@@ -265,9 +265,14 @@ class DelegationRecord:
 
     # Dimension Scope Extension (#170)
     dimension_scope: frozenset[str] = ALL_DIMENSIONS
+
+    # Signing-Payload Version Discriminator (#1841 shard 2)
+    signing_payload_version: str = "legacy-python-v0"
 ```
 
 **Signing contract**: `to_signing_payload()` includes `reasoning_trace_hash` (binding the reasoning to the delegation signature) and `dimension_scope` (sorted list, preventing post-hoc scope widening). The full reasoning trace and its separate signature are excluded from the parent payload -- they have their own verification path.
+
+**Signing-payload version discriminator (#1841 shard 2)**: `signing_payload_version` records WHICH canonical pre-image shape the signature was produced over, so a verifier can dispatch to the matching builder. It defaults to `legacy-python-v0` (the pre-migration Python schema) and a record deserialized from a wire form with NO version key also resolves to `legacy-python-v0` (`from_dict` backward-compat), so every existing signed record keeps verifying byte-identically. The discriminator is NOT folded into the legacy `to_signing_payload()` pre-image -- adding it there would change every existing record's signed bytes; the engine (v2/v3) owns its own `signing_payload_version` key inside its pre-image. See §3.3.1 § "Version-gated migration" for the dual-path contract.
 
 **Dimension scope validation**: `__post_init__` validates that all scope values are from `VALID_DIMENSION_NAMES = {"financial", "operational", "temporal", "data_access", "communication"}`. At least one dimension is required.
 
@@ -330,6 +335,71 @@ multi-sig signers (a multiset weakens the M-of-N quorum — the threshold is
 validated against the DISTINCT signer count); and the inconsistent
 `V2_COMPLETE` + `multi_sig=True` combo (a multi-sig record MUST sign
 `V3_COMPLETE`).
+
+**Version-gated migration (#1841 shard 2 -- the ratified byte-CHANGING migration, least-breaking form).**
+The engine above is the byte-exact pre-image builder; `DelegationRecord`'s
+sign/verify path is put behind a per-record `signing_payload_version`
+discriminator so the engine can be adopted WITHOUT invalidating existing
+Python-signed records. Three discriminator values are defined
+(`DELEGATION_SIGNING_VERSION_LEGACY` / `_V2` / `_V3` in `chain.py`):
+
+- **`legacy-python-v0`** (the DEFAULT) -- the pre-migration Python schema emitted
+  by `DelegationRecord.to_signing_payload()` (`id` / `delegator_id` /
+  `delegatee_id` / `task_id` / `capabilities_delegated` / `constraint_subset` /
+  `delegated_at` / `dimension_scope` / `expires_at` / `parent_delegation_id` /
+  `reasoning_trace_hash`). This is DISTINCT from the engine's rs-canonical
+  `v1-legacy` shape (`delegation_id` / `delegator` / ...): the Python legacy
+  schema pre-dates the cross-SDK engine and never used the rs-canonical base.
+  A record deserialized from a wire form with NO `signing_payload_version` key
+  resolves to this value (`from_dict` / chain `_deserialize_delegation`
+  backward-compat), so every existing signed record verifies byte-identically.
+- **`v2-complete` / `v3-complete`** -- the engine pre-images. New non-multi-sig
+  records sign v2; new multi-sig records sign v3 (folding the multi-sig policy
+  per the quorum-integrity goal).
+
+**Single dispatch, fail-closed.** Every delegation sign/verify call site routes
+through ONE shared function `delegation_canonical_payload_str()` in
+`kailash.trust.signing.delegation_record_signing` (call sites:
+`operations/__init__.py` `_verify_delegation_signature` + the delegate mint;
+`cli/commands.py` delegate + verify; `signing/rotation.py` key-rotation
+re-sign). It returns the byte-identical legacy pre-image for a
+`legacy-python-v0` record and RAISES
+`UnsupportedSigningPayloadVersionError` (fail-closed) for any other version --
+a non-legacy record MUST NOT fall through to the legacy verifier (which would
+check the WRONG pre-image). The verify sites map that raise to a verification
+failure; the sign/rotation sites propagate it.
+
+**Engine-mapping bridge.** `build_delegation_signing_input()` /
+`delegation_record_signing_payload()` (same module) MAP a `DelegationRecord`'s
+carried fields (`id`->`delegation_id`, `delegator_id`->`delegator`,
+`delegatee_id`->`delegate`, `capabilities_delegated`->`capabilities`,
+`delegated_at`->`created_at`, `expires_at`/`parent_delegation_id`/
+`reasoning_trace_hash` verbatim) onto the engine's `DelegationSigningInput` and
+emit the byte-exact v2/v3 pre-image. `DelegationRecord` does NOT persist the
+structured `constraints` / `resource_limits` / `scope` (nor a multi-sig policy)
+the engine folds, so the caller supplies them; the bridge fails closed when a
+required structured field is missing AND when a record carries a narrowed
+`dimension_scope` (its v2/v3 fold is un-pinned cross-SDK, rs#1795, and the
+engine byte-verifies only the unscoped form -- signing a scoped record under
+v2/v3 would silently drop its widening-attack scope binding).
+
+**What breaks + backward-compat.** This is a byte-CHANGING migration: a record
+signed under `v2-complete` / `v3-complete` produces DIFFERENT bytes from the
+legacy schema and cannot verify under it (and vice versa) -- which is why the
+discriminator is mandatory. Existing (`legacy-python-v0`) records are
+byte-preserved: the shared dispatch reproduces the exact pre-migration
+`serialize_for_signing(to_signing_payload())` bytes, and the discriminator is
+never folded into the legacy pre-image.
+
+**Shard scope.** Shard 2 lands the additive + version-gate half: the
+discriminator field + serde-default backward-compat, the shared fail-closed
+dispatch (all sign/verify/rotation callers migrated), and the additive
+engine-mapping bridge. Sign callers still emit `legacy-python-v0` (byte-identical
+to today); making new records SIGN `v2`/`v3` via the engine requires persisting
+the structured `constraints`/`resource_limits`/`scope`/multi-sig fields on
+`DelegationRecord` (so verify can reconstruct the pre-image) and is a follow-on
+shard (S2b). Verify already fails closed on any non-legacy record until S2b
+wires the record-persisted v2/v3 path.
 
 ### 3.4 AuditAnchor
 

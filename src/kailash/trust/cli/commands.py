@@ -32,8 +32,20 @@ from kailash.trust.chain import (
     TrustLineageChain,
     VerificationLevel,
 )
-from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign, verify_signature
-from kailash.trust.exceptions import TrustChainNotFoundError, TrustError
+from kailash.trust.exceptions import (
+    TrustChainNotFoundError,
+    TrustError,
+    UnsupportedSigningPayloadVersionError,
+)
+from kailash.trust.signing.crypto import (
+    generate_keypair,
+    serialize_for_signing,
+    sign,
+    verify_signature,
+)
+from kailash.trust.signing.delegation_record_signing import (
+    delegation_canonical_payload_str,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +151,9 @@ def _format_chain_summary(chain: TrustLineageChain) -> str:
         lines.append("  Capability List:")
         for cap in chain.capabilities:
             expired_tag = " [EXPIRED]" if cap.is_expired() else ""
-            lines.append(f"    - {cap.capability} ({cap.capability_type.value}){expired_tag}")
+            lines.append(
+                f"    - {cap.capability} ({cap.capability_type.value}){expired_tag}"
+            )
     if chain.delegations:
         lines.append("  Delegation List:")
         for d in chain.delegations:
@@ -208,7 +222,9 @@ def _load_private_key(store_dir: str, key_id: str) -> str:
         if data["key_id"] == key_id:
             return data["private_key"]
 
-    raise click.ClickException(f"Key not found: '{key_id}'. Run 'eatp init' to generate keys.")
+    raise click.ClickException(
+        f"Key not found: '{key_id}'. Run 'eatp init' to generate keys."
+    )
 
 
 def _find_delegation_in_store(store_dir: str, delegation_id: str) -> tuple:
@@ -341,7 +357,7 @@ def init_cmd(
             )
         )
     else:
-        click.echo(f"Authority initialized successfully.")
+        click.echo("Authority initialized successfully.")
         click.echo(f"  Authority ID:   {authority_id}")
         click.echo(f"  Name:           {name}")
         click.echo(f"  Type:           {authority_type}")
@@ -472,7 +488,7 @@ def establish_cmd(
             )
         )
     else:
-        click.echo(f"Agent established successfully.")
+        click.echo("Agent established successfully.")
         click.echo(f"  Agent ID:    {agent_name}")
         click.echo(f"  Authority:   {auth.id}")
         click.echo(f"  Capabilities: {', '.join(cap_names)}")
@@ -596,8 +612,9 @@ def delegate_cmd(
         reasoning_trace=reasoning_trace,
     )
 
-    # Sign delegation
-    del_payload = serialize_for_signing(delegation.to_signing_payload())
+    # Sign delegation over the version-gated canonical pre-image (#1841 shard 2).
+    # New records default to legacy-python-v0 (byte-identical to pre-migration).
+    del_payload = delegation_canonical_payload_str(delegation)
     delegation.signature = sign(del_payload, private_key)
 
     # Get or create delegatee's chain
@@ -631,7 +648,9 @@ def delegate_cmd(
                 (c for c in delegator_chain.capabilities if c.capability == cap_name),
                 None,
             )
-            cap_type = source_cap.capability_type if source_cap else CapabilityType.ACTION
+            cap_type = (
+                source_cap.capability_type if source_cap else CapabilityType.ACTION
+            )
             cap_scope = source_cap.scope if source_cap else None
 
             derived_cap = CapabilityAttestation(
@@ -720,7 +739,9 @@ def verify_cmd(
     try:
         chain = _run_async(store.get_chain(agent_id))
     except TrustChainNotFoundError:
-        raise click.ClickException(f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents.")
+        raise click.ClickException(
+            f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents."
+        )
 
     # Check expiration
     if chain.is_expired():
@@ -772,7 +793,9 @@ def verify_cmd(
     if level == "full" and valid:
         auth = _load_authority(store_dir, chain.genesis.authority_id)
         genesis_payload = serialize_for_signing(chain.genesis.to_signing_payload())
-        sig_valid = verify_signature(genesis_payload, chain.genesis.signature, auth.public_key)
+        sig_valid = verify_signature(
+            genesis_payload, chain.genesis.signature, auth.public_key
+        )
         if not sig_valid:
             valid = False
             reason = "Invalid genesis signature"
@@ -864,11 +887,11 @@ def revoke_cmd(
             )
         )
     else:
-        click.echo(f"Delegation revoked successfully.")
+        click.echo("Delegation revoked successfully.")
         click.echo(f"  Delegation ID: {delegation_id}")
         click.echo(f"  Agent:         {agent_id}")
         if cascade:
-            click.echo(f"  Cascade:       Yes (downstream delegations also revoked)")
+            click.echo("  Cascade:       Yes (downstream delegations also revoked)")
 
 
 @click.command("status")
@@ -894,7 +917,9 @@ def status_cmd(
         try:
             chain = _run_async(store.get_chain(agent_id))
         except TrustChainNotFoundError:
-            raise click.ClickException(f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents.")
+            raise click.ClickException(
+                f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents."
+            )
 
         if json_output:
             result = {
@@ -902,7 +927,11 @@ def status_cmd(
                 "authority_id": chain.genesis.authority_id,
                 "authority_type": chain.genesis.authority_type.value,
                 "created_at": chain.genesis.created_at.isoformat(),
-                "expires_at": (chain.genesis.expires_at.isoformat() if chain.genesis.expires_at else None),
+                "expires_at": (
+                    chain.genesis.expires_at.isoformat()
+                    if chain.genesis.expires_at
+                    else None
+                ),
                 "expired": chain.is_expired(),
                 "capabilities": [
                     {
@@ -989,7 +1018,9 @@ def audit_cmd(
     try:
         chain = _run_async(store.get_chain(agent_id))
     except TrustChainNotFoundError:
-        raise click.ClickException(f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents.")
+        raise click.ClickException(
+            f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents."
+        )
 
     # Filter audit anchors
     anchors = list(chain.audit_anchors)
@@ -1036,7 +1067,9 @@ def audit_cmd(
             click.echo("-" * 60)
             for a in anchors:
                 resource_str = f" on {a.resource}" if a.resource else ""
-                click.echo(f"  [{_format_datetime(a.timestamp)}] {a.action}{resource_str} -> {a.result.value}")
+                click.echo(
+                    f"  [{_format_datetime(a.timestamp)}] {a.action}{resource_str} -> {a.result.value}"
+                )
 
 
 @click.command("export")
@@ -1056,7 +1089,9 @@ def export_cmd(ctx: click.Context, agent_id: str) -> None:
     try:
         chain = _run_async(store.get_chain(agent_id))
     except TrustChainNotFoundError:
-        raise click.ClickException(f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents.")
+        raise click.ClickException(
+            f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents."
+        )
 
     chain_dict = chain.to_dict()
 
@@ -1134,7 +1169,9 @@ def scan_cmd(
         else:
             click.echo(f"Scanned: {scan_dir}")
             click.echo("No EATP configuration found.")
-            click.echo("  Expected 'chains/' or 'authorities/' subdirectories, or a '.eatp/' directory.")
+            click.echo(
+                "  Expected 'chains/' or 'authorities/' subdirectories, or a '.eatp/' directory."
+            )
         return
 
     # Aggregate results across all candidate directories
@@ -1213,7 +1250,11 @@ def scan_cmd(
                     "authority_type": chain.genesis.authority_type.value,
                     "chain_status": "expired" if expired else "active",
                     "created_at": chain.genesis.created_at.isoformat(),
-                    "expires_at": (chain.genesis.expires_at.isoformat() if chain.genesis.expires_at else None),
+                    "expires_at": (
+                        chain.genesis.expires_at.isoformat()
+                        if chain.genesis.expires_at
+                        else None
+                    ),
                     "capabilities": capabilities,
                     "active_capabilities": active_caps,
                     "total_capabilities": len(chain.capabilities),
@@ -1237,8 +1278,12 @@ def scan_cmd(
                     "summary": {
                         "total_authorities": len(all_authorities),
                         "total_agents": len(all_agents),
-                        "active_agents": sum(1 for a in all_agents if a["chain_status"] == "active"),
-                        "expired_agents": sum(1 for a in all_agents if a["chain_status"] == "expired"),
+                        "active_agents": sum(
+                            1 for a in all_agents if a["chain_status"] == "active"
+                        ),
+                        "expired_agents": sum(
+                            1 for a in all_agents if a["chain_status"] == "expired"
+                        ),
                     },
                 },
                 indent=2,
@@ -1255,7 +1300,9 @@ def scan_cmd(
             click.echo(f"Authorities ({len(all_authorities)}):")
             click.echo("-" * 60)
             for auth in all_authorities:
-                click.echo(f"  {auth['authority_id']}  |  name={auth['name']}  |  type={auth['type']}")
+                click.echo(
+                    f"  {auth['authority_id']}  |  name={auth['name']}  |  type={auth['type']}"
+                )
         else:
             click.echo("No authorities found.")
         click.echo()
@@ -1263,11 +1310,15 @@ def scan_cmd(
         if all_agents:
             active_count = sum(1 for a in all_agents if a["chain_status"] == "active")
             expired_count = sum(1 for a in all_agents if a["chain_status"] == "expired")
-            click.echo(f"Agents ({len(all_agents)} total, {active_count} active, {expired_count} expired):")
+            click.echo(
+                f"Agents ({len(all_agents)} total, {active_count} active, {expired_count} expired):"
+            )
             click.echo("-" * 60)
             for agent in all_agents:
                 status_tag = " [EXPIRED]" if agent["chain_status"] == "expired" else ""
-                caps_str = ", ".join(c["name"] for c in agent["capabilities"] if not c["expired"])
+                caps_str = ", ".join(
+                    c["name"] for c in agent["capabilities"] if not c["expired"]
+                )
                 click.echo(
                     f"  {agent['agent_id']}{status_tag}"
                     f"  |  auth={agent['authority_id']}"
@@ -1300,7 +1351,9 @@ def verify_chain_cmd(
     try:
         chain = _run_async(store.get_chain(agent_id))
     except TrustChainNotFoundError:
-        raise click.ClickException(f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents.")
+        raise click.ClickException(
+            f"Agent not found: '{agent_id}'. Use 'eatp status' to list known agents."
+        )
 
     # Load authority
     authority_id = chain.genesis.authority_id
@@ -1318,9 +1371,18 @@ def verify_chain_cmd(
         if not verify_signature(cap_payload, cap.signature, auth.public_key):
             issues.append(f"Invalid capability signature (cap_id={cap.id})")
 
-    # Verify delegation signatures
+    # Verify delegation signatures via the version-gated dispatch (#1841 shard 2).
+    # A non-legacy record fails closed (its record-persisted v2/v3 verify path is
+    # not wired in this build) rather than verifying the WRONG legacy pre-image.
     for d in chain.delegations:
-        del_payload = serialize_for_signing(d.to_signing_payload())
+        try:
+            del_payload = delegation_canonical_payload_str(d)
+        except UnsupportedSigningPayloadVersionError as exc:
+            issues.append(
+                f"Unsupported delegation signing_payload_version "
+                f"(del_id={d.id}, version={exc.version})"
+            )
+            continue
         if not verify_signature(del_payload, d.signature, auth.public_key):
             issues.append(f"Invalid delegation signature (del_id={d.id})")
 
@@ -1332,8 +1394,12 @@ def verify_chain_cmd(
             "agent_id": agent_id,
             "chain_hash": chain.hash(),
             "genesis_verified": "Invalid genesis signature" not in " ".join(issues),
-            "capabilities_verified": not any("capability signature" in i for i in issues),
-            "delegations_verified": not any("delegation signature" in i for i in issues),
+            "capabilities_verified": not any(
+                "capability signature" in i for i in issues
+            ),
+            "delegations_verified": not any(
+                "delegation signature" in i for i in issues
+            ),
         }
         if issues:
             result["issues"] = issues
@@ -1341,7 +1407,7 @@ def verify_chain_cmd(
     else:
         if valid:
             click.echo(f"Chain integrity VERIFIED for agent '{agent_id}'.")
-            click.echo(f"  Genesis:      OK")
+            click.echo("  Genesis:      OK")
             click.echo(f"  Capabilities: {len(chain.capabilities)} verified")
             click.echo(f"  Delegations:  {len(chain.delegations)} verified")
             click.echo(f"  Chain Hash:   {chain.hash()[:16]}...")

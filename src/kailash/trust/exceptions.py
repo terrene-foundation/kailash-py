@@ -172,6 +172,32 @@ class InvalidSignatureError(TrustError):
         self.record_id = record_id
 
 
+class UnsupportedSigningPayloadVersionError(TrustError):
+    """Raised when a delegation record declares a signing-payload version whose
+    sign/verify path is not wired for the record in this build.
+
+    Fail-closed discriminator (#1841 shard 2): the shared canonical-payload
+    dispatch produces the legacy (``legacy-python-v0``) pre-image for records
+    on the pre-migration schema. The engine-backed ``v2-complete`` /
+    ``v3-complete`` pre-images require structured constraint / resource-limit /
+    scope (and, for v3, multi-sig policy) data that a :class:`DelegationRecord`
+    does not yet persist, so a record carrying a non-legacy version MUST NOT
+    fall through to the legacy verifier (which would sign/verify the WRONG
+    pre-image). Wiring the record-persisted v2/v3 path is a later shard (S2b).
+    """
+
+    def __init__(self, version: str, record_id: Optional[str] = None):
+        super().__init__(
+            f"Unsupported delegation signing_payload_version {version!r} "
+            f"(record_id={record_id!r}): only 'legacy-python-v0' is wired for "
+            f"DelegationRecord sign/verify in this build; v2/v3-complete require "
+            f"record-persisted structured pre-image data (#1841 shard 2b)",
+            details={"version": version, "record_id": record_id},
+        )
+        self.version = version
+        self.record_id = record_id
+
+
 class VerificationFailedError(TrustError):
     """Raised when trust verification fails for an action."""
 
@@ -332,6 +358,7 @@ __all__ = [
     "DelegationCycleError",
     "DelegationExpiredError",
     "InvalidSignatureError",
+    "UnsupportedSigningPayloadVersionError",
     "VerificationFailedError",
     "AgentAlreadyEstablishedError",
     "TrustStoreError",

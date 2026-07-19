@@ -37,6 +37,31 @@ VALID_DIMENSION_NAMES: frozenset[str] = frozenset(
 # Default dimension scope: all five dimensions (no scoping restriction).
 ALL_DIMENSIONS: frozenset[str] = VALID_DIMENSION_NAMES
 
+# Delegation signing-payload version discriminator (#1841 shard 2).
+#
+# A DelegationRecord records WHICH canonical pre-image shape its Ed25519
+# signature was produced over, so a verifier can dispatch to the matching
+# builder. Three values are defined:
+#
+# * ``legacy-python-v0`` (the DEFAULT) — the pre-migration Python schema emitted
+#   by ``DelegationRecord.to_signing_payload()`` (id / delegator_id / ... ).
+#   This is DISTINCT from the engine's rs-canonical ``v1-legacy`` shape
+#   (delegation_id / delegator / ... in ``delegation_payload.py``); the Python
+#   legacy schema pre-dates the cross-SDK engine and never used the rs-canonical
+#   base. Records with NO version field on the wire deserialize to this value
+#   (``from_dict`` backward-compat), so every existing signed record keeps
+#   verifying byte-identically.
+# * ``v2-complete`` / ``v3-complete`` — the engine pre-images
+#   (``kailash.trust.signing.delegation_payload``). New non-multi-sig records
+#   sign v2; new multi-sig records sign v3. Wiring these into the persisted
+#   DelegationRecord sign/verify path (which requires persisting the structured
+#   constraints / resource_limits / scope / multi-sig policy the engine folds)
+#   is a later shard (S2b); this shard lands the discriminator + the additive
+#   engine-mapping bridge + a fail-closed verify dispatch.
+DELEGATION_SIGNING_VERSION_LEGACY: str = "legacy-python-v0"
+DELEGATION_SIGNING_VERSION_V2: str = "v2-complete"
+DELEGATION_SIGNING_VERSION_V3: str = "v3-complete"
+
 if TYPE_CHECKING:
     from kailash.trust.execution_context import HumanOrigin
     from kailash.trust.reasoning.traces import ReasoningTrace
@@ -273,6 +298,16 @@ class DelegationRecord:
     # envelope computation; unscoped dimensions inherit from the parent unchanged.
     dimension_scope: frozenset[str] = field(default_factory=lambda: ALL_DIMENSIONS)
 
+    # Signing-payload version discriminator (#1841 shard 2).
+    # Records which canonical pre-image shape the signature was produced over.
+    # Defaults to the pre-migration Python schema (``legacy-python-v0``); a
+    # record deserialized with NO version field also resolves to this value
+    # (from_dict backward-compat), so existing signed records verify unchanged.
+    # NOT folded into the legacy ``to_signing_payload()`` pre-image — the engine
+    # (v2/v3) owns its own ``signing_payload_version`` key; adding it to the
+    # legacy payload would change every existing record's signed bytes.
+    signing_payload_version: str = DELEGATION_SIGNING_VERSION_LEGACY
+
     def __post_init__(self) -> None:
         """Validate dimension_scope values are from the canonical set."""
         if not isinstance(self.dimension_scope, frozenset):
@@ -341,6 +376,9 @@ class DelegationRecord:
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "signature": self.signature,
             "parent_delegation_id": self.parent_delegation_id,
+            # Signing-payload version discriminator (#1841 shard 2). Always
+            # emitted; from_dict defaults a missing key to legacy-python-v0.
+            "signing_payload_version": self.signing_payload_version,
             # EATP fields
             "delegation_chain": self.delegation_chain,
             "delegation_depth": self.delegation_depth,
@@ -413,6 +451,13 @@ class DelegationRecord:
             reasoning_signature=data.get("reasoning_signature"),
             # Dimension scope extension (#170)
             dimension_scope=dimension_scope,
+            # Signing-payload version (#1841 shard 2): backward-compatible --
+            # a record serialized before this field existed has no key, so it
+            # deserializes to the pre-migration legacy schema and verifies
+            # byte-identically to how it was signed.
+            signing_payload_version=data.get(
+                "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
+            ),
         )
 
 
@@ -954,6 +999,8 @@ class TrustLineageChain:
             "delegated_at": d.delegated_at.isoformat(),
             "expires_at": d.expires_at.isoformat() if d.expires_at else None,
             "parent_delegation_id": d.parent_delegation_id,
+            # Signing-payload version discriminator (#1841 shard 2).
+            "signing_payload_version": d.signing_payload_version,
         }
         # Reasoning trace extension fields (only if present)
         if d.reasoning_trace:
@@ -992,6 +1039,10 @@ class TrustLineageChain:
             reasoning_trace=reasoning_trace,
             reasoning_trace_hash=d.get("reasoning_trace_hash"),
             reasoning_signature=d.get("reasoning_signature"),
+            # Signing-payload version (#1841 shard 2): absent key = legacy.
+            signing_payload_version=d.get(
+                "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -1420,6 +1471,9 @@ __all__ = [
     # Constants
     "ALL_DIMENSIONS",
     "VALID_DIMENSION_NAMES",
+    "DELEGATION_SIGNING_VERSION_LEGACY",
+    "DELEGATION_SIGNING_VERSION_V2",
+    "DELEGATION_SIGNING_VERSION_V3",
     # Enums
     "AuthorityType",
     "CapabilityType",
