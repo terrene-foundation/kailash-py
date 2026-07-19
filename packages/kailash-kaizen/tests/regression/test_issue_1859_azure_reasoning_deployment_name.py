@@ -55,17 +55,24 @@ def _azure_deployment(model: str, deployment: str):
 def _payload_and_url(
     deployment,
     *,
+    model=None,
     temperature=0.7,
     max_tokens=500,
     top_p=0.9,
     frequency_penalty=0.1,
     presence_penalty=0.1,
 ):
-    """Build the wire payload + URL through the real client + shaper (offline)."""
+    """Build the wire payload + URL through the real client + shaper (offline).
+
+    ``model`` mirrors what the caller passes to ``complete(model=...)``:
+    ``None`` = the strategy/TEST fallback (wire model <- deployment.default_model);
+    a family string (e.g. ``"gpt-5"``) = the LIVE node path
+    (``llm_agent._provider_llm_response`` -> ``complete(model=<family>)``).
+    """
     client = LlmClient.from_deployment(deployment, ungoverned=True)
     request = client._build_completion_request(
         [{"role": "user", "content": "hello"}],
-        model=None,  # falls back to deployment.default_model (the deployment name)
+        model=model,
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,
@@ -142,6 +149,40 @@ def test_wire_still_targets_deployment_name():
     assert "/deployments/gpt-5/" not in url
 
 
+def test_live_node_path_model_is_family_wire_body_is_deployment_name():
+    """LIVE node path shape: `llm_agent._provider_llm_response` calls
+    `client.complete(messages, model=<FAMILY>)` (the value of `kwargs["model"]`,
+    which is the canonical family, e.g. "gpt-5") against the Azure deployment
+    built with deployment_name="my-gpt5-deploy".
+
+    Regression for the round-3 gap: a bare `model or default_model` would put the
+    FAMILY on the wire body `model` field, mismatching the Azure deployment the
+    URL targets. The fix forces the wire body/URL model to the deployment name
+    (`default_model`) for any deployment declaring a `canonical_model`, while
+    detection still keys off the family.
+
+    FAILS pre-fix (wire body would be "gpt-5"); PASSES after.
+    """
+    dep = _azure_deployment("gpt-5", "my-gpt5-deploy")
+    request, payload, url = _payload_and_url(dep, model="gpt-5")
+
+    # wire body model = deployment name, NOT the family the caller passed
+    assert payload["model"] == "my-gpt5-deploy"
+    assert request.model == "my-gpt5-deploy"
+    # detection still keyed off the family
+    assert request.canonical_model == "gpt-5"
+    # URL targets the deployment (never the family)
+    assert "/openai/deployments/my-gpt5-deploy/chat/completions" in url
+    assert "/deployments/gpt-5/" not in url
+    # reasoning strip fired off the family
+    assert payload.get("temperature") == 1.0
+    assert "top_p" not in payload
+    assert "frequency_penalty" not in payload
+    assert "presence_penalty" not in payload
+    assert payload.get("max_completion_tokens") == 500
+    assert "max_tokens" not in payload
+
+
 # ---------------------------------------------------------------------------
 # (3) non-reasoning model KEEPS temperature (no false-positive strip)
 # ---------------------------------------------------------------------------
@@ -167,6 +208,30 @@ def test_non_reasoning_model_keeps_temperature_and_max_tokens():
 # ---------------------------------------------------------------------------
 # (4) the resolver carries family vs deployment name distinctly
 # ---------------------------------------------------------------------------
+
+
+def test_non_azure_direct_provider_is_byte_neutral():
+    """Guard the client fix does NOT regress non-Azure providers: a direct
+    OpenAI deployment has no canonical_model, so `complete(model="o1")` puts the
+    passed model on the wire body AND uses it for detection (canonical is None).
+    """
+    from kaizen.llm.presets import openai_preset
+
+    dep = openai_preset("test-key-not-a-real-secret", "gpt-4o")
+    assert dep.canonical_model is None  # direct providers carry no alias family
+    # caller passes a reasoning model per-call; wire body = the passed model
+    _request, payload, _url = _payload_and_url(dep, model="o1")
+    assert payload["model"] == "o1"
+    # detection keyed off the passed model (canonical is None) -> temperature dropped
+    assert "temperature" not in payload
+    assert payload.get("max_completion_tokens") == 500
+
+    # and a plain non-reasoning direct call is fully unchanged
+    _r2, p2, _u2 = _payload_and_url(dep, model="gpt-4o")
+    assert p2["model"] == "gpt-4o"
+    assert p2.get("temperature") == 0.7
+    assert p2.get("max_tokens") == 500
+    assert "max_completion_tokens" not in p2
 
 
 def test_resolver_separates_family_from_deployment_name():

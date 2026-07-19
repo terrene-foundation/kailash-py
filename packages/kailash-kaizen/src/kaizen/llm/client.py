@@ -1068,6 +1068,20 @@ class LlmClient:
         # (rules/observability.md §8 / §6.5). No-op when no policy installed.
         redacted = self.redact_request_messages(messages)
         resolved_model = model or self._deployment.default_model
+        # #1859: an ALIAS deployment carries a canonical model FAMILY distinct
+        # from its wire identity — Azure OpenAI's `default_model` is the
+        # caller-chosen DEPLOYMENT NAME that Azure requires in BOTH the URL path
+        # (`/openai/deployments/{deployment}`) AND the wire body `model` field,
+        # while the family lives on `canonical_model` (detection only). The live
+        # node path calls `complete(model=<family>)` (e.g. "gpt-5"), so a bare
+        # `model or default_model` would put the FAMILY on the wire body/URL,
+        # mismatching the Azure deployment. When the deployment declares a
+        # `canonical_model`, the wire model MUST be the deployment name
+        # (`default_model`) regardless of the family passed for detection. For
+        # every non-Azure deployment `canonical_model` is None => this is a no-op
+        # (wire model = the passed model, byte-identical to pre-#1859).
+        if self._deployment.canonical_model is not None:
+            resolved_model = self._deployment.default_model or resolved_model
         if not resolved_model:
             raise ValueError(
                 "complete() requires a model — pass model=..., or construct "
@@ -1079,9 +1093,10 @@ class LlmClient:
         _validate_completion_model(resolved_model)
         # #1859: thread the deployment's canonical model FAMILY onto the request
         # so the wire shaper's reasoning-model detection + token-limit field
-        # selection key off the family rather than a routing alias. `None` for
-        # every direct provider (deployment carries no canonical_model) =>
-        # detection falls back to `resolved_model`, byte-identical to pre-#1859.
+        # selection key off the family, while `model` (above) is the wire
+        # identity (deployment name for Azure). `canonical_model` is `None` for
+        # every direct provider => detection falls back to `model`,
+        # byte-identical to pre-#1859.
         return CompletionRequest(
             model=resolved_model,
             canonical_model=self._deployment.canonical_model,
