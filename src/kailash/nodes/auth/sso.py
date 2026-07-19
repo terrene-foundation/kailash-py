@@ -15,6 +15,7 @@ Enterprise-grade SSO implementation supporting multiple protocols:
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import secrets
 import time
@@ -432,12 +433,61 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "relay_state": kwargs.get("relay_state"),
         }
 
+    @staticmethod
+    def _pkce_pair() -> tuple[str, str]:
+        """Generate a PKCE (RFC 7636) ``code_verifier`` / ``code_challenge`` pair.
+
+        The verifier is a high-entropy secret retained by the client; the
+        challenge is its S256 (SHA-256, base64url, no padding) transform sent on
+        the authorization request. Binding the two proves the client that later
+        redeems the authorization code is the same one that requested it,
+        closing the auth-code interception attack on public clients.
+        """
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
+        return code_verifier, code_challenge
+
+    @staticmethod
+    def _decode_id_token_claims(id_token: str) -> Dict[str, Any]:
+        """Decode the (base64url) payload segment of a JWT id_token.
+
+        This reads the claims WITHOUT verifying the signature — it is used ONLY
+        to compare the ``nonce`` claim against the value minted at authorization
+        time (a replay/injection defense layered on the provider's own token
+        validation). It MUST NOT be relied on as authentication evidence beyond
+        the nonce match.
+        """
+        parts = id_token.split(".")
+        if len(parts) < 2:
+            raise ValueError("Invalid id_token: not a JWT (missing payload segment)")
+        payload_segment = parts[1]
+        # Restore base64url padding stripped by the encoder.
+        padding = "=" * (-len(payload_segment) % 4)
+        try:
+            decoded = base64.urlsafe_b64decode(payload_segment + padding)
+            claims = json.loads(decoded)
+        except (ValueError, json.JSONDecodeError) as e:
+            raise ValueError(f"Invalid id_token: undecodable payload ({e})")
+        if not isinstance(claims, dict):
+            # A valid-JSON but non-object payload (e.g. "123", "[]") has no
+            # claims to read; fail closed with a typed error rather than let
+            # a later ``claims.get(...)`` raise an opaque AttributeError.
+            raise ValueError("Invalid id_token: payload is not a JSON object")
+        return claims
+
     async def _initiate_oauth(
         self, provider: str, redirect_uri: str, **kwargs
     ) -> Dict[str, Any]:
         """Initiate OAuth 2.0 / OIDC authentication flow."""
         # Generate state parameter for CSRF protection
         state = secrets.token_urlsafe(32)
+
+        # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
+        code_verifier, code_challenge = self._pkce_pair()
 
         # OAuth parameters
         auth_params = {
@@ -446,6 +496,8 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "redirect_uri": redirect_uri,
             "scope": self.oauth_settings.get("scope", "openid profile email"),
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         # Add OIDC-specific parameters
@@ -463,6 +515,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
             "nonce": auth_params.get("nonce"),
+            "code_verifier": code_verifier,
         }
 
         return {
@@ -490,6 +543,9 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
 
+        # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
+        code_verifier, code_challenge = self._pkce_pair()
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("azure_client_id"),
@@ -497,6 +553,8 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "scope": "openid profile email User.Read",
             "state": state,
             "response_mode": "query",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         auth_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?{urlencode(auth_params)}"
@@ -507,6 +565,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
             "tenant_id": tenant_id,
+            "code_verifier": code_verifier,
         }
 
         return {
@@ -521,6 +580,9 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         """Initiate Google Workspace authentication."""
         state = secrets.token_urlsafe(32)
 
+        # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
+        code_verifier, code_challenge = self._pkce_pair()
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("google_client_id"),
@@ -528,6 +590,8 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "scope": "openid profile email",
             "state": state,
             "access_type": "offline",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         auth_url = (
@@ -538,6 +602,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "provider": "google",
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
         }
 
         return {
@@ -551,12 +616,17 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         """Initiate Okta authentication."""
         state = secrets.token_urlsafe(32)
 
+        # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
+        code_verifier, code_challenge = self._pkce_pair()
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("okta_client_id"),
             "redirect_uri": redirect_uri,
             "scope": "openid profile email groups",
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         okta_domain = self.oauth_settings.get("okta_domain")
@@ -567,6 +637,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
             "okta_domain": okta_domain,
+            "code_verifier": code_verifier,
         }
 
         return {
@@ -621,6 +692,32 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # Exchange code for tokens
         token_result = await self._exchange_oauth_code(provider, auth_code, cached_data)
 
+        # OIDC nonce enforcement (id_token replay/injection defense).
+        # When a nonce was minted at authorization time, the returned id_token
+        # MUST be present and its ``nonce`` claim MUST match the minted value.
+        # This is layered on the provider's own token validation; it does not
+        # weaken it — a mismatch fails closed with a typed error.
+        expected_nonce = cached_data.get("nonce")
+        if expected_nonce is not None:
+            id_token = token_result.get("id_token")
+            if not id_token:
+                raise ValueError(
+                    "OIDC nonce was minted but the token response carried no "
+                    "id_token — cannot verify nonce; rejecting authentication"
+                )
+            claims = self._decode_id_token_claims(id_token)
+            returned_nonce = claims.get("nonce")
+            # Constant-time compare (defense-in-depth; the one-shot state pop
+            # already bounds attempts). A missing/non-string claim fails closed.
+            if not isinstance(returned_nonce, str) or not hmac.compare_digest(
+                returned_nonce, expected_nonce
+            ):
+                raise ValueError(
+                    "OIDC nonce mismatch — id_token nonce claim does not match "
+                    "the value minted at authorization time; rejecting "
+                    "authentication (possible id_token replay/injection)"
+                )
+
         # Get user info
         user_info = await self._get_oauth_user_info(
             provider, token_result["access_token"]
@@ -662,6 +759,13 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "client_id": self.oauth_settings.get(f"{provider}_client_id"),
             "client_secret": self.oauth_settings.get(f"{provider}_client_secret"),
         }
+
+        # PKCE (RFC 7636) — return the code_verifier bound to this authorization
+        # request so the token endpoint can confirm proof-of-possession. Guarded
+        # for presence to stay backward-safe if a cached entry predates PKCE.
+        code_verifier = cached_data.get("code_verifier")
+        if code_verifier:
+            token_data["code_verifier"] = code_verifier
 
         # Determine token endpoint
         if provider == "azure":
