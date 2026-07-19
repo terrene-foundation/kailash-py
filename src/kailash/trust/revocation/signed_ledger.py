@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence
 
 from kailash.trust._json import canonical_json_dumps
+from kailash.trust.exceptions import InvalidSignatureError
 from kailash.trust.signing import crypto
 
 logger = logging.getLogger(__name__)
@@ -119,8 +120,14 @@ class SignedRevocationEvent:
             raise RevocationLedgerError(
                 f"epoch must be an int, got {type(self.epoch).__name__}"
             )
-        if self.epoch < 0:
-            raise RevocationLedgerError(f"epoch must be >= 0, got {self.epoch}")
+        # Unified u64 epoch: rs LEADS and parses it into a u64, so an
+        # out-of-u64-range value serializes as a JSON number rs cannot ingest,
+        # making the folded tip unreproducible cross-SDK. Fail closed on both
+        # bounds.
+        if not (0 <= self.epoch < 2**64):
+            raise RevocationLedgerError(
+                f"epoch must be in the u64 range [0, 2**64), got {self.epoch}"
+            )
         if not isinstance(self.revoked_at, str) or not _REVOKED_AT_RE.match(
             self.revoked_at
         ):
@@ -174,10 +181,19 @@ class SignedRevocationEvent:
 
         Returns:
             True iff the signature is valid for this event's pre-image.
+            Fail-closed: a malformed / short / non-hex / wrong-length
+            ``signature_hex`` returns False (never raises an off-contract
+            ``ValueError`` / ``InvalidSignatureError``).
         """
-        b64_pub = base64.b64encode(public_key).decode("ascii")
-        b64_sig = base64.b64encode(bytes.fromhex(signature_hex)).decode("ascii")
-        return crypto.verify_signature(self.signing_preimage(), b64_sig, b64_pub)
+        try:
+            sig_bytes = bytes.fromhex(signature_hex)
+            b64_pub = base64.b64encode(public_key).decode("ascii")
+            b64_sig = base64.b64encode(sig_bytes).decode("ascii")
+            return crypto.verify_signature(self.signing_preimage(), b64_sig, b64_pub)
+        except (ValueError, TypeError, InvalidSignatureError):
+            # Malformed hex (ValueError/TypeError) OR a wrong-length signature
+            # the crypto layer rejects (InvalidSignatureError) → fail closed.
+            return False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-friendly dict."""
@@ -189,7 +205,15 @@ class SignedRevocationEvent:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SignedRevocationEvent":
-        """Reconstruct from a dict (validates via ``__post_init__``)."""
+        """Reconstruct from a dict (validates via ``__post_init__``).
+
+        Raises:
+            RevocationLedgerError: If a required field is missing (typed, names
+                the field) — not a bare ``KeyError``.
+        """
+        for field_name in ("delegation_id", "epoch", "revoked_at"):
+            if field_name not in data:
+                raise RevocationLedgerError(f"missing required field {field_name!r}")
         return cls(
             delegation_id=data["delegation_id"],
             epoch=data["epoch"],

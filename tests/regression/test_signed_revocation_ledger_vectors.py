@@ -194,3 +194,58 @@ def test_malformed_event_fails_closed() -> None:
     with pytest.raises(RevocationLedgerError):
         # bool epoch must not slip through the int check.
         SignedRevocationEvent("del-x", True, "2026-07-17T00:00:00.000000000Z")
+
+
+# --- Crypto-review hardening -------------------------------------------------
+
+
+def test_epoch_u64_range_enforced_fail_closed() -> None:
+    """A u64 epoch is fail-closed at both bounds: ``2**64`` (out of range)
+    raises; ``2**64 - 1`` (max u64) is accepted. An oversized epoch would
+    serialize as a JSON number rs cannot parse into a u64, making the folded
+    tip unreproducible cross-SDK."""
+    with pytest.raises(RevocationLedgerError, match="u64 range"):
+        SignedRevocationEvent("del-x", 2**64, "2026-07-17T00:00:00.000000000Z")
+    ok = SignedRevocationEvent("del-x", 2**64 - 1, "2026-07-17T00:00:00.000000000Z")
+    assert ok.epoch == 2**64 - 1
+
+
+def test_verify_fails_closed_on_malformed_signature_hex() -> None:
+    """``verify()`` returns False (never raises) on malformed / short / non-hex
+    signature input — fail-closed, not an off-contract ValueError."""
+    event = SignedRevocationEvent("del-0001", 2, "2026-07-17T00:00:00.000000000Z")
+    assert event.verify("not-hex-!!", _PUBLIC_KEY) is False
+    assert event.verify("dead", _PUBLIC_KEY) is False  # valid hex, wrong length
+    assert event.verify("", _PUBLIC_KEY) is False
+    assert event.verify("abc", _PUBLIC_KEY) is False  # odd-length hex
+
+
+def test_from_dict_missing_field_raises_typed_error() -> None:
+    """``from_dict`` raises the typed ``RevocationLedgerError`` naming the
+    missing field, not a bare ``KeyError``."""
+    base = {
+        "delegation_id": "del-0001",
+        "epoch": 2,
+        "revoked_at": "2026-07-17T00:00:00.000000000Z",
+    }
+    # Round-trip sanity.
+    assert SignedRevocationEvent.from_dict(base).to_dict() == base
+    for missing in ("delegation_id", "epoch", "revoked_at"):
+        partial = {k: v for k, v in base.items() if k != missing}
+        with pytest.raises(RevocationLedgerError, match=missing):
+            SignedRevocationEvent.from_dict(partial)
+
+
+def test_duplicate_delegation_id_across_epochs_accepted() -> None:
+    """A re-revocation event for an already-revoked delegation_id at a later
+    epoch is a legitimate append (duplicate delegation_id across epochs is
+    intended, not blocked)."""
+    ledger = RevocationLedger()
+    ledger.append(
+        SignedRevocationEvent("del-0001", 2, "2026-07-17T00:00:00.000000000Z")
+    )
+    ledger.append(
+        SignedRevocationEvent("del-0001", 5, "2026-07-17T00:00:00.000000000Z")
+    )
+    assert len(ledger) == 2
+    assert [e.delegation_id for e in ledger.events] == ["del-0001", "del-0001"]
