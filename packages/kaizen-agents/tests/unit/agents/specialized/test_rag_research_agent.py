@@ -148,15 +148,22 @@ class TestRAGResearchAgentInitialization:
         assert agent.rag_config.similarity_threshold == 0.6
         assert agent.rag_config.embedding_model == "all-mpnet-base-v2"
 
-    def test_default_configuration_values(self):
+    def test_default_configuration_values(self, monkeypatch):
         """Test that defaults are set correctly."""
         from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
+
+        # Isolate from the ambient .env: model resolution is env-first
+        # (KAIZEN_MODEL -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> the shared
+        # provider-intrinsic fallback), so this pins the fallback deterministically.
+        monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
         agent = RAGResearchAgent()
 
         # LLM defaults
         assert agent.rag_config.llm_provider == "openai"
-        assert agent.rag_config.model == "gpt-3.5-turbo"
+        assert agent.rag_config.model == "gpt-4o"  # shared env-first fallback
         assert isinstance(agent.rag_config.temperature, float)
         assert isinstance(agent.rag_config.max_tokens, int)
 
