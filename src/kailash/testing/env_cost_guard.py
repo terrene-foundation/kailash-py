@@ -46,30 +46,80 @@ from typing import Optional
 
 _REAL_LLM_ENV_FLAG = "KAIZEN_ALLOW_REAL_LLM"
 
-# Comprehensive, fail-closed secret-name families. A key is treated as a
-# provider credential if its UPPERCASED name contains any secret substring OR
-# ends in any secret suffix. This is deliberately broad: withholding a
-# non-secret config var from a bare test run is recoverable (mark the test
-# ``requires_real_llm`` or set it explicitly); leaking a credential bills money.
-_SECRET_SUBSTRINGS = (
-    "SECRET",
-    "PASSWORD",
-    "PASSWD",
-    "TOKEN",  # AWS_BEARER_TOKEN_BEDROCK, REPLICATE_API_TOKEN, HF_TOKEN, AZURE_*_AD_TOKEN
-    "BEARER",
-    "CREDENTIAL",  # GOOGLE_APPLICATION_CREDENTIALS
-    "PRIVATE_KEY",
-    "ACCESS_KEY",  # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-    "APIKEY",
-    "API_KEY",
+# This is a COST guard: it scopes to LLM-PROVIDER credentials — the only keys
+# whose presence causes LLM billing. It deliberately does NOT scrub every
+# secret-shaped var: an over-broad predicate that popped app secrets like
+# ``SAAS_STARTER_JWT_SECRET`` or infra creds like ``DB_PASSWORD`` /
+# ``AWS_ACCESS_KEY_ID`` would break non-LLM tests that legitimately set them,
+# without preventing any LLM spend.
+
+# Config vars that are NEVER credentials (loaded normally even if a provider
+# token appears in the name, e.g. ``OPENAI_PROD_MODEL``).
+_NONSECRET_SUFFIXES = (
+    "_MODEL",
+    "_URL",
+    "_BASE_URL",
+    "_BASE",
+    "_ENDPOINT",
+    "_HOST",
+    "_PORT",
+    "_REGION",
+    "_LOCATION",
+    "_VERSION",
+    "_API_VERSION",
+    "_DEPLOYMENT",
+    "_DEPLOYMENT_NAME",
+    "_ORG",
+    "_ORG_ID",
+    "_ORGANIZATION",
+    "_PROJECT",
+    "_PROJECT_ID",
 )
-_SECRET_SUFFIXES = (
-    "_KEY",  # OPENAI_API_KEY, AZURE_OPENAI_KEY, *_KEY
-    "_SECRET",
-    "_TOKEN",
-    "_CREDENTIALS",
-    "_PASSWORD",
-    "_PASSPHRASE",
+
+# Credential-shaped suffixes (a secret ends this way).
+_CREDENTIAL_SUFFIXES = ("_KEY", "_SECRET", "_TOKEN", "_CREDENTIALS", "_APIKEY")
+
+# Known LLM-provider name fragments. A credential-shaped name containing one of
+# these is a provider secret. (Generic ``*_API_KEY`` / ``*_API_TOKEN`` is also
+# caught below, covering any provider not enumerated here.)
+_LLM_PROVIDER_TOKENS = (
+    "OPENAI",
+    "ANTHROPIC",
+    "CLAUDE",
+    "GEMINI",
+    "VERTEX",
+    "DEEPSEEK",
+    "MISTRAL",
+    "MIXTRAL",
+    "COHERE",
+    "REPLICATE",
+    "HUGGINGFACE",
+    "HUGGING_FACE",
+    "TOGETHER",
+    "GROQ",
+    "PERPLEXITY",
+    "FIREWORKS",
+    "OPENROUTER",
+    "BEDROCK",
+    "AZURE_OPENAI",
+    "WATSONX",
+    "AI21",
+    "NVIDIA",
+    "XAI",
+    "MOONSHOT",
+    "DASHSCOPE",
+    "ANYSCALE",
+    "DEEPINFRA",
+    "OLLAMA",
+)
+
+# Explicit provider-credential names that don't fit the shape rules above.
+_EXPLICIT_PROVIDER_SECRETS = frozenset(
+    {
+        "GOOGLE_APPLICATION_CREDENTIALS",  # Vertex/Gemini service-account JSON path
+        "HF_TOKEN",  # HuggingFace short form
+        "HF_API_TOKEN",
+    }
 )
 
 
@@ -79,16 +129,34 @@ def _real_llm_allowed() -> bool:
 
 
 def is_provider_secret(key: str) -> bool:
-    """True if ``key`` names a provider credential that must not load on a bare run.
+    """True if ``key`` names an LLM-PROVIDER credential that would bill on a bare run.
 
-    Fail-closed by design: any name matching a secret substring or suffix family
-    is treated as a secret. Non-secret config (``*_MODEL``, ``*_URL``, ``*_HOST``,
-    ``*_REGION``, ``*_VERSION`` …) matches neither and loads normally.
+    Scoped to LLM billing — the guard's purpose. Returns True for:
+      * any ``*_API_KEY`` / ``*_API_TOKEN`` (generic provider-credential shape);
+      * a credential-shaped name (``*_KEY`` / ``*_SECRET`` / ``*_TOKEN`` /
+        ``*_CREDENTIALS``, or containing ``BEARER``) that ALSO names a known LLM
+        provider (``OPENAI``, ``ANTHROPIC``, ``BEDROCK``, ``AZURE_OPENAI`` …);
+      * a small explicit set (``GOOGLE_APPLICATION_CREDENTIALS``, ``HF_TOKEN`` …).
+
+    Returns False for config vars (``*_MODEL``, ``*_URL``, ``*_REGION`` …) and for
+    NON-LLM secrets (``SAAS_STARTER_JWT_SECRET``, ``DB_PASSWORD``,
+    ``AWS_ACCESS_KEY_ID`` …) — those cause no LLM spend and are needed by tests
+    that set them; scrubbing them was a real regression.
     """
     k = key.upper()
-    if any(sub in k for sub in _SECRET_SUBSTRINGS):
+    if k in _EXPLICIT_PROVIDER_SECRETS:
         return True
-    return any(k.endswith(suf) for suf in _SECRET_SUFFIXES)
+    if any(k.endswith(suf) for suf in _NONSECRET_SUFFIXES):
+        return False
+    # Generic provider-credential shape (covers any provider, enumerated or not).
+    if k.endswith("_API_KEY") or k.endswith("_API_TOKEN"):
+        return True
+    # Named LLM provider + credential shape.
+    names_provider = any(tok in k for tok in _LLM_PROVIDER_TOKENS)
+    credential_shaped = "BEARER" in k or any(
+        k.endswith(suf) for suf in _CREDENTIAL_SUFFIXES
+    )
+    return names_provider and credential_shaped
 
 
 def scrub_provider_secrets(environ: Optional[dict] = None) -> list[str]:

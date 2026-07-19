@@ -20,29 +20,31 @@ from kailash.testing.env_cost_guard import (
     scrub_provider_secrets,
 )
 
-# Every provider-credential family a bare run must withhold — including the ones
-# the original `*_API_KEY` / `*_SECRET` predicate missed.
+# LLM-provider credentials a bare run must withhold (these cause LLM billing) —
+# including AWS_BEARER_TOKEN_BEDROCK, which the original *_API_KEY/*_SECRET
+# predicate missed.
 SECRET_NAMES = [
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GOOGLE_API_KEY",
     "DEEPSEEK_API_KEY",
     "MISTRAL_API_KEY",
-    "AWS_BEARER_TOKEN_BEDROCK",  # live in this repo's .env; ends in neither _API_KEY nor _SECRET
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
+    "COHERE_API_KEY",
+    "GROQ_API_KEY",
+    "AWS_BEARER_TOKEN_BEDROCK",  # live in this repo's .env; not *_API_KEY nor *_SECRET
     "REPLICATE_API_TOKEN",
     "HF_TOKEN",
     "HUGGING_FACE_HUB_TOKEN",
     "GOOGLE_APPLICATION_CREDENTIALS",
     "AZURE_OPENAI_KEY",
     "AZURE_OPENAI_AD_TOKEN",
-    "DB_PASSWORD",
 ]
 
-# Non-secret config that MUST still load on a bare run.
+# Vars that MUST still load on a bare run: config (never a credential) AND
+# NON-LLM secrets (they cause no LLM spend and are legitimately needed by tests
+# that set them — scrubbing them was a real regression, see the JWT test below).
 NON_SECRET_NAMES = [
+    # Config
     "OPENAI_PROD_MODEL",
     "OPENAI_DEV_MODEL",
     "DEFAULT_LLM_MODEL",
@@ -51,6 +53,14 @@ NON_SECRET_NAMES = [
     "KAIZEN_ALLOW_REAL_LLM",
     "AWS_REGION",
     "OPENAI_API_VERSION",
+    "OPENAI_BASE_URL",
+    # NON-LLM secrets — not scrubbed (no LLM billing risk; tests need them)
+    "SAAS_STARTER_JWT_SECRET",  # the regression: broad SECRET-match scrubbed this
+    "DB_PASSWORD",
+    "SESSION_SECRET",
+    "CSRF_TOKEN",
+    "AWS_ACCESS_KEY_ID",  # generic cloud cred (not LLM-scoped); scrubbing breaks S3 tests
+    "AWS_SECRET_ACCESS_KEY",
 ]
 
 
