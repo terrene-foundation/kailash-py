@@ -8,6 +8,8 @@ import json
 import time
 
 import pytest
+from pytest_httpserver import HTTPServer
+
 from nexus.auth.sso import (
     InMemorySSOStateStore,
     InvalidStateError,
@@ -15,7 +17,6 @@ from nexus.auth.sso import (
     configure_state_store,
 )
 from nexus.auth.sso.base import SSOAuthError, SSOTokenResponse, SSOUserInfo
-from pytest_httpserver import HTTPServer
 
 # =============================================================================
 # Fixtures
@@ -399,11 +400,11 @@ class TestCsrfStateValidationIntegration:
         state = secrets.token_urlsafe(32)
         store.store(state)
 
-        # Validate (consume)
-        assert store.validate_and_consume(state) is True
+        # Validate (consume) — returns the stored data dict, not a bool
+        assert store.validate_and_consume(state) is not None
 
         # State consumed - cannot be used again
-        assert store.validate_and_consume(state) is False
+        assert store.validate_and_consume(state) is None
 
     def test_state_prevents_replay(self):
         """Same state cannot be used twice (one-time use)."""
@@ -415,7 +416,7 @@ class TestCsrfStateValidationIntegration:
         store.validate_and_consume(state)
 
         # Second use fails
-        assert store.validate_and_consume(state) is False
+        assert store.validate_and_consume(state) is None
 
     def test_expired_state_rejected(self):
         """Expired state is detected and rejected."""
@@ -424,16 +425,16 @@ class TestCsrfStateValidationIntegration:
         configure_state_store(short_ttl_store)
 
         state = "expired-state"
-        # Directly insert with past timestamp to simulate expiry
-        short_ttl_store._store[state] = time.time() - 100
+        # Directly insert with past timestamp to simulate expiry (dict entry)
+        short_ttl_store._store[state] = {"timestamp": time.time() - 100}
 
         # Expired state is rejected
-        assert short_ttl_store.validate_and_consume(state) is False
+        assert short_ttl_store.validate_and_consume(state) is None
 
     def test_unknown_state_rejected(self):
         """Unknown state (CSRF attack) is rejected."""
         store = _get_state_store()
-        assert store.validate_and_consume("unknown-state") is False
+        assert store.validate_and_consume("unknown-state") is None
 
     @pytest.mark.asyncio
     async def test_handle_callback_rejects_invalid_state(self):
@@ -466,7 +467,7 @@ class TestCsrfStateValidationIntegration:
         configure_state_store(short_ttl_store)
 
         state = "expired-callback-state"
-        short_ttl_store._store[state] = time.time() - 100
+        short_ttl_store._store[state] = {"timestamp": time.time() - 100}
 
         github = GitHubProvider(
             client_id="test-client",
@@ -520,7 +521,7 @@ class TestAuthorizationUrlIntegration:
             )
 
             assert "state=test-state" in url, f"{provider.name} missing state param"
-            assert f"client_id={provider.client_id}" in url, (
-                f"{provider.name} missing client_id param"
-            )
+            assert (
+                f"client_id={provider.client_id}" in url
+            ), f"{provider.name} missing client_id param"
             assert "redirect_uri=" in url, f"{provider.name} missing redirect_uri"

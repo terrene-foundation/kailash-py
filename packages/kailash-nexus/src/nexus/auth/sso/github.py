@@ -46,6 +46,10 @@ class GitHubProvider(BaseSSOProvider):
 
     name = "github"
 
+    # GitHub OAuth2 issues no OIDC id_token, so nonce enforcement does not
+    # apply; PKCE still applies to its authorization-code flow.
+    supports_id_token = False
+
     AUTHORIZATION_URL = "https://github.com/login/oauth/authorize"
     TOKEN_URL = "https://github.com/login/oauth/access_token"
     USERINFO_URL = "https://api.github.com/user"
@@ -77,6 +81,7 @@ class GitHubProvider(BaseSSOProvider):
         redirect_uri: str,
         scope: Optional[str] = None,
         allow_signup: bool = True,
+        code_challenge: Optional[str] = None,
         **kwargs,
     ) -> str:
         """Generate GitHub authorization URL.
@@ -86,6 +91,8 @@ class GitHubProvider(BaseSSOProvider):
             redirect_uri: Callback URL
             scope: Override default scopes
             allow_signup: Allow new user signups (default: True)
+            code_challenge: PKCE (RFC 7636) S256 challenge. When present, emits
+                ``code_challenge`` + ``code_challenge_method=S256``.
             **kwargs: Additional parameters (login hint)
 
         Returns:
@@ -98,6 +105,9 @@ class GitHubProvider(BaseSSOProvider):
             "state": state,
             "allow_signup": str(allow_signup).lower(),
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         params.update(kwargs)
 
         return f"{self.AUTHORIZATION_URL}?{urlencode(params)}"
@@ -106,12 +116,15 @@ class GitHubProvider(BaseSSOProvider):
         self,
         code: str,
         redirect_uri: str,
+        code_verifier: Optional[str] = None,
     ) -> SSOTokenResponse:
         """Exchange authorization code for access token.
 
         Args:
             code: Authorization code
             redirect_uri: Callback URL
+            code_verifier: PKCE (RFC 7636) verifier replayed to the token
+                endpoint to prove proof-of-possession.
 
         Returns:
             Token response (no id_token for GitHub)
@@ -121,14 +134,18 @@ class GitHubProvider(BaseSSOProvider):
         """
         client = await self._get_http_client()
 
+        token_request_data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            token_request_data["code_verifier"] = code_verifier
+
         response = await client.post(
             self.TOKEN_URL,
-            data={
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
+            data=token_request_data,
             headers={"Accept": "application/json"},
         )
 

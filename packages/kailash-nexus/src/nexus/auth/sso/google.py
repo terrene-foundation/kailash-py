@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 
 import jwt
 from jwt import PyJWKClient
+
 from nexus.auth.sso.base import (
     BaseSSOProvider,
     SSOAuthError,
@@ -82,6 +83,7 @@ class GoogleProvider(BaseSSOProvider):
         scope: Optional[str] = None,
         access_type: str = "offline",
         prompt: str = "consent",
+        code_challenge: Optional[str] = None,
         **kwargs,
     ) -> str:
         """Generate Google authorization URL.
@@ -92,7 +94,10 @@ class GoogleProvider(BaseSSOProvider):
             scope: Override default scopes
             access_type: "online" or "offline" (for refresh token)
             prompt: "none", "consent", "select_account"
-            **kwargs: Additional parameters (login_hint, hd for G Suite)
+            code_challenge: PKCE (RFC 7636) S256 challenge. When present, emits
+                ``code_challenge`` + ``code_challenge_method=S256``.
+            **kwargs: Additional parameters (login_hint, hd for G Suite, and
+                ``nonce`` for OIDC id_token replay defense)
 
         Returns:
             Authorization URL
@@ -106,6 +111,9 @@ class GoogleProvider(BaseSSOProvider):
             "access_type": access_type,
             "prompt": prompt,
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         params.update(kwargs)
 
         return f"{self.AUTHORIZATION_URL}?{urlencode(params)}"
@@ -114,12 +122,15 @@ class GoogleProvider(BaseSSOProvider):
         self,
         code: str,
         redirect_uri: str,
+        code_verifier: Optional[str] = None,
     ) -> SSOTokenResponse:
         """Exchange authorization code for tokens.
 
         Args:
             code: Authorization code
             redirect_uri: Callback URL
+            code_verifier: PKCE (RFC 7636) verifier replayed to the token
+                endpoint to prove proof-of-possession.
 
         Returns:
             Token response
@@ -134,6 +145,8 @@ class GoogleProvider(BaseSSOProvider):
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
 
         response = await self._post_form(self.TOKEN_URL, data)
 
@@ -170,17 +183,24 @@ class GoogleProvider(BaseSSOProvider):
             raw_data=data,
         )
 
-    def validate_id_token(self, id_token: str) -> Dict[str, Any]:
+    def validate_id_token(
+        self,
+        id_token: str,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Validate and decode Google ID token.
 
         Args:
             id_token: JWT ID token
+            nonce: The nonce minted at authorization time. When present, the
+                id_token's ``nonce`` claim MUST match (constant-time) or this
+                raises — the id_token replay/injection defense.
 
         Returns:
             Decoded token claims
 
         Raises:
-            SSOAuthError: If validation fails
+            SSOAuthError: If validation fails or the nonce does not match
         """
         try:
             signing_key = self._jwks_client.get_signing_key_from_jwt(id_token)
@@ -192,6 +212,9 @@ class GoogleProvider(BaseSSOProvider):
                 audience=self.client_id,
                 issuer=["https://accounts.google.com", "accounts.google.com"],
             )
+
+            # Nonce enforced ONLY against the verified payload above.
+            self._enforce_nonce(payload, nonce)
 
             return payload
 

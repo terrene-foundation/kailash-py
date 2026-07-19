@@ -78,36 +78,58 @@ class SSOStateStore(Protocol):
     development only. For production multi-process or multi-server
     deployments, use a Redis-backed implementation.
 
+    The store persists — alongside the CSRF state token — the per-flow PKCE
+    ``code_verifier`` (RFC 7636) and OIDC ``nonce`` minted at authorization
+    time, so :func:`handle_sso_callback` can replay the verifier to the token
+    endpoint and enforce the nonce against the returned id_token.
+    ``validate_and_consume`` returns the stored data dict on a valid,
+    single-use consume and ``None`` when the state is unknown or expired.
+
     Example Redis implementation:
+        >>> import json
         >>> class RedisSSOStateStore:
         ...     def __init__(self, redis_client, ttl=600):
         ...         self._redis = redis_client
         ...         self._ttl = ttl
         ...
-        ...     def store(self, state: str) -> None:
-        ...         self._redis.setex(f"sso:state:{state}", self._ttl, "1")
+        ...     def store(self, state, *, code_verifier=None, nonce=None):
+        ...         payload = json.dumps(
+        ...             {"code_verifier": code_verifier, "nonce": nonce}
+        ...         )
+        ...         self._redis.setex(f"sso:state:{state}", self._ttl, payload)
         ...
-        ...     def validate_and_consume(self, state: str) -> bool:
+        ...     def validate_and_consume(self, state):
         ...         key = f"sso:state:{state}"
         ...         pipe = self._redis.pipeline()
         ...         pipe.get(key)
         ...         pipe.delete(key)
         ...         result = pipe.execute()
-        ...         return result[0] is not None
+        ...         if result[0] is None:
+        ...             return None
+        ...         return json.loads(result[0])
         ...
         ...     def cleanup(self) -> None:
         ...         pass  # Redis TTL handles expiration
     """
 
-    def store(self, state: str) -> None:
-        """Store a new CSRF state token."""
+    def store(
+        self,
+        state: str,
+        *,
+        code_verifier: Optional[str] = None,
+        nonce: Optional[str] = None,
+    ) -> None:
+        """Store a new CSRF state token with its PKCE verifier + OIDC nonce."""
         ...
 
-    def validate_and_consume(self, state: str) -> bool:
+    def validate_and_consume(self, state: str) -> Optional[Dict[str, Any]]:
         """Validate state token and remove it (single use).
 
         Returns:
-            True if state was valid and not expired, False otherwise
+            The stored ``{"code_verifier": ..., "nonce": ...}`` dict if the
+            state was valid and not expired, ``None`` otherwise. The dict is
+            truthy on success so ``if not store.validate_and_consume(state)``
+            remains a correct validity gate.
         """
         ...
 
@@ -125,27 +147,47 @@ class InMemorySSOStateStore:
     """
 
     def __init__(self, ttl_seconds: int = 600):
-        self._store: Dict[str, float] = {}
+        # state -> {"timestamp": float, "code_verifier": str|None, "nonce": str|None}
+        self._store: Dict[str, Dict[str, Any]] = {}
         self._ttl = ttl_seconds
 
-    def store(self, state: str) -> None:
-        """Store a new state token with current timestamp."""
+    def store(
+        self,
+        state: str,
+        *,
+        code_verifier: Optional[str] = None,
+        nonce: Optional[str] = None,
+    ) -> None:
+        """Store a new state token with its PKCE verifier + OIDC nonce."""
         self.cleanup()
-        self._store[state] = time.time()
+        self._store[state] = {
+            "timestamp": time.time(),
+            "code_verifier": code_verifier,
+            "nonce": nonce,
+        }
 
-    def validate_and_consume(self, state: str) -> bool:
-        """Validate and atomically consume state token."""
-        stored_time = self._store.pop(state, None)
-        if stored_time is None:
-            return False
-        if time.time() - stored_time > self._ttl:
-            return False
-        return True
+    def validate_and_consume(self, state: str) -> Optional[Dict[str, Any]]:
+        """Validate and atomically consume state token.
+
+        Returns the stored ``{"code_verifier", "nonce"}`` dict on success,
+        ``None`` when the state is unknown or expired.
+        """
+        entry = self._store.pop(state, None)
+        if entry is None:
+            return None
+        if time.time() - entry["timestamp"] > self._ttl:
+            return None
+        return {
+            "code_verifier": entry.get("code_verifier"),
+            "nonce": entry.get("nonce"),
+        }
 
     def cleanup(self) -> None:
         """Remove expired state entries."""
         now = time.time()
-        expired = [k for k, v in self._store.items() if now - v > self._ttl]
+        expired = [
+            k for k, v in self._store.items() if now - v["timestamp"] > self._ttl
+        ]
         for k in expired:
             del self._store[k]
 
@@ -206,14 +248,28 @@ async def initiate_sso_login(
 
     redirect_uri = f"{callback_base_url}/auth/sso/{provider.name}/callback"
 
+    # PKCE (RFC 7636) — a per-flow verifier/challenge pair bound to this state.
+    code_verifier, code_challenge = provider.generate_pkce_pair()
+
+    # OIDC nonce (id_token replay/injection defense) — minted ONLY for providers
+    # that issue an id_token (GitHub OAuth2 has none, so no nonce).
+    nonce = (
+        secrets.token_urlsafe(32)
+        if getattr(provider, "supports_id_token", False)
+        else None
+    )
+    if nonce is not None:
+        kwargs["nonce"] = nonce
+
     auth_url = provider.get_authorization_url(
         state=state,
         redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
         **kwargs,
     )
 
     store = _get_state_store()
-    store.store(state)
+    store.store(state, code_verifier=code_verifier, nonce=nonce)
 
     return RedirectResponse(url=auth_url)
 
@@ -242,15 +298,27 @@ async def handle_sso_callback(
         SSOAuthError: If SSO authentication fails
     """
     store = _get_state_store()
-    if not store.validate_and_consume(state):
+    state_result = store.validate_and_consume(state)
+    if not state_result:
         raise InvalidStateError("Invalid or expired SSO state - possible CSRF attack")
+
+    # A dict-returning store carries the per-flow PKCE verifier + nonce; a legacy
+    # bool-returning custom store carries neither (empty dict), so PKCE/nonce are
+    # simply absent — never a silent downgrade of a flow that DID mint them.
+    state_data = state_result if isinstance(state_result, dict) else {}
+    code_verifier = state_data.get("code_verifier")
+    nonce = state_data.get("nonce")
 
     redirect_uri = f"{callback_base_url or ''}/auth/sso/{provider.name}/callback"
 
-    tokens = await provider.exchange_code(code, redirect_uri)
+    tokens = await provider.exchange_code(
+        code, redirect_uri, code_verifier=code_verifier
+    )
 
     if tokens.id_token:
-        claims = provider.validate_id_token(tokens.id_token)
+        # nonce enforcement runs inside validate_id_token against the
+        # JWKS-verified claims (fail-closed on mismatch).
+        claims = provider.validate_id_token(tokens.id_token, nonce=nonce)
         user_id = claims.get("sub")
         email = claims.get("email")
         name = claims.get("name")

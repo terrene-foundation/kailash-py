@@ -18,6 +18,7 @@ import logging
 import time
 
 import pytest
+
 from nexus.auth.audit.config import AuditConfig
 from nexus.auth.audit.middleware import AuditMiddleware
 from nexus.auth.rate_limit.backends.memory import InMemoryBackend
@@ -95,33 +96,35 @@ class TestSSOStateStore:
         """Store a state and validate it once."""
         store = InMemorySSOStateStore()
         store.store("test-state-123")
-        assert store.validate_and_consume("test-state-123") is True
+        # validate_and_consume now returns the stored data dict (truthy) on a
+        # valid consume, None on an invalid/expired one.
+        assert store.validate_and_consume("test-state-123") is not None
 
     def test_single_use_consumption(self):
         """State tokens are consumed on first validation (single use)."""
         store = InMemorySSOStateStore()
         store.store("single-use-token")
-        assert store.validate_and_consume("single-use-token") is True
-        assert store.validate_and_consume("single-use-token") is False
+        assert store.validate_and_consume("single-use-token") is not None
+        assert store.validate_and_consume("single-use-token") is None
 
     def test_unknown_state_rejected(self):
         """Unknown state tokens are rejected."""
         store = InMemorySSOStateStore()
-        assert store.validate_and_consume("nonexistent") is False
+        assert store.validate_and_consume("nonexistent") is None
 
     def test_expired_state_rejected(self):
         """Expired state tokens are rejected."""
         store = InMemorySSOStateStore(ttl_seconds=1)
         store.store("will-expire")
-        # Manually backdate the entry
-        store._store["will-expire"] = time.time() - 10
-        assert store.validate_and_consume("will-expire") is False
+        # Manually backdate the entry's timestamp (entries are dicts).
+        store._store["will-expire"]["timestamp"] = time.time() - 10
+        assert store.validate_and_consume("will-expire") is None
 
     def test_cleanup_removes_expired(self):
         """cleanup() removes expired entries."""
         store = InMemorySSOStateStore(ttl_seconds=1)
-        store._store["old"] = time.time() - 10
-        store._store["fresh"] = time.time()
+        store._store["old"] = {"timestamp": time.time() - 10}
+        store._store["fresh"] = {"timestamp": time.time()}
         store.cleanup()
         assert "old" not in store._store
         assert "fresh" in store._store

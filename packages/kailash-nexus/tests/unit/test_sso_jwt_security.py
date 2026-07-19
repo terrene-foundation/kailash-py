@@ -20,7 +20,6 @@ jwt_mod = pytest.importorskip("jwt", reason="pyjwt required for JWT security tes
 
 from kailash.trust.auth.jwt import JWTConfig, JWTValidator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -139,10 +138,10 @@ class TestSSONonceReplay:
         nonce = "test-nonce-123"
         store.store(nonce)
 
-        # First consumption should succeed
-        assert store.validate_and_consume(nonce) is True
+        # First consumption should succeed (returns the stored data dict)
+        assert store.validate_and_consume(nonce) is not None
 
         # Second consumption should fail (replay attack)
         assert (
-            store.validate_and_consume(nonce) is False
-        ), "SSO nonce replay: second consumption should return False"
+            store.validate_and_consume(nonce) is None
+        ), "SSO nonce replay: second consumption should return None"
