@@ -5,7 +5,22 @@ This module provides pre-configured capability combinations for common use cases
 Presets are the recommended starting point for most users.
 """
 
+import os
 from typing import Any
+
+from kaizen_agents._model_env import resolve_default_model
+
+# The code-review preset default is provider-intrinsic (Claude excels at code
+# review). Documented module-level constant, overridable via
+# KAIZEN_CODE_REVIEW_MODEL (env-models "Provider-Intrinsic Named-Constant
+# Defaults" carve-out) — NOT resolved through the general text resolver, which
+# would drop the deliberate Claude recommendation.
+_DEFAULT_CODE_REVIEW_MODEL = "claude-3-opus"
+
+
+def _resolve_code_review_model() -> str:
+    """Resolve the code-review preset default (Claude, env-overridable)."""
+    return os.environ.get("KAIZEN_CODE_REVIEW_MODEL", _DEFAULT_CODE_REVIEW_MODEL)
 
 
 class CapabilityPresets:
@@ -31,7 +46,7 @@ class CapabilityPresets:
 
     @staticmethod
     def qa_assistant(
-        model: str = "gpt-4",
+        model: str | None = None,
         **overrides,
     ) -> dict[str, Any]:
         """
@@ -54,7 +69,7 @@ class CapabilityPresets:
             result = agent.run("What is IRP?")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "single",
             "memory": "stateless",
             "tool_access": "none",
@@ -66,7 +81,7 @@ class CapabilityPresets:
 
     @staticmethod
     def tutor(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_turns: int = 50,
         **overrides,
     ) -> dict[str, Any]:
@@ -92,7 +107,7 @@ class CapabilityPresets:
             result = agent.chat("Can you give me an example?")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "multi",
             "memory": "session",
             "tool_access": "none",
@@ -104,7 +119,7 @@ class CapabilityPresets:
 
     @staticmethod
     def researcher(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_cycles: int = 50,
         **overrides,
     ) -> dict[str, Any]:
@@ -129,7 +144,7 @@ class CapabilityPresets:
             result = agent.run("Analyze the authentication module and identify security issues")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "autonomous",
             "memory": "session",
             "tool_access": "read_only",
@@ -141,7 +156,7 @@ class CapabilityPresets:
 
     @staticmethod
     def developer(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_cycles: int = 100,
         **overrides,
     ) -> dict[str, Any]:
@@ -166,7 +181,7 @@ class CapabilityPresets:
             result = agent.run("Implement a REST API endpoint for user authentication")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "autonomous",
             "memory": "session",
             "tool_access": "constrained",
@@ -178,7 +193,7 @@ class CapabilityPresets:
 
     @staticmethod
     def admin(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_cycles: int = 100,
         **overrides,
     ) -> dict[str, Any]:
@@ -206,7 +221,7 @@ class CapabilityPresets:
             result = agent.run("Deploy the new version to staging")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "autonomous",
             "memory": "persistent",
             "tool_access": "full",
@@ -218,7 +233,7 @@ class CapabilityPresets:
 
     @staticmethod
     def chat_assistant(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_turns: int = 100,
         memory_path: str | None = None,
         **overrides,
@@ -247,7 +262,7 @@ class CapabilityPresets:
             result = agent.chat("What's my favorite color?")  # Remembers!
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "multi",
             "memory": "persistent",
             "memory_path": memory_path or "./data/chat_memory",
@@ -260,7 +275,7 @@ class CapabilityPresets:
 
     @staticmethod
     def data_analyst(
-        model: str = "gpt-4",
+        model: str | None = None,
         max_cycles: int = 50,
         **overrides,
     ) -> dict[str, Any]:
@@ -285,7 +300,7 @@ class CapabilityPresets:
             result = agent.run("Analyze sales.csv and create a summary report")
         """
         config = {
-            "model": model,
+            "model": model or resolve_default_model(),
             "execution_mode": "autonomous",
             "memory": "session",
             "tool_access": "constrained",
@@ -305,7 +320,9 @@ class CapabilityPresets:
 
     @staticmethod
     def code_reviewer(
-        model: str = "claude-3-opus",  # Claude excels at code review
+        model: (
+            str | None
+        ) = None,  # default resolves to KAIZEN_CODE_REVIEW_MODEL / claude-3-opus
         max_cycles: int = 30,
         **overrides,
     ) -> dict[str, Any]:
@@ -330,7 +347,7 @@ class CapabilityPresets:
             result = agent.run("Review the authentication module for security issues")
         """
         config = {
-            "model": model,
+            "model": model or _resolve_code_review_model(),
             "execution_mode": "autonomous",
             "memory": "session",
             "tool_access": "read_only",

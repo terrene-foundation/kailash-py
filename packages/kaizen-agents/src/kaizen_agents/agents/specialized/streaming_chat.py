@@ -42,6 +42,8 @@ from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.streaming import StreamingStrategy
 
+from kaizen_agents._model_env import resolve_default_model
+
 
 class ChatSignature(Signature):
     """Signature for streaming chat interactions."""
@@ -268,7 +270,7 @@ class StreamingChatAgent(BaseAgent):
 async def stream_chat(
     message: str,
     llm_provider: str = "openai",
-    model: str = "gpt-3.5-turbo",
+    model: str | None = None,
     chunk_size: int = 1,
 ) -> AsyncIterator[str]:
     """
@@ -293,6 +295,9 @@ async def stream_chat(
         ...
         >>> asyncio.run(demo())
     """
+    if model is None:
+        model = resolve_default_model()
+
     agent = StreamingChatAgent(
         llm_provider=llm_provider, model=model, streaming=True, chunk_size=chunk_size
     )

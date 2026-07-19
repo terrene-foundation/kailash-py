@@ -7,6 +7,8 @@ All errors include remediation suggestions to help users fix configuration issue
 
 from typing import Any
 
+from kaizen_agents._model_env import resolve_default_model
+
 from kaizen_agents.api.types import (
     AgentCapabilities,
     ExecutionMode,
@@ -527,7 +529,7 @@ def validate_execution_mode_for_task(
 
 def get_recommended_configuration(
     task: str,
-    model: str = "gpt-4",
+    model: str | None = None,
 ) -> dict[str, Any]:
     """
     Get recommended configuration based on task description.
@@ -546,6 +548,7 @@ def get_recommended_configuration(
         # Returns: {"execution_mode": "autonomous", "tool_access": "constrained", ...}
     """
     task_lower = task.lower()
+    model = model or resolve_default_model()
 
     # Default recommendation
     config = {

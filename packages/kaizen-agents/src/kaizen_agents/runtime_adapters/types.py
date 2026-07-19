@@ -9,11 +9,17 @@ Defines the core types for the native autonomous agent implementation:
 - PermissionMode: Tool permission modes
 """
 
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+
+# Provider-intrinsic default for the native (OpenAI-backed) autonomous runtime.
+# Documented module-level named constant, overridable via the KAIZEN_OPENAI_MODEL
+# env var. NOT chained to the provider-agnostic default resolver.
+_DEFAULT_MODEL = "gpt-4o"
 
 
 class AutonomousPhase(Enum):
@@ -79,7 +85,9 @@ class AutonomousConfig:
 
     # LLM settings
     llm_provider: str = "openai"
-    model: str = "gpt-4o"
+    model: str = field(
+        default_factory=lambda: os.environ.get("KAIZEN_OPENAI_MODEL", _DEFAULT_MODEL)
+    )
     temperature: float = 0.7
 
     # Execution limits

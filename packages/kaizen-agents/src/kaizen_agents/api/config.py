@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen_agents._model_env import resolve_default_model
+
 from kaizen_agents.api.types import (
     AgentCapabilities,
     ExecutionMode,
@@ -191,8 +193,9 @@ class AgentConfig:
 
     # === Core Configuration ===
 
-    model: str = "gpt-4"
-    """Primary model to use."""
+    model: str = field(default_factory=resolve_default_model)
+    """Primary model to use. Defaults to the .env-resolved model
+    (OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> gpt-4o)."""
 
     provider: str | None = None
     """LLM provider. None for auto-detection based on model."""
@@ -429,7 +432,7 @@ class AgentConfig:
 
         # Map preset config to AgentConfig fields
         return cls(
-            model=preset_config.get("model", "gpt-4"),
+            model=preset_config.get("model") or resolve_default_model(),
             execution_mode=ExecutionMode(preset_config.get("execution_mode", "single")),
             max_cycles=preset_config.get("max_cycles", 100),
             max_turns=preset_config.get("max_turns", 50),

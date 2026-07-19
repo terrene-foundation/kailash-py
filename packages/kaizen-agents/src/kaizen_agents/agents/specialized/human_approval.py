@@ -36,6 +36,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
+from kaizen_agents._model_env import resolve_default_model
+
 if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
 from kaizen.core.base_agent import BaseAgent
@@ -292,7 +294,7 @@ async def approve_decision(
     prompt: str,
     approval_callback: Callable[[dict[str, Any]], tuple[bool, str]] | None = None,
     llm_provider: str = "openai",
-    model: str = "gpt-4",
+    model: str | None = None,
 ) -> dict[str, Any]:
     """
     Quick decision approval with default configuration.
@@ -319,6 +321,9 @@ async def approve_decision(
         ... ))
         >>> print(f"Approved: {result['_human_approved']}")
     """
+    if model is None:
+        model = resolve_default_model()
+
     agent = HumanApprovalAgent(
         approval_callback=approval_callback, llm_provider=llm_provider, model=model
     )

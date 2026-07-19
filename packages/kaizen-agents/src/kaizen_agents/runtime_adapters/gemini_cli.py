@@ -31,6 +31,11 @@ from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
 
 logger = logging.getLogger(__name__)
 
+# Provider-intrinsic default (this adapter IS Gemini). Documented module-level
+# named constant, overridable via the KAIZEN_GEMINI_MODEL env var. NOT chained
+# to the provider-agnostic default resolver — a non-Gemini model here is wrong.
+_DEFAULT_MODEL = "gemini-1.5-pro"
+
 
 class GeminiCLIAdapter(BaseRuntimeAdapter):
     """Adapter that delegates to Google Gemini API.
@@ -65,7 +70,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gemini-1.5-pro",
+        model: str | None = None,
         enable_code_execution: bool = False,
         custom_tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.7,
@@ -100,6 +105,8 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
         super().__init__()
 
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        if model is None:
+            model = os.environ.get("KAIZEN_GEMINI_MODEL", _DEFAULT_MODEL)
         self.model = model
         self.enable_code_execution = enable_code_execution
         self.custom_tools = custom_tools or []
