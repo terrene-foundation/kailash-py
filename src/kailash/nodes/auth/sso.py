@@ -535,6 +535,14 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             raise ValueError(
                 f"OIDC id_token verification failed: invalid token ({exc})"
             )
+        except Exception as exc:
+            # Fail-closed catch-all: some PyJWT versions surface a JWKS network
+            # fetch failure OUTSIDE the jwt exception hierarchy (e.g.
+            # urllib.error.URLError). It already REJECTS by propagating, but this
+            # normalizes it to the SAME typed ValueError so the fail-closed
+            # contract is uniform across PyJWT versions. It NEVER falls back to
+            # the unverified base64url read — it re-raises a rejection.
+            raise ValueError(f"OIDC id_token verification failed: {exc}") from exc
 
         if not isinstance(claims, dict):
             # jwt.decode returns a dict for a JWS; guard defensively so a later

@@ -198,6 +198,35 @@ async def test_fail_closed_when_jwks_unreachable(oidc_jwks_server):
         await _callback(node, state, token)
 
 
+@pytest.mark.asyncio
+async def test_fail_closed_normalizes_non_jwt_error_to_typed_valueerror(
+    oidc_jwks_server, monkeypatch
+):
+    """A JWKS/network failure OUTSIDE the jwt exception hierarchy MUST still be
+    normalized to the typed fail-closed ValueError (uniform across PyJWT
+    versions). This injects a non-jwt failure at the JWKS-client boundary — a
+    forced REJECT, never a mocked verification pass — to exercise the catch-all
+    that a version-specific specific-handler would otherwise miss."""
+    import jwt
+
+    class _Boom:
+        def __init__(self, *a, **kw):
+            raise OSError("simulated non-jwt JWKS fetch failure")
+
+    # Patch the JWKS client so construction raises an error OUTSIDE jwt.*;
+    # `_verify_id_token` does `from jwt import PyJWKClient` at call time, so this
+    # attribute patch is picked up. The verifier itself is not mocked — the
+    # boundary is forced to FAIL, and the node MUST reject with a typed error.
+    monkeypatch.setattr(jwt, "PyJWKClient", _Boom)
+
+    node = _make_node(_oauth_settings(oidc_jwks_server))
+    state, minted = await _seed(node)
+    token = oidc_jwks_server.sign(oidc_jwks_server.base_claims(nonce=minted))
+
+    with pytest.raises(ValueError, match="verification failed"):
+        await _callback(node, state, token)
+
+
 # --------------------------------------------------------------------------- #
 # structural: the base64url display helper is NOT used for the trust decision
 # --------------------------------------------------------------------------- #
