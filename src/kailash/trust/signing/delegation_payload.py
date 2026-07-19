@@ -49,6 +49,27 @@ paired regression test holds the CURRENT reference bytes as a loud tripwire; if
 kailash-rs re-pins the vectors, they MUST be re-pinned here in lockstep
 (``cross-sdk-inspection.md`` Rule 4b).
 
+Fail-closed on un-pinned inputs. Every §5.3 reference vector is whole-second,
+ASCII-only, single-payload-version-consistent, and uses distinct signers with
+``TrustLevel.SUPERVISED`` / ``dimension_scope=None``. The engine REFUSES any
+input whose bytes are NOT covered by a pinned cross-SDK vector rather than emit
+un-verified bytes single-SDK:
+
+* **Non-ASCII string content** (``delegator`` / ``delegate`` / ``capabilities`` /
+  ``scope.domain`` / ``scope.operations`` / any signed string) — the delegate
+  encoder would emit raw UTF-8, but the delegate vs signing encoders disagree on
+  ``ensure_ascii`` and no non-ASCII vector is pinned. Known cross-SDK
+  limitation; a non-ASCII vector is a future lockstep item.
+* **Sub-second ``created_at`` / ``expires_at``** — the RFC3339 fractional-second
+  rendering vs the kailash-rs chrono form is un-pinned.
+* **Duplicate multi-sig signers** — a multiset silently weakens the M-of-N
+  quorum and diverges from a deduping sibling SDK; the threshold is validated
+  against the DISTINCT signer count.
+* **``V2_COMPLETE`` + ``multi_sig=True``** — an inconsistent combo that would
+  carry ``"multi_sig":true`` without the policy fold; a multi-sig record MUST
+  sign ``V3_COMPLETE``.
+* **Un-pinned ``TrustLevel`` / non-None ``dimension_scope``** — see below.
+
 Additive scope — this module is a standalone byte-exact engine. It does NOT
 migrate the existing ``DelegationRecord`` sign/verify call sites; that is a
 later shard of the #1841 program.
@@ -265,17 +286,27 @@ class MultiSigSigningPolicy:
             raise ValueError(
                 f"multi-sig threshold ({self.threshold}) must be at least 1"
             )
-        if self.threshold > len(self.authorized_signers):
-            raise ValueError(
-                f"multi-sig threshold ({self.threshold}) cannot exceed the number "
-                f"of signers ({len(self.authorized_signers)})"
-            )
         for signer in self.authorized_signers:
             if not isinstance(signer, (bytes, bytearray)) or len(signer) != 32:
                 raise ValueError(
                     "each multi-sig authorized signer MUST be 32 raw bytes "
                     "(Ed25519 public key)"
                 )
+        # Duplicate signer keys silently WEAKEN the M-of-N quorum — a 2-of-2
+        # over [K, K] is really a 1-of-1 — and diverge from any sibling SDK
+        # that dedupes. Reject duplicates and validate the threshold against the
+        # DISTINCT signer count, not the raw multiset length.
+        distinct = {bytes(signer) for signer in self.authorized_signers}
+        if len(distinct) != len(self.authorized_signers):
+            raise ValueError(
+                "multi-sig authorized_signers MUST be distinct; duplicate signer "
+                "keys weaken the M-of-N quorum and diverge cross-SDK"
+            )
+        if self.threshold > len(distinct):
+            raise ValueError(
+                f"multi-sig threshold ({self.threshold}) cannot exceed the number "
+                f"of distinct signers ({len(distinct)})"
+            )
 
     @classmethod
     def new(
@@ -320,19 +351,71 @@ class DelegationSigningInput:
 
 
 def _rfc3339_utc(value: datetime) -> str:
-    """Format a tz-aware datetime as RFC3339 with a ``+00:00`` offset.
+    """Format a tz-aware, whole-second datetime as RFC3339 with a ``+00:00`` offset.
 
     §5.3 pins the timestamp form to ``+00:00`` (NOT ``Z``); Python's
     :meth:`datetime.isoformat` on a UTC-aware datetime produces exactly that.
+
+    Sub-second precision fails closed: the §5.3 reference vectors are all
+    whole-second, so the fractional-second rendering (Python
+    ``isoformat`` emits a variable-width ``.ffffff``) has NO pinned cross-SDK
+    vector against the kailash-rs chrono format. Emitting it single-SDK would
+    be an un-verified byte divergence, so a non-zero-microsecond timestamp is
+    rejected until a sub-second vector is pinned in lockstep — matching the
+    module's fail-closed posture on un-pinned TrustLevel / dimension_scope /
+    non-ASCII content.
     """
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(
             "created_at / expires_at MUST be timezone-aware "
             "(RFC3339 requires an explicit offset)"
         )
+    if value.microsecond != 0:
+        raise ValueError(
+            "created_at / expires_at with sub-second precision is not "
+            "cross-SDK-pinned (§5.3 vectors are whole-second); the RFC3339 "
+            "fractional-second rendering vs kailash-rs chrono is un-verified — "
+            "reject rather than emit un-pinned bytes (future lockstep item)"
+        )
     from datetime import timezone
 
     return value.astimezone(timezone.utc).isoformat()
+
+
+def _assert_signed_strings_ascii(value: Any, path: str = "$") -> None:
+    """Fail closed on non-ASCII content in any signed string field.
+
+    The delegate JCS encoder emits non-ASCII code points as raw UTF-8
+    (``ensure_ascii=False``), but NO kailash-rs reference vector pins a
+    non-ASCII pre-image, so emitting those bytes single-SDK is an un-verified
+    cross-SDK divergence (the delegate vs signing encoders disagree on
+    ``ensure_ascii``; §5.3 inputs are ASCII-only, so which encoder is canonical
+    for non-ASCII is un-pinned). Until a non-ASCII vector is pinned in lockstep,
+    reject non-ASCII string content — matching the module's fail-closed posture
+    on un-pinned TrustLevel / dimension_scope / sub-second timestamps.
+    """
+    if isinstance(value, str):
+        try:
+            value.encode("ascii")
+        except UnicodeEncodeError:
+            raise ValueError(
+                f"non-ASCII content in signed string field at {path}: {value!r} — "
+                f"the cross-SDK pre-image byte contract has no pinned non-ASCII "
+                f"vector yet (future lockstep item); reject rather than emit "
+                f"un-verified bytes"
+            ) from None
+    elif isinstance(value, dict):
+        for sub_key, sub_value in value.items():
+            _assert_signed_strings_ascii(sub_value, f"{path}.{sub_key}")
+    elif isinstance(value, list):
+        for index, sub_value in enumerate(value):
+            _assert_signed_strings_ascii(sub_value, f"{path}[{index}]")
+
+
+def _encode_preimage(payload: dict[str, Any]) -> bytes:
+    """Assert ASCII-only signed content, then encode the canonical pre-image."""
+    _assert_signed_strings_ascii(payload)
+    return canonical_json_dumps(payload).encode("utf-8")
 
 
 def delegation_signing_payload(
@@ -382,7 +465,18 @@ def delegation_signing_payload(
         )
 
     if version is SigningPayloadVersion.V1_LEGACY:
-        return canonical_json_dumps(payload).encode("utf-8")
+        return _encode_preimage(payload)
+
+    # V2_COMPLETE describes NON-multi-sig records; a multi-sig record signs
+    # V3_COMPLETE (verify fails closed on a policy-bearing non-V3 record). A
+    # V2_COMPLETE + multi_sig=True combo would emit a pre-image carrying
+    # ``"multi_sig":true`` but dropping the policy fold — deterministic yet with
+    # NO pinned vector. Reject the inconsistent combo.
+    if version is SigningPayloadVersion.V2_COMPLETE and signing_input.multi_sig:
+        raise ValueError(
+            "V2_COMPLETE is for non-multi-sig records; a multi-sig record "
+            "(multi_sig=True) MUST sign V3_COMPLETE"
+        )
 
     # --- V2_COMPLETE fold: constraints / limits / scope / trace-hash / token
     payload["constraints"] = signing_input.constraints.to_signing_dict()
@@ -392,7 +486,7 @@ def delegation_signing_payload(
     payload["signing_payload_version"] = version.value
 
     if version is SigningPayloadVersion.V2_COMPLETE:
-        return canonical_json_dumps(payload).encode("utf-8")
+        return _encode_preimage(payload)
 
     # --- V3_COMPLETE fold: multi-sig policy (byte-CHANGING for multi-sig) ---
     if not signing_input.multi_sig or signing_input.multi_sig_policy is None:
@@ -405,4 +499,4 @@ def delegation_signing_payload(
     payload["multi_sig_authorized_signers"] = (
         signing_input.multi_sig_policy.authorized_signers_hex()
     )
-    return canonical_json_dumps(payload).encode("utf-8")
+    return _encode_preimage(payload)

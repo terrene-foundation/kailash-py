@@ -317,6 +317,20 @@ event. `ConstraintDimensions.for_level` / `ResourceLimits.for_level` are
 byte-verified only for `TrustLevel.SUPERVISED` in this shard and fail closed on
 any un-pinned level rather than emit un-verified bytes.
 
+**Fail-closed on un-pinned inputs.** Every §5.3 vector is ASCII-only,
+whole-second, payload-version-consistent, and uses distinct signers. The engine
+REFUSES (raises) any input whose bytes are not covered by a pinned cross-SDK
+vector rather than emit un-verified bytes single-SDK: **non-ASCII** string
+content in any signed field (`delegator` / `delegate` / `capabilities` /
+`scope.domain` / `scope.operations` — a known cross-SDK limitation pending a
+non-ASCII lockstep vector, since the delegate and signing encoders disagree on
+`ensure_ascii`); **sub-second** `created_at` / `expires_at` (RFC3339
+fractional-second rendering vs kailash-rs chrono is un-pinned); **duplicate**
+multi-sig signers (a multiset weakens the M-of-N quorum — the threshold is
+validated against the DISTINCT signer count); and the inconsistent
+`V2_COMPLETE` + `multi_sig=True` combo (a multi-sig record MUST sign
+`V3_COMPLETE`).
+
 ### 3.4 AuditAnchor
 
 Tamper-evident record of an agent action.

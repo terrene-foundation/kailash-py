@@ -181,3 +181,90 @@ def test_pre_image_is_ascii_only() -> None:
         SigningPayloadVersion.V3_COMPLETE,
     )
     assert payload.decode("ascii")  # raises if any non-ASCII byte present
+
+
+# --- Fail-closed edge cases (redteam FIX 1-3, PR #1868) ----------------------
+
+
+def test_duplicate_signers_rejected() -> None:
+    """FIX 1: a duplicate-signer multiset weakens M-of-N and MUST be rejected.
+
+    ``2-of-[K, K]`` is really a 1-of-1 and diverges from a deduping sibling SDK.
+    """
+    with pytest.raises(ValueError, match="distinct"):
+        MultiSigSigningPolicy.new(2, [_key(1), _key(1)])
+    # Threshold validated against the DISTINCT count, not the raw multiset len.
+    with pytest.raises(ValueError, match="distinct"):
+        MultiSigSigningPolicy.new(2, [_key(1), _key(1), _key(1)])
+
+
+def test_non_ascii_signed_string_rejected() -> None:
+    """FIX 2: non-ASCII in any signed string field fails closed (no pinned vector)."""
+    policy = MultiSigSigningPolicy.new(1, [_key(9)])
+    base = dict(
+        delegation_id="00000000-0000-4000-8000-000000000001",
+        delegate="bob",
+        capabilities=("LlmCall",),
+        created_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
+        constraints=ConstraintDimensions.for_level(TrustLevel.SUPERVISED),
+        resource_limits=ResourceLimits.for_level(TrustLevel.SUPERVISED),
+        scope=DelegationScope.new("engineering").with_operation("read"),
+        multi_sig=True,
+        multi_sig_policy=policy,
+    )
+    # Non-ASCII delegator.
+    with pytest.raises(ValueError, match="non-ASCII"):
+        delegation_signing_payload(
+            DelegationSigningInput(delegator="aliçe", **base),
+            SigningPayloadVersion.V3_COMPLETE,
+        )
+    # Non-ASCII inside a scope operation (nested list element).
+    bad_scope = DelegationScope.new("engineering").with_operation("réad")
+    with pytest.raises(ValueError, match="non-ASCII"):
+        delegation_signing_payload(
+            DelegationSigningInput(
+                delegator="alice",
+                delegation_id="00000000-0000-4000-8000-000000000001",
+                delegate="bob",
+                capabilities=("LlmCall",),
+                created_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
+                constraints=ConstraintDimensions.for_level(TrustLevel.SUPERVISED),
+                resource_limits=ResourceLimits.for_level(TrustLevel.SUPERVISED),
+                scope=bad_scope,
+                multi_sig=True,
+                multi_sig_policy=policy,
+            ),
+            SigningPayloadVersion.V3_COMPLETE,
+        )
+
+
+def test_v2_complete_with_multi_sig_rejected() -> None:
+    """FIX 3a: V2_COMPLETE + multi_sig=True is an inconsistent, un-pinned combo."""
+    policy = MultiSigSigningPolicy.new(1, [_key(9)])
+    with pytest.raises(ValueError, match="V3_COMPLETE"):
+        delegation_signing_payload(
+            _fixed_input(multi_sig=True, policy=policy),
+            SigningPayloadVersion.V2_COMPLETE,
+        )
+
+
+def test_sub_second_timestamp_rejected() -> None:
+    """FIX 3b: sub-second created_at/expires_at fails closed (un-pinned format)."""
+    policy = MultiSigSigningPolicy.new(1, [_key(9)])
+    sub_second = datetime(2026, 1, 2, 3, 4, 5, 123456, tzinfo=timezone.utc)
+    with pytest.raises(ValueError, match="sub-second"):
+        delegation_signing_payload(
+            DelegationSigningInput(
+                delegation_id="00000000-0000-4000-8000-000000000001",
+                delegator="alice",
+                delegate="bob",
+                capabilities=("LlmCall",),
+                created_at=sub_second,
+                constraints=ConstraintDimensions.for_level(TrustLevel.SUPERVISED),
+                resource_limits=ResourceLimits.for_level(TrustLevel.SUPERVISED),
+                scope=DelegationScope.new("engineering").with_operation("read"),
+                multi_sig=True,
+                multi_sig_policy=policy,
+            ),
+            SigningPayloadVersion.V3_COMPLETE,
+        )
