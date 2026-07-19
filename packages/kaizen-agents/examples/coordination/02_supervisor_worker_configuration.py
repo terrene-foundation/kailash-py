@@ -38,7 +38,7 @@ def example_2_custom_model():
 
     # Use GPT-4 instead of default gpt-3.5-turbo
     pattern = create_supervisor_worker_pattern(
-        num_workers=3, model="gpt-4", temperature=0.7
+        num_workers=3, model="gpt-4o-mini", temperature=0.7
     )
 
     print("✓ Pattern created with custom model")
@@ -57,17 +57,17 @@ def example_3_separate_configs():
     pattern = create_supervisor_worker_pattern(
         num_workers=4,
         supervisor_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.3,  # Lower temp for deterministic delegation
             "max_tokens": 1000,
         },
         worker_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.7,  # Higher temp for creative execution
             "max_tokens": 1500,
         },
         coordinator_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.1,  # Very low for accurate monitoring
         },
     )
@@ -85,7 +85,7 @@ def example_4_environment_variables():
     print("-" * 70)
 
     # Set environment variables
-    os.environ["KAIZEN_MODEL"] = "gpt-4"
+    os.environ["KAIZEN_MODEL"] = "gpt-4o-mini"
     os.environ["KAIZEN_TEMPERATURE"] = "0.5"
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
@@ -150,7 +150,7 @@ def main():
     print("Basic Parameters:")
     print("  - num_workers: int (default: 3)")
     print("  - llm_provider: str (default: 'openai' or KAIZEN_LLM_PROVIDER)")
-    print("  - model: str (default: 'gpt-3.5-turbo' or KAIZEN_MODEL)")
+    print("  - model: str (default: 'gpt-4o-mini' or KAIZEN_MODEL)")
     print("  - temperature: float (default: 0.7 or KAIZEN_TEMPERATURE)")
     print("  - max_tokens: int (default: 1000 or KAIZEN_MAX_TOKENS)")
     print()

@@ -28,7 +28,7 @@ class MonitoringSignature(Signature):
 @dataclass
 class MonitorConfig:
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.0
     check_timeout: int = 10
     alert_threshold: int = 2

@@ -52,7 +52,7 @@ class AssistantConfig:
     """Configuration for AI assistant agent."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_tokens: int = 2000
 

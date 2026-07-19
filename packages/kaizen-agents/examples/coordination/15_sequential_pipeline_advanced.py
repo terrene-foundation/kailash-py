@@ -68,7 +68,7 @@ def main():
     print("Scenario 1: Complex 6-Stage Data Processing Pipeline")
     print("-" * 70)
 
-    pipeline1 = create_sequential_pipeline(model="gpt-4")
+    pipeline1 = create_sequential_pipeline(model="gpt-4o-mini")
 
     # Create comprehensive data processing pipeline
     stages = [
@@ -142,7 +142,7 @@ def main():
     print("Scenario 3: Stage Metadata Tracking")
     print("-" * 70)
 
-    pipeline3 = create_sequential_pipeline(model="gpt-4")
+    pipeline3 = create_sequential_pipeline(model="gpt-4o-mini")
 
     # Add stages
     pipeline3.add_stage(PipelineStageAgent(BaseAgentConfig(), "analyze"))
@@ -233,11 +233,11 @@ def main():
     # Optimize stages based on task complexity
     optimized_configs = [
         # Simple extraction - fast model, low temp, fewer tokens
-        {"model": "gpt-3.5-turbo", "temperature": 0.3, "max_tokens": 500},
+        {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 500},
         # Complex transformation - powerful model, higher temp, more tokens
-        {"model": "gpt-4", "temperature": 0.8, "max_tokens": 1500},
+        {"model": "gpt-4o-mini", "temperature": 0.8, "max_tokens": 1500},
         # Simple formatting - fast model, low temp, fewer tokens
-        {"model": "gpt-3.5-turbo", "temperature": 0.2, "max_tokens": 300},
+        {"model": "gpt-4o-mini", "temperature": 0.2, "max_tokens": 300},
     ]
 
     pipeline5 = create_sequential_pipeline(stage_configs=optimized_configs)

@@ -28,7 +28,7 @@ class APIAggregationSignature(Signature):
 @dataclass
 class APIAgentConfig:
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     max_retries: int = 3
     retry_delay: float = 1.0

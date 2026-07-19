@@ -20,14 +20,14 @@ Zero-config usage:
 Progressive configuration:
     agent = BatchProcessingAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.1,
         max_concurrent=20  # Increase throughput
     )
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-3.5-turbo
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.1
     KAIZEN_MAX_TOKENS=200
     KAIZEN_MAX_CONCURRENT=10
@@ -71,7 +71,7 @@ class BatchProcessingConfig:
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
     model: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
     )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.1"))
@@ -136,7 +136,7 @@ class BatchProcessingAgent(BaseAgent):
         # With configuration
         agent = BatchProcessingAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             max_concurrent=20
         )
 

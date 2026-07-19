@@ -26,6 +26,22 @@ def _lazy_import_workflow_builder():
     return WorkflowBuilder
 
 
+def _resolve_default_model() -> str:
+    """Env-first default model — never a hardcoded obsolete literal.
+
+    Resolves ``OPENAI_PROD_MODEL`` / ``DEFAULT_LLM_MODEL`` (per env-models.md), then
+    the provider-intrinsic named default. Used wherever a per-config ``model`` is
+    absent so an unconfigured agent never falls back to a deprecated billed model.
+    """
+    from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+
+    return (
+        os.environ.get("OPENAI_PROD_MODEL")
+        or os.environ.get("DEFAULT_LLM_MODEL")
+        or DEFAULT_OPENAI_MODEL
+    )
+
+
 if TYPE_CHECKING:
     from .framework import Kaizen
 
@@ -1769,9 +1785,8 @@ Final Answer: [Your complete solution]
         # Build LLM parameters with CoT system prompt
         llm_params = {
             "provider": self._get_provider_for_config(),
-            "model": self.config.get(
-                "model", "gpt-4"
-            ),  # Use more capable model for CoT
+            "model": self.config.get("model")
+            or _resolve_default_model(),  # env-first; never a hardcoded obsolete literal (CoT)
             "timeout": self.config.get("timeout", 60),  # Allow more time for reasoning
         }
 
@@ -1835,9 +1850,8 @@ Final Answer: [Your complete solution]
         # Build LLM parameters with ReAct system prompt
         llm_params = {
             "provider": self._get_provider_for_config(),
-            "model": self.config.get(
-                "model", "gpt-4"
-            ),  # Use more capable model for ReAct
+            "model": self.config.get("model")
+            or _resolve_default_model(),  # env-first; never a hardcoded obsolete literal (ReAct)
             "timeout": self.config.get("timeout", 60),  # Allow more time for reasoning
         }
 
@@ -2094,9 +2108,18 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
             WorkflowBuilder = _lazy_import_workflow_builder()
             workflow = WorkflowBuilder()
 
-            # Build Core SDK compatible parameters
+            # Build Core SDK compatible parameters. Model is env-first (never a
+            # hardcoded obsolete literal): caller config wins, then
+            # OPENAI_PROD_MODEL / DEFAULT_LLM_MODEL, then the provider-intrinsic
+            # default. Complex patterns still favor a capable model via the
+            # deployment's configured OPENAI_PROD_MODEL.
+            from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+
             base_params = {
-                "model": "gpt-4",  # Force GPT-4 for complex patterns
+                "model": self.config.get("model")
+                or os.environ.get("OPENAI_PROD_MODEL")
+                or os.environ.get("DEFAULT_LLM_MODEL")
+                or DEFAULT_OPENAI_MODEL,
                 "timeout": self.config.get("timeout", 30),
             }
 

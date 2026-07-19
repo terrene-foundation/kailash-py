@@ -21,7 +21,7 @@ class ReflectionConfig:
     """Configuration for self-reflection agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_cycles: int = 3
     improvement_threshold: float = 0.8

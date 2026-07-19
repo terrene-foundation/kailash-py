@@ -20,7 +20,7 @@ Usage:
     # Progressive configuration
     pattern = create_supervisor_worker_pattern(
         num_workers=5,
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7
     )
 
@@ -47,6 +47,7 @@ from typing import Any
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -892,21 +893,21 @@ def create_supervisor_worker_pattern(
     Progressive Configuration:
         >>> pattern = create_supervisor_worker_pattern(
         ...     num_workers=5,
-        ...     model="gpt-4",
+        ...     model="gpt-4o-mini",
         ...     temperature=0.7
         ... )
 
     Separate Agent Configs:
         >>> pattern = create_supervisor_worker_pattern(
         ...     num_workers=3,
-        ...     supervisor_config={'model': 'gpt-4'},
-        ...     worker_config={'model': 'gpt-3.5-turbo'}
+        ...     supervisor_config={'model': 'gpt-4o'},
+        ...     worker_config={'model': 'gpt-4o-mini'}
         ... )
 
     Args:
         num_workers: Number of worker agents (default: 3)
         llm_provider: LLM provider (default: from env or "openai")
-        model: Model name (default: from env or "gpt-3.5-turbo")
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o)
         temperature: Temperature (default: 0.7)
         max_tokens: Max tokens (default: 1000)
         shared_memory: Existing SharedMemoryPool (default: creates new)
@@ -924,7 +925,7 @@ def create_supervisor_worker_pattern(
     # Build base config from parameters (or use defaults)
     base_config_dict = {
         "llm_provider": llm_provider or os.getenv("KAIZEN_LLM_PROVIDER", "openai"),
-        "model": model or os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"),
+        "model": model or os.getenv("KAIZEN_MODEL") or resolve_default_model(),
         "temperature": temperature if temperature is not None else 0.7,
         "max_tokens": max_tokens if max_tokens is not None else 1000,
     }

@@ -447,12 +447,13 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
 
         # Process text-only
         if text and not image and not audio:
-            # Use GPT-4 for text
+            # Use GPT-4o (current vision-capable model, consistent with the
+            # vision call site above)
             import openai
 
             client = openai.OpenAI(api_key=self.api_key)
             response = client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt or text}],
                 **kwargs,
             )

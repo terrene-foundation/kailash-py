@@ -23,7 +23,7 @@ class RAGConfig:
     """Configuration for RAG agent behavior."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_tokens: int = 1000
     top_k_documents: int = 3

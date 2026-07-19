@@ -39,7 +39,7 @@ class ApprovalConfig:
     """Configuration for Approval Agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.3
     max_tokens: int = 300
     approval_callback: Optional[Callable[[Dict[str, Any]], Tuple[bool, str]]] = None

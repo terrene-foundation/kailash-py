@@ -13,7 +13,7 @@ Zero-config usage:
 Progressive configuration:
     agent = CodeGenerationAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.1,
         programming_language="typescript",
         include_tests=True,
@@ -38,6 +38,7 @@ from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen_agents._model_env import resolve_default_model
 
 
 @dataclass
@@ -56,7 +57,7 @@ class CodeGenConfig:
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
     model: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-4o-mini")
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
     )  # Better for code
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.2"))
@@ -153,7 +154,7 @@ class CodeGenerationAgent(BaseAgent):
         # With configuration
         agent = CodeGenerationAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.1,
             programming_language="typescript",
             include_tests=True,

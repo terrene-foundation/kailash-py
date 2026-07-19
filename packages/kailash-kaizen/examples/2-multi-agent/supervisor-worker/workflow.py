@@ -590,7 +590,7 @@ def supervisor_worker_workflow(
     """
     # Setup shared memory pool
     shared_pool = SharedMemoryPool()
-    config = BaseAgentConfig(llm_provider="mock", model="gpt-3.5-turbo")
+    config = BaseAgentConfig(llm_provider="mock", model="gpt-4o-mini")
 
     # Create agents
     supervisor = SupervisorAgent(config, shared_pool, agent_id="supervisor_1")

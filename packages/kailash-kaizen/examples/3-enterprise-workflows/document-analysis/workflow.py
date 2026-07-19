@@ -35,7 +35,7 @@ class DocumentAnalysisConfig:
     """Configuration for document analysis workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     analysis_depth: str = "standard"  # "basic", "standard", "detailed"
     extract_entities: bool = True
     sentiment_analysis: bool = True

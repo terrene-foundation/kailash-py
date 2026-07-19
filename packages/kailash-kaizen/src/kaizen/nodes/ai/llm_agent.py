@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
+from kaizen.config.providers import DEFAULT_OPENAI_MODEL
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
@@ -373,8 +374,10 @@ class LLMAgentNode(Node):
                 name="model",
                 type=str,
                 required=False,
-                default="gpt-4",
-                description="Model name (e.g., gpt-4, claude-3-sonnet, gpt-4-turbo)",
+                default=os.environ.get("OPENAI_PROD_MODEL")
+                or os.environ.get("DEFAULT_LLM_MODEL")
+                or DEFAULT_OPENAI_MODEL,
+                description="Model name (e.g., gpt-4o-mini, claude-3-sonnet, gpt-4-turbo)",
             ),
             "messages": NodeParameter(
                 name="messages",

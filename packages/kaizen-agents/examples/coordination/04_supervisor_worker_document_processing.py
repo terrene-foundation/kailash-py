@@ -129,17 +129,17 @@ def main():
     pattern = create_supervisor_worker_pattern(
         num_workers=num_workers,
         supervisor_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.2,  # Low temp for consistent delegation
             "max_tokens": 2000,
         },
         worker_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.5,  # Balanced for analysis
             "max_tokens": 1500,
         },
         coordinator_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.1,  # Very low for accurate monitoring
         },
     )

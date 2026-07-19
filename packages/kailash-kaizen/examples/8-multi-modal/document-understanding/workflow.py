@@ -106,7 +106,7 @@ class DocumentUnderstandingWorkflow:
         # Step 2: Analysis Agent
         analysis_config = MultiModalConfig(
             llm_provider=config.llm_provider,
-            model="llama2" if config.llm_provider == "ollama" else "gpt-3.5-turbo",
+            model="llama2" if config.llm_provider == "ollama" else "gpt-4o-mini",
             enable_cost_tracking=config.enable_cost_tracking,
         )
 
@@ -121,7 +121,7 @@ class DocumentUnderstandingWorkflow:
         # Step 3: Summary Agent
         summary_config = MultiModalConfig(
             llm_provider=config.llm_provider,
-            model="llama2" if config.llm_provider == "ollama" else "gpt-3.5-turbo",
+            model="llama2" if config.llm_provider == "ollama" else "gpt-4o-mini",
             enable_cost_tracking=config.enable_cost_tracking,
         )
 

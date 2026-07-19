@@ -43,7 +43,7 @@ class FileProcessorConfig:
     """Configuration for file processor agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.0
 
 

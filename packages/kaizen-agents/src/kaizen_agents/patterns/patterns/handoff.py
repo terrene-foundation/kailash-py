@@ -54,6 +54,7 @@ from typing import Any
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 logger = logging.getLogger(__name__)
@@ -514,16 +515,16 @@ def create_handoff_pattern(
     Basic Parameters (Level 2):
         >>> pattern = create_handoff_pattern(
         ...     num_tiers=5,
-        ...     model="gpt-4",
+        ...     model="gpt-4o-mini",
         ...     temperature=0.7
         ... )
 
     Tier Configs (Level 3):
         >>> pattern = create_handoff_pattern(
         ...     tier_configs={
-        ...         1: {'model': 'gpt-3.5-turbo'},
-        ...         2: {'model': 'gpt-4'},
-        ...         3: {'model': 'gpt-4-turbo'}
+        ...         1: {'model': 'gpt-4o-mini'},
+        ...         2: {'model': 'gpt-4o'},
+        ...         3: {'model': 'gpt-4o'}
         ...     }
         ... )
 
@@ -537,7 +538,7 @@ def create_handoff_pattern(
     Args:
         num_tiers: Number of tiers to create (default: 3)
         llm_provider: LLM provider (default: from env or "openai")
-        model: Model name (default: from env or "gpt-3.5-turbo")
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o)
         temperature: Temperature (default: 0.7)
         max_tokens: Max tokens (default: 1000)
         shared_memory: Existing SharedMemoryPool (default: creates new)
@@ -562,7 +563,7 @@ def create_handoff_pattern(
     # Build base config from parameters (or use defaults)
     base_config_dict = {
         "llm_provider": llm_provider or os.getenv("KAIZEN_LLM_PROVIDER", "openai"),
-        "model": model or os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"),
+        "model": model or os.getenv("KAIZEN_MODEL") or resolve_default_model(),
         "temperature": temperature if temperature is not None else 0.7,
         "max_tokens": max_tokens if max_tokens is not None else 1000,
     }

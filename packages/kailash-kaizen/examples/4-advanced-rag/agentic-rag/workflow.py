@@ -35,7 +35,7 @@ class AgenticRAGConfig:
     """Configuration for agentic RAG workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     max_iterations: int = 3
     retrieval_strategy: str = "auto"  # "auto", "semantic", "keyword", "hybrid"
     top_k: int = 5

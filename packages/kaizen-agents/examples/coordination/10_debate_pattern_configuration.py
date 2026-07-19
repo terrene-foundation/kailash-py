@@ -24,7 +24,7 @@ def example_1_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pattern = create_debate_pattern(model="gpt-4", temperature=0.7)
+    pattern = create_debate_pattern(model="gpt-4o-mini", temperature=0.7)
 
     print("✓ Pattern created with custom model")
     print("  Model: gpt-4")
@@ -41,17 +41,17 @@ def example_2_separate_configs():
     # Judge uses GPT-4 (better judgment)
     pattern = create_debate_pattern(
         proponent_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.7,  # Creative arguments
             "max_tokens": 1500,
         },
         opponent_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.7,  # Creative counter-arguments
             "max_tokens": 1500,
         },
         judge_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.3,  # Balanced judgment
             "max_tokens": 1000,
         },
@@ -70,7 +70,7 @@ def example_3_environment_variables():
     print("-" * 70)
 
     # Set environment variables
-    os.environ["KAIZEN_MODEL"] = "gpt-4"
+    os.environ["KAIZEN_MODEL"] = "gpt-4o-mini"
     os.environ["KAIZEN_TEMPERATURE"] = "0.6"
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
@@ -116,7 +116,7 @@ def example_5_multi_round_debate():
     print("-" * 70)
 
     # Create pattern
-    pattern = create_debate_pattern(model="gpt-4")
+    pattern = create_debate_pattern(model="gpt-4o-mini")
 
     # Run 3-round debate (initial arguments + 2 rounds of rebuttals)
     topic = "Should remote work be the default for tech companies?"
@@ -143,7 +143,7 @@ def example_6_complete_workflow():
     print("-" * 70)
 
     # Create pattern with optimal config
-    pattern = create_debate_pattern(model="gpt-4", temperature=0.7, max_tokens=2000)
+    pattern = create_debate_pattern(model="gpt-4o-mini", temperature=0.7, max_tokens=2000)
 
     # Run debate
     topic = "Should AI development be open source or proprietary?"
@@ -199,7 +199,7 @@ def main():
     print()
     print("Basic Parameters:")
     print("  - llm_provider: str (default: 'openai' or KAIZEN_LLM_PROVIDER)")
-    print("  - model: str (default: 'gpt-3.5-turbo' or KAIZEN_MODEL)")
+    print("  - model: str (default: 'gpt-4o-mini' or KAIZEN_MODEL)")
     print("  - temperature: float (default: 0.7 or KAIZEN_TEMPERATURE)")
     print("  - max_tokens: int (default: 1000 or KAIZEN_MAX_TOKENS)")
     print()
@@ -223,13 +223,13 @@ def main():
     print("Recommended Configurations:")
     print()
     print("  Cost-Optimized:")
-    print("    model='gpt-3.5-turbo', rounds=1")
+    print("    model='gpt-4o-mini', rounds=1")
     print()
     print("  Quality-Optimized:")
-    print("    model='gpt-4', temperature=0.7, rounds=3")
+    print("    model='gpt-4o-mini', temperature=0.7, rounds=3")
     print()
     print("  Balanced:")
-    print("    proponent/opponent='gpt-4', judge='gpt-3.5-turbo', rounds=2")
+    print("    proponent/opponent='gpt-4o-mini', judge='gpt-4o-mini', rounds=2")
     print()
 
 

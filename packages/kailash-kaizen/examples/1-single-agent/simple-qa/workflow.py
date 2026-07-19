@@ -21,7 +21,7 @@ class QAConfig:
     """Configuration for Q&A Agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     max_tokens: int = 300
     timeout: int = 30

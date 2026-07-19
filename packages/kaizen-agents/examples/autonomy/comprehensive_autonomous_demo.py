@@ -63,21 +63,21 @@ class ComprehensiveAutonomousDemo:
         # Create specialized agents with tool support
         self.research_agent = RAGResearchAgent(
             llm_provider="openai",
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             temperature=0.3,
             max_cycles=5,
         )
 
         self.codegen_agent = CodeGenerationAgent(
             llm_provider="openai",
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             temperature=0.2,
             max_cycles=5,
         )
 
         self.react_agent = ReActAgent(
             llm_provider="openai",
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             temperature=0.0,
             max_cycles=10,
             confidence_threshold=0.85,

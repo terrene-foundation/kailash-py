@@ -35,7 +35,7 @@ class CustomerServiceConfig:
     """Configuration for customer service workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     auto_response: bool = True
     knowledge_base_enabled: bool = True
     max_articles: int = 5

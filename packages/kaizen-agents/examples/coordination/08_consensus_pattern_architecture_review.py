@@ -232,17 +232,17 @@ def main():
         num_voters=len(arb_perspectives),
         voter_perspectives=arb_perspectives,
         proposer_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.5,  # Balanced for proposals
             "max_tokens": 2000,
         },
         voter_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.6,  # Thoughtful evaluation
             "max_tokens": 1500,
         },
         aggregator_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.2,  # Precise aggregation
         },
     )

@@ -118,17 +118,17 @@ def main():
     support_handoff = create_handoff_pattern(
         tier_configs={
             1: {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.3,  # Deterministic for FAQ responses
                 "max_tokens": 800,
             },
             2: {
-                "model": "gpt-4",
+                "model": "gpt-4o-mini",
                 "temperature": 0.5,  # Balanced for technical help
                 "max_tokens": 1200,
             },
             3: {
-                "model": "gpt-4-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.7,  # Creative problem-solving
                 "max_tokens": 1800,
             },

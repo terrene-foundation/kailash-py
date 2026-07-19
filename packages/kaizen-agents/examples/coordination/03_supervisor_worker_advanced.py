@@ -47,7 +47,7 @@ def main():
 
     # Create pattern with our shared memory
     pattern = create_supervisor_worker_pattern(
-        num_workers=4, shared_memory=shared_memory, model="gpt-4", temperature=0.5
+        num_workers=4, shared_memory=shared_memory, model="gpt-4o-mini", temperature=0.5
     )
 
     print("✓ Pattern created!")

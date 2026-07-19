@@ -19,12 +19,12 @@ Progressive configuration:
     agent = HumanApprovalAgent(
         approval_callback=my_approval_callback,
         llm_provider="openai",
-        model="gpt-4"
+        model="gpt-4o-mini"
     )
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-4
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.3
     KAIZEN_MAX_TOKENS=300
 """
@@ -67,7 +67,9 @@ class HumanApprovalConfig:
     llm_provider: str = field(
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-4"))
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.3"))
     )

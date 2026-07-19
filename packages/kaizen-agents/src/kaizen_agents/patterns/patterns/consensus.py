@@ -24,7 +24,7 @@ Usage:
     pattern = create_consensus_pattern(
         num_voters=5,
         voter_perspectives=["technical", "business", "security", "legal", "ops"],
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7
     )
 
@@ -54,6 +54,7 @@ if TYPE_CHECKING:
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
@@ -684,22 +685,22 @@ def create_consensus_pattern(
         >>> pattern = create_consensus_pattern(
         ...     num_voters=5,
         ...     voter_perspectives=["technical", "business", "security", "legal", "ops"],
-        ...     model="gpt-4",
+        ...     model="gpt-4o-mini",
         ...     temperature=0.7
         ... )
 
     Separate Agent Configs:
         >>> pattern = create_consensus_pattern(
         ...     num_voters=3,
-        ...     proposer_config={'model': 'gpt-4'},
-        ...     voter_config={'model': 'gpt-3.5-turbo'}
+        ...     proposer_config={'model': 'gpt-4o'},
+        ...     voter_config={'model': 'gpt-4o-mini'}
         ... )
 
     Args:
         num_voters: Number of voter agents (default: 3)
         voter_perspectives: List of perspectives for voters (default: ["general"] * num_voters)
         llm_provider: LLM provider (default: from env or "openai")
-        model: Model name (default: from env or "gpt-3.5-turbo")
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o)
         temperature: Temperature (default: 0.7)
         max_tokens: Max tokens (default: 1000)
         shared_memory: Existing SharedMemoryPool (default: creates new)
@@ -717,7 +718,7 @@ def create_consensus_pattern(
     # Build base config from parameters (or use defaults)
     base_config_dict = {
         "llm_provider": llm_provider or os.getenv("KAIZEN_LLM_PROVIDER", "openai"),
-        "model": model or os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"),
+        "model": model or os.getenv("KAIZEN_MODEL") or resolve_default_model(),
         "temperature": temperature if temperature is not None else 0.7,
         "max_tokens": max_tokens if max_tokens is not None else 1000,
     }

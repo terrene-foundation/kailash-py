@@ -30,7 +30,7 @@ class DocumentProcessingSignature(Signature):
 @dataclass
 class DocumentConfig:
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.2
     max_doc_size: int = 1_000_000
     chunk_size: int = 4000

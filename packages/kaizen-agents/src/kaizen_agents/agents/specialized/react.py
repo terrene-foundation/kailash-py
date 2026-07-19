@@ -13,7 +13,7 @@ Zero-config usage:
 Progressive configuration:
     agent = ReActAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.1,
         max_cycles=15,
         confidence_threshold=0.8,
@@ -22,7 +22,7 @@ Progressive configuration:
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-4
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.1
     KAIZEN_MAX_TOKENS=1000
 """
@@ -36,6 +36,7 @@ from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen_agents._model_env import resolve_default_model
 
 
 class ActionType(Enum):
@@ -60,7 +61,9 @@ class ReActConfig:
     llm_provider: str = field(
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-4"))
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.1"))
     )
@@ -130,7 +133,7 @@ class ReActAgent(BaseAgent):
         # With configuration
         agent = ReActAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.1,
             max_cycles=15,
             confidence_threshold=0.8,
@@ -146,7 +149,7 @@ class ReActAgent(BaseAgent):
 
     Configuration:
         llm_provider: LLM provider (default: "openai", env: KAIZEN_LLM_PROVIDER)
-        model: Model name (default: "gpt-4", env: KAIZEN_MODEL)
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o, env: KAIZEN_MODEL)
         temperature: Sampling temperature (default: 0.1, env: KAIZEN_TEMPERATURE)
         max_tokens: Maximum tokens (default: 1000, env: KAIZEN_MAX_TOKENS)
         max_cycles: Maximum reasoning cycles (default: 10)

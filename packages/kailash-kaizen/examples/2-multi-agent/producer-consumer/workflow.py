@@ -98,7 +98,7 @@ class ProducerConsumerConfig(BaseAgentConfig):
     """Configuration for producer-consumer pattern."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     queue_segment: str = "queue"
     results_segment: str = "results"
 

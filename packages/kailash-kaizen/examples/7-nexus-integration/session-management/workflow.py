@@ -41,7 +41,7 @@ class ConversationConfig:
     """Configuration for conversation agent."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.8
 
 

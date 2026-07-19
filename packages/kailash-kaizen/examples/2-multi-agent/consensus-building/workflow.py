@@ -103,7 +103,7 @@ class ConsensusConfig:
     """Configuration for consensus-building workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     num_reviewers: int = 3
     consensus_threshold: float = 0.67  # 2/3 threshold
 

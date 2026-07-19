@@ -103,7 +103,7 @@ class DomainSpecialistsConfig(BaseAgentConfig):
     """Configuration for domain specialists pattern."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     routing_segment: str = "routing"
     answers_segment: str = "answers"
     final_segment: str = "final"

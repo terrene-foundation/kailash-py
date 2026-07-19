@@ -36,7 +36,7 @@ def main():
     print("-" * 50)
 
     agent = SimpleQAAgent(
-        model="gpt-3.5-turbo",  # Override just the model
+        model="gpt-4o-mini",  # Override just the model
         temperature=0.7,  # And temperature
         # All other params use defaults
     )
@@ -84,7 +84,7 @@ def main():
 
     agent = SimpleQAAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.1,
         max_tokens=300,
         timeout=30,

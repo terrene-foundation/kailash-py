@@ -112,8 +112,8 @@ def main():
     fast_handoff = create_handoff_pattern(
         num_tiers=2,
         tier_configs={
-            1: {"model": "gpt-3.5-turbo", "temperature": 0.3, "max_tokens": 500},
-            2: {"model": "gpt-4", "temperature": 0.5, "max_tokens": 1000},
+            1: {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 500},
+            2: {"model": "gpt-4o-mini", "temperature": 0.5, "max_tokens": 1000},
         },
     )
 
@@ -121,10 +121,10 @@ def main():
     deep_handoff = create_handoff_pattern(
         num_tiers=4,
         tier_configs={
-            1: {"model": "gpt-3.5-turbo", "temperature": 0.3},
-            2: {"model": "gpt-4", "temperature": 0.5},
-            3: {"model": "gpt-4", "temperature": 0.7},
-            4: {"model": "gpt-4-turbo", "temperature": 0.8},
+            1: {"model": "gpt-4o-mini", "temperature": 0.3},
+            2: {"model": "gpt-4o-mini", "temperature": 0.5},
+            3: {"model": "gpt-4o-mini", "temperature": 0.7},
+            4: {"model": "gpt-4o-mini", "temperature": 0.8},
         },
     )
 
@@ -222,7 +222,7 @@ def main():
             2: {"temperature": 0.6},
             3: {"temperature": 0.7},
             4: {"temperature": 0.8},
-            5: {"model": "gpt-4-turbo", "temperature": 0.9},
+            5: {"model": "gpt-4o-mini", "temperature": 0.9},
         },
     )
 

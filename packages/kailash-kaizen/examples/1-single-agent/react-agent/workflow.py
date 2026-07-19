@@ -32,7 +32,7 @@ class ReActConfig:
 
     max_cycles: int = 10
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     confidence_threshold: float = 0.7
     mcp_discovery_enabled: bool = True

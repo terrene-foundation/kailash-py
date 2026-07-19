@@ -67,7 +67,7 @@ class ResilientAgent(BaseAgent):
         >>> import asyncio
         >>> # Configure fallback chain: GPT-4 → GPT-3.5 → local
         >>> config = FallbackConfig(
-        ...     models=["gpt-4", "gpt-3.5-turbo", "local-model"]
+        ...     models=["gpt-4o-mini", "gpt-4o-mini", "local-model"]
         ... )
         >>> agent = ResilientAgent(config)
         >>>
@@ -158,7 +158,7 @@ def demo_fallback_success():
     import asyncio
 
     config = FallbackConfig(
-        models=["gpt-4", "gpt-3.5-turbo", "local-model"], llm_provider="mock"
+        models=["gpt-4o-mini", "gpt-4o-mini", "local-model"], llm_provider="mock"
     )
     agent = ResilientAgent(config)
 
@@ -190,7 +190,7 @@ def demo_fallback_chain():
     """Demo multiple queries with fallback."""
     import asyncio
 
-    config = FallbackConfig(models=["gpt-4", "gpt-3.5-turbo"], llm_provider="mock")
+    config = FallbackConfig(models=["gpt-4o-mini", "gpt-4o-mini"], llm_provider="mock")
     agent = ResilientAgent(config)
 
     async def demo():
@@ -227,7 +227,7 @@ def demo_cost_optimization():
 
     # Expensive → Moderate → Cheap
     config = FallbackConfig(
-        models=["gpt-4", "gpt-3.5-turbo", "local-llama"], llm_provider="mock"
+        models=["gpt-4o-mini", "gpt-4o-mini", "local-llama"], llm_provider="mock"
     )
 
     print(f"Fallback chain: {' → '.join(config.models)}")
