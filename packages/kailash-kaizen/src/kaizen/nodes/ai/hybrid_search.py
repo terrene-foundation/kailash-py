@@ -325,6 +325,7 @@ class SemanticHybridSearchNode(Node):
         self.enable_tfidf = True
         self.embedding_model = "nomic-embed-text"
         self.embedding_host = "http://localhost:11434"
+        self.ungoverned = False
 
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -335,7 +336,9 @@ class SemanticHybridSearchNode(Node):
 
         # Initialize components
         self.embedding_provider = SimpleEmbeddingProvider(
-            model_name=self.embedding_model, host=self.embedding_host
+            model_name=self.embedding_model,
+            host=self.embedding_host,
+            ungoverned=self.ungoverned,
         )
         self.tfidf_vectorizer = TFIDFVectorizer()
         self.fuzzy_matcher = FuzzyMatcher()
@@ -434,6 +437,13 @@ class SemanticHybridSearchNode(Node):
                 required=False,
                 default="http://localhost:11434",
                 description="Embedding service host",
+            ),
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
             ),
         }
 
@@ -757,6 +767,7 @@ class AdaptiveSearchNode(Node):
         self.keyword_weight = 0.3
         self.context_weight = 0.2
         self.performance_weight = 0.2
+        self.ungoverned = False
 
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -776,6 +787,7 @@ class AdaptiveSearchNode(Node):
             keyword_weight=self.keyword_weight,
             context_weight=self.context_weight,
             performance_weight=self.performance_weight,
+            ungoverned=self.ungoverned,
         )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -812,6 +824,13 @@ class AdaptiveSearchNode(Node):
                 required=False,
                 default=100,
                 description="Number of searches to remember",
+            ),
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
             ),
         }
 

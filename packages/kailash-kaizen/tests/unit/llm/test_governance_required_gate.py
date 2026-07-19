@@ -981,7 +981,19 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         r"|httpx\.(Async)?Client\("
         r"|ChatCompletionsClient\("
         r"|EmbeddingsClient\("
-        r"|ollama\.(chat|list|embeddings)\("
+        r"|ollama\.(chat|list|embeddings|generate)\("
+        # #1803 security-review MEDIUM: the initial pattern set missed
+        # aiohttp/requests-based egress entirely (caught SimpleEmbeddingProvider
+        # ungated -- HIGH, fixed same session). Broadened so the sweep proves
+        # more than "the sites I already know how to recognize are gated".
+        # aiohttp's CONSTRUCTION site (ClientSession()) is the chokepoint --
+        # a generic `session.post/get(` pattern was tried and dropped: "session"
+        # is an extremely common non-HTTP variable name (dict.get() on a
+        # conversation/approval-request session both false-matched). The
+        # negative lookbehind on `requests\.` avoids matching `self._requests.get(`
+        # (an approval-request STORE, not the requests HTTP library) as a substring.
+        r"|aiohttp\.ClientSession\("
+        r"|(?<!\w)requests\.(post|get)\("
     )
     gate_re = re.compile(r"enforce_governance_posture\(")
 
@@ -1016,6 +1028,33 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         # cache itself never constructs a client (the factory is opaque and
         # caller-supplied). No live construction to gate.
         "nodes/ai/client_cache.py",
+        # --- security-review follow-up (same session): broadening the regex
+        # to catch aiohttp/requests egress (the SimpleEmbeddingProvider HIGH
+        # fix) surfaced these additional real HTTP call sites. None are LLM/
+        # vision PROVIDER egress (no prompt/conversation content sent to an
+        # LLM API) -- each is out of THIS posture's stated scope (governance_
+        # gate.py docstring: "a real, un-governed LLM call") and is a
+        # different governance surface entirely:
+        #
+        # Availability/administration check (requests.get to /api/tags),
+        # same class as the ollama_model_manager.py exemption above.
+        "config/providers.py",
+        # ImageField.from_url() / AudioField.from_url() fetch raw input BYTES
+        # from a caller-supplied URL -- input loading, not provider egress
+        # (no prompt/conversation data is sent anywhere).
+        "signatures/multi_modal.py",
+        # AlertManager posts to a monitoring/alerting webhook (Slack/PagerDuty-
+        # style) -- operational alerting, not LLM/vision provider egress.
+        "monitoring/alert_manager.py",
+        # WebSearchTool / WebFetchTool are dumb data-fetch TOOLS an agent may
+        # invoke (rules/agent-reasoning.md "tools are dumb data endpoints") --
+        # they fetch public web content FOR the agent, they do not send
+        # conversation data TO an LLM/vision provider.
+        "tools/native/search_tools.py",
+        # HTTPTransport is the Control Protocol's bidirectional transport
+        # (ADR-011, human-in-the-loop question/approval channel over SSE) --
+        # control-plane communication, not LLM/vision provider egress.
+        "core/autonomy/control/transports/http.py",
     }
 
     violations = []
@@ -1038,3 +1077,100 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         "this is documented Wave-C-retiring code or core four-axis wire "
         "machinery."
     )
+
+
+# --------------------------------------------------------------------------- #
+# #1803 security-review follow-up (same session, HIGH finding fixed) --
+# kaizen.nodes.ai.semantic_memory.SimpleEmbeddingProvider makes real aiohttp
+# egress to an embedding host (default localhost, but caller-configurable)
+# with NO four-axis LlmClient in the path. Gate lives at the top of
+# embed_text(), before the cache check or the aiohttp session. ungoverned is
+# threaded from every consumer: SemanticMemoryStoreNode, SemanticMemorySearchNode,
+# SemanticAgentMatchingNode (semantic_memory.py), and SemanticHybridSearchNode /
+# AdaptiveSearchNode (hybrid_search.py, the latter composing the former).
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_simple_embedding_provider_refused_under_posture_on() -> None:
+    from kaizen.nodes.ai.semantic_memory import SimpleEmbeddingProvider
+
+    kailash.set_governance_required(True)
+    provider = SimpleEmbeddingProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.embed_text("hello")
+
+
+@pytest.mark.asyncio
+async def test_simple_embedding_provider_ungoverned_bypasses() -> None:
+    from kaizen.nodes.ai.semantic_memory import SimpleEmbeddingProvider
+
+    kailash.set_governance_required(True)
+    provider = SimpleEmbeddingProvider(ungoverned=True)
+    try:
+        await provider.embed_text("hello")
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass embed_text's gate")
+    except Exception:
+        pass  # numpy-missing / connection-refused past the gate is acceptable
+
+
+@pytest.mark.asyncio
+async def test_simple_embedding_provider_off_posture_byte_identical() -> None:
+    from kaizen.nodes.ai.semantic_memory import SimpleEmbeddingProvider
+
+    kailash.set_governance_required(None)
+    provider = SimpleEmbeddingProvider()
+    try:
+        await provider.embed_text("hello")
+    except UngovernedEgressRefused:
+        raise AssertionError("OFF posture must not gate")
+    except Exception:
+        pass
+
+
+def test_semantic_memory_nodes_thread_ungoverned_to_provider() -> None:
+    """SemanticMemoryStoreNode / SemanticMemorySearchNode / SemanticAgentMatchingNode
+    each construct a class-level cached SimpleEmbeddingProvider on first init --
+    assert the node's own ungoverned kwarg reaches it. The class-level cache
+    (``if not hasattr(cls, "_provider")``) is cleared before each construction
+    so this test's ungoverned=True actually reaches a freshly-built provider
+    rather than reusing one cached by an earlier test/import in this process."""
+    from kaizen.nodes.ai.semantic_memory import (
+        SemanticAgentMatchingNode,
+        SemanticMemorySearchNode,
+        SemanticMemoryStoreNode,
+    )
+
+    for cls in (
+        SemanticMemoryStoreNode,
+        SemanticMemorySearchNode,
+        SemanticAgentMatchingNode,
+    ):
+        if hasattr(cls, "_provider"):
+            del cls._provider
+        node = cls(name="test_node", ungoverned=True)
+        assert node._provider._ungoverned is True
+
+
+def test_semantic_hybrid_search_node_threads_ungoverned_to_provider() -> None:
+    from kaizen.nodes.ai.hybrid_search import SemanticHybridSearchNode
+
+    node = SemanticHybridSearchNode(name="hybrid_test", ungoverned=True)
+    assert node.embedding_provider._ungoverned is True
+
+
+def test_adaptive_search_node_forwards_ungoverned_to_hybrid_search() -> None:
+    from kaizen.nodes.ai.hybrid_search import AdaptiveSearchNode
+
+    node = AdaptiveSearchNode(name="adaptive_test", ungoverned=True)
+    assert node.hybrid_search.embedding_provider._ungoverned is True
+
+
+def test_semantic_memory_nodes_default_ungoverned_false() -> None:
+    from kaizen.nodes.ai.semantic_memory import SemanticAgentMatchingNode
+
+    if hasattr(SemanticAgentMatchingNode, "_provider"):
+        del SemanticAgentMatchingNode._provider
+    node = SemanticAgentMatchingNode(name="match_default")
+    assert node._provider._ungoverned is False
