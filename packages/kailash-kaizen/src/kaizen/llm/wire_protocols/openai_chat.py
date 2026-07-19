@@ -88,6 +88,17 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         "messages": list(request.messages),
     }
 
+    # #1859: reasoning-model detection + the token-limit field NAME key off the
+    # canonical model FAMILY, NOT `request.model`. For a direct provider
+    # `request.model` already IS the family, so `canonical_model` is None and
+    # this is `request.model` — byte-identical to pre-#1859. For Azure OpenAI
+    # `request.model` is the caller-chosen DEPLOYMENT NAME (a routing alias that
+    # Azure requires in the URL / wire `model` field); the family arrives on
+    # `request.canonical_model`. Keying detection off the deployment name skips
+    # the reasoning-param strip whenever the deployment name != the canonical
+    # model id (the common case) and Azure returns 400 `unsupported_value`.
+    detection_model = request.canonical_model or request.model
+
     # Collect the caller-set sampling fields, THEN filter by model family —
     # insertion into `payload` still happens at each field's ORIGINAL
     # position below, so key order (and therefore JSON byte output) is
@@ -101,7 +112,7 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
         sampling["frequency_penalty"] = request.frequency_penalty
     if request.presence_penalty is not None:
         sampling["presence_penalty"] = request.presence_penalty
-    filtered_sampling = filter_reasoning_model_params(request.model, sampling)
+    filtered_sampling = filter_reasoning_model_params(detection_model, sampling)
     if filtered_sampling != sampling:
         logger.debug(
             "openai_chat.reasoning_model_params_filtered",
@@ -116,7 +127,11 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     if "top_p" in filtered_sampling:
         payload["top_p"] = filtered_sampling["top_p"]
     if request.max_tokens is not None:
-        payload[_token_limit_field(request.model)] = request.max_tokens
+        # #1859: the token-limit field NAME is model-family-aware, so it keys off
+        # `detection_model` (the canonical family) — an Azure gpt-5/o-series
+        # deployment with a non-canonical name still emits `max_completion_tokens`
+        # instead of `max_tokens` (which those families 400 on).
+        payload[_token_limit_field(detection_model)] = request.max_tokens
     if request.stop:
         payload["stop"] = list(request.stop)
     if request.stream:

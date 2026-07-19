@@ -1077,8 +1077,14 @@ class LlmClient:
         # path for the {model}-template wires; reject traversal / URL-control
         # injection before the request is built (security-reviewer #1717 MEDIUM).
         _validate_completion_model(resolved_model)
+        # #1859: thread the deployment's canonical model FAMILY onto the request
+        # so the wire shaper's reasoning-model detection + token-limit field
+        # selection key off the family rather than a routing alias. `None` for
+        # every direct provider (deployment carries no canonical_model) =>
+        # detection falls back to `resolved_model`, byte-identical to pre-#1859.
         return CompletionRequest(
             model=resolved_model,
+            canonical_model=self._deployment.canonical_model,
             messages=redacted,
             temperature=temperature,
             top_p=top_p,
