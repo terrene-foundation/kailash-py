@@ -182,18 +182,18 @@ def _resolve_azure_deployment(
     args (the shadow/live callers only carry ``provider, model, api_key,
     base_url``).
 
-    Credentials mirror the legacy Azure backend's own resolution
-    (``kaizen.nodes.ai.azure_detection.resolve_azure_env``): the per-request
+    Credentials mirror the canonical Azure env resolution
+    (``kaizen.llm.azure_env.resolve_azure_env``): the per-request
     override wins, else the canonical ``AZURE_*`` env vars (legacy
     ``AZURE_OPENAI_*`` names still resolve with a DeprecationWarning). A
     missing endpoint or api-key returns ``None`` (skip), matching the
     base-url family's missing-credential contract.
     """
     from kaizen.llm.auth.azure import AzureEntra
+    from kaizen.llm.azure_env import resolve_azure_env
     from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
     from kaizen.llm.grammar.azure_openai import AzureOpenAIGrammar
     from kaizen.llm.presets import AZURE_OPENAI_DEFAULT_API_VERSION
-    from kaizen.nodes.ai.azure_detection import resolve_azure_env
 
     resolved_endpoint = base_url or resolve_azure_env(
         "AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT"

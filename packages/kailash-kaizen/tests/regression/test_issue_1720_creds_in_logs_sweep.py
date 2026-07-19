@@ -150,37 +150,13 @@ def test_mcp_tool_execution_error_log_matches_sanitized_return(caplog):
 
 
 # ---------------------------------------------------------------------------
-# azure_backends — the UnifiedAzure backend (distinct from providers/llm/azure;
-# KEPT in Wave C). Convergence-round finding: 6 sites logged raw + exc_info.
+# NOTE (#1820): the AzureOpenAIBackend creds-in-logs case was REMOVED here when
+# the unified-azure provider stack (unified_azure_provider / azure_backends /
+# azure_capabilities / azure_detection) was retired. The four-axis Azure path
+# (llm_agent._provider_llm_response / embedding_generator) carries its own
+# error-sanitization parity via kaizen.nodes.ai.error_sanitizer, exercised by
+# the mcp/discovery cases above and the four-axis wire tests.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.regression
-def test_azure_openai_backend_error_log_sanitized_no_key_leak(caplog):
-    """``AzureOpenAIBackend.chat`` logged the raw provider exception with
-    ``exc_info=True`` — an Azure key (32-char hex, or an api-key echoed in a
-    response body) must not reach the log surface."""
-    from kaizen.nodes.ai.azure_backends import AzureOpenAIBackend
-
-    hex_key = "abcdef0123456789abcdef0123456789"  # 32-char hex → sanitizer redacts
-
-    class _RaisingCompletions:
-        def create(self, *a, **k):
-            raise RuntimeError(f"401 auth failed with api-key {hex_key}")
-
-    class _FakeClient:
-        class chat:  # noqa: N801 - mimic SDK attribute shape
-            completions = _RaisingCompletions()
-
-    backend = AzureOpenAIBackend()
-    backend._client = _FakeClient()  # bypass _get_client() (no env/network)
-
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError) as excinfo:
-            backend.chat([{"role": "user", "content": "hi"}], model="test-model-mock")
-
-    assert hex_key not in str(excinfo.value)
-    assert hex_key not in caplog.text
 
 
 # ---------------------------------------------------------------------------

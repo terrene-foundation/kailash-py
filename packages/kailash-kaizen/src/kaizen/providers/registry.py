@@ -22,8 +22,6 @@ from kaizen.providers.base import (
     LLMProvider,
     StreamingProvider,
 )
-from kaizen.providers.embedding.cohere import CohereProvider
-from kaizen.providers.embedding.huggingface import HuggingFaceProvider
 from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
 from kaizen.providers.llm.azure import AzureAIFoundryProvider
 from kaizen.providers.provider_names import PROVIDER_NAMES
@@ -31,25 +29,19 @@ from kaizen.providers.provider_names import PROVIDER_NAMES
 logger = logging.getLogger(__name__)
 
 
-def _get_unified_azure_provider() -> type:
-    """Lazy-import UnifiedAzureProvider to avoid circular dependency.
-
-    The UnifiedAzureProvider lives in ``kaizen.nodes.ai.unified_azure_provider``
-    and inherits from the *old* monolith's ``UnifiedAIProvider``. We import it
-    lazily so that the new providers package can coexist during migration.
-    """
-    from kaizen.nodes.ai.unified_azure_provider import UnifiedAzureProvider
-
-    return UnifiedAzureProvider
-
-
 # Provider registry mapping names to classes.
-# UnifiedAzureProvider is resolved lazily via a string sentinel.
-PROVIDERS: dict[str, type | str] = {
-    "cohere": CohereProvider,
-    "huggingface": HuggingFaceProvider,
-    "azure": "_unified_azure",
-    "azure_openai": "_unified_azure",
+#
+# #1820: the embedding-legacy providers (``cohere`` / ``huggingface``) and the
+# unified-azure providers (``azure`` / ``azure_openai``) were RETIRED and their
+# modules deleted. Their transports are served end-to-end by the four-axis
+# ``kaizen.llm.LlmClient`` path, which is consulted BEFORE this registry in
+# every live caller (``llm_agent._provider_llm_response`` and
+# ``embedding_generator._generate_provider_embedding`` both resolve through
+# ``kaizen.llm.deployment_resolver.resolve_deployment_for`` first). The registry
+# is only reached for ``azure_ai_foundry`` — the one KNOWN provider
+# ``resolve_deployment_for`` declines to map (no confirmed four-axis wire; it
+# raises ``UnsupportedDeploymentProvider`` so the caller falls back here).
+PROVIDERS: dict[str, type] = {
     "azure_ai_foundry": AzureAIFoundryProvider,
 }
 
@@ -77,15 +69,13 @@ assert set(PROVIDERS.keys()) <= PROVIDER_NAMES, (
 
 
 def _resolve_provider_class(name: str) -> type:
-    """Resolve a provider name to its class, handling lazy imports."""
+    """Resolve a provider name to its class."""
     entry = PROVIDERS.get(name.lower())
     if entry is None:
         raise UnknownProviderError(
             f"Unknown provider: {name}. Available: {list(PROVIDERS.keys())}",
             provider_name=name,
         )
-    if isinstance(entry, str) and entry == "_unified_azure":
-        return _get_unified_azure_provider()
     return entry
 
 

@@ -12,14 +12,15 @@ kaizen 2.34.0).
 
 Wave-2 then RETIRED the seven legacy chat providers (openai / anthropic /
 google / ollama / docker / perplexity / mock) onto the four-axis LlmClient and
-DELETED their canonical modules. Their barrel re-exports were removed in the
-same step — the deprecation cycle for those seven is COMPLETE, so accessing them
-via either barrel now raises ``AttributeError`` (no warning, no resolution). The
-STILL-shimmed names (the base ``LLMProvider``, the kept
-``AzureAIFoundryProvider``, the embedding ``CohereProvider`` /
-``HuggingFaceProvider``, and the registry accessors ``PROVIDERS`` /
-``get_provider`` / ``get_available_providers``) stay on the warn+resolve shim
-until Wave-C.
+DELETED their canonical modules. #1820 likewise RETIRED the embedding-legacy
+``CohereProvider`` / ``HuggingFaceProvider`` (delete-now, no deprecation cycle)
+and the unified-azure provider stack, deleting their modules too. Their barrel
+re-exports were removed in the same step — the deprecation cycle for all of
+them is COMPLETE, so accessing them via either barrel now raises
+``AttributeError`` (no warning, no resolution). The STILL-shimmed names (the
+base ``LLMProvider``, the kept ``AzureAIFoundryProvider``, and the registry
+accessors ``PROVIDERS`` / ``get_provider`` / ``get_available_providers``) stay
+on the warn+resolve shim until Wave-C.
 
 This pins the behavioral contract so a refactor cannot silently change it:
 
@@ -64,22 +65,25 @@ _NODES_AI_LEGACY = {
     "get_available_providers": "kaizen.providers.registry",
 }
 
-_PROVIDERS_LEGACY = {
-    **_NODES_AI_LEGACY,
-    "CohereProvider": "kaizen.providers.embedding.cohere",
-    "HuggingFaceProvider": "kaizen.providers.embedding.huggingface",
-}
+# #1820: CohereProvider / HuggingFaceProvider were RETIRED (delete-now, no
+# deprecation cycle) with the embedding-legacy providers — their modules were
+# DELETED and their barrel re-exports removed, so they now join the
+# AttributeError set below rather than the warn+resolve set.
+_PROVIDERS_LEGACY = dict(_NODES_AI_LEGACY)
 
 _PROVIDERS_LEGACY_WARNS = _PROVIDERS_LEGACY
 
-# #1720 Wave-2: these seven legacy chat providers were retired onto the four-axis
-# LlmClient and their canonical modules deleted. Their barrel re-exports were
-# removed, ending the deprecation cycle — accessing them now raises
-# AttributeError (no warning, no resolution) on BOTH barrels.
+# #1720 Wave-2: seven legacy chat providers retired onto the four-axis LlmClient,
+# modules deleted, barrel re-exports removed.
+# #1820: the embedding-legacy CohereProvider / HuggingFaceProvider joined them
+# (delete-now, no deprecation cycle). Accessing any of these now raises
+# AttributeError (no warning, no resolution) — the end-of-cycle contract.
 _REMOVED_LEGACY_PROVIDERS = [
     "AnthropicProvider",
+    "CohereProvider",
     "DockerModelRunnerProvider",
     "GoogleGeminiProvider",
+    "HuggingFaceProvider",
     "MockProvider",
     "OllamaProvider",
     "OpenAIProvider",
