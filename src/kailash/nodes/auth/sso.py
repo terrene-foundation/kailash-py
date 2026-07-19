@@ -644,6 +644,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
         code_verifier, code_challenge = self._pkce_pair()
 
+        # OIDC nonce (id_token replay/injection defense). Azure AD is
+        # OIDC-capable, so mint + cache a nonce; the callback's
+        # ``expected_nonce`` then activates enforcement against the
+        # JWKS-verified id_token in ``_handle_oauth_callback``.
+        nonce = secrets.token_urlsafe(16)
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("azure_client_id"),
@@ -651,6 +657,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "scope": "openid profile email User.Read",
             "state": state,
             "response_mode": "query",
+            "nonce": nonce,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
@@ -663,6 +670,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
             "tenant_id": tenant_id,
+            "nonce": nonce,
             "code_verifier": code_verifier,
         }
 
@@ -681,6 +689,11 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
         code_verifier, code_challenge = self._pkce_pair()
 
+        # OIDC nonce (id_token replay/injection defense). Google is
+        # OIDC-capable; caching the nonce activates callback enforcement
+        # against the JWKS-verified id_token in ``_handle_oauth_callback``.
+        nonce = secrets.token_urlsafe(16)
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("google_client_id"),
@@ -688,6 +701,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "scope": "openid profile email",
             "state": state,
             "access_type": "offline",
+            "nonce": nonce,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
@@ -700,6 +714,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "provider": "google",
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
+            "nonce": nonce,
             "code_verifier": code_verifier,
         }
 
@@ -717,12 +732,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # PKCE (RFC 7636) — proof-of-possession binding for the auth-code flow
         code_verifier, code_challenge = self._pkce_pair()
 
+        # OIDC nonce (id_token replay/injection defense). Okta is OIDC-capable;
+        # caching the nonce activates callback enforcement against the
+        # JWKS-verified id_token in ``_handle_oauth_callback``.
+        nonce = secrets.token_urlsafe(16)
+
         auth_params = {
             "response_type": "code",
             "client_id": self.oauth_settings.get("okta_client_id"),
             "redirect_uri": redirect_uri,
             "scope": "openid profile email groups",
             "state": state,
+            "nonce": nonce,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
@@ -735,6 +756,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "timestamp": time.time(),
             "redirect_uri": redirect_uri,
             "okta_domain": okta_domain,
+            "nonce": nonce,
             "code_verifier": code_verifier,
         }
 

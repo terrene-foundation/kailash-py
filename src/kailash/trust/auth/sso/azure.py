@@ -106,6 +106,7 @@ class AzureADProvider(BaseSSOProvider):
         redirect_uri: str,
         scope: Optional[str] = None,
         prompt: str = "select_account",
+        code_challenge: Optional[str] = None,
         **kwargs,
     ) -> str:
         """Generate Azure AD authorization URL.
@@ -115,7 +116,10 @@ class AzureADProvider(BaseSSOProvider):
             redirect_uri: Callback URL
             scope: Override default scopes (space-separated)
             prompt: Login prompt behavior (none, login, consent, select_account)
-            **kwargs: Additional parameters (login_hint, domain_hint, etc.)
+            code_challenge: PKCE (RFC 7636) S256 challenge. When present, emits
+                ``code_challenge`` + ``code_challenge_method=S256``.
+            **kwargs: Additional parameters (login_hint, domain_hint, and
+                ``nonce`` for OIDC id_token replay defense)
 
         Returns:
             Authorization URL
@@ -129,6 +133,9 @@ class AzureADProvider(BaseSSOProvider):
             "response_mode": "query",
             "prompt": prompt,
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         params.update(kwargs)
 
         base_url = f"{self.AUTHORITY_BASE}/{self.tenant_id}/oauth2/v2.0/authorize"
@@ -138,12 +145,15 @@ class AzureADProvider(BaseSSOProvider):
         self,
         code: str,
         redirect_uri: str,
+        code_verifier: Optional[str] = None,
     ) -> SSOTokenResponse:
         """Exchange authorization code for tokens.
 
         Args:
             code: Authorization code from callback
             redirect_uri: Same redirect URI used in authorization
+            code_verifier: PKCE (RFC 7636) verifier replayed to the token
+                endpoint to prove proof-of-possession.
 
         Returns:
             Token response with access_token and id_token
@@ -160,6 +170,8 @@ class AzureADProvider(BaseSSOProvider):
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
 
         response = await self._post_form(token_url, data)
 
@@ -196,7 +208,11 @@ class AzureADProvider(BaseSSOProvider):
             raw_data=data,
         )
 
-    def validate_id_token(self, id_token: str) -> Dict[str, Any]:
+    def validate_id_token(
+        self,
+        id_token: str,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Validate and decode Azure AD ID token.
 
         Validates:
@@ -205,15 +221,19 @@ class AzureADProvider(BaseSSOProvider):
             - Audience (aud claim = client_id)
             - Issuer (iss claim = Azure AD)
             - Tenant ID (tid claim, for multi-tenant)
+            - Nonce (when provided; id_token replay/injection defense)
 
         Args:
             id_token: JWT ID token
+            nonce: The nonce minted at authorization time. When present, the
+                id_token's ``nonce`` claim MUST match (constant-time) or this
+                raises.
 
         Returns:
             Decoded token claims
 
         Raises:
-            SSOAuthError: If validation fails
+            SSOAuthError: If validation fails or the nonce does not match
         """
         try:
             signing_key = self._jwks_client.get_signing_key_from_jwt(id_token)
@@ -234,6 +254,9 @@ class AzureADProvider(BaseSSOProvider):
                 audience=self.client_id,
                 issuer=issuer,
             )
+
+            # Nonce enforced ONLY against the verified payload above.
+            self._enforce_nonce(payload, nonce)
 
             return payload
 

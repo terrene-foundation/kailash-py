@@ -155,6 +155,7 @@ class AppleProvider(BaseSSOProvider):
         redirect_uri: str,
         scope: Optional[str] = None,
         response_mode: str = "form_post",
+        code_challenge: Optional[str] = None,
         **kwargs,
     ) -> str:
         """Generate Apple authorization URL.
@@ -164,7 +165,10 @@ class AppleProvider(BaseSSOProvider):
             redirect_uri: Callback URL
             scope: Override default scopes
             response_mode: "query" or "form_post" (recommended)
-            **kwargs: Additional parameters
+            code_challenge: PKCE (RFC 7636) S256 challenge. When present, emits
+                ``code_challenge`` + ``code_challenge_method=S256``.
+            **kwargs: Additional parameters (incl. ``nonce`` for OIDC id_token
+                replay defense)
 
         Returns:
             Authorization URL
@@ -180,6 +184,9 @@ class AppleProvider(BaseSSOProvider):
             "state": state,
             "response_mode": response_mode,
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         params.update(kwargs)
 
         return f"{self.AUTHORIZATION_URL}?{urlencode(params)}"
@@ -188,12 +195,15 @@ class AppleProvider(BaseSSOProvider):
         self,
         code: str,
         redirect_uri: str,
+        code_verifier: Optional[str] = None,
     ) -> SSOTokenResponse:
         """Exchange authorization code for tokens.
 
         Args:
             code: Authorization code
             redirect_uri: Callback URL
+            code_verifier: PKCE (RFC 7636) verifier replayed to the token
+                endpoint to prove proof-of-possession.
 
         Returns:
             Token response
@@ -210,6 +220,8 @@ class AppleProvider(BaseSSOProvider):
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
 
         response = await self._post_form(self.TOKEN_URL, data)
 
@@ -243,18 +255,22 @@ class AppleProvider(BaseSSOProvider):
         self,
         id_token: str,
         user_data: Optional[Dict[str, Any]] = None,
+        nonce: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Validate and decode Apple ID token.
 
         Args:
             id_token: JWT ID token
             user_data: User data from authorization (name, email on first auth)
+            nonce: The nonce minted at authorization time. When present, the
+                id_token's ``nonce`` claim MUST match (constant-time) or this
+                raises — the id_token replay/injection defense.
 
         Returns:
             Decoded token claims with user data merged
 
         Raises:
-            SSOAuthError: If validation fails
+            SSOAuthError: If validation fails or the nonce does not match
 
         Note:
             Apple only sends user's name on FIRST authorization.
@@ -270,6 +286,10 @@ class AppleProvider(BaseSSOProvider):
                 audience=self.client_id,
                 issuer="https://appleid.apple.com",
             )
+
+            # Nonce enforced ONLY against the verified payload above, before
+            # merging any non-token user_data.
+            self._enforce_nonce(payload, nonce)
 
             if user_data:
                 if "name" in user_data:

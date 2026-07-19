@@ -10,7 +10,10 @@ Evidence:
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
+import secrets
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
@@ -104,6 +107,8 @@ class SSOProvider(Protocol):
         state: str,
         redirect_uri: str,
         scope: Optional[str] = None,
+        code_challenge: Optional[str] = None,
+        nonce: Optional[str] = None,
         **kwargs,
     ) -> str:
         """Generate authorization URL for OAuth2 flow.
@@ -112,6 +117,12 @@ class SSOProvider(Protocol):
             state: CSRF state parameter
             redirect_uri: Callback URL after authorization
             scope: OAuth2 scopes (optional, uses provider default)
+            code_challenge: PKCE (RFC 7636) S256 code_challenge. When present,
+                the provider MUST emit ``code_challenge`` +
+                ``code_challenge_method=S256`` on the authorization request.
+            nonce: OIDC nonce (id_token replay defense). When present, an
+                OIDC provider MUST emit ``nonce`` so the IdP echoes it into the
+                id_token for later verification in :meth:`validate_id_token`.
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -123,12 +134,16 @@ class SSOProvider(Protocol):
         self,
         code: str,
         redirect_uri: str,
+        code_verifier: Optional[str] = None,
     ) -> SSOTokenResponse:
         """Exchange authorization code for tokens.
 
         Args:
             code: Authorization code from callback
             redirect_uri: Same redirect_uri used in authorization
+            code_verifier: PKCE (RFC 7636) code_verifier retained from the
+                authorization request. When present, the provider MUST replay
+                it to the token endpoint so the IdP confirms proof-of-possession.
 
         Returns:
             Token response with access_token and optionally id_token
@@ -152,17 +167,25 @@ class SSOProvider(Protocol):
         """
         ...
 
-    def validate_id_token(self, id_token: str) -> Dict[str, Any]:
+    def validate_id_token(
+        self,
+        id_token: str,
+        nonce: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Validate and decode ID token.
 
         Args:
             id_token: OIDC ID token (JWT)
+            nonce: The nonce minted at authorization time. When present, the
+                provider MUST enforce that the id_token's ``nonce`` claim
+                matches (constant-time), rejecting on mismatch — the id_token
+                replay/injection defense.
 
         Returns:
             Decoded token claims
 
         Raises:
-            SSOAuthError: If token is invalid
+            SSOAuthError: If token is invalid or the nonce does not match
         """
         ...
 
@@ -174,7 +197,59 @@ class BaseSSOProvider:
         - HTTP client management
         - Common error handling
         - Token validation utilities
+        - PKCE (RFC 7636) pair generation + OIDC nonce enforcement
     """
+
+    #: Whether this provider issues an OIDC id_token (and therefore supports
+    #: nonce enforcement). GitHub OAuth2 has no id_token and overrides this to
+    #: False; callers use it to decide whether to mint + enforce a nonce.
+    supports_id_token: bool = True
+
+    @staticmethod
+    def generate_pkce_pair() -> tuple[str, str]:
+        """Generate a PKCE (RFC 7636) ``(code_verifier, code_challenge)`` pair.
+
+        The verifier is a high-entropy secret the caller retains and replays to
+        the token endpoint via :meth:`exchange_code`; the challenge is its S256
+        (SHA-256, base64url, no padding) transform sent on the authorization
+        request via :meth:`get_authorization_url`. Binding the two proves the
+        client that redeems the authorization code is the same one that
+        requested it, closing the auth-code interception attack on public
+        clients.
+
+        Returns:
+            ``(code_verifier, code_challenge)``
+        """
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .rstrip(b"=")
+            .decode()
+        )
+        return code_verifier, code_challenge
+
+    @staticmethod
+    def _enforce_nonce(claims: Dict[str, Any], nonce: Optional[str]) -> None:
+        """Enforce the OIDC nonce against VERIFIED id_token claims (fail-closed).
+
+        MUST be called only after the id_token signature/aud/iss/exp have been
+        verified — the claims passed here are trusted. When ``nonce`` is
+        provided, the id_token's ``nonce`` claim MUST be a string matching it
+        (compared in constant time); a missing, non-string, or mismatched
+        claim raises :class:`SSOAuthError`. When ``nonce`` is None the check is
+        skipped (no nonce was minted for this flow).
+        """
+        if nonce is None:
+            return
+        import hmac as _hmac
+
+        returned = claims.get("nonce")
+        if not isinstance(returned, str) or not _hmac.compare_digest(returned, nonce):
+            raise SSOAuthError(
+                "OIDC nonce mismatch — id_token nonce claim does not match the "
+                "value minted at authorization time; rejecting authentication "
+                "(possible id_token replay/injection)"
+            )
 
     def __init__(
         self,

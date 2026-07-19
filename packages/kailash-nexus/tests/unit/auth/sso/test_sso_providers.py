@@ -8,6 +8,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from nexus.auth.sso.base import (
     BaseSSOProvider,
     SSOAuthError,
@@ -735,8 +736,8 @@ class TestStateManagement:
         state = secrets.token_urlsafe(32)
         store.store(state)
 
-        # State can be validated
-        assert store.validate_and_consume(state) is True
+        # State can be validated (returns the stored data dict, not a bool)
+        assert store.validate_and_consume(state) is not None
 
     def test_state_consumed_on_validate(self):
         """State is consumed (removed) after validation."""
@@ -746,9 +747,9 @@ class TestStateManagement:
         store.store("test-state")
 
         # First validation succeeds
-        assert store.validate_and_consume("test-state") is True
+        assert store.validate_and_consume("test-state") is not None
         # State is now consumed
-        assert store.validate_and_consume("test-state") is False
+        assert store.validate_and_consume("test-state") is None
 
     def test_state_one_time_use(self):
         """State cannot be used twice."""
@@ -761,7 +762,7 @@ class TestStateManagement:
         store.validate_and_consume("one-time-state")
 
         # Second use fails
-        assert store.validate_and_consume("one-time-state") is False
+        assert store.validate_and_consume("one-time-state") is None
 
     def test_expired_state_cleanup(self):
         """InMemorySSOStateStore.cleanup() removes expired entries."""
@@ -769,9 +770,9 @@ class TestStateManagement:
 
         store = InMemorySSOStateStore(ttl_seconds=1)
 
-        # Add an expired state (directly manipulate internal store)
-        store._store["expired"] = time.time() - 100
-        store._store["valid"] = time.time()
+        # Add an expired state (directly manipulate internal store; entries are dicts)
+        store._store["expired"] = {"timestamp": time.time() - 100}
+        store._store["valid"] = {"timestamp": time.time()}
 
         store.cleanup()
 
