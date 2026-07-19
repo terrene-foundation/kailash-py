@@ -31,10 +31,12 @@ actionable diagnostic AND the cross-tenant-no-leak property.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
 import time
+import uuid
 
 import pytest
 
@@ -80,6 +82,66 @@ def _pg_available() -> bool:
         return False
 
 
+def _names(base: str, suffix: str) -> tuple[str, str]:
+    """Per-test-unique ``(model_name, table)`` for a fixed-name base model.
+
+    #1526's models (``@db.model class Doc`` / ``class Account``) pluralise to
+    the FIXED tables ``docs`` / ``accounts``. On the shared PostgreSQL backend
+    those tables PERSIST across tests — the ``finally`` blocks close the pool
+    but never DROP — so the next test's ``auto_migrate`` re-creates constraints
+    and indexes on the already-present table (duplicate-index / duplicate-key)
+    and leftover seed rows collide (duplicate-key). CI is serial (no xdist), so
+    this is cross-TEST contamination within one run. Namespacing every model per
+    test with a ``uuid.uuid4().hex[:8]`` suffix — the #1252 reference pattern —
+    gives each test its own table; the paired ``_drop_tables`` teardown then
+    leaves the backend clean. Pluralisation here (``lower()`` + ``"s"``) mirrors
+    DataFlow's ``_class_name_to_table_name`` for these alnum names (same rule the
+    #1252 suite relies on).
+    """
+    model_name = f"{base}{suffix}"
+    return model_name, f"{model_name.lower()}s"
+
+
+async def _drop_tables(db: DataFlow, *tables: str) -> None:
+    """Guaranteed per-test teardown: DROP each namespaced table on the SAME real
+    backend ``db`` wrote to (real DROP, no mocking), via the SAME
+    ``SyncDDLExecutor`` DDL path DataFlow's own auto-migrate uses.
+
+    The express ``AsyncSQLDatabaseNode`` REJECTS admin/DDL statements at its
+    ``QueryValidator`` gate (even with ``validate_queries=False`` — the gate is
+    governed by ``_allow_admin``, not that flag), so a DROP MUST route through
+    the framework's DDL executor, not the CRUD node (framework-first; no raw
+    asyncpg/aiosqlite hand-roll). ``SyncDDLExecutor`` opens its OWN sync
+    connection, so teardown works even if ``db``'s pool is already torn down.
+
+    Runs even on mid-test failure (called from the caller's ``finally``). A DROP
+    failure is logged at WARNING (never silently swallowed — zero-tolerance
+    Rule 3) but MUST NOT be re-raised out of the ``finally``, or it would mask
+    the test's own result. ``CASCADE`` is PostgreSQL-only (SQLite ``DROP TABLE``
+    has no ``CASCADE`` clause).
+    """
+    from dataflow.migrations.sync_ddl_executor import SyncDDLExecutor
+
+    dbt = db._detect_database_type()
+    cascade = " CASCADE" if "postgres" in str(dbt).lower() else ""
+    database_url = db._memory_db_uri or db.config.database.get_connection_url(
+        db.config.environment
+    )
+    executor = SyncDDLExecutor(database_url)
+    log = logging.getLogger(__name__)
+    for table in tables:
+        try:
+            result = await asyncio.to_thread(
+                executor.execute_ddl, f'DROP TABLE IF EXISTS "{table}"{cascade}'
+            )
+            if isinstance(result, dict) and result.get("success") is False:
+                log.warning(
+                    "teardown: DROP TABLE %s failed: %s", table, result.get("error")
+                )
+        except Exception:
+            log.warning("teardown: DROP TABLE %s raised", table, exc_info=True)
+
+
 def _assert_actionable_collision(result, *, caller_tenant: str, colliding_id: str):
     """Assert ``result`` is a bulk failure DICT (never raised) carrying the
     actionable, tenant-scoped collision diagnostic naming ONLY ``caller_tenant``
@@ -114,11 +176,10 @@ def _assert_actionable_collision(result, *, caller_tenant: str, colliding_id: st
 # ---------------------------------------------------------------------------
 
 
-async def _run_bulk_create_scenario(db: DataFlow) -> None:
-    @db.model
-    class Doc:
-        id: str
-        title: str
+async def _run_bulk_create_scenario(db: DataFlow, suffix: str) -> None:
+    model_name, _table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -130,7 +191,7 @@ async def _run_bulk_create_scenario(db: DataFlow) -> None:
     # tenant-a establishes the natural key with a SECRET title.
     with db.tenant_context.switch("tenant-a"):
         created = await db.express.create(
-            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+            model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
         )
         assert created["id"] == shared_id
 
@@ -138,7 +199,7 @@ async def _run_bulk_create_scenario(db: DataFlow) -> None:
     # partial-failure dict carrying the actionable collision diagnostic.
     with db.tenant_context.switch("tenant-b"):
         result = await db.express.bulk_create(
-            "Doc",
+            model_name,
             [{"id": shared_id, "title": "B"}, {"id": new_id, "title": "B2"}],
         )
 
@@ -150,25 +211,24 @@ async def _run_bulk_create_scenario(db: DataFlow) -> None:
     assert new_id in [str(x) for x in result["collision"]["colliding_ids"]]
 
 
-async def _run_bulk_create_same_tenant_duplicate(db: DataFlow) -> None:
+async def _run_bulk_create_same_tenant_duplicate(db: DataFlow, suffix: str) -> None:
     """A same-tenant bulk duplicate MUST keep the ordinary raw-error path — it
     MUST NOT be converted into a cross-tenant collision claim (no
     over-broadening), mirroring the single-record discipline."""
 
-    @db.model
-    class Doc:
-        id: str
-        title: str
+    model_name, _table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
 
     dup_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
-        await db.express.create("Doc", {"id": dup_id, "title": "A"})
+        await db.express.create(model_name, {"id": dup_id, "title": "A"})
         # tenant-a re-inserting its OWN id (+ a new id) → same-tenant duplicate.
         result = await db.express.bulk_create(
-            "Doc",
+            model_name,
             [{"id": dup_id, "title": "A2"}, {"id": _uid("doc-new"), "title": "A3"}],
         )
 
@@ -188,15 +248,18 @@ async def test_issue_1526_bulk_create_cross_tenant_collision_sqlite(caplog):
     actionable diagnostic in the failure dict + emits a WARN partial-failure
     log (observability.md Rule 7); it does NOT raise and does NOT leak."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
         with caplog.at_level(logging.WARNING):
-            await _run_bulk_create_scenario(db)
+            await _run_bulk_create_scenario(db, suffix)
         assert any(
             "bulk_create.partial_failure" in rec.message
             or rec.getMessage() == "bulk_create.partial_failure"
             for rec in caplog.records
         ), "expected a bulk_create.partial_failure WARN"
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -208,9 +271,12 @@ async def test_issue_1526_bulk_create_same_tenant_duplicate_sqlite():
     """SQLite (always-on): a same-tenant bulk duplicate keeps the raw error
     path — no over-broadening into a cross-tenant collision claim."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bulk_create_same_tenant_duplicate(db)
+        await _run_bulk_create_same_tenant_duplicate(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -225,9 +291,12 @@ async def test_issue_1526_bulk_create_cross_tenant_collision_postgres():
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bulk_create_scenario(db)
+        await _run_bulk_create_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -236,20 +305,24 @@ async def test_issue_1526_bulk_create_cross_tenant_collision_postgres():
 # ---------------------------------------------------------------------------
 
 
-async def _run_bulk_upsert_scenario(db: DataFlow) -> None:
+async def _run_bulk_upsert_scenario(db: DataFlow, suffix: str) -> None:
     """A bulk_upsert whose conflict target is a UNIQUE column (``code``) with a
     NEW value, while the ``id`` PK collides cross-tenant → the INSERT fails on
     the PK (not the conflict target) → whole-batch failure dict carrying the
     actionable collision diagnostic."""
 
-    @db.model
-    class Account:
-        id: str
-        code: str
-        title: str
-        # A real UNIQUE index makes ``code`` a valid conflict target; the id PK
-        # is what collides cross-tenant.
-        __dataflow__ = {"indexes": [{"fields": ["code"], "unique": True}]}
+    model_name, _table = _names("Account", suffix)
+    Account = type(
+        model_name,
+        (),
+        {
+            "__annotations__": {"id": str, "code": str, "title": str},
+            # A real UNIQUE index makes ``code`` a valid conflict target; the id
+            # PK is what collides cross-tenant.
+            "__dataflow__": {"indexes": [{"fields": ["code"], "unique": True}]},
+        },
+    )
+    db.model(Account)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -258,7 +331,7 @@ async def _run_bulk_upsert_scenario(db: DataFlow) -> None:
     shared_id = _uid("acct")
     with db.tenant_context.switch("tenant-a"):
         await db.express.create(
-            "Account",
+            model_name,
             {"id": shared_id, "code": _uid("code-a"), "title": TENANT_A_SECRET_TITLE},
         )
 
@@ -266,7 +339,7 @@ async def _run_bulk_upsert_scenario(db: DataFlow) -> None:
     # conflict target does not match, the INSERT hits the cross-tenant id PK.
     with db.tenant_context.switch("tenant-b"):
         result = await db.express.bulk_upsert(
-            "Account",
+            model_name,
             [{"id": shared_id, "code": _uid("code-b"), "title": "B"}],
             conflict_on=["code"],
         )
@@ -285,13 +358,16 @@ async def test_issue_1526_bulk_upsert_cross_tenant_collision_sqlite(caplog):
     actionable diagnostic in the failure dict + emits a WARN partial-failure
     log; it does NOT raise and does NOT leak tenant-a's data."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Account", suffix)
     try:
         with caplog.at_level(logging.WARNING):
-            await _run_bulk_upsert_scenario(db)
+            await _run_bulk_upsert_scenario(db, suffix)
         assert any(
             "bulk_upsert.partial_failure" in rec.getMessage() for rec in caplog.records
         ), "expected a bulk_upsert.partial_failure WARN"
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -306,9 +382,12 @@ async def test_issue_1526_bulk_upsert_cross_tenant_collision_postgres():
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Account", suffix)
     try:
-        await _run_bulk_upsert_scenario(db)
+        await _run_bulk_upsert_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -331,12 +410,11 @@ async def test_issue_1526_bulk_collision_helper_no_leak_and_no_over_broadening()
     over-broadening), and (c) declines for an intra-batch duplicate id (a
     caller-side duplicate, not a cross-tenant collision)."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    model_name, table = _names("Doc", suffix)
     try:
-
-        @db.model
-        class Doc:
-            id: str
-            title: str
+        Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+        db.model(Doc)
 
         db._ensure_connected()
         db.tenant_context.register_tenant("tenant-a", "A")
@@ -346,15 +424,19 @@ async def test_issue_1526_bulk_collision_helper_no_leak_and_no_over_broadening()
         new_id = _uid("doc-new")
         with db.tenant_context.switch("tenant-a"):
             await db.express.create(
-                "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+                model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
             )
 
-        pk_err = "UNIQUE constraint failed: docs.id"
+        # The PK-unique driver message the helper's ``is_pk_unique_violation``
+        # text-gate matches MUST name this test's namespaced table, not ``docs``
+        # (the helper resolves the table via ``_class_name_to_table_name`` — the
+        # same ``lower()+"s"`` pluralisation ``_names`` uses).
+        pk_err = f"UNIQUE constraint failed: {table}.id"
 
         # (a) cross-tenant: tenant-b owns neither id → diagnostic, no leak.
         with db.tenant_context.switch("tenant-b"):
             diag = await db.express._maybe_bulk_tenant_natural_key_collision(
-                "Doc",
+                model_name,
                 [{"id": shared_id, "title": "B"}, {"id": new_id, "title": "B2"}],
                 pk_err,
             )
@@ -367,7 +449,7 @@ async def test_issue_1526_bulk_collision_helper_no_leak_and_no_over_broadening()
         # (b) same-tenant: tenant-a OWNS shared_id → decline (no over-broadening).
         with db.tenant_context.switch("tenant-a"):
             diag_same = await db.express._maybe_bulk_tenant_natural_key_collision(
-                "Doc",
+                model_name,
                 [
                     {"id": shared_id, "title": "A2"},
                     {"id": _uid("doc-x"), "title": "A3"},
@@ -381,12 +463,13 @@ async def test_issue_1526_bulk_collision_helper_no_leak_and_no_over_broadening()
         dup = _uid("doc-dup")
         with db.tenant_context.switch("tenant-b"):
             diag_dup = await db.express._maybe_bulk_tenant_natural_key_collision(
-                "Doc",
+                model_name,
                 [{"id": dup, "title": "B"}, {"id": dup, "title": "B-again"}],
                 pk_err,
             )
         assert diag_dup is None
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -429,11 +512,10 @@ async def _assert_tenant_a_row_intact(db: DataFlow, table: str, shared_id: str):
     assert row["title"] == TENANT_A_SECRET_TITLE, f"title was overwritten: {row!r}"
 
 
-async def _run_bulk_id_conflict_scenario(db: DataFlow) -> None:
-    @db.model
-    class Doc:
-        id: str
-        title: str
+async def _run_bulk_id_conflict_scenario(db: DataFlow, suffix: str) -> None:
+    model_name, table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -442,13 +524,13 @@ async def _run_bulk_id_conflict_scenario(db: DataFlow) -> None:
     shared_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
         await db.express.create(
-            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+            model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
         )
 
     # THE BREACH: tenant B upserts the SAME id on the id PK conflict target.
     with db.tenant_context.switch("tenant-b"):
         result = await db.express.bulk_upsert(
-            "Doc", [{"id": shared_id, "title": "B-STOLEN"}], conflict_on=["id"]
+            model_name, [{"id": shared_id, "title": "B-STOLEN"}], conflict_on=["id"]
         )
 
     # Fail-closed: actionable, tenant-scoped collision diagnostic, no leak.
@@ -456,7 +538,7 @@ async def _run_bulk_id_conflict_scenario(db: DataFlow) -> None:
         result, caller_tenant="tenant-b", colliding_id=shared_id
     )
     # And — the load-bearing assertion — tenant A's row was NOT stolen.
-    await _assert_tenant_a_row_intact(db, "docs", shared_id)
+    await _assert_tenant_a_row_intact(db, table, shared_id)
 
 
 @pytest.mark.regression
@@ -468,13 +550,16 @@ async def test_issue_bulk_upsert_id_conflict_no_cross_tenant_theft_sqlite(caplog
     overwrite/steal A's row; surfaces the actionable collision diagnostic +
     a WARN partial-failure log."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
         with caplog.at_level(logging.WARNING):
-            await _run_bulk_id_conflict_scenario(db)
+            await _run_bulk_id_conflict_scenario(db, suffix)
         assert any(
             "bulk_upsert.partial_failure" in rec.getMessage() for rec in caplog.records
         ), "expected a bulk_upsert.partial_failure WARN"
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -489,19 +574,21 @@ async def test_issue_bulk_upsert_id_conflict_no_cross_tenant_theft_postgres():
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bulk_id_conflict_scenario(db)
+        await _run_bulk_id_conflict_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
-async def _run_single_id_conflict_scenario(db: DataFlow) -> None:
+async def _run_single_id_conflict_scenario(db: DataFlow, suffix: str) -> None:
     from dataflow.core.exceptions import TenantNaturalKeyCollisionError
 
-    @db.model
-    class Doc:
-        id: str
-        title: str
+    model_name, table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -510,14 +597,14 @@ async def _run_single_id_conflict_scenario(db: DataFlow) -> None:
     shared_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
         await db.express.create(
-            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+            model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
         )
 
     # Single-record sibling: tenant B upsert on tenant A's id MUST fail closed.
     with db.tenant_context.switch("tenant-b"):
         with pytest.raises(Exception) as exc_info:
             await db.express.upsert(
-                "Doc", {"id": shared_id, "title": "B-STOLEN"}, conflict_on=["id"]
+                model_name, {"id": shared_id, "title": "B-STOLEN"}, conflict_on=["id"]
             )
     # A caller-actionable raise (never a silent success). On the PG native
     # ON CONFLICT path this is the typed TenantNaturalKeyCollisionError; the
@@ -526,7 +613,7 @@ async def _run_single_id_conflict_scenario(db: DataFlow) -> None:
     assert isinstance(raised, (TenantNaturalKeyCollisionError, Exception))
     assert not isinstance(raised, AssertionError)
     # The row is intact regardless of which fail-closed raise fired.
-    await _assert_tenant_a_row_intact(db, "docs", shared_id)
+    await _assert_tenant_a_row_intact(db, table, shared_id)
 
 
 @pytest.mark.regression
@@ -536,9 +623,12 @@ async def _run_single_id_conflict_scenario(db: DataFlow) -> None:
 async def test_issue_single_upsert_id_conflict_no_cross_tenant_theft_sqlite():
     """SQLite: single-record upsert(conflict_on=['id']) fails closed (no theft)."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_single_id_conflict_scenario(db)
+        await _run_single_id_conflict_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -555,12 +645,11 @@ async def test_issue_single_upsert_id_conflict_no_cross_tenant_theft_postgres():
     from dataflow.core.exceptions import TenantNaturalKeyCollisionError
 
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    model_name, table = _names("Doc", suffix)
     try:
-
-        @db.model
-        class Doc:
-            id: str
-            title: str
+        Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+        db.model(Doc)
 
         db._ensure_connected()
         db.tenant_context.register_tenant("tenant-a", "A")
@@ -568,26 +657,28 @@ async def test_issue_single_upsert_id_conflict_no_cross_tenant_theft_postgres():
         shared_id = _uid("doc")
         with db.tenant_context.switch("tenant-a"):
             await db.express.create(
-                "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+                model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
             )
         with db.tenant_context.switch("tenant-b"):
             with pytest.raises(TenantNaturalKeyCollisionError):
                 await db.express.upsert(
-                    "Doc", {"id": shared_id, "title": "B-STOLEN"}, conflict_on=["id"]
+                    model_name,
+                    {"id": shared_id, "title": "B-STOLEN"},
+                    conflict_on=["id"],
                 )
-        await _assert_tenant_a_row_intact(db, "docs", shared_id)
+        await _assert_tenant_a_row_intact(db, table, shared_id)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
-async def _run_same_tenant_positive_scenario(db: DataFlow) -> None:
+async def _run_same_tenant_positive_scenario(db: DataFlow, suffix: str) -> None:
     """The tenant guard MUST NOT break legitimate same-tenant upserts: a
     new insert, a same-tenant bulk update, and a same-tenant single update."""
 
-    @db.model
-    class Doc:
-        id: str
-        title: str
+    model_name, _table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -595,25 +686,25 @@ async def _run_same_tenant_positive_scenario(db: DataFlow) -> None:
     doc_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
         r_ins = await db.express.bulk_upsert(
-            "Doc", [{"id": doc_id, "title": "v1"}], conflict_on=["id"]
+            model_name, [{"id": doc_id, "title": "v1"}], conflict_on=["id"]
         )
         assert r_ins.get("created") == 1 and r_ins.get("updated") == 0
         r_upd = await db.express.bulk_upsert(
-            "Doc", [{"id": doc_id, "title": "v2"}], conflict_on=["id"]
+            model_name, [{"id": doc_id, "title": "v2"}], conflict_on=["id"]
         )
         assert r_upd.get("updated") == 1 and r_upd.get("created") == 0
-        assert (await db.express.read("Doc", doc_id))["title"] == "v2"
+        assert (await db.express.read(model_name, doc_id))["title"] == "v2"
         # Single-record same-tenant update.
         await db.express.upsert(
-            "Doc", {"id": doc_id, "title": "v3"}, conflict_on=["id"]
+            model_name, {"id": doc_id, "title": "v3"}, conflict_on=["id"]
         )
-        assert (await db.express.read("Doc", doc_id))["title"] == "v3"
+        assert (await db.express.read(model_name, doc_id))["title"] == "v3"
         # Single-record new insert.
         new_id = _uid("doc-new")
         await db.express.upsert(
-            "Doc", {"id": new_id, "title": "n1"}, conflict_on=["id"]
+            model_name, {"id": new_id, "title": "n1"}, conflict_on=["id"]
         )
-        assert (await db.express.read("Doc", new_id))["title"] == "n1"
+        assert (await db.express.read(model_name, new_id))["title"] == "n1"
 
 
 @pytest.mark.regression
@@ -623,9 +714,12 @@ async def _run_same_tenant_positive_scenario(db: DataFlow) -> None:
 async def test_issue_same_tenant_upsert_still_updates_sqlite():
     """SQLite: the cross-tenant guard does NOT regress same-tenant upserts."""
     db = _sqlite_db()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_same_tenant_positive_scenario(db)
+        await _run_same_tenant_positive_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -639,9 +733,12 @@ async def test_issue_same_tenant_upsert_still_updates_postgres():
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_same_tenant_positive_scenario(db)
+        await _run_same_tenant_positive_scenario(db, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -678,13 +775,14 @@ def _sqlite_db_with_url():
     return DataFlow(url, auto_migrate=True, multi_tenant=True), url
 
 
-async def _run_bcpool_cross_tenant_scenario(db: DataFlow, url: str) -> None:
+async def _run_bcpool_cross_tenant_scenario(
+    db: DataFlow, url: str, suffix: str
+) -> None:
     from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
 
-    @db.model
-    class Doc:
-        id: str
-        title: str
+    model_name, table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
@@ -693,7 +791,7 @@ async def _run_bcpool_cross_tenant_scenario(db: DataFlow, url: str) -> None:
     shared_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
         await db.express.create(
-            "Doc", {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
+            model_name, {"id": shared_id, "title": TENANT_A_SECRET_TITLE}
         )
 
     # THE BREACH: tenant B drives BulkCreatePoolNode directly with
@@ -702,7 +800,7 @@ async def _run_bcpool_cross_tenant_scenario(db: DataFlow, url: str) -> None:
     # flipped tenant_id to "tenant-b" (data theft). The guard makes it a no-op.
     dbt = db._detect_database_type()
     node = BulkCreatePoolNode(
-        table_name="docs",
+        table_name=table,
         database_type=dbt,
         connection_string=url,
         multi_tenant=True,
@@ -716,37 +814,35 @@ async def _run_bcpool_cross_tenant_scenario(db: DataFlow, url: str) -> None:
     # LOAD-BEARING (raw cross-tenant read): tenant A's row is UNCHANGED — secret
     # title intact (i.e. NOT "B-STOLEN"), tenant_id NOT flipped — and, because id
     # is the global PK, exactly one row exists for shared_id, so tenant B did NOT
-    # gain/overwrite it. Assertions are id-scoped: the shared PostgreSQL `docs`
-    # table accumulates rows across regression runs, so a global repr scan would
-    # be polluted by residue (including the without-fix proof run's stolen row).
-    await _assert_tenant_a_row_intact(db, "docs", shared_id)
-    rows = await _raw_read_all(db, "docs")
+    # gain/overwrite it. Assertions stay id-scoped (defense-in-depth) even though
+    # the per-test namespaced table now isolates each run.
+    await _assert_tenant_a_row_intact(db, table, shared_id)
+    rows = await _raw_read_all(db, table)
     this_id = [r for r in rows if str(r["id"]) == shared_id]
     assert len(this_id) == 1, f"expected one row for id={shared_id}: {this_id!r}"
     assert this_id[0]["tenant_id"] == "tenant-a", f"ownership flipped: {this_id[0]!r}"
     assert this_id[0]["title"] != "B-STOLEN", f"tenant-b's write landed: {this_id[0]!r}"
 
 
-async def _run_bcpool_same_tenant_positive(db: DataFlow, url: str) -> None:
+async def _run_bcpool_same_tenant_positive(db: DataFlow, url: str, suffix: str) -> None:
     """The tenant guard MUST NOT lock out a legitimate SAME-tenant upsert: when
     the incoming tenant matches the row's own tenant, the update DOES apply."""
     from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
 
-    @db.model
-    class Doc:
-        id: str
-        title: str
+    model_name, table = _names("Doc", suffix)
+    Doc = type(model_name, (), {"__annotations__": {"id": str, "title": str}})
+    db.model(Doc)
 
     db._ensure_connected()
     db.tenant_context.register_tenant("tenant-a", "A")
 
     doc_id = _uid("doc")
     with db.tenant_context.switch("tenant-a"):
-        await db.express.create("Doc", {"id": doc_id, "title": "v1"})
+        await db.express.create(model_name, {"id": doc_id, "title": "v1"})
 
     dbt = db._detect_database_type()
     node = BulkCreatePoolNode(
-        table_name="docs",
+        table_name=table,
         database_type=dbt,
         connection_string=url,
         multi_tenant=True,
@@ -758,7 +854,7 @@ async def _run_bcpool_same_tenant_positive(db: DataFlow, url: str) -> None:
 
     # Same-tenant → WHERE tenant_id = EXCLUDED.tenant_id (/ IF()) is TRUE → the
     # update applies. No false lockout.
-    rows = await _raw_read_all(db, "docs")
+    rows = await _raw_read_all(db, table)
     matches = [r for r in rows if str(r["id"]) == doc_id]
     assert len(matches) == 1, f"expected one row for id={doc_id}: {rows!r}"
     assert matches[0]["tenant_id"] == "tenant-a"
@@ -775,9 +871,12 @@ async def test_issue_bulk_create_pool_node_id_conflict_no_cross_tenant_theft_sql
     """SQLite: tenant B ``BulkCreatePoolNode(conflict_resolution='update')`` on
     tenant A's id does NOT overwrite/steal A's row (the H1 breach, fail-closed)."""
     db, url = _sqlite_db_with_url()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bcpool_cross_tenant_scenario(db, url)
+        await _run_bcpool_cross_tenant_scenario(db, url, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -789,9 +888,12 @@ async def test_issue_bulk_create_pool_node_same_tenant_update_still_applies_sqli
     """SQLite: the cross-tenant guard does NOT regress a legitimate same-tenant
     BulkCreatePoolNode upsert (the update still applies)."""
     db, url = _sqlite_db_with_url()
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bcpool_same_tenant_positive(db, url)
+        await _run_bcpool_same_tenant_positive(db, url, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -806,9 +908,12 @@ async def test_issue_bulk_create_pool_node_id_conflict_no_cross_tenant_theft_pos
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bcpool_cross_tenant_scenario(db, TEST_DATABASE_URL)
+        await _run_bcpool_cross_tenant_scenario(db, TEST_DATABASE_URL, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
 
 
@@ -823,7 +928,10 @@ async def test_issue_bulk_create_pool_node_same_tenant_update_still_applies_post
     if not _pg_available():
         pytest.skip("PostgreSQL infra (localhost:5434) not reachable")
     db = DataFlow(TEST_DATABASE_URL, auto_migrate=True, multi_tenant=True)
+    suffix = uuid.uuid4().hex[:8]
+    _, table = _names("Doc", suffix)
     try:
-        await _run_bcpool_same_tenant_positive(db, TEST_DATABASE_URL)
+        await _run_bcpool_same_tenant_positive(db, TEST_DATABASE_URL, suffix)
     finally:
+        await _drop_tables(db, table)
         db.close()
