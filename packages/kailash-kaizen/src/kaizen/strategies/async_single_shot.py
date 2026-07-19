@@ -16,9 +16,31 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 from kaizen.core.deprecation import deprecated
+from kaizen.nodes.ai.audio_utils import (
+    encode_audio,
+    get_audio_media_type,
+    validate_audio_size,
+)
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+from kaizen.nodes.ai.vision_utils import (
+    encode_image,
+    get_media_type,
+    validate_image_size,
+)
 
 logger = logging.getLogger(__name__)
+
+# File-path keys a high-level multimodal input dict may carry (a local path,
+# NOT a data-URI or remote URL).
+_FILE_PATH_KEYS = (
+    "path",
+    "file_path",
+    "file",
+    "image_path",
+    "audio_path",
+    "image",
+    "audio",
+)
 
 # Allowlist regex for MCP tool names — validates before execution
 _TOOL_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.:-]{0,127}$")
@@ -38,8 +60,65 @@ def _classify_input_value(
     """
     import base64
 
-    # Already a structured content part dict (caller pre-built it)
+    # Structured content-part dict. Three cases handled here:
+    #  1. file-path / high-level image dict -> normalize to an image_url data-URI
+    #  2. file-path / high-level audio dict -> normalize to an input_audio block
+    #  3. already-wire-shaped dict (no file-path key) -> pass through verbatim
+    # Delegates ALL encoding/validation to the surviving vision/audio primitives.
     if isinstance(value, dict) and "type" in value:
+        dtype = value.get("type")
+
+        # Locate a local file path (a str that is not a data-URI / remote URL).
+        file_path = None
+        for _k in _FILE_PATH_KEYS:
+            _v = value.get(_k)
+            if (
+                isinstance(_v, str)
+                and _v
+                and not _v.startswith(("data:", "http://", "https://"))
+            ):
+                file_path = _v
+                break
+
+        if file_path is not None and dtype in ("image", "image_url"):
+            ok, err = validate_image_size(file_path)
+            if not ok:
+                raise ValueError(
+                    f"image input {file_path!r} failed size validation: {err}"
+                )
+            b64_data = encode_image(file_path)
+            return {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{get_media_type(file_path)};base64,{b64_data}",
+                },
+            }
+
+        if file_path is not None and dtype in ("audio", "input_audio"):
+            ok, err = validate_audio_size(file_path)
+            if not ok:
+                raise ValueError(
+                    f"audio input {file_path!r} failed size validation: {err}"
+                )
+            b64_data = encode_audio(file_path)
+            # Normalize the media-type subtype to the provider wire format
+            # (input_audio expects e.g. mp3 / wav / m4a, not the MIME subtype
+            # mpeg / mp4).
+            subtype = get_audio_media_type(file_path).split("/", 1)[-1]
+            wire_format = {
+                "mpeg": "mp3",
+                "mp4": "m4a",
+                "x-ms-wma": "wma",
+            }.get(subtype, subtype)
+            return {
+                "type": "input_audio",
+                "input_audio": {
+                    "data": b64_data,
+                    "format": wire_format,
+                },
+            }
+
+        # Already-wire-shaped (or otherwise pre-built) content part.
         return value
 
     # Raw bytes -- detect media type and build a content part
