@@ -121,3 +121,30 @@ def test_tools_alone_emits_tools_no_structured_output():
     gen = payload.get("generationConfig", {})
     assert "responseMimeType" not in gen
     assert "responseSchema" not in gen
+
+
+@pytest.mark.regression
+def test_text_response_format_plus_tools_does_not_warn(caplog):
+    """(d) response_format={"type":"text"} + tools → no responseMimeType
+    (text is Gemini's default, nothing structured to emit) AND no suppression
+    WARN — the guard must not claim a suppression that never happened."""
+    req = CompletionRequest(
+        model="test-model",
+        messages=_base_messages(),
+        tools=[_tool()],
+        response_format={"type": "text"},
+    )
+
+    with caplog.at_level(
+        logging.WARNING, logger="kaizen.llm.wire_protocols.google_generate_content"
+    ):
+        payload = gg.build_request_payload(req)
+
+    assert "tools" in payload
+    gen = payload.get("generationConfig", {})
+    assert "responseMimeType" not in gen
+    assert "responseSchema" not in gen
+    # Nothing structured was requested -> the WARN must NOT fire (log accuracy).
+    assert not any(
+        "response_format suppressed" in rec.getMessage() for rec in caplog.records
+    ), "text response_format must not trigger a suppression WARN"

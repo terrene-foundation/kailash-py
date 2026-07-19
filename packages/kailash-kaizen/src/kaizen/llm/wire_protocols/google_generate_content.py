@@ -197,7 +197,14 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
             schema = _extract_json_schema(request.response_format)
             if schema is not None:
                 generation_config["responseSchema"] = schema
-    elif request.response_format and request.tools:
+    elif (
+        request.response_format
+        and request.tools
+        and request.response_format.get("type") in ("json_object", "json_schema")
+    ):
+        # Only WARN when a JSON structured-output mode was genuinely dropped;
+        # response_format={"type":"text"} emits nothing structured regardless of
+        # tools, so warning there would misleadingly claim a suppression.
         logger.warning(
             "google_generate_content: response_format suppressed — Gemini rejects "
             "responseMimeType/responseSchema combined with tools (gh#357/#1819); "
