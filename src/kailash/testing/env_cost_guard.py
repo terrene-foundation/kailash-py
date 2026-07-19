@@ -139,32 +139,72 @@ def install_dotenv_guard() -> None:
     dotenv_main.load_dotenv = _guarded_load_dotenv
 
 
+def _find_env_upwards() -> Optional[Path]:
+    """Locate the nearest ``.env`` by walking up from the cwd (dependency-free)."""
+    here = Path.cwd()
+    for d in (here, *here.parents):
+        candidate = d / ".env"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _parse_env_file(env_path: Path) -> dict:
+    """Parse a ``.env`` file into a dict WITHOUT python-dotenv.
+
+    The cost-guard is installed at every package rootdir, including packages that
+    do not declare ``python-dotenv`` (dataflow, pact, nexus, align, ml). A hard
+    ``import dotenv`` here would crash their test collection — so the parse is
+    dependency-free (same lightweight grammar the repo-root conftest used).
+    """
+    result: dict = {}
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        eq = line.find("=")
+        if eq == -1:
+            continue
+        key = line[:eq].strip()
+        val = line[eq + 1 :].strip()
+        is_quoted = (val.startswith('"') and val.endswith('"') and len(val) >= 2) or (
+            val.startswith("'") and val.endswith("'") and len(val) >= 2
+        )
+        if is_quoted:
+            val = val[1:-1]
+        else:
+            comment_idx = val.find(" #")
+            if comment_idx > -1:
+                val = val[:comment_idx].strip()
+        result[key] = val
+    return result
+
+
 def load_env_cost_guarded(env_path: Optional[Path] = None) -> None:
     """Load ``.env`` into ``os.environ`` with the cost-guard applied.
 
     Provider secrets are withheld on load AND actively scrubbed afterward.
     Model names, DB URLs, and non-secret vars load; already-set vars are not
-    overridden.
+    overridden. Dependency-free (no python-dotenv required).
 
     Args:
         env_path: Path to the ``.env`` file. When ``None``, the nearest ``.env``
             is located by walking up from the current working directory.
     """
-    from dotenv import dotenv_values, find_dotenv
-
     if env_path is None:
-        found = find_dotenv(usecwd=True)
-        if not found:
+        env_path = _find_env_upwards()
+        if env_path is None:
             scrub_provider_secrets()
             return
-        env_path = Path(found)
     env_path = Path(env_path)
     if not env_path.exists():
         scrub_provider_secrets()
         return
 
     allow_real_llm = _real_llm_allowed()
-    for key, val in dotenv_values(str(env_path)).items():
+    for key, val in _parse_env_file(env_path).items():
         if val is None:
             continue
         if not allow_real_llm and is_provider_secret(key):
