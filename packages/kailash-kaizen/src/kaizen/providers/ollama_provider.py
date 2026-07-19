@@ -16,6 +16,12 @@ class OllamaConfig:
     temperature: float = 0.7
     top_p: float = 0.9
     stream: bool = False
+    # #1803: explicit opt-out from the ``governance_required`` posture gate
+    # enforced at construction (below) — this class makes real network
+    # egress (``ollama.list()``) unconditionally in ``__init__``, so the
+    # gate cannot defer to an egress method. Inherited by
+    # ``OllamaVisionConfig`` (dataclass subclass). Default False.
+    ungoverned: bool = False
 
 
 class OllamaProvider:
@@ -31,6 +37,23 @@ class OllamaProvider:
     def __init__(self, config: Optional[OllamaConfig] = None):
         """Initialize Ollama provider."""
         self.config = config or OllamaConfig()
+        # #1803 governance_required posture: this class is directly
+        # standalone-constructible (``kaizen.providers.LegacyOllamaProvider``)
+        # AND the ``OllamaMultiModalAdapter`` / ``OllamaVisionProvider``
+        # (top-level) path. ``_check_ollama_available`` below makes a real
+        # ``ollama.list()`` call unconditionally, so the gate MUST fire
+        # before that call, not deferred to an egress method. No mock
+        # concept exists for this provider (is_mock=False always); locality
+        # (base_url defaults to localhost) is NOT a governance exemption —
+        # parity with the four-axis LlmClient path, which gates Ollama
+        # deployments too.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self.config.ungoverned,
+            surface="OllamaProvider",
+        )
         self._check_ollama_available()
 
     def _check_ollama_available(self):

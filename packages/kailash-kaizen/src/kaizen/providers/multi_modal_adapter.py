@@ -98,6 +98,8 @@ class OllamaMultiModalAdapter(MultiModalAdapter):
         model: str = "llava:13b",
         whisper_model: str = "base",
         auto_download: bool = True,
+        *,
+        ungoverned: bool = False,
     ):
         """
         Initialize Ollama adapter.
@@ -106,10 +108,16 @@ class OllamaMultiModalAdapter(MultiModalAdapter):
             model: Ollama vision model (llava:13b, bakllava)
             whisper_model: Whisper model size (tiny, base, small, medium)
             auto_download: Auto-download models if missing
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate, forwarded to the lazily-constructed
+                ``OllamaVisionProvider`` (the actual egress chokepoint —
+                see ``_get_ollama_vision_provider``). Default False. Local
+                Whisper transcription is NOT LLM egress and is never gated.
         """
         self.model = model
         self.whisper_model = whisper_model
         self.auto_download = auto_download
+        self._ungoverned = ungoverned
 
         # Lazy imports
         self._ollama_provider = None
@@ -151,8 +159,10 @@ class OllamaMultiModalAdapter(MultiModalAdapter):
                 OllamaVisionProvider,
             )
 
-            # Create config matching Phase 2 API
-            config = OllamaVisionConfig(model=self.model)
+            # Create config matching Phase 2 API. #1803: forward this
+            # adapter's opt-out so the gate at OllamaProvider.__init__
+            # (the real egress chokepoint) sees the caller's intent.
+            config = OllamaVisionConfig(model=self.model, ungoverned=self._ungoverned)
             self._ollama_vision_provider = OllamaVisionProvider(config=config)
         return self._ollama_vision_provider
 
@@ -239,6 +249,29 @@ class OllamaMultiModalAdapter(MultiModalAdapter):
         **kwargs,
     ) -> Dict[str, Any]:
         """Process multi-modal inputs with Ollama."""
+        # #1803 governance_required posture: this adapter is directly
+        # standalone-constructible and every branch below egresses to real
+        # Ollama (local network call) via _call_ollama_vision / _call_whisper
+        # / _get_ollama_vision_provider()._call_ollama_text. Enforce BEFORE
+        # the is_available() check below -- that check reads a FROZEN
+        # kaizen.providers.OLLAMA_AVAILABLE module constant (computed once,
+        # at kaizen.providers import time), NOT a live probe, so in an
+        # infra-free environment (e.g. CI) where the real ``ollama`` package
+        # was never importable, is_available() raises RuntimeError before
+        # any egress is attempted -- and before this gate would otherwise
+        # fire. The gate MUST run regardless of that constant's value; no
+        # mock concept exists for this adapter (is_mock=False always) --
+        # locality is not a governance exemption (parity with
+        # OllamaProvider.__init__ / OllamaVisionProvider.extract()).
+        # ungoverned=True and the OFF posture are the only exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="OllamaMultiModalAdapter",
+        )
+
         if not self.is_available():
             raise RuntimeError("Ollama not available")
 
@@ -295,16 +328,27 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
     VISION_COST_PER_IMAGE = 0.01  # ~$0.01 per image
     AUDIO_COST_PER_MINUTE = 0.006  # $0.006 per minute
 
-    def __init__(self, api_key: Optional[str] = None, warn_before_call: bool = True):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        warn_before_call: bool = True,
+        *,
+        ungoverned: bool = False,
+    ):
         """
         Initialize OpenAI adapter.
 
         Args:
             api_key: OpenAI API key (or from env)
             warn_before_call: Warn before making paid API calls
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate enforced in :meth:`process_multi_modal` before
+                any real OpenAI egress (vision, Whisper, or text). Default
+                False.
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.warn_before_call = warn_before_call
+        self._ungoverned = ungoverned
 
         # Usage tracking
         self._usage_stats = {
@@ -422,6 +466,21 @@ class OpenAIMultiModalAdapter(MultiModalAdapter):
         **kwargs,
     ) -> Dict[str, Any]:
         """Process multi-modal inputs with OpenAI."""
+        # #1803 governance_required posture: this adapter is directly
+        # standalone-constructible (get_multi_modal_adapter / a caller
+        # importing OpenAIMultiModalAdapter directly) and every branch below
+        # egresses to the real OpenAI API with no four-axis LlmClient in the
+        # path. Enforce BEFORE any branch dispatches; no mock concept exists
+        # for this adapter (is_mock=False always). ungoverned=True and the
+        # OFF posture are the only exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="OpenAIMultiModalAdapter",
+        )
+
         if not self.is_available():
             raise RuntimeError("OpenAI API key not available")
 

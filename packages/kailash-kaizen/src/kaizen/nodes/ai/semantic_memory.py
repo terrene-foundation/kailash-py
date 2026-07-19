@@ -59,12 +59,23 @@ class SimpleEmbeddingProvider:
     """Simple embedding provider using Ollama by default."""
 
     def __init__(
-        self, model_name: str = "nomic-embed-text", host: str = "http://localhost:11434"
+        self,
+        model_name: str = "nomic-embed-text",
+        host: str = "http://localhost:11434",
+        *,
+        ungoverned: bool = False,
     ):
         self.model_name = model_name
         self.host = host
         self.embed_url = f"{host}/api/embeddings"
         self._cache = {}
+        # #1803: honor the `governance_required` posture — this class egresses
+        # to `host` (default localhost, but callers may point it elsewhere) via
+        # real aiohttp POST in embed_text() below. No mock concept exists here
+        # (is_mock=False always); locality is NOT a governance exemption
+        # (parity with the four-axis LlmClient path, which gates Ollama
+        # deployments too).
+        self._ungoverned = ungoverned
 
     def _get_cache_key(self, text: str) -> str:
         """Generate cache key for text."""
@@ -72,6 +83,14 @@ class SimpleEmbeddingProvider:
 
     async def embed_text(self, text: Union[str, List[str]]) -> EmbeddingResult:
         """Generate embeddings for text."""
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="SimpleEmbeddingProvider",
+        )
+
         np = require_numpy("embedding generation")
         if isinstance(text, str):
             texts = [text]
@@ -196,25 +215,53 @@ class SemanticMemoryStoreNode(Node):
     def __init__(self, name: str = "semantic_memory_store", **kwargs):
         """Initialize semantic memory store node."""
         self.content = None
-        self.metadata = None
         self.collection = "default"
         self.embedding_model = "nomic-embed-text"
         self.embedding_host = "http://localhost:11434"
+        self.ungoverned = False
 
-        # Set attributes from kwargs
+        # Set attributes from kwargs (excluding "metadata" -- see below; this
+        # runs BEFORE super().__init__() has populated self.config, so
+        # `hasattr(self, key)` on any key routing through a property backed
+        # by self.config would raise internally and hasattr would silently
+        # swallow it as False, no-op'ing the setattr for that key).
         for key, value in kwargs.items():
+            if key == "metadata":
+                continue
             if hasattr(self, key):
                 setattr(self, key, value)
 
         super().__init__(name=name, **kwargs)
+        # `metadata` is BOTH this node's own content-metadata parameter AND
+        # (per Node.metadata's docstring) a name Node.metadata's setter
+        # deliberately reserves for user parameters, routing a dict/None
+        # value to self.config["metadata"] -- but ONLY once self.config
+        # exists, i.e. AFTER super().__init__() above (NOT before it, which
+        # is what a bare `self.metadata = None` pre-super assignment hit:
+        # AttributeError, self.config not yet populated). super().__init__()
+        # already seeded self.config["metadata"] from **kwargs when the
+        # caller passed one; this sets the None default only when absent.
+        self.config.setdefault("metadata", None)
 
-        # Shared store and provider (in production, use persistent storage)
+        # Shared store, in production use persistent storage (the store is
+        # genuinely shared memory across node instances -- class-level
+        # caching is correct for it). #1803 security-review MEDIUM: the
+        # provider was PREVIOUSLY also class-cached, which made `ungoverned`
+        # sticky per-class -- the first-constructed instance's value won for
+        # every later instance of the SAME class in this process, silently
+        # ungating a default (governed) instance constructed after an
+        # ungoverned=True one. The provider is a stateless client wrapper (no
+        # connection pool held open -- embed_text() opens a fresh
+        # aiohttp.ClientSession() per call); instance-level construction is
+        # the correct fix, matching SemanticHybridSearchNode's existing
+        # pattern in hybrid_search.py.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider(
-                model_name=self.embedding_model, host=self.embedding_host
-            )
+        self._provider = SimpleEmbeddingProvider(
+            model_name=self.embedding_model,
+            host=self.embedding_host,
+            ungoverned=self.ungoverned,
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
@@ -252,13 +299,24 @@ class SemanticMemoryStoreNode(Node):
                 default="http://localhost:11434",
                 description="Embedding service host",
             ),
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
+            ),
         }
 
     async def run(self, **kwargs) -> Dict[str, Any]:
         """Store content in semantic memory."""
         # Get parameters
         content = kwargs.get("content", self.content)
-        metadata = kwargs.get("metadata", self.metadata) or {}
+        # self.metadata is the base Node property (returns the framework's
+        # own NodeMetadata bookkeeping object, NOT this node's content-
+        # metadata parameter) -- read the user parameter from self.config,
+        # where super().__init__() / self.config.setdefault() above put it.
+        metadata = kwargs.get("metadata", self.config.get("metadata")) or {}
         collection = kwargs.get("collection", self.collection)
 
         if not content:
@@ -311,6 +369,7 @@ class SemanticMemorySearchNode(Node):
         self.collection = None
         self.embedding_model = "nomic-embed-text"
         self.embedding_host = "http://localhost:11434"
+        self.ungoverned = False
 
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -319,13 +378,16 @@ class SemanticMemorySearchNode(Node):
 
         super().__init__(name=name, **kwargs)
 
-        # Use shared store and provider
+        # Shared store (genuinely shared memory); instance-level provider --
+        # #1803 security-review MEDIUM, see SemanticMemoryStoreNode's __init__
+        # for the class-cache-stickiness rationale.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider(
-                model_name=self.embedding_model, host=self.embedding_host
-            )
+        self._provider = SimpleEmbeddingProvider(
+            model_name=self.embedding_model,
+            host=self.embedding_host,
+            ungoverned=self.ungoverned,
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
@@ -366,6 +428,13 @@ class SemanticMemorySearchNode(Node):
                 required=False,
                 default="http://localhost:11434",
                 description="Embedding service host",
+            ),
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
             ),
         }
 
@@ -426,6 +495,7 @@ class SemanticAgentMatchingNode(Node):
         self.threshold = 0.3
         self.weight_semantic = 0.6
         self.weight_keyword = 0.4
+        self.ungoverned = False
 
         # Set attributes from kwargs
         for key, value in kwargs.items():
@@ -434,11 +504,12 @@ class SemanticAgentMatchingNode(Node):
 
         super().__init__(name=name, **kwargs)
 
-        # Use shared store and provider
+        # Shared store (genuinely shared memory); instance-level provider --
+        # #1803 security-review MEDIUM, see SemanticMemoryStoreNode's __init__
+        # for the class-cache-stickiness rationale.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider()
+        self._provider = SimpleEmbeddingProvider(ungoverned=self.ungoverned)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
@@ -482,6 +553,13 @@ class SemanticAgentMatchingNode(Node):
                 required=False,
                 default=0.4,
                 description="Weight for keyword matching",
+            ),
+            "ungoverned": NodeParameter(
+                name="ungoverned",
+                type=bool,
+                required=False,
+                default=False,
+                description="Opt out of the KAILASH_GOVERNANCE_REQUIRED posture gate for this node's embed egress",
             ),
         }
 

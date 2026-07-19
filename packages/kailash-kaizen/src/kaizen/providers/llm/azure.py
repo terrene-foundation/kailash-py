@@ -32,7 +32,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
 
     MODELS = ["gpt-4o", "gpt-4-turbo", "Llama-3.1-*", "Mistral-large"]
 
-    def __init__(self, use_async: bool = False) -> None:
+    def __init__(self, use_async: bool = False, *, ungoverned: bool = False) -> None:
         super().__init__()
         self._use_async = use_async
         self._sync_chat_client: Any = None
@@ -40,6 +40,36 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
         self._async_chat_client: Any = None
         self._async_embed_client: Any = None
         self._model_cache: dict[str, dict[str, Any]] = {}
+        # #1803: honor the ``governance_required`` posture for STANDALONE use
+        # of this provider (``from kaizen.providers import
+        # AzureAIFoundryProvider; AzureAIFoundryProvider().chat(...)``) — the
+        # ONLY existing gate (``LLMAgentNode._legacy_provider_chat``) covers
+        # this class solely when reached through the node. Construction
+        # itself is NOT gated (mirrors ``LlmClient``'s deployment-less
+        # exemption): ``is_available()`` / ``get_available_providers()`` call
+        # only metadata methods, never egress, so a bare construction MUST
+        # NOT refuse. The gate fires at each egress method instead (see
+        # ``_enforce_gate``).
+        self._ungoverned = ungoverned
+
+    def _enforce_gate(self) -> None:
+        """#1803 construction/egress chokepoint for direct standalone use.
+
+        Called at the top of every real-egress method (``chat`` /
+        ``chat_async`` / ``stream_chat`` / ``embed`` / ``embed_async``),
+        BEFORE the method's own ``try/except`` so a refusal propagates
+        UNWRAPPED (never re-typed to ``RuntimeError`` by the method's broad
+        except clause — invariant 4, mirrors ``_legacy_provider_chat``). No
+        mock concept exists for this provider (``is_mock=False`` always);
+        the only exemptions are ``ungoverned=True`` and the OFF posture.
+        """
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="AzureAIFoundryProvider",
+        )
 
     def is_available(self) -> bool:
         if self._available is not None:
@@ -240,6 +270,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 pass
 
     def chat(self, messages: List[Message], **kwargs: Any) -> dict[str, Any]:
+        self._enforce_gate()
         try:
             from azure.ai.inference import ChatCompletionsClient
             from azure.core.credentials import AzureKeyCredential
@@ -324,6 +355,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
     async def chat_async(
         self, messages: List[Message], **kwargs: Any
     ) -> dict[str, Any]:
+        self._enforce_gate()
         try:
             from azure.ai.inference.aio import ChatCompletionsClient
             from azure.core.credentials import AzureKeyCredential
@@ -417,6 +449,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
         Iterates the real per-chunk ``StreamingChatCompletionsUpdate`` events
         via ``ChatCompletionsClient.complete(stream=True)``.
         """
+        self._enforce_gate()
         from azure.ai.inference.aio import ChatCompletionsClient
 
         model = kwargs.get("model")
@@ -503,6 +536,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 pass  # cleanup path — carve-out per zero-tolerance.md Rule 3
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
+        self._enforce_gate()
         try:
             from azure.ai.inference import EmbeddingsClient
 
@@ -527,6 +561,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     async def embed_async(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
+        self._enforce_gate()
         try:
             from azure.ai.inference.aio import EmbeddingsClient
 
