@@ -82,6 +82,8 @@ def _resolve_provider_class(name: str) -> type:
 def get_provider(
     provider_name: str,
     provider_type: str | None = None,
+    *,
+    ungoverned: bool = False,
 ) -> BaseAIProvider | LLMProvider | EmbeddingProvider:
     """Get an AI provider instance by name.
 
@@ -89,6 +91,13 @@ def get_provider(
         provider_name: Name of the provider (case-insensitive).
         provider_type: Required capability — ``"chat"``, ``"embeddings"``,
             or ``None`` for any.
+        ungoverned: #1803 opt-out threaded to the constructed instance's
+            ``governance_required`` posture gate (fires at the instance's
+            own egress methods, e.g. ``AzureAIFoundryProvider.chat``) — NOT
+            evaluated here. Callers that will invoke an egress method on the
+            returned instance MUST pass the same ``ungoverned`` value their
+            own gate (e.g. ``LLMAgentNode._legacy_provider_chat``) already
+            enforced, so the two gates agree instead of double-refusing.
 
     Returns:
         Provider instance with the requested capabilities.
@@ -104,7 +113,7 @@ def get_provider(
             f"Unknown provider: {provider_name}. Available: {list(PROVIDERS.keys())}"
         )
 
-    provider = provider_class()
+    provider = provider_class(ungoverned=ungoverned)
 
     if provider_type:
         if provider_type == "chat" and not provider.supports_chat():

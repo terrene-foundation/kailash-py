@@ -2585,7 +2585,11 @@ Final Answer: 6 hours"""
 
         from kaizen.providers.registry import get_provider
 
-        provider_instance = get_provider(provider)
+        # #1803: thread the node's opt-out into the constructed instance so
+        # its own egress-method gate (e.g. AzureAIFoundryProvider.chat) agrees
+        # with the outer gate just above instead of double-refusing when
+        # ungoverned=True.
+        provider_instance = get_provider(provider, ungoverned=self._ungoverned)
 
         # Check if provider is available (skip if per-request key provided)
         if not api_key and not provider_instance.is_available():

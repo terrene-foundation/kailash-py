@@ -83,6 +83,8 @@ class LandingAIProvider(BaseDocumentProvider):
         api_key: Optional[str] = None,
         endpoint: Optional[str] = None,
         timeout: int = 30,
+        *,
+        ungoverned: bool = False,
         **kwargs,
     ):
         """
@@ -92,6 +94,9 @@ class LandingAIProvider(BaseDocumentProvider):
             api_key: Landing AI API key (falls back to LANDING_AI_API_KEY env var)
             endpoint: Custom API endpoint (default: production endpoint)
             timeout: Request timeout in seconds
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate enforced in :meth:`extract` before the real
+                Landing AI egress. Default False.
             **kwargs: Additional configuration
         """
         super().__init__(provider_name="landing_ai", **kwargs)
@@ -99,6 +104,7 @@ class LandingAIProvider(BaseDocumentProvider):
         self.api_key = api_key or os.getenv("LANDING_AI_API_KEY")
         self.endpoint = endpoint or self.DEFAULT_ENDPOINT
         self.timeout = timeout
+        self._ungoverned = ungoverned
 
     async def extract(
         self,
@@ -143,6 +149,20 @@ class LandingAIProvider(BaseDocumentProvider):
             ...     print(f"Text at {bbox['coordinates']}: {bbox['text']}")
         """
         start_time = time.time()
+
+        # #1803 governance_required posture: this provider is directly
+        # standalone-constructible and egresses to the real Landing AI API
+        # below with no four-axis LlmClient in the path. Enforce the posture
+        # BEFORE any real work; no mock concept exists for this provider
+        # (is_mock=False always). ungoverned=True and the OFF posture are
+        # the only exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="LandingAIProvider",
+        )
 
         # Validate inputs
         self._validate_file_type(file_type)

@@ -550,9 +550,7 @@ def test_enforce_fail_closed_when_posture_read_raises(
 
     monkeypatch.setattr(kailash, "is_governance_required", _boom)
     with pytest.raises(UngovernedEgressRefused):
-        enforce_governance_posture(
-            is_mock=False, ungoverned=False, surface="LlmClient"
-        )
+        enforce_governance_posture(is_mock=False, ungoverned=False, surface="LlmClient")
 
 
 def test_enforce_fail_closed_exemptions_short_circuit_before_read(
@@ -570,3 +568,473 @@ def test_enforce_fail_closed_exemptions_short_circuit_before_read(
     # Neither raises despite the poisoned reader (exemptions short-circuit).
     enforce_governance_posture(is_mock=False, ungoverned=True, surface="LlmClient")
     enforce_governance_posture(is_mock=True, ungoverned=False, surface="Agent")
+
+
+# --------------------------------------------------------------------------- #
+# #1803 — AzureAIFoundryProvider direct standalone use (the only legacy chat
+# provider still constructible after #1720 Wave-2 retired openai / anthropic /
+# google / ollama / docker / perplexity / mock; #1820 retired the embedding-
+# legacy + unified-azure stacks). Previously gated ONLY when reached through
+# LLMAgentNode._legacy_provider_chat; direct construction bypassed the gate
+# entirely. Gate lives at each egress method (chat/chat_async/stream_chat/
+# embed/embed_async), NOT __init__ -- construction and metadata-only methods
+# (is_available/get_capabilities/get_available_providers) must never gate.
+# --------------------------------------------------------------------------- #
+
+
+def test_azure_foundry_construction_and_metadata_never_gated() -> None:
+    """Bare construction and metadata-only introspection must NOT gate --
+    only the real-egress methods do (mirrors the deployment-less LlmClient
+    exemption: is_available()/get_available_providers() are not egress)."""
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()  # must not raise
+    assert provider is not None
+    assert provider.is_available() in (True, False)  # must not raise
+    assert provider.capabilities is not None
+
+
+def test_azure_foundry_standalone_chat_refused_under_posture_on() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        provider.chat([{"role": "user", "content": "hi"}])
+
+
+def test_azure_foundry_standalone_ungoverned_bypasses() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider(ungoverned=True)
+    try:
+        provider.chat([{"role": "user", "content": "hi"}])
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the standalone gate")
+    except Exception:
+        pass  # missing azure-ai-inference credentials/endpoint is acceptable
+
+
+def test_azure_foundry_off_posture_byte_identical() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(None)
+    provider = AzureAIFoundryProvider()
+    try:
+        provider.chat([{"role": "user", "content": "hi"}])
+    except UngovernedEgressRefused:
+        raise AssertionError("OFF posture must not gate")
+    except Exception:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_azure_foundry_chat_async_refused() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.chat_async([{"role": "user", "content": "hi"}])
+
+
+@pytest.mark.asyncio
+async def test_azure_foundry_stream_chat_refused() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        async for _ in provider.stream_chat([{"role": "user", "content": "hi"}]):
+            pass
+
+
+def test_azure_foundry_embed_refused() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        provider.embed(["hello"])
+
+
+@pytest.mark.asyncio
+async def test_azure_foundry_embed_async_refused() -> None:
+    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+
+    kailash.set_governance_required(True)
+    provider = AzureAIFoundryProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.embed_async(["hello"])
+
+
+def test_get_provider_threads_ungoverned_so_node_and_instance_agree() -> None:
+    """registry.get_provider(ungoverned=...) must reach the constructed
+    instance's own gate, so LLMAgentNode._legacy_provider_chat's outer gate
+    and AzureAIFoundryProvider's inner gate agree instead of double-refusing
+    when ungoverned=True."""
+    from kaizen.providers.registry import get_provider
+
+    kailash.set_governance_required(True)
+    provider = get_provider("azure_ai_foundry", ungoverned=True)
+    try:
+        provider.chat([{"role": "user", "content": "hi"}])
+    except UngovernedEgressRefused:
+        raise AssertionError(
+            "get_provider(ungoverned=True) must construct an ungoverned instance"
+        )
+    except Exception:
+        pass
+
+
+def test_get_provider_default_ungoverned_false_still_gates() -> None:
+    from kaizen.providers.registry import get_provider
+
+    kailash.set_governance_required(True)
+    provider = get_provider("azure_ai_foundry")
+    with pytest.raises(UngovernedEgressRefused):
+        provider.chat([{"role": "user", "content": "hi"}])
+
+
+# --------------------------------------------------------------------------- #
+# #1803 — document / vision providers (kaizen.providers.document.*). No mock
+# concept exists for these providers (is_mock=False always); the gate fires
+# at the top of extract(), before file validation, so a nonexistent path
+# still surfaces UngovernedEgressRefused rather than FileNotFoundError.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_openai_vision_provider_refused_under_posture_on() -> None:
+    from kaizen.providers.document.openai_vision_provider import OpenAIVisionProvider
+
+    kailash.set_governance_required(True)
+    provider = OpenAIVisionProvider(api_key="sk-test")
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.extract("nonexistent.pdf", "pdf")
+
+
+@pytest.mark.asyncio
+async def test_openai_vision_provider_ungoverned_bypasses() -> None:
+    from kaizen.providers.document.openai_vision_provider import OpenAIVisionProvider
+
+    kailash.set_governance_required(True)
+    provider = OpenAIVisionProvider(api_key="sk-test", ungoverned=True)
+    try:
+        await provider.extract("nonexistent.pdf", "pdf")
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the extract() gate")
+    except Exception:
+        pass  # FileNotFoundError past the gate is expected
+
+
+@pytest.mark.asyncio
+async def test_landing_ai_provider_refused_under_posture_on() -> None:
+    from kaizen.providers.document.landing_ai_provider import LandingAIProvider
+
+    kailash.set_governance_required(True)
+    provider = LandingAIProvider(api_key="test-key")
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.extract("nonexistent.pdf", "pdf")
+
+
+@pytest.mark.asyncio
+async def test_landing_ai_provider_ungoverned_bypasses() -> None:
+    from kaizen.providers.document.landing_ai_provider import LandingAIProvider
+
+    kailash.set_governance_required(True)
+    provider = LandingAIProvider(api_key="test-key", ungoverned=True)
+    try:
+        await provider.extract("nonexistent.pdf", "pdf")
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the extract() gate")
+    except Exception:
+        pass  # FileNotFoundError past the gate is expected
+
+
+@pytest.mark.asyncio
+async def test_ollama_vision_document_provider_refused_under_posture_on() -> None:
+    """Locality is NOT a governance exemption -- a local base_url is still
+    real network egress, gated the same as any other provider."""
+    from kaizen.providers.document.ollama_vision_provider import OllamaVisionProvider
+
+    kailash.set_governance_required(True)
+    provider = OllamaVisionProvider()
+    with pytest.raises(UngovernedEgressRefused):
+        await provider.extract("nonexistent.pdf", "pdf")
+
+
+@pytest.mark.asyncio
+async def test_ollama_vision_document_provider_ungoverned_bypasses() -> None:
+    from kaizen.providers.document.ollama_vision_provider import OllamaVisionProvider
+
+    kailash.set_governance_required(True)
+    provider = OllamaVisionProvider(ungoverned=True)
+    try:
+        await provider.extract("nonexistent.pdf", "pdf")
+    except UngovernedEgressRefused:
+        raise AssertionError("ungoverned=True must bypass the extract() gate")
+    except Exception:
+        pass  # FileNotFoundError past the gate is expected
+
+
+def test_provider_manager_forwards_ungoverned_to_all_sub_providers() -> None:
+    from kaizen.providers.document.provider_manager import ProviderManager
+
+    manager = ProviderManager(ungoverned=True)
+    assert manager.providers["landing_ai"]._ungoverned is True
+    assert manager.providers["openai_vision"]._ungoverned is True
+    assert manager.providers["ollama_vision"]._ungoverned is True
+
+
+def test_provider_manager_default_ungoverned_false() -> None:
+    from kaizen.providers.document.provider_manager import ProviderManager
+
+    manager = ProviderManager()
+    assert manager.providers["landing_ai"]._ungoverned is False
+    assert manager.providers["openai_vision"]._ungoverned is False
+    assert manager.providers["ollama_vision"]._ungoverned is False
+
+
+# --------------------------------------------------------------------------- #
+# #1803 — legacy standalone OllamaProvider (kaizen.providers.ollama_provider,
+# re-exported as kaizen.providers.LegacyOllamaProvider). Gate lives at
+# __init__, BEFORE _check_ollama_available()'s unconditional real egress
+# (ollama.list()) -- there is no way to obtain a constructed instance
+# without passing through it, so a single construction-time gate covers
+# every egress method transitively.
+# --------------------------------------------------------------------------- #
+
+
+def test_ollama_provider_refused_under_posture_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    from kaizen.providers.ollama_provider import OllamaProvider
+
+    mock_ollama = MagicMock()
+    mock_ollama.list.return_value = {"models": []}
+    monkeypatch.setitem(sys.modules, "ollama", mock_ollama)
+
+    kailash.set_governance_required(True)
+    with pytest.raises(UngovernedEgressRefused):
+        OllamaProvider()
+
+
+def test_ollama_provider_ungoverned_bypasses(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
+
+    mock_ollama = MagicMock()
+    mock_ollama.list.return_value = {"models": []}
+    monkeypatch.setitem(sys.modules, "ollama", mock_ollama)
+
+    kailash.set_governance_required(True)
+    provider = OllamaProvider(config=OllamaConfig(ungoverned=True))
+    assert provider is not None
+
+
+def test_ollama_provider_off_posture_byte_identical(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    from kaizen.providers.ollama_provider import OllamaProvider
+
+    mock_ollama = MagicMock()
+    mock_ollama.list.return_value = {"models": []}
+    monkeypatch.setitem(sys.modules, "ollama", mock_ollama)
+
+    kailash.set_governance_required(None)
+    assert OllamaProvider() is not None
+
+
+# --------------------------------------------------------------------------- #
+# #1803 — multi-modal adapters (kaizen.providers.multi_modal_adapter). The
+# Ollama adapter's gate lives transitively at OllamaProvider.__init__ (via
+# _get_ollama_vision_provider's lazy construction); the OpenAI adapter's
+# gate is explicit at the top of process_multi_modal (all 3 of its internal
+# branches -- vision/whisper/text -- construct openai.OpenAI() only after
+# that dispatch point).
+# --------------------------------------------------------------------------- #
+
+
+def test_openai_multi_modal_adapter_refused_under_posture_on() -> None:
+    from kaizen.providers.multi_modal_adapter import OpenAIMultiModalAdapter
+
+    kailash.set_governance_required(True)
+    adapter = OpenAIMultiModalAdapter(api_key="sk-test")
+    with pytest.raises(UngovernedEgressRefused):
+        adapter.process_multi_modal(text="hello", prompt="hi")
+
+
+def test_openai_multi_modal_adapter_ungoverned_bypasses() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from kaizen.providers.multi_modal_adapter import OpenAIMultiModalAdapter
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value.choices = [
+        MagicMock(message=MagicMock(content="ok"))
+    ]
+    kailash.set_governance_required(True)
+    adapter = OpenAIMultiModalAdapter(api_key="sk-test", ungoverned=True)
+    with patch("openai.OpenAI", return_value=mock_client):
+        try:
+            adapter.process_multi_modal(text="hello", prompt="hi")
+        except UngovernedEgressRefused:
+            raise AssertionError(
+                "ungoverned=True must bypass process_multi_modal's gate"
+            )
+
+
+def test_openai_multi_modal_adapter_off_posture_byte_identical() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from kaizen.providers.multi_modal_adapter import OpenAIMultiModalAdapter
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value.choices = [
+        MagicMock(message=MagicMock(content="ok"))
+    ]
+    kailash.set_governance_required(None)
+    adapter = OpenAIMultiModalAdapter(api_key="sk-test")
+    with patch("openai.OpenAI", return_value=mock_client):
+        try:
+            adapter.process_multi_modal(text="hello", prompt="hi")
+        except UngovernedEgressRefused:
+            raise AssertionError("OFF posture must not gate")
+
+
+def test_ollama_multi_modal_adapter_refused_under_posture_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    from kaizen.providers.multi_modal_adapter import OllamaMultiModalAdapter
+
+    mock_ollama = MagicMock()
+    mock_ollama.list.return_value = {"models": []}
+    monkeypatch.setitem(sys.modules, "ollama", mock_ollama)
+
+    kailash.set_governance_required(True)
+    adapter = OllamaMultiModalAdapter()
+    with pytest.raises(UngovernedEgressRefused):
+        adapter.process_multi_modal(text="hello", prompt="hi")
+
+
+def test_ollama_multi_modal_adapter_ungoverned_bypasses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    from kaizen.providers.multi_modal_adapter import OllamaMultiModalAdapter
+
+    mock_ollama = MagicMock()
+    mock_ollama.list.side_effect = Exception("Connection refused")
+    monkeypatch.setitem(sys.modules, "ollama", mock_ollama)
+
+    kailash.set_governance_required(True)
+    adapter = OllamaMultiModalAdapter(ungoverned=True)
+    try:
+        adapter.process_multi_modal(text="hello", prompt="hi")
+    except UngovernedEgressRefused:
+        raise AssertionError(
+            "ungoverned=True must bypass the underlying OllamaProvider gate"
+        )
+    except Exception:
+        pass  # Ollama unavailable downstream is acceptable
+
+
+# --------------------------------------------------------------------------- #
+# #1803 — mechanical parity sweep (acceptance criterion): every real LLM/
+# vision-egress client-construction site under kaizen/ lives in a file that
+# also calls enforce_governance_posture, OR is core four-axis LlmClient wire
+# machinery (kaizen/llm/**, gated once at LlmClient.__init__ /
+# _enforce_lazy_governance rather than per internal call site). A structural
+# grep sweep, not a probe -- rules/probe-driven-verification.md Rule 3: no
+# LLM judge is needed to answer "does this file contain both a construction
+# site and a gate call".
+# --------------------------------------------------------------------------- #
+
+
+def test_no_ungated_egress_construction_site_outside_known_files() -> None:
+    import re
+    from pathlib import Path
+
+    kaizen_src = Path(__file__).resolve().parents[3] / "src" / "kaizen"
+    assert kaizen_src.is_dir(), f"expected kaizen src at {kaizen_src}"
+
+    construction_re = re.compile(
+        r"openai\.(Async)?OpenAI\("
+        r"|anthropic\.(Async)?Anthropic\("
+        r"|genai\."
+        r"|httpx\.(Async)?Client\("
+        r"|ChatCompletionsClient\("
+        r"|EmbeddingsClient\("
+        r"|ollama\.(chat|list|embeddings)\("
+    )
+    gate_re = re.compile(r"enforce_governance_posture\(")
+
+    # kaizen/llm/** is the four-axis LlmClient's OWN wire-transport
+    # implementation: gated once, structurally, at LlmClient.__init__ /
+    # _enforce_lazy_governance (client.py) -- not per internal call site
+    # inside the wire adapters (http_client.py, wire/*). This is the
+    # documented Wave-C-retiring-adjacent exemption: kaizen/llm/* is the
+    # governed path itself, not a gap.
+    exempt_prefixes = ("llm/",)
+
+    # Explicit per-file exemptions, each with a load-bearing reason (#1803
+    # audit finding -- verified, not assumed): construction-time gating that
+    # covers the file transitively via inheritance, model-lifecycle
+    # administration outside the posture's user-data-egress scope, or a
+    # false-positive match inside prose/docstring text.
+    exempt_files = {
+        # OllamaVisionProvider.analyze_images() calls ollama.chat() directly
+        # for the multi-image path, but __init__ inherits OllamaProvider's
+        # gate (providers/ollama_provider.py) via super().__init__() -- no
+        # instance can exist without passing through it first.
+        "providers/ollama_vision_provider.py",
+        # Model lifecycle administration (list/pull installed models), NOT
+        # user-data LLM egress -- outside the governance_required posture's
+        # scope (kaizen/llm/governance_gate.py docstring: "a real,
+        # un-governed LLM call").
+        "providers/ollama_model_manager.py",
+        # BYOKClientCache is orphaned (#1803 audit: zero production call
+        # sites anywhere in kaizen; only its own regression tests construct
+        # it). The regex match is the module docstring's USAGE EXAMPLE
+        # (`factory=lambda: openai.OpenAI(...)`), not executable code -- the
+        # cache itself never constructs a client (the factory is opaque and
+        # caller-supplied). No live construction to gate.
+        "nodes/ai/client_cache.py",
+    }
+
+    violations = []
+    for path in kaizen_src.rglob("*.py"):
+        rel = path.relative_to(kaizen_src).as_posix()
+        if rel.startswith(exempt_prefixes) or rel in exempt_files:
+            continue
+        text = path.read_text()
+        if not construction_re.search(text):
+            continue
+        if gate_re.search(text):
+            continue
+        violations.append(rel)
+
+    assert not violations, (
+        "Ungated LLM/vision-egress construction site(s) found -- no "
+        "enforce_governance_posture call in the same file (#1803 parity "
+        f"sweep): {violations}. Gate at construction or the real-egress "
+        "method (mirroring #1779/#1803), or extend the allowlist above if "
+        "this is documented Wave-C-retiring code or core four-axis wire "
+        "machinery."
+    )

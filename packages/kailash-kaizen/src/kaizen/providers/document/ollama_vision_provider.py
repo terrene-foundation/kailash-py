@@ -77,6 +77,8 @@ class OllamaVisionProvider(BaseDocumentProvider):
         base_url: Optional[str] = None,
         model: str = DEFAULT_MODEL,
         timeout: int = 120,
+        *,
+        ungoverned: bool = False,
         **kwargs,
     ):
         """
@@ -86,6 +88,12 @@ class OllamaVisionProvider(BaseDocumentProvider):
             base_url: Ollama API base URL (default: localhost:11434)
             model: Model name (default: llama3.2-vision)
             timeout: Request timeout in seconds (longer for local processing)
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate enforced in :meth:`extract` before the real
+                Ollama HTTP egress. Default False. No locality exemption —
+                a local ``base_url`` is still real network egress, gated the
+                same as any other provider (parity with the four-axis
+                ``LlmClient`` path, which gates Ollama deployments too).
             **kwargs: Additional configuration
         """
         super().__init__(provider_name="ollama_vision", **kwargs)
@@ -93,6 +101,7 @@ class OllamaVisionProvider(BaseDocumentProvider):
         self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", self.DEFAULT_BASE_URL)
         self.model = model
         self.timeout = timeout
+        self._ungoverned = ungoverned
 
     async def extract(
         self,
@@ -128,6 +137,21 @@ class OllamaVisionProvider(BaseDocumentProvider):
             >>> print(f"Cost: ${result.cost:.3f}")  # Always $0.00
         """
         start_time = time.time()
+
+        # #1803 governance_required posture: this provider is directly
+        # standalone-constructible and egresses via real HTTP (default
+        # localhost, but a caller MAY point ``base_url`` elsewhere) below.
+        # Enforce BEFORE any real work; no mock concept exists for this
+        # provider (is_mock=False always — locality is not a governance
+        # exemption). ungoverned=True and the OFF posture are the only
+        # exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="OllamaVisionProvider",
+        )
 
         # Validate inputs
         self._validate_file_type(file_type)

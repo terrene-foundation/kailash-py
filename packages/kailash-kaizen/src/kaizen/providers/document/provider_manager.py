@@ -84,6 +84,8 @@ class ProviderManager:
         openai_key: Optional[str] = None,
         ollama_base_url: Optional[str] = None,
         default_fallback_chain: Optional[List[str]] = None,
+        *,
+        ungoverned: bool = False,
     ):
         """
         Initialize provider manager with provider credentials.
@@ -94,12 +96,22 @@ class ProviderManager:
             ollama_base_url: Ollama API base URL
             default_fallback_chain: Default fallback order
                                    (default: ["landing_ai", "openai_vision", "ollama_vision"])
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate, forwarded to every sub-provider so a manager
+                constructed ``ungoverned=True`` bypasses the gate on whichever
+                provider the fallback chain selects. Default False.
         """
         # Initialize providers
         self.providers: Dict[str, BaseDocumentProvider] = {
-            "landing_ai": LandingAIProvider(api_key=landing_ai_key),
-            "openai_vision": OpenAIVisionProvider(api_key=openai_key),
-            "ollama_vision": OllamaVisionProvider(base_url=ollama_base_url),
+            "landing_ai": LandingAIProvider(
+                api_key=landing_ai_key, ungoverned=ungoverned
+            ),
+            "openai_vision": OpenAIVisionProvider(
+                api_key=openai_key, ungoverned=ungoverned
+            ),
+            "ollama_vision": OllamaVisionProvider(
+                base_url=ollama_base_url, ungoverned=ungoverned
+            ),
         }
 
         # Default fallback chain: quality-first

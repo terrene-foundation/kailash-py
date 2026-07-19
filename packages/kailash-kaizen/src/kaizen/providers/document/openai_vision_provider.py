@@ -80,6 +80,8 @@ class OpenAIVisionProvider(BaseDocumentProvider):
         model: str = DEFAULT_MODEL,
         max_tokens: int = 4096,
         temperature: float = 0,
+        *,
+        ungoverned: bool = False,
         **kwargs,
     ):
         """
@@ -90,6 +92,9 @@ class OpenAIVisionProvider(BaseDocumentProvider):
             model: Model name (default: gpt-4o-mini)
             max_tokens: Max response tokens
             temperature: Sampling temperature (0 for deterministic)
+            ungoverned: #1803 explicit opt-out from the ``governance_required``
+                posture gate enforced in :meth:`extract` before the real
+                OpenAI Vision egress. Default False.
             **kwargs: Additional configuration
         """
         super().__init__(provider_name="openai_vision", **kwargs)
@@ -98,6 +103,7 @@ class OpenAIVisionProvider(BaseDocumentProvider):
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self._ungoverned = ungoverned
 
     async def extract(
         self,
@@ -133,6 +139,21 @@ class OpenAIVisionProvider(BaseDocumentProvider):
             >>> print(f"Processing time: {result.processing_time:.2f}s")
         """
         start_time = time.time()
+
+        # #1803 governance_required posture: this provider is directly
+        # standalone-constructible (kaizen.providers.document.ProviderManager
+        # / a user importing OpenAIVisionProvider directly) and egresses to
+        # the real OpenAI Vision API below with no four-axis LlmClient in the
+        # path. Enforce the posture BEFORE any real work; no mock concept
+        # exists for this provider (is_mock=False always). ungoverned=True
+        # and the OFF posture are the only exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="OpenAIVisionProvider",
+        )
 
         # Validate inputs
         self._validate_file_type(file_type)
