@@ -23,6 +23,24 @@ def _sentence_transformers_available() -> bool:
         return False
 
 
+def _rag_available() -> bool:
+    """Check if RAGResearchAgent is importable.
+
+    RAGResearchAgent pulls in numpy via kaizen.retrieval.vector_store — an
+    optional dependency shipped only under kailash-kaizen[rag]. The "rag" agent
+    type registers if and only if this import succeeds (see register_builtin.py),
+    so registry assertions about "rag" are gated on the same condition.
+    """
+    try:
+        from kaizen_agents.agents.specialized.rag_research import (  # noqa: F401
+            RAGResearchAgent,
+        )
+
+        return True
+    except ImportError:
+        return False
+
+
 class TestAgentRegistryBasics:
     """Test basic agent registry operations."""
 
@@ -79,10 +97,17 @@ class TestAgentTypeRegistration:
         assert is_agent_type_registered("vision")
 
     def test_rag_research_agent_registered(self):
-        """Test that RAGResearchAgent is registered."""
+        """RAGResearchAgent registers only when its optional deps (numpy) are present.
+
+        On a bare install without numpy, "rag" is skipped (not eagerly imported),
+        so the registration is gated on RAGResearchAgent being importable.
+        """
         from kaizen.agents import is_agent_type_registered
 
-        assert is_agent_type_registered("rag")
+        if _rag_available():
+            assert is_agent_type_registered("rag")
+        else:
+            assert not is_agent_type_registered("rag")
 
     def test_code_generation_agent_registered(self):
         """Test that CodeGenerationAgent is registered."""
@@ -218,13 +243,13 @@ class TestListAgentTypes:
 
         names = list_agent_type_names()
 
-        # All 18 agent types should be present
+        # All builtin agent types should be present. "rag" is optional — it
+        # registers only when numpy (via kailash-kaizen[rag]) is installed.
         expected_agents = [
             "simple",
             "react",
             "cot",
             "vision",
-            "rag",
             "code",
             "reflection",
             "memory",
@@ -239,18 +264,26 @@ class TestListAgentTypes:
             "claude_code",
             "autonomous",
         ]
+        if _rag_available():
+            expected_agents.append("rag")
 
         for agent_type in expected_agents:
             assert agent_type in names, f"{agent_type} not found in registry"
 
     def test_list_agent_type_names_count(self):
-        """Test that exactly 18 agent types are registered."""
+        """Test that all builtin agent types are registered.
+
+        The base count is 17; "rag" is optional (numpy-gated) and adds one when
+        its dependencies are installed.
+        """
         from kaizen.agents import list_agent_type_names
 
         names = list_agent_type_names()
 
-        # Should have exactly 18 agent types
-        assert len(names) >= 18, f"Expected at least 18 agents, found {len(names)}"
+        expected_min = 18 if _rag_available() else 17
+        assert (
+            len(names) >= expected_min
+        ), f"Expected at least {expected_min} agents, found {len(names)}"
 
 
 class TestCoreSKDIntegration:

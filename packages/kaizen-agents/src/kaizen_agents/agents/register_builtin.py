@@ -10,6 +10,8 @@ are registered on import.
 Part of ADR-020: Unified Agent API Architecture
 """
 
+import logging
+
 # Import autonomous agents
 from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
 from kaizen_agents.agents.autonomous.claude_code import ClaudeCodeAgent
@@ -30,7 +32,6 @@ from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgen
 from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
 from kaizen_agents.agents.specialized.human_approval import HumanApprovalAgent
 from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
-from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 from kaizen_agents.agents.specialized.react import ReActAgent
 from kaizen_agents.agents.specialized.resilient import ResilientAgent
 from kaizen_agents.agents.specialized.self_reflection import SelfReflectionAgent
@@ -42,6 +43,8 @@ from kaizen_agents.agents.specialized.streaming_chat import StreamingChatAgent
 # =============================================================================
 # Register Specialized Agents
 # =============================================================================
+
+logger = logging.getLogger(__name__)
 
 
 def register_builtin_agents():
@@ -83,14 +86,30 @@ def register_builtin_agents():
         tags=["reasoning", "step-by-step", "analysis"],
     )
 
-    # RAG Research Agent
-    register_agent(
-        name="rag",
-        agent_class=RAGResearchAgent,
-        description="Retrieval-Augmented Generation with document retrieval",
-        category="specialized",
-        tags=["rag", "retrieval", "research", "knowledge"],
-    )
+    # RAG Research Agent (optional — requires numpy via kailash-kaizen[rag])
+    # RAGResearchAgent pulls in kaizen.retrieval.vector_store -> numpy, which
+    # ships only under the kailash-kaizen[rag] extra. On a bare kaizen-agents
+    # install numpy is absent, so importing it raises ImportError. Guard the
+    # import + registration so every non-RAG agent stays available and the
+    # skip reason is actionable rather than a silent swallow.
+    try:
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
+    except ImportError as exc:
+        logger.warning(
+            "RAGResearchAgent not registered (agent_type='rag') — its optional "
+            "dependencies are missing: %s. Install with: pip install "
+            "'kailash-kaizen[rag]' (provides numpy). All other builtin agents "
+            "remain available.",
+            exc,
+        )
+    else:
+        register_agent(
+            name="rag",
+            agent_class=RAGResearchAgent,
+            description="Retrieval-Augmented Generation with document retrieval",
+            category="specialized",
+            tags=["rag", "retrieval", "research", "knowledge"],
+        )
 
     # Memory Agent
     register_agent(

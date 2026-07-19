@@ -34,6 +34,7 @@ Registered Agents:
     2. MemoryAgent - Conversational agent with multi-turn memory
     3. ChainOfThoughtAgent - Step-by-step reasoning with verification
     4. RAGResearchAgent - Retrieval-Augmented Generation with vector search
+       (optional — registered only when numpy is present via kailash-kaizen[rag])
     5. CodeGenerationAgent - Multi-language code generation with tests
     6. ReActAgent - Reasoning + Acting agent with tool use
     7. BatchProcessingAgent - Concurrent high-throughput batch processing
@@ -53,6 +54,9 @@ See Also:
     - KAIZEN_MEMORY_ARCHITECTURE.md - Memory management
 """
 
+import logging
+from typing import TYPE_CHECKING, Any
+
 from kaizen_agents.agents.multi_modal.multi_modal_agent import MultiModalAgent
 from kaizen_agents.agents.multi_modal.transcription_agent import TranscriptionAgent
 
@@ -63,7 +67,6 @@ from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgen
 from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
 from kaizen_agents.agents.specialized.human_approval import HumanApprovalAgent
 from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
-from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 from kaizen_agents.agents.specialized.react import ReActAgent
 from kaizen_agents.agents.specialized.resilient import ResilientAgent
 from kaizen_agents.agents.specialized.self_reflection import SelfReflectionAgent
@@ -71,6 +74,14 @@ from kaizen_agents.agents.specialized.self_reflection import SelfReflectionAgent
 # Specialized agents
 from kaizen_agents.agents.specialized.simple_qa import SimpleQAAgent
 from kaizen_agents.agents.specialized.streaming_chat import StreamingChatAgent
+
+if TYPE_CHECKING:
+    # Static-analysis-only import — RAGResearchAgent's numpy dependency is
+    # optional (kailash-kaizen[rag]); it is registered into KAIZEN_AGENTS
+    # conditionally below and exposed via __getattr__.
+    from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
+
+logger = logging.getLogger(__name__)
 
 # Agent metadata for Studio integration
 KAIZEN_AGENTS = {
@@ -116,23 +127,6 @@ KAIZEN_AGENTS = {
         ],
         "icon": "git-branch",
         "color": "#DC2626",  # Red
-    },
-    "RAGResearchAgent": {
-        "class": RAGResearchAgent,
-        "category": "AI Agents",
-        "description": "Retrieval-Augmented Generation agent with semantic vector search and source attribution",
-        "version": "1.0.0",
-        "tags": [
-            "ai",
-            "kaizen",
-            "rag",
-            "research",
-            "retrieval",
-            "vector-search",
-            "semantic",
-        ],
-        "icon": "search",
-        "color": "#059669",  # Green
     },
     "CodeGenerationAgent": {
         "class": CodeGenerationAgent,
@@ -255,6 +249,41 @@ KAIZEN_AGENTS = {
 }
 
 
+# RAGResearchAgent is optional — it pulls in numpy via
+# kaizen.retrieval.vector_store, which ships only under kailash-kaizen[rag].
+# Register its Studio metadata only when the import succeeds so a bare install
+# without numpy can still import this module and use every other agent node.
+try:
+    from kaizen_agents.agents.specialized.rag_research import (
+        RAGResearchAgent as _RAGResearchAgent,
+    )
+except ImportError as _rag_exc:  # numpy (kailash-kaizen[rag]) not installed
+    logger.warning(
+        "RAGResearchAgent Studio node not registered — its optional "
+        "dependencies are missing: %s. Install with: pip install "
+        "'kailash-kaizen[rag]' (provides numpy).",
+        _rag_exc,
+    )
+else:
+    KAIZEN_AGENTS["RAGResearchAgent"] = {
+        "class": _RAGResearchAgent,
+        "category": "AI Agents",
+        "description": "Retrieval-Augmented Generation agent with semantic vector search and source attribution",
+        "version": "1.0.0",
+        "tags": [
+            "ai",
+            "kaizen",
+            "rag",
+            "research",
+            "retrieval",
+            "vector-search",
+            "semantic",
+        ],
+        "icon": "search",
+        "color": "#059669",  # Green
+    }
+
+
 # Export all agents for convenience
 __all__ = [
     "SimpleQAAgent",
@@ -273,6 +302,21 @@ __all__ = [
     "MultiModalAgent",
     "KAIZEN_AGENTS",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily import optional-dependency agents (PEP 562).
+
+    ``RAGResearchAgent`` pulls in numpy via ``kaizen.retrieval.vector_store``
+    (the optional ``kailash-kaizen[rag]`` extra). Importing this node module
+    must NOT require numpy, so the symbol resolves lazily here; when numpy is
+    absent the underlying ``ImportError`` propagates with its original message.
+    """
+    if name == "RAGResearchAgent":
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
+
+        return RAGResearchAgent
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_agent_class(agent_name: str):
