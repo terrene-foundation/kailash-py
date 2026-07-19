@@ -76,6 +76,15 @@ from kailash.trust.revocation.broadcaster import (
     TrustRevocationList,
 )
 from kailash.trust.revocation.cascade import RevocationResult, cascade_revoke
+from kailash.trust.revocation.signed_ledger import (
+    GENESIS_TIP,
+    REVOCATION_EVENT_DOMAIN_SEP,
+    REVOCATION_LEDGER_DOMAIN,
+    RevocationLedger,
+    RevocationLedgerError,
+    SignedRevocationEvent,
+    revocation_ledger_tip,
+)
 
 __all__ = [
     # Enums
@@ -100,4 +109,12 @@ __all__ = [
     "cascade_revoke",
     # Trust Revocation List
     "TrustRevocationList",
+    # Signed revocation ledger (EATP-12 D5)
+    "SignedRevocationEvent",
+    "RevocationLedger",
+    "RevocationLedgerError",
+    "revocation_ledger_tip",
+    "REVOCATION_EVENT_DOMAIN_SEP",
+    "REVOCATION_LEDGER_DOMAIN",
+    "GENESIS_TIP",
 ]
