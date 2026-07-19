@@ -5,6 +5,33 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] — 2026-07-19 — Cost fix: KAIZEN_MODEL fallbacks now resolve via the shared env helper (#1844, #1845)
+
+### Fixed
+
+- **Specialized agents, pattern factories, and workflow templates now resolve their
+  `KAIZEN_MODEL`-unset fallback through the shared `kaizen_agents._model_env.resolve_default_model()`
+  helper instead of a hardcoded `gpt-4` / `gpt-3.5-turbo` literal (#1844).** 0.11.1 introduced
+  `resolve_default_model()` (`OPENAI_PROD_MODEL` → `DEFAULT_LLM_MODEL` → the provider-intrinsic
+  `gpt-4o` fallback) for the `api` config layer only; every other consumer still had its own
+  `os.getenv("KAIZEN_MODEL", "gpt-4")` (or `"gpt-3.5-turbo"`) pattern, so an unconfigured agent
+  silently spent against a deprecated, billed model whenever `KAIZEN_MODEL` was unset (root
+  cause of a ~$208 obsolete-model spend across the shared dev environment — the specialized
+  agents, pattern factories, and coordination examples were the primary source, run on their
+  obsolete defaults). `KAIZEN_MODEL`, when explicitly set, still wins at every call site — only
+  the _unset_ fallback changed. Touched: the 14 specialized agents (`batch_processing`,
+  `chain_of_thought`, `code_generation`, `human_approval`, `memory_agent`, `pev`, `planning`,
+  `rag_research`, `react`, `resilient`, `self_reflection`, `simple_qa`, `streaming_chat`,
+  `tree_of_thoughts`), the 4 pattern factories (`consensus`, `debate`, `handoff`,
+  `supervisor_worker`), and `workflows/enterprise_templates.py` +
+  `workflows/supervisor_worker.py`. No public signature changes — every fix is a default-_value_
+  change; explicit `model=` / `KAIZEN_MODEL=` are unaffected.
+
+Companion release: `kailash-kaizen` `2.37.1` (released alongside) closes the equivalent gap at
+the Core-SDK-agent layer (`core/agents.py`, `core/framework.py`,
+`nodes/ai/{llm_agent,iterative_llm_agent}.py`, `providers/multi_modal_adapter.py`). Dependency
+floor stays `kailash-kaizen>=2.36.0` — this release does not depend on any new kaizen surface.
+
 ## [0.11.1] — 2026-07-19 — env-models: model defaults resolve from .env (#1825)
 
 ### Fixed
