@@ -19,11 +19,18 @@ These tests pin the fixed behavior:
 - PKCE round-trip: ``_initiate_oauth`` emits ``code_challenge`` +
   ``code_challenge_method=S256``; the cached ``code_verifier`` flows into
   ``_exchange_oauth_code``; the verifier S256-hashes to the emitted challenge.
+
+Note (issue #1835): the nonce is now compared ONLY against cryptographically
+verified id_token claims — ``_handle_oauth_callback`` verifies the id_token
+signature against the provider's JWKS (RS256/ES256 + aud + iss + exp) before
+reading any claim. The nonce tests below therefore sign REAL tokens via the
+``oidc_jwks_server`` fixture (an unsigned-shape token would now be rejected at
+the signature gate, never reaching the nonce comparison). The full JWKS-verify
+matrix lives in ``test_issue_1835_sso_id_token_verify.py``.
 """
 
 import base64
 import hashlib
-import json
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -39,33 +46,23 @@ def _s256(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-def _make_id_token(claims: dict) -> str:
-    """Build an unsigned-shape JWT (header.payload.signature) for tests.
-
-    Only the base64url payload segment is load-bearing here — the nonce check
-    reads the ``nonce`` claim; it does not (and must not) treat this token as
-    signature-validated evidence beyond the nonce match.
-    """
-
-    def _seg(obj: dict) -> str:
-        raw = json.dumps(obj).encode()
-        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
-
-    header = _seg({"alg": "RS256", "typ": "JWT"})
-    payload = _seg(claims)
-    return f"{header}.{payload}.sig"
-
-
-def _make_node() -> SSOAuthenticationNode:
+def _make_node(harness=None) -> SSOAuthenticationNode:
+    """Build the node. When ``harness`` is given, wire the JWKS-verify config
+    (jwks_uri / issuer) so the nonce path can verify real signed id_tokens; the
+    harness audience matches ``client_id`` ("test-client")."""
+    oauth_settings = {
+        "client_id": "test-client",
+        "auth_endpoint": "https://idp.example.com/oauth2/authorize",
+        "token_endpoint": "https://idp.example.com/oauth2/token",
+        "userinfo_endpoint": "https://idp.example.com/oauth2/userinfo",
+    }
+    if harness is not None:
+        oauth_settings["jwks_uri"] = harness.jwks_uri
+        oauth_settings["issuer"] = harness.issuer
     return SSOAuthenticationNode(
         name="sso_test",
         enable_jit_provisioning=False,  # skip audit-logger path; isolate the nonce gate
-        oauth_settings={
-            "client_id": "test-client",
-            "auth_endpoint": "https://idp.example.com/oauth2/authorize",
-            "token_endpoint": "https://idp.example.com/oauth2/token",
-            "userinfo_endpoint": "https://idp.example.com/oauth2/userinfo",
-        },
+        oauth_settings=oauth_settings,
     )
 
 
@@ -75,9 +72,12 @@ def _make_node() -> SSOAuthenticationNode:
 
 
 @pytest.mark.asyncio
-async def test_callback_rejects_nonce_mismatch():
-    """Callback MUST reject when id_token nonce != minted nonce."""
-    node = _make_node()
+async def test_callback_rejects_nonce_mismatch(oidc_jwks_server):
+    """Callback MUST reject when a VALIDLY-SIGNED id_token's nonce != minted.
+
+    The token passes JWKS signature + aud/iss/exp verification (issue #1835);
+    it is rejected on the nonce gate, not the signature gate."""
+    node = _make_node(oidc_jwks_server)
     init = await node._initiate_oauth("oidc", "https://app.example.com/cb")
     state = init["state"]
 
@@ -85,7 +85,9 @@ async def test_callback_rejects_nonce_mismatch():
         return {
             "access_token": "test_access_token",
             "token_type": "Bearer",
-            "id_token": _make_id_token({"sub": "u1", "nonce": "ATTACKER-INJECTED"}),
+            "id_token": oidc_jwks_server.sign(
+                oidc_jwks_server.base_claims(sub="u1", nonce="ATTACKER-INJECTED")
+            ),
         }
 
     node._exchange_oauth_code = fake_exchange
@@ -97,9 +99,9 @@ async def test_callback_rejects_nonce_mismatch():
 
 
 @pytest.mark.asyncio
-async def test_callback_rejects_missing_id_token_when_nonce_minted():
+async def test_callback_rejects_missing_id_token_when_nonce_minted(oidc_jwks_server):
     """When a nonce was minted, an id_token MUST be present; absence rejects."""
-    node = _make_node()
+    node = _make_node(oidc_jwks_server)
     init = await node._initiate_oauth("oidc", "https://app.example.com/cb")
     state = init["state"]
 
@@ -116,9 +118,10 @@ async def test_callback_rejects_missing_id_token_when_nonce_minted():
 
 
 @pytest.mark.asyncio
-async def test_callback_accepts_matching_nonce():
-    """Callback MUST succeed when the id_token nonce matches the minted nonce."""
-    node = _make_node()
+async def test_callback_accepts_matching_nonce(oidc_jwks_server):
+    """Callback MUST succeed when a VALIDLY-SIGNED id_token's nonce matches the
+    minted nonce (signature + aud/iss/exp verified, then nonce matched)."""
+    node = _make_node(oidc_jwks_server)
     init = await node._initiate_oauth("oidc", "https://app.example.com/cb")
     state = init["state"]
     minted_nonce = node.provider_cache[state]["nonce"]
@@ -128,7 +131,9 @@ async def test_callback_accepts_matching_nonce():
         return {
             "access_token": "test_access_token",
             "token_type": "Bearer",
-            "id_token": _make_id_token({"sub": "u1", "nonce": minted_nonce}),
+            "id_token": oidc_jwks_server.sign(
+                oidc_jwks_server.base_claims(sub="u1", nonce=minted_nonce)
+            ),
         }
 
     async def fake_userinfo(provider, access_token):

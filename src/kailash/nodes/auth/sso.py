@@ -451,15 +451,105 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         )
         return code_verifier, code_challenge
 
+    def _verify_id_token(self, provider: str, id_token: str) -> Dict[str, Any]:
+        """Cryptographically verify an OIDC id_token against the provider's JWKS.
+
+        Fail-closed. Any id_token whose claims (including ``nonce``) will be
+        trusted MUST first have its RS256/ES256 signature verified against the
+        provider's published JWKS AND its ``aud`` / ``iss`` / ``exp`` validated.
+        This reuses the same PyJWT ``PyJWKClient`` + ``jwt.decode`` pattern the
+        provider classes use (``kailash.trust.auth.sso.google`` et al.).
+
+        Configuration is read from ``oauth_settings``:
+
+        - ``jwks_uri`` — the provider's JWKS endpoint (required)
+        - ``issuer`` — the expected ``iss`` claim (required)
+        - ``{provider}_client_id`` or ``client_id`` — the expected ``aud``
+          claim (required)
+
+        If any of these are unconfigured, the JWKS is unreachable, or
+        verification fails (bad signature / audience / issuer / expiry), this
+        raises a typed :class:`ValueError` and REJECTS — it NEVER falls back to
+        the unverified base64url read for a trust decision.
+        """
+        try:
+            import jwt
+            from jwt import PyJWKClient
+        except ImportError as exc:  # pragma: no cover - optional-extra guard
+            raise ValueError(
+                "OIDC id_token signature verification requires PyJWT. Install "
+                "with: pip install 'kailash[server]' (or 'kailash[trust]')"
+            ) from exc
+
+        jwks_uri = self.oauth_settings.get("jwks_uri")
+        issuer = self.oauth_settings.get("issuer")
+        audience = self.oauth_settings.get(
+            f"{provider}_client_id"
+        ) or self.oauth_settings.get("client_id")
+
+        missing = [
+            name
+            for name, value in (
+                ("jwks_uri", jwks_uri),
+                ("issuer", issuer),
+                ("client_id", audience),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "OIDC id_token signature verification is required for the nonce "
+                f"flow but oauth_settings is missing: {', '.join(missing)}. "
+                "Configure jwks_uri, issuer, and client_id; refusing to trust "
+                "an unverified id_token."
+            )
+
+        try:
+            jwks_client = PyJWKClient(jwks_uri)
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+            claims = jwt.decode(
+                id_token,
+                signing_key.key,
+                algorithms=["RS256", "ES256"],
+                audience=audience,
+                issuer=issuer,
+            )
+        except jwt.ExpiredSignatureError as exc:
+            raise ValueError(
+                f"OIDC id_token verification failed: token expired ({exc})"
+            )
+        except jwt.InvalidAudienceError as exc:
+            raise ValueError(
+                f"OIDC id_token verification failed: audience mismatch ({exc})"
+            )
+        except jwt.InvalidIssuerError as exc:
+            raise ValueError(
+                f"OIDC id_token verification failed: issuer mismatch ({exc})"
+            )
+        except jwt.PyJWKClientError as exc:
+            raise ValueError(
+                "OIDC id_token verification failed: JWKS unreachable or signing "
+                f"key not found ({exc})"
+            )
+        except jwt.InvalidTokenError as exc:
+            raise ValueError(
+                f"OIDC id_token verification failed: invalid token ({exc})"
+            )
+
+        if not isinstance(claims, dict):
+            # jwt.decode returns a dict for a JWS; guard defensively so a later
+            # ``claims.get(...)`` cannot raise an opaque AttributeError.
+            raise ValueError("OIDC id_token verification produced a non-object payload")
+        return claims
+
     @staticmethod
     def _decode_id_token_claims(id_token: str) -> Dict[str, Any]:
         """Decode the (base64url) payload segment of a JWT id_token.
 
-        This reads the claims WITHOUT verifying the signature — it is used ONLY
-        to compare the ``nonce`` claim against the value minted at authorization
-        time (a replay/injection defense layered on the provider's own token
-        validation). It MUST NOT be relied on as authentication evidence beyond
-        the nonce match.
+        This reads the claims WITHOUT verifying the signature. It is a
+        DISPLAY-ONLY helper and MUST NOT be used for any trust decision — the
+        nonce comparison in ``_handle_oauth_callback`` uses the cryptographically
+        verified claims from :meth:`_verify_id_token` instead.
         """
         parts = id_token.split(".")
         if len(parts) < 2:
@@ -694,9 +784,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # OIDC nonce enforcement (id_token replay/injection defense).
         # When a nonce was minted at authorization time, the returned id_token
-        # MUST be present and its ``nonce`` claim MUST match the minted value.
-        # This is layered on the provider's own token validation; it does not
-        # weaken it — a mismatch fails closed with a typed error.
+        # MUST be present, cryptographically verified against the provider's
+        # JWKS (signature + aud + iss + exp), and its ``nonce`` claim MUST match
+        # the minted value. The nonce is compared ONLY against VERIFIED claims —
+        # a forged id_token whose signature fails JWKS verification is rejected
+        # before any claim is trusted. Fail-closed: any verification failure
+        # raises a typed error and rejects authentication.
         expected_nonce = cached_data.get("nonce")
         if expected_nonce is not None:
             id_token = token_result.get("id_token")
@@ -705,7 +798,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                     "OIDC nonce was minted but the token response carried no "
                     "id_token — cannot verify nonce; rejecting authentication"
                 )
-            claims = self._decode_id_token_claims(id_token)
+            claims = self._verify_id_token(provider, id_token)
             returned_nonce = claims.get("nonce")
             # Constant-time compare (defense-in-depth; the one-shot state pop
             # already bounds attempts). A missing/non-string claim fails closed.
