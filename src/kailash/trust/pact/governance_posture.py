@@ -91,7 +91,20 @@ Coverage (what an ACTIVE posture gates) — enforced from Kaizen:
     (inherited by ``OllamaVisionConfig``), so
     ``kaizen.providers.ollama_vision_provider.OllamaVisionProvider``
     (top-level) is covered through its base-class construction — no
-    instance of either class can exist without passing through the gate.
+    instance of either class can exist without passing through the gate;
+  * ``kaizen.nodes.ai.semantic_memory.SimpleEmbeddingProvider`` — a
+    security-review follow-up finding (not caught by the initial parity
+    sweep's regex, which had no aiohttp/requests pattern): real aiohttp
+    embedding-host egress in ``embed_text()``, gated at the top of that
+    method before the cache check or the aiohttp session. ``ungoverned``
+    is threaded top-down from every consumer — ``SemanticMemoryStoreNode``,
+    ``SemanticMemorySearchNode``, ``SemanticAgentMatchingNode``
+    (``kaizen.nodes.ai.semantic_memory``), and
+    ``SemanticHybridSearchNode`` / ``AdaptiveSearchNode``
+    (``kaizen.nodes.ai.hybrid_search``, the latter composing the former)
+    — each constructs its own INSTANCE-level provider (not class-cached,
+    so one node's ``ungoverned=True`` never leaks into a sibling
+    instance's default-governed provider).
 
   Two subsystems the #1803 audit found were retired, not gated — recorded
   here so a future reader does not re-discover the same dead ends:

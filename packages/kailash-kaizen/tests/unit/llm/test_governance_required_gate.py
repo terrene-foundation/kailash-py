@@ -967,14 +967,14 @@ def test_ollama_multi_modal_adapter_ungoverned_bypasses(
 # --------------------------------------------------------------------------- #
 
 
-def test_no_ungated_egress_construction_site_outside_known_files() -> None:
+# Shared regex + sweep logic (PR #1866 redteam FIX 1): a single detection
+# pair is reused by BOTH the kaizen-package sweep below AND the kaizen-agents
+# sweep that follows it, so the two packages cannot drift apart on what
+# counts as an ungated egress construction site.
+def _construction_re():
     import re
-    from pathlib import Path
 
-    kaizen_src = Path(__file__).resolve().parents[3] / "src" / "kaizen"
-    assert kaizen_src.is_dir(), f"expected kaizen src at {kaizen_src}"
-
-    construction_re = re.compile(
+    return re.compile(
         r"openai\.(Async)?OpenAI\("
         r"|anthropic\.(Async)?Anthropic\("
         r"|genai\."
@@ -995,7 +995,43 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         r"|aiohttp\.ClientSession\("
         r"|(?<!\w)requests\.(post|get)\("
     )
-    gate_re = re.compile(r"enforce_governance_posture\(")
+
+
+def _gate_re():
+    import re
+
+    return re.compile(r"enforce_governance_posture\(")
+
+
+def _sweep_ungated_egress(src_root, *, exempt_prefixes=(), exempt_files=frozenset()):
+    """Structural sweep (rules/probe-driven-verification.md Rule 3: no LLM
+    judge needed to answer "does this file contain both a construction site
+    and a gate call") -- shared by the kaizen and kaizen-agents sweeps below.
+    Returns the sorted list of relative-path violations (empty = clean)."""
+    construction_re = _construction_re()
+    gate_re = _gate_re()
+
+    violations = []
+    for path in src_root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        rel = path.relative_to(src_root).as_posix()
+        if rel.startswith(exempt_prefixes) or rel in exempt_files:
+            continue
+        text = path.read_text()
+        if not construction_re.search(text):
+            continue
+        if gate_re.search(text):
+            continue
+        violations.append(rel)
+    return sorted(violations)
+
+
+def test_no_ungated_egress_construction_site_outside_known_files() -> None:
+    from pathlib import Path
+
+    kaizen_src = Path(__file__).resolve().parents[3] / "src" / "kaizen"
+    assert kaizen_src.is_dir(), f"expected kaizen src at {kaizen_src}"
 
     # kaizen/llm/** is the four-axis LlmClient's OWN wire-transport
     # implementation: gated once, structurally, at LlmClient.__init__ /
@@ -1021,12 +1057,13 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         # scope (kaizen/llm/governance_gate.py docstring: "a real,
         # un-governed LLM call").
         "providers/ollama_model_manager.py",
-        # BYOKClientCache is orphaned (#1803 audit: zero production call
-        # sites anywhere in kaizen; only its own regression tests construct
-        # it). The regex match is the module docstring's USAGE EXAMPLE
-        # (`factory=lambda: openai.OpenAI(...)`), not executable code -- the
-        # cache itself never constructs a client (the factory is opaque and
-        # caller-supplied). No live construction to gate.
+        # BYOKClientCache EXISTS (nodes/ai/client_cache.py) but is orphaned:
+        # #1803 audit found zero production call sites anywhere in kaizen --
+        # only its own regression tests construct it. The regex match here is
+        # the module docstring's USAGE EXAMPLE (`factory=lambda:
+        # openai.OpenAI(...)`), not executable code -- the cache itself never
+        # constructs a client (the factory is opaque and caller-supplied).
+        # No live construction to gate.
         "nodes/ai/client_cache.py",
         # --- security-review follow-up (same session): broadening the regex
         # to catch aiohttp/requests egress (the SimpleEmbeddingProvider HIGH
@@ -1057,17 +1094,9 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         "core/autonomy/control/transports/http.py",
     }
 
-    violations = []
-    for path in kaizen_src.rglob("*.py"):
-        rel = path.relative_to(kaizen_src).as_posix()
-        if rel.startswith(exempt_prefixes) or rel in exempt_files:
-            continue
-        text = path.read_text()
-        if not construction_re.search(text):
-            continue
-        if gate_re.search(text):
-            continue
-        violations.append(rel)
+    violations = _sweep_ungated_egress(
+        kaizen_src, exempt_prefixes=exempt_prefixes, exempt_files=exempt_files
+    )
 
     assert not violations, (
         "Ungated LLM/vision-egress construction site(s) found -- no "
@@ -1076,6 +1105,52 @@ def test_no_ungated_egress_construction_site_outside_known_files() -> None:
         "method (mirroring #1779/#1803), or extend the allowlist above if "
         "this is documented Wave-C-retiring code or core four-axis wire "
         "machinery."
+    )
+
+
+def test_no_ungated_egress_construction_site_outside_known_files_kaizen_agents() -> (
+    None
+):
+    """PR #1866 redteam FIX 1 (INVEST-NOW): the sweep above scoped ONLY
+    packages/kailash-kaizen/src/kaizen and never verified that
+    packages/kaizen-agents/src/kaizen_agents -- the delegate/adapter egress
+    layer governance_posture.py's coverage docstring claims is covered --
+    actually is. Same construction/gate regex pair (`_sweep_ungated_egress`),
+    applied to the sibling package, so a future ungated kaizen-agents adapter
+    is caught structurally rather than relying on a one-time manual grep."""
+    from pathlib import Path
+
+    kaizen_agents_src = (
+        Path(__file__).resolve().parents[4] / "kaizen-agents" / "src" / "kaizen_agents"
+    )
+    assert (
+        kaizen_agents_src.is_dir()
+    ), f"expected kaizen_agents src at {kaizen_agents_src}"
+
+    exempt_files = {
+        # openai_stream.py's ONLY construction-regex match is the module
+        # docstring's prose description ("...An async stream from
+        # openai.AsyncOpenAI().chat.completions.create(stream=True)."). The
+        # file's actual imports are type-only (`from openai import
+        # AsyncStream`, `from openai.types.chat import ChatCompletionChunk`)
+        # -- it processes an already-constructed stream (constructed at the
+        # already-gated delegate/adapters/openai_adapter.py) and never
+        # constructs a client itself. Verified via a full-tree dry-run sweep
+        # of kaizen_agents (PR #1866 redteam FIX 1): this is the ONLY match
+        # in the entire package.
+        "delegate/adapters/openai_stream.py",
+    }
+
+    violations = _sweep_ungated_egress(kaizen_agents_src, exempt_files=exempt_files)
+
+    assert not violations, (
+        "Ungated LLM/vision-egress construction site(s) found in "
+        "kaizen-agents -- no enforce_governance_posture call in the same "
+        f"file (#1803/#1866 cross-package parity sweep): {violations}. Gate "
+        "at construction or the real-egress method (mirroring the "
+        "kaizen_agents.llm.LLMClient chokepoint + the existing delegate/"
+        "orchestration adapters), or extend the allowlist above if this is "
+        "a documented false positive."
     )
 
 

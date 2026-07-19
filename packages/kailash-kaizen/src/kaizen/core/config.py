@@ -322,7 +322,15 @@ class BaseAgentConfig:
                 max_tokens=config.get("max_tokens"),
                 provider_config=config.get("provider_config"),
                 response_format=config.get("response_format"),
-                structured_output_mode=config.get("structured_output_mode", "auto"),
+                # Default MUST match the dataclass field default above
+                # ("explicit", not the deprecated "auto") -- this branch's stale
+                # "auto" default silently downgraded every dict-based domain
+                # config (e.g. Agent()'s _convert_to_base_agent_config(), which
+                # never sets this key) to the deprecated mode, firing
+                # workflow_generator's FutureWarning on every signature-based
+                # run. Explicit callers that DO set structured_output_mode in
+                # their dict are unaffected -- config.get() returns their value.
+                structured_output_mode=config.get("structured_output_mode", "explicit"),
                 api_key=config.get("api_key"),
                 base_url=config.get("base_url"),
                 ungoverned=config.get("ungoverned", False),
