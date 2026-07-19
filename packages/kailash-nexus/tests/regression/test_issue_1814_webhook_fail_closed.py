@@ -23,11 +23,14 @@ This exercises the real ``WebhookTransport`` + the real
 - Secret configured + a forged signature → returns ``False`` (unchanged).
 - Secret configured + a valid signature → returns ``True`` (unchanged).
 
-Note ``receive()`` semantics are intentionally UNCHANGED and out of scope:
-it guards the verify call with ``if self._secret is not None`` and so
-never reaches the new raise on the unsigned-receive path. That path stays
-covered by the pre-existing unit test
-``test_receive_no_secret_skips_verification``.
+Note the ``receive()`` unsigned-receive path was subsequently hardened by
+issue #1836: ``receive()`` now also fails closed when no secret is
+configured unless ``allow_unsigned=True`` is set. That behaviour is covered
+by ``tests/regression/test_issue_1836_webhook_fail_closed.py`` and the unit
+tests ``test_receive_no_secret_fails_closed`` /
+``test_receive_no_secret_allow_unsigned_accepts``. This #1814 test remains
+scoped to the ``verify_signature`` / ``verify_signature_for_request`` entry
+points.
 """
 
 import hashlib
