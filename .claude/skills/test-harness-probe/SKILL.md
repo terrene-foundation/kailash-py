@@ -1,4 +1,5 @@
 ---
+name: test-harness-probe
 description: Procedural reference for /test-harness-probe — schema lookup, subagent dispatch shape, JSON output format, retry semantics.
 ---
 

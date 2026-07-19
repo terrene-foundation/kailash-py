@@ -1349,6 +1349,17 @@ const LOOM_ONLY_TIER_CARVEOUTS = new Set([
   // claim.domain/opts.candidateDomain, never this lib). Under the synced `hooks/lib/**`
   // glob → LOAD-BEARING carve-out, the same class as o1-citation-check.js above.
   "hooks/lib/distillation-claim.js",
+  // loom#1209 W1-b (2026-07-18, co-owner-directed journal/0549) — the artifact-
+  // activation event producers + libs. loom-INTERNAL session observability (#1228:
+  // "run in EVERY loom session"), default-matched by the synced hooks/** + hooks/lib/**
+  // tiers but shipped present-but-inert to templates (settings.json preserved → no
+  // registration propagation). loom_only STOPS distribution; loom keeps + fires them.
+  // Closed import cluster (event ← ledger ← the 2 top-level hooks). LOAD-BEARING
+  // carve-out, same class as the weft-* / o1-citation / distillation-claim siblings above.
+  "hooks/emit-artifact-activation.js",
+  "hooks/emit-artifact-activation-session.js",
+  "hooks/lib/artifact-activation-event.js",
+  "hooks/lib/artifact-activation-ledger.js",
 ]);
 
 // Positive allowlist (cc-artifacts.md Rule 10) of concrete loom_only files that
@@ -3969,7 +3980,14 @@ function allowlistGlobCovers(glob, entry) {
 //
 // The non-learning loom-only scratch (SURVEY-F40-4*, test-harness/.claude/) lives
 // OUTSIDE .claude/learning/, so it never enters this comparison and needs no entry.
-const LOOM_ONLY_LEARNING_EXCLUSIONS = new Set([".autocommit.lock"]);
+const LOOM_ONLY_LEARNING_EXCLUSIONS = new Set([
+  ".autocommit.lock",
+  // loom#1209 W1-b (2026-07-18, journal/0549) — the artifact-activation event sink is
+  // written ONLY by the now-loom_only artifact-activation hooks (loom-internal
+  // observability), so it never materializes at a consumer; loom-only, not a
+  // gitignore_additions disclosure-parity requirement.
+  "artifact-activation",
+]);
 
 const LEARNING_PREFIX = ".claude/learning/";
 
