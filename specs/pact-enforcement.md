@@ -239,6 +239,18 @@ class McpToolPolicy:
 
 **Validation:** `tool_name` must be non-empty. `max_cost` must be finite and non-negative. `rate_limit` must be >= 1.
 
+### 17.2a McpTenantGrant (tenant isolation, issue #1843)
+
+```python
+@dataclass(frozen=True)
+class McpTenantGrant:
+    tenant: str
+    tools: frozenset[str] = frozenset()       # tools/call keyed on tool name
+    resources: frozenset[str] = frozenset()   # resources/read keyed on URI
+```
+
+**Validation:** `tenant` must be non-empty. `tools` / `resources` must not be a bare string and must contain only strings -- rejected in both `__post_init__` (direct construction) and `from_dict` (rejected BEFORE the `frozenset(str)` wrap, which would otherwise silently split a bare string into single-character grants). Config-level allowlist entry: which tools and which resource URIs a tenant may reach.
+
 ### 17.3 McpGovernanceConfig
 
 ```python
@@ -248,13 +260,15 @@ class McpGovernanceConfig:
     tool_policies: dict[str, McpToolPolicy]               # MappingProxyType (immutable)
     audit_enabled: bool = True
     max_audit_entries: int = 10_000
+    tenant_grants: dict[str, McpTenantGrant]              # MappingProxyType (immutable)
+    require_caller_identity: bool = True
 ```
 
-Config dict keys must match policy `tool_name`. `tool_policies` dict replaced with `MappingProxyType` at construction for immutability.
+Config dict keys must match policy `tool_name` (`tool_policies`) / `tenant` (`tenant_grants`). Both dicts are replaced with `MappingProxyType` at construction for immutability. `tenant_grants` is ADDITIVE and OPTIONAL -- empty (the default) means tenant isolation is OFF, byte-identical to the pre-`tenant_grants` behavior on both `tools/call` and `resources/read`. `require_caller_identity` (additive, default `True` -- secure by default, issue #1843 redteam round 1) disables the self-asserted `metadata["tenant_id"]` fallback entirely -- an absent, or tenant-less, trusted `McpCallerIdentity` resolves straight to no-tenant (fail-closed) instead of trusting the caller-supplied metadata channel. This is a no-op when `tenant_grants` is empty (isolation OFF). A deployment with no transport-level identity resolution wired, and that genuinely wants the weaker metadata-fallback channel, MUST pass `require_caller_identity=False` explicitly to opt in.
 
 ### 17.4 McpGovernanceEnforcer
 
-The core enforcement engine for MCP tool calls.
+The core enforcement engine for MCP tool calls AND resource reads.
 
 **Security invariants:**
 
@@ -263,17 +277,23 @@ The core enforcement engine for MCP tool calls.
 3. Thread-safe (all shared state under `self._lock`)
 4. Fail-closed (all error paths return BLOCKED)
 5. Bounded collections
+6. Clearance authorization evaluated before the cost ladder (fail-closed)
+7. Tenant isolation (issue #1843): when `tenant_grants` is non-empty, BOTH `tools/call` and `resources/read` are scoped through ONE shared restrictiveness function (`_tenant_isolation_decision` / `_tenant_grant_permits`), fail-closed on an absent, unrecognized, or ungranted tenant. A trusted `McpCallerIdentity`'s tenant overwrites any self-asserted `metadata["tenant_id"]` (impersonation defeat). Empty `tenant_grants` is a byte-neutral no-op.
 
-**Evaluation steps:**
+**Evaluation steps (`check_tool_call`):**
 
+0. Check tenant isolation (issue #1843, fail-closed) -- SKIPPED entirely when `tenant_grants` is empty (isolation OFF); evaluated BEFORE tool registration so isolation applies uniformly regardless of `default_policy`
 1. Check tool registration (default-deny for unregistered)
 2. Validate `cost_estimate` (NaN/Inf -> BLOCKED)
 3. Check argument constraints (`denied_args` first, then `allowed_args`)
-4. Check cost constraints (`cost_estimate > max_cost` -> BLOCKED; within 20% of max -> FLAGGED)
-5. Check rate limits (per-minute sliding window, per agent+tool)
-6. All passed -> AUTO_APPROVED
+4. Check clearance requirement (Layer-2 authorization, fail-closed) -- evaluated BEFORE cost so an unmet-clearance caller is BLOCKED regardless of cost band
+5. Check cost constraints (`cost_estimate > max_cost` -> BLOCKED; within 20% of max -> FLAGGED)
+6. Check rate limits (per-minute sliding window, re-keyed on `(tenant, agent_id, tool)` when a tenant resolved)
+7. All passed -> AUTO_APPROVED
 
-**Rate limiting:** Per `agent_id:tool_name` key. Uses bounded deque per key, max 10,000 total rate tracker entries with oldest-10% eviction.
+**`check_resource_read`** (issue #1843): the enforcement entry point for `resources/read`. Prior to #1843, `resources/read` had NO governance layer at all. Currently performs ONLY the tenant-isolation check (via the SAME shared restrictiveness function `tools/call` uses, keyed on resource URI) -- no cost/arg/clearance/rate-limit layer for resources yet. When `tenant_grants` is empty, every resource read is AUTO_APPROVED unconditionally (byte-identical to the pre-#1843, fully-ungoverned behavior).
+
+**Rate limiting:** Per `agent_id:tool_name` STRING key when tenant isolation is off (or no tenant resolves) -- preserved BYTE-FOR-BYTE for backward compatibility. Per `(tenant, agent_id, tool_name)` TUPLE key when a tenant resolves (issue #1843) -- a tuple, not a colon-joined string, so a tenant/agent_id/tool_name containing a literal `:` cannot collide two distinct principals into the same rate bucket. Uses bounded deque per key, max 10,000 total rate tracker entries with oldest-10% eviction.
 
 **Runtime tool registration:** `register_tool(policy)` enforces monotonic tightening against existing policy:
 
@@ -281,16 +301,24 @@ The core enforcement engine for MCP tool calls.
 - `rate_limit`: new must be <= existing
 - `allowed_args`: new must be subset
 - `denied_args`: new must be superset
+- `clearance_required`: new must be equal-or-tighter (None=widest, unrecognized=tightest)
+
+### 17.4a Tenant Isolation Contract (issue #1843) -- Byte-Neutral
+
+Tenant rides the existing free-form `metadata["tenant_id"]` channel on `McpActionContext` / `McpResourceContext` -- NO new first-class serialized field was added to either wire envelope. `McpCallerIdentity` (new: `agent_id`, `tenant`) is the trusted caller identity resolved by the transport/auth layer BEFORE governance evaluation; it carries deliberately NO `to_dict()` / `from_dict()` -- it is never part of the wire-serialized envelope. Its `tenant` (when set) OVERWRITES any self-asserted `metadata["tenant_id"]` on the context (impersonation defeat: a caller cannot widen its own access by asserting a different tenant in the request body). By default (`McpGovernanceConfig.require_caller_identity=True`, secure by default -- issue #1843 redteam round 1), the metadata fallback is NEVER consulted: an absent, or tenant-less, trusted identity fails closed straight to no-tenant (see 17.3). Only when a deployment explicitly opts in via `require_caller_identity=False` does the enforcer fall back to the self-asserted `metadata["tenant_id"]` when no trusted identity (or no identity tenant) is supplied -- a deployment with no transport-level identity resolution wired that genuinely wants the weaker channel makes this choice explicitly; the metadata channel is a documented, but caller-controlled, fallback -- not a bypass, but also not a substitute for a trusted identity.
+
+**Byte-diff verdict:** the Rust SDK deliberately did NOT add a first-class serialized `tenant_id` field to its `McpActionContext` equivalent -- it kept the envelope frozen and routed tenant through the existing free-form metadata channel instead. This Python port makes the SAME choice: the field form is NOT adopted here (per `cross-sdk-inspection.md` Rule 4b, a byte-CHANGING wire-envelope field addition would require cross-SDK lockstep); adopt it only if ecosystems later converge on that shape.
 
 ### 17.5 McpGovernanceMiddleware
 
 ```python
 class McpGovernanceMiddleware:
-    def __init__(self, enforcer, handler: Callable[..., Awaitable])
-    async def invoke(self, tool_name, args=None, agent_id="", *, cost_estimate=None, metadata=None) -> McpInvocationResult
+    def __init__(self, enforcer, handler: Callable[..., Awaitable], resource_handler: Callable[[str], Awaitable] | None = None)
+    async def invoke(self, tool_name, args=None, agent_id="", *, cost_estimate=None, caller_clearance=None, caller_identity=None, metadata=None) -> McpInvocationResult
+    async def invoke_resource_read(self, uri, agent_id="", *, caller_identity=None, metadata=None) -> McpInvocationResult
 ```
 
-Intercepts MCP tool calls. If governance allows (AUTO_APPROVED or FLAGGED), forwards to handler. If HELD or BLOCKED, returns without calling handler. Handler errors captured without affecting governance decision.
+Intercepts MCP tool calls AND resource reads. If governance allows (AUTO_APPROVED or FLAGGED), forwards to `handler` / `resource_handler`. If HELD or BLOCKED, returns without calling the handler. Handler errors captured without affecting the governance decision. `resource_handler` is optional (default `None`) -- when unconfigured, `invoke_resource_read` still evaluates governance but calls no handler (`executed=False`, `tool_result=None`).
 
 ### 17.6 McpInvocationResult
 
@@ -308,15 +336,16 @@ class McpInvocationResult:
 @dataclass(frozen=True)
 class GovernanceDecision:
     level: str                  # "auto_approved", "flagged", "held", "blocked"
-    tool_name: str
+    tool_name: str               # "" for a resources/read decision
     agent_id: str
     reason: str
+    resource_uri: str | None = None   # set for a resources/read decision (issue #1843)
     timestamp: datetime
     policy_snapshot: dict | None
     metadata: dict
 ```
 
-`decision.allowed` -- True for AUTO_APPROVED or FLAGGED.
+`decision.allowed` -- True for AUTO_APPROVED or FLAGGED. `resource_uri` is additive (default `None`); it is semantically inert for a tools/call decision -- `to_dict()` now includes `"resource_uri": null` on every tool-call decision's serialized dict, but no existing consumer field is removed or renamed.
 
 ### 17.8 McpAuditTrail
 
@@ -332,7 +361,7 @@ class McpAuditTrail:
     def clear()
 ```
 
-`McpAuditEntry` is frozen with immutable metadata (MappingProxyType).
+`McpAuditEntry` is frozen with immutable metadata (MappingProxyType). A `resources/read` decision records with `tool_name=""` and the resource URI under `metadata["resource_uri"]`.
 
 ### 17.9 Failure Modes
 
@@ -345,6 +374,13 @@ class McpAuditTrail:
 - Rate limit exceeded -> BLOCKED
 - Internal error -> BLOCKED (fail-closed)
 - Monotonic tightening violation on register_tool -> ValueError
+- Absent tenant (no caller_identity, no metadata["tenant_id"]) with tenant_grants non-empty -> BLOCKED
+- Unrecognized tenant (not a key in tenant_grants) -> BLOCKED
+- Recognized tenant with no grant for the tool/resource -> BLOCKED
+- require_caller_identity=True (the default) and no caller_identity.tenant supplied -- metadata fallback never consulted, even when metadata["tenant_id"] is present -> BLOCKED
+- require_caller_identity=False (explicit opt-in) and no caller_identity.tenant supplied and no metadata["tenant_id"] -> BLOCKED (still fails closed; the opt-in only re-enables the fallback, it never disables fail-closed)
+- McpTenantGrant with a bare-string `tools`/`resources` value, or a non-string element -> ValueError
+- McpCallerIdentity with a non-string, non-None `tenant` -> ValueError
 
 ---
 
@@ -546,8 +582,11 @@ All governance data structures are frozen to prevent post-construction mutation.
 | `WorkSubmission`       | `@dataclass(frozen=True)`                    |
 | `WorkResult`           | `@dataclass(frozen=True)`                    |
 | `McpToolPolicy`        | `@dataclass(frozen=True)`                    |
+| `McpTenantGrant`       | `@dataclass(frozen=True)`                    |
 | `McpGovernanceConfig`  | `@dataclass(frozen=True)` + MappingProxyType |
 | `McpActionContext`     | `@dataclass(frozen=True)` + MappingProxyType |
+| `McpResourceContext`   | `@dataclass(frozen=True)` + MappingProxyType |
+| `McpCallerIdentity`    | `@dataclass(frozen=True)`                    |
 | `McpAuditEntry`        | `@dataclass(frozen=True)` + MappingProxyType |
 | `AddressSegment`       | `@dataclass(frozen=True)`                    |
 | `Address`              | `@dataclass(frozen=True)`                    |

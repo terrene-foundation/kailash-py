@@ -15,6 +15,14 @@ Security invariants (per pact-governance.md):
 6. Clearance authorization: a tool whose policy sets clearance_required is
    evaluated for caller clearance BEFORE the cost ladder; absent, unrecognized,
    or insufficient caller clearance fails closed to BLOCKED (Rule 4).
+7. Tenant isolation (issue #1843): when McpGovernanceConfig.tenant_grants is
+   non-empty, BOTH tools/call (keyed on tool name) and resources/read (keyed
+   on URI) are scoped through ONE shared restrictiveness function
+   (_tenant_isolation_decision), fail-closed on an absent, unrecognized, or
+   ungranted tenant (security.md Enforcement-Surface Parity). A trusted
+   McpCallerIdentity's tenant OVERWRITES any self-asserted
+   metadata["tenant_id"] (impersonation defeat). Empty tenant_grants (the
+   default) means isolation is OFF -- byte-neutral backward compatibility.
 """
 
 from __future__ import annotations
@@ -23,16 +31,20 @@ import logging
 import math
 import threading
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from kailash.trust import ConfidentialityLevel
 from pact.mcp.audit import McpAuditTrail
 from pact.mcp.types import (
     DefaultPolicy,
     McpActionContext,
+    McpCallerIdentity,
     McpGovernanceConfig,
+    McpResourceContext,
+    McpTenantGrant,
     McpToolPolicy,
 )
 
@@ -80,6 +92,78 @@ def _clearance_restrictiveness(value: str | None) -> int:
     return _CLEARANCE_LEVELS_ASCENDING.index(level)
 
 
+# Rate-tracker dict key: "agent_id:tool_name" (isolation off / no tenant) OR
+# the tuple (tenant, agent_id, tool_name) (issue #1843, tenant resolved). A
+# tuple -- not a colon-joined string -- makes the tenant-keyed form
+# collision-free: a tenant/agent_id/tool_name containing a literal ":" can
+# never make two distinct principals hash to the same string key.
+_RateTrackerKey = str | tuple[str, str, str]
+
+
+def _resolve_effective_tenant(
+    metadata: Mapping[str, Any],
+    caller_identity: McpCallerIdentity | None,
+    *,
+    require_caller_identity: bool = False,
+) -> str | None:
+    """Resolve the AUTHORITATIVE tenant for an MCP call (issue #1843).
+
+    The trusted ``caller_identity`` -- resolved by the transport/auth layer,
+    never attacker-controlled -- OVERWRITES any self-asserted
+    ``metadata["tenant_id"]`` (impersonation defeat): a caller cannot widen
+    its own access by putting a different tenant in the request body. Only
+    when no trusted identity (or no identity tenant) is supplied does this
+    fall back to the self-asserted metadata channel -- UNLESS
+    ``require_caller_identity`` is set, in which case the metadata fallback is
+    never consulted at all: an absent (or tenant-less) trusted identity
+    resolves straight to None (fail-closed), rather than trusting a
+    caller-supplied ``metadata["tenant_id"]``. Deployments with no
+    transport-level identity resolution (no caller_identity ever wired) MUST
+    set ``McpGovernanceConfig.require_caller_identity=True`` to get a REAL
+    isolation guarantee; without it, the self-asserted metadata channel is a
+    legitimate but attacker-controlled fallback (documented, not a bypass).
+
+    Returns:
+        The tenant string, or None if neither the caller identity nor the
+        (optionally-disabled) metadata channel carries one.
+    """
+    if caller_identity is not None and caller_identity.tenant is not None:
+        return caller_identity.tenant
+    if require_caller_identity:
+        return None
+    metadata_tenant = metadata.get("tenant_id") if metadata else None
+    return metadata_tenant if isinstance(metadata_tenant, str) else None
+
+
+def _tenant_grant_permits(
+    tenant_grants: Mapping[str, McpTenantGrant],
+    tenant: str | None,
+    kind: Literal["tool", "resource"],
+    key: str,
+) -> bool:
+    """Shared restrictiveness check for MCP tenant isolation (issue #1843).
+
+    This is the ONE function BOTH the tools/call path (keyed on tool name)
+    and the resources/read path (keyed on URI) call to decide access --
+    security.md Enforcement-Surface Parity: a single shared restrictiveness
+    function so the two enforcement surfaces cannot silently diverge.
+
+    Fail-closed: an absent tenant, an unrecognized tenant (not a key in
+    ``tenant_grants``), or a tenant with no grant for ``key`` under ``kind``
+    all return False. Only an explicit grant for ``key`` returns True.
+    Callers MUST NOT invoke this when ``tenant_grants`` is empty -- that is
+    the isolation-OFF case, handled entirely by the caller (see
+    :meth:`McpGovernanceEnforcer._tenant_isolation_decision`).
+    """
+    if tenant is None:
+        return False
+    grant = tenant_grants.get(tenant)
+    if grant is None:
+        return False
+    granted = grant.tools if kind == "tool" else grant.resources
+    return key in granted
+
+
 @dataclass(frozen=True)
 class GovernanceDecision:
     """Result of an MCP governance check.
@@ -92,9 +176,17 @@ class GovernanceDecision:
             "flagged" -- tool call is near a boundary (cost near limit)
             "held" -- tool call exceeds soft limit, needs approval
             "blocked" -- tool call violates a hard constraint
-        tool_name: The MCP tool that was evaluated.
+        tool_name: The MCP tool that was evaluated. For a resources/read
+            decision (see McpGovernanceEnforcer.check_resource_read), this is
+            "" and ``resource_uri`` carries the resource URI instead.
         agent_id: The agent that attempted the call.
         reason: Human-readable explanation of the decision.
+        resource_uri: The MCP resource URI evaluated, for a resources/read
+            decision (issue #1843). None for a tools/call decision. Additive
+            field -- default None, semantically inert for a tools/call
+            decision (to_dict() now includes "resource_uri": null on every
+            tool-call decision's serialized dict; no existing consumer field
+            is removed or renamed).
         timestamp: When the decision was made.
         policy_snapshot: Serialized policy that was evaluated, if any.
         metadata: Additional structured details.
@@ -104,6 +196,7 @@ class GovernanceDecision:
     tool_name: str
     agent_id: str
     reason: str
+    resource_uri: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     policy_snapshot: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -124,6 +217,7 @@ class GovernanceDecision:
             "tool_name": self.tool_name,
             "agent_id": self.agent_id,
             "reason": self.reason,
+            "resource_uri": self.resource_uri,
             "allowed": self.allowed,
             "timestamp": self.timestamp.isoformat(),
             "policy_snapshot": self.policy_snapshot,
@@ -158,8 +252,13 @@ class McpGovernanceEnforcer:
         )
         # Mutable overlay for runtime tool registration
         self._policy_overlay: dict[str, McpToolPolicy] = {}
-        # Rate tracking: "agent_id:tool_name" -> deque of timestamps
-        self._rate_tracker: dict[str, deque[datetime]] = {}
+        # Rate tracking: "agent_id:tool_name" (isolation off / no tenant) OR
+        # (tenant, agent_id, tool_name) (issue #1843, tenant resolved) -> deque
+        # of timestamps. The tenant-keyed form is a TUPLE, not a colon-joined
+        # string, so a tenant/agent_id/tool_name containing a literal ":" can
+        # never collide two distinct principals into the same bucket (a
+        # string-join would: tenant="a:b" -- see _check_rate_limit).
+        self._rate_tracker: dict[_RateTrackerKey, deque[datetime]] = {}
         # Observed-time high-water of the last window-expiry GC sweep. None until
         # the first rate-limited check. Amortizes the O(n) silent-pair sweep so
         # the hot path stays O(1) between sweeps (see _gc_expired_rate_entries).
@@ -175,10 +274,22 @@ class McpGovernanceEnforcer:
         """The audit trail for governance decisions."""
         return self._audit_trail
 
-    def check_tool_call(self, context: McpActionContext) -> GovernanceDecision:
+    def check_tool_call(
+        self,
+        context: McpActionContext,
+        *,
+        caller_identity: McpCallerIdentity | None = None,
+    ) -> GovernanceDecision:
         """Main entry point: evaluate an MCP tool call against governance policies.
 
         Implements the verification gradient:
+        0. Check tenant isolation (issue #1843, fail-closed) -- SKIPPED
+           entirely when McpGovernanceConfig.tenant_grants is empty (isolation
+           OFF, byte-neutral backward compatibility); when non-empty, the
+           trusted caller_identity's tenant (or the self-asserted
+           metadata["tenant_id"] fallback) must hold a grant for this tool.
+           Evaluated BEFORE tool registration so isolation applies uniformly
+           regardless of default_policy (DENY or ALLOW).
         1. Check if tool is registered (default-deny for unregistered)
         2. Validate numeric fields (NaN/Inf defense)
         3. Check argument constraints (denied_args, allowed_args)
@@ -186,19 +297,26 @@ class McpGovernanceEnforcer:
            evaluated BEFORE cost so an unmet-clearance caller is BLOCKED
            regardless of cost band
         5. Check cost constraints (max_cost)
-        6. Check rate limits
+        6. Check rate limits (re-keyed on (tenant, agent_id, tool) when a
+           tenant resolved -- see _check_rate_limit)
         7. Return appropriate gradient level
 
         Fail-closed: any exception during evaluation returns BLOCKED.
 
         Args:
             context: The MCP action context describing the tool call.
+            caller_identity: The trusted caller identity resolved by the
+                transport/auth layer, if any. Its tenant (when set)
+                OVERWRITES any self-asserted context.metadata["tenant_id"]
+                (impersonation defeat). None means no trusted identity was
+                supplied -- the enforcer falls back to the self-asserted
+                metadata channel.
 
         Returns:
             A GovernanceDecision with the verdict.
         """
         try:
-            decision = self._evaluate(context)
+            decision = self._evaluate(context, caller_identity)
         except Exception as exc:
             logger.warning(
                 "McpGovernanceEnforcer: evaluation failed for tool '%s': %s",
@@ -228,6 +346,148 @@ class McpGovernanceEnforcer:
             )
 
         return decision
+
+    def check_resource_read(
+        self,
+        context: McpResourceContext,
+        *,
+        caller_identity: McpCallerIdentity | None = None,
+    ) -> GovernanceDecision:
+        """Evaluate an MCP resources/read invocation against tenant isolation.
+
+        Prior to issue #1843, resources/read had NO governance layer at all.
+        This entry point adds ONLY the tenant-isolation check -- there is no
+        cost, argument, clearance, or rate-limit governance layer for
+        resources yet (out of scope for #1843; see check_tool_call for that
+        richer contract on the tools/call surface).
+
+        When McpGovernanceConfig.tenant_grants is empty (isolation OFF), every
+        resource read is auto_approved unconditionally -- byte-identical to
+        the pre-existing (fully-ungoverned) resources/read behavior. When
+        non-empty, the SAME shared restrictiveness function tools/call uses
+        (_tenant_isolation_decision / _tenant_grant_permits) fail-closes on an
+        absent, unrecognized, or ungranted tenant.
+
+        Fail-closed: any exception during evaluation returns BLOCKED.
+
+        Args:
+            context: The MCP resource context describing the resources/read
+                invocation.
+            caller_identity: The trusted caller identity resolved by the
+                transport/auth layer, if any. Its tenant (when set)
+                OVERWRITES any self-asserted context.metadata["tenant_id"]
+                (impersonation defeat), mirroring check_tool_call.
+
+        Returns:
+            A GovernanceDecision with the verdict.
+        """
+        try:
+            decision = self._tenant_isolation_decision(
+                kind="resource",
+                key=context.uri,
+                agent_id=context.agent_id,
+                timestamp=context.timestamp,
+                metadata=context.metadata,
+                caller_identity=caller_identity,
+            )
+            if decision is None:
+                decision = GovernanceDecision(
+                    level="auto_approved",
+                    tool_name="",
+                    resource_uri=context.uri,
+                    agent_id=context.agent_id,
+                    reason=(
+                        f"resource '{context.uri}' read is within tenant "
+                        f"isolation constraints"
+                    ),
+                    timestamp=context.timestamp,
+                )
+        except Exception as exc:
+            logger.warning(
+                "McpGovernanceEnforcer: evaluation failed for resource '%s': %s",
+                context.uri,
+                exc,
+            )
+            decision = GovernanceDecision(
+                level="blocked",
+                tool_name="",
+                resource_uri=context.uri,
+                agent_id=context.agent_id,
+                reason="Internal error during governance check -- fail-closed to BLOCKED",
+                timestamp=context.timestamp,
+            )
+
+        if self._config.audit_enabled:
+            self._audit_trail.record(
+                tool_name="",
+                agent_id=context.agent_id,
+                decision=decision.level,
+                reason=decision.reason,
+                metadata={
+                    "resource_uri": context.uri,
+                    **(context.metadata or {}),
+                },
+            )
+
+        return decision
+
+    def _tenant_isolation_decision(
+        self,
+        *,
+        kind: Literal["tool", "resource"],
+        key: str,
+        agent_id: str,
+        timestamp: datetime,
+        metadata: Mapping[str, Any],
+        caller_identity: McpCallerIdentity | None,
+    ) -> GovernanceDecision | None:
+        """Shared tenant-isolation gate for BOTH tools/call and resources/read.
+
+        This is the single decision-building function BOTH _evaluate (Step
+        0, tools/call) and check_resource_read (resources/read) call --
+        security.md Enforcement-Surface Parity: one shared function so the
+        two enforcement surfaces cannot silently diverge.
+
+        Returns None (isolation OFF, or tenant check satisfied -- caller
+        continues) or a BLOCKED GovernanceDecision (fail-closed).
+        """
+        tenant_grants = self._config.tenant_grants
+        if not tenant_grants:
+            # Isolation OFF: skip entirely -- byte-neutral backward
+            # compatibility (issue #1843 acceptance criterion).
+            return None
+
+        tenant = _resolve_effective_tenant(
+            metadata,
+            caller_identity,
+            require_caller_identity=self._config.require_caller_identity,
+        )
+        if tenant is None:
+            reason = (
+                f"tenant isolation is enabled but no tenant was declared for "
+                f"{kind} '{key}' -- BLOCKED (fail-closed)"
+            )
+        elif tenant not in tenant_grants:
+            reason = (
+                f"tenant '{tenant}' is not a recognized tenant -- BLOCKED "
+                f"(fail-closed)"
+            )
+        elif not _tenant_grant_permits(tenant_grants, tenant, kind, key):
+            reason = (
+                f"tenant '{tenant}' is not granted access to {kind} '{key}' "
+                f"-- BLOCKED (fail-closed)"
+            )
+        else:
+            return None
+
+        return GovernanceDecision(
+            level="blocked",
+            tool_name=key if kind == "tool" else "",
+            resource_uri=key if kind == "resource" else None,
+            agent_id=agent_id,
+            reason=reason,
+            timestamp=timestamp,
+        )
 
     # Sliding-window width for rate limiting (seconds). Single source of truth
     # for both the per-key prune cutoff and the silent-pair GC cutoff.
@@ -438,7 +698,11 @@ class McpGovernanceEnforcer:
         # Clearance satisfied; continue evaluation.
         return None
 
-    def _evaluate(self, context: McpActionContext) -> GovernanceDecision:
+    def _evaluate(
+        self,
+        context: McpActionContext,
+        caller_identity: McpCallerIdentity | None = None,
+    ) -> GovernanceDecision:
         """Internal evaluation logic. Caller handles exceptions.
 
         Returns:
@@ -446,6 +710,25 @@ class McpGovernanceEnforcer:
         """
         tool_name = context.tool_name
         agent_id = context.agent_id
+
+        # Step 0: Check tenant isolation (issue #1843, fail-closed). SKIPPED
+        # entirely when tenant_grants is empty (isolation OFF -- byte-neutral
+        # backward compatibility); see _tenant_isolation_decision. Evaluated
+        # BEFORE tool registration (Step 1) so tenant scoping applies
+        # uniformly regardless of default_policy -- under DefaultPolicy.ALLOW
+        # an unregistered tool short-circuits to auto_approved at Step 1 with
+        # no further checks, so tenant isolation MUST run first or it would
+        # never fire for any unregistered tool.
+        tenant_decision = self._tenant_isolation_decision(
+            kind="tool",
+            key=tool_name,
+            agent_id=agent_id,
+            timestamp=context.timestamp,
+            metadata=context.metadata,
+            caller_identity=caller_identity,
+        )
+        if tenant_decision is not None:
+            return tenant_decision
 
         # Step 1: Check tool registration
         policy = self._get_policy(tool_name)
@@ -571,10 +854,22 @@ class McpGovernanceEnforcer:
                     policy_snapshot=policy.to_dict(),
                 )
 
-        # Step 5: Check rate limits
+        # Step 5: Check rate limits, re-keyed on (tenant, agent_id, tool) when
+        # tenant isolation is enabled (issue #1843) -- see _check_rate_limit.
+        # tenant_decision is None here (isolation OFF or tenant satisfied);
+        # re-resolving is cheap and keeps this step's tenant self-contained.
         if policy.rate_limit is not None:
+            rate_tenant = (
+                _resolve_effective_tenant(
+                    context.metadata,
+                    caller_identity,
+                    require_caller_identity=self._config.require_caller_identity,
+                )
+                if self._config.tenant_grants
+                else None
+            )
             rate_decision = self._check_rate_limit(
-                agent_id, tool_name, policy.rate_limit, context.timestamp
+                agent_id, tool_name, policy.rate_limit, context.timestamp, rate_tenant
             )
             if rate_decision is not None:
                 return rate_decision
@@ -595,6 +890,7 @@ class McpGovernanceEnforcer:
         tool_name: str,
         rate_limit: int,
         now: datetime,
+        tenant: str | None = None,
     ) -> GovernanceDecision | None:
         """Check rate limit for a specific agent+tool combination.
 
@@ -605,11 +901,23 @@ class McpGovernanceEnforcer:
             tool_name: The tool being invoked.
             rate_limit: Maximum invocations per minute.
             now: Current timestamp.
+            tenant: The resolved tenant (issue #1843), if tenant isolation is
+                enabled. When set, the tracking key is re-keyed on the TUPLE
+                (tenant, agent_id, tool) -- not a colon-joined string, so a
+                tenant/agent_id/tool_name containing a literal ":" can never
+                collide two distinct principals into the same rate bucket --
+                so two tenants sharing an agent_id + tool do NOT share a rate
+                budget. None (the default -- isolation OFF, or no tenant
+                resolved) preserves the pre-existing "agent_id:tool_name"
+                string key format BYTE-FOR-BYTE -- backward compatibility for
+                every caller that never passes a tenant.
 
         Returns:
             A BLOCKED GovernanceDecision if rate limit exceeded, None otherwise.
         """
-        key = f"{agent_id}:{tool_name}"
+        key: _RateTrackerKey = (
+            (tenant, agent_id, tool_name) if tenant else f"{agent_id}:{tool_name}"
+        )
         cutoff = now.timestamp() - self._RATE_LIMIT_WINDOW_SECONDS
         with self._lock:
             # Window-expiry GC: reclaim "silent" pairs whose sliding window has
@@ -729,7 +1037,7 @@ class McpGovernanceEnforcer:
         # Empty deques sort to epoch so they are evicted first.
         epoch = datetime.min.replace(tzinfo=UTC)
 
-        def _last_ts(k: str) -> datetime:
+        def _last_ts(k: _RateTrackerKey) -> datetime:
             dq = self._rate_tracker[k]
             return dq[-1] if dq else epoch
 

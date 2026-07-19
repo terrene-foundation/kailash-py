@@ -13,11 +13,19 @@ enforcement as a middleware layer:
 - **Audit trail**: bounded, append-only record of all governance decisions.
 - **Monotonic tightening**: runtime-registered tools can only narrow policies,
   not widen them.
+- **Tenant isolation** (issue #1843): optional, additive McpGovernanceConfig
+  .tenant_grants scopes BOTH tools/call and resources/read to the caller's
+  tenant through one shared restrictiveness function, fail-closed on an
+  absent/unknown/ungranted tenant. Empty tenant_grants (the default) is a
+  byte-neutral no-op. A trusted McpCallerIdentity's tenant overwrites any
+  self-asserted metadata["tenant_id"] (impersonation defeat).
 
 Architecture:
-    pact.mcp.types      -- McpToolPolicy, McpGovernanceConfig, McpActionContext
+    pact.mcp.types      -- McpToolPolicy, McpGovernanceConfig, McpActionContext,
+                           McpResourceContext, McpCallerIdentity, McpTenantGrant
     pact.mcp.enforcer   -- McpGovernanceEnforcer (the core decision engine)
-    pact.mcp.middleware  -- McpGovernanceMiddleware (wraps MCP tool calls)
+    pact.mcp.middleware  -- McpGovernanceMiddleware (wraps MCP tool calls +
+                           resources/read)
     pact.mcp.audit      -- McpAuditTrail, McpAuditEntry
 
 This is a PRIMITIVE (deterministic, no LLM). All decisions are rule-based.
@@ -58,7 +66,10 @@ from pact.mcp.middleware import McpGovernanceMiddleware, McpInvocationResult
 from pact.mcp.types import (
     DefaultPolicy,
     McpActionContext,
+    McpCallerIdentity,
     McpGovernanceConfig,
+    McpResourceContext,
+    McpTenantGrant,
     McpToolPolicy,
 )
 
@@ -66,7 +77,10 @@ __all__ = [
     # Types
     "DefaultPolicy",
     "McpActionContext",
+    "McpCallerIdentity",
     "McpGovernanceConfig",
+    "McpResourceContext",
+    "McpTenantGrant",
     "McpToolPolicy",
     # Enforcer
     "GovernanceDecision",
