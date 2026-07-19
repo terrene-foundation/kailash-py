@@ -150,9 +150,25 @@ class TestSignatureVerification:
         tampered = b'{"event": "user.deleted"}'
         assert transport.verify_signature(tampered, sig) is False
 
-    def test_verify_no_secret_always_true(self, transport_no_secret):
-        """Without a secret, verification is vacuously true."""
-        assert transport_no_secret.verify_signature(b"anything", "sha256=bogus") is True
+    def test_verify_no_secret_fails_closed(self, transport_no_secret):
+        """Without a secret, verification fails closed (issue #1814).
+
+        A caller reaching verify_signature with a signature but no secret is
+        a misconfiguration: the signature cannot be checked, so verification
+        MUST raise rather than accept any payload (fail-open bypass). Mirrors
+        compute_signature's existing no-secret guard.
+        """
+        with pytest.raises(ValueError, match="no secret configured"):
+            transport_no_secret.verify_signature(b"anything", "sha256=bogus")
+
+    def test_verify_for_request_no_secret_fails_closed(self, transport_no_secret):
+        """verify_signature_for_request also fails closed with no secret (#1814)."""
+        with pytest.raises(ValueError, match="no secret configured"):
+            transport_no_secret.verify_signature_for_request(
+                url="https://example.com/webhook",
+                payload_bytes=b"anything",
+                signature="sha256=bogus",
+            )
 
     def test_signature_deterministic(self, transport):
         payload = b"consistent"
