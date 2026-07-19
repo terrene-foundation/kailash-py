@@ -1141,3 +1141,22 @@ changes:
       verdict FINDINGS -> the one MED (stale "5-step" descriptor) fixed same-shard; all cross-refs resolve,
       both incidents corroborate against commits 2d2f57f3c / c66b7ceab / 5408381ad. Landed locally on
       kailash-py main (PR #1715). Journal: workspaces/observability-1708/journal/0001-DECISION + 0002-DISCOVERY.'
+  - type: rule_update
+    artifact: orphan-detection
+    files:
+      - .claude/rules/orphan-detection.md
+    classification_suggestion: global
+    context: >
+      Rule 4b (Default/Behavior Change MUST Sweep Stale-Assertion Tests In Same PR — Including
+      Out-Of-CI-Matrix Tests) — sibling of Rule 4a, generalizing "sweep tests in the same commit"
+      from stub-implementation (4a) to ANY default/behavior change, PLUS the "CI-green is NOT
+      full-suite-green" insight: CI matrices exclude example / optional-dep-gated / ambient-.env
+      tests, so a default change can be fully CI-green while N full-suite tests still assert the old
+      value. Evidence: kailash-py PR #1847 (#1844/#1845 cost fix) changed model defaults
+      (gpt-3.5-turbo->gpt-4o-mini in examples; gpt-4->env-resolved in specialized agents); CI fully
+      green, yet 18 test files (example + sentence-transformers-gated + ambient-.env-dependent) still
+      asserted the old defaults, caught only at release prep (PR #1850), not by #1847's own CI. Ships
+      canonical-8-field Trust Posture Wiring (clause-scoped; orphan-detection.md is a grandfathered
+      priority:10 path-scoped rule; added a length rationale in the same edit). NOT on the
+      self-referential-codify allowlist -> no mandatory multi-agent gate. CLASSIFICATION global: any
+      SDK / downstream consumer that changes a default inherits the failure mode (language-agnostic).
