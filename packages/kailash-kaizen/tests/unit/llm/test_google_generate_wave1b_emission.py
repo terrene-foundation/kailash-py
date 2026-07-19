@@ -208,7 +208,10 @@ def test_logit_bias_never_emitted():
     assert payload["generationConfig"]["topK"] == 5
 
 
-def test_full_wave1b_request_shapes_all_surfaces():
+def test_full_wave1b_request_shapes_all_surfaces_with_tools():
+    """#1819: with tools present, structured-output (responseMimeType/
+    responseSchema) MUST be suppressed — Gemini 400s on tools + structured
+    output together (gh#357). Every OTHER surface still shapes normally."""
     schema = {"type": "object", "properties": {"x": {"type": "string"}}}
     req = CompletionRequest(
         model="test-model",
@@ -223,12 +226,39 @@ def test_full_wave1b_request_shapes_all_surfaces():
     )
     payload = gg.build_request_payload(req)
 
-    # Gemini-shaped tools.
+    # Gemini-shaped tools present.
     assert payload["tools"][0]["functionDeclarations"][0]["name"] == "f"
     # Default ANY tool_config.
     assert payload["toolConfig"]["functionCallingConfig"]["mode"] == "ANY"
     gen = payload["generationConfig"]
     assert gen["temperature"] == 0.3  # not clobbered
+    # #1819: structured-output keys ABSENT when tools are present.
+    assert "responseMimeType" not in gen
+    assert "responseSchema" not in gen
+    assert gen["topK"] == 32
+    assert gen["seed"] == 11
+    assert gen["candidateCount"] == 3
+
+
+def test_full_wave1b_request_shapes_all_surfaces_no_tools():
+    """Companion to the tools case: WITHOUT tools, the SAME sampling/structured
+    surfaces shape normally — the #1819 guard must not over-suppress."""
+    schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+    req = CompletionRequest(
+        model="test-model",
+        messages=_base_messages(),
+        temperature=0.3,
+        response_format={"type": "json_schema", "json_schema": {"schema": schema}},
+        top_k=32,
+        seed=11,
+        n=3,
+    )
+    payload = gg.build_request_payload(req)
+
+    assert "tools" not in payload
+    gen = payload["generationConfig"]
+    assert gen["temperature"] == 0.3
+    # No tools -> structured output present.
     assert gen["responseMimeType"] == "application/json"
     assert gen["responseSchema"] == schema
     assert gen["topK"] == 32

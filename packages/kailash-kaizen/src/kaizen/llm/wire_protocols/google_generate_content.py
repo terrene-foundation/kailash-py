@@ -181,13 +181,35 @@ def build_request_payload(request: CompletionRequest) -> Dict[str, Any]:
     # (openai_chat / anthropic_messages / ollama_native / etc.) — an
     # explicitly-set EMPTY `response_format={}` emits nothing, same as an
     # unset one.
-    if request.response_format:
+    #
+    # #1819 (gh#357 legacy guard, ported to the four-axis wire): Gemini rejects
+    # a request that carries BOTH responseMimeType/responseSchema AND tools
+    # (functionDeclarations) with a 400. The legacy paths dropped structured
+    # output when tools were present on Gemini (base_agent.py:126-134,
+    # workflow_generator.py:376-380); mirror that here — suppress the
+    # response_format block when tools are set, WARNing so the drop is not
+    # silent (zero-tolerance Rule 3). Function-calling is used alone; the tools
+    # block below still emits.
+    if request.response_format and not request.tools:
         rf_type = request.response_format.get("type")
         if rf_type in ("json_object", "json_schema"):
             generation_config["responseMimeType"] = "application/json"
             schema = _extract_json_schema(request.response_format)
             if schema is not None:
                 generation_config["responseSchema"] = schema
+    elif (
+        request.response_format
+        and request.tools
+        and request.response_format.get("type") in ("json_object", "json_schema")
+    ):
+        # Only WARN when a JSON structured-output mode was genuinely dropped;
+        # response_format={"type":"text"} emits nothing structured regardless of
+        # tools, so warning there would misleadingly claim a suppression.
+        logger.warning(
+            "google_generate_content: response_format suppressed — Gemini rejects "
+            "responseMimeType/responseSchema combined with tools (gh#357/#1819); "
+            "using function-calling only."
+        )
 
     payload: Dict[str, Any] = {"contents": contents}
     if generation_config:
