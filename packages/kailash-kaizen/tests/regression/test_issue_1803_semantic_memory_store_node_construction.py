@@ -50,7 +50,9 @@ async def test_run_defaults_metadata_to_empty_dict_when_absent(monkeypatch) -> N
     mock_provider.embed_text = AsyncMock(
         return_value=MagicMock(embeddings=[MagicMock()], model="test-model")
     )
-    monkeypatch.setattr(SemanticMemoryStoreNode, "_provider", mock_provider)
+    # _provider is instance-level (#1803 security-review MEDIUM fix -- no
+    # longer class-cached), so patch the instance, not the class.
+    monkeypatch.setattr(node, "_provider", mock_provider)
     mock_store = MagicMock()
     mock_store.add = AsyncMock(return_value="item-1")
     monkeypatch.setattr(SemanticMemoryStoreNode, "_store", mock_store)
@@ -72,7 +74,7 @@ async def test_run_uses_construction_time_metadata_default(monkeypatch) -> None:
     mock_provider.embed_text = AsyncMock(
         return_value=MagicMock(embeddings=[MagicMock()], model="test-model")
     )
-    monkeypatch.setattr(SemanticMemoryStoreNode, "_provider", mock_provider)
+    monkeypatch.setattr(node, "_provider", mock_provider)
     mock_store = MagicMock()
     mock_store.add = AsyncMock(return_value="item-1")
     monkeypatch.setattr(SemanticMemoryStoreNode, "_store", mock_store)

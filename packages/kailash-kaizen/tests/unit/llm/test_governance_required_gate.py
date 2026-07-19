@@ -1131,11 +1131,8 @@ async def test_simple_embedding_provider_off_posture_byte_identical() -> None:
 
 def test_semantic_memory_nodes_thread_ungoverned_to_provider() -> None:
     """SemanticMemoryStoreNode / SemanticMemorySearchNode / SemanticAgentMatchingNode
-    each construct a class-level cached SimpleEmbeddingProvider on first init --
-    assert the node's own ungoverned kwarg reaches it. The class-level cache
-    (``if not hasattr(cls, "_provider")``) is cleared before each construction
-    so this test's ungoverned=True actually reaches a freshly-built provider
-    rather than reusing one cached by an earlier test/import in this process."""
+    each construct an INSTANCE-level SimpleEmbeddingProvider on init -- assert
+    the node's own ungoverned kwarg reaches it."""
     from kaizen.nodes.ai.semantic_memory import (
         SemanticAgentMatchingNode,
         SemanticMemorySearchNode,
@@ -1147,10 +1144,26 @@ def test_semantic_memory_nodes_thread_ungoverned_to_provider() -> None:
         SemanticMemorySearchNode,
         SemanticAgentMatchingNode,
     ):
-        if hasattr(cls, "_provider"):
-            del cls._provider
         node = cls(name="test_node", ungoverned=True)
         assert node._provider._ungoverned is True
+
+
+def test_semantic_memory_nodes_provider_ungoverned_not_sticky_across_instances() -> (
+    None
+):
+    """#1803 security-review MEDIUM regression: the provider was PREVIOUSLY
+    cached on the CLASS (``if not hasattr(cls, "_provider")``), so the FIRST
+    instance's ungoverned value silently governed every LATER instance of the
+    same class in this process -- an ungoverned=True node constructed first
+    would leave a later default (governed) node's embed_text() ALSO
+    ungoverned. Assert two same-class instances get INDEPENDENT providers."""
+    from kaizen.nodes.ai.semantic_memory import SemanticMemoryStoreNode
+
+    opted_out = SemanticMemoryStoreNode(name="opted_out", ungoverned=True)
+    governed = SemanticMemoryStoreNode(name="governed")
+    assert opted_out._provider is not governed._provider
+    assert opted_out._provider._ungoverned is True
+    assert governed._provider._ungoverned is False
 
 
 def test_semantic_hybrid_search_node_threads_ungoverned_to_provider() -> None:
@@ -1170,7 +1183,5 @@ def test_adaptive_search_node_forwards_ungoverned_to_hybrid_search() -> None:
 def test_semantic_memory_nodes_default_ungoverned_false() -> None:
     from kaizen.nodes.ai.semantic_memory import SemanticAgentMatchingNode
 
-    if hasattr(SemanticAgentMatchingNode, "_provider"):
-        del SemanticAgentMatchingNode._provider
     node = SemanticAgentMatchingNode(name="match_default")
     assert node._provider._ungoverned is False

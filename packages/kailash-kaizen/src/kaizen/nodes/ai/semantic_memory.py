@@ -243,15 +243,25 @@ class SemanticMemoryStoreNode(Node):
         # caller passed one; this sets the None default only when absent.
         self.config.setdefault("metadata", None)
 
-        # Shared store and provider (in production, use persistent storage)
+        # Shared store, in production use persistent storage (the store is
+        # genuinely shared memory across node instances -- class-level
+        # caching is correct for it). #1803 security-review MEDIUM: the
+        # provider was PREVIOUSLY also class-cached, which made `ungoverned`
+        # sticky per-class -- the first-constructed instance's value won for
+        # every later instance of the SAME class in this process, silently
+        # ungating a default (governed) instance constructed after an
+        # ungoverned=True one. The provider is a stateless client wrapper (no
+        # connection pool held open -- embed_text() opens a fresh
+        # aiohttp.ClientSession() per call); instance-level construction is
+        # the correct fix, matching SemanticHybridSearchNode's existing
+        # pattern in hybrid_search.py.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider(
-                model_name=self.embedding_model,
-                host=self.embedding_host,
-                ungoverned=self.ungoverned,
-            )
+        self._provider = SimpleEmbeddingProvider(
+            model_name=self.embedding_model,
+            host=self.embedding_host,
+            ungoverned=self.ungoverned,
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
@@ -368,15 +378,16 @@ class SemanticMemorySearchNode(Node):
 
         super().__init__(name=name, **kwargs)
 
-        # Use shared store and provider
+        # Shared store (genuinely shared memory); instance-level provider --
+        # #1803 security-review MEDIUM, see SemanticMemoryStoreNode's __init__
+        # for the class-cache-stickiness rationale.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider(
-                model_name=self.embedding_model,
-                host=self.embedding_host,
-                ungoverned=self.ungoverned,
-            )
+        self._provider = SimpleEmbeddingProvider(
+            model_name=self.embedding_model,
+            host=self.embedding_host,
+            ungoverned=self.ungoverned,
+        )
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
@@ -493,13 +504,12 @@ class SemanticAgentMatchingNode(Node):
 
         super().__init__(name=name, **kwargs)
 
-        # Use shared store and provider
+        # Shared store (genuinely shared memory); instance-level provider --
+        # #1803 security-review MEDIUM, see SemanticMemoryStoreNode's __init__
+        # for the class-cache-stickiness rationale.
         if not hasattr(self.__class__, "_store"):
             self.__class__._store = InMemoryVectorStore()
-        if not hasattr(self.__class__, "_provider"):
-            self.__class__._provider = SimpleEmbeddingProvider(
-                ungoverned=self.ungoverned
-            )
+        self._provider = SimpleEmbeddingProvider(ungoverned=self.ungoverned)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters."""
