@@ -62,13 +62,18 @@ from kaizen.providers.types import (
 # and their canonical modules deleted. Their barrel re-exports are removed here;
 # a ``from kaizen.providers import OpenAIProvider`` now raises AttributeError
 # (end of the deprecation cycle that shipped the DeprecationWarning in 2.34.0).
-# The remaining shims (base ``LLMProvider``, the kept ``AzureAIFoundryProvider``,
-# the embedding providers, the registry accessors) stay deprecated until Wave-C.
+#
+# #1820: the embedding-legacy providers (``CohereProvider`` /
+# ``HuggingFaceProvider``) and the unified-azure provider stack were RETIRED and
+# their canonical modules DELETED (delete-now, no deprecation cycle — their
+# transports are served end-to-end by the four-axis ``LlmClient`` path). Their
+# barrel re-exports are removed here too; ``from kaizen.providers import
+# CohereProvider`` now raises AttributeError. The remaining shims (base
+# ``LLMProvider``, the kept ``AzureAIFoundryProvider``, the registry accessors)
+# stay deprecated until Wave-C.
 _LEGACY_PROVIDER_MODULES: dict[str, str] = {
     "LLMProvider": "kaizen.providers.base",
     "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
-    "CohereProvider": "kaizen.providers.embedding.cohere",
-    "HuggingFaceProvider": "kaizen.providers.embedding.huggingface",
     "PROVIDERS": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
@@ -78,8 +83,6 @@ if TYPE_CHECKING:
     # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
     # autodoc still resolve the legacy names kept in ``__all__`` below.
     from kaizen.providers.base import LLMProvider
-    from kaizen.providers.embedding.cohere import CohereProvider
-    from kaizen.providers.embedding.huggingface import HuggingFaceProvider
     from kaizen.providers.llm.azure import AzureAIFoundryProvider
     from kaizen.providers.registry import (
         PROVIDERS,
@@ -155,10 +158,9 @@ __all__ = [
     "CostTracker",
     "CostConfig",
     "ModelPricing",
-    # Providers (kept — legacy chat providers retired in #1720 Wave-2)
+    # Providers (kept — legacy chat providers retired in #1720 Wave-2; the
+    # embedding-legacy + unified-azure providers retired in #1820)
     "AzureAIFoundryProvider",
-    "CohereProvider",
-    "HuggingFaceProvider",
     # Registry
     "PROVIDERS",
     "get_provider",

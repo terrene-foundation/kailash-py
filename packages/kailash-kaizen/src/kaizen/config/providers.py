@@ -179,7 +179,7 @@ def check_azure_available() -> bool:
     Returns:
         bool: True if endpoint and API key are set
     """
-    from kaizen.nodes.ai.azure_detection import resolve_azure_env
+    from kaizen.llm.azure_env import resolve_azure_env
 
     endpoint = resolve_azure_env(
         "AZURE_ENDPOINT",
@@ -361,7 +361,7 @@ def get_azure_config(
     Raises:
         ConfigurationError: If Azure credentials not available
     """
-    from kaizen.nodes.ai.azure_detection import resolve_azure_env
+    from kaizen.llm.azure_env import resolve_azure_env
 
     resolved_api_key = _validate_api_key(api_key) or resolve_azure_env(
         "AZURE_API_KEY",
