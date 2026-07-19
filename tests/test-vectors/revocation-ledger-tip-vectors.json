@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "contract": "revocation-ledger-tip-v1",
+  "description": "Cross-SDK reference vectors for the EATP-12 D5 (S4b) append-only revocation-ledger tip fold (kailash-rs LEADS). The tip is a SHA-256 hash chain: tip_0 = 32 zero bytes; tip_i = SHA-256(REVOCATION_LEDGER_DOMAIN || tip_{i-1} || RevocationEvent::signing_preimage(delegation_id, epoch, revoked_at)) over the events in epoch-ascending order. The domain is the RAW-BYTE prefix 'EATP-12/revocation-ledger/v1:' (WITH a trailing colon — a byte-prefix, contrasted with the colon-less JCS domain_sep string-field domains). The fold is signature-INDEPENDENT: it binds each event's signing pre-image, not its signature, so a following SDK reproduces expected_tip_hex from the {delegation_id, epoch, revoked_at} inputs alone. GENERATED from crates/eatp/src/vault/persisted_head.rs — do NOT hand-edit; regenerate via `cargo run -p eatp --example gen_epoch_anchor_vectors`. Pinned by tests/epoch_anchor_vectors.rs.",
+  "domain_sep": "EATP-12/revocation-ledger/v1:",
+  "keypair": {
+    "comment": "RFC 8032 §7.1 Test 1 secret key. Used only to build RevocationEvent values for the fold; the tip is signature-independent.",
+    "secret_key_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+  },
+  "vectors": [
+    {
+      "id": "LT0-empty-ledger",
+      "description": "Empty / genesis ledger: no events fold to the all-zero tip [0u8;32] (matches the epoch-0 genesis HeadCommitment).",
+      "events": [],
+      "expected_tip_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "LT1-single-event",
+      "description": "Single revocation event ('del-0001' @ epoch 2): tip_1 = SHA-256(DOMAIN || [0u8;32] || preimage(e1)).",
+      "events": [
+        { "delegation_id": "del-0001", "epoch": 2, "revoked_at": "2026-07-17T00:00:00.000000000Z" }
+      ],
+      "expected_tip_hex": "e5dc20fdf01aa19c5bb39dbe005dd6b66adc84596a2457bb6fec767d7a3aa6a5"
+    },
+    {
+      "id": "LT2-two-events-ascending",
+      "description": "Two events in canonical epoch-ascending order ('del-0001'@2, then 'del-0002'@3): the folded two-event tip.",
+      "events": [
+        { "delegation_id": "del-0001", "epoch": 2, "revoked_at": "2026-07-17T00:00:00.000000000Z" },
+        { "delegation_id": "del-0002", "epoch": 3, "revoked_at": "2026-07-17T00:00:00.000000000Z" }
+      ],
+      "expected_tip_hex": "bb9d05a0fa2c03851343205fb0b93900548cd428b259a26470c90cee3bb5572a"
+    },
+    {
+      "id": "LT3-two-events-reversed",
+      "description": "The SAME two events in REVERSED order ('del-0002'@3, then 'del-0001'@2): a DIFFERENT tip than LT2 — pins that the fold is order-dependent.",
+      "events": [
+        { "delegation_id": "del-0002", "epoch": 3, "revoked_at": "2026-07-17T00:00:00.000000000Z" },
+        { "delegation_id": "del-0001", "epoch": 2, "revoked_at": "2026-07-17T00:00:00.000000000Z" }
+      ],
+      "expected_tip_hex": "27c9eaccf6f7e7c57dee3b8ff036d995c582c05d655a95ef8ea2c23e8e9497d9"
+    }
+  ]
+}

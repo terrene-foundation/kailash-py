@@ -590,6 +590,50 @@ Project Owner (Genesis Record)
 
 **Cascade revocation**: Revoking a delegate revokes all sub-delegates. Uses a WAL (Write-Ahead Log) for crash recovery during cascade operations. WAL hashes are verified with `hmac.compare_digest()`.
 
+### 11.1 Signed Revocation Ledger (EATP-12 D5)
+
+An ADDITIVE signed store lives in `kailash.trust.revocation.signed_ledger`,
+ALONGSIDE the in-memory cascade above (it does NOT replace or rewire it). The
+cascade's own pub/sub `RevocationEvent` is a DIFFERENT type from the signed,
+epoch-keyed `SignedRevocationEvent` here. kailash-rs LEADS the byte contract
+(mint spec is the cross-SDK arbiter, never a sibling issue comment).
+
+**Event signing pre-image.** `SignedRevocationEvent.signing_preimage()` builds
+canonical JSON (JCS: sorted keys, ASCII, no whitespace) of
+`{delegation_id, domain_sep, epoch, revoked_at}`, where `domain_sep` is the
+colon-LESS STRING-FIELD constant `REVOCATION_EVENT_DOMAIN_SEP`
+(`"EATP-12/revocation-event/v1"`). It uses the shared `canonical_json_dumps`
+encoder (`kailash.trust._json`, the raw-UTF-8 JCS family — `ensure_ascii=False`,
+`allow_nan=False`; RFC 8785 JCS emits raw UTF-8, and it is empirically
+byte-identical to the pinned rs pre-image on the all-ASCII conformance vectors).
+`SignedRevocationEvent.sign()` / `.verify()` produce/check an Ed25519 hex
+signature via the `kailash.trust.signing.crypto` primitives. `revoked_at` is
+RFC 3339 with EXACTLY 9 fractional (nanosecond) digits + `Z` and is
+STRING-PRESERVED end-to-end — never parsed to a `datetime` and re-rendered
+(which would microsecond-truncate the nanosecond tail).
+
+**Ledger tip fold.** `revocation_ledger_tip(events)` folds a SHA-256 hash chain:
+`tip_0 = GENESIS_TIP` (32 zero bytes); `tip_i = SHA-256(REVOCATION_LEDGER_DOMAIN
+|| tip_{i-1} || signing_preimage(e_i))`. The domain `REVOCATION_LEDGER_DOMAIN` is
+the RAW-BYTE prefix `b"EATP-12/revocation-ledger/v1:"` — WITH a trailing colon
+(a load-bearing byte separator, contrasting the colon-less event `domain_sep`
+string field). The fold is signature-INDEPENDENT (binds each event's pre-image,
+not its signature) and ORDER-DEPENDENT (reordering or deleting any event changes
+every subsequent tip). `RevocationLedger` wraps the fold with append-only
+enforcement: `append()` fails closed (`RevocationLedgerError`) unless each
+event's `epoch` is strictly greater than the current tip's — no reorder, replay,
+or delete surface.
+
+**Cross-SDK PROVISIONAL tripwires.** The pre-image + signature (RE0-RE3, incl.
+the RE3 nanosecond-fidelity boundary) and tip fold (LT0 all-zero empty, LT1,
+LT2, LT3 reversed-differs) are pinned in
+`tests/regression/test_signed_revocation_ledger_vectors.py` against the
+rs-authored vectors vendored under `tests/test-vectors/`
+(`revocation-event-vectors.json`, `revocation-ledger-tip-vectors.json`) per
+`rules/cross-sdk-inspection.md` Rule 4a. These are PROVISIONAL
+(rs#1849 / rs#1763 OPEN) — re-pin in lockstep if rs changes the reference bytes,
+per `rules/cross-sdk-inspection.md` Rule 4b.
+
 **Valid dimensions**: `{"operational", "data_access", "financial", "temporal", "communication"}`.
 
 ---

@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "contract": "revocation-event-v1",
+  "description": "Cross-SDK reference vectors for the EATP-12 D5 signed RevocationEvent pre-image + Ed25519 signature (kailash-rs LEADS). The signing pre-image is canonical-JSON (JCS-sorted keys, ASCII-only, no whitespace) of {delegation_id, domain_sep, epoch, revoked_at} with the timestamp as RFC 3339 fixed 9-digit nanoseconds + Z. The record is keyed by delegation_id and carries the unified u64 epoch (the SAME counter the head commitment folds). GENERATED from crates/eatp/src/vault/epoch_anchor.rs — do NOT hand-edit; regenerate via `cargo run -p eatp --example gen_epoch_anchor_vectors`. Pinned by tests/epoch_anchor_vectors.rs.",
+  "domain_sep": "EATP-12/revocation-event/v1",
+  "keypair": {
+    "comment": "RFC 8032 §7.1 Test 1 secret key. Cross-SDK byte-shape fixtures only; never live signing.",
+    "secret_key_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+  },
+  "vectors": [
+    {
+      "id": "RE0-epoch0-sentinel",
+      "description": "Sentinel: revocation recorded at genesis epoch=0 (edge — a delegation revoked before any advance).",
+      "input": {
+        "delegation_id": "del-0000",
+        "epoch": 0,
+        "revoked_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"delegation_id\":\"del-0000\",\"domain_sep\":\"EATP-12/revocation-event/v1\",\"epoch\":0,\"revoked_at\":\"2026-07-17T00:00:00.000000000Z\"}",
+      "expected_signature_hex": "60d412513ca1c063b874fc344e12560979b76df292fcfe8f3ee8e3de14ff6909eab1b099d7e3a2dc790a205f93aa853304b9d44478e8ddda5c52bc7ffda6750b"
+    },
+    {
+      "id": "RE1-single-append",
+      "description": "First revocation append: delegation 'del-0001' at epoch=2.",
+      "input": {
+        "delegation_id": "del-0001",
+        "epoch": 2,
+        "revoked_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"delegation_id\":\"del-0001\",\"domain_sep\":\"EATP-12/revocation-event/v1\",\"epoch\":2,\"revoked_at\":\"2026-07-17T00:00:00.000000000Z\"}",
+      "expected_signature_hex": "8cd0be89613dfa16e83bae6b6bd5d0a57d0d5f908dc28520c36f651f4af79c8bb002665560c154962f7ba5763214690649b8ed1ed722a9aae59f519cee217d03"
+    },
+    {
+      "id": "RE2-post-revocation-second",
+      "description": "Second revocation append: delegation 'del-0002' at epoch=3.",
+      "input": {
+        "delegation_id": "del-0002",
+        "epoch": 3,
+        "revoked_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"delegation_id\":\"del-0002\",\"domain_sep\":\"EATP-12/revocation-event/v1\",\"epoch\":3,\"revoked_at\":\"2026-07-17T00:00:00.000000000Z\"}",
+      "expected_signature_hex": "0a7b74db397711b150ea27af720c4a3c7507289a319dc82b1ac57d96bac6fb4918953da728fb860c20122e8f3e1c6ff4b6675eb62c3c5410e31bd1762be73f07"
+    },
+    {
+      "id": "RE3-fractional-second-boundary",
+      "description": "Boundary: non-zero 9-digit fractional second (2026-07-17T12:34:56.123456789Z) pins nanosecond fidelity — a following SDK MUST string-preserve the timestamp, not microsecond-truncate it.",
+      "input": {
+        "delegation_id": "del-0003",
+        "epoch": 4,
+        "revoked_at": "2026-07-17T12:34:56.123456789Z"
+      },
+      "expected_canonical_preimage": "{\"delegation_id\":\"del-0003\",\"domain_sep\":\"EATP-12/revocation-event/v1\",\"epoch\":4,\"revoked_at\":\"2026-07-17T12:34:56.123456789Z\"}",
+      "expected_signature_hex": "29c40a124fb792d324a202a975de029d945afb3a2b19de2aa3ddc27eb27d85a030d9f0092e4b3a67907000ec6677180ce64c3dd11f46d034091dd9ffd09e0a04"
+    }
+  ]
+}
