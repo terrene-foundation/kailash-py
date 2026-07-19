@@ -85,6 +85,9 @@ def _make_raising_session(exc):
         def post(self, *a, **k):  # returns a CM; entering raises
             raise exc
 
+        def delete(self, *a, **k):  # returns a CM; entering raises
+            raise exc
+
         async def close(self):
             pass
 
@@ -188,6 +191,24 @@ async def test_http_send_raise_masks_credentials():
     msg = str(ei.value)
     assert "S3cr3tHTTP" not in msg
     assert "httptok123" not in msg
+
+
+@pytest.mark.asyncio
+async def test_http_close_server_session_log_masks_credentials(caplog):
+    # _close_server_session swallows aiohttp errors in its own try/except and
+    # logs them — the {e} there embeds base_url via urljoin(self.base_url, ...).
+    t = StreamableHTTPTransport(
+        HTTP_URL, session_management=True, skip_security_validation=True
+    )
+    t.session = _make_raising_session(Exception(f"DELETE failed to {HTTP_URL}"))()
+    t.session_id = "sess-123"
+    with caplog.at_level(logging.ERROR, logger="kailash_mcp.transports.transports"):
+        await t._close_server_session()
+    logged = "\n".join(r.getMessage() for r in caplog.records)
+    assert "Error closing server session" in logged
+    assert "S3cr3tHTTP" not in logged
+    assert "httptok123" not in logged
+    assert "***@mcp.example" in logged
 
 
 # --- WebSocket ---------------------------------------------------------------

@@ -547,7 +547,7 @@ def _mask_err_query_pair(match: "re.Match[str]") -> str:
     return match.group(0)
 
 
-def mask_error_text(text: Optional[str]) -> str:
+def mask_error_text(text: Optional[object]) -> str:
     """Mask credentials embedded anywhere in an arbitrary error / log string.
 
     The companion to :func:`mask_url` for the case where the credential is

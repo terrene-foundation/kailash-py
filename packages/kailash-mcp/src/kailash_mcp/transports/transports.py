@@ -73,11 +73,12 @@ from urllib.parse import urljoin, urlparse
 
 import aiohttp
 import websockets
-from kailash.utils.url_credentials import mask_error_text, mask_url
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
 from kailash_mcp.security import validate_spawn_command
+
+from kailash.utils.url_credentials import mask_error_text, mask_url
 
 logger = logging.getLogger(__name__)
 
@@ -672,7 +673,7 @@ class SSETransport(BaseTransport):
                         logger.warning(f"Invalid JSON in SSE event: {data_str}")
 
         except Exception as e:
-            logger.error(f"SSE read error: {e}")
+            logger.error(f"SSE read error: {mask_error_text(str(e))}")
         finally:
             if self._connected:
                 await self.disconnect()
@@ -938,7 +939,7 @@ class StreamableHTTPTransport(BaseTransport):
                 else:
                     logger.warning(f"Failed to close server session: {response.status}")
         except Exception as e:
-            logger.error(f"Error closing server session: {e}")
+            logger.error(f"Error closing server session: {mask_error_text(str(e))}")
         finally:
             self.session_id = None
 
@@ -1136,7 +1137,7 @@ class WebSocketTransport(BaseTransport):
         except websockets.exceptions.ConnectionClosed:
             logger.info("WebSocket connection closed")
         except Exception as e:
-            logger.error(f"WebSocket read error: {e}")
+            logger.error(f"WebSocket read error: {mask_error_text(str(e))}")
         finally:
             if self._connected:
                 await self.disconnect()
