@@ -133,15 +133,22 @@ class TestMemoryAgentInitialization:
         assert agent.memory_config.temperature == 0.3
         assert agent.memory_config.max_history_turns == 5
 
-    def test_default_configuration_values(self):
+    def test_default_configuration_values(self, monkeypatch):
         """Test that defaults are set correctly."""
         from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
+
+        # Isolate from the ambient .env: model resolution is env-first
+        # (KAIZEN_MODEL -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> the shared
+        # provider-intrinsic fallback), so this pins the fallback deterministically.
+        monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
         agent = MemoryAgent()
 
         # LLM defaults
         assert agent.memory_config.llm_provider == "openai"
-        assert agent.memory_config.model == "gpt-3.5-turbo"
+        assert agent.memory_config.model == "gpt-4o"  # shared env-first fallback
         assert isinstance(agent.memory_config.temperature, float)
         assert isinstance(agent.memory_config.max_tokens, int)
 

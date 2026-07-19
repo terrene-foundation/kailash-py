@@ -287,13 +287,20 @@ def test_execution_error_fallback():
 # ============================================================================
 
 
-def test_tot_config_defaults():
+def test_tot_config_defaults(monkeypatch):
     """Test ToTAgentConfig default values"""
+    # Isolate from the ambient .env: model resolution is env-first
+    # (KAIZEN_MODEL -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> the shared
+    # provider-intrinsic fallback), so this pins the fallback deterministically.
+    monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+    monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+
     config = ToTAgentConfig()
 
     # Verify default values
     assert config.llm_provider == "openai"
-    assert config.model == "gpt-4"
+    assert config.model == "gpt-4o"  # shared env-first fallback
     assert config.temperature == 0.9  # Higher for diversity
     assert config.num_paths == 5
     assert config.max_paths == 20

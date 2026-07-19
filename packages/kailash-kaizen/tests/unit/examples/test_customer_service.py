@@ -293,7 +293,7 @@ class TestConfigurationOptions:
         config = CustomerServiceConfig()
 
         assert config.llm_provider == "mock"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.auto_response is True
 
     def test_custom_config(self):

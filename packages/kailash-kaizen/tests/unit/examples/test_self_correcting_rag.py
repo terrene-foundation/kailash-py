@@ -261,7 +261,7 @@ class TestConfigurationOptions:
         config = SelfCorrectingRAGConfig()
 
         assert config.llm_provider == "mock"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.max_corrections == 3
 
     def test_custom_config(self):

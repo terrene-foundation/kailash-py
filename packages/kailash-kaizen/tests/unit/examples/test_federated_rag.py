@@ -317,7 +317,7 @@ class TestConfigurationOptions:
         config = FederatedRAGConfig()
 
         assert config.llm_provider == "mock"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.max_sources == 5
 
     def test_custom_config(self):
