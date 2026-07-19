@@ -156,6 +156,108 @@ def test_anti_rollback_equal_and_greater_epochs_accepted() -> None:
     assert anchor.high_water_epoch == 3
 
 
+def test_fresh_anchor_fails_open_documents_durability_requirement() -> None:
+    """The high-water is IN-MEMORY, monotonic only within ONE anchor lifetime. A
+    freshly-constructed ``HeadCommitmentAnchor()`` (default ``initial_epoch=0``) fails
+    OPEN — it accepts ANY epoch >= 0, INCLUDING a lower one a prior anchor instance had
+    already advanced past. This is the DOCUMENTED #1842-S3 durability requirement (a
+    caller MUST persist ``high_water_epoch`` and re-seed ``initial_epoch`` from it on
+    the persisted-head read path), NOT a silent bug: constructing a bare anchor on the
+    persisted read path is a rollback vulnerability the S3 wiring closes."""
+
+    def _head(epoch: int, block_count: int, tip_byte: int) -> HeadCommitment:
+        return HeadCommitment(
+            epoch=epoch,
+            block_count=block_count,
+            tip_hash=bytes([tip_byte]) * 32,
+            revocation_ledger_tip=bytes(32),
+            signed_at="2026-07-17T00:00:00.000000000Z",
+        )
+
+    anchor = HeadCommitmentAnchor()
+    anchor.accept(_head(100, 50, 0xAA))
+    assert anchor.high_water_epoch == 100
+    assert anchor.high_water_tip_hash == bytes([0xAA]) * 32
+
+    # A NEW bare anchor (the restart-without-re-seed path) has NO memory of epoch 100
+    # and fails OPEN — it accepts an epoch-5 head that the first anchor would reject.
+    fresh = HeadCommitmentAnchor()  # default initial_epoch=0 → fails open
+    fresh.accept(_head(5, 3, 0xBB))  # accepted: the S3 re-seed is what prevents this
+    assert fresh.high_water_epoch == 5
+
+    # Re-seeding from the persisted high-water (the S3 durability contract) restores the
+    # anti-rollback: the epoch-5 replay is now rejected.
+    reseeded = HeadCommitmentAnchor(
+        initial_epoch=100, initial_tip_hash=bytes([0xAA]) * 32
+    )
+    assert (
+        reseeded.high_water_epoch == 100
+        and reseeded.high_water_tip_hash == bytes([0xAA]) * 32
+    )
+    with pytest.raises(HeadCommitmentError, match="anti-rollback violation"):
+        reseeded.accept(_head(5, 3, 0xBB))
+
+
+def test_equivocation_same_epoch_differing_tip_rejected() -> None:
+    """Defense-in-depth: two DISTINCT heads at the SAME epoch (differing ``tip_hash``)
+    is an equivocation / same-epoch fork — the second is REJECTED fail-closed. Under the
+    strict-monotonic-epoch invariant a single epoch has at most one head, so a differing
+    same-epoch tip is a forgery signal. A same-epoch re-read of the IDENTICAL head is
+    still accepted (idempotent)."""
+
+    def _head(tip_byte: int) -> HeadCommitment:
+        return HeadCommitment(
+            epoch=7,
+            block_count=4,
+            tip_hash=bytes([tip_byte]) * 32,
+            revocation_ledger_tip=bytes(32),
+            signed_at="2026-07-17T00:00:00.000000000Z",
+        )
+
+    anchor = HeadCommitmentAnchor()
+    head_a = _head(0x11)
+    anchor.accept(head_a)  # pins (epoch 7, tip 0x11...)
+    assert anchor.high_water_tip_hash == bytes([0x11]) * 32
+
+    # Re-reading the IDENTICAL head at epoch 7 is idempotent — accepted, tip unchanged.
+    anchor.accept(head_a)
+    assert anchor.high_water_epoch == 7
+
+    # A DIFFERENT head at the SAME epoch 7 is a fork — rejected, pinned tip unchanged.
+    with pytest.raises(HeadCommitmentError, match="equivocation detected"):
+        anchor.accept(_head(0x22))
+    assert anchor.high_water_tip_hash == bytes([0x11]) * 32
+
+
+def test_equivocation_baseline_absent_first_same_seed_epoch_accepted() -> None:
+    """When an anchor is re-seeded with ``initial_epoch`` but NO ``initial_tip_hash``
+    (no prior tip to compare), the first accept at that seed epoch records its tip
+    WITHOUT an equivocation check — there is no baseline. The check engages only once a
+    tip is pinned."""
+    anchor = HeadCommitmentAnchor(initial_epoch=7)  # seed epoch, no pinned tip
+    assert anchor.high_water_tip_hash is None
+    first = HeadCommitment(
+        epoch=7,
+        block_count=4,
+        tip_hash=bytes([0x33]) * 32,
+        revocation_ledger_tip=bytes(32),
+        signed_at="2026-07-17T00:00:00.000000000Z",
+    )
+    anchor.accept(first)  # no baseline → accepted, tip now pinned
+    assert anchor.high_water_tip_hash == bytes([0x33]) * 32
+    # Now a differing same-epoch tip IS caught.
+    with pytest.raises(HeadCommitmentError, match="equivocation detected"):
+        anchor.accept(
+            HeadCommitment(
+                epoch=7,
+                block_count=4,
+                tip_hash=bytes([0x44]) * 32,
+                revocation_ledger_tip=bytes(32),
+                signed_at="2026-07-17T00:00:00.000000000Z",
+            )
+        )
+
+
 # --- Fail-closed construction + hardening ------------------------------------
 
 

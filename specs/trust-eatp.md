@@ -649,7 +649,25 @@ epoch across persisted-head reads and REJECTS (`HeadCommitmentError`, fail-close
 a persisted `HeadCommitment` whose `epoch` is strictly LOWER than the retained
 high-water — a stale-head replay. An epoch EQUAL to the high-water (re-reading the
 current head) is accepted; a strictly-greater epoch advances the anchor. The
-high-water never decreases, including across a rejected replay.
+high-water never decreases within one instance lifetime, including across a
+rejected replay. Equal-epoch defense-in-depth: a same-epoch head whose `tip_hash`
+differs from the pinned one is REJECTED as an equivocation / same-epoch fork (under
+the strict-monotonic-epoch invariant one epoch has at most one head, so a differing
+same-epoch tip is a forgery signal).
+
+**Durability contract (`#1842-S3` REQUIREMENT).** The high-water is IN-MEMORY and
+monotonic only within ONE `HeadCommitmentAnchor` lifetime. A bare
+`HeadCommitmentAnchor()` (default `initial_epoch=0`) fails OPEN — it accepts any
+epoch ≥ 0, correct ONLY for genuine first-use with no head history. A caller
+persisting heads across process restarts MUST (a) persist `high_water_epoch` (and
+`high_water_tip_hash`, to carry the equivocation defense) after each `accept()`, and
+(b) RE-SEED `initial_epoch` (and `initial_tip_hash`) from that durable store when
+reconstructing the anchor on the persisted-head read path. Constructing a bare
+anchor on the persisted-head read path is a ROLLBACK VULNERABILITY (every restart
+resets the high-water to 0 and would accept a stale lower-epoch head silently). The
+durability WIRING (which store, when to persist) is #1842 shard 3's job; this shard
+ships the enforced-as-documented in-memory contract + the `initial_epoch` /
+`initial_tip_hash` re-seed handles.
 
 **Cross-SDK PROVISIONAL tripwires.** The event pre-image + signature (RE0-RE3,
 incl. the RE3 nanosecond-fidelity boundary), tip fold (LT0 all-zero empty, LT1,

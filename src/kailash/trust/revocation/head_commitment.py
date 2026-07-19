@@ -270,39 +270,86 @@ class HeadCommitmentAnchor:
     :class:`HeadCommitment` whose ``epoch`` is LOWER than the retained high-water is
     a stale-head replay and is REJECTED fail-closed. An epoch EQUAL to the high-water
     is accepted (re-reading the current head is legitimate) and a strictly-greater
-    epoch advances the high-water.
+    epoch advances the high-water. Equal-epoch defense-in-depth: a same-epoch head
+    whose ``tip_hash`` differs from the retained one is REJECTED as an equivocation /
+    same-epoch fork (under the strict-monotonic-epoch invariant two legitimate heads
+    at one epoch cannot exist, so a differing same-epoch tip is a forgery signal).
 
-    The high-water is the anchor's ONLY mutable state; it never decreases.
+    **DURABILITY CONTRACT (MUST — this is IN-MEMORY, monotonic only within ONE
+    instance lifetime).** The high-water epoch (and pinned tip) live ONLY in this
+    object; a freshly-constructed ``HeadCommitmentAnchor()`` with the default
+    ``initial_epoch=0`` fails OPEN — it accepts ANY epoch ``>= 0`` (correct ONLY for
+    genuine first-use with no prior head history). A caller that persists heads
+    across process restarts MUST:
+
+    1. Persist :attr:`high_water_epoch` (and, to also carry the equivocation defense,
+       :attr:`high_water_tip_hash`) to a durable store after each :meth:`accept`.
+    2. RE-SEED ``initial_epoch`` (and ``initial_tip_hash``) from that durable store
+       when reconstructing the anchor on the persisted-head read path.
+
+    Constructing a BARE ``HeadCommitmentAnchor()`` on a persisted-head read path
+    (rather than re-seeding from the durable high-water store) is a ROLLBACK
+    VULNERABILITY: every restart resets the high-water to 0 and would ACCEPT a stale
+    lower-epoch head with no error, defeating the whole anti-rollback purpose. The
+    durability WIRING (which store, when to persist) is #1842-S3's job; THIS shard
+    ships the enforced-as-documented in-memory contract + the re-seed handles.
+
+    The high-water epoch is the anchor's ONLY monotonic state; it never decreases
+    within one lifetime, including across a rejected replay.
     """
 
-    def __init__(self, initial_epoch: int = 0) -> None:
-        """Initialize the anchor's retained high-water epoch.
+    def __init__(
+        self, initial_epoch: int = 0, initial_tip_hash: bytes | None = None
+    ) -> None:
+        """Initialize (or S3-re-seed) the anchor's retained high-water.
 
         Args:
             initial_epoch: The starting high-water epoch (default 0 — the genesis
                 head, epoch 0, is accepted since ``0 >= 0``). MUST be a non-negative
-                ``int`` in ``[0, 2**64)``.
+                ``int`` in ``[0, 2**64)``. On the persisted-head read path a caller
+                MUST re-seed this from the durable high-water store (see the class
+                DURABILITY CONTRACT), NOT rely on the default.
+            initial_tip_hash: The 32-byte ``tip_hash`` pinned at ``initial_epoch``
+                (for the equivocation defense across a restart), or ``None`` (default)
+                when there is no prior head — the first accept at ``initial_epoch``
+                then records its tip without an equivocation check (no baseline to
+                compare against).
 
         Raises:
-            HeadCommitmentError: If ``initial_epoch`` is malformed (fail-closed).
+            HeadCommitmentError: If ``initial_epoch`` or ``initial_tip_hash`` is
+                malformed (fail-closed).
         """
         _validate_u64(initial_epoch, "initial_epoch")
+        if initial_tip_hash is not None:
+            _validate_hash(initial_tip_hash, "initial_tip_hash")
+            initial_tip_hash = bytes(initial_tip_hash)
         self._high_water_epoch = initial_epoch
+        self._high_water_tip_hash = initial_tip_hash
 
     @property
     def high_water_epoch(self) -> int:
-        """The retained high-water epoch (never decreases)."""
+        """The retained high-water epoch (persist this for S3 durability re-seeding)."""
         return self._high_water_epoch
 
+    @property
+    def high_water_tip_hash(self) -> bytes | None:
+        """The ``tip_hash`` pinned at the high-water epoch, or ``None`` if no head has
+        been accepted yet (persist this alongside :attr:`high_water_epoch` to carry the
+        equivocation defense across an S3 durability re-seed)."""
+        return self._high_water_tip_hash
+
     def accept(self, commitment: HeadCommitment) -> None:
-        """Accept a persisted head, advancing the high-water; reject a rollback.
+        """Accept a persisted head, advancing the high-water; reject a rollback or
+        same-epoch equivocation.
 
         Args:
             commitment: The persisted :class:`HeadCommitment` being read back.
 
         Raises:
             HeadCommitmentError: If ``commitment.epoch`` is strictly LOWER than the
-                retained high-water epoch (fail-closed anti-rollback).
+                retained high-water epoch (fail-closed anti-rollback), OR if it EQUALS
+                the high-water but its ``tip_hash`` differs from the pinned one
+                (fail-closed equivocation / same-epoch fork detection).
         """
         if commitment.epoch < self._high_water_epoch:
             raise HeadCommitmentError(
@@ -310,7 +357,20 @@ class HeadCommitmentAnchor:
                 f"the retained high-water epoch {self._high_water_epoch} "
                 f"(a persisted head cannot roll back to an earlier epoch)"
             )
+        if (
+            commitment.epoch == self._high_water_epoch
+            and self._high_water_tip_hash is not None
+            and commitment.tip_hash != self._high_water_tip_hash
+        ):
+            raise HeadCommitmentError(
+                f"equivocation detected: two distinct heads at epoch "
+                f"{commitment.epoch} — retained tip_hash "
+                f"{self._high_water_tip_hash.hex()} vs presented "
+                f"{commitment.tip_hash.hex()} (under strict-monotonic epochs a single "
+                f"epoch has at most one head; a differing same-epoch tip is a fork)"
+            )
         self._high_water_epoch = commitment.epoch
+        self._high_water_tip_hash = commitment.tip_hash
 
 
 __all__ = [
