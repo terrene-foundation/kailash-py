@@ -113,6 +113,41 @@ def test_agents_registry_imports_without_numpy():
 
 
 @pytest.mark.regression
+def test_direct_rag_import_raises_actionable_error_without_numpy():
+    """The AC-named direct import raises an ACTIONABLE ImportError (issue #1849 AC2).
+
+    ``from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent``
+    on a bare install (no numpy) must fail with guidance naming
+    ``kailash-kaizen[rag]`` — NOT a raw ``ModuleNotFoundError: No module named
+    'numpy'``. The original cause stays chained (``raise ... from exc``), so this
+    is an actionable re-raise, not a silent swallow.
+    """
+    result = _run_without_numpy(
+        """
+        try:
+            from kaizen_agents.agents.specialized.rag_research import (
+                RAGResearchAgent,  # noqa: F401
+            )
+        except ImportError as exc:
+            msg = str(exc)
+            assert "kailash-kaizen[rag]" in msg, f"not actionable: {msg!r}"
+            assert msg != "No module named 'numpy'", "still a bare ModuleNotFoundError"
+            assert exc.__cause__ is not None, "original cause not chained"
+            print("OK: actionable ImportError on direct RAGResearchAgent import")
+        else:
+            raise AssertionError("expected ImportError with numpy absent")
+        """
+    )
+    assert result.returncode == 0, (
+        "direct RAGResearchAgent import must raise an actionable ImportError\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert (
+        "OK: actionable ImportError on direct RAGResearchAgent import" in result.stdout
+    )
+
+
+@pytest.mark.regression
 def test_top_level_kaizen_agents_imports_without_numpy():
     """``import kaizen_agents`` (top-level package) succeeds with numpy absent."""
     result = _run_without_numpy(

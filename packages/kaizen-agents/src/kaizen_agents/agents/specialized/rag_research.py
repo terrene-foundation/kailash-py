@@ -37,7 +37,19 @@ from typing import Any
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.memory.vector import VectorMemory
-from kaizen.retrieval.vector_store import SimpleVectorStore
+
+try:
+    # SimpleVectorStore pulls in numpy, which ships only under the optional
+    # kailash-kaizen[rag] extra. Re-raise with an actionable message so a direct
+    # `from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent`
+    # on a bare install fails with guidance, not a raw ModuleNotFoundError.
+    from kaizen.retrieval.vector_store import SimpleVectorStore
+except ImportError as exc:
+    raise ImportError(
+        "RAGResearchAgent requires numpy — install it with: "
+        "pip install 'kailash-kaizen[rag]'"
+    ) from exc
+
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 from kaizen_agents._model_env import resolve_default_model
