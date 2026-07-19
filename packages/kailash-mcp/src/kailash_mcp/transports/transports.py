@@ -78,6 +78,8 @@ from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
 from kailash_mcp.security import validate_spawn_command
 
+from kailash.utils.url_credentials import mask_error_text, mask_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +125,7 @@ class TransportSecurity:
             return True
 
         except Exception as e:
-            logger.error(f"URL validation error: {e}")
+            logger.error(f"URL validation error: {mask_error_text(str(e))}")
             return False
 
     @classmethod
@@ -577,12 +579,15 @@ class SSETransport(BaseTransport):
             self._connected = True
             self._update_metrics("connections_total")
 
-            logger.info(f"SSE transport connected: {sse_url}")
+            logger.info(f"SSE transport connected: {mask_url(sse_url)}")
 
         except Exception as e:
             self._update_metrics("connections_failed")
             await self._cleanup_connection()
-            raise TransportError(f"SSE connection failed: {e}", transport_type="sse")
+            raise TransportError(
+                f"SSE connection failed: {mask_error_text(str(e))}",
+                transport_type="sse",
+            )
 
     async def disconnect(self) -> None:
         """Disconnect from SSE endpoint."""
@@ -615,7 +620,10 @@ class SSETransport(BaseTransport):
 
         except Exception as e:
             self._update_metrics("errors_total")
-            raise TransportError(f"Failed to send message: {e}", transport_type="sse")
+            raise TransportError(
+                f"Failed to send message: {mask_error_text(str(e))}",
+                transport_type="sse",
+            )
 
     async def receive_message(self) -> Dict[str, Any]:
         """Receive message from SSE stream."""
@@ -638,7 +646,8 @@ class SSETransport(BaseTransport):
         except Exception as e:
             self._update_metrics("errors_total")
             raise TransportError(
-                f"Failed to receive message: {e}", transport_type="sse"
+                f"Failed to receive message: {mask_error_text(str(e))}",
+                transport_type="sse",
             )
 
     async def _read_sse_events(self):
@@ -664,7 +673,7 @@ class SSETransport(BaseTransport):
                         logger.warning(f"Invalid JSON in SSE event: {data_str}")
 
         except Exception as e:
-            logger.error(f"SSE read error: {e}")
+            logger.error(f"SSE read error: {mask_error_text(str(e))}")
         finally:
             if self._connected:
                 await self.disconnect()
@@ -782,13 +791,16 @@ class StreamableHTTPTransport(BaseTransport):
             self._connected = True
             self._update_metrics("connections_total")
 
-            logger.info(f"StreamableHTTP transport connected: {self.base_url}")
+            logger.info(
+                f"StreamableHTTP transport connected: {mask_url(self.base_url)}"
+            )
 
         except Exception as e:
             self._update_metrics("connections_failed")
             await self._cleanup_connection()
             raise TransportError(
-                f"HTTP connection failed: {e}", transport_type="streamable_http"
+                f"HTTP connection failed: {mask_error_text(str(e))}",
+                transport_type="streamable_http",
             )
 
     async def disconnect(self) -> None:
@@ -846,7 +858,8 @@ class StreamableHTTPTransport(BaseTransport):
         except Exception as e:
             self._update_metrics("errors_total")
             raise TransportError(
-                f"Failed to send message: {e}", transport_type="streamable_http"
+                f"Failed to send message: {mask_error_text(str(e))}",
+                transport_type="streamable_http",
             )
 
     async def receive_message(self) -> Dict[str, Any]:
@@ -893,7 +906,8 @@ class StreamableHTTPTransport(BaseTransport):
         except Exception as e:
             self._update_metrics("errors_total")
             raise TransportError(
-                f"Failed to receive message: {e}", transport_type="streamable_http"
+                f"Failed to receive message: {mask_error_text(str(e))}",
+                transport_type="streamable_http",
             )
 
     async def _create_server_session(self):
@@ -925,7 +939,7 @@ class StreamableHTTPTransport(BaseTransport):
                 else:
                     logger.warning(f"Failed to close server session: {response.status}")
         except Exception as e:
-            logger.error(f"Error closing server session: {e}")
+            logger.error(f"Error closing server session: {mask_error_text(str(e))}")
         finally:
             self.session_id = None
 
@@ -1041,13 +1055,14 @@ class WebSocketTransport(BaseTransport):
             self._connected = True
             self._update_metrics("connections_total")
 
-            logger.info(f"WebSocket transport connected: {self.url}")
+            logger.info(f"WebSocket transport connected: {mask_url(self.url)}")
 
         except Exception as e:
             self._update_metrics("connections_failed")
             await self._cleanup_connection()
             raise TransportError(
-                f"WebSocket connection failed: {e}", transport_type="websocket"
+                f"WebSocket connection failed: {mask_error_text(str(e))}",
+                transport_type="websocket",
             )
 
     async def disconnect(self) -> None:
@@ -1075,7 +1090,8 @@ class WebSocketTransport(BaseTransport):
         except Exception as e:
             self._update_metrics("errors_total")
             raise TransportError(
-                f"Failed to send message: {e}", transport_type="websocket"
+                f"Failed to send message: {mask_error_text(str(e))}",
+                transport_type="websocket",
             )
 
     async def receive_message(self) -> Dict[str, Any]:
@@ -1098,7 +1114,8 @@ class WebSocketTransport(BaseTransport):
         except Exception as e:
             self._update_metrics("errors_total")
             raise TransportError(
-                f"Failed to receive message: {e}", transport_type="websocket"
+                f"Failed to receive message: {mask_error_text(str(e))}",
+                transport_type="websocket",
             )
 
     async def _read_messages(self):
@@ -1120,7 +1137,7 @@ class WebSocketTransport(BaseTransport):
         except websockets.exceptions.ConnectionClosed:
             logger.info("WebSocket connection closed")
         except Exception as e:
-            logger.error(f"WebSocket read error: {e}")
+            logger.error(f"WebSocket read error: {mask_error_text(str(e))}")
         finally:
             if self._connected:
                 await self.disconnect()

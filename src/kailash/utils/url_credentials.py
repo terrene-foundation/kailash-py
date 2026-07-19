@@ -41,6 +41,7 @@ one place. ``dataflow/utils/masking.py`` now re-exports from here.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Optional, Tuple
 from urllib.parse import (
     ParseResult,
@@ -55,6 +56,7 @@ __all__ = [
     "decode_userinfo_or_raise",
     "preencode_password_special_chars",
     "mask_url",
+    "mask_error_text",
     "mask_secret",
     "fingerprint_secret",
     "is_sensitive_query_key",
@@ -467,6 +469,127 @@ def _mask_multi_host_url(url: str) -> str:
 
     query_suffix = f"?{query}" if q_sep else ""
     return f"{scheme}://{masked_authority}{path_prefix}{query_suffix}{frag_suffix}"
+
+
+# --- Arbitrary-string (error / log text) credential scrubbing ---------------
+#
+# ``mask_url`` is the value-source masker: use it wherever the raw URL string
+# is in hand (a log line that interpolates ``base_url`` directly). But an
+# EXCEPTION rendered into an error message (``f"connection failed: {e}"``) is
+# an OPAQUE string that may embed a credential-bearing URL ANYWHERE inside it
+# — the driver/provider chose the text, not us — so it cannot be routed
+# through the urlparse-based ``mask_url``. ``mask_error_text`` scrubs
+# credentials out of such arbitrary strings via regex.
+#
+# CRITICAL — DOTALL / newline safety (see ``rules/observability.md`` Rule 6 +
+# the driver-error redaction requirement, cross-SDK):
+#   Database/provider drivers render a credential value's embedded newline
+#   LITERALLY into the error text (e.g. a password that contains ``\n``, so the
+#   rendered connection string is ``postgresql://user:sec\nret@host/db``). A
+#   naive scrubber whose value class is ``\S`` / ``[^\s]`` STOPS at the first
+#   ``\n`` — matching only ``sec`` — and the credential TAIL (``ret``) leaks.
+#   The defenses below therefore:
+#     * compile with ``re.DOTALL`` (so any ``.`` in a pattern is newline-aware),
+#       AND
+#     * bound the userinfo span with a class (``[^/?#\r\t ]``) that INCLUDES
+#       ``\n`` but stops at the real URL host-boundary delimiters (``/`` ``?``
+#       ``#``) and horizontal whitespace / CR — so an embedded ``\n`` in the
+#       credential does NOT terminate the match, while a bare ``@`` on a later
+#       log line cannot pull the match across an unrelated line.
+#   The userinfo match backtracks to the LAST ``@`` before the host boundary,
+#   so a password containing a raw ``@`` is masked WHOLE, not split at its
+#   first ``@``.
+#
+# The scrubber masks two credential carriers in an arbitrary string:
+#   1. ``scheme://user:password@host`` userinfo → ``scheme://***@host``
+#   2. sensitive query parameters (``?token=...`` / ``&password=...`` etc.),
+#      matched via the canonical :func:`is_sensitive_query_key` set → value
+#      replaced with ``***``.
+
+# Userinfo in an embedded URL. The userinfo class ``[^/?#\r\t ]`` bounds the
+# span by the real URL host-boundary delimiters (``/`` ``?`` ``#``) and by
+# horizontal whitespace / CR that end a token in log text — but it INCLUDES
+# newline (``\n``), so a credential value with an embedded newline (drivers
+# render these literally) does NOT terminate the match and cannot leak its
+# tail. The two greedy halves around a required ``:`` make the engine backtrack
+# to the LAST ``@`` before the host boundary, so a password containing a raw
+# ``@`` (e.g. ``user:p@ss@host``) is masked WHOLE — ``***@host`` — rather than
+# split at the first ``@``. The required ``:`` targets credential-bearing
+# userinfo (``user:pass@``), leaving a bare ``git@host`` ref untouched.
+_ERR_USERINFO_RE = re.compile(
+    r"([a-zA-Z][a-zA-Z0-9+.\-]*://)"  # group 1: scheme:// (preserved)
+    r"[^/?#\r\t ]*"  # userinfo head (allows @ and \n; greedy → last @)
+    r":"  # user:password separator (targets credential userinfo)
+    r"[^/?#\r\t ]*"  # userinfo tail (allows @ and \n)
+    r"@",  # last @ before the host boundary
+    re.DOTALL,
+)
+
+# Sensitive query parameter ``key=value``. The value class ``[^&#\r\t ]*``
+# tolerates an embedded newline (does NOT treat ``\n`` as a terminator, the
+# DOTALL requirement) while still stopping at the real URL delimiters ``&`` /
+# ``#`` and at horizontal whitespace / CR that end a token in log text. The
+# key is checked against the canonical sensitive-key set at substitution time.
+_ERR_QUERY_PAIR_RE = re.compile(
+    r"([?&;])"  # group 1: query/param delimiter (preserved)
+    r"([A-Za-z0-9_.\-]+)"  # group 2: key
+    r"(=)"  # group 3: equals (preserved)
+    r"([^&#\r\t ]*)",  # group 4: value — tolerates embedded newline
+    re.DOTALL,
+)
+
+
+def _mask_err_query_pair(match: "re.Match[str]") -> str:
+    """Replacement for :data:`_ERR_QUERY_PAIR_RE` — mask only sensitive keys."""
+    delim, key, eq, _value = match.groups()
+    if is_sensitive_query_key(key):
+        return f"{delim}{key}{eq}***"
+    return match.group(0)
+
+
+def mask_error_text(text: Optional[object]) -> str:
+    """Mask credentials embedded anywhere in an arbitrary error / log string.
+
+    The companion to :func:`mask_url` for the case where the credential is
+    inside an OPAQUE string chosen by a driver / provider — a rendered
+    exception (``f"connection failed: {e}"``) that may embed a credential-
+    bearing URL. Prefer :func:`mask_url` whenever the raw URL value is in hand;
+    use this only for opaque ``{e}``-style text.
+
+    Masks, in an arbitrary string:
+
+    - ``scheme://user:password@host`` userinfo → ``scheme://***@host``
+    - sensitive query parameters (``?token=`` / ``&password=`` / ``&api_key=``
+      etc., matched via the canonical :func:`is_sensitive_query_key` set) →
+      value replaced with ``***``.
+
+    DOTALL / newline safety: a credential value with an embedded newline
+    (drivers render these literally) is still FULLY masked — the password span
+    is bound by ``@``, not by whitespace, so the tail after a ``\\n`` cannot
+    leak. See the module-level comment above and ``rules/observability.md``
+    Rule 6.
+
+    Non-credential input is returned unchanged. ``None`` returns ``""``; a
+    non-string is coerced via ``str()`` first (so
+    ``mask_error_text(some_exception)`` works).
+
+    Examples:
+        >>> mask_error_text("connect failed: postgresql://u:secret@db/x")
+        'connect failed: postgresql://***@db/x'
+        >>> mask_error_text("HTTPError for https://svc/api?token=abc123")
+        'HTTPError for https://svc/api?token=***'
+        >>> mask_error_text("ok: postgresql://localhost:5432/db")
+        'ok: postgresql://localhost:5432/db'
+        >>> mask_error_text(None)
+        ''
+    """
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
+    masked = _ERR_USERINFO_RE.sub(r"\1***@", text)
+    masked = _ERR_QUERY_PAIR_RE.sub(_mask_err_query_pair, masked)
+    return masked
 
 
 def redact_pool_key(pool_key: Optional[str]) -> str:

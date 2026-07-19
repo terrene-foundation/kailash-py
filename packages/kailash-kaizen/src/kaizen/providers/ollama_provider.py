@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator, Optional
 
+from kailash.utils.url_credentials import mask_error_text
+
 
 @dataclass
 class OllamaConfig:
@@ -40,7 +42,8 @@ class OllamaProvider:
             ollama.list()
         except Exception as e:
             raise RuntimeError(
-                f"Ollama not available. Please install and start Ollama: {e}\n"
+                "Ollama not available. Please install and start Ollama: "
+                f"{mask_error_text(str(e))}\n"
                 "Install: https://ollama.ai/download"
             )
 
@@ -85,7 +88,7 @@ class OllamaProvider:
             }
 
         except Exception as e:
-            raise RuntimeError(f"Ollama generation failed: {e}")
+            raise RuntimeError(f"Ollama generation failed: {mask_error_text(str(e))}")
 
     def generate_stream(
         self, prompt: str, system: Optional[str] = None, **kwargs
@@ -125,7 +128,7 @@ class OllamaProvider:
                         yield content
 
         except Exception as e:
-            raise RuntimeError(f"Ollama streaming failed: {e}")
+            raise RuntimeError(f"Ollama streaming failed: {mask_error_text(str(e))}")
 
     def generate_vision(
         self, prompt: str, image_path: str, system: Optional[str] = None, **kwargs
@@ -175,4 +178,6 @@ class OllamaProvider:
             }
 
         except Exception as e:
-            raise RuntimeError(f"Ollama vision generation failed: {e}")
+            raise RuntimeError(
+                f"Ollama vision generation failed: {mask_error_text(str(e))}"
+            )
