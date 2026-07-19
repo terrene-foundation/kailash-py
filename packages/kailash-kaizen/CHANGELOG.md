@@ -2,6 +2,42 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.37.2] — 2026-07-19 — Ollama credential-log sanitization + Azure reasoning-model detection fix (#1840, #1859)
+
+### Security
+
+- **Ollama provider exception logs no longer leak `base_url` credentials
+  (#1840).** `OllamaProvider` raised `RuntimeError(f"... {e}")` at four sites
+  (`_check_ollama_available`, `generate`, `generate_stream`,
+  `generate_vision`); the `ollama` client renders the configured
+  `base_url` / `OLLAMA_HOST` (which may carry `user:pass@host` or
+  `?token=...`) into its exception text, so every raised error leaked the
+  credential. All four sites now route through the shared
+  `kailash.utils.url_credentials.mask_error_text` helper (companion fix:
+  `kailash` 2.56.0, `kailash-mcp` 0.4.1).
+
+### Fixed
+
+- **Azure reasoning-model detection now keys off the configured model
+  family, not the deployment name (#1859).** Azure OpenAI uses a
+  caller-chosen deployment name as the wire `model` field / URL path, so
+  the four-axis path built the deployment with `default_model = <deployment
+name>`. Reasoning-model detection (`filter_reasoning_model_params` +
+  `max_tokens`/`max_completion_tokens` selection) ran against that
+  deployment name; whenever the deployment name was not the canonical model
+  id (the common case — Azure deployment names are user-chosen), the
+  anchored patterns (`^gpt-?5`/`^o1`/`^o3`/`^o4`) missed, the reasoning-param
+  strip was skipped, and Azure returned a 400 `unsupported_value` on the
+  default `temperature` (and on `max_tokens`) — gpt-5/o-series deployments
+  with non-canonical names were unusable on `azure_openai`. Detection and
+  the token-limit field name now key off a new optional `canonical_model`
+  threaded end-to-end (`LlmDeployment`/`CompletionRequest`; `None` falls
+  back to `model`, byte-identical for every direct provider whose `model`
+  already IS the family) while the wire `model` field and URL keep the
+  deployment name — so the live path now sends the deployment name on the
+  wire (not the family) while detection stays correct on the family.
+  Non-Azure providers carry no `canonical_model` and are unaffected.
+
 ## [2.37.1] — 2026-07-19 — Cost fix: obsolete-model call-defaults now resolve from .env (#1844, #1845)
 
 ### Fixed

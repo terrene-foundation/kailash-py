@@ -5,6 +5,30 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] — 2026-07-19 — RAGResearchAgent lazy-loads so bare install imports without numpy (#1849)
+
+### Fixed
+
+- **A bare install no longer fails to import `kaizen_agents.agents` (or any
+  `specialized.*` agent) when `numpy` is absent (#1849).** An unguarded
+  module-scope import chain eagerly loaded `RAGResearchAgent`, which pulls
+  `kaizen.retrieval.vector_store` → `import numpy`. `numpy` is declared by
+  no `kaizen-agents` manifest — it ships only under `kailash-kaizen[rag]` —
+  so its absence collateral-damaged every non-RAG agent (`chain_of_thought`,
+  etc.) even though they have nothing to do with RAG. `RAGResearchAgent` now
+  resolves via a PEP 562 `__getattr__` (static analysis / `__all__`
+  preserved via a `TYPE_CHECKING` block) instead of an eager module-scope
+  import; the registration path (`register_builtin.py` / `nodes.py`) guards
+  the import with `try/except ImportError`, emitting an actionable WARN
+  ("install kailash-kaizen[rag]") instead of a silent swallow. A **direct**
+  submodule import
+  (`from kaizen_agents.agents.specialized.rag_research import
+RAGResearchAgent`) without numpy now raises an actionable `ImportError`
+  naming `kailash-kaizen[rag]` (chained via `from exc`, not swallowed)
+  instead of a bare `ModuleNotFoundError: No module named 'numpy'`.
+  `RAGResearchAgent` remains fully functional when numpy IS present — no new
+  hard dependency, no behavior change on the RAG path.
+
 ## [0.11.2] — 2026-07-19 — Cost fix: KAIZEN_MODEL fallbacks now resolve via the shared env helper (#1844, #1845)
 
 ### Fixed

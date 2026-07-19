@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.56.0] - 2026-07-19
+
+### Security
+
+- **SSO `id_token` is now cryptographically verified via JWKS before its
+  `nonce` claim is trusted (#1835).** `SSOAuthenticationNode` previously read
+  the OIDC `nonce` claim from an id_token decoded with base64url only — no
+  signature, audience, issuer, or expiry check — so a forged id_token
+  carrying the expected nonce was trusted at the callback (#1815 added nonce
+  enforcement + PKCE but compared the nonce against claims that were never
+  cryptographically verified). A new JWKS-backed verifier (RS256/ES256 +
+  `aud`/`iss`/expiry) now runs before the nonce comparison; the base64url
+  decode is retained only as a display-only helper and is no longer on the
+  trust path. Fail-closed: a missing JWKS/issuer/client_id config, an
+  unreachable JWKS endpoint, or any verification failure (including
+  network/library errors outside PyJWT's own exception hierarchy) raises a
+  typed `ValueError` and rejects the login — there is no fallback to the
+  unverified read.
+  **Migration:** deployments using the id_token-nonce SSO flow MUST now
+  provide `jwks_uri` + `issuer` + `client_id` in `oauth_settings`; without
+  them the callback fails closed (rejects) rather than trusting an
+  unverified token.
+
+### Added
+
+- **`kailash.utils.url_credentials.mask_error_text` — a DOTALL-aware
+  credential scrubber for opaque exception text (#1840).** `mask_url` masks
+  a URL value in hand; an exception rendered into `f"...{e}"` is an opaque
+  string that may embed a credential-bearing URL anywhere inside it, so it
+  cannot route through `mask_url`'s `urlparse`-based path. The new helper
+  scrubs `user:pass@host` userinfo and sensitive query params
+  (`?token=`/`&password=`/...) out of arbitrary strings via a `re.DOTALL`
+  regex — drivers/providers render an embedded newline in a credential value
+  literally into error text, and a naive `\S`/`[^\s]` value class stops at
+  the first `\n` and leaks the credential tail; the userinfo class used here
+  includes `\n` (bounded by real URL host delimiters) and backtracks to the
+  last `@` before the host, so a password with an embedded newline or a raw
+  `@` is masked whole, never split. This is the one shared credential-helper
+  module (`security.md` § "No secrets in logs") — no per-adapter copies.
+  Companion fixes routing through this helper: `kailash-mcp` 0.4.1
+  (SSE/StreamableHTTP/WebSocket transport connect/send/receive logs +
+  server-session close / read-loop error logs) and `kailash-kaizen` 2.37.2
+  (Ollama provider exception logs).
+
 ## [2.55.0] - 2026-07-19
 
 ### Added (Security)
