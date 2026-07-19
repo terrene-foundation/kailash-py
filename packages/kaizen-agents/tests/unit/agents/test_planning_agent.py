@@ -52,13 +52,20 @@ def test_planning_agent_has_run_method():
     assert callable(agent.run)
 
 
-def test_planning_config_defaults():
+def test_planning_config_defaults(monkeypatch):
     """Test PlanningConfig default values."""
+    # Isolate from the ambient .env: model resolution is env-first
+    # (KAIZEN_MODEL -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> the shared
+    # provider-intrinsic fallback), so this pins the fallback deterministically.
+    monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+    monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+
     config = PlanningConfig()
 
     # Verify default values
     assert config.llm_provider == "openai"
-    assert config.model == "gpt-4"
+    assert config.model == "gpt-4o"  # shared env-first fallback
     assert config.temperature == 0.7
     assert config.max_plan_steps == 10
     assert config.validation_mode == "strict"

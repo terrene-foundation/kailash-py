@@ -140,15 +140,22 @@ class TestCodeGenerationAgentInitialization:
         assert agent.codegen_config.include_tests is False
         assert agent.codegen_config.include_documentation is False
 
-    def test_default_configuration_values(self):
+    def test_default_configuration_values(self, monkeypatch):
         """Test that defaults are set correctly."""
         from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
+
+        # Isolate from the ambient .env: model resolution is env-first
+        # (KAIZEN_MODEL -> OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL -> the shared
+        # provider-intrinsic fallback), so this pins the fallback deterministically.
+        monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
         agent = CodeGenerationAgent()
 
         # LLM defaults
         assert agent.codegen_config.llm_provider == "openai"
-        assert agent.codegen_config.model == "gpt-4o-mini"  # Code-specific default
+        assert agent.codegen_config.model == "gpt-4o"  # shared env-first fallback
         assert agent.codegen_config.temperature == 0.2  # Lower for deterministic code
         assert agent.codegen_config.max_tokens == 8000
 
@@ -461,13 +468,22 @@ class TestCodeGenerationAgentConfiguration:
 
         assert isinstance(config.provider_config, dict)
 
-    def test_default_model_is_gpt_4o_mini(self):
-        """Test that default model is gpt-4o-mini for better code quality."""
+    def test_default_model_is_gpt_4o_mini(self, monkeypatch):
+        """Test the fallback model when no env override is configured.
+
+        Model resolution is env-first (KAIZEN_MODEL -> OPENAI_PROD_MODEL ->
+        DEFAULT_LLM_MODEL -> the shared provider-intrinsic fallback); this test
+        isolates from the ambient .env to pin the fallback deterministically.
+        """
         from kaizen_agents.agents.specialized.code_generation import CodeGenConfig
+
+        monkeypatch.delenv("KAIZEN_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
 
         config = CodeGenConfig()
 
-        assert config.model == "gpt-4o-mini"
+        assert config.model == "gpt-4o"
 
 
 # ============================================================================

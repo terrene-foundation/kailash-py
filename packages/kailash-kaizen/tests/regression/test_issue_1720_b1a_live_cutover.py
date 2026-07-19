@@ -29,7 +29,6 @@ import pytest
 
 from kaizen.llm import LlmClient, resolve_deployment_for
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
-
 from tests.parity._harness import CapturingTransport, load_fixture
 
 pytestmark = pytest.mark.regression
@@ -94,6 +93,15 @@ def test_provider_llm_response_returns_four_axis_mapped_shape_for_openai(monkeyp
         messages=_MSGS,
         tools=[],
         generation_config={},
+        # Same placeholder as the up-front `resolve_deployment_for` call above:
+        # `_provider_llm_response` re-resolves the deployment internally (its
+        # own `resolve_deployment_for(provider, model, api_key=api_key, ...)`
+        # call), so without an explicit override it falls back to the
+        # provider's env var (`OPENAI_API_KEY`) — which #1845's cost-guard
+        # withholds by default in a bare pytest run. The placeholder keeps this
+        # offline/canned-bytes test hermetic regardless of ambient env state
+        # (no secret; never sent — the transport is stubbed).
+        api_key="sk-b1a-parity-placeholder",
     )
 
     # The canned openai bytes parsed through the four-axis wire + to_legacy_shape.

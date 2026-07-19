@@ -303,7 +303,7 @@ class TestConfigurationOptions:
         config = DataReportingConfig()
 
         assert config.llm_provider == "mock"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.output_format == "pdf"
 
     def test_custom_config(self):

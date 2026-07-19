@@ -48,6 +48,7 @@ TextAnalysisSignature = agent_as_server_example.TextAnalysisSignature
 
 # Production MCP infrastructure - kailash_mcp
 from kailash_mcp import MCPServer
+
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class TestMCPServerAgentConfig:
         config = MCPServerAgentConfig()
 
         assert config.llm_provider == "openai"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.server_name == "kaizen-qa-agent"
         assert config.server_port == 18090
         assert config.server_host == "0.0.0.0"  # Binds to all interfaces

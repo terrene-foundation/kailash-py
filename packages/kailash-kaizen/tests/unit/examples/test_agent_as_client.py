@@ -49,6 +49,7 @@ ResultSynthesisSignature = agent_as_client_example.ResultSynthesisSignature
 
 # Production MCP infrastructure - kailash_mcp
 from kailash_mcp import MCPClient
+
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class TestMCPClientConfig:
         config = MCPClientConfig()
 
         assert config.llm_provider == "openai"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.temperature == 0.7
         assert config.max_tokens == 1000
         assert config.connection_timeout == 30  # Default is 30 seconds

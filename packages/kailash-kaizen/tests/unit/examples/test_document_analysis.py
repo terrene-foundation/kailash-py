@@ -331,7 +331,7 @@ class TestConfigurationOptions:
         config = DocumentAnalysisConfig()
 
         assert config.llm_provider == "mock"
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.analysis_depth == "standard"
 
     def test_custom_config(self):
