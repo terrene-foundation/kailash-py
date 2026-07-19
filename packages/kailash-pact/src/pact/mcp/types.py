@@ -218,17 +218,18 @@ class McpGovernanceConfig:
             fail-closed on an absent, unrecognized, or ungranted tenant. See
             ``McpGovernanceEnforcer._tenant_isolation_decision`` (enforcer.py)
             -- the ONE shared restrictiveness function both surfaces call.
-        require_caller_identity: When True (default False), the tenant
-            resolver NEVER consults the self-asserted ``metadata["tenant_id"]``
+        require_caller_identity: When True (the default), the tenant resolver
+            NEVER consults the self-asserted ``metadata["tenant_id"]``
             fallback -- an absent, or tenant-less, trusted ``McpCallerIdentity``
             resolves straight to no-tenant (fail-closed), rather than trusting
-            a caller-supplied metadata value. Deployments with no
-            transport-level identity resolution wired (no caller_identity ever
-            passed to check_tool_call / check_resource_read) MUST set this to
-            True to get a REAL tenant-isolation guarantee; the default False
-            preserves the documented metadata-fallback behavior (weaker, but
-            explicit) for backward compatibility. A no-op when tenant_grants
-            is empty (isolation OFF).
+            a caller-supplied metadata value. SECURE BY DEFAULT: with no
+            existing users of the metadata-fallback behavior, True costs
+            nothing at zero backward-compat risk and closes the bypass where
+            a deployment sets tenant_grants but never wires caller_identity,
+            silently trusting the self-asserted body tenant_id. Pass False
+            explicitly to opt into the weaker metadata-fallback channel (only
+            appropriate for deployments with no transport-level identity
+            resolution). A no-op when tenant_grants is empty (isolation OFF).
 
     Raises:
         ValueError: If max_audit_entries is < 1, or a tenant_grants key does
@@ -240,7 +241,7 @@ class McpGovernanceConfig:
     audit_enabled: bool = True
     max_audit_entries: int = 10_000
     tenant_grants: dict[str, McpTenantGrant] = field(default_factory=dict)
-    require_caller_identity: bool = False
+    require_caller_identity: bool = True
 
     def __post_init__(self) -> None:
         if self.max_audit_entries < 1:
@@ -301,7 +302,7 @@ class McpGovernanceConfig:
         return cls(
             default_policy=DefaultPolicy(data.get("default_policy", "DENY")),
             tool_policies=policies,
-            require_caller_identity=data.get("require_caller_identity", False),
+            require_caller_identity=data.get("require_caller_identity", True),
             tenant_grants=grants,
             audit_enabled=data.get("audit_enabled", True),
             max_audit_entries=data.get("max_audit_entries", 10_000),

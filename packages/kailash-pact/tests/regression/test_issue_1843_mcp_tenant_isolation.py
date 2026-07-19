@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -71,15 +72,26 @@ def _config(
     tenant_grants: dict[str, McpTenantGrant] | None = None,
     tool_policies: dict[str, McpToolPolicy] | None = None,
     default_policy: DefaultPolicy = DefaultPolicy.ALLOW,
+    require_caller_identity: bool | None = None,
 ) -> McpGovernanceConfig:
     """Default-ALLOW isolates the tenant-isolation gate under test from the
     Step-1 default-deny registration gate; tests that need to prove ordering
-    against a registered tool's policy pass explicit tool_policies."""
+    against a registered tool's policy pass explicit tool_policies.
+
+    require_caller_identity is None by default, which means the caller
+    relies purely on McpGovernanceConfig's own dataclass default (secure by
+    default, issue #1843 redteam round 1) rather than this helper silently
+    picking a value -- tests proving the opt-in weaker metadata-fallback
+    channel pass require_caller_identity=False explicitly."""
+    kwargs: dict[str, Any] = {}
+    if require_caller_identity is not None:
+        kwargs["require_caller_identity"] = require_caller_identity
     return McpGovernanceConfig(
         default_policy=default_policy,
         tool_policies=tool_policies or {},
         tenant_grants=tenant_grants or {},
         audit_enabled=False,
+        **kwargs,
     )
 
 
@@ -349,9 +361,14 @@ class TestImpersonationDefeat:
     def test_metadata_tenant_id_fallback_when_no_caller_identity_supplied(
         self,
     ) -> None:
-        """When no trusted identity is supplied at all, the self-asserted
-        metadata["tenant_id"] is consulted as a (weaker) fallback."""
-        enf = McpGovernanceEnforcer(_config(tenant_grants=_two_tenant_grants()))
+        """The metadata["tenant_id"] fallback is now OPT-IN
+        (require_caller_identity defaults to True -- secure by default,
+        issue #1843 redteam round 1). A deployment that explicitly opts
+        into the weaker channel (require_caller_identity=False) still
+        gets the fallback consulted when no trusted identity is supplied."""
+        enf = McpGovernanceEnforcer(
+            _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
+        )
         ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
         decision = enf.check_tool_call(ctx)
         assert decision.level == "auto_approved"
@@ -359,15 +376,23 @@ class TestImpersonationDefeat:
     def test_metadata_tenant_id_fallback_still_fails_closed_if_ungranted(
         self,
     ) -> None:
-        enf = McpGovernanceEnforcer(_config(tenant_grants=_two_tenant_grants()))
+        """Opt-in fallback (require_caller_identity=False) still fails
+        closed when the self-asserted tenant lacks a grant for the tool --
+        the fallback is weaker than trusted identity, never permissive."""
+        enf = McpGovernanceEnforcer(
+            _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
+        )
         ctx = _tool_ctx(tool_name="tool-b", metadata={"tenant_id": "tenant-a"})
         decision = enf.check_tool_call(ctx)
         assert decision.level == "blocked"
 
     def test_caller_identity_with_no_tenant_falls_back_to_metadata(self) -> None:
-        """caller_identity is supplied but its own tenant is None -- the
+        """With the opt-in weaker channel (require_caller_identity=False),
+        caller_identity is supplied but its own tenant is None -- the
         metadata fallback still applies (not a hard override to "no tenant")."""
-        enf = McpGovernanceEnforcer(_config(tenant_grants=_two_tenant_grants()))
+        enf = McpGovernanceEnforcer(
+            _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
+        )
         identity = McpCallerIdentity(agent_id="agent-1", tenant=None)
         ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
         decision = enf.check_tool_call(ctx, caller_identity=identity)
@@ -437,12 +462,28 @@ class TestRequireCallerIdentity:
         decision = enf.check_resource_read(ctx)
         assert decision.level == "blocked"
 
-    def test_require_caller_identity_defaults_false(self) -> None:
-        """Additive + backward-compatible: constructing McpGovernanceConfig
-        with no require_caller_identity argument preserves the (default)
-        metadata-fallback behavior."""
+    def test_require_caller_identity_defaults_true(self) -> None:
+        """Secure by default (redteam round 1, issue #1843): constructing
+        McpGovernanceConfig with no require_caller_identity argument
+        disables the metadata["tenant_id"] fallback by default. A
+        deployment with no transport-level identity resolution must pass
+        require_caller_identity=False explicitly to opt into the weaker
+        channel."""
         config = McpGovernanceConfig()
-        assert config.require_caller_identity is False
+        assert config.require_caller_identity is True
+
+    def test_require_caller_identity_true_by_default_fails_closed_on_body_asserted_tenant(
+        self,
+    ) -> None:
+        """The secure-by-default itself (NOT an explicit _strict_config())
+        fails closed: tenant_grants set, no caller_identity supplied, and a
+        body-asserted metadata["tenant_id"] that WOULD be honored under the
+        old (opt-out) default. Proves the new default -- not just an
+        explicitly-strict config -- closes the HIGH-1 bypass."""
+        enf = McpGovernanceEnforcer(_config(tenant_grants=_two_tenant_grants()))
+        ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
+        decision = enf.check_tool_call(ctx)
+        assert decision.level == "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -460,11 +501,11 @@ class TestTenantGrantTypeConfusion:
 
     def test_direct_construction_bare_string_tools_rejected(self) -> None:
         with pytest.raises(ValueError, match="bare string"):
-            McpTenantGrant(tenant="t", tools="admin")
+            McpTenantGrant(tenant="t", tools="admin")  # type: ignore[arg-type]
 
     def test_direct_construction_bare_string_resources_rejected(self) -> None:
         with pytest.raises(ValueError, match="bare string"):
-            McpTenantGrant(tenant="t", resources="admin")
+            McpTenantGrant(tenant="t", resources="admin")  # type: ignore[arg-type]
 
     def test_direct_construction_non_string_element_rejected(self) -> None:
         with pytest.raises(ValueError, match="must contain only strings"):
