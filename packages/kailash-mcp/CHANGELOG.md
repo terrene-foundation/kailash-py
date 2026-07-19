@@ -2,6 +2,17 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.4.2] — 2026-07-19 — Dependency pin fix: require kailash>=2.56.0
+
+### Fixed
+
+- **`kailash>=2.50.0` pin was too low for the 0.4.1 `mask_error_text` import.**
+  0.4.1 (below) made `transports.py` import `mask_error_text` from
+  `kailash.utils.url_credentials` — a helper new in `kailash` 2.56.0. A user
+  on core `>=2.50.0,<2.56.0` satisfied the declared pin but hit
+  `ImportError` at `import kailash_mcp`. The pin now reads
+  `kailash>=2.56.0`.
+
 ## [0.4.1] — 2026-07-19 — Credential-bearing exception logs sanitized (#1840)
 
 ### Security

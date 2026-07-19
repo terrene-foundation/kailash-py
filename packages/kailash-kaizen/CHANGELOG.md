@@ -2,6 +2,16 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.37.3] — 2026-07-19 — Dependency pin fix: require kailash>=2.56.0
+
+### Fixed
+
+- **`kailash>=2.54.0` pin was too low for the 2.37.2 `mask_error_text` import.**
+  2.37.2 (below) made `ollama_provider.py` import `mask_error_text` from
+  `kailash.utils.url_credentials` — a helper new in `kailash` 2.56.0. A user
+  on core `>=2.54.0,<2.56.0` satisfied the declared pin but hit
+  `ImportError` at `import kaizen`. The pin now reads `kailash>=2.56.0`.
+
 ## [2.37.2] — 2026-07-19 — Ollama credential-log sanitization + Azure reasoning-model detection fix (#1840, #1859)
 
 ### Security
