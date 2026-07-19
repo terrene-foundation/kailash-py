@@ -499,10 +499,15 @@ class WebhookTransport(Transport):
 
         Returns:
             True if the signature is valid, False otherwise.
+
+        Raises:
+            ValueError: If no secret is configured. Reaching verification
+                with a signature but no secret is a misconfiguration: the
+                signature cannot be checked, so verification MUST fail closed
+                rather than accept any payload. Mirrors compute_signature.
         """
         if self._secret is None:
-            # No secret configured — verification is vacuously true
-            return True
+            raise ValueError("Cannot verify signature: no secret configured")
 
         ok = self._signer.verify(
             secret=self._secret,
@@ -542,9 +547,13 @@ class WebhookTransport(Transport):
 
         Returns:
             True if the signature is valid, False otherwise.
+
+        Raises:
+            ValueError: If no secret is configured. Fails closed rather than
+                accepting any payload+signature (mirrors compute_signature).
         """
         if self._secret is None:
-            return True
+            raise ValueError("Cannot verify signature: no secret configured")
 
         ok = self._signer.verify(
             secret=self._secret,
