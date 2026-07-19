@@ -46,6 +46,14 @@ def transport_no_secret():
 
 
 @pytest.fixture
+def transport_unsigned():
+    # Opt-in unsigned mode (#1836): no secret, but explicitly accepts
+    # unsigned inbound webhooks. Used by dispatch/idempotency tests that
+    # exercise receive() behaviour independent of signature verification.
+    return WebhookTransport(allow_unsigned=True)
+
+
+@pytest.fixture
 def registry():
     return HandlerRegistry()
 
@@ -315,10 +323,13 @@ class TestInboundReceive:
         assert result["result"]["message"] == "Hello, Alice!"
 
     @pytest.mark.asyncio
-    async def test_receive_no_secret_skips_verification(
-        self, transport_no_secret, registry
-    ):
-        """Without a secret, signature verification is skipped entirely."""
+    async def test_receive_no_secret_fails_closed(self, transport_no_secret, registry):
+        """Without a secret AND without allow_unsigned, receive() fails closed (#1836).
+
+        Previously this path silently accepted the unsigned payload
+        (``test_receive_no_secret_skips_verification``); a no-secret
+        deployment therefore accepted forged webhook events. It now raises.
+        """
 
         async def greet(name: str) -> dict:
             return {"message": f"Hello, {name}!"}
@@ -326,45 +337,60 @@ class TestInboundReceive:
         registry.register_handler("greet", greet)
         await transport_no_secret.start(registry)
 
-        result = await transport_no_secret.receive("greet", {"name": "Bob"})
+        with pytest.raises(ValueError, match="unsigned webhook"):
+            await transport_no_secret.receive("greet", {"name": "Bob"})
+
+    @pytest.mark.asyncio
+    async def test_receive_no_secret_allow_unsigned_accepts(
+        self, transport_unsigned, registry
+    ):
+        """With allow_unsigned=True and no secret, unsigned receive is accepted (#1836)."""
+
+        async def greet(name: str) -> dict:
+            return {"message": f"Hello, {name}!"}
+
+        registry.register_handler("greet", greet)
+        await transport_unsigned.start(registry)
+
+        result = await transport_unsigned.receive("greet", {"name": "Bob"})
         assert result["status"] == "ok"
         assert result["result"]["message"] == "Hello, Bob!"
 
     @pytest.mark.asyncio
-    async def test_receive_unknown_handler_raises(self, transport_no_secret, registry):
-        await transport_no_secret.start(registry)
+    async def test_receive_unknown_handler_raises(self, transport_unsigned, registry):
+        await transport_unsigned.start(registry)
         with pytest.raises(ValueError, match="not found"):
-            await transport_no_secret.receive("nonexistent", {"key": "val"})
+            await transport_unsigned.receive("nonexistent", {"key": "val"})
 
     @pytest.mark.asyncio
-    async def test_receive_handler_no_func_raises(self, transport_no_secret, registry):
+    async def test_receive_handler_no_func_raises(self, transport_unsigned, registry):
         """Handlers with func=None (workflow-only) cannot receive webhooks."""
-        await transport_no_secret.start(registry)
+        await transport_unsigned.start(registry)
         # Manually insert a handler without a function
-        transport_no_secret._handler_map["wf_only"] = HandlerDef(
+        transport_unsigned._handler_map["wf_only"] = HandlerDef(
             name="wf_only", func=None
         )
 
         with pytest.raises(ValueError, match="no callable function"):
-            await transport_no_secret.receive("wf_only", {"key": "val"})
+            await transport_unsigned.receive("wf_only", {"key": "val"})
 
     @pytest.mark.asyncio
-    async def test_receive_sync_handler(self, transport_no_secret, registry):
+    async def test_receive_sync_handler(self, transport_unsigned, registry):
         """Synchronous handler functions are executed in an executor."""
 
         def sync_greet(name: str) -> dict:
             return {"message": f"Sync Hello, {name}!"}
 
         registry.register_handler("sync_greet", sync_greet)
-        await transport_no_secret.start(registry)
+        await transport_unsigned.start(registry)
 
-        result = await transport_no_secret.receive("sync_greet", {"name": "Eve"})
+        result = await transport_unsigned.receive("sync_greet", {"name": "Eve"})
         assert result["status"] == "ok"
         assert result["result"]["message"] == "Sync Hello, Eve!"
 
     @pytest.mark.asyncio
     async def test_receive_idempotency_returns_cached(
-        self, transport_no_secret, registry
+        self, transport_unsigned, registry
     ):
         """Duplicate requests with the same idempotency key return cached responses."""
         call_count = 0
@@ -375,17 +401,17 @@ class TestInboundReceive:
             return {"count": call_count}
 
         registry.register_handler("counter", counter)
-        await transport_no_secret.start(registry)
+        await transport_unsigned.start(registry)
 
         # First call
-        r1 = await transport_no_secret.receive(
+        r1 = await transport_unsigned.receive(
             "counter", {"name": "A"}, idempotency_key="idem-1"
         )
         assert r1["result"]["count"] == 1
         assert call_count == 1
 
         # Second call with same key — should return cached, not call handler
-        r2 = await transport_no_secret.receive(
+        r2 = await transport_unsigned.receive(
             "counter", {"name": "A"}, idempotency_key="idem-1"
         )
         assert r2["result"]["count"] == 1
@@ -393,7 +419,7 @@ class TestInboundReceive:
 
     @pytest.mark.asyncio
     async def test_receive_different_idempotency_keys(
-        self, transport_no_secret, registry
+        self, transport_unsigned, registry
     ):
         """Different idempotency keys dispatch independently."""
         call_count = 0
@@ -404,14 +430,10 @@ class TestInboundReceive:
             return {"count": call_count}
 
         registry.register_handler("counter", counter)
-        await transport_no_secret.start(registry)
+        await transport_unsigned.start(registry)
 
-        await transport_no_secret.receive(
-            "counter", {"name": "A"}, idempotency_key="k1"
-        )
-        await transport_no_secret.receive(
-            "counter", {"name": "B"}, idempotency_key="k2"
-        )
+        await transport_unsigned.receive("counter", {"name": "A"}, idempotency_key="k1")
+        await transport_unsigned.receive("counter", {"name": "B"}, idempotency_key="k2")
         assert call_count == 2
 
 

@@ -311,8 +311,16 @@ class WebhookTransport(Transport):
     Args:
         secret: Shared secret for signature verification. When set, every
             inbound request must include a valid signature header. When
-            None, signature verification is skipped (not recommended for
-            production).
+            None, ``receive()`` fails closed (raises) unless
+            ``allow_unsigned=True`` is also set — an unsigned deployment
+            would otherwise silently accept forged webhook events (#1836).
+        allow_unsigned: Opt-in to accept unsigned inbound webhooks when no
+            ``secret`` is configured (default ``False``). Leaving this at the
+            secure default makes ``receive()`` raise when no secret is set,
+            so a missing-secret misconfiguration fails loudly instead of
+            accepting any forged payload. Set ``True`` ONLY for deployments
+            that genuinely front webhook verification elsewhere (e.g. an
+            edge proxy / gateway) or intentionally run unsigned.
         signature_header: Name of the HTTP header carrying the signature
             (default ``X-Webhook-Signature``). Twilio integrations should
             set this to ``X-Twilio-Signature``.
@@ -349,8 +357,10 @@ class WebhookTransport(Transport):
         max_idempotency_keys: int = 10000,
         max_deliveries: int = 10000,
         signer: Optional[WebhookSigner] = None,
+        allow_unsigned: bool = False,
     ):
         self._secret = secret
+        self._allow_unsigned = allow_unsigned
         self._signature_header = signature_header
         self._idempotency_header = idempotency_header
         self._max_retries = max_retries
@@ -653,8 +663,9 @@ class WebhookTransport(Transport):
             Dict with ``status``, ``handler``, and ``result`` keys.
 
         Raises:
-            ValueError: If signature verification fails or the handler
-                is not found.
+            ValueError: If signature verification fails, the handler is not
+                found, OR no signing secret is configured and
+                ``allow_unsigned`` was not set (fail-closed default, #1836).
             RuntimeError: If the transport is not running.
         """
         if not self._running:
@@ -671,6 +682,19 @@ class WebhookTransport(Transport):
                 raise ValueError("payload_bytes is required for signature verification")
             if not self.verify_signature(payload_bytes, signature):
                 raise ValueError("Invalid webhook signature")
+        elif not self._allow_unsigned:
+            # Fail closed (#1836): no signing secret configured means an
+            # inbound webhook cannot be authenticated, so a forged event is
+            # indistinguishable from a genuine one. Refuse rather than
+            # silently accept. Deployments that intentionally run unsigned
+            # (or verify at an edge proxy) MUST opt in explicitly.
+            raise ValueError(
+                "Refusing to process an unsigned webhook: no signing secret is "
+                "configured, so the payload's authenticity cannot be verified "
+                "and a forged event would be accepted. Configure a webhook "
+                "signing secret (WebhookTransport(secret=...)), or set "
+                "allow_unsigned=True to explicitly accept unsigned webhooks."
+            )
 
         # Idempotency deduplication. is_duplicate() returns False for None
         # keys; the explicit narrowing satisfies the str-only signature on
