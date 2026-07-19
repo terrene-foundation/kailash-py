@@ -183,8 +183,10 @@ class GovernanceDecision:
         reason: Human-readable explanation of the decision.
         resource_uri: The MCP resource URI evaluated, for a resources/read
             decision (issue #1843). None for a tools/call decision. Additive
-            field -- default None, does not affect any existing tool-call
-            decision or its serialization.
+            field -- default None, semantically inert for a tools/call
+            decision (to_dict() now includes "resource_uri": null on every
+            tool-call decision's serialized dict; no existing consumer field
+            is removed or renamed).
         timestamp: When the decision was made.
         policy_snapshot: Serialized policy that was evaluated, if any.
         metadata: Additional structured details.

@@ -278,9 +278,10 @@ class TestFailClosed:
         assert "not granted access" in decision.reason
 
     def test_tenant_isolation_evaluated_before_clearance_and_cost(self) -> None:
-        """Tenant isolation runs at Step 1.5 -- BEFORE cost/args/clearance
-        (Step 2-4). A wrong-tenant caller with otherwise-perfect clearance
-        and cost is still BLOCKED on the tenant reason, not clearance/cost."""
+        """Tenant isolation runs at Step 0 -- BEFORE registration and
+        cost/args/clearance (Steps 1-5). A wrong-tenant caller with
+        otherwise-perfect clearance and cost is still BLOCKED on the tenant
+        reason, not clearance/cost."""
         policy = McpToolPolicy(
             tool_name="tool-a",
             max_cost=100.0,

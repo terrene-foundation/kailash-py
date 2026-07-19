@@ -345,7 +345,7 @@ class GovernanceDecision:
     metadata: dict
 ```
 
-`decision.allowed` -- True for AUTO_APPROVED or FLAGGED. `resource_uri` is additive (default `None`); it does not affect any existing tool-call decision or its serialization.
+`decision.allowed` -- True for AUTO_APPROVED or FLAGGED. `resource_uri` is additive (default `None`); it is semantically inert for a tools/call decision -- `to_dict()` now includes `"resource_uri": null` on every tool-call decision's serialized dict, but no existing consumer field is removed or renamed.
 
 ### 17.8 McpAuditTrail
 
@@ -581,8 +581,11 @@ All governance data structures are frozen to prevent post-construction mutation.
 | `WorkSubmission`       | `@dataclass(frozen=True)`                    |
 | `WorkResult`           | `@dataclass(frozen=True)`                    |
 | `McpToolPolicy`        | `@dataclass(frozen=True)`                    |
+| `McpTenantGrant`       | `@dataclass(frozen=True)`                    |
 | `McpGovernanceConfig`  | `@dataclass(frozen=True)` + MappingProxyType |
 | `McpActionContext`     | `@dataclass(frozen=True)` + MappingProxyType |
+| `McpResourceContext`   | `@dataclass(frozen=True)` + MappingProxyType |
+| `McpCallerIdentity`    | `@dataclass(frozen=True)`                    |
 | `McpAuditEntry`        | `@dataclass(frozen=True)` + MappingProxyType |
 | `AddressSegment`       | `@dataclass(frozen=True)`                    |
 | `Address`              | `@dataclass(frozen=True)`                    |
