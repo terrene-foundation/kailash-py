@@ -135,6 +135,136 @@ class TestClassifyInputValue:
 
 
 # ===================================================================
+# _classify_input_value file-path + high-level dict tests (issue #1817)
+# ===================================================================
+
+
+class TestClassifyFilePathAndHighLevelDicts:
+    """Issue #1817: four-axis file-path + high-level-audio normalizer.
+
+    A dict with ``type`` in {image, image_url} / {audio, input_audio} carrying
+    a local FILE-PATH key must be normalized to the provider wire form by
+    delegating to the vision/audio encoding primitives.  Already-wire-shaped
+    dicts (no path key) pass through verbatim.
+    """
+
+    @pytest.mark.regression
+    def test_image_file_path_normalized_to_data_uri(self, tmp_path):
+        """A high-level image dict with a file path becomes an image_url block."""
+        img = tmp_path / "photo.png"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+        result = _classify_input_value({"type": "image", "path": str(img)}, "Photo", {})
+        assert result is not None
+        assert result["type"] == "image_url"
+        url = result["image_url"]["url"]
+        assert url.startswith("data:image/png;base64,")
+        # The base64 payload must decode back to the original file bytes.
+        b64 = url.split(",", 1)[1]
+        assert base64.b64decode(b64) == img.read_bytes()
+
+    @pytest.mark.regression
+    def test_image_url_type_with_path_key_normalized(self, tmp_path):
+        """type 'image_url' + a local path key is still normalized (not passed through)."""
+        img = tmp_path / "shot.jpg"
+        img.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 32)
+        result = _classify_input_value(
+            {"type": "image_url", "image_path": str(img)}, "Shot", {}
+        )
+        assert result["type"] == "image_url"
+        assert result["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    @pytest.mark.regression
+    def test_audio_file_path_normalized_to_input_audio(self, tmp_path):
+        """A high-level audio dict with a file path becomes an input_audio block."""
+        clip = tmp_path / "clip.mp3"
+        clip.write_bytes(b"ID3" + b"\x00" * 64)
+        result = _classify_input_value({"type": "audio", "path": str(clip)}, "Clip", {})
+        assert result is not None
+        assert result["type"] == "input_audio"
+        # mp3 -> media type audio/mpeg -> wire format normalized to "mp3".
+        assert result["input_audio"]["format"] == "mp3"
+        assert base64.b64decode(result["input_audio"]["data"]) == clip.read_bytes()
+
+    @pytest.mark.regression
+    def test_high_level_audio_m4a_format_normalized(self, tmp_path):
+        """.m4a -> media type audio/mp4 -> wire format normalized to 'm4a'."""
+        clip = tmp_path / "voice.m4a"
+        clip.write_bytes(b"\x00\x00\x00\x20ftypM4A " + b"\x00" * 32)
+        result = _classify_input_value(
+            {"type": "input_audio", "file": str(clip)}, "Voice", {}
+        )
+        assert result["type"] == "input_audio"
+        assert result["input_audio"]["format"] == "m4a"
+
+    @pytest.mark.regression
+    def test_audio_wav_format_passthrough_subtype(self, tmp_path):
+        """.wav -> audio/wav -> wire format 'wav' (no normalization needed)."""
+        clip = tmp_path / "sound.wav"
+        clip.write_bytes(b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 16)
+        result = _classify_input_value(
+            {"type": "audio", "audio_path": str(clip)}, "Sound", {}
+        )
+        assert result["input_audio"]["format"] == "wav"
+
+    @pytest.mark.regression
+    def test_missing_image_file_raises_typed_error(self):
+        """A missing/oversize image path fails CLOSED with a typed ValueError."""
+        with pytest.raises(ValueError, match="failed size validation"):
+            _classify_input_value(
+                {"type": "image", "path": "/no/such/file/x.png"}, "Photo", {}
+            )
+
+    @pytest.mark.regression
+    def test_missing_audio_file_raises_typed_error(self):
+        """A missing/oversize audio path fails CLOSED with a typed ValueError."""
+        with pytest.raises(ValueError, match="failed size validation"):
+            _classify_input_value(
+                {"type": "audio", "path": "/no/such/file/x.mp3"}, "Clip", {}
+            )
+
+    @pytest.mark.regression
+    def test_oversize_image_raises_typed_error(self, tmp_path, monkeypatch):
+        """An oversize file (validator returns not-ok) fails closed, no silent pass."""
+        import kaizen.strategies.async_single_shot as mod
+
+        img = tmp_path / "big.png"
+        img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+        # Force the size validator to reject WITHOUT mocking the encoder.
+        monkeypatch.setattr(
+            mod, "validate_image_size", lambda p, **kw: (False, "too large")
+        )
+        with pytest.raises(ValueError, match="too large"):
+            _classify_input_value({"type": "image", "path": str(img)}, "Big", {})
+
+    @pytest.mark.regression
+    def test_wire_shaped_image_url_passthrough(self):
+        """An already-wire-shaped image_url dict (no path key) is returned verbatim."""
+        part = {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/pic.png"},
+        }
+        result = _classify_input_value(part, "Image", {})
+        assert result is part  # exact same object, unchanged
+
+    @pytest.mark.regression
+    def test_wire_shaped_input_audio_passthrough(self):
+        """An already-wire-shaped input_audio dict is returned verbatim."""
+        part = {
+            "type": "input_audio",
+            "input_audio": {"data": "AAAA", "format": "mp3"},
+        }
+        result = _classify_input_value(part, "Audio", {})
+        assert result is part  # exact same object, unchanged
+
+    @pytest.mark.regression
+    def test_image_type_with_remote_url_not_treated_as_file(self):
+        """A remote http(s) URL is NOT a file path -> dict passes through verbatim."""
+        part = {"type": "image", "url": "https://example.com/remote.png"}
+        result = _classify_input_value(part, "Remote", {})
+        assert result is part
+
+
+# ===================================================================
 # _guess_media_type unit tests
 # ===================================================================
 
