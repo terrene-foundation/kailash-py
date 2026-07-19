@@ -857,12 +857,19 @@ def test_ollama_provider_off_posture_byte_identical(
 
 
 # --------------------------------------------------------------------------- #
-# #1803 — multi-modal adapters (kaizen.providers.multi_modal_adapter). The
-# Ollama adapter's gate lives transitively at OllamaProvider.__init__ (via
-# _get_ollama_vision_provider's lazy construction); the OpenAI adapter's
-# gate is explicit at the top of process_multi_modal (all 3 of its internal
-# branches -- vision/whisper/text -- construct openai.OpenAI() only after
-# that dispatch point).
+# #1803 — multi-modal adapters (kaizen.providers.multi_modal_adapter). BOTH
+# adapters' gates are explicit at the top of process_multi_modal, before any
+# branch executes. The Ollama adapter's gate was ORIGINALLY assumed to live
+# transitively at OllamaProvider.__init__ (reached via
+# _get_ollama_vision_provider's lazy construction) -- that path IS gated when
+# reached, but process_multi_modal's own is_available() check (reading the
+# frozen kaizen.providers.OLLAMA_AVAILABLE module constant, NOT a live probe)
+# raised RuntimeError("Ollama not available") BEFORE that transitive path was
+# ever reached in an infra-free environment (no real `ollama` package
+# importable, e.g. CI) -- masked locally on any machine where `ollama` IS
+# importable. Fixed by adding an explicit gate matching the OpenAI adapter's
+# pattern (all 3 of its internal branches -- vision/whisper/text -- construct
+# openai.OpenAI() only after that dispatch point).
 # --------------------------------------------------------------------------- #
 
 

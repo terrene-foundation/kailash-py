@@ -249,6 +249,29 @@ class OllamaMultiModalAdapter(MultiModalAdapter):
         **kwargs,
     ) -> Dict[str, Any]:
         """Process multi-modal inputs with Ollama."""
+        # #1803 governance_required posture: this adapter is directly
+        # standalone-constructible and every branch below egresses to real
+        # Ollama (local network call) via _call_ollama_vision / _call_whisper
+        # / _get_ollama_vision_provider()._call_ollama_text. Enforce BEFORE
+        # the is_available() check below -- that check reads a FROZEN
+        # kaizen.providers.OLLAMA_AVAILABLE module constant (computed once,
+        # at kaizen.providers import time), NOT a live probe, so in an
+        # infra-free environment (e.g. CI) where the real ``ollama`` package
+        # was never importable, is_available() raises RuntimeError before
+        # any egress is attempted -- and before this gate would otherwise
+        # fire. The gate MUST run regardless of that constant's value; no
+        # mock concept exists for this adapter (is_mock=False always) --
+        # locality is not a governance exemption (parity with
+        # OllamaProvider.__init__ / OllamaVisionProvider.extract()).
+        # ungoverned=True and the OFF posture are the only exemptions.
+        from kaizen.llm.governance_gate import enforce_governance_posture
+
+        enforce_governance_posture(
+            is_mock=False,
+            ungoverned=self._ungoverned,
+            surface="OllamaMultiModalAdapter",
+        )
+
         if not self.is_available():
             raise RuntimeError("Ollama not available")
 
