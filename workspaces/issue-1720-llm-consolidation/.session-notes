@@ -1,87 +1,64 @@
-# Session Notes — 2026-07-19
+# Session Notes — 2026-07-19 (cost purge + release)
 
-## Where we are — #1720 Wave 2 (retire legacy providers/llm) essential path is DONE-pending-release
+## Where we are
 
-**Wave 2a: MERGED to main** (PR #1816, kaizen `2.36.0`, unreleased). Retired the 7
-legacy `kaizen.providers.llm` chat providers (openai/anthropic/google/mock/ollama/
-docker/perplexity) onto the four-axis `LlmClient`. `azure_ai_foundry` KEPT. Registry
-pruned; `provider_names` KEPT full as the metrics classification vocabulary (decoupled
-— drift-assert relaxed to subset); `get_provider_for_model` retired to raise.
-Gate-reviewed (reviewer + security), CI-green, zero regression.
+**#1844/#1845 cost purge COMPLETE + RELEASED.** Root cause of the ~$208 OpenAI spend:
+hardcoded obsolete-model defaults (`gpt-4`/`gpt-3.5-turbo`) in kaizen-agents pattern
+factories + specialized agents + kailash-kaizen core (`.env` never sets `KAIZEN_MODEL`,
+so fallbacks resolved to obsolete billed models), PLUS a bare `pytest` auto-loading the
+prod key. Both fixed, merged, published, verified.
 
-**Wave 2b-C: PR #1821 OPEN, review-clean + locally-verified; CI RE-RUNNING**
-(branch `feat/1720-wave2b-streaming-cutover`, head `42dd8e47d`). The only prior CI
-red was `test_base_agent_under_1010_lines` (LOC invariant); FIXED (budget→<1015,
-verified locally 1013 passes) + pushed as the last commit. CI was re-running at
-handoff — **CONFIRM green on `42dd8e47d` before merge (step 1); do NOT assume.** Cut
-`kaizen-agents`
-streaming over to four-axis `LlmClient.stream` (was silently degrading to batch after
-2a); fixed a pre-existing kaizen<->kaizen_agents circular import; bumped
-`kaizen-agents` → `0.11.0` + pin `kailash-kaizen>=2.36.0`. Both reviewers ran
-(code=approve, security=PASS-on-governance); ALL findings fixed + re-verified
-(MEDIUM stream-error credential scrub + regression test; LOW async-downgrade WARN; LOW
-dead accumulator; LOC-invariant budget 1010→1015 for the cleanup() guard).
+## Executed this session (durable receipts)
 
-**RELEASE: USER-AUTHORIZED (2026-07-19), NOT YET EXECUTED.** The user approved the
-two-package release. Execution deferred to THIS fresh session (multi-step, best run
-start-to-finish). See "Resume here" below.
+- **PR #1847** (merged `8fcaf3153`) — #1844 purge (env-first resolution everywhere; incl.
+  env-proof unconditional spenders in core/agents CoT/ReAct + framework.create_team, and
+  the `examples/coordination/*` scripts) + #1845 active LLM cost-guard
+  (`src/kailash/testing/env_cost_guard.py`: pop provider secrets on a bare pytest unless
+  `KAIZEN_ALLOW_REAL_LLM=1`; installed at ALL 10 pytest rootdirs). 3 adversarial
+  security-review rounds to convergence + 2 CI-parity fixes (dep-free guard; LLM-scoped
+  predicate). #1844+#1845 CLOSED.
+- **PR #1850** (merged) — repaired 18 test files with assertions stale against the new
+  env-first defaults (example + optional-dep-gated + ambient-.env-dependent tests NOT in
+  the CI matrix, so #1847 went stale-green on them). Test-only, correct fixes (updated
+  assertions + `monkeypatch.delenv` env-isolation), not masking.
+- **PR #1851** (merged) — version bumps. **PUBLISHED PyPI**: kailash-kaizen 2.37.1
+  (tag `kaizen-v2.37.1`) + kaizen-agents 0.11.2 (tag `kaizen-agents-v0.11.2`). Clean-venv
+  verified from real PyPI: versions correct, bare default = gpt-4o (non-obsolete).
+- **kailash-rs cross-SDK inspection** (read-authorized, receipt in `.claude/cross-repo-authz/`):
+  BOTH gaps ABSENT — Rust SDK does env-first fail-closed model resolution
+  (`resolve_model` errors when unset) + real-provider tests are `#[ignore]`+env-gated.
+  NO mirror issue warranted. Cross-sdk-inspection obligation satisfied.
 
-## Resume here (fresh session — START)
+## Follow-ups filed (non-blocking)
 
-1. **Confirm #1821 CI green** on head `42dd8e47d` (the LOC fix was the last push; the
-   prior red was ONLY `test_base_agent_under_1010_lines`, now 1015-budgeted):
-   `head=$(gh pr view 1821 --json headRefOid -q .headRefOid); gh pr checks 1821`
-   — required checks SUCCESS on `$head` (read step SEPARATE from merge, per git.md).
-2. **Merge 2b-C**: `gh pr merge 1821 --admin --merge --delete-branch`; `git checkout main && git pull`.
-   Confirm main: kaizen `2.36.0`, kaizen-agents `0.11.0`.
-3. **EXECUTE THE RELEASE** (user already authorized — do NOT re-ask; still confirm the
-   exact versions before publish). Order is LOAD-BEARING (kaizen-agents 0.11.0 pins
-   `>=2.36.0`, so kaizen MUST be on PyPI first):
-   - **kailash-kaizen 2.36.0** → TestPyPI first (minor), clean-venv verify, then prod PyPI.
-   - **kaizen-agents 0.11.0** → TestPyPI (deps live on prod PyPI so use
-     `--index-strategy unsafe-best-match`), clean-venv verify, then prod PyPI.
-   - Delegate to release-specialist OR run `/release`. Only 2 packages drift from PyPI
-     (enumerated this session — all 7 others at parity, no sibling sweep needed).
-4. **Post-publish**: clean-venv install + import each (build-repo-release-discipline R2);
-   PyPI `info.version` lags minutes — retry 3× / `uv pip install --refresh`.
-5. Update these notes; wave-2 essential path is then DONE = released.
+- **#1848** — cost-guard hardening: uniform rootdir-conftest placement + durable per-rootdir
+  tests (no exposure today; grep-verified wiring).
+- **#1849** — kaizen-agents bare `pip install` breaks on numpy eager-import via rag_research
+  (PRE-EXISTING on published 0.11.1; real architectural fix = lazy imports; NOT in this patch).
 
-## Deferred (all tracked, value-anchored) — do NOT re-scope into this session
+## Codify candidate
 
-- **#1820** — Wave-3: retire embedding-legacy (cohere/huggingface) + azure-unified.
-  DEFERRED because their canonical import paths lack a shipped ≥1-minor deprecation
-  cycle (unlike the 7 chat providers) — deleting now = hard break (zero-tolerance 6a).
-  Needs its own deprecation-shim wave FIRST. Registry currently keeps 5
-  functional-but-redundant providers — no regression, just not-100%-consolidated.
-- **#1817** four-axis multimodal file-path/high-level-audio input normalizer.
-- **#1818** four-axis `google_embeddings` wire (BLOCKED on GCP creds, like FVERT).
-- **#1819** #340 four-axis Gemini tools+response_format mutual-exclusion guard (pre-existing).
+- When a change alters a default/behavior, sweep ALL tests asserting the old value — incl.
+  example tests + optional-dep-gated tests NOT in the standard CI matrix (they go
+  stale-green). #1847 CI was green while 18 full-suite tests were stale (caught at release).
 
-## Traps (release-specific)
+## Outstanding ledger (untouched — was kept isolated from the cost branch)
 
-- **Release ORDER**: kaizen 2.36.0 → THEN kaizen-agents 0.11.0 (pin `>=2.36.0`). Never reverse.
-- **kaizen tests are PER-PACKAGE**: `cd packages/<pkg> && ../../.venv/bin/python -m pytest`
-  (combined kaizen-agents + kailash-kaizen → ImportPathMismatchError; both ship tests/conftest.py).
-- **TestPyPI interdependent**: dispatch in dependency order + `--index-strategy unsafe-best-match`;
-  capture uv's REAL exit code (a `| tail` pipe masks it).
-- **pyright false-positive storm on kaizen.\*** (stale installed wheel) — editable `.venv` pytest is authoritative. Many `kaizen.llm.*`/`ungoverned`/`deployment_resolver` "unresolved" diagnostics this session were ALL stale-wheel FPs; runtime green.
-- **Self-hosted CI**: core `Test (Python 3.11/3.12)` jobs ~15-18 min (not a hang); stale CANCELLED "Build Documentation" duplicate on most PRs (concurrency) — pin the head SHA's run.
-- **base_agent LOC budget** is now `<1015` (was 1010); the guard still catches mixin re-inlining (200+ lines).
+| ID | Item | Notes |
+| -- | ---- | ----- |
+| #1840 | sanitize creds in provider/MCP exception logs | HIGH sec; py-side in-repo; cross-SDK mirror needs auth |
+| #1834/#1835 | provider-suite PKCE+nonce / id_token JWKS | #1815 follow-ups; in-repo |
+| #1841 | EATP multi-sig→V3Complete signing pre-image | HIGH; byte-lockstep w/ rs; SEQUENTIAL before #1842 |
+| #1842 | EATP revocation ledger + head-commitment | HIGH; byte-lockstep; after #1841 |
+| #1843 | MCP first-class tenant isolation | cross-sdk |
+| #1836 | webhook fail-closed decision | needs user decision |
+| #1818 | google_embeddings four-axis wire | BLOCKED (GCP creds) |
 
-## Untracked working-tree byproducts (harmless, left in place)
+## Traps
 
-`packages/kaizen-agents/{evaluations/, final_report.txt}` — e2e-run byproducts from the
-2b-C agent; not committed (working-tree-safety: not deleting untracked). Candidate for
-a `.gitignore` add (sibling of #1808) if they recur.
-
-## Executed this session (2026-07-18→19)
-
-- **V0 verification gate** (3 parallel deep-dives) — turned "90% surgical delete" into a
-  precise capability map; found the delete is NOT pure-redundant (multimodal file-path,
-  google embeddings, #340 gaps) → user-ratified "delete + document + follow-ups".
-- **Wave 2a** (PR #1816) — 7-provider retirement; reviewer caught a real CRITICAL (emptied
-  MODEL_PREFIX_MAP broke metrics labels) → fixed by decoupling classification from registry.
-- **Wave 2b-C** (PR #1821) — streaming cutover + circular-import fix + kaizen-agents 0.11.0;
-  found+fixed a pre-existing base_agent.cleanup() NameError + a stream-error credential-scrub gap.
-- **Filed** #1817/#1818/#1819 (capability follow-ups) + #1820 (Wave-3 deferred).
-- **Release-scope enumerated**: only kaizen + kaizen-agents drift; user AUTHORIZED the release.
+- COST NOW SAFE: key can be restated; main clean (0 obsolete defaults, AST-verified); a bare
+  pytest withholds provider secrets. To run real-LLM tests: `KAIZEN_ALLOW_REAL_LLM=1`.
+- #1841→#1842 HARD serialize (same EATP signing surface). #1840/#1841/#1842 need FRESH
+  cross-repo READ auth (the kailash-rs read receipt from this session is SPENT/scoped to the cost inspection).
+- Untracked cost-artifact junk in packages/kaizen-agents/ (hello_world.py, consensus_result_*,
+  evaluations/, etc.) — byproducts of the original manual spend runs; left untouched (no bulk discard).
