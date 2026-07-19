@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.57.0] - 2026-07-20
+
+### Added (Security)
+
+- **PKCE (S256) + `id_token` nonce enforcement primitives land on
+  `BaseSSOProvider`; the SSO provider suite adopts them (#1834).**
+  `generate_pkce_pair()` (RFC 7636 `code_verifier`/`code_challenge` pair) and
+  a `supports_id_token` flag are now available on every SSO provider in
+  `kailash.trust.auth.sso`. The google/azure/apple providers enforce the OIDC
+  `nonce` claim against JWKS-verified id_token claims (`_enforce_nonce`,
+  built on the JWKS-backed verifier from #1835); GitHub — which issues no
+  OIDC id_token — sets `supports_id_token = False` and adopts PKCE only.
+  `SSOAuthenticationNode`'s azure/google/okta initiators now mint and cache a
+  nonce per authorization request, activating #1835's callback-side nonce
+  enforcement for the node-based SSO flow.
+
 ## [2.56.0] - 2026-07-19
 
 ### Security

@@ -1,5 +1,27 @@
 # Nexus Changelog
 
+## [2.14.0] — 2026-07-20 — PKCE + id_token nonce across the SSO provider suite (#1834)
+
+### Added (Security)
+
+- **PKCE + id_token nonce enforcement across the SSO provider suite, with
+  state-store persistence of `code_verifier`/`nonce` (#1834).**
+  `initiate_sso_login` now stores the per-flow PKCE `code_verifier` and OIDC
+  `nonce` alongside the CSRF state token; `complete_sso_login` reads them back
+  from the state store to complete the token exchange (`code_verifier`) and
+  verify the returned `id_token`'s `nonce` claim against JWKS-verified claims
+  (fail-closed on mismatch).
+  **Migration (BREAKING for custom `SSOStateStore` implementers):**
+  `SSOStateStore.store()` gained keyword-only parameters `code_verifier` and
+  `nonce`; `initiate_sso_login` now calls
+  `store.store(state, code_verifier=..., nonce=...)`. A custom store
+  implementing the old `def store(self, state)` signature will raise
+  `TypeError` at login — add `*, code_verifier=None, nonce=None` to your
+  `store()` signature. The `validate_and_consume` return-shape change is
+  backward-tolerant: a legacy store still returning a bare `bool` is treated
+  as carrying no PKCE verifier/nonce (never a silent downgrade of a flow that
+  did mint them), while a dict-returning store's stored values are used.
+
 ## [2.13.0] — 2026-07-19 — `WebhookTransport.receive()` fails closed on missing secret (#1836)
 
 ### Fixed (Security)
