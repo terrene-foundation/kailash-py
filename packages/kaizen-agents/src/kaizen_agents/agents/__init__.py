@@ -29,6 +29,8 @@ Creating Custom Agents:
     - Implementing custom strategies
 """
 
+from typing import TYPE_CHECKING, Any
+
 # IMPORTANT: Auto-register all builtin agents with the registry
 # This enables Agent(agent_type="simple"), Agent(agent_type="react"), etc.
 from kaizen_agents.agents import register_builtin  # noqa: F401
@@ -45,7 +47,7 @@ from kaizen_agents.agents.multi_modal.transcription_agent import (
 from kaizen_agents.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
 
 # Registry functions for agent type registration and discovery
-from kaizen_agents.agents.registry import (
+from kaizen_agents.agents.registry import (  # Backward compatibility alias
     create_agent_from_type,
     get_agent_type_registration,
     get_agent_types_by_category,
@@ -57,13 +59,12 @@ from kaizen_agents.agents.registry import (
     register_agent,
     register_agent_type,
     unregister_agent_type,
-)  # Backward compatibility alias
+)
 from kaizen_agents.agents.specialized.batch_processing import BatchProcessingAgent
 from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtAgent
 from kaizen_agents.agents.specialized.code_generation import CodeGenerationAgent
 from kaizen_agents.agents.specialized.human_approval import HumanApprovalAgent
 from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
-from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 from kaizen_agents.agents.specialized.react import ReActAgent
 from kaizen_agents.agents.specialized.resilient import ResilientAgent
 from kaizen_agents.agents.specialized.self_reflection import SelfReflectionAgent
@@ -71,6 +72,12 @@ from kaizen_agents.agents.specialized.self_reflection import SelfReflectionAgent
 # Specialized agents (single-purpose, ready-to-use)
 from kaizen_agents.agents.specialized.simple_qa import SimpleQAAgent
 from kaizen_agents.agents.specialized.streaming_chat import StreamingChatAgent
+
+if TYPE_CHECKING:
+    # Static-analysis-only import so pyright / mypy / Sphinx resolve the symbol
+    # without dragging RAGResearchAgent's optional numpy dependency into the
+    # eager import path (see __getattr__ below).
+    from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
 
 __all__ = [
     # Specialized (11 production agents)
@@ -105,3 +112,20 @@ __all__ = [
     "get_registry_info",
     "create_agent_from_type",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily import optional-dependency agents (PEP 562).
+
+    ``RAGResearchAgent`` pulls in ``kaizen.retrieval.vector_store`` -> numpy, an
+    OPTIONAL dependency shipped only under ``kailash-kaizen[rag]``. Importing
+    this package (and thus every other agent) must NOT require numpy, so
+    ``RAGResearchAgent`` resolves lazily here instead of at module scope. When
+    numpy is absent the underlying ``ImportError`` propagates with its original
+    actionable message.
+    """
+    if name == "RAGResearchAgent":
+        from kaizen_agents.agents.specialized.rag_research import RAGResearchAgent
+
+        return RAGResearchAgent
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
