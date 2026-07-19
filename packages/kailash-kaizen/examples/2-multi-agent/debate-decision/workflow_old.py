@@ -57,7 +57,7 @@ class DebateConfig:
     stakeholder_alignment_weight: float = 0.4
     max_agents: int = 6
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.2
 
 
@@ -575,7 +575,7 @@ async def main():
     """Example usage of multi-agent debate system."""
     # Configure debate system
     config = DebateConfig(
-        rounds=3, consensus_threshold=0.8, model="gpt-4", temperature=0.2
+        rounds=3, consensus_threshold=0.8, model="gpt-4o-mini", temperature=0.2
     )
 
     # Initialize debate system

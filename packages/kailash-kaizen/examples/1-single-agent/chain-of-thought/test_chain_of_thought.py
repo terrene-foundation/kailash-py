@@ -100,7 +100,7 @@ class TestChainOfThoughtAgent:
         """Provide test configuration for agent."""
         return CoTConfig(
             llm_provider="mock",  # Use mock provider for unit tests
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.1,
             max_tokens=1500,
             reasoning_steps=5,

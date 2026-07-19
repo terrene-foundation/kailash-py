@@ -38,7 +38,7 @@ def example_2_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pattern = create_consensus_pattern(num_voters=3, model="gpt-4", temperature=0.7)
+    pattern = create_consensus_pattern(num_voters=3, model="gpt-4o-mini", temperature=0.7)
 
     print("✓ Pattern created with custom model")
     print("  Model: gpt-4")
@@ -75,17 +75,17 @@ def example_4_separate_configs():
         num_voters=3,
         voter_perspectives=["engineering", "product", "design"],
         proposer_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.5,  # Balanced creativity
             "max_tokens": 1500,
         },
         voter_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.7,  # More creative evaluation
             "max_tokens": 1000,
         },
         aggregator_config={
-            "model": "gpt-3.5-turbo",
+            "model": "gpt-4o-mini",
             "temperature": 0.2,  # Low for accurate tallying
         },
     )
@@ -106,7 +106,7 @@ def example_5_environment_variables():
     print("-" * 70)
 
     # Set environment variables
-    os.environ["KAIZEN_MODEL"] = "gpt-4"
+    os.environ["KAIZEN_MODEL"] = "gpt-4o-mini"
     os.environ["KAIZEN_TEMPERATURE"] = "0.6"
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
@@ -161,7 +161,7 @@ def example_7_complete_workflow():
             "maintainability",
             "cost",
         ],
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.6,
     )
 
@@ -221,7 +221,7 @@ def main():
     print("  - num_voters: int (default: 3)")
     print("  - voter_perspectives: List[str] (default: ['general'] * num_voters)")
     print("  - llm_provider: str (default: 'openai' or KAIZEN_LLM_PROVIDER)")
-    print("  - model: str (default: 'gpt-3.5-turbo' or KAIZEN_MODEL)")
+    print("  - model: str (default: 'gpt-4o-mini' or KAIZEN_MODEL)")
     print("  - temperature: float (default: 0.7 or KAIZEN_TEMPERATURE)")
     print("  - max_tokens: int (default: 1000 or KAIZEN_MAX_TOKENS)")
     print()

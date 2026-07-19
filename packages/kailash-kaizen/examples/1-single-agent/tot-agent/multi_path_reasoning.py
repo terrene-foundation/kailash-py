@@ -29,7 +29,7 @@ def main():
     # Configuration
     config = ToTAgentConfig(
         llm_provider="openai",  # or "ollama" for local
-        model="gpt-4",  # or "llama3.2" for Ollama
+        model="gpt-4o-mini",  # or "llama3.2" for Ollama
         temperature=0.9,  # Higher temperature for diversity
         num_paths=5,
         max_paths=20,

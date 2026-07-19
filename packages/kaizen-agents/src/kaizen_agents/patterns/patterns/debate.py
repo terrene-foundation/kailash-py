@@ -20,7 +20,7 @@ Usage:
 
     # Progressive configuration
     pattern = create_debate_pattern(
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7,
         rounds=3
     )
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
@@ -858,20 +859,20 @@ def create_debate_pattern(
 
     Progressive Configuration:
         >>> pattern = create_debate_pattern(
-        ...     model="gpt-4",
+        ...     model="gpt-4o-mini",
         ...     temperature=0.7
         ... )
 
     Separate Agent Configs:
         >>> pattern = create_debate_pattern(
-        ...     proponent_config={'model': 'gpt-4'},
-        ...     opponent_config={'model': 'gpt-3.5-turbo'},
-        ...     judge_config={'model': 'gpt-4'}
+        ...     proponent_config={'model': 'gpt-4o'},
+        ...     opponent_config={'model': 'gpt-4o-mini'},
+        ...     judge_config={'model': 'gpt-4o'}
         ... )
 
     Args:
         llm_provider: LLM provider (default: from env or "openai")
-        model: Model name (default: from env or "gpt-3.5-turbo")
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o)
         temperature: Temperature (default: 0.7)
         max_tokens: Max tokens (default: 1000)
         shared_memory: Existing SharedMemoryPool (default: creates new)
@@ -889,7 +890,7 @@ def create_debate_pattern(
     # Build base config from parameters (or use defaults)
     base_config_dict = {
         "llm_provider": llm_provider or os.getenv("KAIZEN_LLM_PROVIDER", "openai"),
-        "model": model or os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo"),
+        "model": model or os.getenv("KAIZEN_MODEL") or resolve_default_model(),
         "temperature": (
             temperature
             if temperature is not None

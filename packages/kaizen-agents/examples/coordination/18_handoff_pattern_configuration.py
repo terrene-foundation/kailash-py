@@ -43,9 +43,9 @@ def example_2_tier_specific_models():
     # Tier 3: Powerful model for complex tasks
     handoff = create_handoff_pattern(
         tier_configs={
-            1: {"model": "gpt-3.5-turbo", "temperature": 0.3},  # Fast, deterministic
-            2: {"model": "gpt-4", "temperature": 0.5},  # Balanced
-            3: {"model": "gpt-4-turbo", "temperature": 0.7},  # Powerful, creative
+            1: {"model": "gpt-4o-mini", "temperature": 0.3},  # Fast, deterministic
+            2: {"model": "gpt-4o-mini", "temperature": 0.5},  # Balanced
+            3: {"model": "gpt-4o-mini", "temperature": 0.7},  # Powerful, creative
         }
     )
 
@@ -62,7 +62,7 @@ def example_3_environment_variables():
     print("-" * 70)
 
     # Set environment variables
-    os.environ["KAIZEN_MODEL"] = "gpt-4"
+    os.environ["KAIZEN_MODEL"] = "gpt-4o-mini"
     os.environ["KAIZEN_TEMPERATURE"] = "0.6"
 
     # Create pattern - uses env vars for all tiers
@@ -91,21 +91,21 @@ def example_4_pre_built_tiers():
 
     # Create custom tier agents
     tier1 = HandoffAgent(
-        config=BaseAgentConfig(model="gpt-3.5-turbo", temperature=0.3),
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.3),
         shared_memory=shared_memory,
         tier_level=1,
         agent_id="junior_support",
     )
 
     tier2 = HandoffAgent(
-        config=BaseAgentConfig(model="gpt-4", temperature=0.5),
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.5),
         shared_memory=shared_memory,
         tier_level=2,
         agent_id="senior_support",
     )
 
     tier3 = HandoffAgent(
-        config=BaseAgentConfig(model="gpt-4-turbo", temperature=0.7),
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.7),
         shared_memory=shared_memory,
         tier_level=3,
         agent_id="expert_engineer",
@@ -130,17 +130,17 @@ def example_5_complete_workflow():
     handoff = create_handoff_pattern(
         tier_configs={
             1: {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.3,
                 "max_tokens": 500,
             },  # Quick responses
             2: {
-                "model": "gpt-4",
+                "model": "gpt-4o-mini",
                 "temperature": 0.5,
                 "max_tokens": 1000,
             },  # Detailed help
             3: {
-                "model": "gpt-4-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.7,
                 "max_tokens": 1500,
             },  # Expert troubleshooting
@@ -201,7 +201,7 @@ def main():
     print()
     print("Basic Parameters:")
     print("  - llm_provider: str (default: 'openai' or KAIZEN_LLM_PROVIDER)")
-    print("  - model: str (default: 'gpt-3.5-turbo' or KAIZEN_MODEL)")
+    print("  - model: str (default: 'gpt-4o-mini' or KAIZEN_MODEL)")
     print("  - temperature: float (default: 0.7 or KAIZEN_TEMPERATURE)")
     print("  - max_tokens: int (default: 1000 or KAIZEN_MAX_TOKENS)")
     print("  - num_tiers: int (default: 3)")
@@ -228,7 +228,7 @@ def main():
     print("Recommended Configurations:")
     print()
     print("  Cost-Optimized (Fewer Tiers):")
-    print("    num_tiers=2, model='gpt-3.5-turbo'")
+    print("    num_tiers=2, model='gpt-4o-mini'")
     print()
     print("  Quality-Optimized (More Tiers):")
     print("    num_tiers=5, tier_configs with gpt-4-turbo for top tier")

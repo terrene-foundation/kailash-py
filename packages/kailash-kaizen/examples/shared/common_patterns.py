@@ -22,7 +22,7 @@ class BaseAgentConfig:
     """Base configuration for all agents."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     max_tokens: int = 500
     timeout: int = 30
@@ -170,7 +170,7 @@ class ConfigurationManager:
 
         return BaseAgentConfig(
             llm_provider=llm_config.get("provider", "openai"),
-            model=llm_config.get("model", "gpt-4"),
+            model=llm_config.get("model", "gpt-4o-mini"),
             temperature=llm_config.get("temperature", 0.1),
             max_tokens=llm_config.get("max_tokens", 500),
             timeout=config.get("workflow_config", {}).get("timeout", 30),

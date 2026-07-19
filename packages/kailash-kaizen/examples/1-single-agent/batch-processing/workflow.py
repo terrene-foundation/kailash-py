@@ -39,7 +39,7 @@ class BatchConfig:
     """Configuration for Batch Processor Agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     max_tokens: int = 200
     max_concurrent: int = 10  # Maximum concurrent executions
@@ -123,7 +123,7 @@ def demo_batch_processing():
     import asyncio
     import time
 
-    config = BatchConfig(max_concurrent=5, llm_provider="mock", model="gpt-3.5-turbo")
+    config = BatchConfig(max_concurrent=5, llm_provider="mock", model="gpt-4o-mini")
     agent = BatchProcessorAgent(config)
 
     async def batch_demo():
@@ -158,7 +158,7 @@ def demo_different_concurrency():
 
     async def test_concurrency(max_concurrent: int):
         config = BatchConfig(
-            max_concurrent=max_concurrent, llm_provider="mock", model="gpt-3.5-turbo"
+            max_concurrent=max_concurrent, llm_provider="mock", model="gpt-4o-mini"
         )
         agent = BatchProcessorAgent(config)
 

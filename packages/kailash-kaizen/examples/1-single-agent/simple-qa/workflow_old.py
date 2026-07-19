@@ -475,7 +475,7 @@ def performance_benchmark():
     """Run performance benchmarks to validate targets."""
     print("=== Kaizen Performance Benchmark ===\n")
 
-    config = QAConfig(llm_provider="mock", model="gpt-3.5-turbo", temperature=0.0)
+    config = QAConfig(llm_provider="mock", model="gpt-4o-mini", temperature=0.0)
 
     # Benchmark framework initialization
     framework_times = []
@@ -498,7 +498,7 @@ def performance_benchmark():
         )
         agent = framework.create_agent(
             agent_id=f"benchmark_agent_{i}",
-            config={"model": "gpt-3.5-turbo"},
+            config={"model": "gpt-4o-mini"},
             signature=signature,
         )
         agent_time = (time.time() - agent_start) * 1000

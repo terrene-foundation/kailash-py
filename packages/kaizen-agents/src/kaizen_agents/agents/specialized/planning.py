@@ -15,7 +15,7 @@ Zero-config usage:
 Progressive configuration:
     agent = PlanningAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.3,
         max_plan_steps=10,
         validation_mode="strict",
@@ -24,7 +24,7 @@ Progressive configuration:
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-4
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.3
 """
 
@@ -36,6 +36,7 @@ from typing import Any, NotRequired, TypedDict
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,9 @@ class PlanningConfig:
     llm_provider: str = field(
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-4"))
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
+    )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
     )
@@ -214,7 +217,7 @@ class PlanningAgent(BaseAgent):
         # With configuration
         agent = PlanningAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.3,
             max_plan_steps=10,
             validation_mode="strict",
@@ -230,7 +233,7 @@ class PlanningAgent(BaseAgent):
 
     Configuration:
         llm_provider: LLM provider (default: "openai", env: KAIZEN_LLM_PROVIDER)
-        model: Model name (default: "gpt-4", env: KAIZEN_MODEL)
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o, env: KAIZEN_MODEL)
         temperature: Sampling temperature (default: 0.7, env: KAIZEN_TEMPERATURE)
         max_tokens: Maximum tokens (default: 2000, env: KAIZEN_MAX_TOKENS)
         max_plan_steps: Maximum steps in plan (default: 10)

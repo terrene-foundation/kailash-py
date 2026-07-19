@@ -61,7 +61,7 @@ class TestQAConfig:
         config = QAConfig()
 
         assert config.llm_provider == "openai"
-        assert config.model == "gpt-4"
+        assert config.model == "gpt-4o-mini"
         assert config.temperature == 0.1
         assert config.max_tokens == 300
         assert config.timeout == 30
@@ -71,10 +71,10 @@ class TestQAConfig:
     def test_custom_config(self):
         """Test custom configuration initialization."""
         config = QAConfig(
-            model="gpt-3.5-turbo", temperature=0.2, min_confidence_threshold=0.8
+            model="gpt-4o-mini", temperature=0.2, min_confidence_threshold=0.8
         )
 
-        assert config.model == "gpt-3.5-turbo"
+        assert config.model == "gpt-4o-mini"
         assert config.temperature == 0.2
         assert config.min_confidence_threshold == 0.8
         # Other values should remain default
@@ -90,7 +90,7 @@ class TestSimpleQAAgent:
         """Create agent instance for testing."""
         config = QAConfig(
             llm_provider="mock",  # Use mock provider for testing
-            model="gpt-3.5-turbo",  # Faster for testing
+            model="gpt-4o-mini",  # Faster for testing
             timeout=10,
             min_confidence_threshold=0.0,  # Allow all responses for testing
         )
@@ -122,7 +122,7 @@ class TestSimpleQAAgent:
         """Test agent initializes correctly."""
         assert agent.kaizen_framework is not None
         assert agent.agent is not None
-        assert agent.config.model == "gpt-3.5-turbo"
+        assert agent.config.model == "gpt-4o-mini"
 
     def test_successful_question_processing(self, agent):
         """Test successful question processing flow."""
@@ -222,7 +222,7 @@ class TestPerformanceRequirements:
         """Fast agent configuration for performance testing."""
         config = QAConfig(
             llm_provider="mock",  # Use mock provider for testing
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             timeout=5,
             min_confidence_threshold=0.0,
         )
@@ -289,7 +289,7 @@ class TestEnterpriseCompliance:
         """Agent with enterprise configuration."""
         config = QAConfig(
             llm_provider="mock",  # Use mock provider for testing
-            model="gpt-4",
+            model="gpt-4o-mini",
             min_confidence_threshold=0.8,  # Higher threshold for enterprise
             retry_attempts=5,
         )
@@ -333,7 +333,7 @@ class TestEnterpriseCompliance:
         original_threshold = enterprise_agent.config.min_confidence_threshold
 
         # Verify configuration values
-        assert original_model == "gpt-4"
+        assert original_model == "gpt-4o-mini"
         assert original_threshold == 0.8
 
         # Configuration should remain consistent
@@ -350,7 +350,7 @@ class TestIntegrationScenarios:
         # This test uses mock provider for CI/testing environment
         config = QAConfig(
             llm_provider="mock",  # Use mock provider for testing
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             timeout=30,
             min_confidence_threshold=0.7,
         )

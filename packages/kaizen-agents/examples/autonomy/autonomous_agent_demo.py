@@ -83,7 +83,7 @@ def main():
 
     agent = ReActAgent(
         llm_provider="openai",
-        model="gpt-3.5-turbo",  # Use gpt-3.5-turbo for cost efficiency
+        model="gpt-4o-mini",  # Use gpt-3.5-turbo for cost efficiency
         temperature=0.0,  # Deterministic for demo
         max_cycles=10,  # Allow up to 10 reasoning cycles
         confidence_threshold=0.8,  # Enable tool calling

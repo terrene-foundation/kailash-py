@@ -35,7 +35,7 @@ class SelfCorrectingRAGConfig:
     """Configuration for self-correcting RAG workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     max_corrections: int = 3
     validation_threshold: float = 0.8
     enable_self_critique: bool = True

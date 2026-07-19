@@ -30,7 +30,7 @@ def main():
     # Configuration
     config = PEVAgentConfig(
         llm_provider="openai",  # or "ollama" for local
-        model="gpt-4",  # or "llama3.2" for Ollama
+        model="gpt-4o-mini",  # or "llama3.2" for Ollama
         temperature=0.7,
         max_iterations=5,
         verification_strictness="medium",  # strict, medium, or lenient

@@ -11,14 +11,14 @@ Zero-config usage:
 Progressive configuration:
     agent = MemoryAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7,
         max_history_turns=15
     )
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-4
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.7
     KAIZEN_MAX_HISTORY_TURNS=15
 """
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents._model_env import resolve_default_model
 
 
 @dataclass
@@ -51,7 +52,7 @@ class MemoryConfig:
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
     model: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
     )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
@@ -167,7 +168,7 @@ class MemoryAgent(BaseAgent):
         # With configuration
         agent = MemoryAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.7,
             max_history_turns=20
         )
@@ -178,7 +179,7 @@ class MemoryAgent(BaseAgent):
 
     Configuration:
         llm_provider: LLM provider (default: "openai", env: KAIZEN_LLM_PROVIDER)
-        model: Model name (default: "gpt-3.5-turbo", env: KAIZEN_MODEL)
+        model: Model name (default: resolved from OPENAI_PROD_MODEL/DEFAULT_LLM_MODEL env, else gpt-4o, env: KAIZEN_MODEL)
         temperature: Sampling temperature (default: 0.7, env: KAIZEN_TEMPERATURE)
         max_tokens: Maximum tokens (default: 500, env: KAIZEN_MAX_TOKENS)
         max_history_turns: Memory limit in turns (default: 10, env: KAIZEN_MAX_HISTORY_TURNS)

@@ -129,7 +129,7 @@ class DebateConfig:
     """Configuration for debate-decision workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     rounds: int = 2  # Initial argument + rebuttal
 
 

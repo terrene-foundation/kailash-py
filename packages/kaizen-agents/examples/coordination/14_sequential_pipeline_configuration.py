@@ -26,7 +26,7 @@ def example_1_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pipeline = create_sequential_pipeline(model="gpt-4", temperature=0.7)
+    pipeline = create_sequential_pipeline(model="gpt-4o-mini", temperature=0.7)
 
     # Add stages
     pipeline.add_stage(PipelineStageAgent(BaseAgentConfig(), "stage_1"))
@@ -48,17 +48,17 @@ def example_2_stage_specific_configs():
     pipeline = create_sequential_pipeline(
         stage_configs=[
             {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.5,  # Lower temp for extraction
                 "max_tokens": 500,
             },
             {
-                "model": "gpt-4",
+                "model": "gpt-4o-mini",
                 "temperature": 0.8,  # Higher temp for transformation
                 "max_tokens": 1000,
             },
             {
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0.3,  # Very low temp for loading
                 "max_tokens": 300,
             },
@@ -79,7 +79,7 @@ def example_3_environment_variables():
     print("-" * 70)
 
     # Set environment variables
-    os.environ["KAIZEN_MODEL"] = "gpt-4"
+    os.environ["KAIZEN_MODEL"] = "gpt-4o-mini"
     os.environ["KAIZEN_TEMPERATURE"] = "0.6"
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
@@ -106,16 +106,16 @@ def example_4_pre_built_stages():
 
     # Create custom stages first
     extract = PipelineStageAgent(
-        config=BaseAgentConfig(model="gpt-3.5-turbo", temperature=0.5),
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.5),
         agent_id="extract",
     )
 
     transform = PipelineStageAgent(
-        config=BaseAgentConfig(model="gpt-4", temperature=0.8), agent_id="transform"
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.8), agent_id="transform"
     )
 
     load = PipelineStageAgent(
-        config=BaseAgentConfig(model="gpt-3.5-turbo", temperature=0.3), agent_id="load"
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.3), agent_id="load"
     )
 
     # Create pipeline with pre-built stages
@@ -157,7 +157,7 @@ def example_6_complete_workflow():
 
     # Create pipeline with optimal config
     pipeline = create_sequential_pipeline(
-        model="gpt-4", temperature=0.7, max_tokens=1500
+        model="gpt-4o-mini", temperature=0.7, max_tokens=1500
     )
 
     # Add stages for content generation pipeline
@@ -221,7 +221,7 @@ def main():
     print()
     print("Basic Parameters:")
     print("  - llm_provider: str (default: 'openai' or KAIZEN_LLM_PROVIDER)")
-    print("  - model: str (default: 'gpt-3.5-turbo' or KAIZEN_MODEL)")
+    print("  - model: str (default: 'gpt-4o-mini' or KAIZEN_MODEL)")
     print("  - temperature: float (default: 0.7 or KAIZEN_TEMPERATURE)")
     print("  - max_tokens: int (default: 1000 or KAIZEN_MAX_TOKENS)")
     print()
@@ -236,7 +236,7 @@ def main():
     print("    pipeline = create_sequential_pipeline()")
     print()
     print("  Level 2: Basic parameters")
-    print("    pipeline = create_sequential_pipeline(model='gpt-4', temperature=0.7)")
+    print("    pipeline = create_sequential_pipeline(model='gpt-4o-mini', temperature=0.7)")
     print()
     print("  Level 3: Stage-specific configs")
     print("    pipeline = create_sequential_pipeline(stage_configs=[{...}, {...}])")
@@ -253,10 +253,10 @@ def main():
     print("Recommended Configurations:")
     print()
     print("  Cost-Optimized:")
-    print("    model='gpt-3.5-turbo', temperature=0.5")
+    print("    model='gpt-4o-mini', temperature=0.5")
     print()
     print("  Quality-Optimized:")
-    print("    model='gpt-4', temperature=0.7")
+    print("    model='gpt-4o-mini', temperature=0.7")
     print()
     print("  Balanced (Mixed Stages):")
     print("    stage_configs with mix of gpt-3.5-turbo and gpt-4")

@@ -34,7 +34,7 @@ class ResearchConfig:
     """Configuration for research agent."""
 
     llm_provider: str = "mock"  # Use mock for example
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.5
 
 

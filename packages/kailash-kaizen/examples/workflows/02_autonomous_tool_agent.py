@@ -42,7 +42,7 @@ class FileAgentConfig:
     """Configuration for file analysis agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"  # Use GPT-4 for better reasoning with tools
+    model: str = "gpt-4o-mini"  # Use GPT-4 for better reasoning with tools
     temperature: float = 0.3  # Lower temp for more deterministic tool usage
     max_tokens: int = 1000
 

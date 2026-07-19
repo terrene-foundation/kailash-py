@@ -119,15 +119,15 @@ def main():
     # Optimize stage configs for ETL workload
     etl_configs = [
         # Extract: Fast model, low temp (deterministic extraction)
-        {"model": "gpt-3.5-turbo", "temperature": 0.3, "max_tokens": 1000},
+        {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 1000},
         # Validate: Fast model, very low temp (strict validation)
-        {"model": "gpt-3.5-turbo", "temperature": 0.1, "max_tokens": 800},
+        {"model": "gpt-4o-mini", "temperature": 0.1, "max_tokens": 800},
         # Transform: Powerful model, moderate temp (complex transformation)
-        {"model": "gpt-4", "temperature": 0.5, "max_tokens": 1500},
+        {"model": "gpt-4o-mini", "temperature": 0.5, "max_tokens": 1500},
         # Enrich: Fast model, low temp (deterministic enrichment)
-        {"model": "gpt-3.5-turbo", "temperature": 0.3, "max_tokens": 1000},
+        {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 1000},
         # Load: Fast model, very low temp (format for DB)
-        {"model": "gpt-3.5-turbo", "temperature": 0.1, "max_tokens": 800},
+        {"model": "gpt-4o-mini", "temperature": 0.1, "max_tokens": 800},
     ]
 
     etl_pipeline = create_sequential_pipeline(stage_configs=etl_configs)

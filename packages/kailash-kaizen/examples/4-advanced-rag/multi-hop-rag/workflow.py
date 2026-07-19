@@ -35,7 +35,7 @@ class MultiHopRAGConfig:
     """Configuration for multi-hop RAG workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     max_hops: int = 3
     max_sub_questions: int = 5
     enable_chain_tracking: bool = True

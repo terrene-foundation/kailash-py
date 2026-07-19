@@ -35,7 +35,7 @@ class FederatedRAGConfig:
     """Configuration for federated RAG workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     max_sources: int = 5
     enable_deduplication: bool = True
     consistency_threshold: float = 0.7

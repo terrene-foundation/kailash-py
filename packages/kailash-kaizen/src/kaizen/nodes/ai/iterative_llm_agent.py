@@ -12,6 +12,26 @@ from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
+def _resolve_action_model(kwargs: dict) -> str:
+    """Env-first model for the action/synthesis LLM call.
+
+    Never a hardcoded obsolete default: caller ``kwargs["model"]`` wins, then
+    ``OPENAI_PROD_MODEL`` / ``DEFAULT_LLM_MODEL``, then the provider-intrinsic
+    default. Keeps this Core-SDK node's LLM invocation path off deprecated,
+    billed models when no explicit model is supplied.
+    """
+    import os
+
+    from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+
+    return (
+        kwargs.get("model")
+        or os.environ.get("OPENAI_PROD_MODEL")
+        or os.environ.get("DEFAULT_LLM_MODEL")
+        or DEFAULT_OPENAI_MODEL
+    )
+
+
 class ConvergenceMode(Enum):
     """Convergence modes for iterative agent."""
 
@@ -998,7 +1018,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
             try:
                 llm_kwargs = {
                     "provider": kwargs.get("provider", "openai"),
-                    "model": kwargs.get("model", "gpt-4"),
+                    "model": _resolve_action_model(kwargs),
                     "messages": llm_messages,
                     "temperature": kwargs.get("temperature", 0.7),
                     "max_tokens": kwargs.get("max_tokens", 1000),
@@ -1717,7 +1737,7 @@ provide your best analysis of the query directly.""",
             # Use the parent's LLM capabilities to generate synthesis
             synthesis_kwargs = {
                 "provider": kwargs.get("provider", "openai"),
-                "model": kwargs.get("model", "gpt-4"),
+                "model": _resolve_action_model(kwargs),
                 "messages": synthesis_messages,
                 "temperature": kwargs.get("temperature", 0.7),
                 "max_tokens": kwargs.get("max_tokens", 1000),

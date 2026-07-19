@@ -165,17 +165,17 @@ def main():
     # - Higher token limit for detailed arguments
     debate_pattern = create_debate_pattern(
         proponent_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.6,  # Balanced creativity
             "max_tokens": 2000,
         },
         opponent_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.6,  # Balanced creativity
             "max_tokens": 2000,
         },
         judge_config={
-            "model": "gpt-4",
+            "model": "gpt-4o-mini",
             "temperature": 0.3,  # More deterministic judgment
             "max_tokens": 1500,
         },

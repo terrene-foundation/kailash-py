@@ -872,6 +872,20 @@ class Kaizen:
         """
         from kaizen_agents.coordination.teams import AgentTeam
 
+        # Resolve the team-agent model env-first (never a hardcoded obsolete
+        # literal): OPENAI_PROD_MODEL / DEFAULT_LLM_MODEL, then the provider-
+        # intrinsic default. Setting it explicitly here (rather than omitting it)
+        # keeps the per-team model overridable via config downstream.
+        import os
+
+        from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+
+        default_team_model = (
+            os.environ.get("OPENAI_PROD_MODEL")
+            or os.environ.get("DEFAULT_LLM_MODEL")
+            or DEFAULT_OPENAI_MODEL
+        )
+
         # Create agents for each role
         team_agents = []
         for i, role in enumerate(roles):
@@ -879,7 +893,7 @@ class Kaizen:
 
             # Configure agent based on role
             agent_config = {
-                "model": "gpt-3.5-turbo",
+                "model": default_team_model,
                 "team_role": role,
                 "team_name": team_name,
             }

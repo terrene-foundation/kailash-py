@@ -35,7 +35,7 @@ class ComplianceConfig:
     """Configuration for compliance monitoring workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     severity_threshold: str = "medium"  # "low", "medium", "high", "critical"
     schedule: Optional[str] = None  # "daily", "weekly", "monthly"
     audit_trail: bool = False

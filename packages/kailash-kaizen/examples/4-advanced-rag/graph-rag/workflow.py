@@ -35,7 +35,7 @@ class GraphRAGConfig:
     """Configuration for graph RAG workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     max_hops: int = 2
     enable_entity_linking: bool = True
     graph_depth: int = 3

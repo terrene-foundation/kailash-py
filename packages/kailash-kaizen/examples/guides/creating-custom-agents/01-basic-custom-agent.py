@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Optional
 
+from kaizen.config.providers import DEFAULT_OPENAI_MODEL
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -48,7 +49,14 @@ class TranslationConfig:
     llm_provider: str = field(
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
-    model: str = field(default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-4"))
+    # Model from .env (never a hardcoded obsolete model): KAIZEN_MODEL ->
+    # OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL, then the provider-intrinsic default.
+    model: str = field(
+        default_factory=lambda: os.getenv("KAIZEN_MODEL")
+        or os.getenv("OPENAI_PROD_MODEL")
+        or os.getenv("DEFAULT_LLM_MODEL")
+        or DEFAULT_OPENAI_MODEL
+    )
     temperature: float = 0.3  # Lower temp for more accurate translations
     max_tokens: int = 1000
 
@@ -93,7 +101,7 @@ class TranslationAgent(BaseAgent):
 
         # With configuration
         agent = TranslationAgent(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             formal_tone=True
         )
     """
@@ -248,7 +256,7 @@ def main():
     print("-" * 50)
 
     agent = TranslationAgent(
-        model="gpt-3.5-turbo", formal_tone=True, min_quality_threshold=0.8
+        model="gpt-4o-mini", formal_tone=True, min_quality_threshold=0.8
     )
 
     result = agent.translate("Hey, what's up?", target_lang="French")
@@ -261,7 +269,7 @@ def main():
 
     config = TranslationConfig(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.2,
         preserve_formatting=True,
         formal_tone=True,

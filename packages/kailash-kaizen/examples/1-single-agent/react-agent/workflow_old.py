@@ -68,7 +68,7 @@ class ReActConfig:
 
     max_cycles: int = 10
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.1
     confidence_threshold: float = 0.7
     mcp_discovery_enabled: bool = True
@@ -456,7 +456,7 @@ def main():
     config = ReActConfig(
         max_cycles=5,
         llm_provider="mock",  # Use mock provider for demo
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.1,
         confidence_threshold=0.7,
         mcp_discovery_enabled=True,
@@ -562,7 +562,7 @@ def performance_benchmark():
     config = ReActConfig(
         max_cycles=3,
         llm_provider="mock",  # Use mock provider for speed
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         temperature=0.0,
         mcp_discovery_enabled=False,  # Skip discovery for speed
     )

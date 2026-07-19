@@ -364,7 +364,7 @@ def research_collaboration_workflow(topic: str) -> Dict[str, Any]:
     """
     # Setup shared memory pool
     shared_pool = SharedMemoryPool()
-    config = BaseAgentConfig(llm_provider="mock", model="gpt-3.5-turbo")
+    config = BaseAgentConfig(llm_provider="mock", model="gpt-4o-mini")
 
     # Create agents
     researcher = ResearcherAgent(config, shared_pool, agent_id="researcher_1")

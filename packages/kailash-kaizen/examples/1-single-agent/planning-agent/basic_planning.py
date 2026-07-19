@@ -19,6 +19,7 @@ Run with:
 import os
 
 from dotenv import load_dotenv
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 
 # Load environment variables
@@ -35,7 +36,11 @@ def main():
 
     # Configuration (uses environment variables by default)
     llm_provider = os.getenv("KAIZEN_LLM_PROVIDER", "openai")
-    model = os.getenv("KAIZEN_MODEL", "gpt-4" if llm_provider == "openai" else "llama2")
+    # Model from .env (never a hardcoded obsolete model): the shared resolver
+    # reads OPENAI_PROD_MODEL -> DEFAULT_LLM_MODEL for OpenAI; local providers
+    # default to a free local model.
+    default_model = resolve_default_model() if llm_provider == "openai" else "llama2"
+    model = os.getenv("KAIZEN_MODEL", default_model)
 
     config = PlanningConfig(
         llm_provider=llm_provider,

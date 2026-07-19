@@ -63,7 +63,7 @@ class MCPClientConfig:
     """Configuration for MCP client agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_tokens: int = 1000
 

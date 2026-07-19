@@ -24,7 +24,7 @@ class QueryConfig:
     """Configuration for NL query agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.2  # Low temp for precise queries
     max_tokens: int = 1000
 

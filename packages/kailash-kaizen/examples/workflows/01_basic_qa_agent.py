@@ -57,7 +57,7 @@ class QAConfig:
     """
 
     llm_provider: str = "openai"  # Options: openai, anthropic, ollama
-    model: str = "gpt-3.5-turbo"  # Cheaper model for simple tasks
+    model: str = "gpt-4o-mini"  # Cheaper model for simple tasks
     temperature: float = 0.7  # Balanced creativity
     max_tokens: int = 500  # Reasonable answer length
 
@@ -137,7 +137,7 @@ def main():
         return
 
     # Create configuration
-    config = QAConfig(llm_provider="openai", model="gpt-3.5-turbo", temperature=0.7)
+    config = QAConfig(llm_provider="openai", model="gpt-4o-mini", temperature=0.7)
 
     # Initialize agent
     print("Initializing Q&A agent...")

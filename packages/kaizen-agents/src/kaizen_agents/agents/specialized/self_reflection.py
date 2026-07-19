@@ -12,14 +12,14 @@ Zero-config usage:
 Progressive configuration:
     agent = SelfReflectionAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         max_cycles=5,
         improvement_threshold=0.9
     )
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-3.5-turbo
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.7
     KAIZEN_MAX_CYCLES=3
     KAIZEN_IMPROVEMENT_THRESHOLD=0.8
@@ -66,7 +66,7 @@ class SelfReflectionConfig:
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
     model: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
     )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
@@ -138,7 +138,7 @@ class SelfReflectionAgent(BaseAgent):
         # Custom configuration
         agent = SelfReflectionAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             max_cycles=5,
             improvement_threshold=0.9
         )

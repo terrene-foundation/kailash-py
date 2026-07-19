@@ -35,7 +35,7 @@ class DataReportingConfig:
     """Configuration for data reporting workflow."""
 
     llm_provider: str = "mock"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     output_format: str = "pdf"  # "pdf", "html", "excel"
     chart_types: List[str] = field(default_factory=lambda: ["line", "bar", "pie"])
     schedule: Optional[str] = None  # "daily", "weekly", "monthly"

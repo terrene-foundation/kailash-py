@@ -118,9 +118,8 @@ class SupervisorWorkerWorkflow:
 
         # Add supervisor as A2A agent node
         supervisor_config = {
-            "model": self.supervisor.config.get(
-                "model", "gpt-4"
-            ),  # Supervisor often needs more capable model
+            "model": self.supervisor.config.get("model")
+            or resolve_default_model(),  # env-first; capable model via OPENAI_PROD_MODEL
             "generation_config": self.supervisor.config.get(
                 "generation_config",
                 {

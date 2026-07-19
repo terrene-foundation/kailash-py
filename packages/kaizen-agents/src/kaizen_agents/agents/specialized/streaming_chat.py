@@ -17,7 +17,7 @@ Zero-config usage:
 Progressive configuration:
     agent = StreamingChatAgent(
         llm_provider="openai",
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7,
         streaming=True,
         chunk_size=1  # Token-by-token streaming
@@ -25,7 +25,7 @@ Progressive configuration:
 
 Environment variable support:
     KAIZEN_LLM_PROVIDER=openai
-    KAIZEN_MODEL=gpt-3.5-turbo
+    KAIZEN_MODEL=gpt-4o-mini
     KAIZEN_TEMPERATURE=0.7
     KAIZEN_MAX_TOKENS=500
     KAIZEN_STREAMING=true
@@ -68,7 +68,7 @@ class StreamingChatConfig:
         default_factory=lambda: os.getenv("KAIZEN_LLM_PROVIDER", "openai")
     )
     model: str = field(
-        default_factory=lambda: os.getenv("KAIZEN_MODEL", "gpt-3.5-turbo")
+        default_factory=lambda: os.getenv("KAIZEN_MODEL") or resolve_default_model()
     )
     temperature: float = field(
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
@@ -141,7 +141,7 @@ class StreamingChatAgent(BaseAgent):
         # Custom configuration
         agent = StreamingChatAgent(
             llm_provider="openai",
-            model="gpt-4",
+            model="gpt-4o-mini",
             streaming=True,
             chunk_size=5  # Stream 5 tokens at a time
         )

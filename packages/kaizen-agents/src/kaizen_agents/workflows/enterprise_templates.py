@@ -21,6 +21,8 @@ import kailash.nodes.enterprise  # noqa: F401  -- side-effect: node registration
 import kailash.nodes.security  # noqa: F401  -- side-effect: node registration
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen_agents._model_env import resolve_default_model
+
 
 class EnterpriseWorkflowTemplate(ABC):
     """
@@ -771,7 +773,7 @@ class ApprovalWorkflowTemplate(EnterpriseWorkflowTemplate):
                 "LLMAgentNode",
                 approval_node_id,
                 {
-                    "model": "gpt-3.5-turbo",
+                    "model": resolve_default_model(),
                     "system_message": f"You are an {level} approver. Review the request and provide approval/rejection decision with reasoning.",
                     "approval_level": level,
                     "escalation_timeout": self.escalation_timeout,
@@ -973,7 +975,7 @@ result = {{
                 "LLMAgentNode",
                 level_node_id,
                 {
-                    "model": "gpt-3.5-turbo",
+                    "model": resolve_default_model(),
                     "system_message": f"You are a {level} customer service representative. Handle customer requests professionally and escalate if needed.",
                     "service_level": level,
                     "escalation_criteria": self.config.get("escalation_criteria", []),
@@ -1135,7 +1137,7 @@ result = {
                     "LLMAgentNode",
                     stage_node_id,
                     {
-                        "model": "gpt-3.5-turbo",
+                        "model": resolve_default_model(),
                         "system_message": "Classify documents by type, sensitivity, and content category.",
                         "classification_categories": [
                             "contracts",
@@ -1156,7 +1158,7 @@ result = {
                     "LLMAgentNode",
                     stage_node_id,
                     {
-                        "model": "gpt-4",
+                        "model": resolve_default_model(),
                         "system_message": "Perform detailed document analysis and extract key information.",
                         "analysis_depth": "comprehensive",
                         "extract_entities": True,

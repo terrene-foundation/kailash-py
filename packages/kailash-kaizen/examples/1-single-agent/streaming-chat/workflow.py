@@ -39,7 +39,7 @@ class ChatConfig:
     """Configuration for Streaming Chat Agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_tokens: int = 500
     streaming: bool = True  # Enable/disable streaming mode
@@ -136,7 +136,7 @@ def demo_streaming():
     """Demo streaming chat with real-time token display."""
     import asyncio
 
-    config = ChatConfig(streaming=True, llm_provider="mock", model="gpt-3.5-turbo")
+    config = ChatConfig(streaming=True, llm_provider="mock", model="gpt-4o-mini")
     agent = StreamChatAgent(config)
 
     async def stream_demo():
@@ -155,7 +155,7 @@ def demo_streaming():
 
 def demo_non_streaming():
     """Demo non-streaming chat with standard execution."""
-    config = ChatConfig(streaming=False, llm_provider="openai", model="gpt-3.5-turbo")
+    config = ChatConfig(streaming=False, llm_provider="openai", model="gpt-4o-mini")
     agent = StreamChatAgent(config)
 
     print("Non-Streaming Chat Demo")

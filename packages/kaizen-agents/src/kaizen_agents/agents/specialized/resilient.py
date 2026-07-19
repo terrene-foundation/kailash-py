@@ -35,6 +35,29 @@ from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
 from kaizen.strategies.fallback import FallbackStrategy
 
+from kaizen_agents._model_env import resolve_default_model
+
+
+def _default_model_chain() -> list[str]:
+    """Env-first fallback chain — never a hardcoded obsolete model.
+
+    Resolves distinct models from ``OPENAI_PROD_MODEL`` -> ``OPENAI_DEV_MODEL``
+    -> ``DEFAULT_LLM_MODEL`` (order-preserving, deduped) so a zero-config
+    ``ResilientAgent`` still gets a multi-tier chain when several are set, and
+    falls back to the shared resolver's provider-intrinsic floor otherwise.
+    """
+    chain: list[str] = []
+    for candidate in (
+        os.getenv("OPENAI_PROD_MODEL"),
+        os.getenv("OPENAI_DEV_MODEL"),
+        os.getenv("DEFAULT_LLM_MODEL"),
+    ):
+        if candidate and candidate not in chain:
+            chain.append(candidate)
+    if not chain:
+        chain.append(resolve_default_model())
+    return chain
+
 
 class QuerySignature(Signature):
     """Signature for resilient query processing."""
@@ -55,7 +78,7 @@ class ResilientConfig:
     """
 
     # Fallback chain configuration
-    models: list[str] = field(default_factory=lambda: ["gpt-4", "gpt-3.5-turbo"])
+    models: list[str] = field(default_factory=_default_model_chain)
 
     # LLM configuration
     llm_provider: str = field(
@@ -307,7 +330,7 @@ async def query_with_fallback(
         >>> print(f"Used model #{result['_fallback_strategy_used']}")
     """
     if models is None:
-        models = ["gpt-4", "gpt-3.5-turbo"]
+        models = _default_model_chain()
 
     agent = ResilientAgent(
         models=models, llm_provider=llm_provider, temperature=temperature

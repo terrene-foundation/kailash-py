@@ -77,7 +77,7 @@ def main():
     print("Scenario 2: Multi-Round Debate (3 rounds)")
     print("-" * 70)
 
-    pattern2 = create_debate_pattern(model="gpt-4")
+    pattern2 = create_debate_pattern(model="gpt-4o-mini")
 
     # Multi-round debate allows rebuttals
     topic2 = "Should AI models be trained on copyrighted content?"
@@ -153,7 +153,7 @@ def main():
     print("Scenario 4: Confidence Analysis Across Rounds")
     print("-" * 70)
 
-    pattern4 = create_debate_pattern(model="gpt-4")
+    pattern4 = create_debate_pattern(model="gpt-4o-mini")
 
     topic4 = "Should cryptocurrencies replace traditional banking?"
 

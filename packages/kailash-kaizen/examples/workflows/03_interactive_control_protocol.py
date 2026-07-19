@@ -47,7 +47,7 @@ class InteractiveAgentConfig:
     """Configuration for interactive agent."""
 
     llm_provider: str = "openai"
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = 0.5
     max_tokens: int = 1000
 
