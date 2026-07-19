@@ -271,6 +271,66 @@ class DelegationRecord:
 
 **Dimension scope validation**: `__post_init__` validates that all scope values are from `VALID_DIMENSION_NAMES = {"financial", "operational", "temporal", "data_access", "communication"}`. At least one dimension is required.
 
+#### 3.3.1 Canonical delegation signing pre-image (cross-SDK, EATP §5.3)
+
+`delegation_signing_payload()` in `kailash.trust.signing.delegation_payload` is
+the Python side of the cross-SDK byte contract that a delegation record's
+Ed25519 signature is produced over (mirroring kailash-rs
+`delegation.rs::delegation_signing_payload` / `DelegationSigningInput`). Both
+SDKs reproduce the same JCS pre-image bytes so a record signed by one verifies
+on the other. Three self-describing shapes are emitted, keyed by the
+`SigningPayloadVersion` enum (wire tokens `"v1-legacy"` / `"v2-complete"` /
+`"v3-complete"`):
+
+- **`V1_LEGACY`** — seven base keys (`delegation_id`, `delegator`, `delegate`,
+  `capabilities`, `created_at`, `expires_at`, `parent_delegation_id`), ALWAYS
+  emitted (`None` → `null`), plus conditional `multi_sig: true` and conditional
+  `dimension_scope`.
+- **`V2_COMPLETE`** — all `V1_LEGACY` keys PLUS `constraints`,
+  `resource_limits`, `scope`, `reasoning_trace_hash`, and the
+  `signing_payload_version` discriminator. New NON-multi-sig records sign
+  `V2_COMPLETE`.
+- **`V3_COMPLETE`** — all `V2_COMPLETE` keys PLUS `multi_sig_threshold` (a JSON
+  number) and `multi_sig_authorized_signers` (the Ed25519 keys as
+  lowercase-hex, CANONICALLY ORDERED by sorting the hex strings — the pre-image
+  binds the signer SET + threshold, invariant to insertion order). New MULTI-SIG
+  records sign `V3_COMPLETE`. The `multi_sig_bundle` is NOT folded into the
+  pre-image.
+
+**Encoder.** The pre-image uses the shared delegate JCS encoder
+`canonical_json_dumps()` in `kailash.trust._json` (`sort_keys=True`,
+`separators=(",", ":")`, `allow_nan=False`, `ensure_ascii=False`). For the §5.3
+fixed inputs — all ASCII — this reproduces the kailash-rs reference bytes
+exactly and is byte-identical to an `ensure_ascii=True` encoder (verified
+empirically against every pinned vector). The pre-image is ASCII-only by
+construction.
+
+**Cross-SDK provisional tripwire (rs#1795 OPEN).** kailash-rs LEADS and
+authored the reference vectors; the `V3_COMPLETE` fold is a byte-CHANGING
+cross-SDK-lockstep contract (`cross-sdk-inspection.md` Rule 4b). The pinned
+current bytes are held as a tripwire in
+`tests/regression/test_delegation_signing_payload_vectors.py` (the seven §5.3
+vectors: three real multi-sig shapes + the canonical-order, boundary-key,
+one-byte-diff sentinels + the non-multi-sig byte-neutrality anchor). If
+kailash-rs re-pins the vectors, they are re-pinned here in the SAME lockstep
+event. `ConstraintDimensions.for_level` / `ResourceLimits.for_level` are
+byte-verified only for `TrustLevel.SUPERVISED` in this shard and fail closed on
+any un-pinned level rather than emit un-verified bytes.
+
+**Fail-closed on un-pinned inputs.** Every §5.3 vector is ASCII-only,
+whole-second, payload-version-consistent, and uses distinct signers. The engine
+REFUSES (raises) any input whose bytes are not covered by a pinned cross-SDK
+vector rather than emit un-verified bytes single-SDK: **non-ASCII** string
+content in any signed field (`delegator` / `delegate` / `capabilities` /
+`scope.domain` / `scope.operations` — a known cross-SDK limitation pending a
+non-ASCII lockstep vector, since the delegate and signing encoders disagree on
+`ensure_ascii`); **sub-second** `created_at` / `expires_at` (RFC3339
+fractional-second rendering vs kailash-rs chrono is un-pinned); **duplicate**
+multi-sig signers (a multiset weakens the M-of-N quorum — the threshold is
+validated against the DISTINCT signer count); and the inconsistent
+`V2_COMPLETE` + `multi_sig=True` combo (a multi-sig record MUST sign
+`V3_COMPLETE`).
+
 ### 3.4 AuditAnchor
 
 Tamper-evident record of an agent action.

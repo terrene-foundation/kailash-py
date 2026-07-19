@@ -45,7 +45,6 @@ from kailash.trust.signing.algorithm_id import (
     is_registered,
     resolve_dispatch,
 )
-from kailash.trust.signing.derivation import derive_trace_token
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     SALT_LENGTH,
@@ -67,6 +66,17 @@ from kailash.trust.signing.crypto import (
     verify_reasoning_signature,
     verify_signature,
 )
+from kailash.trust.signing.delegation_payload import (
+    ConstraintDimensions,
+    DelegationScope,
+    DelegationSigningInput,
+    MultiSigSigningPolicy,
+    ResourceLimits,
+    SigningPayloadVersion,
+    TrustLevel,
+    delegation_signing_payload,
+)
+from kailash.trust.signing.derivation import derive_trace_token
 
 __all__ = [
     # Constants
@@ -96,6 +106,15 @@ __all__ = [
     "dual_verify",
     # Disclosure-trace token derivation (issue #1482)
     "derive_trace_token",
+    # Cross-SDK canonical delegation signing pre-image engine (#1841 §5.3)
+    "TrustLevel",
+    "SigningPayloadVersion",
+    "ConstraintDimensions",
+    "ResourceLimits",
+    "DelegationScope",
+    "MultiSigSigningPolicy",
+    "DelegationSigningInput",
+    "delegation_signing_payload",
     # EATP-08 v1.1 algorithm-identifier surface (canonical namespace)
     "ADOPTION_DATE",
     "ADOPTION_DATE_PARSED",
