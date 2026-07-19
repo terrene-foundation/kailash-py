@@ -2,6 +2,67 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.37.0] — 2026-07-19 — Multimodal normalizer + Gemini structured-output guard + legacy-provider retirement (#1817, #1819, #1820)
+
+### Added
+
+- **File-path + high-level-audio multimodal input normalizer on the four-axis
+  path (#1817).** `AsyncSingleShotStrategy._classify_input_value` previously
+  forwarded any `{"type": ...}` dict verbatim, so a file-path image/audio dict
+  or a high-level audio shape (the convenience shapes `#1720` migrators rely
+  on — e.g. `{"type": "image", "path": "x.jpg"}`) shipped as an invalid wire
+  block and the LLM never received usable multimodal content. A dict carrying
+  a local file path is now normalized to the provider wire form (`image_url`
+  data-URI / `input_audio` block) by delegating to the surviving vision/audio
+  primitives (`encode_image` / `validate_image_size` / `get_media_type` and
+  their audio equivalents) — zero new encoding logic. Bad or oversize paths
+  fail closed with a typed `ValueError` rather than silently falling back to
+  text. Already-wire-shaped dicts and the raw-bytes path are unchanged.
+
+### Fixed
+
+- **Gemini four-axis wire guards against `tools` + structured-output 400s
+  (#1819).** Gemini's `generateContent` endpoint rejects a request that
+  carries BOTH `responseMimeType`/`responseSchema` AND `tools`
+  (`functionDeclarations`) with an HTTP 400. The four-axis
+  `google_generate_content` shaper emitted the two branches independently
+  with no cross-check, so a `CompletionRequest` with both a JSON
+  `response_format` and `tools` was unconditionally rejected by Gemini. The
+  shaper now gates the `responseMimeType`/`responseSchema` block on `tools`
+  being absent, matching the guard the legacy provider path already applied,
+  and logs a WARN naming the dropped structured-output when a JSON
+  `response_format` is suppressed (the WARN is scoped to genuine JSON
+  suppression only — a `response_format={"type": "text"}` alongside `tools`
+  does not fire it, since nothing structured would have been emitted anyway).
+
+### Removed (BREAKING)
+
+- **Retired the embedding-legacy (cohere/huggingface) and unified-azure
+  provider stacks (#1820).** The four-axis `LlmClient` path already served
+  every one of these keys end-to-end BEFORE the registry in every live
+  caller (`llm_agent._provider_llm_response`, `embedding_generator`) — the
+  registry classes were dead fallbacks. Deleted with no deprecation shim
+  (user-directed; zero-tolerance Rule 6a waived): `kaizen.providers.embedding.cohere`
+  (`CohereProvider`), `kaizen.providers.embedding.huggingface`
+  (`HuggingFaceProvider`), `kaizen.nodes.ai.unified_azure_provider`
+  (`UnifiedAzureProvider`), `kaizen.nodes.ai.azure_backends`
+  (`AzureOpenAIBackend`, `AzureAIFoundryBackend`),
+  `kaizen.nodes.ai.azure_capabilities` (`AzureCapabilityRegistry`, ...),
+  `kaizen.nodes.ai.azure_detection` (`AzureBackendDetector`,
+  `resolve_azure_env`). `kaizen.providers.registry.PROVIDERS` now holds only
+  `azure_ai_foundry` — the sole provider `deployment_resolver.resolve_deployment_for`
+  declines to map (no confirmed four-axis wire), kept as the registry's
+  legacy fallback. The `cohere`/`huggingface` barrel re-exports now raise
+  `AttributeError`, joining the `#1720` Wave-2 removed set.
+
+  **Migration.** `resolve_azure_env` relocated to `kaizen.llm.azure_env` (a
+  live four-axis dependency of `deployment_resolver` + `config.providers`) —
+  update imports from `kaizen.nodes.ai.azure_detection` accordingly. Cohere
+  and HuggingFace embeddings, and Azure/Azure OpenAI chat, resolve
+  automatically via the four-axis `LlmClient` (`from_env()` /
+  `from_deployment()`) with no code change beyond removing any direct
+  provider-class import; `azure_ai_foundry` usage is unchanged.
+
 ## [2.36.0] — 2026-07-19 — #1720 Wave-2 legacy-provider retirement + StreamingAgent circular-import fix
 
 ### Removed
