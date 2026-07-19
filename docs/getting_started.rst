@@ -2,7 +2,7 @@
 Getting Started
 ===============
 
-Welcome to the Kailash SDK v2.54.0. This guide walks you through core concepts and
+Welcome to the Kailash SDK v2.55.0. This guide walks you through core concepts and
 patterns you will use in every Kailash project.
 
 Prerequisites
