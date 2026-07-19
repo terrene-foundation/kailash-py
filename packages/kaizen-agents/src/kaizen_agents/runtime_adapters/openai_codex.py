@@ -30,6 +30,11 @@ from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
 
 logger = logging.getLogger(__name__)
 
+# Provider-intrinsic default (this adapter IS OpenAI). Documented module-level
+# named constant, overridable via the KAIZEN_OPENAI_MODEL env var. NOT chained
+# to the provider-agnostic default resolver — a non-OpenAI model here is wrong.
+_DEFAULT_MODEL = "gpt-4o"
+
 
 class OpenAICodexAdapter(BaseRuntimeAdapter):
     """Adapter that delegates to OpenAI Responses API.
@@ -70,7 +75,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-4o",
+        model: str | None = None,
         enable_code_interpreter: bool = True,
         enable_file_search: bool = False,
         custom_tools: list[dict[str, Any]] | None = None,
@@ -104,6 +109,8 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
         super().__init__()
 
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        if model is None:
+            model = os.environ.get("KAIZEN_OPENAI_MODEL", _DEFAULT_MODEL)
         self.model = model
         self.enable_code_interpreter = enable_code_interpreter
         self.enable_file_search = enable_file_search

@@ -50,6 +50,7 @@ References:
 import hashlib
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
@@ -60,6 +61,11 @@ if TYPE_CHECKING:
     from kaizen_agents.journey.transitions import IntentTrigger
 
 logger = logging.getLogger(__name__)
+
+# Task-intrinsic default: a deliberately small model chosen for the low-latency
+# intent-classification task (NOT the provider-agnostic prod model). Documented
+# module-level constant, overridable via the KAIZEN_INTENT_MODEL env var.
+_DEFAULT_INTENT_MODEL = "gpt-4o-mini"
 
 
 # ============================================================================
@@ -190,7 +196,7 @@ class IntentDetector:
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str | None = None,
         llm_provider: str = "openai",
         cache_ttl_seconds: int = 300,
         confidence_threshold: float = 0.7,
@@ -200,12 +206,15 @@ class IntentDetector:
         Initialize IntentDetector.
 
         Args:
-            model: LLM model for classification
+            model: LLM model for classification. Defaults to the task-intrinsic
+                intent model (KAIZEN_INTENT_MODEL env var, else gpt-4o-mini).
             llm_provider: LLM provider (openai, ollama, etc.)
             cache_ttl_seconds: Cache TTL in seconds
             confidence_threshold: Minimum confidence for valid match
             max_cache_size: Maximum cache entries before eviction
         """
+        if model is None:
+            model = os.environ.get("KAIZEN_INTENT_MODEL", _DEFAULT_INTENT_MODEL)
         self.model = model
         self.llm_provider = llm_provider
         self.cache_ttl_seconds = cache_ttl_seconds

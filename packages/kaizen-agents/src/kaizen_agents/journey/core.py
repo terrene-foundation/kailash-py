@@ -42,6 +42,7 @@ Usage:
     session = await journey.start()
 """
 
+import os
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
@@ -57,6 +58,11 @@ if TYPE_CHECKING:
     from kaizen_agents.patterns.pipeline import Pipeline
 
 from kaizen_agents.journey.behaviors import ReturnBehavior
+
+# Task-intrinsic default: a deliberately small model chosen for the low-latency
+# intent-classification task (NOT the provider-agnostic prod model). Documented
+# module-level constant, overridable via the KAIZEN_INTENT_MODEL env var.
+_DEFAULT_INTENT_MODEL = "gpt-4o-mini"
 
 # ============================================================================
 # Data Classes (REQ-JC-005)
@@ -84,7 +90,11 @@ class JourneyConfig:
     """
 
     # Intent detection
-    intent_detection_model: str = "gpt-4o-mini"
+    intent_detection_model: str = field(
+        default_factory=lambda: os.environ.get(
+            "KAIZEN_INTENT_MODEL", _DEFAULT_INTENT_MODEL
+        )
+    )
     intent_confidence_threshold: float = 0.7
     intent_cache_ttl_seconds: int = 300
 

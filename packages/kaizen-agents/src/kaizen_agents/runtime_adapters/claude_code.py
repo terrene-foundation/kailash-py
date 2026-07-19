@@ -36,6 +36,11 @@ from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
 
 logger = logging.getLogger(__name__)
 
+# Provider-intrinsic default (this adapter IS Claude). Documented module-level
+# named constant, overridable via the KAIZEN_CLAUDE_MODEL env var. NOT chained
+# to the provider-agnostic default resolver — a non-Claude model here is wrong.
+_DEFAULT_MODEL = "claude-sonnet-4-20250514"
+
 
 class ClaudeCodeAdapter(BaseRuntimeAdapter):
     """Adapter that delegates to Claude Code SDK.
@@ -75,7 +80,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
         max_tokens: int = 8192,
         timeout_seconds: float = 300,
         allowed_commands: list[str] | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str | None = None,
     ):
         """Initialize the ClaudeCodeAdapter.
 
@@ -104,6 +109,8 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
         self.allowed_commands = allowed_commands
+        if model is None:
+            model = os.environ.get("KAIZEN_CLAUDE_MODEL", _DEFAULT_MODEL)
         self.model = model
 
         # Session tracking

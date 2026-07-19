@@ -5,6 +5,31 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] — 2026-07-19 — env-models: model defaults resolve from .env (#1825)
+
+### Fixed
+
+- **Hardcoded LLM model defaults now resolve from `.env` (#1825, env-models
+  rule).** Executable `model="gpt-4"` / `model: str = "gpt-4"` /
+  `.get("model", "gpt-3.5-turbo")` defaults across the package (the `api`
+  config layer — `AgentConfig.model`, the `CapabilityPresets`, `from_preset`,
+  `get_recommended_configuration` — plus the specialized-agent convenience
+  functions, `patterns`/`workflows` config fallbacks) now resolve the default
+  model from the environment via a shared helper
+  (`kaizen_agents._model_env.resolve_default_model`:
+  `OPENAI_PROD_MODEL` → `DEFAULT_LLM_MODEL` → `gpt-4o`), so a deployment's
+  configured model is honored instead of a pinned literal. Provider-intrinsic
+  defaults (the runtime adapters) and task-intrinsic defaults (the vision
+  model, the intent-detection model, the code-review preset's Claude
+  recommendation) are preserved as documented module-level constants
+  overridable via provider/task-scoped env vars (`KAIZEN_OPENAI_MODEL`,
+  `KAIZEN_GEMINI_MODEL`, `KAIZEN_CLAUDE_MODEL`, `KAIZEN_VISION_MODEL`,
+  `KAIZEN_INTENT_MODEL`, `KAIZEN_CODE_REVIEW_MODEL`) — the env-models
+  "Provider-Intrinsic Named-Constant Defaults" carve-out. No public API
+  signatures changed (defaults moved from a literal to `None`-resolves-from-env);
+  explicit `model=` arguments are unaffected. Regression test pins the
+  resolution order and asserts no executable hardcoded default remains.
+
 ## [0.11.0] — 2026-07-19 — StreamingAgent token-streaming cutover to the four-axis LlmClient (#1720 Wave-2b)
 
 ### Changed

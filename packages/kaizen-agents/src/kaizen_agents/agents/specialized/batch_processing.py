@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from kailash.nodes.base import NodeMetadata
 
+from kaizen_agents._model_env import resolve_default_model
+
 if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
 from kaizen.core.base_agent import BaseAgent
@@ -271,7 +273,7 @@ async def process_batch_quick(
     items: list[str],
     max_concurrent: int = 10,
     llm_provider: str = "openai",
-    model: str = "gpt-3.5-turbo",
+    model: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Quick batch processing with default configuration.
@@ -294,6 +296,9 @@ async def process_batch_quick(
         ... ]))
         >>> print(f"Processed {len(results)} items")
     """
+    if model is None:
+        model = resolve_default_model()
+
     agent = BatchProcessingAgent(
         max_concurrent=max_concurrent, llm_provider=llm_provider, model=model
     )

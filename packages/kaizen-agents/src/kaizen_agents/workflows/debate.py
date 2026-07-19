@@ -10,6 +10,8 @@ from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen_agents._model_env import resolve_default_model
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,7 +102,7 @@ class DebateWorkflow:
         # Add each agent as A2A agent node
         for i, agent in enumerate(self.agents):
             agent_config = {
-                "model": agent.config.get("model", "gpt-3.5-turbo"),
+                "model": agent.config.get("model") or resolve_default_model(),
                 "generation_config": agent.config.get(
                     "generation_config",
                     {

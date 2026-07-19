@@ -34,6 +34,8 @@ from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 
+from kaizen_agents._model_env import resolve_default_model
+
 
 class ReflectionSignature(Signature):
     """Signature for self-reflection cycle."""
@@ -328,7 +330,7 @@ def reflect_and_improve(
     max_cycles: int = 3,
     improvement_threshold: float = 0.8,
     llm_provider: str = "openai",
-    model: str = "gpt-3.5-turbo",
+    model: str | None = None,
 ) -> dict[str, Any]:
     """
     Quick self-reflection with default configuration.
@@ -354,6 +356,9 @@ def reflect_and_improve(
         >>> print(f"Quality: {result['quality_score']}")
         >>> print(f"Cycles: {len(result['reflection_history'])}")
     """
+    if model is None:
+        model = resolve_default_model()
+
     agent = SelfReflectionAgent(
         max_cycles=max_cycles,
         improvement_threshold=improvement_threshold,

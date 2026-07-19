@@ -150,7 +150,11 @@ class TestAgentConfigCreation:
         """Test creating with defaults."""
         config = AgentConfig()
 
-        assert config.model == "gpt-4"
+        # Default model is resolved from .env (env-models rule, #1825), not a
+        # hardcoded literal.
+        from kaizen_agents._model_env import resolve_default_model
+
+        assert config.model == resolve_default_model()
         assert config.execution_mode == ExecutionMode.SINGLE
         assert config.max_cycles == 100
         assert config.max_turns == 50

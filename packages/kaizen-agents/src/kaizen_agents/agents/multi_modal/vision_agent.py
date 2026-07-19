@@ -8,7 +8,8 @@ document extraction with RAG chunking.
 Uses .run() method for standardized execution interface.
 """
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,14 @@ from kaizen.providers.ollama_vision_provider import (
 )
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.signatures.multi_modal import ImageField, MultiModalSignature
+
+# Task-intrinsic default: VisionAgent requires a vision-capable model, NOT a
+# general text model, so the provider-agnostic ``resolve_default_model`` is the
+# wrong modality here. Documented module-level named constant (env-models
+# "Provider-Intrinsic Named-Constant Defaults" carve-out): overridable via the
+# task-scoped ``KAIZEN_VISION_MODEL`` env var, never chained to the general
+# default-model variable.
+_DEFAULT_VISION_MODEL = "llava:13b"
 
 
 class VisionQASignature(MultiModalSignature, Signature):
@@ -50,7 +59,11 @@ class VisionAgentConfig:
 
     # Vision settings (existing - unchanged)
     llm_provider: str = "ollama"
-    model: str = "llava:13b"
+    model: str = field(
+        default_factory=lambda: os.environ.get(
+            "KAIZEN_VISION_MODEL", _DEFAULT_VISION_MODEL
+        )
+    )
     temperature: float = 0.7
     max_images: int = 5
     auto_resize: bool = True

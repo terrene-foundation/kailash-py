@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
+from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.workflows.consensus import ConsensusWorkflow
 from kaizen_agents.workflows.debate import DebateWorkflow, EnterpriseDebateWorkflow
 from kaizen_agents.workflows.supervisor_worker import SupervisorWorkerWorkflow
@@ -402,7 +403,7 @@ class TeamCoordinationPattern(CoordinationPattern):
         # Add each team member as A2A agent node
         for i, member in enumerate(team.members):
             agent_config = {
-                "model": member.config.get("model", "gpt-3.5-turbo"),
+                "model": member.config.get("model") or resolve_default_model(),
                 "generation_config": member.config.get(
                     "generation_config",
                     {

@@ -10,6 +10,8 @@ from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen_agents._model_env import resolve_default_model
+
 logger = logging.getLogger(__name__)
 
 
@@ -159,7 +161,7 @@ class SupervisorWorkerWorkflow:
         # Add each worker as A2A agent node
         for i, worker in enumerate(self.workers):
             worker_config = {
-                "model": worker.config.get("model", "gpt-3.5-turbo"),
+                "model": worker.config.get("model") or resolve_default_model(),
                 "generation_config": worker.config.get(
                     "generation_config",
                     {
