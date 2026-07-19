@@ -1,5 +1,22 @@
 # Nexus Changelog
 
+## [2.13.0] — 2026-07-19 — `WebhookTransport.receive()` fails closed on missing secret (#1836)
+
+### Fixed (Security)
+
+- **`WebhookTransport.receive()` now fails closed when no signing secret is
+  configured (#1836).** `receive()` guarded signature verification with
+  `if self._secret is not None`, so a deployment with no webhook signing
+  secret SKIPPED verification entirely and silently accepted any forged
+  inbound webhook event. #1814 (2.12.1) hardened `verify_signature` /
+  `verify_signature_for_request` to fail closed but left this `receive()`
+  path as an intentional unsigned-mode contract; this closes it.
+  **Behavior change:** with no secret configured, `receive()` now raises a
+  typed `ValueError` by default. Deployments that intentionally run
+  unsigned webhooks (or verify signatures at an edge proxy/gateway) must
+  pass `allow_unsigned=True` to `WebhookTransport(...)` to opt back into the
+  prior unsigned-accept behavior.
+
 ## [2.12.1] — 2026-07-19 — Webhook signature verification fails closed (#1814)
 
 ### Fixed (Security)

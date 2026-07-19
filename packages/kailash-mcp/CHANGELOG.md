@@ -2,6 +2,25 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.4.1] — 2026-07-19 — Credential-bearing exception logs sanitized (#1840)
+
+### Security
+
+- **SSE / StreamableHTTP / WebSocket transports no longer leak `base_url`
+  credentials into logs or exception text (#1840).** A credential-bearing
+  `base_url`/`url` (e.g. `https://user:secret@host?token=abc`) was
+  interpolated verbatim into the "transport connected" `logger.info` line
+  and into the opaque `{e}` of every `TransportError` raised on
+  connect/send/receive — readable by anyone with log access. URL-value log
+  lines now route through `mask_url`; opaque `{e}` strings route through the
+  new `mask_error_text` helper (both from the shared
+  `kailash.utils.url_credentials` module — no per-transport copies). A
+  round-1 sweep also closed the same class in `_close_server_session`'s
+  swallowed-exception log and the SSE / WebSocket read-loop error logs.
+  `stdio` (subprocess command, no URL) and `WebSocketServerTransport` (local
+  bind, no client credential) carry no credential surface and are
+  unaffected.
+
 ## [0.4.0] — 2026-07-16 — Server-initiated request/response lifecycle hardening (#1712)
 
 Completes the #1712 MCP 2025-11-25 work. The 2025-11-25 wire surface
