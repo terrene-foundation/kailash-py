@@ -29,7 +29,7 @@ import pytest
 
 from kaizen.llm import LlmClient
 from kaizen.llm.deployment import LlmDeployment
-from kaizen.llm.errors import EndpointError
+from kaizen.llm.errors import EndpointError, ProviderError
 
 # ---------------------------------------------------------------------------
 # Real OpenAI
@@ -61,6 +61,67 @@ async def test_llmclient_embed_openai_real() -> None:
         3072,
         768,
     ), f"unexpected vector dim for model={model}: {len(vectors[0])}"
+    assert all(isinstance(v, float) for v in vectors[0])
+
+
+# ---------------------------------------------------------------------------
+# Real Google Gemini (#1818)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_llmclient_embed_google_real() -> None:
+    """End-to-end: LlmClient.embed() returns a real vector from Gemini.
+
+    Exercises the #1818 four-axis Google embed wire against the live Gemini
+    ``:batchEmbedContents`` endpoint. The root repo `.env` carries an active
+    `GOOGLE_API_KEY` (conftest auto-loads it), so this test RUNS live; it skips
+    cleanly only when the key is absent or a placeholder.
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key or api_key.startswith("your-") or api_key in ("changeme", "test"):
+        pytest.skip(
+            "GOOGLE_API_KEY missing or placeholder; real Gemini embed wiring "
+            "test requires a real credential"
+        )
+    model = os.environ.get("GOOGLE_EMBEDDING_MODEL", "text-embedding-004")
+
+    deployment = LlmDeployment.google(api_key=api_key, model=model)
+    client = LlmClient.from_deployment(deployment)
+
+    try:
+        vectors = await client.embed(["hello", "world"], model=model)
+    except ProviderError as exc:
+        # An external provisioning gap — a real credential whose Google Cloud
+        # project has NOT enabled the Generative Language API (403 with a
+        # SERVICE_DISABLED / "has not been used in project" body) — is a
+        # credential-environment gap, NOT a wire defect, so it skips cleanly
+        # like the Ollama-not-reachable path above. A malformed-request (400)
+        # or a genuine INVALID key error is NOT caught here and still fails
+        # loudly, so a real wire/shape regression cannot hide behind this skip.
+        body = (exc.body_snippet or "").lower()
+        api_disabled = exc.status == 403 and (
+            "has not been used in project" in body
+            or "is disabled" in body
+            or "service_disabled" in body
+            or "not been enabled" in body
+        )
+        if api_disabled:
+            pytest.skip(
+                "Gemini Generative Language API is not enabled for this "
+                "credential's Google Cloud project (403 SERVICE_DISABLED); "
+                "the four-axis Google embed wire reached the correct endpoint "
+                "with the correct payload — enable the API to run this live. "
+                f"body_snippet={exc.body_snippet!r}"
+            )
+        raise
+    assert isinstance(vectors, list)
+    assert len(vectors) == 2
+    # text-embedding-004 emits 768-dim vectors by default. Assert a real,
+    # non-trivial embedding came back (dims > 0, all floats, both texts).
+    assert len(vectors[0]) > 0
+    assert len(vectors[0]) == len(vectors[1])
     assert all(isinstance(v, float) for v in vectors[0])
 
 

@@ -17,14 +17,18 @@ import pytest
 
 from kaizen.llm import LlmClient
 from kaizen.llm.auth.azure import AzureEntra
-from kaizen.llm.deployment import EmbedOptions, WireProtocol
+from kaizen.llm.deployment import EmbedOptions, LlmDeployment, WireProtocol
 from kaizen.llm.errors import InvalidResponse
 from kaizen.llm.presets import (
     AZURE_OPENAI_DEFAULT_API_VERSION,
     azure_openai_preset,
     huggingface_preset,
 )
-from kaizen.llm.wire_protocols import cohere_embeddings, huggingface_embeddings
+from kaizen.llm.wire_protocols import (
+    cohere_embeddings,
+    google_embeddings,
+    huggingface_embeddings,
+)
 
 # ---------------------------------------------------------------------------
 # cohere_embeddings.build_request_payload
@@ -79,6 +83,89 @@ def test_cohere_parse_rejects_malformed() -> None:
         cohere_embeddings.parse_response({"embeddings": [["x"]]})  # non-numeric
     with pytest.raises(InvalidResponse):
         cohere_embeddings.parse_response({"embeddings": [[True]]})  # bool rejected
+
+
+# ---------------------------------------------------------------------------
+# google_embeddings.build_request_payload / parse_response (#1818)
+# ---------------------------------------------------------------------------
+
+
+def test_google_build_minimal_shape() -> None:
+    payload = google_embeddings.build_request_payload(
+        ["hello", "world"], "text-embedding-004"
+    )
+    # Deterministic byte-shape pin: one request per text, model prefixed with
+    # `models/`, no outputDimensionality when options unset.
+    assert payload == {
+        "requests": [
+            {
+                "model": "models/text-embedding-004",
+                "content": {"parts": [{"text": "hello"}]},
+            },
+            {
+                "model": "models/text-embedding-004",
+                "content": {"parts": [{"text": "world"}]},
+            },
+        ]
+    }
+
+
+def test_google_build_accepts_already_prefixed_model() -> None:
+    # A caller passing the already-`models/`-prefixed id gets the same body
+    # (no double prefix).
+    payload = google_embeddings.build_request_payload(
+        ["q"], "models/text-embedding-004"
+    )
+    assert payload["requests"][0]["model"] == "models/text-embedding-004"
+
+
+def test_google_build_emits_output_dimensionality_only_when_set() -> None:
+    opts = EmbedOptions(dimensions=256)
+    payload = google_embeddings.build_request_payload(["q"], "text-embedding-004", opts)
+    assert payload["requests"][0]["outputDimensionality"] == 256
+    # user / input_type are NOT emitted for Gemini even when set.
+    payload_no_dim = google_embeddings.build_request_payload(
+        ["q"], "text-embedding-004", EmbedOptions(user="u", input_type="search_query")
+    )
+    assert "outputDimensionality" not in payload_no_dim["requests"][0]
+    assert "user" not in payload_no_dim["requests"][0]
+    assert "input_type" not in payload_no_dim["requests"][0]
+
+
+def test_google_build_rejects_empty_and_non_str() -> None:
+    with pytest.raises(ValueError):
+        google_embeddings.build_request_payload([], "text-embedding-004")
+    with pytest.raises(TypeError):
+        google_embeddings.build_request_payload([b"bytes"], "text-embedding-004")  # type: ignore[list-item]
+    with pytest.raises(ValueError):
+        google_embeddings.build_request_payload(["ok"], "")
+
+
+def test_google_parse_extracts_vectors_in_request_order() -> None:
+    resp = {
+        "embeddings": [
+            {"values": [0.1, 0.2]},
+            {"values": [0.3, 0.4]},
+        ]
+    }
+    out = google_embeddings.parse_response(resp)
+    assert out["vectors"] == [[0.1, 0.2], [0.3, 0.4]]
+    # :batchEmbedContents carries no model echo / usage metadata.
+    assert out["model"] is None
+    assert out["usage"] == {"input_tokens": None, "total_tokens": None}
+
+
+def test_google_parse_rejects_malformed() -> None:
+    with pytest.raises(InvalidResponse):
+        google_embeddings.parse_response({"embeddings": "nope"})
+    with pytest.raises(InvalidResponse):
+        google_embeddings.parse_response(
+            {"embeddings": [{"values": ["x"]}]}
+        )  # non-numeric
+    with pytest.raises(InvalidResponse):
+        google_embeddings.parse_response({"embeddings": [{"values": [True]}]})  # bool
+    with pytest.raises(InvalidResponse):
+        google_embeddings.parse_response({"embeddings": [{"no_values": 1}]})  # missing
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +237,32 @@ def test_embed_dispatch_wires_cohere_and_huggingface() -> None:
         _EMBED_DISPATCH[WireProtocol.HuggingFaceInference]["shaper"]
         is huggingface_embeddings
     )
+
+
+def test_embed_dispatch_wires_google() -> None:
+    # #1818 — the Google embed wire is routable through _EMBED_DISPATCH on the
+    # GoogleGenerateContent enum (shared chat+embed wire family), with the model
+    # carried in the URL path via the :batchEmbedContents verb.
+    from kaizen.llm.client import _EMBED_DISPATCH
+
+    assert WireProtocol.GoogleGenerateContent in _EMBED_DISPATCH
+    entry = _EMBED_DISPATCH[WireProtocol.GoogleGenerateContent]
+    assert entry["shaper"] is google_embeddings
+    assert entry["path"] == "/models/{model}:batchEmbedContents"
+    assert entry["env_model_hint"] == "GOOGLE_EMBEDDING_MODEL"
+
+
+def test_google_embed_url_carries_model_and_batch_verb() -> None:
+    # The `{model}` template + `:batchEmbedContents` verb produce the documented
+    # Gemini embed URL; guards the same call-site regression #1818's HF sibling
+    # (test_hf_embed_url_carries_model_in_path) guards for HuggingFace.
+    dep = LlmDeployment.google(api_key="AIza-test", model="text-embedding-004")
+    client = LlmClient.from_deployment(dep)
+    url = client._build_embed_url(
+        "/models/{model}:batchEmbedContents", model="text-embedding-004"
+    )
+    assert "{model}" not in url
+    assert url.endswith("/v1beta/models/text-embedding-004:batchEmbedContents")
 
 
 # ---------------------------------------------------------------------------

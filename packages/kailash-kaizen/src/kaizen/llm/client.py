@@ -66,6 +66,7 @@ from kaizen.llm.wire_protocols import (
     bedrock_invoke,
     cohere_embeddings,
     cohere_generate,
+    google_embeddings,
     google_generate_content,
     huggingface_embeddings,
     huggingface_inference,
@@ -171,6 +172,18 @@ _EMBED_DISPATCH: dict = {
         "path": "/models/{model}",
         "shaper": huggingface_embeddings,
         "env_model_hint": "HUGGINGFACE_EMBEDDING_MODEL",
+    },
+    # #1818 — Gemini speaks its own wire family (WireProtocol.GoogleGenerateContent)
+    # across both chat AND embeddings, same as CohereGenerate above. The embed
+    # path carries the model in the URL (`/models/{model}:batchEmbedContents`,
+    # substituted by `_build_embed_url`) — the `:batchEmbedContents` verb attaches
+    # after the model segment, mirroring HuggingFaceInference's `{model}` template.
+    # Completes the Google embeddings migration target for #1720 (the four-axis
+    # path previously had a Google CHAT wire but no Google EMBED wire).
+    WireProtocol.GoogleGenerateContent: {
+        "path": "/models/{model}:batchEmbedContents",
+        "shaper": google_embeddings,
+        "env_model_hint": "GOOGLE_EMBEDDING_MODEL",
     },
 }
 
@@ -749,9 +762,9 @@ class LlmClient:
             raise NotImplementedError(
                 f"LlmClient.embed does not yet support wire={wire.name!r}. "
                 "Supported: OpenAiChat (openai, groq, etc.), OllamaNative, "
-                "CohereGenerate, HuggingFaceInference. File an issue at "
-                "terrene-foundation/kailash-py referencing #462 to request "
-                "another provider."
+                "CohereGenerate, HuggingFaceInference, GoogleGenerateContent. "
+                "File an issue at terrene-foundation/kailash-py referencing #462 "
+                "to request another provider."
             )
 
         resolved_model = model or self._deployment.default_model
