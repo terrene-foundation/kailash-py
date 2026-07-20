@@ -1,64 +1,55 @@
-# Session Notes — 2026-07-19 (cost purge + release)
+# Session Notes — 2026-07-20 (Wave-B/3 EATP + Wave-A, RELEASED)
 
 ## Where we are
 
-**#1844/#1845 cost purge COMPLETE + RELEASED.** Root cause of the ~$208 OpenAI spend:
-hardcoded obsolete-model defaults (`gpt-4`/`gpt-3.5-turbo`) in kaizen-agents pattern
-factories + specialized agents + kailash-kaizen core (`.env` never sets `KAIZEN_MODEL`,
-so fallbacks resolved to obsolete billed models), PLUS a bare `pytest` auto-loading the
-prod key. Both fixed, merged, published, verified.
+Wave-B (EATP cross-SDK) + the in-repo Wave-3 items are COMPLETE + RELEASED to PyPI.
+main @ origin/main (post release-prep #1875 merge = 3701b45d7 + 3 tags). 0 open PRs from this session.
 
-## Executed this session (durable receipts)
+**Released to PyPI (verified HTTP 200 + clean-venv import):**
+- kailash 2.58.0 (v2.58.0) — EATP delegation-signing engine (#1841 S1/S2) + signed revocation ledger/HeadCommitment/verify (#1842 S1/S2/S3)
+- kailash-pact 0.16.0 (pact-v0.16.0) — MCP tenant isolation (#1843); + 0.16.1 (pact-v0.16.1) follow-up: export McpCallerIdentity/McpTenantGrant/McpResourceContext at pact top level (#1876, reviewer-caught API-surface gap)
+- kailash-kaizen 2.38.0 (kaizen-v2.38.0) — governance-gate over remaining provider egress (#1803)
 
-- **PR #1847** (merged `8fcaf3153`) — #1844 purge (env-first resolution everywhere; incl.
-  env-proof unconditional spenders in core/agents CoT/ReAct + framework.create_team, and
-  the `examples/coordination/*` scripts) + #1845 active LLM cost-guard
-  (`src/kailash/testing/env_cost_guard.py`: pop provider secrets on a bare pytest unless
-  `KAIZEN_ALLOW_REAL_LLM=1`; installed at ALL 10 pytest rootdirs). 3 adversarial
-  security-review rounds to convergence + 2 CI-parity fixes (dep-free guard; LLM-scoped
-  predicate). #1844+#1845 CLOSED.
-- **PR #1850** (merged) — repaired 18 test files with assertions stale against the new
-  env-first defaults (example + optional-dep-gated + ambient-.env-dependent tests NOT in
-  the CI matrix, so #1847 went stale-green on them). Test-only, correct fixes (updated
-  assertions + `monkeypatch.delenv` env-isolation), not masking.
-- **PR #1851** (merged) — version bumps. **PUBLISHED PyPI**: kailash-kaizen 2.37.1
-  (tag `kaizen-v2.37.1`) + kaizen-agents 0.11.2 (tag `kaizen-agents-v0.11.2`). Clean-venv
-  verified from real PyPI: versions correct, bare default = gpt-4o (non-obsolete).
-- **kailash-rs cross-SDK inspection** (read-authorized, receipt in `.claude/cross-repo-authz/`):
-  BOTH gaps ABSENT — Rust SDK does env-first fail-closed model resolution
-  (`resolve_model` errors when unset) + real-provider tests are `#[ignore]`+env-gated.
-  NO mirror issue warranted. Cross-sdk-inspection obligation satisfied.
+## Read first
+1. `workspaces/issue-1720-llm-consolidation/wave-ledger-2.md` — full per-shard ledger (8 feature PRs + release, redteam rounds incl. the CRITICAL #1842-S3 catch, all findings + dispositions).
+2. `CLAUDE.md` — project rules.
 
-## Follow-ups filed (non-blocking)
+## Issues closed this session
+#1842 (EATP revocation: ledger + HeadCommitment + verify-consults-signed-ledger, security-hardened) · #1843 (MCP tenant isolation) · #1803 (kaizen governance-gate).
+Filed: #1869 (kaizen-providers.md spec split, DQ). Merged: #1865/#1866/#1867/#1868/#1870/#1871/#1872 (features) + #1873 (authz receipt) + #1875 (release-prep).
 
-- **#1848** — cost-guard hardening: uniform rootdir-conftest placement + durable per-rootdir
-  tests (no exposure today; grep-verified wiring).
-- **#1849** — kaizen-agents bare `pip install` breaks on numpy eager-import via rag_research
-  (PRE-EXISTING on published 0.11.1; real architectural fix = lazy imports; NOT in this patch).
+## In-flight state
+Nothing uncommitted of substance. Local main FF'd to origin/main. Cross-repo READ authz receipt (kailash-rs) upstreamed via #1873. Untracked spend-artifact junk under packages/kaizen-agents/ (pre-existing) — leave.
 
-## Codify candidate
+## CARRY-FORWARD (value-anchored, fresh session)
+| ID | Item | Value | Status |
+| -- | ---- | ----- | ------ |
+| #1841-S2b | Enrich DelegationRecord (structured constraints/resource_limits/scope/multi-sig/trust_level) → records SIGN v3-complete → **quorum-integrity value** | HIGH — the #1841 headline fix; engine+version-gate scaffolding ALREADY merged | OPEN, ~12+ inv byte-CHANGING data-model + cross-SDK lockstep |
+| #1846 | dataflow Vector byte-lockstep | feature parity | BLOCKED on rs#1990 (unmerged; no authored reference vectors). Re-check when rs#1990 lands. |
+| DQ7 | kaizen-providers.md split (>300 lines) | maintainability | tracked #1869 |
+| DQ9 | non-ASCII posture harmonize #1841/#1842 engines (one fail-closes, other trusts RFC-8785) | consistency | deferred-quality |
+| DQ10 | key-zeroization (del b64_priv) both sign sites (signed_ledger + head_commitment) | defense-in-depth | deferred-quality |
+| DQ11 | #1841 rotation.py:546 try/except (unknown-version record aborts rotation batch; fails closed) | robustness | fold into #1841-S2b |
 
-- When a change alters a default/behavior, sweep ALL tests asserting the old value — incl.
-  example tests + optional-dep-gated tests NOT in the standard CI matrix (they go
-  stale-green). #1847 CI was green while 18 full-suite tests were stale (caught at release).
+## Traps / lessons (CODIFY candidates)
+- **correctness-review-clean ≠ security-clean**: RT-verify-corr passed #1842-S3 CLEAN; RT-verify-sec (adversarial) caught a CRITICAL revocation-resurrection bypass (single-file head delete → all revoked delegations silently un-revoked) + a HIGH monotonic-regression + the revocation_verifier=None fail-open. BOTH adversarial lenses non-negotiable on security-critical shards.
+- **secure-default recurrence**: same fail-open-default shape hit #1843 (require_caller_identity=False) AND #1842-S3 (revocation_verifier=None). New security features should default fail-CLOSED (or loud-WARN when a required verifier is unwired).
+- **CodeQL orphan check**: repo has BOTH a "CodeQL Security Scanning" WORKFLOW (real scan) AND an orphaned "CodeQL" default-setup CHECK that hangs `queued`. Verify the WORKFLOW=success on the head, then admin-merge over the orphaned check (it never completes).
+- **duplicate-run race** (git.md): a concurrency-CANCELLED duplicate `build` run shows as "fail" in `gh pr checks` while the real run succeeds — verify the SUCCESS run is on the current head SHA before admin-merging.
+- EATP byte-lockstep: rs LEADS + authored the vectors (committed on rs default branch even though rs#1795/#1849/#1763 tracking issues stay OPEN); NEVER reason bytes — pin the exact rs vectors behind a PROVISIONAL tripwire; re-pin in lockstep.
 
-## Outstanding ledger (untouched — was kept isolated from the cost branch)
+## Release facts (for next release)
+- Tag convention: core `v<X.Y.Z>`, `pact-v<X.Y.Z>`, `kaizen-v<X.Y.Z>`. Tag-triggered OIDC "Publish to PyPI" workflow. release/* branch auto-skips the heavy PR-gate matrix.
+- Dep-pins this release: NONE needed (sub-pkg kailash>= floors already satisfied; grep-verified no new-core-symbol usage in pact/kaizen).
+- nexus/mcp: no changes since nexus-v2.14.0 / mcp-v0.4.2 — NOT released.
 
-| ID | Item | Notes |
-| -- | ---- | ----- |
-| #1840 | sanitize creds in provider/MCP exception logs | HIGH sec; py-side in-repo; cross-SDK mirror needs auth |
-| #1834/#1835 | provider-suite PKCE+nonce / id_token JWKS | #1815 follow-ups; in-repo |
-| #1841 | EATP multi-sig→V3Complete signing pre-image | HIGH; byte-lockstep w/ rs; SEQUENTIAL before #1842 |
-| #1842 | EATP revocation ledger + head-commitment | HIGH; byte-lockstep; after #1841 |
-| #1843 | MCP first-class tenant isolation | cross-sdk |
-| #1836 | webhook fail-closed decision | needs user decision |
-| #1818 | google_embeddings four-axis wire | BLOCKED (GCP creds) |
+## Codify complete (2026-07-20)
+- /codify DONE on branch `codify/jack-hong-2026-07-20`: TWO rule clauses landed with canonical-8-field clause-scoped Trust Posture Wiring —
+  - `security.md` § "Secure-Default For A New Security Feature — Fail-Closed Or Loud-WARN, Never A Silent No-Op" (recurred #1843 + #1842-S3).
+  - `agents.md` § "MUST: Correctness-Review-Clean Is Not Security-Clean" (evidence #1842-S3).
+- Self-referential Rule-1 gate (agents.md allowlisted): 3-lens PARALLEL redteam (CODIFY-rev/sec/arch) converged NO-BLOCKER; two non-blocking tightenings applied.
+- posture.json `pending_verification = [security, agents]`; anchor advanced → 2026-07-20T07:41:49Z; BUILD→loom proposal appended (pending_review, Rule-10 headroom = loom Gate-1 action).
+- Journal: `journal/0007-DECISION` + `journal/0008-DISCOVERY`. CodeQL-orphan/duplicate-run lessons remain captured in this notes file (not rule-worthy — CI-environment facts, not SDK/COC contracts).
 
-## Traps
-
-- COST NOW SAFE: key can be restated; main clean (0 obsolete defaults, AST-verified); a bare
-  pytest withholds provider secrets. To run real-LLM tests: `KAIZEN_ALLOW_REAL_LLM=1`.
-- #1841→#1842 HARD serialize (same EATP signing surface). #1840/#1841/#1842 need FRESH
-  cross-repo READ auth (the kailash-rs read receipt from this session is SPENT/scoped to the cost inspection).
-- Untracked cost-artifact junk in packages/kaizen-agents/ (hello_world.py, consensus_result_*,
-  evaluations/, etc.) — byproducts of the original manual spend runs; left untouched (no bulk discard).
+## Open questions for the human
+- Proceed with #1841-S2b (quorum-integrity data-model enrichment) next session? It's the last piece of the #1841 headline value.

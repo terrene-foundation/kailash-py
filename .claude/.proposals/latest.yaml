@@ -1160,3 +1160,103 @@ changes:
       priority:10 path-scoped rule; added a length rationale in the same edit). NOT on the
       self-referential-codify allowlist -> no mandatory multi-agent gate. CLASSIFICATION global: any
       SDK / downstream consumer that changes a default inherits the failure mode (language-agnostic).
+  - type: rule_update
+    artifact: security
+    files:
+      - .claude/rules/security.md
+    classification_suggestion: global
+    context: >
+      APPEND 2026-07-20 (Wave-B/3 EATP post-release codify). NEW security.md section "Secure-Default
+      For A New Security Feature — Fail-Closed Or Loud-WARN, Never A Silent No-Op": when a NEW security
+      feature is gated behind a config field / kwarg / injected dependency whose DEFAULT makes the feature
+      a SILENT NO-OP, that default is fail-OPEN — the release ships the protection's headline claim while
+      every un-wired deployment believes it is protected and is not. The default MUST be either (a)
+      fail-CLOSED (feature ON by default, opt-OUT explicit) OR (b) when backward-compat genuinely forbids
+      on-by-default (the feature needs a key/store/identity a pre-upgrade caller has not wired), a LOUD
+      one-time WARN at init/first-use naming the OFF protection + the exact wiring. Silent-no-op default
+      with neither is BLOCKED. DO/DO-NOT (require_caller_identity=True; the revocation_verifier=None
+      one-time WARN; vs the silent-no-op defaults), 5-phrase BLOCKED corpus, Why, Origin, AND a
+      canonical-8-field clause-scoped Trust Posture Wiring (grace 2026-07-20 -> 2026-07-27; detection =
+      security-reviewer at /implement + cc-architect at /codify confirm the enabling default fails closed
+      OR emits a loud WARN, AND — for the (b) WARN path — that fail-closed was genuinely infeasible, not
+      assumed). Also names the new clause in security.md's length-rationale enumeration.
+
+      EVIDENCE (recurred TWICE this session, both caught by an ADVERSARIAL /redteam, neither by the
+      feature's own tests): (1) kailash-pact 0.16.0 McpGovernanceConfig.require_caller_identity defaulted
+      False (silent-no-op: a deployment sets tenant_grants, forgets caller_identity, trusts the body
+      tenant -> zero isolation) -> flipped to True (fail-closed), #1843; (2) kailash 2.58.0
+      TrustOperations(revocation_verifier=None) skipped the signed-ledger gate for every un-wired caller
+      with no signal -> kept None for backward-compat but added the one-time WARN, #1842-S3. Ground-truth
+      re-verified this session: packages/kailash-pact/src/pact/mcp/types.py:244
+      `require_caller_identity: bool = True`; src/kailash/trust/operations/__init__.py:250
+      `revocation_verifier=None` + the one-time WARN latch at :274-277/:591-608.
+
+      rule-authoring Rule 10 (proximity-band) — LOOM-SIDE GATE-1 ACTION REQUIRED: security.md is
+      priority:0 / scope:baseline; this ~40-line MUST section MAY fall within the 15% proximity-band on a
+      near-breach lane (codex-rs / gemini-rs). This BUILD repo cannot faithfully run loom's
+      aggregate-emission `emit.mjs --all --dry-run` headroom check; Gate-1 MUST run it and EITHER (a) pair
+      the addition with an extraction recovering the bytes on the near-breach lane (depth to
+      skills/18-security-patterns/), OR (b) carry a named-rationale exception. NOT performed in this BUILD
+      proposal by design. UNLIKE the prior grandfathered security.md entries, this clause SHIPS WITH its
+      canonical-8-field Trust Posture Wiring already authored (clause-scoped per the trust-posture.md MUST-8
+      grandfather-cutoff precedent set by this file's own Enforcement-Surface-Parity clause), so no Gate-1
+      wiring-retrofit decision is needed for it.
+
+      Self-referential /codify gate: security.md is NOT on self-referential-codify.md Rule 2's allowlist,
+      but the SAME codify also edits agents.md (which IS on the allowlist, entry below), so the mandatory
+      posture-independent multi-agent redteam-with-tests round fired for the whole codify: reviewer +
+      security-reviewer + cc-architect ran in parallel against the proposal + receipt journal + originating
+      evidence; verdict NO BLOCKER (3/3), two non-blocking tightenings applied to the proposed text (the
+      WARN-path infeasibility interrogation in the Detection field; naming the clause in the length
+      rationale). CLASSIFICATION global: the secure-default-fail-closed-or-loud-WARN principle is
+      CLI-neutral and cross-SDK — the kailash-rs binding is the same shape (a new signed-revocation /
+      caller-identity gate defaulting to a silent no-op is the identical failure). DO/DO-NOT examples are
+      illustrative Python (no CLI delegation primitive), emits globally with no cross-cli slot partitioning.
+      Receipt: workspaces/issue-1720-llm-consolidation (wave-ledger-2.md + .session-notes) + this codify's
+      journal DECISION/DISCOVERY.
+  - type: rule_update
+    artifact: agents
+    files:
+      - .claude/rules/agents.md
+    classification_suggestion: global
+    context: >
+      APPEND 2026-07-20 (Wave-B/3 EATP post-release codify). NEW agents.md section under § Quality Gates:
+      "MUST: Correctness-Review-Clean Is Not Security-Clean — The Adversarial Security Lens Is
+      Non-Negotiable On Security-Critical Changes". A correctness / closure-parity reviewer returning CLEAN
+      is NOT evidence a change is SECURITY-clean — the two lenses answer DIFFERENT questions (correctness:
+      does it do what it claims on the TESTED paths + map ACs to code; adversarial security: can an ATTACKER
+      defeat it OFF the tested paths — fail-open on an absent file, a store-writer rollback, a silent-no-op
+      default, a TOCTOU race). A security-critical change (auth, crypto-signing, revocation,
+      tenant-isolation, a fail-closed gate, any trust-boundary) MUST be redteamed by BOTH a correctness
+      reviewer AND an adversarial security-reviewer prompted to REFUTE, both returning a genuine ran-signal
+      (§ Redteam Reviewer Dispatch), before convergence. Counting a CLEAN correctness verdict AS the
+      security round — or dispatching only a correctness reviewer for a security-critical change — is
+      BLOCKED. DO/DO-NOT, 4-phrase BLOCKED corpus, Why, and canonical-8-field clause-scoped Trust Posture
+      Wiring (grace 2026-07-20 -> 2026-07-27).
+
+      EVIDENCE: kailash 2.58.0 #1842-S3 (signed revocation ledger). The correctness/closure-parity reviewer
+      returned CLEAN (13/13 tests, all 3 ACs MET, "Fixes #1842" justified — ground-truth: PR #1872 body +
+      commit 555875899); the adversarial security-reviewer, run in the SAME round, caught a CRITICAL
+      revocation-resurrection bypass (deleting one revocation_head.json file silently un-revoked
+      everything) + a HIGH non-monotonic high-water regression + the revocation_verifier=None fail-open —
+      none of which the correctness lens saw. All fixed (head-absent+high_water>0 -> RAISE; CAS-under-one-
+      lock; owner-signed high-water; loud WARN; key-parity assert) before merge.
+
+      rule-authoring Rule 10 (proximity-band) — LOOM-SIDE GATE-1 ACTION REQUIRED: agents.md is priority:0 /
+      scope:baseline; this ~30-line MUST section MAY fall within the 15% proximity-band on a near-breach
+      lane. This BUILD repo cannot faithfully run loom's `emit.mjs --all --dry-run` headroom check; Gate-1
+      MUST run it and EITHER (a) pair with an extraction (depth to skills/30-claude-code-patterns/ alongside
+      the § Redteam Reviewer Dispatch extraction), OR (b) carry a named-rationale exception. NOT performed
+      in this BUILD proposal by design. Clause SHIPS WITH its canonical-8-field Trust Posture Wiring already
+      authored (clause-scoped per the § Triad clause's own post-MUST-8-cutoff precedent in this same file),
+      so no Gate-1 wiring-retrofit decision is needed.
+
+      Self-referential /codify gate: agents.md IS on self-referential-codify.md Rule 2's allowlist -> the
+      mandatory posture-independent multi-agent redteam-with-tests round (reviewer + security-reviewer +
+      cc-architect, parallel) fired and is satisfied by this codify's 3-reviewer NO-BLOCKER convergence
+      (verdicts received against the proposal + receipt journal + originating #1842-S3 evidence).
+      CLASSIFICATION global: the correctness-clean-is-not-security-clean discipline is CLI-neutral and
+      applies to every repo running a two-lens gate; the DO/DO-NOT examples are illustrative markdown (no
+      per-CLI delegation primitive), emits globally with no cross-cli slot partitioning. Companion to the
+      security.md secure-default entry above (both from the same #1842-S3 / #1843 evidence). Receipt: this
+      codify's journal DECISION/DISCOVERY + workspaces/issue-1720-llm-consolidation.
