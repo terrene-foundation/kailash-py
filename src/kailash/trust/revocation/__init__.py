@@ -76,6 +76,12 @@ from kailash.trust.revocation.broadcaster import (
     TrustRevocationList,
 )
 from kailash.trust.revocation.cascade import RevocationResult, cascade_revoke
+from kailash.trust.revocation.head_commitment import (
+    HEAD_COMMITMENT_DOMAIN_SEP,
+    HeadCommitment,
+    HeadCommitmentAnchor,
+    HeadCommitmentError,
+)
 from kailash.trust.revocation.signed_ledger import (
     GENESIS_TIP,
     REVOCATION_EVENT_DOMAIN_SEP,
@@ -117,4 +123,9 @@ __all__ = [
     "REVOCATION_EVENT_DOMAIN_SEP",
     "REVOCATION_LEDGER_DOMAIN",
     "GENESIS_TIP",
+    # Owner-signed persisted-head commitment (EATP-12 D5)
+    "HeadCommitment",
+    "HeadCommitmentAnchor",
+    "HeadCommitmentError",
+    "HEAD_COMMITMENT_DOMAIN_SEP",
 ]

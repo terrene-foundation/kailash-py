@@ -694,12 +694,60 @@ enforcement: `append()` fails closed (`RevocationLedgerError`) unless each
 event's `epoch` is strictly greater than the current tip's — no reorder, replay,
 or delete surface.
 
-**Cross-SDK PROVISIONAL tripwires.** The pre-image + signature (RE0-RE3, incl.
-the RE3 nanosecond-fidelity boundary) and tip fold (LT0 all-zero empty, LT1,
-LT2, LT3 reversed-differs) are pinned in
-`tests/regression/test_signed_revocation_ledger_vectors.py` against the
-rs-authored vectors vendored under `tests/test-vectors/`
-(`revocation-event-vectors.json`, `revocation-ledger-tip-vectors.json`) per
+**Owner-signed HeadCommitment epoch anchor.** An ADDITIVE persisted-head anchor
+lives in `kailash.trust.revocation.head_commitment`, BINDING the tip the fold
+above produces into a higher-level record the owner signs once per authenticated
+state change (it does NOT modify signed_ledger's byte contract).
+`HeadCommitment.signing_preimage()` builds canonical JSON (JCS: sorted keys,
+ASCII, no whitespace) of `{block_count, domain_sep, epoch,
+revocation_ledger_tip, signed_at, tip_hash}`, where `domain_sep` is the
+colon-LESS STRING-FIELD constant `HEAD_COMMITMENT_DOMAIN_SEP`
+(`"EATP-12/head-commitment/v1"`), both 32-byte hashes are lowercase-hex-encoded,
+and `signed_at` is RFC 3339 with EXACTLY 9 fractional (nanosecond) digits + `Z`,
+STRING-PRESERVED end-to-end. `revocation_ledger_tip` is the value
+`revocation_ledger_tip()` returns (`GENESIS_TIP` for an empty ledger). It uses
+the SAME shared `canonical_json_dumps` encoder (`kailash.trust._json`, raw-UTF-8
+JCS family — byte-identical to the pinned rs pre-image on the all-ASCII / hex
+conformance vectors). `HeadCommitment.sign()` / `.verify()` produce/check an
+Ed25519 hex signature over the pre-image bytes DIRECTLY (Ed25519 is
+deterministic) via the `kailash.trust.signing.crypto` primitives. `epoch` is the
+SAME unified `u64` counter the fold uses (spanning block-appends +
+revocation-appends), enforced fail-closed to `[0, 2**64)`.
+
+**Anti-rollback (replay defense).** `HeadCommitmentAnchor` retains a high-water
+epoch across persisted-head reads and REJECTS (`HeadCommitmentError`, fail-closed)
+a persisted `HeadCommitment` whose `epoch` is strictly LOWER than the retained
+high-water — a stale-head replay. An epoch EQUAL to the high-water (re-reading the
+current head) is accepted; a strictly-greater epoch advances the anchor. The
+high-water never decreases within one instance lifetime, including across a
+rejected replay. Equal-epoch defense-in-depth: a same-epoch head whose `tip_hash`
+differs from the pinned one is REJECTED as an equivocation / same-epoch fork (under
+the strict-monotonic-epoch invariant one epoch has at most one head, so a differing
+same-epoch tip is a forgery signal).
+
+**Durability contract (`#1842-S3` REQUIREMENT).** The high-water is IN-MEMORY and
+monotonic only within ONE `HeadCommitmentAnchor` lifetime. A bare
+`HeadCommitmentAnchor()` (default `initial_epoch=0`) fails OPEN — it accepts any
+epoch ≥ 0, correct ONLY for genuine first-use with no head history. A caller
+persisting heads across process restarts MUST (a) persist `high_water_epoch` (and
+`high_water_tip_hash`, to carry the equivocation defense) after each `accept()`, and
+(b) RE-SEED `initial_epoch` (and `initial_tip_hash`) from that durable store when
+reconstructing the anchor on the persisted-head read path. Constructing a bare
+anchor on the persisted-head read path is a ROLLBACK VULNERABILITY (every restart
+resets the high-water to 0 and would accept a stale lower-epoch head silently). The
+durability WIRING (which store, when to persist) is #1842 shard 3's job; this shard
+ships the enforced-as-documented in-memory contract + the `initial_epoch` /
+`initial_tip_hash` re-seed handles.
+
+**Cross-SDK PROVISIONAL tripwires.** The event pre-image + signature (RE0-RE3,
+incl. the RE3 nanosecond-fidelity boundary), tip fold (LT0 all-zero empty, LT1,
+LT2, LT3 reversed-differs), and the head-commitment pre-image + owner signature
+(HC0 genesis-all-zero, HC1, HC2 post-revocation, HC3 nanosecond-fidelity
+boundary) plus the anti-rollback anchor are pinned in
+`tests/regression/test_signed_revocation_ledger_vectors.py` and
+`tests/regression/test_head_commitment_vectors.py` against the rs-authored vectors
+vendored under `tests/test-vectors/` (`revocation-event-vectors.json`,
+`revocation-ledger-tip-vectors.json`, `head-commitment-vectors.json`) per
 `rules/cross-sdk-inspection.md` Rule 4a. These are PROVISIONAL
 (rs#1849 / rs#1763 OPEN) — re-pin in lockstep if rs changes the reference bytes,
 per `rules/cross-sdk-inspection.md` Rule 4b.

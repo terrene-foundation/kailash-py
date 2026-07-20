@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "contract": "head-commitment-v1",
+  "description": "Cross-SDK reference vectors for the EATP-12 D5 owner-signed HeadCommitment pre-image + Ed25519 signature (kailash-rs LEADS). The signing pre-image is canonical-JSON (JCS-sorted keys, ASCII-only, no whitespace) of {block_count, domain_sep, epoch, revocation_ledger_tip, signed_at, tip_hash} with 32-byte hashes hex-encoded and the timestamp as RFC 3339 with fixed 9-digit nanoseconds + Z. The owner signs those pre-image bytes directly (Ed25519 is deterministic). GENERATED from crates/eatp/src/vault/epoch_anchor.rs — do NOT hand-edit; regenerate via `cargo run -p eatp --example gen_epoch_anchor_vectors`. Pinned by tests/epoch_anchor_vectors.rs.",
+  "domain_sep": "EATP-12/head-commitment/v1",
+  "keypair": {
+    "comment": "RFC 8032 §7.1 Test 1 secret key. Cross-SDK byte-shape fixtures only; never live signing.",
+    "secret_key_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+  },
+  "vectors": [
+    {
+      "id": "HC0-genesis-epoch0",
+      "description": "Sentinel: genesis head, epoch=0, block_count=0, all-zero tips, empty revocation ledger.",
+      "input": {
+        "epoch": 0,
+        "block_count": 0,
+        "tip_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "revocation_ledger_tip": "0000000000000000000000000000000000000000000000000000000000000000",
+        "signed_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"block_count\":0,\"domain_sep\":\"EATP-12/head-commitment/v1\",\"epoch\":0,\"revocation_ledger_tip\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"signed_at\":\"2026-07-17T00:00:00.000000000Z\",\"tip_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\"}",
+      "expected_signature_hex": "fc8c420ff50d85d413c670c02c168945aefc0a9c1c0641d5e376bd7f364c913eb3660d5cb3a5b59ae36f46fc823e5a88fbd4638f1c64199b8fdfbec261616d02"
+    },
+    {
+      "id": "HC1-single-append",
+      "description": "Single chain append: epoch=1, block_count=1, non-zero chain tip, empty revocation ledger.",
+      "input": {
+        "epoch": 1,
+        "block_count": 1,
+        "tip_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "revocation_ledger_tip": "0000000000000000000000000000000000000000000000000000000000000000",
+        "signed_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"block_count\":1,\"domain_sep\":\"EATP-12/head-commitment/v1\",\"epoch\":1,\"revocation_ledger_tip\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"signed_at\":\"2026-07-17T00:00:00.000000000Z\",\"tip_hash\":\"1111111111111111111111111111111111111111111111111111111111111111\"}",
+      "expected_signature_hex": "2cfffff86e87b010e37fdb9d3e9e305b27abb819529672450ded5ab2f2103ece7065897f7b54b293e802b196ab8d87bf18eeaf6122b45ebe190b76a9f9a2930b"
+    },
+    {
+      "id": "HC2-post-revocation",
+      "description": "Post-revocation head: epoch=2, block_count=1, non-zero chain tip AND non-zero revocation-ledger tip.",
+      "input": {
+        "epoch": 2,
+        "block_count": 1,
+        "tip_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+        "revocation_ledger_tip": "abababababababababababababababababababababababababababababababab",
+        "signed_at": "2026-07-17T00:00:00.000000000Z"
+      },
+      "expected_canonical_preimage": "{\"block_count\":1,\"domain_sep\":\"EATP-12/head-commitment/v1\",\"epoch\":2,\"revocation_ledger_tip\":\"abababababababababababababababababababababababababababababababab\",\"signed_at\":\"2026-07-17T00:00:00.000000000Z\",\"tip_hash\":\"2222222222222222222222222222222222222222222222222222222222222222\"}",
+      "expected_signature_hex": "558f26d5c04f66b53606a22fe7c5bb39a75a6921eba0f6ce3c111c42aa53be17997fddf37d6e9911abe6b7aff89a05c8f97f28614b5889a9ac283083eeb96b0f"
+    },
+    {
+      "id": "HC3-fractional-second-boundary",
+      "description": "Boundary: non-zero 9-digit fractional second (2026-07-17T12:34:56.123456789Z) pins nanosecond fidelity — a following SDK MUST string-preserve the timestamp, not microsecond-truncate it.",
+      "input": {
+        "epoch": 3,
+        "block_count": 2,
+        "tip_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+        "revocation_ledger_tip": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "signed_at": "2026-07-17T12:34:56.123456789Z"
+      },
+      "expected_canonical_preimage": "{\"block_count\":2,\"domain_sep\":\"EATP-12/head-commitment/v1\",\"epoch\":3,\"revocation_ledger_tip\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"signed_at\":\"2026-07-17T12:34:56.123456789Z\",\"tip_hash\":\"3333333333333333333333333333333333333333333333333333333333333333\"}",
+      "expected_signature_hex": "b65a7d3f30fa2e291945b912d0f6d12f555deb7a6811f86b921361050468e2c7fe71df41da1bc82b69e56997d398c34d88d8db0206539941317e42102bf95406"
+    }
+  ]
+}
