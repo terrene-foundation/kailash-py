@@ -241,4 +241,4 @@ Generates OpenAI-compatible JSON schemas from Kaizen signatures. Properties are 
 
 - `strict=True` mode provides 100% format compliance but requires specific OpenAI model versions.
 - `strict=False` (legacy json_object) provides ~70-85% compliance across all OpenAI models.
-- When structured output is enabled, MCP auto-discovery is suppressed (see `kaizen-providers.md` section 10.5).
+- When structured output is enabled, MCP auto-discovery is suppressed (see `kaizen-providers-tool-integration.md` § 10.5).

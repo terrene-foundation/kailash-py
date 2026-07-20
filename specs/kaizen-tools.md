@@ -221,7 +221,8 @@ Tier 2 / Tier 3 coverage is via the production caller path (`kaizen_local.py`
 ## See Also
 
 - `kaizen-core.md` — `BaseAgent`, agent lifecycle, tool registry initialization
-- `kaizen-providers.md` — Provider system, MCP integration, tool routing
+- `kaizen-providers-provider-system.md` — Provider system, tool routing
+- `kaizen-providers-tool-integration.md` — MCP integration
 - `kaizen-llm-deployments.md` — LLM deployment surface that consumes
   `get_schema()` for tool-call construction
 - `rules/dependencies.md` — Lazy-import sentinel + optional-extras patterns
