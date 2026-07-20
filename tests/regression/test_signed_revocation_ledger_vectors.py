@@ -196,6 +196,29 @@ def test_malformed_event_fails_closed() -> None:
         SignedRevocationEvent("del-x", True, "2026-07-17T00:00:00.000000000Z")
 
 
+def test_non_ascii_delegation_id_fails_closed() -> None:
+    """A non-ASCII delegation_id is rejected at construction (fail-closed).
+
+    Regression for the DQ9 fail-open: ``delegation_id`` is the only free-string
+    field that reaches the event signing pre-image, which is byte-verified
+    against the kailash-rs reference ONLY on the all-ASCII conformance vectors.
+    A non-ASCII value would emit un-pinned raw-UTF-8 bytes single-SDK — the same
+    fail-open the #1841 delegation-signing engine already closes. Harmonizes the
+    revocation ledger with that fail-closed non-ASCII posture.
+    """
+    with pytest.raises(RevocationLedgerError, match="ASCII-only"):
+        SignedRevocationEvent("café-0001", 0, "2026-07-17T00:00:00.000000000Z")
+    with pytest.raises(RevocationLedgerError, match="ASCII-only"):
+        # an en-dash (U+2013) inside an otherwise-ASCII id is still rejected.
+        SignedRevocationEvent("del–0001", 0, "2026-07-17T00:00:00.000000000Z")
+    # Byte-NEUTRAL: an ASCII (UUID-shaped) delegation_id constructs unchanged and
+    # still reproduces the pinned pre-image (covered by the vector tests above).
+    ok = SignedRevocationEvent(
+        "00000000-0000-4000-8000-000000000001", 0, "2026-07-17T00:00:00.000000000Z"
+    )
+    assert ok.delegation_id == "00000000-0000-4000-8000-000000000001"
+
+
 # --- Crypto-review hardening -------------------------------------------------
 
 

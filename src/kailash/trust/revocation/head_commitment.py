@@ -195,7 +195,15 @@ class HeadCommitment:
             The 64-byte Ed25519 signature, lowercase hex-encoded.
         """
         b64_priv = base64.b64encode(private_key_seed).decode("ascii")
-        b64_sig = crypto.sign(self.signing_preimage(), b64_priv)
+        try:
+            b64_sig = crypto.sign(self.signing_preimage(), b64_priv)
+        finally:
+            # Drop the base64 secret-key copy immediately after use to minimize
+            # its in-memory lifetime (trust-plane-security.md MUST-NOT-3). Python
+            # cannot zeroize the immutable str's buffer, but dropping the reference
+            # lets it be reclaimed at the earliest GC (mirrors the SignedRevocationEvent
+            # signing site in signed_ledger.py).
+            del b64_priv
         return base64.b64decode(b64_sig).hex()
 
     def verify(self, signature_hex: str, public_key: bytes) -> bool:
