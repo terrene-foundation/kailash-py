@@ -29,7 +29,7 @@ Four integration surfaces Kaizen 2.12.0 ships:
 - AgentDiagnostics internals (event aggregation, rollup math) → `specs/kaizen-observability.md`.
 - Judge evaluation → `specs/kaizen-judges.md`.
 - Signature authoring → `specs/kaizen-signatures.md`.
-- Provider abstraction → `specs/kaizen-providers.md`.
+- Provider abstraction → `specs/kaizen-providers-provider-system.md`.
 - Agent governance → `specs/kaizen-agents-governance.md`.
 
 ### 1.3 Non-Goals
