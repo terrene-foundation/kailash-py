@@ -99,7 +99,7 @@ def _make_verifier(
     store_dir: Path, pubkey: bytes
 ) -> Tuple[SignedRevocationVerifier, SignedRevocationStore, DurableHighWaterStore]:
     signed_store = SignedRevocationStore(store_dir)
-    highwater_store = DurableHighWaterStore(store_dir)
+    highwater_store = DurableHighWaterStore(store_dir, pubkey)
     verifier = SignedRevocationVerifier(pubkey, signed_store, highwater_store)
     return verifier, signed_store, highwater_store
 
@@ -270,10 +270,128 @@ def test_malformed_high_water_store_fails_closed(tmp_path, owner_keys):
     resets the anti-rollback high-water to 0)."""
     from kailash.trust.revocation.verify import HIGHWATER_FILENAME
 
+    _, pubkey = owner_keys
     (tmp_path / HIGHWATER_FILENAME).write_text('{"epoch": "not-an-int"}')
-    hw_store = DurableHighWaterStore(tmp_path)
+    hw_store = DurableHighWaterStore(tmp_path, pubkey)
     with pytest.raises(RevocationVerificationError):
         hw_store.load_anchor()
+
+
+# ---------------------------------------------------------------------------
+# Security-redteam regression cases (FIX 1 CRITICAL, FIX 2 HIGH, FIX 3 HIGH)
+# ---------------------------------------------------------------------------
+
+
+def test_R1_head_delete_with_high_water_is_detected(tmp_path, owner_keys):
+    """FIX 1 (CRITICAL): deleting ONLY the signed-head store, leaving the durable
+    high-water at epoch ≥ 1, is a resurrection attempt — verify RAISES, does NOT
+    return an empty (nothing-revoked) set.
+    """
+    seed, pubkey = owner_keys
+    events = [SignedRevocationEvent("del-01", epoch=5, revoked_at=_rfc3339_ns())]
+    head, sig = _build_signed_head(seed, events, epoch=5)
+    verifier, signed_store, _ = _make_verifier(tmp_path, pubkey)
+    signed_store.persist_head(events, head, sig)
+    assert verifier.is_revoked("del-01") is True  # advances + persists high-water
+
+    # Store-writer deletes ONLY revocation_head.json (high-water file remains).
+    (tmp_path / HEAD_FILENAME).unlink()
+
+    # A fresh verifier (restart) MUST NOT read "nothing revoked" — the retained
+    # high-water at epoch 5 proves a head existed → fail-closed.
+    verifier2, _, _ = _make_verifier(tmp_path, pubkey)
+    with pytest.raises(RevocationVerificationError) as exc:
+        verifier2.verified_revoked_set()
+    assert (
+        "resurrection" in str(exc.value).lower() or "deleted" in str(exc.value).lower()
+    )
+
+
+def test_R2_lower_epoch_persist_does_not_regress_high_water(tmp_path, owner_keys):
+    """FIX 2 (HIGH): a lower-epoch accept after a higher one is rejected and does
+    NOT lower the durable high-water.
+    """
+    seed, pubkey = owner_keys
+    _, _, hw_store = _make_verifier(tmp_path, pubkey)
+
+    head_hi, sig_hi = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=10, revoked_at=_rfc3339_ns())], epoch=10
+    )
+    hw_store.accept_and_persist(head_hi, sig_hi)
+    assert hw_store.load_anchor().high_water_epoch == 10
+
+    head_lo, sig_lo = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=7, revoked_at=_rfc3339_ns())], epoch=7
+    )
+    with pytest.raises(RevocationVerificationError):
+        hw_store.accept_and_persist(head_lo, sig_lo)
+    # High-water is UNCHANGED at 10 — no regression.
+    assert hw_store.load_anchor().high_water_epoch == 10
+
+
+def test_R2_concurrent_accepts_never_regress_high_water(tmp_path, owner_keys):
+    """FIX 2 (HIGH): under concurrency, the compare-and-swap under a single file
+    lock guarantees the durable high-water is monotonic — a racing lower-epoch
+    accept can never lower it below a higher accepted epoch.
+    """
+    import threading
+
+    seed, pubkey = owner_keys
+    _, _, hw_store = _make_verifier(tmp_path, pubkey)
+    head_hi, sig_hi = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=10, revoked_at=_rfc3339_ns())], epoch=10
+    )
+    head_lo, sig_lo = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=7, revoked_at=_rfc3339_ns())], epoch=7
+    )
+    barrier = threading.Barrier(2)
+
+    def worker(commitment, signature):
+        barrier.wait()
+        try:
+            hw_store.accept_and_persist(commitment, signature)
+        except RevocationVerificationError:
+            pass  # a lost race for the lower epoch legitimately raises
+
+    threads = [
+        threading.Thread(target=worker, args=(head_hi, sig_hi)),
+        threading.Thread(target=worker, args=(head_lo, sig_lo)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Whatever the interleaving, the durable high-water settles at the MAX
+    # accepted epoch (10) and never regresses to 7.
+    assert hw_store.load_anchor().high_water_epoch == 10
+
+
+def test_R3_forged_unsigned_high_water_fails_closed(tmp_path, owner_keys):
+    """FIX 3 (HIGH): the durable high-water is owner-signed; a store-writer who
+    forges a low-epoch high-water with a BOGUS signature cannot pass the
+    signature check — load fails closed. (The documented RESIDUAL is replay of a
+    previously-valid owner-signed head, which this signature binding does not
+    claim to prevent.)
+    """
+    seed, pubkey = owner_keys
+    _, _, hw_store = _make_verifier(tmp_path, pubkey)
+    head_hi, sig_hi = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=10, revoked_at=_rfc3339_ns())], epoch=10
+    )
+    hw_store.accept_and_persist(head_hi, sig_hi)
+
+    # Attacker rewrites the high-water to a forged low-epoch head with a bad sig.
+    forged_head, _ = _build_signed_head(
+        seed, [SignedRevocationEvent("d", epoch=1, revoked_at=_rfc3339_ns())], epoch=1
+    )
+    path = tmp_path / "revocation_highwater.json"
+    path.write_text(
+        json.dumps({"head": forged_head.to_dict(), "head_signature": "00" * 64})
+    )
+    with pytest.raises(RevocationVerificationError) as exc:
+        hw_store.load_anchor()
+    assert "signature" in str(exc.value).lower() or "tamper" in str(exc.value).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +527,26 @@ async def test_operations_verify_fails_closed_on_unverifiable_ledger(
         "unverifiable" in result.reason.lower()
         or "fail-closed" in result.reason.lower()
     )
+
+
+async def test_operations_verify_warns_once_when_verifier_absent(ops_factory, caplog):
+    """FIX 4 (Check-2): with NO signed-ledger verifier wired, verify() emits ONE
+    WARN that the authoritative resurrection/rollback layer is OFF (observability),
+    and does NOT hard-fail (backward-compatible default).
+    """
+    import logging
+
+    ops = await ops_factory(verifier=None)
+    with caplog.at_level(logging.WARNING):
+        r1 = await ops.verify(agent_id="agent-001", action="analyze_data")
+        r2 = await ops.verify(agent_id="agent-001", action="analyze_data")
+    assert r1.valid is True and r2.valid is True  # not hard-failed
+    warns = [
+        rec
+        for rec in caplog.records
+        if rec.levelno == logging.WARNING and "signed-revocation" in rec.getMessage()
+    ]
+    assert len(warns) == 1  # emitted exactly ONCE, not per-verify
 
 
 def test_ledger_append_only_ordering_matches_persisted_events(tmp_path, owner_keys):

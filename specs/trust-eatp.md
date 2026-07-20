@@ -738,30 +738,40 @@ resets the high-water to 0 and would accept a stale lower-epoch head silently).
 
 **Authoritative verify + durable anti-rollback wiring (`#1842` shard 3).** The
 durability WIRING and the verify consult live in
-`kailash.trust.revocation.verify`. `DurableHighWaterStore` persists the
-`high_water_epoch` + `high_water_tip_hash` to `revocation_highwater.json` after
-each `accept()` (via `persist_anchor`) and RE-SEEDS a `HeadCommitmentAnchor` from
-it on every read (via `load_anchor` — never a bare anchor, so a process-restart
-replay of a lower-epoch head is REJECTED). `SignedRevocationStore` persists the
-ledger event set ALONGSIDE the owner-signed `HeadCommitment` +
-signature to `revocation_head.json`, so a verifier RECOMPUTES the ledger tip and
-detects a store-writer who added / deleted / reordered an event (the tip changes
-→ the owner-head signature no longer binds it). `SignedRevocationVerifier` is the
-AUTHORITATIVE revocation decision (`verified_revoked_set` / `is_revoked`): it (1)
-verifies the owner's Ed25519 signature over the head, (2) recomputes the ledger
-tip and confirms it equals the signed head tip, (3) re-seeds the durable anchor
-and `accept`s the head (anti-rollback + equivocation), then persists the advanced
-high-water. Any unverifiable condition RAISES `RevocationVerificationError` —
+`kailash.trust.revocation.verify`. `SignedRevocationStore` persists the ledger
+event set ALONGSIDE the owner-signed `HeadCommitment` + signature to
+`revocation_head.json`, so a verifier RECOMPUTES the ledger tip and detects a
+store-writer who added / deleted / reordered an event (the tip changes → the
+owner-head signature no longer binds it). `DurableHighWaterStore` persists the
+accepted head as an **owner-SIGNED** high-water record (`{head, head_signature}`)
+to `revocation_highwater.json` and RE-SEEDS a `HeadCommitmentAnchor` from it on
+every read — never a bare anchor, so a process-restart replay of a lower-epoch
+head is REJECTED. The high-water record's owner signature is verified on every
+load (a store-writer cannot forge an arbitrary lower epoch; the documented
+RESIDUAL is replay of a previously-valid owner-signed head — complete defense
+against a full-local-write adversary needs an EXTERNAL append-only anchor, out of
+scope for local persistence). The re-seed → `accept` → persist sequence runs as
+ONE atomic compare-and-swap under a single `file_lock`, so a concurrent verifier
+cannot interleave a stale read and regress the high-water (monotonic-non-
+decreasing by construction). `SignedRevocationVerifier` is the AUTHORITATIVE
+revocation decision (`verified_revoked_set` / `is_revoked`): it (1) loads the
+signed-head store — an ABSENT store consults the durable high-water FIRST and
+RAISES if a head was ever accepted (`high_water_epoch > 0` = a deleted-head
+resurrection attempt), only genesis (high-water at 0) yields the empty set; (2)
+verifies the owner Ed25519 signature over the head; (3) recomputes the ledger tip
+and confirms it equals the signed head tip; (4) runs the atomic anti-rollback
+CAS. Any unverifiable condition RAISES `RevocationVerificationError` —
 fail-closed: the caller DENIES, NEVER falling open to the mutable unsigned
-`revoked` flag / the in-memory cascade. An ABSENT store is the legitimate
-genesis / empty-ledger case (empty revoked set), distinct from a
-PRESENT-but-unverifiable store (deny). The delegation verify path consults this
-verifier authoritatively: `TrustOperations.verify` (`operations/__init__.py`,
-the `_check_signed_revocation` helper) DENIES at EVERY level (including QUICK)
-when the agent's chain (its `agent_id` or any delegation id) is in the verified
-signed ledger, or when the ledger/head is unverifiable. The in-memory cascade
-(`TrustRevocationList`) and the CRL (`CertificateRevocationList`) MAY remain a
-fast-path cache, but the AUTHORITATIVE decision derives from the signed ledger.
+`revoked` flag / the in-memory cascade. The delegation verify path consults this
+verifier authoritatively: `TrustOperations.verify` (`operations/__init__.py`, the
+`_check_signed_revocation` helper) DENIES at EVERY level (including QUICK) when
+the agent's chain (its `agent_id` or any delegation id) is in the verified signed
+ledger, or when the ledger/head is unverifiable. When NO verifier is wired,
+`verify` emits a one-time WARN that the authoritative layer is OFF (a deployment
+handling untrusted store writers MUST wire a `SignedRevocationVerifier`); it does
+not hard-fail (backward-compatible). The in-memory cascade (`TrustRevocationList`)
+and the CRL (`CertificateRevocationList`) MAY remain a fast-path cache, but the
+AUTHORITATIVE decision derives from the signed ledger.
 
 **Cross-SDK PROVISIONAL tripwires.** The event pre-image + signature (RE0-RE3,
 incl. the RE3 nanosecond-fidelity boundary), tip fold (LT0 all-zero empty, LT1,

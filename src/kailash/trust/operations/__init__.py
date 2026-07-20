@@ -271,6 +271,10 @@ class TrustOperations:
         self.trust_store = trust_store
         self.max_delegation_depth = max_delegation_depth
         self.revocation_verifier = revocation_verifier
+        # FIX 4 (#1842) — one-time WARN latch. When no signed-ledger verifier is
+        # wired, the authoritative resurrection/rollback defenses are OFF; verify()
+        # emits ONE WARN the first time it runs unprotected (observability Rule 4).
+        self._revocation_verifier_absent_warned = False
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -588,6 +592,20 @@ class TrustOperations:
             revoked = self._check_signed_revocation(chain, level)
             if revoked is not None:
                 return revoked
+        elif not self._revocation_verifier_absent_warned:
+            # FIX 4 (#1842) — opt-in fail-open is a real gap: with no signed-ledger
+            # verifier, verify() offers ZERO protection against a store-writer who
+            # flips a persisted `revoked` flag or replays a stale head. Emit ONE
+            # WARN so the missing authoritative layer is observable rather than
+            # silent (observability Rule 4). Deployments handling untrusted store
+            # writers MUST wire a SignedRevocationVerifier.
+            self._revocation_verifier_absent_warned = True
+            logger.warning(
+                "trust verify running WITHOUT the authoritative signed-revocation "
+                "layer (#1842): resurrection/rollback defenses are OFF — wire a "
+                "SignedRevocationVerifier via TrustOperations(revocation_verifier=...) "
+                "for store-tamper protection"
+            )
 
         # QUICK level: Just check hash and expiration
         if level == VerificationLevel.QUICK:

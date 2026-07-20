@@ -85,32 +85,39 @@ class DurableHighWaterStore:
     uses), NOT a bespoke store.
     """
 
-    def __init__(self, store_dir: Path) -> None:
+    def __init__(self, store_dir: Path, owner_public_key: bytes) -> None:
+        """Initialize the durable high-water store.
+
+        Args:
+            store_dir: Directory holding ``revocation_highwater.json``.
+            owner_public_key: The 32-byte Ed25519 owner public key. The persisted
+                high-water is itself an owner-SIGNED head (see the class
+                docstring's FIX-3 note); the signature is verified on every read so
+                a store-writer cannot forge an arbitrary lower epoch — only replay
+                a PREVIOUSLY-VALID owner-signed head (the documented residual).
+        """
         self._store_dir = Path(store_dir)
         self._path = self._store_dir / HIGHWATER_FILENAME
         self._lock_path = self._store_dir / f".{HIGHWATER_FILENAME}.lock"
+        self._owner_public_key = owner_public_key
 
-    def load_anchor(self) -> HeadCommitmentAnchor:
-        """Reconstruct the anchor, re-seeding the high-water from durable state.
+    def _load_anchor_unlocked(self) -> HeadCommitmentAnchor:
+        """Re-seed the anchor from the durable (owner-signed) high-water record.
 
-        A missing file yields a genesis anchor (``initial_epoch=0``) — the
-        legitimate first-use case with no prior head. A present record re-seeds
-        ``initial_epoch`` (+ ``initial_tip_hash``) so a lower-epoch replay after a
-        restart is rejected.
-
-        Raises:
-            RevocationVerificationError: If the persisted high-water record is
-                present but malformed (fail-closed — never silently reset to 0,
-                which would defeat the anti-rollback purpose).
+        Caller MUST hold ``self._lock_path``. A missing file yields a genesis
+        anchor (``initial_epoch=0``) — the legitimate first-use case. A present
+        record is an owner-signed head; its signature is verified before the epoch
+        is trusted (FIX 3). Fail-closed on absent-signature / malformed / bad-sig —
+        NEVER silently reset to 0 (which would defeat anti-rollback).
         """
         if not self._path.exists():
             return HeadCommitmentAnchor()
         try:
             data = safe_read_json(self._path)
-            epoch = data["epoch"]
-            tip_hex = data.get("tip_hash")
-            tip_hash = bytes.fromhex(tip_hex) if tip_hex is not None else None
-            return HeadCommitmentAnchor(initial_epoch=epoch, initial_tip_hash=tip_hash)
+            head = HeadCommitment.from_dict(data["head"])
+            signature_hex = data["head_signature"]
+            if not isinstance(signature_hex, str):
+                raise ValueError("head_signature must be a hex string")
         except (
             OSError,
             json.JSONDecodeError,
@@ -124,19 +131,73 @@ class DurableHighWaterStore:
                 "(fail-closed — refusing to reset the anti-rollback high-water "
                 f"to 0): {exc}"
             ) from exc
+        # FIX 3 — bind the durable high-water to the owner signature. A store-writer
+        # who lowers the persisted epoch must present a validly-owner-signed head at
+        # that epoch, not forge an arbitrary number; an unsigned/forged high-water
+        # fails closed here. RESIDUAL (documented): a full-local-write adversary can
+        # still REPLAY a previously-valid owner-signed head at an earlier epoch —
+        # complete defense against a local store-writer requires an EXTERNAL
+        # monotonic/append-only anchor outside the store's write scope, out of scope
+        # for local persistence.
+        if not head.verify(signature_hex, self._owner_public_key):
+            raise RevocationVerificationError(
+                "durable high-water head signature did not verify (fail-closed — "
+                "the persisted anti-rollback high-water was tampered)"
+            )
+        return HeadCommitmentAnchor(
+            initial_epoch=head.epoch, initial_tip_hash=head.tip_hash
+        )
 
-    def persist_anchor(self, anchor: HeadCommitmentAnchor) -> None:
-        """Persist the anchor's current high-water (epoch + pinned tip) durably.
+    def load_anchor(self) -> HeadCommitmentAnchor:
+        """Re-seed the anchor from durable state (read-only, off the CAS path).
 
-        Called after each successful :meth:`HeadCommitmentAnchor.accept` so the
-        advanced high-water survives a process restart.
+        Used by the head-absent tamper check (a persisted high-water at epoch ≥ 1
+        with the signed-head store deleted is a resurrection signal). Held under the
+        file lock for a consistent read.
+
+        Raises:
+            RevocationVerificationError: If the persisted high-water record is
+                present but malformed or its owner signature does not verify
+                (fail-closed).
         """
-        tip = anchor.high_water_tip_hash
-        record: Dict[str, Any] = {
-            "epoch": anchor.high_water_epoch,
-            "tip_hash": tip.hex() if tip is not None else None,
-        }
         with file_lock(self._lock_path):
+            return self._load_anchor_unlocked()
+
+    def accept_and_persist(
+        self, commitment: HeadCommitment, head_signature_hex: str
+    ) -> None:
+        """Atomic anti-rollback compare-and-swap under ONE file lock (FIX 2).
+
+        Reads the current durable high-water, re-seeds an anchor from it, and
+        ``accept``s ``commitment`` — all inside a SINGLE ``file_lock`` so no
+        concurrent verifier can interleave a stale read between another's
+        accept and persist (the non-monotonic-regression race). ``accept`` enforces
+        ``commitment.epoch >= current`` (rollback → raise) and equal-epoch tip
+        equality (equivocation → raise), so the persisted high-water is
+        monotonic-non-decreasing by construction. Persists the accepted head as the
+        new owner-signed high-water record (FIX 3).
+
+        Args:
+            commitment: The verified :class:`HeadCommitment` being accepted.
+            head_signature_hex: The owner's Ed25519 signature over ``commitment``
+                (already verified by the caller; re-verified on the next load).
+
+        Raises:
+            RevocationVerificationError: On rollback / equivocation (fail-closed),
+                or if the current durable record is unverifiable.
+        """
+        with file_lock(self._lock_path):
+            anchor = self._load_anchor_unlocked()
+            try:
+                anchor.accept(commitment)
+            except HeadCommitmentError as exc:
+                raise RevocationVerificationError(
+                    f"anti-rollback check rejected the persisted head: {exc}"
+                ) from exc
+            record: Dict[str, Any] = {
+                "head": commitment.to_dict(),
+                "head_signature": head_signature_hex,
+            }
             atomic_write(self._path, record)
 
 
@@ -275,6 +336,22 @@ class SignedRevocationVerifier:
         """
         loaded = self._signed_store.load_head()
         if loaded is None:
+            # FIX 1 (CRITICAL) — a MISSING signed-head store is NOT unconditionally
+            # "nothing revoked". A store-writer who deletes ONLY
+            # revocation_head.json (leaving the durable high-water at epoch ≥ 1)
+            # would silently un-revoke EVERY delegation. Consult the durable
+            # high-water FIRST: if a head was ever accepted (high_water_epoch > 0),
+            # an absent signed-head store is a resurrection/tamper signal → deny.
+            # ONLY head-absent AND high-water-at-genesis(0) is the legitimate
+            # empty-ledger case.
+            anchor = self._highwater_store.load_anchor()
+            if anchor.high_water_epoch > 0:
+                raise RevocationVerificationError(
+                    "signed revocation head store is absent but the durable "
+                    f"high-water is at epoch {anchor.high_water_epoch} — the "
+                    "persisted head was deleted (resurrection attempt); "
+                    "fail-closed deny"
+                )
             # Genesis / empty ledger — nothing revoked. NOT a fail-closed deny.
             return set()
         events, head, signature_hex = loaded
@@ -301,16 +378,12 @@ class SignedRevocationVerifier:
             )
 
         # (4) Anti-rollback: re-seed the anchor from the DURABLE high-water (never
-        # a bare anchor) and accept the head. A restart replay of a lower-epoch
-        # head — or a same-epoch equivocating fork — raises here.
-        anchor = self._highwater_store.load_anchor()
-        try:
-            anchor.accept(head)
-        except HeadCommitmentError as exc:
-            raise RevocationVerificationError(
-                f"anti-rollback check rejected the persisted head: {exc}"
-            ) from exc
-        self._highwater_store.persist_anchor(anchor)
+        # a bare anchor) and accept the head — as ONE atomic compare-and-swap under
+        # a single file lock (FIX 2), so a concurrent verifier cannot interleave a
+        # stale read and regress the high-water. A restart replay of a lower-epoch
+        # head — or a same-epoch equivocating fork — raises here. The accepted head
+        # is persisted as the new owner-signed high-water (FIX 3).
+        self._highwater_store.accept_and_persist(head, signature_hex)
 
         return {e.delegation_id for e in events}
 
