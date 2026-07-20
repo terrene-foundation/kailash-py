@@ -26,8 +26,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
-
 # ---------------------------------------------------------------------------
 # Guarded import of PyJWT
 # ---------------------------------------------------------------------------
@@ -39,18 +37,9 @@ except ImportError as _import_err:
         "Install it with: pip install 'pyjwt[crypto]'"
     ) from _import_err
 
-# ---------------------------------------------------------------------------
-# Module-level constants
-# ---------------------------------------------------------------------------
-
-EATP_VERSION: str = "0.2.0"
-"""EATP protocol version embedded in every JWT payload."""
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 from kailash.trust.chain import (
+    ALL_DIMENSIONS,
+    DELEGATION_SIGNING_VERSION_LEGACY,
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -62,6 +51,23 @@ from kailash.trust.chain import (
     TrustLineageChain,
 )
 from kailash.trust.reasoning.traces import ConfidentialityLevel
+from kailash.trust.signing.delegation_fold_serde import (
+    deserialize_fold_fields,
+    serialize_fold_fields,
+)
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Module-level constants
+# ---------------------------------------------------------------------------
+
+EATP_VERSION: str = "0.2.0"
+"""EATP protocol version embedded in every JWT payload."""
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
 def _validate_signing_key(signing_key: str) -> None:
@@ -147,6 +153,14 @@ def _serialize_delegation(delegation: DelegationRecord) -> Dict[str, Any]:
         d["reasoning_trace_hash"] = delegation.reasoning_trace_hash
     if delegation.reasoning_signature is not None:
         d["reasoning_signature"] = delegation.reasoning_signature
+    # #1841 S2b signing fields — a v2/v3 delegation's signature verifies only if
+    # these survive the JWT round-trip (security.md § Multi-Site Kwarg Plumbing).
+    # Prune-when-unset: a legacy record adds NO new claims (byte-neutral JWT).
+    if delegation.signing_payload_version != DELEGATION_SIGNING_VERSION_LEGACY:
+        d["signing_payload_version"] = delegation.signing_payload_version
+    if frozenset(delegation.dimension_scope) != frozenset(ALL_DIMENSIONS):
+        d["dimension_scope"] = sorted(delegation.dimension_scope)
+    d.update(serialize_fold_fields(delegation))
     return d
 
 
@@ -278,6 +292,22 @@ def _deserialize_delegation(data: Dict[str, Any]) -> DelegationRecord:
 
         reasoning_trace = ReasoningTrace.from_dict(data["reasoning_trace"])
 
+    # #1841 S2b signing fields (backward compatible — absent = legacy defaults).
+    signing_payload_version = data.get(
+        "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
+    )
+    raw_dimension_scope = data.get("dimension_scope")
+    dimension_scope = (
+        frozenset(raw_dimension_scope)
+        if raw_dimension_scope is not None
+        else ALL_DIMENSIONS
+    )
+    fold = deserialize_fold_fields(
+        data,
+        signing_payload_version=signing_payload_version,
+        record_id=data.get("id"),
+    )
+
     return DelegationRecord(
         id=data["id"],
         delegator_id=data["delegator_id"],
@@ -299,6 +329,9 @@ def _deserialize_delegation(data: Dict[str, Any]) -> DelegationRecord:
         reasoning_trace=reasoning_trace,
         reasoning_trace_hash=data.get("reasoning_trace_hash"),
         reasoning_signature=data.get("reasoning_signature"),
+        dimension_scope=dimension_scope,
+        signing_payload_version=signing_payload_version,
+        **fold,
     )
 
 
