@@ -125,45 +125,6 @@ Mirror of Rule 4. Any PR that _implements_ a previously-deferred stub — replac
 
 Origin: Session 2026-04-20 kailash-ml 0.13.0 release (PR #552). See `skills/16-validation-patterns/orphan-audit-playbook.md` § 4a for the full 5-matrix-job CI failure.
 
-### 4b. Default / Behavior Change MUST Sweep Stale-Assertion Tests In The Same PR — Including Out-Of-CI-Matrix Tests
-
-Sibling of Rule 4a for VALUE changes. Any PR that changes a default value or observable behavior — a default parameter, a fallback constant, a resolution order, an env-derived default — MUST update or delete EVERY test asserting the OLD value in the SAME PR. The sweep MUST cover tests OUTSIDE the standard CI matrix — example tests, optional-dependency-gated tests (silently skipped when the dep is absent), and ambient-`.env`/environment-dependent tests — which pass **stale-green** (CI never runs them) and fail only in a full local suite. **CI-green is NOT full-suite-green.**
-
-```bash
-# DO — grep the old value across ALL test trees; update each in the SAME PR;
-#      run the FULL suite with every optional dep installed, not just the CI subset
-grep -rn '"gpt-3.5-turbo"' packages/*/tests   # every stale assertion of the old default
-uv pip install -e "packages/<pkg>[all]" && pytest packages/<pkg>/tests   # full suite, deps present
-
-# DO NOT — change the default, see CI green, ship
-#   (example / optional-dep / ambient-env tests keep asserting the old value,
-#    stale-green until a full suite at release prep surfaces them)
-```
-
-**BLOCKED rationalizations:**
-
-- "CI is green, the change is covered"
-- "Example / integration tests aren't in the matrix, they don't count"
-- "The skipped test will be fixed when someone installs the dep"
-- "The fix's own targeted regression run passed" (it ran the new tests, not the stale ones)
-
-**Why:** CI matrices deliberately exclude example, optional-heavy-dependency, and env-coupled tests for speed and hermeticity — so a default change can be fully CI-green while N full-suite tests still assert the old value, surfacing only at release prep or for a downstream user. Grepping the old value + running the full suite in the SAME PR closes it.
-
-Origin: kailash-py PR #1847/#1850 (2026-07-19). The #1844/#1845 cost fix changed model defaults (`gpt-3.5-turbo`→`gpt-4o-mini` in examples; `gpt-4`→env-resolved in specialized agents); CI was fully green, yet 18 test files (example + `sentence-transformers`-gated + ambient-`.env`-dependent) still asserted the old defaults — caught only at release prep (PR #1850), not by #1847's own CI.
-
-#### Trust Posture Wiring (Rule 4b — clause-scoped)
-
-Rule 4b lands post-`trust-posture.md`-MUST-8-cutoff → ships canonical-8-field-compliant; Rules 1–4/4a/5–6a stay grandfathered until each is itself `/codify`-touched (clause-scoped precedent: `security.md`/`git.md`).
-
-- **Severity:** `halt-and-report` at gate-review (reviewer at `/implement` + release-specialist at `/release` confirm any default/behavior-changing diff swept every stale-assertion test, incl. out-of-CI-matrix ones); `advisory` at the hook layer (a default-change→stale-test property is judgment-bearing over the diff, no structural tool-call signal — `hook-output-discipline.md` MUST-2).
-- **Grace period:** 7 days from clause landing (2026-07-19 → 2026-07-26).
-- **Cumulative posture impact:** same-class violations (a default/behavior change shipped without sweeping out-of-CI-matrix stale-assertion tests) contribute to `trust-posture.md` MUST-4 cumulative-window math (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
-- **Regression-within-grace:** routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause key (a stale-test-sweep property is review-layer judgment; the universal trigger covers it). Named deviation from key-per-clause per `trust-posture.md` Rule 8 — the same no-dedicated-key disposition `security.md` § Enforcement-Surface Parity took.
-- **Receipt requirement:** SessionStart soft-gate `[ack: orphan-detection]` IFF `posture.json::pending_verification` includes the `orphan-detection` rule_id.
-- **Detection mechanism:** Phase 1 (manual, gate-review) — reviewer at `/implement` + release-specialist at `/release` inspect any diff changing a default/fallback/resolution-order and confirm (a) a grep of the old value across `packages/*/tests` returns no stale assertions, (b) the full suite (all optional deps installed) was run, not just the CI subset. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — no hook detector; audit fixtures land with it at `.claude/audit-fixtures/default-change-test-sweep/` per `cc-artifacts.md` Rule 9.
-- **Violation scope:** Rule 4b (default/behavior-change stale-test sweep) ONLY; the grandfathered Rules 1–4/4a/5–6a stay exempt until each is itself `/codify`-touched.
-- **Origin:** See Rule 4b Origin (kailash-py PR #1847/#1850).
-
 ### 5. Collect-Only Is A Merge Gate
 
 `pytest --collect-only` across every test directory MUST return exit 0 before any PR merges. A collection error is a blocker in the same class as a test failure.
@@ -310,5 +271,3 @@ Origin: kailash-ml-audit session 2026-04-23 — W31/W33 parallel-shard `__all__`
 ## Detection Protocol
 
 The 6-step `/redteam` audit procedure (six detection steps + disposition) lives in `skills/16-validation-patterns/orphan-audit-playbook.md` § "Detection Protocol". Runs as part of `/redteam` and `/codify`.
-
-**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body exceeds the 200-line guidance. Named rationale: **orphan-family scope** — the rule codifies the complete orphan/facade + test-sweep contract (Rules 1–6b: production-call-site, Tier-2 wiring, delete-not-deprecate, API-removal + stub-implementation + default-change test sweeps, collect-only gate, `__all__` reconciliation), each carrying the DO/DO-NOT + `**Why:**` the meta-rule mandates. `priority: 10` + `scope: path-scoped` — loaded only in sessions matching `packages/**` / `src/**` / `**/tests/**`, so it pays NO baseline-emission cost and Rule 10's proximity-band gate does NOT fire. Sibling precedent: `dependencies.md` + `cc-artifacts.md` length rationales.
