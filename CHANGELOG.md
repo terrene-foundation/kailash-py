@@ -17,17 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Rust SDK's `delegation.rs::SigningPayloadVersion`) plus
   `delegation_signing_payload()`, the version-gated canonical pre-image
   builder shared across the V1 (legacy), V2 (complete-constraint), and V3
-  (multi-sig) signing shapes. `kailash.trust.signing.delegation_record_signing`
-  adds the dispatch layer (`delegation_record_signing_payload()`,
-  `build_delegation_signing_input()`) that resolves a `DelegationRecord`'s
-  `signing_payload_version` field to the matching pre-image builder.
-  `DelegationRecord` gains a new `signing_payload_version: str` field
-  (default `"legacy-python-v0"`) — existing records with no explicit version
-  sign and verify byte-identically to before this release; only a record
-  explicitly opted into `v2-complete` / `v3-complete` uses the new pre-image
-  shapes. Sign callers still emit the legacy shape by default; the v2/v3
-  engine is wired end-to-end and fails closed on an unsupported/un-pinned
-  `signing_payload_version`.
+  (multi-sig) signing shapes. `DelegationRecord` gains a new
+  `signing_payload_version: str` field (default `"legacy-python-v0"`,
+  excluded from the signing pre-image itself) — every existing record signs
+  and verifies byte-identically to before this release.
+  `kailash.trust.signing.delegation_record_signing` adds the SINGLE shared
+  sign/verify dispatch (`delegation_canonical_payload_str()`) every
+  delegation call site routes through: it returns the legacy pre-image for a
+  `legacy-python-v0` record and fails closed
+  (`UnsupportedSigningPayloadVersionError`) for any other declared version —
+  **the record-persisted `v2-complete`/`v3-complete` sign/verify path is NOT
+  wired yet** (a later shard, S2b, once the structured constraint /
+  resource-limit / scope data those pre-images need is persisted on the
+  record). The v2/v3 engine itself IS usable today via the additive bridge
+  `build_delegation_signing_input()` / `delegation_record_signing_payload()`,
+  which maps a record's existing fields plus caller-supplied structured data
+  onto the engine pre-image directly — exercised now for cross-SDK
+  conformance, not yet reachable by setting a record's
+  `signing_payload_version` field.
 
 - **Signed revocation ledger + owner-signed anti-rollback anchor (#1842).**
   Three new modules under `kailash.trust.revocation`: `signed_ledger.py`
