@@ -183,6 +183,26 @@ class ConstraintDimensions:
             "reasoning_required": self.reasoning_required,
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for DelegationRecord persistence (identical shape to the
+        signing sub-object; #1841 S2b-1 EATP § Dataclasses to_dict/from_dict)."""
+        return self.to_signing_dict()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConstraintDimensions":
+        """Reconstruct from a :meth:`to_dict` mapping (``allowed_tools`` re-tupled)."""
+        tools = data.get("allowed_tools")
+        return cls(
+            allow_code_execution=data["allow_code_execution"],
+            allow_delegation=data["allow_delegation"],
+            allow_filesystem=data["allow_filesystem"],
+            allow_network=data["allow_network"],
+            allow_state_mutation=data["allow_state_mutation"],
+            allowed_tools=tuple(tools) if tools is not None else None,
+            max_context_tokens=data["max_context_tokens"],
+            reasoning_required=data["reasoning_required"],
+        )
+
 
 @dataclass(frozen=True)
 class ResourceLimits:
@@ -225,6 +245,20 @@ class ResourceLimits:
             "max_total_tokens": self.max_total_tokens,
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for DelegationRecord persistence (#1841 S2b-1)."""
+        return self.to_signing_dict()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ResourceLimits":
+        """Reconstruct from a :meth:`to_dict` mapping."""
+        return cls(
+            max_execution_secs=data["max_execution_secs"],
+            max_llm_calls=data["max_llm_calls"],
+            max_tool_calls=data["max_tool_calls"],
+            max_total_tokens=data["max_total_tokens"],
+        )
+
 
 @dataclass(frozen=True)
 class DelegationScope:
@@ -259,6 +293,21 @@ class DelegationScope:
             "max_financial_cents": self.max_financial_cents,
             "operations": list(self.operations),
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for DelegationRecord persistence (#1841 S2b-1)."""
+        return self.to_signing_dict()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DelegationScope":
+        """Reconstruct from a :meth:`to_dict` mapping (``operations`` re-tupled,
+        insertion order preserved)."""
+        operations = data.get("operations") or ()
+        return cls(
+            domain=data["domain"],
+            max_financial_cents=data.get("max_financial_cents"),
+            operations=tuple(operations),
+        )
 
 
 @dataclass(frozen=True)

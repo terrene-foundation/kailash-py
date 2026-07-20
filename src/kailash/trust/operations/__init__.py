@@ -70,8 +70,14 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
+from kailash.trust.signing.delegation_payload import (
+    ConstraintDimensions,
+    DelegationScope,
+    ResourceLimits,
+)
 from kailash.trust.signing.delegation_record_signing import (
     delegation_canonical_payload_str,
+    select_signing_version,
 )
 
 if TYPE_CHECKING:
@@ -1665,6 +1671,9 @@ class TrustOperations:
         metadata: Optional[Dict[str, Any]] = None,
         context: Optional[ExecutionContext] = None,  # EATP: ExecutionContext parameter
         reasoning_trace: Optional[Any] = None,  # EATP: ReasoningTrace for WHY
+        constraints: Optional[ConstraintDimensions] = None,  # #1841 S2b-1: V2 fold
+        resource_limits: Optional[ResourceLimits] = None,  # #1841 S2b-1: V2 fold
+        scope: Optional[DelegationScope] = None,  # #1841 S2b-1: V2 fold
     ) -> DelegationRecord:
         """
         DELEGATE: Transfer trust from one agent to another.
@@ -1691,6 +1700,13 @@ class TrustOperations:
             expires_at: When delegation expires
             metadata: Additional context
             context: EATP ExecutionContext with human_origin (REQUIRED for new delegations)
+            constraints: Optional structured ConstraintDimensions to fold into
+                the cross-SDK V2Complete pre-image (#1841 S2b-1). Additive: omit
+                (with resource_limits/scope) → the record signs legacy-python-v0.
+            resource_limits: Optional structured ResourceLimits (see constraints).
+            scope: Optional structured DelegationScope (see constraints). When
+                constraints + resource_limits + scope are ALL supplied AND the
+                record is unscoped + non-multi-sig, the record signs V2Complete.
 
         Returns:
             DelegationRecord: Signed delegation record with human_origin
@@ -1847,7 +1863,17 @@ class TrustOperations:
             delegation_depth=delegation_depth,
             # Reasoning trace extension (optional)
             reasoning_trace=reasoning_trace,
+            # Structured engine-fold fields (#1841 S2b-1). When all three are
+            # supplied, the record signs the cross-SDK V2Complete pre-image.
+            constraints=constraints,
+            resource_limits=resource_limits,
+            scope=scope,
         )
+
+        # Select the signing pre-image version from the structured fields
+        # (#1841 S2b-1). Defaults to legacy-python-v0 when the caller omits the
+        # structured fields, so existing callers are byte-identical.
+        delegation.signing_payload_version = select_signing_version(delegation)
 
         logger.info(
             f"Delegation created: {delegator_id} -> {delegatee_id} "
