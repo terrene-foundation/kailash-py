@@ -198,23 +198,42 @@ def test_v3_version_fails_closed() -> None:
 # --- select_signing_version selection logic ----------------------------------
 
 
-def test_select_version_requires_all_three_structured_fields() -> None:
-    """Missing ANY structured field falls back to legacy."""
-    full = _v2_record()
-    assert select_signing_version(full) == DELEGATION_SIGNING_VERSION_V2
+def test_select_version_all_three_present_is_v2_none_is_legacy() -> None:
+    """All three structured fields → v2; none → legacy."""
+    assert select_signing_version(_v2_record()) == DELEGATION_SIGNING_VERSION_V2
 
-    assert (
-        select_signing_version(_v2_record(constraints=None))
-        == DELEGATION_SIGNING_VERSION_LEGACY
+    none_record = _v2_record(
+        constraints=None,
+        resource_limits=None,
+        scope=None,
+        signing_payload_version=DELEGATION_SIGNING_VERSION_LEGACY,
     )
-    assert (
-        select_signing_version(_v2_record(resource_limits=None))
-        == DELEGATION_SIGNING_VERSION_LEGACY
-    )
-    assert (
-        select_signing_version(_v2_record(scope=None))
-        == DELEGATION_SIGNING_VERSION_LEGACY
-    )
+    assert select_signing_version(none_record) == DELEGATION_SIGNING_VERSION_LEGACY
+
+
+@pytest.mark.parametrize(
+    "kwargs,missing",
+    [
+        ({"scope": None}, "scope"),
+        ({"constraints": None}, "constraints"),
+        ({"resource_limits": None}, "resource_limits"),
+        ({"constraints": None, "resource_limits": None}, "constraints"),
+        ({"resource_limits": None, "scope": None}, "resource_limits"),
+    ],
+)
+def test_select_version_partial_supply_raises(kwargs, missing) -> None:
+    """PARTIAL structured-field supply fails closed (all-or-nothing) — #1841 S2b-1 FIX 1.
+
+    A partial-supply record would silently downgrade to legacy (dropping the
+    supplied fields from the signature) while to_dict persists them UNSIGNED —
+    a fail-open secure-default. select_signing_version MUST raise instead.
+    """
+    record = _v2_record(**kwargs)
+    with pytest.raises(ValueError, match="must be supplied together or all omitted"):
+        select_signing_version(record)
+    # The raised message names the missing field(s).
+    with pytest.raises(ValueError, match=missing):
+        select_signing_version(record)
 
 
 # --- Real Ed25519 round-trip (Tier-2 crypto, NO mocking) ---------------------
@@ -313,3 +332,177 @@ def test_dimension_scope_default_unset_yields_v2_after_roundtrip() -> None:
     assert frozenset(record.dimension_scope) == frozenset(ALL_DIMENSIONS)
     restored = DelegationRecord.from_dict(record.to_dict())
     assert select_signing_version(restored) == DELEGATION_SIGNING_VERSION_V2
+
+
+# --- FIX 2: verify FAILS CLOSED (returns valid=False), never raises -----------
+
+
+class _SimpleRegistry:
+    """Real in-memory authority registry (NOT a mock) — mirrors the lifecycle test."""
+
+    def __init__(self):
+        self._authorities = {}
+
+    async def initialize(self):  # noqa: D401 - protocol no-op
+        pass
+
+    def register(self, authority):
+        self._authorities[authority.id] = authority
+
+    async def get_authority(self, authority_id, include_inactive=False):
+        from kailash.trust.exceptions import AuthorityNotFoundError
+
+        authority = self._authorities.get(authority_id)
+        if authority is None:
+            raise AuthorityNotFoundError(authority_id)
+        return authority
+
+    async def update_authority(self, authority):
+        self._authorities[authority.id] = authority
+
+
+async def _real_ops_with_delegator():
+    """Build a real TrustOperations (real crypto + real store, NO mocking) and a
+    delegator trust chain rooted at ``org-acme``."""
+    from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
+    from kailash.trust.chain import AuthorityType, CapabilityType
+    from kailash.trust.chain_store.memory import InMemoryTrustStore
+    from kailash.trust.operations import (
+        CapabilityRequest,
+        TrustKeyManager,
+        TrustOperations,
+    )
+
+    private_key, public_key = generate_keypair()
+    authority = OrganizationalAuthority(
+        id="org-acme",
+        name="ACME Corporation",
+        authority_type=AuthorityType.ORGANIZATION,
+        public_key=public_key,
+        signing_key_id="acme-key-001",
+        permissions=[
+            AuthorityPermission.CREATE_AGENTS,
+            AuthorityPermission.DELEGATE_TRUST,
+            AuthorityPermission.GRANT_CAPABILITIES,
+        ],
+    )
+    registry = _SimpleRegistry()
+    registry.register(authority)
+    key_manager = TrustKeyManager()
+    key_manager.register_key("acme-key-001", private_key)
+    store = InMemoryTrustStore()
+    await store.initialize()
+    ops = TrustOperations(
+        authority_registry=registry, key_manager=key_manager, trust_store=store
+    )
+    await ops.initialize()
+    delegator_chain = await ops.establish(
+        agent_id="agent-delegator",
+        authority_id="org-acme",
+        capabilities=[
+            CapabilityRequest(
+                capability="LlmCall", capability_type=CapabilityType.ACTION
+            )
+        ],
+    )
+    return ops, delegator_chain
+
+
+async def test_verify_returns_false_on_v2_record_missing_structured_fields() -> None:
+    """A v2-labelled record with NO structured fields → verify returns valid=False.
+
+    #1841 S2b-1 FIX 2: the engine bridge fails closed with a ValueError; the verify
+    path MUST catch it and return valid=False, NOT let the exception escape
+    (DoS-via-exception).
+    """
+    ops, delegator_chain = await _real_ops_with_delegator()
+
+    bad = DelegationRecord(
+        id="del-bad-v2",
+        delegator_id="agent-delegator",
+        delegatee_id="agent-x",
+        task_id="t",
+        capabilities_delegated=["LlmCall"],
+        constraint_subset=[],
+        delegated_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
+        signature="not-a-real-sig",
+        signing_payload_version=DELEGATION_SIGNING_VERSION_V2,
+        # constraints / resource_limits / scope deliberately absent → bridge raises.
+    )
+
+    result = await ops._verify_delegation_signature(bad, delegator_chain)
+    assert result.valid is False
+    assert result.reason and "could not be built" in result.reason
+
+
+async def test_verify_chain_returns_false_on_v2_record_missing_fields() -> None:
+    """verify_delegation_chain also fails closed (does NOT raise) on the bad record."""
+    ops, delegator_chain = await _real_ops_with_delegator()
+
+    bad = DelegationRecord(
+        id="del-bad-v2-chain",
+        delegator_id="agent-delegator",
+        delegatee_id="agent-y",
+        task_id="t",
+        capabilities_delegated=["LlmCall"],
+        constraint_subset=[],
+        delegated_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc),
+        signature="not-a-real-sig",
+        signing_payload_version=DELEGATION_SIGNING_VERSION_V2,
+    )
+    # Attach the bad delegation to agent-y's chain and verify the chain.
+    delegatee_chain = await ops.trust_store.get_chain("agent-delegator")
+    delegatee_chain.delegations.append(bad)
+    await ops.trust_store.update_chain("agent-delegator", delegatee_chain)
+
+    result = await ops.verify_delegation_chain("agent-delegator")
+    assert result.valid is False  # fails closed, no exception escaped
+
+
+async def test_delegate_partial_structured_supply_raises() -> None:
+    """delegate() with PARTIAL structured params fails closed — #1841 S2b-1 FIX 1."""
+    ops, _ = await _real_ops_with_delegator()
+
+    with pytest.raises(ValueError, match="must be supplied together or all omitted"):
+        await ops.delegate(
+            delegator_id="agent-delegator",
+            delegatee_id="agent-z",
+            task_id="task-partial",
+            capabilities=["LlmCall"],
+            constraints=_supervised_constraints(),
+            resource_limits=_supervised_limits(),
+            scope=None,  # partial supply → raise before signing/persisting
+        )
+    # The partial-supply delegation MUST NOT have been persisted.
+    from kailash.trust.exceptions import TrustChainNotFoundError
+
+    with pytest.raises(TrustChainNotFoundError):
+        await ops.trust_store.get_chain("agent-z")
+
+
+async def test_delegate_all_three_v2_none_legacy_unchanged() -> None:
+    """delegate() all-3 → v2 record; none → legacy record (behavior UNCHANGED)."""
+    ops, _ = await _real_ops_with_delegator()
+
+    v2_deleg = await ops.delegate(
+        delegator_id="agent-delegator",
+        delegatee_id="agent-v2",
+        task_id="task-v2",
+        capabilities=["LlmCall"],
+        constraints=_supervised_constraints(),
+        resource_limits=_supervised_limits(),
+        scope=_engineering_read_scope(),
+    )
+    assert v2_deleg.signing_payload_version == DELEGATION_SIGNING_VERSION_V2
+
+    legacy_deleg = await ops.delegate(
+        delegator_id="agent-delegator",
+        delegatee_id="agent-legacy",
+        task_id="task-legacy",
+        capabilities=["LlmCall"],
+    )
+    assert legacy_deleg.signing_payload_version == DELEGATION_SIGNING_VERSION_LEGACY
+
+    # Both records verify (real Ed25519 round-trip through the store).
+    assert (await ops.verify_delegation_chain("agent-v2")).valid is True
+    assert (await ops.verify_delegation_chain("agent-legacy")).valid is True

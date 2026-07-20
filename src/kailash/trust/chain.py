@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from kailash.trust.signing.crypto import (
     hash_trust_chain_state,
     hash_trust_chain_state_salted,
-    serialize_for_signing,
 )
 
 # Structured engine-fold dataclasses (#1841 S2b-1). A DelegationRecord carrying

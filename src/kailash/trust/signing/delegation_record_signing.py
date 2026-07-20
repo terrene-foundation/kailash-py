@@ -68,15 +68,25 @@ __all__ = [
 def select_signing_version(record: "DelegationRecord") -> str:
     """Select which canonical pre-image a delegation record signs (#1841 S2b-1).
 
+    The structured engine-fold fields (``constraints`` / ``resource_limits`` /
+    ``scope``) are ALL-OR-NOTHING: supply all three (→ v2) or none (→ legacy).
+
     Returns:
-        * ``legacy-python-v0`` (the DEFAULT) when the record lacks any of the
-          structured engine-fold fields (``constraints`` / ``resource_limits`` /
-          ``scope`` — any ``None``), OR carries a NARROWED ``dimension_scope``
-          (whose cross-SDK v2/v3 fold is not yet pinned — rs#1795), OR is
-          multi-sig (V3 is a later shard).
+        * ``legacy-python-v0`` (the DEFAULT) when NONE of the structured fields
+          is supplied, OR (all three supplied but) the record carries a NARROWED
+          ``dimension_scope`` (whose cross-SDK v2/v3 fold is not yet pinned —
+          rs#1795), OR is multi-sig (V3 is a later shard).
         * ``v2-complete`` when ALL structured fields are present AND the record
           is non-multi-sig AND ``dimension_scope`` is the full (unscoped) CARE
           set — so it signs the cross-SDK V2Complete engine pre-image.
+
+    Raises:
+        ValueError: If SOME but not ALL of the three structured fields are
+            supplied (partial supply). A partial-supply record would silently
+            downgrade to legacy (which does NOT bind the supplied fields into
+            the signature) while ``to_dict`` still persists them UNSIGNED — a
+            fail-open secure-default (``rules/security.md`` § "Secure-Default …
+            Never A Silent No-Op"). Fail closed + loud instead.
 
     The record's ``signing_payload_version`` is set from this at ``delegate()``
     sign time; :func:`delegation_canonical_payload_str` then dispatches on that
@@ -89,11 +99,24 @@ def select_signing_version(record: "DelegationRecord") -> str:
         DELEGATION_SIGNING_VERSION_V2,
     )
 
-    constraints = getattr(record, "constraints", None)
-    resource_limits = getattr(record, "resource_limits", None)
-    scope = getattr(record, "scope", None)
-    if constraints is None or resource_limits is None or scope is None:
+    structured = {
+        "constraints": getattr(record, "constraints", None),
+        "resource_limits": getattr(record, "resource_limits", None),
+        "scope": getattr(record, "scope", None),
+    }
+    supplied = [name for name, val in structured.items() if val is not None]
+    if not supplied:
+        # None supplied → legacy (byte-identical to pre-S2b).
         return DELEGATION_SIGNING_VERSION_LEGACY
+    if len(supplied) != len(structured):
+        # Partial supply is fail-open: it would sign legacy bytes (dropping the
+        # supplied fields from the signature) yet persist them unsigned. Refuse.
+        missing = sorted(name for name, val in structured.items() if val is None)
+        raise ValueError(
+            "structured signing fields (constraints, resource_limits, scope) "
+            "must be supplied together or all omitted; got "
+            f"{sorted(supplied)} without {missing}"
+        )
 
     # V3 (multi-sig) is a later shard (S2b-2); no multi-sig field exists on the
     # record yet, but guard defensively so a future multi-sig field cannot slip
