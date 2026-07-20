@@ -91,6 +91,12 @@ from kailash.trust.revocation.signed_ledger import (
     SignedRevocationEvent,
     revocation_ledger_tip,
 )
+from kailash.trust.revocation.verify import (
+    DurableHighWaterStore,
+    RevocationVerificationError,
+    SignedRevocationStore,
+    SignedRevocationVerifier,
+)
 
 __all__ = [
     # Enums
@@ -128,4 +134,9 @@ __all__ = [
     "HeadCommitmentAnchor",
     "HeadCommitmentError",
     "HEAD_COMMITMENT_DOMAIN_SEP",
+    # Authoritative signed-ledger verify + durable anti-rollback (EATP-12 D5, #1842)
+    "SignedRevocationVerifier",
+    "SignedRevocationStore",
+    "DurableHighWaterStore",
+    "RevocationVerificationError",
 ]

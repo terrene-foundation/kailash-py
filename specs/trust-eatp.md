@@ -725,7 +725,7 @@ differs from the pinned one is REJECTED as an equivocation / same-epoch fork (un
 the strict-monotonic-epoch invariant one epoch has at most one head, so a differing
 same-epoch tip is a forgery signal).
 
-**Durability contract (`#1842-S3` REQUIREMENT).** The high-water is IN-MEMORY and
+**Durability contract.** The high-water is IN-MEMORY and
 monotonic only within ONE `HeadCommitmentAnchor` lifetime. A bare
 `HeadCommitmentAnchor()` (default `initial_epoch=0`) fails OPEN — it accepts any
 epoch ≥ 0, correct ONLY for genuine first-use with no head history. A caller
@@ -734,10 +734,44 @@ persisting heads across process restarts MUST (a) persist `high_water_epoch` (an
 (b) RE-SEED `initial_epoch` (and `initial_tip_hash`) from that durable store when
 reconstructing the anchor on the persisted-head read path. Constructing a bare
 anchor on the persisted-head read path is a ROLLBACK VULNERABILITY (every restart
-resets the high-water to 0 and would accept a stale lower-epoch head silently). The
-durability WIRING (which store, when to persist) is #1842 shard 3's job; this shard
-ships the enforced-as-documented in-memory contract + the `initial_epoch` /
-`initial_tip_hash` re-seed handles.
+resets the high-water to 0 and would accept a stale lower-epoch head silently).
+
+**Authoritative verify + durable anti-rollback wiring (`#1842` shard 3).** The
+durability WIRING and the verify consult live in
+`kailash.trust.revocation.verify`. `SignedRevocationStore` persists the ledger
+event set ALONGSIDE the owner-signed `HeadCommitment` + signature to
+`revocation_head.json`, so a verifier RECOMPUTES the ledger tip and detects a
+store-writer who added / deleted / reordered an event (the tip changes → the
+owner-head signature no longer binds it). `DurableHighWaterStore` persists the
+accepted head as an **owner-SIGNED** high-water record (`{head, head_signature}`)
+to `revocation_highwater.json` and RE-SEEDS a `HeadCommitmentAnchor` from it on
+every read — never a bare anchor, so a process-restart replay of a lower-epoch
+head is REJECTED. The high-water record's owner signature is verified on every
+load (a store-writer cannot forge an arbitrary lower epoch; the documented
+RESIDUAL is replay of a previously-valid owner-signed head — complete defense
+against a full-local-write adversary needs an EXTERNAL append-only anchor, out of
+scope for local persistence). The re-seed → `accept` → persist sequence runs as
+ONE atomic compare-and-swap under a single `file_lock`, so a concurrent verifier
+cannot interleave a stale read and regress the high-water (monotonic-non-
+decreasing by construction). `SignedRevocationVerifier` is the AUTHORITATIVE
+revocation decision (`verified_revoked_set` / `is_revoked`): it (1) loads the
+signed-head store — an ABSENT store consults the durable high-water FIRST and
+RAISES if a head was ever accepted (`high_water_epoch > 0` = a deleted-head
+resurrection attempt), only genesis (high-water at 0) yields the empty set; (2)
+verifies the owner Ed25519 signature over the head; (3) recomputes the ledger tip
+and confirms it equals the signed head tip; (4) runs the atomic anti-rollback
+CAS. Any unverifiable condition RAISES `RevocationVerificationError` —
+fail-closed: the caller DENIES, NEVER falling open to the mutable unsigned
+`revoked` flag / the in-memory cascade. The delegation verify path consults this
+verifier authoritatively: `TrustOperations.verify` (`operations/__init__.py`, the
+`_check_signed_revocation` helper) DENIES at EVERY level (including QUICK) when
+the agent's chain (its `agent_id` or any delegation id) is in the verified signed
+ledger, or when the ledger/head is unverifiable. When NO verifier is wired,
+`verify` emits a one-time WARN that the authoritative layer is OFF (a deployment
+handling untrusted store writers MUST wire a `SignedRevocationVerifier`); it does
+not hard-fail (backward-compatible). The in-memory cascade (`TrustRevocationList`)
+and the CRL (`CertificateRevocationList`) MAY remain a fast-path cache, but the
+AUTHORITATIVE decision derives from the signed ledger.
 
 **Cross-SDK PROVISIONAL tripwires.** The event pre-image + signature (RE0-RE3,
 incl. the RE3 nanosecond-fidelity boundary), tip fold (LT0 all-zero empty, LT1,
