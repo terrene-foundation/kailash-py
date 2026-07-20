@@ -52,6 +52,10 @@ if TYPE_CHECKING:
     from kailash.trust.chain import DelegationRecord
 
 from kailash.trust.reasoning.traces import ConfidentialityLevel
+from kailash.trust.signing.delegation_fold_serde import (
+    deserialize_fold_fields,
+    serialize_fold_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +330,14 @@ def _build_facts(
     Returns:
         Dict of EATP fact claims for the fct field.
     """
+    from kailash.trust.chain import ALL_DIMENSIONS, DELEGATION_SIGNING_VERSION_LEGACY
+
+    # #1841 S2b signing fold-fields — nested under a distinct key (the flat
+    # ``eatp_constraints`` fact already carries constraint_subset). A v2/v3
+    # delegation's ``eatp_original_signature`` re-verifies only if these survive
+    # the UCAN round-trip (security.md § Multi-Site Kwarg Plumbing). Prune-when-
+    # unset: a legacy record adds NO new facts (byte-neutral token).
+    fold = serialize_fold_fields(delegation)
     return {
         "eatp_delegation_id": delegation.id,
         "eatp_delegator_id": delegation.delegator_id,
@@ -340,6 +352,18 @@ def _build_facts(
         ),
         "eatp_parent_delegation_id": delegation.parent_delegation_id,
         "eatp_original_signature": delegation.signature,
+        # #1841 S2b fold-fields + version + narrowed dimension_scope (prune-when-unset)
+        **({"eatp_signing_fold": fold} if fold else {}),
+        **(
+            {"eatp_signing_payload_version": delegation.signing_payload_version}
+            if delegation.signing_payload_version != DELEGATION_SIGNING_VERSION_LEGACY
+            else {}
+        ),
+        **(
+            {"eatp_dimension_scope": sorted(delegation.dimension_scope)}
+            if frozenset(delegation.dimension_scope) != frozenset(ALL_DIMENSIONS)
+            else {}
+        ),
         # Reasoning trace extension (confidentiality-filtered)
         **(
             {"eatp_reasoning_trace": delegation.reasoning_trace.to_dict()}
@@ -413,8 +437,6 @@ def to_ucan(
         private_key, public_key = generate_keypair()
         token = to_ucan(delegation, private_key)
     """
-    from kailash.trust.chain import DelegationRecord as _DelegationRecord
-
     _validate_signing_key(signing_key)
 
     # Resolve DIDs
@@ -615,6 +637,25 @@ def from_ucan(
 
         reasoning_trace = ReasoningTrace.from_dict(fct["eatp_reasoning_trace"])
 
+    # #1841 S2b signing fold-fields (absent facts = legacy defaults; a v2/v3
+    # delegation's eatp_original_signature re-verifies only with these).
+    from kailash.trust.chain import ALL_DIMENSIONS, DELEGATION_SIGNING_VERSION_LEGACY
+
+    signing_payload_version = fct.get(
+        "eatp_signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
+    )
+    raw_dimension_scope = fct.get("eatp_dimension_scope")
+    dimension_scope = (
+        frozenset(raw_dimension_scope)
+        if raw_dimension_scope is not None
+        else ALL_DIMENSIONS
+    )
+    fold = deserialize_fold_fields(
+        fct.get("eatp_signing_fold", {}),
+        signing_payload_version=signing_payload_version,
+        record_id=fct["eatp_delegation_id"],
+    )
+
     delegation = _DelegationRecord(
         id=fct["eatp_delegation_id"],
         delegator_id=fct["eatp_delegator_id"],
@@ -631,6 +672,9 @@ def from_ucan(
         reasoning_trace=reasoning_trace,
         reasoning_trace_hash=fct.get("eatp_reasoning_trace_hash"),
         reasoning_signature=fct.get("eatp_reasoning_signature"),
+        dimension_scope=dimension_scope,
+        signing_payload_version=signing_payload_version,
+        **fold,
     )
 
     logger.debug(

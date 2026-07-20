@@ -32,6 +32,10 @@ from kailash.trust.signing.crypto import (
 # Safe at module scope: this file already imports kailash.trust.signing.crypto
 # above (initialising the signing package), and delegation_payload depends only
 # on kailash.trust._json — no cycle back to chain.
+from kailash.trust.signing.delegation_fold_serde import (
+    deserialize_fold_fields,
+    serialize_fold_fields,
+)
 from kailash.trust.signing.delegation_payload import (
     ConstraintDimensions,
     DelegationScope,
@@ -427,24 +431,12 @@ class DelegationRecord:
         d["reasoning_signature"] = self.reasoning_signature
         if self.reasoning_trace:
             d["reasoning_trace"] = self.reasoning_trace.to_dict()
-        # Structured engine-fold fields (#1841 S2b-1) — emitted only when present
-        # so a legacy record round-trips without new keys (missing key -> None on
-        # from_dict, mirroring the dimension_scope / signing_payload_version
-        # backward-compat pattern above).
-        if self.constraints is not None:
-            d["constraints"] = self.constraints.to_dict()
-        if self.resource_limits is not None:
-            d["resource_limits"] = self.resource_limits.to_dict()
-        if self.scope is not None:
-            d["scope"] = self.scope.to_dict()
-        # Multi-sig fold fields (#1841 S2b-2) — emitted ONLY when set, so a
-        # non-multi-sig record's persisted dict carries NO multi_sig keys and is
-        # byte-identical to a pre-S2b-2 record (prune-when-unset, matching the
-        # structured-field pattern above and cross-sdk-inspection 4d).
-        if self.multi_sig:
-            d["multi_sig"] = True
-        if self.multi_sig_policy is not None:
-            d["multi_sig_policy"] = self.multi_sig_policy.to_dict()
+        # #1841 S2b signing fold-fields (constraints / resource_limits / scope /
+        # multi_sig / multi_sig_policy) — emitted prune-when-unset via the SHARED
+        # serializer so this path and the sibling chain / interop serializers
+        # cannot drift (security.md § Multi-Site Kwarg Plumbing). A legacy record
+        # emits NO fold keys (byte-identical to a pre-S2b dict).
+        d.update(serialize_fold_fields(self))
         return d
 
     @classmethod
@@ -480,38 +472,21 @@ class DelegationRecord:
         else:
             dimension_scope = ALL_DIMENSIONS
 
-        # Structured engine-fold fields (#1841 S2b-1): backward-compatible --
-        # a pre-S2b record has no key, so each deserializes to None → the record
-        # resolves to the legacy schema and verifies byte-identically.
-        raw_constraints = data.get("constraints")
-        constraints = (
-            ConstraintDimensions.from_dict(raw_constraints)
-            if raw_constraints is not None
-            else None
+        # Signing-payload version (#1841 shard 2): backward-compatible -- a record
+        # serialized before this field existed has no key, so it deserializes to
+        # the pre-migration legacy schema and verifies byte-identically.
+        signing_payload_version = data.get(
+            "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
         )
-        raw_resource_limits = data.get("resource_limits")
-        resource_limits = (
-            ResourceLimits.from_dict(raw_resource_limits)
-            if raw_resource_limits is not None
-            else None
-        )
-        raw_delegation_scope = data.get("scope")
-        scope = (
-            DelegationScope.from_dict(raw_delegation_scope)
-            if raw_delegation_scope is not None
-            else None
-        )
-
-        # Multi-sig fold fields (#1841 S2b-2): backward-compatible -- a pre-S2b-2
-        # record has no key, so multi_sig defaults False and multi_sig_policy is
-        # None. MultiSigSigningPolicy.from_dict decodes hex->bytes AND re-runs
-        # __post_init__, so distinct-signer / 32-byte / threshold<=N validation
-        # fires on reconstruction (a tampered persisted policy fails closed).
-        raw_multi_sig_policy = data.get("multi_sig_policy")
-        multi_sig_policy = (
-            MultiSigSigningPolicy.from_dict(raw_multi_sig_policy)
-            if raw_multi_sig_policy is not None
-            else None
+        # #1841 S2b signing fold-fields (constraints / resource_limits / scope /
+        # multi_sig / multi_sig_policy) via the SHARED deserializer: backward-
+        # compatible (absent keys = legacy defaults), MultiSigSigningPolicy
+        # validation re-runs on reconstruction, AND an inconsistent multi-sig
+        # record fails closed (defense in depth against a store-tampered record).
+        fold = deserialize_fold_fields(
+            data,
+            signing_payload_version=signing_payload_version,
+            record_id=data.get("id"),
         )
 
         return cls(
@@ -539,20 +514,12 @@ class DelegationRecord:
             reasoning_signature=data.get("reasoning_signature"),
             # Dimension scope extension (#170)
             dimension_scope=dimension_scope,
-            # Signing-payload version (#1841 shard 2): backward-compatible --
-            # a record serialized before this field existed has no key, so it
-            # deserializes to the pre-migration legacy schema and verifies
-            # byte-identically to how it was signed.
-            signing_payload_version=data.get(
-                "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
-            ),
-            # Structured engine-fold fields (#1841 S2b-1): None when absent.
-            constraints=constraints,
-            resource_limits=resource_limits,
-            scope=scope,
-            # Multi-sig fold fields (#1841 S2b-2): defaults when absent.
-            multi_sig=data.get("multi_sig", False),
-            multi_sig_policy=multi_sig_policy,
+            # Signing-payload version (#1841 shard 2).
+            signing_payload_version=signing_payload_version,
+            # #1841 S2b signing fold-fields (constraints / resource_limits / scope
+            # / multi_sig / multi_sig_policy) — shared deserializer, legacy
+            # defaults when absent.
+            **fold,
         )
 
 
@@ -1083,7 +1050,19 @@ class TrustLineageChain:
 
     @staticmethod
     def _serialize_delegation(d: DelegationRecord) -> Dict[str, Any]:
-        """Serialize a delegation record for chain-level serialization."""
+        """Serialize a delegation record for chain-level serialization.
+
+        Carries the #1841 S2b signing fold-fields (``constraints`` /
+        ``resource_limits`` / ``scope`` / ``multi_sig`` / ``multi_sig_policy``)
+        prune-when-unset so a v2/v3 delegation reconstructed by a persistent store
+        (this is the chain-level serialization every store uses) recomputes the
+        SAME signing pre-image and its signature verifies. A legacy record emits
+        NO fold-field keys (byte-identical to a pre-S2b dict). ``dimension_scope``
+        is emitted only when narrowed (a default/all-dimensions record round-trips
+        via from_dict's ALL_DIMENSIONS default) — it is bound into the legacy
+        signing pre-image (``to_signing_payload``), so a narrowed record must
+        carry it through or its signature would not re-verify.
+        """
         result = {
             "id": d.id,
             "delegator_id": d.delegator_id,
@@ -1097,6 +1076,13 @@ class TrustLineageChain:
             # Signing-payload version discriminator (#1841 shard 2).
             "signing_payload_version": d.signing_payload_version,
         }
+        # dimension_scope binds into the legacy pre-image; emit only when narrowed
+        # so a default (all-dimensions) record stays byte-neutral (from_dict
+        # defaults a missing key to ALL_DIMENSIONS).
+        if frozenset(d.dimension_scope) != frozenset(ALL_DIMENSIONS):
+            result["dimension_scope"] = sorted(d.dimension_scope)
+        # #1841 S2b signing fold-fields (shared serializer — prune-when-unset).
+        result.update(serialize_fold_fields(d))
         # Reasoning trace extension fields (only if present)
         if d.reasoning_trace:
             result["reasoning_trace"] = d.reasoning_trace.to_dict()
@@ -1118,6 +1104,25 @@ class TrustLineageChain:
         if d.get("reasoning_trace"):
             reasoning_trace = ReasoningTrace.from_dict(d["reasoning_trace"])
 
+        # Signing-payload version (#1841 shard 2): absent key = legacy.
+        signing_payload_version = d.get(
+            "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
+        )
+        # dimension_scope: absent key = all dimensions (matches DelegationRecord).
+        raw_dimension_scope = d.get("dimension_scope")
+        dimension_scope = (
+            frozenset(raw_dimension_scope)
+            if raw_dimension_scope is not None
+            else ALL_DIMENSIONS
+        )
+        # #1841 S2b signing fold-fields (shared deserializer — fail-closed on an
+        # inconsistent multi-sig record; absent keys = legacy defaults).
+        fold = deserialize_fold_fields(
+            d,
+            signing_payload_version=signing_payload_version,
+            record_id=d.get("id"),
+        )
+
         return DelegationRecord(
             id=d["id"],
             delegator_id=d["delegator_id"],
@@ -1134,10 +1139,9 @@ class TrustLineageChain:
             reasoning_trace=reasoning_trace,
             reasoning_trace_hash=d.get("reasoning_trace_hash"),
             reasoning_signature=d.get("reasoning_signature"),
-            # Signing-payload version (#1841 shard 2): absent key = legacy.
-            signing_payload_version=d.get(
-                "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
-            ),
+            dimension_scope=dimension_scope,
+            signing_payload_version=signing_payload_version,
+            **fold,
         )
 
     def to_dict(self) -> Dict[str, Any]:

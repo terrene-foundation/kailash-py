@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from kailash.trust.chain import (
+    ALL_DIMENSIONS,
+    DELEGATION_SIGNING_VERSION_LEGACY,
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -31,8 +33,12 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
 from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
+from kailash.trust.signing.delegation_fold_serde import (
+    deserialize_fold_fields,
+    serialize_fold_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +75,6 @@ def _iso(dt: datetime) -> str:
     if dt.tzinfo is None:
         raise ValueError(f"datetime must be timezone-aware, got naive datetime: {dt!r}")
     return dt.isoformat()
-
-
-def _iso_optional(dt: Optional[datetime]) -> Optional[str]:
-    """Format an optional datetime; returns None when input is None."""
-    if dt is None:
-        return None
-    return _iso(dt)
 
 
 def _make_vc_id(record_id: str) -> str:
@@ -184,6 +183,16 @@ def _serialize_delegation(d: DelegationRecord) -> Dict[str, Any]:
     if d.reasoning_signature is not None:
         result["reasoningSignature"] = d.reasoning_signature
 
+    # #1841 S2b signing fields (camelCase, W3C VC convention) — a v2/v3
+    # delegation's signature verifies only if these survive the VC round-trip
+    # (security.md § Multi-Site Kwarg Plumbing). Prune-when-unset: a legacy record
+    # adds NO new keys (byte-neutral VC).
+    if d.signing_payload_version != DELEGATION_SIGNING_VERSION_LEGACY:
+        result["signingPayloadVersion"] = d.signing_payload_version
+    if frozenset(d.dimension_scope) != frozenset(ALL_DIMENSIONS):
+        result["dimensionScope"] = sorted(d.dimension_scope)
+    result.update(serialize_fold_fields(d, camel=True))
+
     return result
 
 
@@ -260,7 +269,9 @@ def _create_proof(
     try:
         signature_b64 = sign(payload, signing_key)
     except ValueError as exc:
-        raise ValueError(f"Failed to sign credential: invalid signing_key — {exc}") from exc
+        raise ValueError(
+            f"Failed to sign credential: invalid signing_key — {exc}"
+        ) from exc
 
     return {
         "type": _PROOF_TYPE,
@@ -301,7 +312,9 @@ def export_as_verifiable_credential(
     if not issuer_did or not issuer_did.strip():
         raise ValueError("issuer_did must be a non-empty DID string, got empty value")
     if not signing_key or not signing_key.strip():
-        raise ValueError("signing_key must be a non-empty base64-encoded Ed25519 private key")
+        raise ValueError(
+            "signing_key must be a non-empty base64-encoded Ed25519 private key"
+        )
 
     credential_subject: Dict[str, Any] = {
         "genesis": _serialize_genesis(chain.genesis),
@@ -357,7 +370,9 @@ def export_capability_as_vc(
     if not issuer_did or not issuer_did.strip():
         raise ValueError("issuer_did must be a non-empty DID string, got empty value")
     if not signing_key or not signing_key.strip():
-        raise ValueError("signing_key must be a non-empty base64-encoded Ed25519 private key")
+        raise ValueError(
+            "signing_key must be a non-empty base64-encoded Ed25519 private key"
+        )
 
     credential_subject = _serialize_capability(attestation)
 
@@ -403,14 +418,20 @@ def verify_credential(credential: Dict[str, Any], public_key: str) -> bool:
         ValueError: If public_key is empty or invalid.
     """
     if not public_key or not public_key.strip():
-        raise ValueError("public_key must be a non-empty base64-encoded Ed25519 public key")
+        raise ValueError(
+            "public_key must be a non-empty base64-encoded Ed25519 public key"
+        )
 
     if "proof" not in credential:
-        raise ValueError("Credential is missing 'proof' field — cannot verify an unsigned credential")
+        raise ValueError(
+            "Credential is missing 'proof' field — cannot verify an unsigned credential"
+        )
 
     proof = credential["proof"]
     if "proofValue" not in proof:
-        raise ValueError("Credential proof is missing 'proofValue' — the signature is required for verification")
+        raise ValueError(
+            "Credential proof is missing 'proofValue' — the signature is required for verification"
+        )
 
     signature_b64 = proof["proofValue"]
 
@@ -423,7 +444,9 @@ def verify_credential(credential: Dict[str, Any], public_key: str) -> bool:
     except Exception as exc:
         # InvalidSignatureError or other crypto errors from verify_signature
         # are raised for structural problems (bad key format, etc.)
-        raise ValueError(f"public_key is invalid or signature verification encountered an error: {exc}") from exc
+        raise ValueError(
+            f"public_key is invalid or signature verification encountered an error: {exc}"
+        ) from exc
 
 
 def import_from_verifiable_credential(
@@ -453,7 +476,9 @@ def import_from_verifiable_credential(
     """
     if public_key is not None:
         if not verify_credential(credential, public_key):
-            raise ValueError("W3C VC proof verification failed — credential may be forged")
+            raise ValueError(
+                "W3C VC proof verification failed — credential may be forged"
+            )
     else:
         logger.warning(
             "[W3C-VC] Importing credential WITHOUT proof verification. "
@@ -464,7 +489,9 @@ def import_from_verifiable_credential(
     # --- Validate @context ---
     context = credential.get("@context", [])
     if W3C_CREDENTIALS_V2_CONTEXT not in context:
-        raise ValueError(f"Invalid credential @context: must include '{W3C_CREDENTIALS_V2_CONTEXT}', got {context!r}")
+        raise ValueError(
+            f"Invalid credential @context: must include '{W3C_CREDENTIALS_V2_CONTEXT}', got {context!r}"
+        )
     if EATP_CONTEXT_URL not in context:
         raise ValueError(
             f"Invalid credential @context: must include EATP context '{EATP_CONTEXT_URL}', got {context!r}"
@@ -473,7 +500,9 @@ def import_from_verifiable_credential(
     # --- Validate type ---
     vc_type = credential.get("type", [])
     if "EATPTrustChain" not in vc_type:
-        raise ValueError(f"Invalid credential type: must include 'EATPTrustChain', got {vc_type!r}")
+        raise ValueError(
+            f"Invalid credential type: must include 'EATPTrustChain', got {vc_type!r}"
+        )
 
     # --- Validate credentialSubject ---
     if "credentialSubject" not in credential:
@@ -496,7 +525,9 @@ def import_from_verifiable_credential(
         authority_id=g["authorityId"],
         authority_type=AuthorityType(g["authorityType"]),
         created_at=datetime.fromisoformat(g["createdAt"]),
-        expires_at=(datetime.fromisoformat(g["expiresAt"]) if g.get("expiresAt") else None),
+        expires_at=(
+            datetime.fromisoformat(g["expiresAt"]) if g.get("expiresAt") else None
+        ),
         signature=g.get("signature", ""),
         signature_algorithm=g.get("signatureAlgorithm", "Ed25519"),
         metadata=g.get("metadata", {}),
@@ -513,7 +544,11 @@ def import_from_verifiable_credential(
                 constraints=c.get("constraints", []),
                 attester_id=c["attesterId"],
                 attested_at=datetime.fromisoformat(c["attestedAt"]),
-                expires_at=(datetime.fromisoformat(c["expiresAt"]) if c.get("expiresAt") else None),
+                expires_at=(
+                    datetime.fromisoformat(c["expiresAt"])
+                    if c.get("expiresAt")
+                    else None
+                ),
                 signature=c.get("signature", ""),
                 scope=c.get("scope"),
             )
@@ -533,12 +568,31 @@ def import_from_verifiable_credential(
                     "rationale": reasoning_data["rationale"],
                     "confidentiality": reasoning_data["confidentiality"],
                     "timestamp": reasoning_data["timestamp"],
-                    "alternatives_considered": reasoning_data.get("alternativesConsidered", []),
+                    "alternatives_considered": reasoning_data.get(
+                        "alternativesConsidered", []
+                    ),
                     "evidence": reasoning_data.get("evidence", []),
                     "methodology": reasoning_data.get("methodology"),
                     "confidence": reasoning_data.get("confidence"),
                 }
             )
+
+        # #1841 S2b signing fields (camelCase; absent = legacy defaults).
+        deleg_version = d.get(
+            "signingPayloadVersion", DELEGATION_SIGNING_VERSION_LEGACY
+        )
+        raw_dimension_scope = d.get("dimensionScope")
+        deleg_dimension_scope = (
+            frozenset(raw_dimension_scope)
+            if raw_dimension_scope is not None
+            else ALL_DIMENSIONS
+        )
+        deleg_fold = deserialize_fold_fields(
+            d,
+            signing_payload_version=deleg_version,
+            camel=True,
+            record_id=d.get("id"),
+        )
 
         delegations.append(
             DelegationRecord(
@@ -549,12 +603,19 @@ def import_from_verifiable_credential(
                 capabilities_delegated=d.get("capabilitiesDelegated", []),
                 constraint_subset=d.get("constraintSubset", []),
                 delegated_at=datetime.fromisoformat(d["delegatedAt"]),
-                expires_at=(datetime.fromisoformat(d["expiresAt"]) if d.get("expiresAt") else None),
+                expires_at=(
+                    datetime.fromisoformat(d["expiresAt"])
+                    if d.get("expiresAt")
+                    else None
+                ),
                 signature=d.get("signature", ""),
                 parent_delegation_id=d.get("parentDelegationId"),
                 reasoning_trace=reasoning_trace,
                 reasoning_trace_hash=d.get("reasoningTraceHash"),
                 reasoning_signature=d.get("reasoningSignature"),
+                dimension_scope=deleg_dimension_scope,
+                signing_payload_version=deleg_version,
+                **deleg_fold,
             )
         )
 
