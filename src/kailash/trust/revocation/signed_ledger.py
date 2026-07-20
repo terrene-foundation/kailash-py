@@ -114,6 +114,24 @@ class SignedRevocationEvent:
             raise RevocationLedgerError(
                 f"delegation_id must be a non-empty str, got {self.delegation_id!r}"
             )
+        # Fail closed on a non-ASCII delegation_id. The event signing pre-image
+        # (canonical_json_dumps, raw-UTF-8 JCS) is byte-verified against the
+        # kailash-rs reference ONLY on the all-ASCII conformance vectors (see the
+        # module docstring). A non-ASCII delegation_id is the ONLY free-string
+        # field that reaches the pre-image, and it would emit un-pinned raw-UTF-8
+        # bytes single-SDK — the SAME fail-open the #1841 delegation-signing
+        # engine already closes (delegation_payload.py::_assert_signed_strings_ascii).
+        # Reject rather than sign un-verified bytes; a non-ASCII vector is a future
+        # cross-SDK lockstep item. Byte-NEUTRAL: every ASCII delegation_id (UUIDs
+        # in practice) is unchanged, so the pinned vectors stay green.
+        try:
+            self.delegation_id.encode("ascii")
+        except UnicodeEncodeError:
+            raise RevocationLedgerError(
+                "delegation_id must be ASCII-only (the cross-SDK event pre-image "
+                "has no pinned non-ASCII vector yet — future lockstep item), got "
+                f"{self.delegation_id!r}"
+            ) from None
         # bool is a subclass of int; reject it explicitly so it can never
         # serialize as a JSON boolean in the epoch slot.
         if not isinstance(self.epoch, int) or isinstance(self.epoch, bool):
@@ -169,7 +187,15 @@ class SignedRevocationEvent:
             The 64-byte Ed25519 signature, lowercase hex-encoded.
         """
         b64_priv = base64.b64encode(private_key_seed).decode("ascii")
-        b64_sig = crypto.sign(self.signing_preimage(), b64_priv)
+        try:
+            b64_sig = crypto.sign(self.signing_preimage(), b64_priv)
+        finally:
+            # Drop the base64 secret-key copy immediately after use to minimize
+            # its in-memory lifetime (trust-plane-security.md MUST-NOT-3). Python
+            # cannot zeroize the immutable str's buffer, but dropping the reference
+            # lets it be reclaimed at the earliest GC (applied at both signing
+            # sites — head_commitment.SignedHeadCommitment.sign mirrors this).
+            del b64_priv
         return base64.b64decode(b64_sig).hex()
 
     def verify(self, signature_hex: str, public_key: bytes) -> bool:
