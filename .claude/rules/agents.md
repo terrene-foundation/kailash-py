@@ -66,6 +66,37 @@ A plan shipped across ≥3 sharded waves MUST run ONE holistic redteam round acr
 
 A `/redteam` round dispatches reviewers in PARALLEL; a throttled fan-out can return errored/empty, reading as "0 findings" → false convergence. **(1) EVIDENCE GATE** — every dispatched reviewer MUST return a ran/evidence signal; an errored/empty/timed-out return is ZERO evidence (`rules/evidence-first-claims.md` MUST-3), MUST be re-run, MUST NOT count clean; convergence is claimable ONLY when EVERY agent genuinely ran. **(2) CONCURRENCY BACK-OFF** — on a throttle signal, reduce concurrency (`rules/worktree-isolation.md` Rule 4) and re-run the throttled reviewers. Complements parallel-by-default, does not override it. DO/DO-NOT + BLOCKED corpus + Wiring + Why: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
 
+### MUST: Correctness-Review-Clean Is Not Security-Clean — The Adversarial Security Lens Is Non-Negotiable On Security-Critical Changes
+
+A correctness / closure-parity reviewer returning CLEAN is NOT evidence a change is SECURITY-clean. The two lenses answer DIFFERENT questions: the correctness lens verifies the change does what it claims ON THE TESTED PATHS + maps ACs to delivered code; the adversarial security lens verifies an ATTACKER cannot defeat it OFF the tested paths (fail-open on an absent file, a store-writer rollback, a silent-no-op default, a TOCTOU race). A **security-critical change** — auth, crypto-signing, revocation, tenant-isolation, a fail-closed gate, any trust-boundary — MUST be redteamed by BOTH a correctness reviewer AND an adversarial `security-reviewer` prompted to REFUTE, and BOTH must return a genuine ran-signal (§ Redteam Reviewer Dispatch), BEFORE convergence. A CLEAN correctness verdict MUST NOT be counted as, or substituted for, the security round. Declaring a security-critical change converged on correctness-clean alone — or dispatching only a correctness reviewer for it — is BLOCKED.
+
+```markdown
+# DO — security-critical shard: BOTH lenses, security-reviewer prompted to refute, before converge
+
+RT-corr (run tests + AC-closure) CLEAN + RT-sec (adversarial: try to defeat it) CLEAN → converged
+
+# DO NOT — count the correctness-clean verdict as the security round
+
+"the correctness reviewer passed it clean → converged" (the attacker-path bypass never got looked at)
+```
+
+**BLOCKED rationalizations:** "the correctness reviewer already reviewed the same diff" (it reviewed WHETHER it works, not whether it's DEFEATABLE) / "the tests are green, security is covered" (tests exercise the author's paths; the bypass lives off them) / "it's additive/low-risk, one reviewer is enough" (security-critical is defined by the surface — auth/crypto/revocation/isolation — not the diff size) / "we'll run security-reviewer at /release" (a CRITICAL merged at /implement is far more expensive to unwind at /release).
+
+**Why:** The correctness and adversarial lenses find DISJOINT defect classes; a change can be correctness-perfect (every AC met, every test green) AND carry a CRITICAL security bypass on a path no test exercises. Evidence: #1842-S3 — the correctness/closure-parity reviewer returned CLEAN (13/13 tests, all 3 ACs MET, "Fixes #1842" justified); the adversarial security-reviewer, run in the SAME round, caught a CRITICAL revocation-resurrection bypass (deleting one file silently un-revoked everything) + a HIGH monotonic-regression + the `revocation_verifier=None` fail-open — none of which the correctness lens saw. Both lenses are non-negotiable on the security surface; a correctness-clean verdict is not a security verdict.
+
+**Trust Posture Wiring (Correctness-Clean Is Not Security-Clean):**
+
+Applies to the **Correctness-Review-Clean Is Not Security-Clean** clause (added 2026-07-20); ships canonical-8-field-compliant. Pre-existing grandfathered sections of this baseline rule stay exempt until each is itself `/codify`-touched (precedent: the § Triad clause's own Wiring + `security.md` § Enforcement-Surface Parity).
+
+- **Severity:** `halt-and-report` at `/redteam` + `/codify` gate-review (cc-architect / reviewer confirm any security-critical change was redteamed by BOTH a correctness reviewer AND an adversarial security-reviewer, both with a genuine ran-signal, before convergence — not correctness-clean alone); `advisory` at the hook layer per `rules/hook-output-discipline.md` MUST-2 (which lens ran is a session-history judgment, not a structural tool-call signal).
+- **Grace period:** 7 days from clause landing (2026-07-20 → 2026-07-27).
+- **Cumulative posture impact:** same-class violations (a security-critical change converged on correctness-clean without an adversarial security round) contribute to `rules/trust-posture.md` MUST-4 cumulative-window math (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** a same-class violation within the 7-day grace window routes through the GENERIC `regression_within_grace` emergency trigger per `rules/trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause trigger key (a which-lens-ran property is session-history judgment; the universal trigger covers it). Named deviation from the canonical key-per-clause shape, recorded here per `rules/trust-posture.md` Rule 8 — the same disposition the § Triad clause + `wave-loop.md` MUST-6/7 took.
+- **Receipt requirement:** SessionStart soft-gate `[ack: agents]` IFF `posture.json::pending_verification` includes `agents`.
+- **Detection mechanism:** Phase 1 (manual, gate-review) — cc-architect at `/codify` + reviewer at `/redteam` inspect any session that converged a security-critical change (auth/crypto/revocation/isolation/fail-closed-gate/trust-boundary) and confirm the transcript shows BOTH a correctness reviewer AND an adversarial security-reviewer returning genuine ran-signals before the convergence claim. Phase 2 (deferred per `rules/trust-posture.md` § Two-Phase Rollout) — advisory Stop detector + fixtures at `.claude/audit-fixtures/wave-loop/orchestration-hygiene/` (shared with the § Triad + `wave-loop.md` MUST-6/7 gate) per `rules/cc-artifacts.md` Rule 9.
+- **Violation scope:** the Correctness-Clean-Is-Not-Security-Clean clause ONLY; grandfathered sections exempt until `/codify`-touched.
+- **Origin:** See the clause's Why (kailash-py #1842-S3, 2026-07-20).
+
 ## Zero-Tolerance
 
 Pre-existing failures MUST be fixed (`rules/zero-tolerance.md` Rule 1). No workarounds for SDK bugs — deep-dive and fix directly (Rule 4).
