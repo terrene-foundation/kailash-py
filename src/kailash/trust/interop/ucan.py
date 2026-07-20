@@ -437,8 +437,6 @@ def to_ucan(
         private_key, public_key = generate_keypair()
         token = to_ucan(delegation, private_key)
     """
-    from kailash.trust.chain import DelegationRecord as _DelegationRecord
-
     _validate_signing_key(signing_key)
 
     # Resolve DIDs

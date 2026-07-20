@@ -77,13 +77,6 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-def _iso_optional(dt: Optional[datetime]) -> Optional[str]:
-    """Format an optional datetime; returns None when input is None."""
-    if dt is None:
-        return None
-    return _iso(dt)
-
-
 def _make_vc_id(record_id: str) -> str:
     """Generate a URN-format VC identifier from an EATP record ID."""
     return f"urn:eatp:vc:{record_id}"

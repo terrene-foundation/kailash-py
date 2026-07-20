@@ -34,22 +34,38 @@ faithfully round-trips the five fields. The snake_case shape matches
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict, Optional, Protocol
 
 from kailash.trust.signing.delegation_payload import (
     ConstraintDimensions,
     DelegationScope,
     MultiSigSigningPolicy,
     ResourceLimits,
+    SigningPayloadVersion,
 )
-
-if TYPE_CHECKING:  # pragma: no cover - typing only (avoids a chain <-> signing cycle)
-    from kailash.trust.chain import DelegationRecord
 
 __all__ = [
     "serialize_fold_fields",
     "deserialize_fold_fields",
 ]
+
+
+class _FoldSourceRecord(Protocol):
+    """Structural type for the record fields ``serialize_fold_fields`` reads.
+
+    A LOCAL Protocol (not an import of ``kailash.trust.chain.DelegationRecord``)
+    so this low-level serializer never imports the high-level ``chain`` module —
+    not even under ``TYPE_CHECKING``. That one-way dependency (chain → this
+    module, never back) is what keeps CodeQL's ``py/unsafe-cyclic-import`` clear;
+    ``DelegationRecord`` satisfies this Protocol structurally.
+    """
+
+    constraints: "Optional[ConstraintDimensions]"
+    resource_limits: "Optional[ResourceLimits]"
+    scope: "Optional[DelegationScope]"
+    multi_sig: bool
+    multi_sig_policy: "Optional[MultiSigSigningPolicy]"
+
 
 # Attribute name -> serialized key, per case convention. ``constraints`` and
 # ``scope`` are identical in both; ``resource_limits`` / ``multi_sig`` /
@@ -76,7 +92,7 @@ def _keys(camel: bool) -> Dict[str, str]:
 
 
 def serialize_fold_fields(
-    record: "DelegationRecord", *, camel: bool = False
+    record: _FoldSourceRecord, *, camel: bool = False
 ) -> Dict[str, Any]:
     """Serialize the five S2b fold-fields prune-when-unset.
 
@@ -143,9 +159,12 @@ def deserialize_fold_fields(
     Raises:
         ValueError: On an inconsistent multi-sig record (fail-closed).
     """
-    # Import the version constant lazily to avoid a chain <-> signing import
-    # cycle (chain.py imports this module's package at load time).
-    from kailash.trust.chain import DELEGATION_SIGNING_VERSION_V3
+    # The v3 wire token is sourced from the LOW-LEVEL delegation_payload enum
+    # (``SigningPayloadVersion.V3_COMPLETE.value == "v3-complete"``), the same
+    # string as ``chain.DELEGATION_SIGNING_VERSION_V3`` — so this module never
+    # imports the high-level ``chain`` module (not even lazily), keeping the
+    # dependency one-way (chain → this module) and CodeQL's cyclic-import clear.
+    v3_version = SigningPayloadVersion.V3_COMPLETE.value
 
     k = _keys(camel)
 
@@ -176,7 +195,7 @@ def deserialize_fold_fields(
         multi_sig=multi_sig,
         multi_sig_policy=multi_sig_policy,
         signing_payload_version=signing_payload_version,
-        v3_version=DELEGATION_SIGNING_VERSION_V3,
+        v3_version=v3_version,
         record_id=record_id,
     )
 
