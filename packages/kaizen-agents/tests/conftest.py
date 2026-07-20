@@ -5,23 +5,10 @@ Provides shared fixtures for the agent engine tests migrated from kailash-kaizen
 """
 
 import os
-from pathlib import Path
 
-from kailash.testing.env_cost_guard import install_cost_guard, scrub_provider_secrets
-
-# LLM cost-guard: a bare `pytest` (no KAIZEN_ALLOW_REAL_LLM=1) must make ZERO
-# billed LLM calls. kaizen-agents declares its own pytest rootdir, so the
-# repo-root conftest guard never fires here. install_cost_guard loads .env with
-# provider secret keys withheld, monkeypatches dotenv.load_dotenv so any
-# module-scope / nested-conftest load_dotenv self-scrubs, and actively removes
-# any secret already present. Model names + non-secret vars still load.
-install_cost_guard(Path(__file__).resolve().parents[3] / ".env")
-
-
-def pytest_collection_finish(session):
-    """Backstop: after every module (and its module-scope load_dotenv) is
-    imported, remove any provider secret re-injected during collection."""
-    scrub_provider_secrets()
+# Cost-guard moved to the package-root conftest (packages/kaizen-agents/conftest.py)
+# so an explicit `pytest packages/kaizen-agents/examples/...` invocation is
+# covered too (#1848). The package-root guard fires for this tests/ subtree as well.
 
 
 # Unit-tier deterministic model default (issue-822 pattern): supervisor /
