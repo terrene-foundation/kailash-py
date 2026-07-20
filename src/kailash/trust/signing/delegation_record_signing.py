@@ -19,13 +19,16 @@ Two surfaces, one dispatch (#1841 shard 2):
 1. :func:`delegation_canonical_payload_str` is the SINGLE shared entry point that
    EVERY delegation sign/verify call site routes through. It returns the legacy
    canonical string for a ``legacy-python-v0`` record (byte-identical to the
-   pre-migration behaviour), and FAILS CLOSED
+   pre-migration behaviour), the cross-SDK V2Complete engine pre-image for a
+   ``v2-complete`` record (folding the record-persisted structured constraint /
+   resource-limit / scope — #1841 S2b-1), and the cross-SDK V3Complete engine
+   pre-image for a ``v3-complete`` (multi-sig) record (the V2Complete fold PLUS
+   the record-persisted ``multi_sig_policy`` — #1841 S2b-2). It FAILS CLOSED
    (:class:`~kailash.trust.exceptions.UnsupportedSigningPayloadVersionError`) for
-   any other version — because the engine (v2/v3) pre-image requires structured
-   constraint / resource-limit / scope / multi-sig data a ``DelegationRecord``
-   does not yet persist, so a non-legacy record MUST NOT fall through to the
-   legacy verifier (which would sign/verify the WRONG pre-image). Wiring the
-   record-persisted v2/v3 path is a later shard (S2b).
+   any UNRECOGNISED version, and (via a ``ValueError`` from the engine bridge)
+   for a v2/v3-labelled record missing the structured fold data — a non-legacy
+   record MUST NOT fall through to the legacy verifier (which would sign/verify
+   the WRONG pre-image).
 
 2. :func:`build_delegation_signing_input` / :func:`delegation_record_signing_payload`
    are the ADDITIVE engine bridge: they MAP a ``DelegationRecord``'s carried
@@ -66,27 +69,39 @@ __all__ = [
 
 
 def select_signing_version(record: "DelegationRecord") -> str:
-    """Select which canonical pre-image a delegation record signs (#1841 S2b-1).
+    """Select which canonical pre-image a delegation record signs (#1841 S2b-1/S2b-2).
 
     The structured engine-fold fields (``constraints`` / ``resource_limits`` /
-    ``scope``) are ALL-OR-NOTHING: supply all three (→ v2) or none (→ legacy).
+    ``scope``) are ALL-OR-NOTHING: supply all three (→ v2, or v3 when multi-sig)
+    or none (→ legacy).
 
     Returns:
         * ``legacy-python-v0`` (the DEFAULT) when NONE of the structured fields
-          is supplied, OR (all three supplied but) the record carries a NARROWED
-          ``dimension_scope`` (whose cross-SDK v2/v3 fold is not yet pinned —
-          rs#1795), OR is multi-sig (V3 is a later shard).
+          is supplied on a NON-multi-sig record, OR (all three supplied but) a
+          non-multi-sig record carries a NARROWED ``dimension_scope`` (whose
+          cross-SDK v2/v3 fold is not yet pinned — rs#1795).
         * ``v2-complete`` when ALL structured fields are present AND the record
-          is non-multi-sig AND ``dimension_scope`` is the full (unscoped) CARE
+          is NON-multi-sig AND ``dimension_scope`` is the full (unscoped) CARE
           set — so it signs the cross-SDK V2Complete engine pre-image.
+        * ``v3-complete`` when the record is MULTI-SIG (``multi_sig=True`` with a
+          ``multi_sig_policy``) AND all three structured fields are present AND
+          ``dimension_scope`` is the full (unscoped) CARE set — so it signs the
+          cross-SDK V3Complete pre-image, folding the quorum policy into the
+          signature (#1841 S2b-2, the quorum-integrity headline).
 
     Raises:
-        ValueError: If SOME but not ALL of the three structured fields are
-            supplied (partial supply). A partial-supply record would silently
-            downgrade to legacy (which does NOT bind the supplied fields into
-            the signature) while ``to_dict`` still persists them UNSIGNED — a
-            fail-open secure-default (``rules/security.md`` § "Secure-Default …
-            Never A Silent No-Op"). Fail closed + loud instead.
+        ValueError: (a) If SOME but not ALL of the three structured fields are
+            supplied on a non-multi-sig record (partial supply) — a partial
+            record would silently downgrade to legacy (dropping the supplied
+            fields from the signature) while ``to_dict`` still persists them
+            UNSIGNED, a fail-open secure-default (``rules/security.md`` §
+            "Secure-Default … Never A Silent No-Op"). (b) If the multi-sig flags
+            are INCONSISTENT (``multi_sig=True`` without a policy, OR a policy
+            with ``multi_sig=False``) — a mis-constructed record. (c) If a
+            MULTI-SIG record lacks the structured fold fields OR carries a
+            narrowed ``dimension_scope`` — a multi-sig record MUST sign v3 (never
+            legacy/v2, which drop the quorum binding); when v3 bytes are not
+            producible it fails closed rather than silently downgrading.
 
     The record's ``signing_payload_version`` is set from this at ``delegate()``
     sign time; :func:`delegation_canonical_payload_str` then dispatches on that
@@ -97,7 +112,26 @@ def select_signing_version(record: "DelegationRecord") -> str:
         ALL_DIMENSIONS,
         DELEGATION_SIGNING_VERSION_LEGACY,
         DELEGATION_SIGNING_VERSION_V2,
+        DELEGATION_SIGNING_VERSION_V3,
     )
+
+    multi_sig = getattr(record, "multi_sig", False)
+    multi_sig_policy = getattr(record, "multi_sig_policy", None)
+
+    # Multi-sig flag/policy consistency (fail-closed on a mis-constructed record).
+    # A record with ONE of the two set is inconsistent: silently downgrading it
+    # would drop the quorum binding the v3 fold exists to provide.
+    if multi_sig and multi_sig_policy is None:
+        raise ValueError(
+            "multi_sig=True requires a multi_sig_policy; a multi-sig record with "
+            "no policy cannot bind its quorum (threshold + authorized_signers) "
+            "into the signature (fail-closed)"
+        )
+    if multi_sig_policy is not None and not multi_sig:
+        raise ValueError(
+            "multi_sig_policy is set but multi_sig=False; a policy with no "
+            "multi-sig flag is a mis-constructed record (fail-closed)"
+        )
 
     structured = {
         "constraints": getattr(record, "constraints", None),
@@ -105,6 +139,34 @@ def select_signing_version(record: "DelegationRecord") -> str:
         "scope": getattr(record, "scope", None),
     }
     supplied = [name for name, val in structured.items() if val is not None]
+    record_scope = getattr(record, "dimension_scope", ALL_DIMENSIONS)
+    unscoped = frozenset(record_scope) == frozenset(ALL_DIMENSIONS)
+
+    if multi_sig:
+        # A multi-sig record MUST sign V3Complete — NEVER legacy/v2 (which do not
+        # fold the quorum policy, so a store-write actor could weaken quorum
+        # undetected). It REQUIRES all three structured fields AND the full
+        # (unscoped) CARE set; anything else is not producible as v3 bytes and
+        # fails closed rather than silently downgrading.
+        if len(supplied) != len(structured):
+            missing = sorted(name for name, val in structured.items() if val is None)
+            raise ValueError(
+                "multi-sig record requires constraints, resource_limits, and "
+                f"scope for the V3Complete fold; missing {missing} (fail-closed — "
+                "a multi-sig record must sign v3, never legacy/v2 which drop the "
+                "quorum binding)"
+            )
+        if not unscoped:
+            raise ValueError(
+                "multi-sig record carries a narrowed dimension_scope "
+                f"({sorted(record_scope)}); its cross-SDK V3 fold is not yet "
+                "pinned (rs#1795) and the engine byte-verifies only the unscoped "
+                "form — fail closed rather than downgrade a multi-sig record to "
+                "legacy/v2 (which would drop the quorum binding)"
+            )
+        return DELEGATION_SIGNING_VERSION_V3
+
+    # --- Non-multi-sig (S2b-1 logic, byte-identical) -------------------------
     if not supplied:
         # None supplied → legacy (byte-identical to pre-S2b).
         return DELEGATION_SIGNING_VERSION_LEGACY
@@ -118,17 +180,10 @@ def select_signing_version(record: "DelegationRecord") -> str:
             f"{sorted(supplied)} without {missing}"
         )
 
-    # V3 (multi-sig) is a later shard (S2b-2); no multi-sig field exists on the
-    # record yet, but guard defensively so a future multi-sig field cannot slip
-    # a multi-sig record onto the v2 path.
-    if getattr(record, "multi_sig", False):
-        return DELEGATION_SIGNING_VERSION_LEGACY
-
     # The engine byte-verifies only the all-dimensions form; a narrowed
     # dimension_scope stays legacy (its scope-widening defence lives in the
     # legacy payload, chain.py:to_signing_payload). See build_delegation_signing_input.
-    record_scope = getattr(record, "dimension_scope", ALL_DIMENSIONS)
-    if frozenset(record_scope) != frozenset(ALL_DIMENSIONS):
+    if not unscoped:
         return DELEGATION_SIGNING_VERSION_LEGACY
 
     return DELEGATION_SIGNING_VERSION_V2
@@ -150,13 +205,21 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
         pre-migration behaviour). For a ``v2-complete`` record, the canonical
         cross-SDK V2Complete engine pre-image (folding the record-persisted
         ``constraints`` / ``resource_limits`` / ``scope``) as a UTF-8 string
-        (#1841 S2b-1).
+        (#1841 S2b-1). For a ``v3-complete`` (multi-sig) record, the canonical
+        cross-SDK V3Complete engine pre-image (the V2Complete fold PLUS the
+        record-persisted ``multi_sig_policy`` — threshold + canonically-sorted
+        authorized_signers) as a UTF-8 string (#1841 S2b-2).
 
     Raises:
-        UnsupportedSigningPayloadVersionError: If the record declares
-            ``v3-complete`` (multi-sig — a later shard, S2b-2) or any
-            unrecognised version. Falling through to the legacy verifier would
-            sign/verify the WRONG pre-image, so this fails closed.
+        UnsupportedSigningPayloadVersionError: If the record declares an
+            UNRECOGNISED version (not legacy / v2 / v3). Falling through to the
+            legacy verifier would sign/verify the WRONG pre-image, so this fails
+            closed.
+        ValueError: If a ``v2``/``v3``-labelled record is missing the structured
+            fold fields (or a ``v3`` record lacks a valid multi_sig policy) — the
+            engine bridge fails closed rather than emitting guessed bytes. The
+            verify path catches this and returns ``valid=False`` (never lets it
+            escape as a DoS-via-exception).
     """
     # Import lazily to avoid a chain <-> signing import cycle: chain.py imports
     # kailash.trust.signing.crypto at module load, which initialises the signing
@@ -165,6 +228,7 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
     from kailash.trust.chain import (
         DELEGATION_SIGNING_VERSION_LEGACY,
         DELEGATION_SIGNING_VERSION_V2,
+        DELEGATION_SIGNING_VERSION_V3,
     )
 
     version = getattr(
@@ -187,9 +251,28 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
         )
         return payload_bytes.decode("utf-8")
 
-    # v3-complete (multi-sig) and any unrecognised version fail closed — their
-    # record-persisted verify path is a later shard (S2b-2). Falling through to
-    # the legacy verifier would check the WRONG pre-image.
+    if version == DELEGATION_SIGNING_VERSION_V3:
+        # v3-complete: the V2Complete fold PLUS the record-persisted multi-sig
+        # policy (threshold + canonically-sorted authorized_signers) folded into
+        # the signed pre-image (#1841 S2b-2 — the quorum-integrity headline). The
+        # record's own multi_sig / multi_sig_policy are passed faithfully: a
+        # record LABELLED v3 that is not a genuine multi-sig record (multi_sig
+        # False or policy None) fails closed at the engine (which requires a
+        # multi-sig record with a policy for V3_COMPLETE) rather than emitting
+        # guessed bytes.
+        payload_bytes = delegation_record_signing_payload(
+            record,
+            SigningPayloadVersion.V3_COMPLETE,
+            constraints=record.constraints,
+            resource_limits=record.resource_limits,
+            scope=record.scope,
+            multi_sig=getattr(record, "multi_sig", False),
+            multi_sig_policy=getattr(record, "multi_sig_policy", None),
+        )
+        return payload_bytes.decode("utf-8")
+
+    # Any UNRECOGNISED version (not legacy / v2 / v3) fails closed — falling
+    # through to the legacy verifier would check the WRONG pre-image.
     raise UnsupportedSigningPayloadVersionError(
         version, record_id=getattr(record, "id", None)
     )

@@ -368,6 +368,38 @@ class MultiSigSigningPolicy:
         """Return the signer keys as canonically-ordered lowercase-hex strings."""
         return sorted(bytes(signer).hex() for signer in self.authorized_signers)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for DelegationRecord persistence (#1841 S2b-2).
+
+        The 32-byte signer keys are hex-encoded (lowercase) in their STORED
+        order (NOT the sorted pre-image order — persistence round-trips the exact
+        policy; the signing pre-image sorts independently via
+        :meth:`authorized_signers_hex`). ``threshold`` is emitted verbatim.
+        """
+        return {
+            "threshold": self.threshold,
+            "authorized_signers": [
+                bytes(signer).hex() for signer in self.authorized_signers
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MultiSigSigningPolicy":
+        """Reconstruct from a :meth:`to_dict` mapping (hex → 32-byte keys).
+
+        Decodes each hex signer back to raw bytes and re-runs ``__post_init__``,
+        so the distinct-signer / ≥32-byte / ``threshold ≤ N`` validation fires on
+        reconstruction — a tampered persisted policy (duplicate/short signer,
+        over-large threshold) fails closed at deserialization rather than
+        silently reconstructing a weakened quorum.
+        """
+        return cls(
+            threshold=data["threshold"],
+            authorized_signers=tuple(
+                bytes.fromhex(signer) for signer in data["authorized_signers"]
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class DelegationSigningInput:

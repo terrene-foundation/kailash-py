@@ -35,6 +35,7 @@ from kailash.trust.signing.crypto import (
 from kailash.trust.signing.delegation_payload import (
     ConstraintDimensions,
     DelegationScope,
+    MultiSigSigningPolicy,
     ResourceLimits,
 )
 
@@ -330,6 +331,19 @@ class DelegationRecord:
     resource_limits: Optional[ResourceLimits] = None
     scope: Optional[DelegationScope] = None
 
+    # Multi-sig fold fields (#1841 S2b-2). Backward-compat defaults (False/None)
+    # so a pre-S2b-2 record is byte-identical. When multi_sig is True AND
+    # multi_sig_policy is set (with all three structured fields present AND an
+    # unscoped dimension_scope), the record signs the cross-SDK V3Complete
+    # pre-image, folding the quorum policy (threshold + canonically-sorted
+    # authorized_signers) into the Ed25519-signed bytes so a store-write actor
+    # cannot weaken quorum (lower the threshold, swap/remove a signer) without
+    # invalidating the signature. These fold into the ENGINE pre-image only —
+    # never into the legacy to_signing_payload() below (whose bytes stay
+    # unchanged) nor the v2 pre-image (a non-multi-sig record is byte-neutral).
+    multi_sig: bool = False
+    multi_sig_policy: Optional[MultiSigSigningPolicy] = None
+
     def __post_init__(self) -> None:
         """Validate dimension_scope values are from the canonical set."""
         if not isinstance(self.dimension_scope, frozenset):
@@ -423,6 +437,14 @@ class DelegationRecord:
             d["resource_limits"] = self.resource_limits.to_dict()
         if self.scope is not None:
             d["scope"] = self.scope.to_dict()
+        # Multi-sig fold fields (#1841 S2b-2) — emitted ONLY when set, so a
+        # non-multi-sig record's persisted dict carries NO multi_sig keys and is
+        # byte-identical to a pre-S2b-2 record (prune-when-unset, matching the
+        # structured-field pattern above and cross-sdk-inspection 4d).
+        if self.multi_sig:
+            d["multi_sig"] = True
+        if self.multi_sig_policy is not None:
+            d["multi_sig_policy"] = self.multi_sig_policy.to_dict()
         return d
 
     @classmethod
@@ -480,6 +502,18 @@ class DelegationRecord:
             else None
         )
 
+        # Multi-sig fold fields (#1841 S2b-2): backward-compatible -- a pre-S2b-2
+        # record has no key, so multi_sig defaults False and multi_sig_policy is
+        # None. MultiSigSigningPolicy.from_dict decodes hex->bytes AND re-runs
+        # __post_init__, so distinct-signer / 32-byte / threshold<=N validation
+        # fires on reconstruction (a tampered persisted policy fails closed).
+        raw_multi_sig_policy = data.get("multi_sig_policy")
+        multi_sig_policy = (
+            MultiSigSigningPolicy.from_dict(raw_multi_sig_policy)
+            if raw_multi_sig_policy is not None
+            else None
+        )
+
         return cls(
             id=data["id"],
             delegator_id=data["delegator_id"],
@@ -516,6 +550,9 @@ class DelegationRecord:
             constraints=constraints,
             resource_limits=resource_limits,
             scope=scope,
+            # Multi-sig fold fields (#1841 S2b-2): defaults when absent.
+            multi_sig=data.get("multi_sig", False),
+            multi_sig_policy=multi_sig_policy,
         )
 
 

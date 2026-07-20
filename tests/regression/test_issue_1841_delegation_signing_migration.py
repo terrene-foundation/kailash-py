@@ -168,11 +168,12 @@ def test_record_deserialized_without_version_key_still_verifies():
 
 
 @pytest.mark.parametrize(
-    # v2-complete is WIRED as of #1841 S2b-1 (see the v2 tests below); v3-complete
-    # (multi-sig) remains a later shard (S2b-2), and any unrecognised version
-    # still fails closed with UnsupportedSigningPayloadVersionError.
+    # v2-complete (S2b-1) and v3-complete (S2b-2, multi-sig) are BOTH WIRED (see
+    # the v2/v3 tests below + tests/regression/test_issue_1841_s2b2_v3_*.py). Only
+    # a genuinely UNRECOGNISED version still fails closed with
+    # UnsupportedSigningPayloadVersionError at dispatch.
     "version",
-    [DELEGATION_SIGNING_VERSION_V3, "future-vX"],
+    ["future-vX", "v9-bogus"],
 )
 def test_non_legacy_version_fails_closed_at_dispatch(version):
     record = _record(signing_payload_version=version)
@@ -192,6 +193,21 @@ def test_v2_labeled_record_without_structured_fields_fails_closed():
     legacy.
     """
     record = _record(signing_payload_version=DELEGATION_SIGNING_VERSION_V2)
+    with pytest.raises(ValueError, match="constraints"):
+        delegation_canonical_payload_str(record)
+
+
+def test_v3_labeled_record_without_structured_fields_fails_closed():
+    """A v3-labeled record lacking the structured fold fields fails closed.
+
+    #1841 S2b-2 wires v3, but the engine bridge REQUIRES the structured
+    constraints / resource_limits / scope (AND a multi_sig policy). A record
+    stamped v3 without them is an inconsistent state (select_signing_version
+    never produces it) and MUST fail closed at the bridge (ValueError) rather
+    than emit guessed bytes — never fall through to legacy. Swept from the former
+    v3-unwired deferral assertion per orphan-detection.md Rule 4a.
+    """
+    record = _record(signing_payload_version=DELEGATION_SIGNING_VERSION_V3)
     with pytest.raises(ValueError, match="constraints"):
         delegation_canonical_payload_str(record)
 

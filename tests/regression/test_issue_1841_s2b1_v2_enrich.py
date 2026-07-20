@@ -38,7 +38,6 @@ from kailash.trust.chain import (
     DELEGATION_SIGNING_VERSION_V2,
     DelegationRecord,
 )
-from kailash.trust.exceptions import UnsupportedSigningPayloadVersionError
 from kailash.trust.signing.crypto import (
     generate_keypair,
     serialize_for_signing,
@@ -186,12 +185,25 @@ def test_narrowed_scope_direct_bridge_call_raises() -> None:
         )
 
 
-def test_v3_version_fails_closed() -> None:
-    """A record declaring v3-complete fails closed (multi-sig is a later shard)."""
+def test_v3_labeled_record_without_policy_fails_closed() -> None:
+    """A record LABELLED v3 but lacking a multi_sig policy fails closed.
+
+    #1841 S2b-2 WIRES v3 (see tests/regression/test_issue_1841_s2b2_v3_*.py for
+    the full multi-sig coverage). This test formerly asserted v3 was UNwired
+    (raising ``UnsupportedSigningPayloadVersionError``); with v3 implemented, a
+    v3-LABELLED record that is NOT a genuine multi-sig record (no policy) now
+    fails closed at the engine bridge with a ``ValueError`` — it MUST NOT fall
+    through to the legacy verifier and MUST NOT emit guessed bytes. The verify
+    path catches this ValueError and returns valid=False (never a DoS-escape).
+    Swept per orphan-detection.md Rule 4a (implementing a deferred stub sweeps
+    its deferral assertion in the same commit).
+    """
     from kailash.trust.chain import DELEGATION_SIGNING_VERSION_V3
 
+    # _v2_record has the structured fold fields but NO multi_sig policy; forcing
+    # the v3 label makes it an inconsistent (mislabeled) record.
     record = _v2_record(signing_payload_version=DELEGATION_SIGNING_VERSION_V3)
-    with pytest.raises(UnsupportedSigningPayloadVersionError):
+    with pytest.raises(ValueError, match="multi_sig_policy"):
         delegation_canonical_payload_str(record)
 
 
