@@ -329,6 +329,19 @@ class MultiSigSigningPolicy:
     authorized_signers: tuple[bytes, ...]
 
     def __post_init__(self) -> None:
+        # Threshold MUST be a true int — folded verbatim into the V3 JCS
+        # pre-image (delegation_signing_payload). A float (2.0 → "2.0") or bool
+        # (True → "true") serializes to bytes that DIVERGE from the kailash-rs
+        # integer contract this pre-image is byte-locked to (rs emits "2"),
+        # breaking cross-SDK verification. bool is a subclass of int in Python,
+        # so it must be rejected EXPLICITLY. Fail closed at construction,
+        # matching the rest of the policy's validation posture
+        # (cross-sdk-inspection.md — number-typing byte parity).
+        if not isinstance(self.threshold, int) or isinstance(self.threshold, bool):
+            raise ValueError(
+                "multi_sig threshold must be an int, got "
+                f"{type(self.threshold).__name__}"
+            )
         if not self.authorized_signers:
             raise ValueError("multi-sig policy requires at least one signer")
         if self.threshold < 1:
@@ -367,6 +380,38 @@ class MultiSigSigningPolicy:
     def authorized_signers_hex(self) -> list[str]:
         """Return the signer keys as canonically-ordered lowercase-hex strings."""
         return sorted(bytes(signer).hex() for signer in self.authorized_signers)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for DelegationRecord persistence (#1841 S2b-2).
+
+        The 32-byte signer keys are hex-encoded (lowercase) in their STORED
+        order (NOT the sorted pre-image order — persistence round-trips the exact
+        policy; the signing pre-image sorts independently via
+        :meth:`authorized_signers_hex`). ``threshold`` is emitted verbatim.
+        """
+        return {
+            "threshold": self.threshold,
+            "authorized_signers": [
+                bytes(signer).hex() for signer in self.authorized_signers
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MultiSigSigningPolicy":
+        """Reconstruct from a :meth:`to_dict` mapping (hex → 32-byte keys).
+
+        Decodes each hex signer back to raw bytes and re-runs ``__post_init__``,
+        so the distinct-signer / ≥32-byte / ``threshold ≤ N`` validation fires on
+        reconstruction — a tampered persisted policy (duplicate/short signer,
+        over-large threshold) fails closed at deserialization rather than
+        silently reconstructing a weakened quorum.
+        """
+        return cls(
+            threshold=data["threshold"],
+            authorized_signers=tuple(
+                bytes.fromhex(signer) for signer in data["authorized_signers"]
+            ),
+        )
 
 
 @dataclass(frozen=True)

@@ -73,6 +73,7 @@ from kailash.trust.signing.crypto import (
 from kailash.trust.signing.delegation_payload import (
     ConstraintDimensions,
     DelegationScope,
+    MultiSigSigningPolicy,
     ResourceLimits,
 )
 from kailash.trust.signing.delegation_record_signing import (
@@ -1704,6 +1705,7 @@ class TrustOperations:
         constraints: Optional[ConstraintDimensions] = None,  # #1841 S2b-1: V2 fold
         resource_limits: Optional[ResourceLimits] = None,  # #1841 S2b-1: V2 fold
         scope: Optional[DelegationScope] = None,  # #1841 S2b-1: V2 fold
+        multi_sig_policy: Optional[MultiSigSigningPolicy] = None,  # #1841 S2b-2: V3
     ) -> DelegationRecord:
         """
         DELEGATE: Transfer trust from one agent to another.
@@ -1737,6 +1739,15 @@ class TrustOperations:
             scope: Optional structured DelegationScope (see constraints). When
                 constraints + resource_limits + scope are ALL supplied AND the
                 record is unscoped + non-multi-sig, the record signs V2Complete.
+            multi_sig_policy: Optional M-of-N MultiSigSigningPolicy (#1841 S2b-2).
+                When supplied, the record is MULTI-SIG and signs the cross-SDK
+                V3Complete pre-image, folding the quorum policy (threshold +
+                canonically-sorted authorized_signers) into the Ed25519 signature
+                so a store-write actor cannot weaken quorum undetected. A
+                multi-sig delegation REQUIRES constraints + resource_limits +
+                scope ALL supplied AND an unscoped dimension_scope; a policy
+                supplied without the full structured fold fails closed (a
+                ValueError) before signing/persisting.
 
         Returns:
             DelegationRecord: Signed delegation record with human_origin
@@ -1877,23 +1888,27 @@ class TrustOperations:
                 expires_at = min(expires_at, delegator_chain.genesis.expires_at)
 
         # 7. Create DelegationRecord with EATP fields.
-        # A v2-bound record (all structured fields supplied) signs the cross-SDK
-        # V2Complete engine pre-image, which pins a WHOLE-SECOND timestamp (§5.3;
-        # the engine fails closed on sub-second precision). datetime.now() carries
-        # microseconds, so truncate to whole-second for a v2-bound record — else
-        # the v2 sign path would raise on every real call. Legacy records keep
-        # full microsecond precision (Python-only pre-image, no cross-SDK pin).
-        _v2_bound = (
+        # An ENGINE-bound record (all three structured fields supplied) signs the
+        # cross-SDK V2Complete (non-multi-sig) or V3Complete (multi-sig) engine
+        # pre-image, which pins a WHOLE-SECOND timestamp (§5.3; the engine fails
+        # closed on sub-second precision). datetime.now() carries microseconds,
+        # so truncate to whole-second for an engine-bound record — else the v2/v3
+        # sign path would raise on every real call. TRUNCATE (floor), never round
+        # (rounding could EXTEND an expiry — a security regression). Legacy
+        # records keep full microsecond precision (Python-only pre-image, no
+        # cross-SDK pin). A multi-sig record is always engine-bound (v3 requires
+        # the full structured fold), so this covers the v3 creation path too.
+        _engine_bound = (
             constraints is not None
             and resource_limits is not None
             and scope is not None
         )
         _delegated_at = datetime.now(timezone.utc)
-        if _v2_bound:
+        if _engine_bound:
             _delegated_at = _delegated_at.replace(microsecond=0)
-            # expires_at is also folded into the v2 pre-image via the same
+            # expires_at is also folded into the v2/v3 pre-image via the same
             # whole-second-only guard; truncate it too so a sub-second expiry
-            # (e.g. inherited from the genesis) does not fail the v2 sign path.
+            # (e.g. inherited from the genesis) does not fail the engine sign path.
             if expires_at is not None and expires_at.microsecond != 0:
                 expires_at = expires_at.replace(microsecond=0)
         delegation = DelegationRecord(
@@ -1917,6 +1932,14 @@ class TrustOperations:
             constraints=constraints,
             resource_limits=resource_limits,
             scope=scope,
+            # Multi-sig fold fields (#1841 S2b-2). When multi_sig_policy is
+            # supplied, the record is multi-sig and (with the full structured
+            # fold + unscoped dimension_scope) signs the V3Complete pre-image,
+            # binding the quorum policy into the signature. A policy supplied
+            # without the full structured fold fails closed at
+            # select_signing_version below (before signing/persisting).
+            multi_sig=multi_sig_policy is not None,
+            multi_sig_policy=multi_sig_policy,
         )
 
         # Select the signing pre-image version from the structured fields
