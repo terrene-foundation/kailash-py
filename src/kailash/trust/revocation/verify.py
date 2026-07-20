@@ -101,6 +101,17 @@ class DurableHighWaterStore:
         self._lock_path = self._store_dir / f".{HIGHWATER_FILENAME}.lock"
         self._owner_public_key = owner_public_key
 
+    @property
+    def owner_public_key(self) -> bytes:
+        """The owner public key the persisted high-water head is verified under.
+
+        Exposed so :class:`SignedRevocationVerifier` can assert at construction
+        that its own owner key and this store's key are the SAME — a mis-wired
+        factory passing two different owner keys would otherwise verify the
+        high-water head against the WRONG key (a latent key-confusion footgun).
+        """
+        return self._owner_public_key
+
     def _load_anchor_unlocked(self) -> HeadCommitmentAnchor:
         """Re-seed the anchor from the durable (owner-signed) high-water record.
 
@@ -306,8 +317,23 @@ class SignedRevocationVerifier:
                 signed under.
             signed_store: The durable signed-head + event-set store.
             highwater_store: The durable anti-rollback high-water store (re-seeds
-                the :class:`HeadCommitmentAnchor` on every read).
+                the :class:`HeadCommitmentAnchor` on every read). Its
+                ``owner_public_key`` MUST equal ``owner_public_key`` — the verifier
+                and the store verify the SAME owner signatures, so a mismatch is a
+                mis-wiring.
+
+        Raises:
+            RevocationVerificationError: If ``highwater_store.owner_public_key``
+                differs from ``owner_public_key`` — a key-confusion mis-wiring that
+                would verify the persisted high-water head against the WRONG key
+                (fail-closed at construction; a mismatch is unconstructable).
         """
+        if highwater_store.owner_public_key != owner_public_key:
+            raise RevocationVerificationError(
+                "owner-public-key mismatch: the SignedRevocationVerifier and its "
+                "DurableHighWaterStore were wired with DIFFERENT owner keys — both "
+                "MUST verify the same owner signatures (key-confusion mis-wiring)"
+            )
         self._owner_public_key = owner_public_key
         self._signed_store = signed_store
         self._highwater_store = highwater_store

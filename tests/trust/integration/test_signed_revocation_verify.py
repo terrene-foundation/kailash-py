@@ -394,6 +394,29 @@ def test_R3_forged_unsigned_high_water_fails_closed(tmp_path, owner_keys):
     assert "signature" in str(exc.value).lower() or "tamper" in str(exc.value).lower()
 
 
+def test_R4_mismatched_owner_keys_unconstructable(tmp_path, owner_keys):
+    """Round-2 nit (key-wiring footgun): a verifier and its durable high-water
+    store wired with DIFFERENT owner keys is unconstructable — the equality
+    assertion fails closed at construction, so a mis-wired factory cannot verify
+    the high-water head against the wrong key.
+    """
+    _, pubkey = owner_keys
+    _, other_pubkey = (
+        base64.b64decode(generate_keypair()[0]),
+        base64.b64decode(generate_keypair()[1]),
+    )
+    signed_store = SignedRevocationStore(tmp_path)
+    # Store wired with a DIFFERENT owner key than the verifier.
+    highwater_store = DurableHighWaterStore(tmp_path, other_pubkey)
+    with pytest.raises(RevocationVerificationError) as exc:
+        SignedRevocationVerifier(pubkey, signed_store, highwater_store)
+    assert "mismatch" in str(exc.value).lower()
+
+    # Matched keys construct cleanly (the single-key threading path).
+    matched = DurableHighWaterStore(tmp_path, pubkey)
+    SignedRevocationVerifier(pubkey, signed_store, matched)  # no raise
+
+
 # ---------------------------------------------------------------------------
 # TrustOperations.verify consults the signed ledger authoritatively
 # ---------------------------------------------------------------------------
