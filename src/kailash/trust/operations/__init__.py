@@ -74,6 +74,9 @@ from kailash.trust.signing.delegation_record_signing import (
     delegation_canonical_payload_str,
 )
 
+if TYPE_CHECKING:
+    from kailash.trust.revocation.verify import SignedRevocationVerifier
+
 # Logger for trust operations
 logger = logging.getLogger(__name__)
 
@@ -244,6 +247,7 @@ class TrustOperations:
         key_manager: TrustKeyManager,
         trust_store: TrustStore,
         max_delegation_depth: int = MAX_DELEGATION_DEPTH,
+        revocation_verifier: "SignedRevocationVerifier | None" = None,
     ):
         """
         Initialize TrustOperations.
@@ -254,11 +258,19 @@ class TrustOperations:
             trust_store: Storage for trust chains
             max_delegation_depth: Maximum allowed delegation depth from human origin
                                   (CARE-004). Defaults to MAX_DELEGATION_DEPTH (10).
+            revocation_verifier: Optional AUTHORITATIVE signed-ledger revocation
+                verifier (#1842). When set, :meth:`verify` consults the
+                owner-signed revocation ledger as the authoritative revocation
+                source and DENIES a revoked delegation — fail-closed on an
+                unverifiable ledger/head, never falling open to the unsigned
+                ``revoked`` flag. When ``None`` (default), verify behaviour is
+                unchanged (the in-memory cascade remains the only surface).
         """
         self.authority_registry = authority_registry
         self.key_manager = key_manager
         self.trust_store = trust_store
         self.max_delegation_depth = max_delegation_depth
+        self.revocation_verifier = revocation_verifier
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -565,6 +577,18 @@ class TrustOperations:
                 level=level,
             )
 
+        # 1a. AUTHORITATIVE revocation gate (#1842). When a signed-ledger
+        # verifier is configured it is the AUTHORITATIVE revocation source —
+        # consulted at EVERY level (including QUICK) so no verification path
+        # authorizes a revoked delegation. Fail-closed: an unverifiable
+        # ledger/head (bad owner signature, a store-tampered event set, an
+        # anti-rollback violation) DENIES; it NEVER falls open to the mutable
+        # unsigned ``revoked`` flag / the in-memory cascade.
+        if self.revocation_verifier is not None:
+            revoked = self._check_signed_revocation(chain, level)
+            if revoked is not None:
+                return revoked
+
         # QUICK level: Just check hash and expiration
         if level == VerificationLevel.QUICK:
             return await self._verify_quick(chain, level)
@@ -697,6 +721,70 @@ class TrustOperations:
             reasoning_present=reasoning_present,
             reasoning_verified=reasoning_verified,
         )
+
+    def _check_signed_revocation(
+        self,
+        chain: TrustLineageChain,
+        level: VerificationLevel,
+    ) -> Optional[VerificationResult]:
+        """Consult the AUTHORITATIVE signed revocation ledger (#1842).
+
+        Returns a DENY :class:`VerificationResult` when the agent's chain (its
+        ``agent_id`` or any delegation id in the chain) is present in the
+        owner-signed revocation ledger, OR when the ledger/head cannot be verified
+        (fail-closed). Returns ``None`` when the signed ledger authoritatively
+        shows the chain is NOT revoked, so verification proceeds.
+
+        The signed ledger is the AUTHORITATIVE source: a store-writer who flips a
+        persisted unsigned ``revoked`` flag changes nothing here, and one who
+        deletes a signed revocation event changes the recomputed tip → the
+        owner-head signature no longer binds it → detected and denied.
+        """
+        from kailash.trust.revocation.verify import RevocationVerificationError
+
+        assert self.revocation_verifier is not None  # gated by caller
+        try:
+            revoked_set = self.revocation_verifier.verified_revoked_set()
+        except RevocationVerificationError as exc:
+            # Fail-closed: an unverifiable signed ledger/head DENIES. We do NOT
+            # fall open to the unsigned ``revoked`` flag / in-memory cascade.
+            logger.warning(
+                "signed revocation ledger unverifiable — denying verify "
+                "(fail-closed, #1842)",
+                extra={"agent_id": chain.genesis.agent_id, "error": str(exc)},
+            )
+            return VerificationResult(
+                valid=False,
+                reason=(
+                    "Revocation ledger unverifiable — fail-closed deny "
+                    f"(signed ledger is authoritative): {exc}"
+                ),
+                level=level,
+            )
+
+        # Match the chain's identifiers against the signed revoked set. The
+        # ledger's unit is the delegation id; we also match the agent id so a
+        # revocation recorded against the agent denies too.
+        candidate_ids = {chain.genesis.agent_id}
+        candidate_ids.update(d.id for d in chain.delegations)
+        hit = candidate_ids & revoked_set
+        if hit:
+            logger.info(
+                "signed revocation ledger authoritative DENY (#1842)",
+                extra={
+                    "agent_id": chain.genesis.agent_id,
+                    "revoked_ids": sorted(hit),
+                },
+            )
+            return VerificationResult(
+                valid=False,
+                reason=(
+                    "Delegation revoked per the owner-signed revocation ledger "
+                    f"(authoritative): {sorted(hit)}"
+                ),
+                level=level,
+            )
+        return None
 
     async def _verify_quick(
         self,
