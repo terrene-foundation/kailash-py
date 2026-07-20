@@ -76,6 +76,11 @@ from kailash.trust.signing.delegation_payload import (
     TrustLevel,
     delegation_signing_payload,
 )
+from kailash.trust.signing.delegation_record_signing import (
+    build_delegation_signing_input,
+    delegation_canonical_payload_str,
+    delegation_record_signing_payload,
+)
 from kailash.trust.signing.derivation import derive_trace_token
 
 __all__ = [
@@ -115,6 +120,10 @@ __all__ = [
     "MultiSigSigningPolicy",
     "DelegationSigningInput",
     "delegation_signing_payload",
+    # Version-gated DelegationRecord signing/verify bridge (#1841 shard 2)
+    "delegation_canonical_payload_str",
+    "build_delegation_signing_input",
+    "delegation_record_signing_payload",
     # EATP-08 v1.1 algorithm-identifier surface (canonical namespace)
     "ADOPTION_DATE",
     "ADOPTION_DATE_PARSED",

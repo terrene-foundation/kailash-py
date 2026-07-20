@@ -56,6 +56,7 @@ from kailash.trust.exceptions import (
     InvalidTrustChainError,
     TrustChainNotFoundError,
     TrustError,
+    UnsupportedSigningPayloadVersionError,
     VerificationFailedError,
 )
 from kailash.trust.execution_context import (
@@ -68,6 +69,9 @@ from kailash.trust.signing.crypto import (
     serialize_for_signing,
     sign,
     verify_signature,
+)
+from kailash.trust.signing.delegation_record_signing import (
+    delegation_canonical_payload_str,
 )
 
 # Logger for trust operations
@@ -1368,8 +1372,19 @@ class TrustOperations:
             include_inactive=True,  # Allow inactive for historical verification
         )
 
-        # Build signing payload from delegation
-        del_payload = serialize_for_signing(delegation.to_signing_payload())
+        # Build the canonical signing payload via the version-gated dispatch
+        # (#1841 shard 2). A ``legacy-python-v0`` record yields the byte-identical
+        # legacy pre-image; a non-legacy record fails closed (its record-persisted
+        # v2/v3 verify path is not wired in this build) rather than falling through
+        # to the legacy verifier (which would check the WRONG pre-image).
+        try:
+            del_payload = delegation_canonical_payload_str(delegation)
+        except UnsupportedSigningPayloadVersionError as exc:
+            return VerificationResult(
+                valid=False,
+                reason=f"Unsupported delegation signing_payload_version: {exc.version}",
+                level=VerificationLevel.FULL,
+            )
 
         # Verify signature using authority's key
         if not verify_signature(
@@ -1745,7 +1760,11 @@ class TrustOperations:
         authority_id = delegator_chain.genesis.authority_id
         authority = await self.authority_registry.get_authority(authority_id)
 
-        delegation_payload = serialize_for_signing(delegation.to_signing_payload())
+        # Sign over the version-gated canonical pre-image (#1841 shard 2). New
+        # records default to ``legacy-python-v0``, so this is byte-identical to
+        # the pre-migration signing behaviour; the shared dispatch is the single
+        # site S2b extends to sign the engine (v2/v3) pre-image.
+        delegation_payload = delegation_canonical_payload_str(delegation)
         delegation.signature = await self.key_manager.sign(
             delegation_payload,
             authority.signing_key_id,

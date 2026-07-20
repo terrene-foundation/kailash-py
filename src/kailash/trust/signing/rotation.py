@@ -35,6 +35,9 @@ from kailash.trust.exceptions import (
 )
 from kailash.trust.operations import TrustKeyManager
 from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
+from kailash.trust.signing.delegation_record_signing import (
+    delegation_canonical_payload_str,
+)
 
 
 class RotationStatus(str, Enum):
@@ -533,12 +536,14 @@ class CredentialRotationManager:
                         )
                         capability.signature = new_signature
 
-                # Re-sign delegations
+                # Re-sign delegations over the version-gated canonical pre-image
+                # (#1841 shard 2). A legacy-python-v0 delegation re-signs over the
+                # byte-identical legacy pre-image; a non-legacy record fails closed
+                # (its record-persisted v2/v3 re-sign path is wired in S2b) rather
+                # than re-signing the WRONG pre-image with the rotated key.
                 for delegation in updated_chain.delegations:
                     if delegation.delegator_id == authority_id:
-                        del_payload = serialize_for_signing(
-                            delegation.to_signing_payload()
-                        )
+                        del_payload = delegation_canonical_payload_str(delegation)
                         new_signature = await self.key_manager.sign(
                             del_payload, new_key_id
                         )

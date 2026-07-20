@@ -18,30 +18,30 @@ backward compatibility guarantee:
 """
 
 import json
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
 from kailash.trust.chain import (
-    GenesisRecord,
-    CapabilityAttestation,
-    DelegationRecord,
-    ConstraintEnvelope,
-    Constraint,
-    AuditAnchor,
-    TrustLineageChain,
-    AuthorityType,
-    CapabilityType,
     ActionResult,
+    AuditAnchor,
+    AuthorityType,
+    CapabilityAttestation,
+    CapabilityType,
+    Constraint,
+    ConstraintEnvelope,
     ConstraintType,
+    DelegationRecord,
+    GenesisRecord,
+    TrustLineageChain,
 )
 from kailash.trust.signing.crypto import (
     generate_keypair,
+    hash_trust_chain_state,
+    serialize_for_signing,
     sign,
     verify_signature,
-    serialize_for_signing,
-    hash_trust_chain_state,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: canonical test objects representing the "v1" wire format
@@ -600,6 +600,10 @@ class TestChainInlineSerialization:
             "delegated_at",
             "expires_at",
             "parent_delegation_id",
+            # Signing-payload version discriminator (#1841 shard 2). Serialized
+            # so a verifier can dispatch to the matching pre-image builder; a
+            # record deserialized without the key defaults to legacy-python-v0.
+            "signing_payload_version",
         }
         assert set(delegation_dict.keys()) == expected_keys
 
