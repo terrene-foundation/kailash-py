@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.58.1] - 2026-07-20
+
+### Fixed (Trust Plane — Revocation)
+
+- **Fail-closed non-ASCII guard on the signed revocation event
+  `delegation_id` (#1842).** `SignedRevocationEvent.__post_init__`
+  (`kailash.trust.revocation.signed_ledger`) now rejects a non-ASCII
+  `delegation_id` with a `RevocationLedgerError` before signing. The event
+  signing pre-image (canonical JCS over raw UTF-8) is byte-verified against
+  the Rust SDK reference ONLY on the all-ASCII conformance vectors, and
+  `delegation_id` is the sole free-string field that reaches the pre-image —
+  a non-ASCII value would emit un-pinned raw-UTF-8 bytes single-SDK (the same
+  fail-open the #1841 delegation-signing engine already closes). This closure
+  is **byte-neutral**: every ASCII `delegation_id` (UUIDs in practice) signs
+  and verifies byte-identically to 2.58.0, so all pinned vectors stay green; a
+  non-ASCII vector is a future cross-SDK lockstep item.
+
+### Security (Trust Plane — Revocation)
+
+- **Drop the base64 secret-key copy at both revocation signing sites.**
+  `SignedRevocationEvent.sign` (`signed_ledger.py`) and
+  `HeadCommitment.sign` (`head_commitment.py`) now `del` the base64-encoded
+  private-key-seed copy in a `finally` block immediately after use, minimizing
+  its in-memory lifetime. Python cannot zeroize the immutable `str` buffer, but
+  dropping the reference lets it be reclaimed at the earliest GC. No behavioral
+  change to signature output.
+
 ## [2.58.0] - 2026-07-20
 
 ### Added (EATP Trust Plane)
