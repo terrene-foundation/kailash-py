@@ -59,9 +59,79 @@ if TYPE_CHECKING:
 
 __all__ = [
     "delegation_canonical_payload_str",
+    "select_signing_version",
     "build_delegation_signing_input",
     "delegation_record_signing_payload",
 ]
+
+
+def select_signing_version(record: "DelegationRecord") -> str:
+    """Select which canonical pre-image a delegation record signs (#1841 S2b-1).
+
+    The structured engine-fold fields (``constraints`` / ``resource_limits`` /
+    ``scope``) are ALL-OR-NOTHING: supply all three (→ v2) or none (→ legacy).
+
+    Returns:
+        * ``legacy-python-v0`` (the DEFAULT) when NONE of the structured fields
+          is supplied, OR (all three supplied but) the record carries a NARROWED
+          ``dimension_scope`` (whose cross-SDK v2/v3 fold is not yet pinned —
+          rs#1795), OR is multi-sig (V3 is a later shard).
+        * ``v2-complete`` when ALL structured fields are present AND the record
+          is non-multi-sig AND ``dimension_scope`` is the full (unscoped) CARE
+          set — so it signs the cross-SDK V2Complete engine pre-image.
+
+    Raises:
+        ValueError: If SOME but not ALL of the three structured fields are
+            supplied (partial supply). A partial-supply record would silently
+            downgrade to legacy (which does NOT bind the supplied fields into
+            the signature) while ``to_dict`` still persists them UNSIGNED — a
+            fail-open secure-default (``rules/security.md`` § "Secure-Default …
+            Never A Silent No-Op"). Fail closed + loud instead.
+
+    The record's ``signing_payload_version`` is set from this at ``delegate()``
+    sign time; :func:`delegation_canonical_payload_str` then dispatches on that
+    persisted field. Kept a pure function of the record so it is safe to call
+    from both the sign path and any pre-persistence classification.
+    """
+    from kailash.trust.chain import (
+        ALL_DIMENSIONS,
+        DELEGATION_SIGNING_VERSION_LEGACY,
+        DELEGATION_SIGNING_VERSION_V2,
+    )
+
+    structured = {
+        "constraints": getattr(record, "constraints", None),
+        "resource_limits": getattr(record, "resource_limits", None),
+        "scope": getattr(record, "scope", None),
+    }
+    supplied = [name for name, val in structured.items() if val is not None]
+    if not supplied:
+        # None supplied → legacy (byte-identical to pre-S2b).
+        return DELEGATION_SIGNING_VERSION_LEGACY
+    if len(supplied) != len(structured):
+        # Partial supply is fail-open: it would sign legacy bytes (dropping the
+        # supplied fields from the signature) yet persist them unsigned. Refuse.
+        missing = sorted(name for name, val in structured.items() if val is None)
+        raise ValueError(
+            "structured signing fields (constraints, resource_limits, scope) "
+            "must be supplied together or all omitted; got "
+            f"{sorted(supplied)} without {missing}"
+        )
+
+    # V3 (multi-sig) is a later shard (S2b-2); no multi-sig field exists on the
+    # record yet, but guard defensively so a future multi-sig field cannot slip
+    # a multi-sig record onto the v2 path.
+    if getattr(record, "multi_sig", False):
+        return DELEGATION_SIGNING_VERSION_LEGACY
+
+    # The engine byte-verifies only the all-dimensions form; a narrowed
+    # dimension_scope stays legacy (its scope-widening defence lives in the
+    # legacy payload, chain.py:to_signing_payload). See build_delegation_signing_input.
+    record_scope = getattr(record, "dimension_scope", ALL_DIMENSIONS)
+    if frozenset(record_scope) != frozenset(ALL_DIMENSIONS):
+        return DELEGATION_SIGNING_VERSION_LEGACY
+
+    return DELEGATION_SIGNING_VERSION_V2
 
 
 def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
@@ -75,21 +145,27 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
         record: The delegation record whose canonical pre-image is requested.
 
     Returns:
-        The ``serialize_for_signing`` string of the legacy
-        ``to_signing_payload()`` pre-image (for a ``legacy-python-v0`` record).
+        For a ``legacy-python-v0`` record, the ``serialize_for_signing`` string
+        of the legacy ``to_signing_payload()`` pre-image (byte-identical to the
+        pre-migration behaviour). For a ``v2-complete`` record, the canonical
+        cross-SDK V2Complete engine pre-image (folding the record-persisted
+        ``constraints`` / ``resource_limits`` / ``scope``) as a UTF-8 string
+        (#1841 S2b-1).
 
     Raises:
-        UnsupportedSigningPayloadVersionError: If the record declares any version
-            other than ``legacy-python-v0``. The engine-backed v2/v3 pre-images
-            require record-persisted structured data this build does not yet
-            carry (#1841 shard 2b); falling through to the legacy verifier would
+        UnsupportedSigningPayloadVersionError: If the record declares
+            ``v3-complete`` (multi-sig — a later shard, S2b-2) or any
+            unrecognised version. Falling through to the legacy verifier would
             sign/verify the WRONG pre-image, so this fails closed.
     """
     # Import lazily to avoid a chain <-> signing import cycle: chain.py imports
     # kailash.trust.signing.crypto at module load, which initialises the signing
     # package; a top-level `from kailash.trust.chain import ...` here would run
     # before chain's module-level constants are defined.
-    from kailash.trust.chain import DELEGATION_SIGNING_VERSION_LEGACY
+    from kailash.trust.chain import (
+        DELEGATION_SIGNING_VERSION_LEGACY,
+        DELEGATION_SIGNING_VERSION_V2,
+    )
 
     version = getattr(
         record, "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
@@ -97,6 +173,23 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
     if version == DELEGATION_SIGNING_VERSION_LEGACY:
         return serialize_for_signing(record.to_signing_payload())
 
+    if version == DELEGATION_SIGNING_VERSION_V2:
+        # v2-complete: fold the record-persisted structured constraints /
+        # resource_limits / scope into the cross-SDK V2Complete engine pre-image
+        # (#1841 S2b-1). The engine emits ASCII-only canonical JCS bytes for the
+        # §5.3 inputs; decode to str for the signer (byte-identical on re-encode).
+        payload_bytes = delegation_record_signing_payload(
+            record,
+            SigningPayloadVersion.V2_COMPLETE,
+            constraints=record.constraints,
+            resource_limits=record.resource_limits,
+            scope=record.scope,
+        )
+        return payload_bytes.decode("utf-8")
+
+    # v3-complete (multi-sig) and any unrecognised version fail closed — their
+    # record-persisted verify path is a later shard (S2b-2). Falling through to
+    # the legacy verifier would check the WRONG pre-image.
     raise UnsupportedSigningPayloadVersionError(
         version, record_id=getattr(record, "id", None)
     )
@@ -105,9 +198,9 @@ def delegation_canonical_payload_str(record: "DelegationRecord") -> str:
 def build_delegation_signing_input(
     record: "DelegationRecord",
     *,
-    constraints: ConstraintDimensions,
-    resource_limits: ResourceLimits,
-    scope: DelegationScope,
+    constraints: Optional[ConstraintDimensions],
+    resource_limits: Optional[ResourceLimits],
+    scope: Optional[DelegationScope],
     multi_sig: bool = False,
     multi_sig_policy: Optional[MultiSigSigningPolicy] = None,
 ) -> DelegationSigningInput:
@@ -224,9 +317,9 @@ def delegation_record_signing_payload(
     record: "DelegationRecord",
     version: SigningPayloadVersion,
     *,
-    constraints: ConstraintDimensions,
-    resource_limits: ResourceLimits,
-    scope: DelegationScope,
+    constraints: Optional[ConstraintDimensions],
+    resource_limits: Optional[ResourceLimits],
+    scope: Optional[DelegationScope],
     multi_sig: bool = False,
     multi_sig_policy: Optional[MultiSigSigningPolicy] = None,
 ) -> bytes:

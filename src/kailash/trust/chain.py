@@ -24,7 +24,18 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from kailash.trust.signing.crypto import (
     hash_trust_chain_state,
     hash_trust_chain_state_salted,
-    serialize_for_signing,
+)
+
+# Structured engine-fold dataclasses (#1841 S2b-1). A DelegationRecord carrying
+# all three signs the cross-SDK V2Complete pre-image instead of legacy-python-v0
+# (see kailash.trust.signing.delegation_record_signing.select_signing_version).
+# Safe at module scope: this file already imports kailash.trust.signing.crypto
+# above (initialising the signing package), and delegation_payload depends only
+# on kailash.trust._json — no cycle back to chain.
+from kailash.trust.signing.delegation_payload import (
+    ConstraintDimensions,
+    DelegationScope,
+    ResourceLimits,
 )
 
 # Canonical CARE constraint dimension names for dimension_scope validation.
@@ -308,6 +319,17 @@ class DelegationRecord:
     # legacy payload would change every existing record's signed bytes.
     signing_payload_version: str = DELEGATION_SIGNING_VERSION_LEGACY
 
+    # Structured engine-fold fields (#1841 S2b-1). All Optional/default-None so a
+    # pre-S2b record is byte-identical (from_dict of an old record leaves these
+    # None → version legacy → legacy pre-image). When ALL THREE are present AND
+    # dimension_scope is unscoped AND the record is non-multi-sig, the record
+    # signs the cross-SDK V2Complete pre-image (select_signing_version). These
+    # fold into the ENGINE pre-image only — never into the legacy
+    # to_signing_payload() below, whose bytes MUST stay unchanged.
+    constraints: Optional[ConstraintDimensions] = None
+    resource_limits: Optional[ResourceLimits] = None
+    scope: Optional[DelegationScope] = None
+
     def __post_init__(self) -> None:
         """Validate dimension_scope values are from the canonical set."""
         if not isinstance(self.dimension_scope, frozenset):
@@ -364,7 +386,7 @@ class DelegationRecord:
         Returns:
             Dictionary representation with all fields
         """
-        d = {
+        d: Dict[str, Any] = {
             "id": self.id,
             "delegator_id": self.delegator_id,
             "delegatee_id": self.delegatee_id,
@@ -391,6 +413,16 @@ class DelegationRecord:
         d["reasoning_signature"] = self.reasoning_signature
         if self.reasoning_trace:
             d["reasoning_trace"] = self.reasoning_trace.to_dict()
+        # Structured engine-fold fields (#1841 S2b-1) — emitted only when present
+        # so a legacy record round-trips without new keys (missing key -> None on
+        # from_dict, mirroring the dimension_scope / signing_payload_version
+        # backward-compat pattern above).
+        if self.constraints is not None:
+            d["constraints"] = self.constraints.to_dict()
+        if self.resource_limits is not None:
+            d["resource_limits"] = self.resource_limits.to_dict()
+        if self.scope is not None:
+            d["scope"] = self.scope.to_dict()
         return d
 
     @classmethod
@@ -426,6 +458,28 @@ class DelegationRecord:
         else:
             dimension_scope = ALL_DIMENSIONS
 
+        # Structured engine-fold fields (#1841 S2b-1): backward-compatible --
+        # a pre-S2b record has no key, so each deserializes to None → the record
+        # resolves to the legacy schema and verifies byte-identically.
+        raw_constraints = data.get("constraints")
+        constraints = (
+            ConstraintDimensions.from_dict(raw_constraints)
+            if raw_constraints is not None
+            else None
+        )
+        raw_resource_limits = data.get("resource_limits")
+        resource_limits = (
+            ResourceLimits.from_dict(raw_resource_limits)
+            if raw_resource_limits is not None
+            else None
+        )
+        raw_delegation_scope = data.get("scope")
+        scope = (
+            DelegationScope.from_dict(raw_delegation_scope)
+            if raw_delegation_scope is not None
+            else None
+        )
+
         return cls(
             id=data["id"],
             delegator_id=data["delegator_id"],
@@ -458,6 +512,10 @@ class DelegationRecord:
             signing_payload_version=data.get(
                 "signing_payload_version", DELEGATION_SIGNING_VERSION_LEGACY
             ),
+            # Structured engine-fold fields (#1841 S2b-1): None when absent.
+            constraints=constraints,
+            resource_limits=resource_limits,
+            scope=scope,
         )
 
 

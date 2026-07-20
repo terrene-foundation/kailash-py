@@ -168,8 +168,11 @@ def test_record_deserialized_without_version_key_still_verifies():
 
 
 @pytest.mark.parametrize(
+    # v2-complete is WIRED as of #1841 S2b-1 (see the v2 tests below); v3-complete
+    # (multi-sig) remains a later shard (S2b-2), and any unrecognised version
+    # still fails closed with UnsupportedSigningPayloadVersionError.
     "version",
-    [DELEGATION_SIGNING_VERSION_V2, DELEGATION_SIGNING_VERSION_V3, "future-vX"],
+    [DELEGATION_SIGNING_VERSION_V3, "future-vX"],
 )
 def test_non_legacy_version_fails_closed_at_dispatch(version):
     record = _record(signing_payload_version=version)
@@ -179,24 +182,44 @@ def test_non_legacy_version_fails_closed_at_dispatch(version):
     assert exc.value.record_id == "del-1841"
 
 
-def test_non_legacy_record_does_not_verify_under_legacy_bytes():
-    """A v2-declared record signed over legacy bytes MUST fail closed, not pass.
+def test_v2_labeled_record_without_structured_fields_fails_closed():
+    """A v2-labeled record lacking the structured fold fields fails closed.
 
-    This is the core security property: the version gate stops a record whose
-    declared shape (v2) differs from the bytes a naive legacy verifier would
-    check, so a mismatched record can never be accepted.
+    #1841 S2b-1 wires v2, but the engine bridge REQUIRES the structured
+    constraints / resource_limits / scope. A record stamped v2 without them is an
+    inconsistent state (select_signing_version never produces it) and MUST fail
+    closed at the bridge rather than emit guessed bytes — never fall through to
+    legacy.
     """
-    private_key, _ = generate_keypair()
-    record = _record()
-    # Attacker/legacy signs over the legacy bytes but stamps a v2 version.
+    record = _record(signing_payload_version=DELEGATION_SIGNING_VERSION_V2)
+    with pytest.raises(ValueError, match="constraints"):
+        delegation_canonical_payload_str(record)
+
+
+def test_non_legacy_record_does_not_verify_under_legacy_bytes():
+    """A v2 record signed over LEGACY bytes MUST fail verification.
+
+    Core security property (now testable with v2 wired, #1841 S2b-1): a record
+    whose declared shape (v2, carrying structured fields) differs from the bytes
+    a naive legacy signer produced can never verify — the version gate emits the
+    v2 pre-image, which does not match a legacy-bytes signature.
+    """
+    private_key, public_key = generate_keypair()
+    constraints, limits, scope = _supervised_structured()
+    record = _record(
+        constraints=constraints,
+        resource_limits=limits,
+        scope=scope,
+        signing_payload_version=DELEGATION_SIGNING_VERSION_V2,
+    )
+    # Attacker/legacy signs over the LEGACY bytes but the record is a v2 record.
     record.signature = sign(
         serialize_for_signing(record.to_signing_payload()), private_key
     )
-    record.signing_payload_version = DELEGATION_SIGNING_VERSION_V2
 
-    # The dispatch refuses to produce a verify pre-image → fail closed.
-    with pytest.raises(UnsupportedSigningPayloadVersionError):
-        delegation_canonical_payload_str(record)
+    # The dispatch emits the v2 pre-image (≠ the signed legacy bytes) → verify fails.
+    v2_payload = delegation_canonical_payload_str(record)
+    assert verify_signature(v2_payload, record.signature, public_key) is False
 
 
 # --------------------------------------------------------------------------- #

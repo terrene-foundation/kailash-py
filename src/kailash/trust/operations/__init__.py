@@ -18,7 +18,7 @@ import asyncio
 import hmac
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
@@ -70,8 +70,14 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
+from kailash.trust.signing.delegation_payload import (
+    ConstraintDimensions,
+    DelegationScope,
+    ResourceLimits,
+)
 from kailash.trust.signing.delegation_record_signing import (
     delegation_canonical_payload_str,
+    select_signing_version,
 )
 
 if TYPE_CHECKING:
@@ -1327,6 +1333,16 @@ class TrustOperations:
                     reason=f"Delegator chain not found: {delegation.delegator_id}",
                     level=VerificationLevel.FULL,
                 )
+            except ValueError as exc:
+                # Fail closed on a pre-image build error (#1841 S2b-1 redteam) —
+                # a v2-labelled record with missing / narrowed structured fields
+                # MUST NOT let the exception escape to the caller. (Mirrors the
+                # ValueError handling in _verify_delegation_signature.)
+                return VerificationResult(
+                    valid=False,
+                    reason=(f"Delegation {delegation.id} could not be verified: {exc}"),
+                    level=VerificationLevel.FULL,
+                )
 
         return VerificationResult(
             valid=True,
@@ -1491,6 +1507,16 @@ class TrustOperations:
                 reason=f"Unsupported delegation signing_payload_version: {exc.version}",
                 level=VerificationLevel.FULL,
             )
+        except ValueError as exc:
+            # A v2-labelled record with missing / narrowed structured fields
+            # fails closed at the engine bridge with a ValueError (#1841 S2b-1
+            # redteam). Catch it here so verify returns valid=False rather than
+            # letting the exception escape to the caller (DoS-via-exception).
+            return VerificationResult(
+                valid=False,
+                reason=f"Delegation signing pre-image could not be built: {exc}",
+                level=VerificationLevel.FULL,
+            )
 
         # Verify signature using authority's key
         if not verify_signature(
@@ -1555,6 +1581,16 @@ class TrustOperations:
                 return VerificationResult(
                     valid=False,
                     reason=f"Delegator chain not found: {delegation.delegator_id}",
+                    level=VerificationLevel.FULL,
+                )
+            except ValueError as exc:
+                # Fail closed on a pre-image build error (#1841 S2b-1 redteam) —
+                # a v2-labelled record with missing / narrowed structured fields
+                # MUST NOT let the exception escape to the caller. (Mirrors the
+                # ValueError handling in _verify_delegation_signature.)
+                return VerificationResult(
+                    valid=False,
+                    reason=(f"Delegation {delegation.id} could not be verified: {exc}"),
                     level=VerificationLevel.FULL,
                 )
 
@@ -1665,6 +1701,9 @@ class TrustOperations:
         metadata: Optional[Dict[str, Any]] = None,
         context: Optional[ExecutionContext] = None,  # EATP: ExecutionContext parameter
         reasoning_trace: Optional[Any] = None,  # EATP: ReasoningTrace for WHY
+        constraints: Optional[ConstraintDimensions] = None,  # #1841 S2b-1: V2 fold
+        resource_limits: Optional[ResourceLimits] = None,  # #1841 S2b-1: V2 fold
+        scope: Optional[DelegationScope] = None,  # #1841 S2b-1: V2 fold
     ) -> DelegationRecord:
         """
         DELEGATE: Transfer trust from one agent to another.
@@ -1691,6 +1730,13 @@ class TrustOperations:
             expires_at: When delegation expires
             metadata: Additional context
             context: EATP ExecutionContext with human_origin (REQUIRED for new delegations)
+            constraints: Optional structured ConstraintDimensions to fold into
+                the cross-SDK V2Complete pre-image (#1841 S2b-1). Additive: omit
+                (with resource_limits/scope) → the record signs legacy-python-v0.
+            resource_limits: Optional structured ResourceLimits (see constraints).
+            scope: Optional structured DelegationScope (see constraints). When
+                constraints + resource_limits + scope are ALL supplied AND the
+                record is unscoped + non-multi-sig, the record signs V2Complete.
 
         Returns:
             DelegationRecord: Signed delegation record with human_origin
@@ -1830,7 +1876,26 @@ class TrustOperations:
             else:
                 expires_at = min(expires_at, delegator_chain.genesis.expires_at)
 
-        # 7. Create DelegationRecord with EATP fields
+        # 7. Create DelegationRecord with EATP fields.
+        # A v2-bound record (all structured fields supplied) signs the cross-SDK
+        # V2Complete engine pre-image, which pins a WHOLE-SECOND timestamp (§5.3;
+        # the engine fails closed on sub-second precision). datetime.now() carries
+        # microseconds, so truncate to whole-second for a v2-bound record — else
+        # the v2 sign path would raise on every real call. Legacy records keep
+        # full microsecond precision (Python-only pre-image, no cross-SDK pin).
+        _v2_bound = (
+            constraints is not None
+            and resource_limits is not None
+            and scope is not None
+        )
+        _delegated_at = datetime.now(timezone.utc)
+        if _v2_bound:
+            _delegated_at = _delegated_at.replace(microsecond=0)
+            # expires_at is also folded into the v2 pre-image via the same
+            # whole-second-only guard; truncate it too so a sub-second expiry
+            # (e.g. inherited from the genesis) does not fail the v2 sign path.
+            if expires_at is not None and expires_at.microsecond != 0:
+                expires_at = expires_at.replace(microsecond=0)
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
             delegator_id=delegator_id,
@@ -1838,7 +1903,7 @@ class TrustOperations:
             task_id=task_id,
             capabilities_delegated=capabilities,
             constraint_subset=constraint_subset,
-            delegated_at=datetime.now(timezone.utc),
+            delegated_at=_delegated_at,
             expires_at=expires_at,
             signature="",  # Will be signed below
             # EATP fields
@@ -1847,7 +1912,17 @@ class TrustOperations:
             delegation_depth=delegation_depth,
             # Reasoning trace extension (optional)
             reasoning_trace=reasoning_trace,
+            # Structured engine-fold fields (#1841 S2b-1). When all three are
+            # supplied, the record signs the cross-SDK V2Complete pre-image.
+            constraints=constraints,
+            resource_limits=resource_limits,
+            scope=scope,
         )
+
+        # Select the signing pre-image version from the structured fields
+        # (#1841 S2b-1). Defaults to legacy-python-v0 when the caller omits the
+        # structured fields, so existing callers are byte-identical.
+        delegation.signing_payload_version = select_signing_version(delegation)
 
         logger.info(
             f"Delegation created: {delegator_id} -> {delegatee_id} "
