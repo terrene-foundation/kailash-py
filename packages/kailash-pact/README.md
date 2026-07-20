@@ -25,6 +25,7 @@ pip install kailash-pact
 ```
 
 With Kaizen agent integration:
+
 ```bash
 pip install kailash-pact[kaizen]
 ```
@@ -40,6 +41,46 @@ pip install kailash-pact[kaizen]
 - **SQLite/PostgreSQL Stores** — Persistent governance state
 - **REST API** — 9 governance endpoints with auth and rate limiting
 - **CLI** — `kailash-pact validate org.yaml`
+
+## MCP Governance — Tenant Isolation (Pre-Pledge v0)
+
+`pact.mcp` adds deterministic governance to MCP (Model Context Protocol) tool
+calls and resource reads, including first-class multi-tenant isolation
+(issue #1843, shipped in 0.16.0). Because `kailash-pact` is still pre-1.0,
+this section is an explicit pledge of what the tenant-isolation surface
+enforces **today** versus what remains open — read it before relying on
+`McpGovernanceConfig.tenant_grants` in a multi-tenant deployment.
+
+- **Enforced today:** `McpGovernanceConfig.tenant_grants` (a
+  `dict[str, McpTenantGrant]`) scopes both `tools/call` and `resources/read`
+  to the caller's tenant through one shared, fail-closed restrictiveness
+  function, evaluated before tool registration (so it applies even under
+  `DefaultPolicy.ALLOW`). `McpCallerIdentity.tenant` — resolved by your
+  transport/auth layer and passed to `check_tool_call`/`check_resource_read`
+  — always overwrites a self-asserted `metadata["tenant_id"]`, defeating
+  impersonation. `require_caller_identity` defaults to `True`: with no
+  trusted identity wired, the self-asserted body value is never trusted and
+  the call fails closed rather than silently falling back to it.
+- **Deferred:** `resources/read` has ONLY the tenant-isolation check today —
+  no cost, argument, clearance, or rate-limit governance layer exists yet
+  for that surface (that richer contract exists only for `tools/call` via
+  `McpToolPolicy`). No first-class serialized `tenant_id` field exists on
+  the wire envelope; tenant rides the existing free-form
+  `metadata["tenant_id"]` channel by design (byte-neutral with the Rust
+  SDK's frozen envelope) and may change if the ecosystems converge on a
+  first-class field later.
+- **Non-promises:** `tenant_grants` being empty is NOT "tenant isolation
+  enabled with an empty allowlist" — it is isolation OFF entirely (every
+  call auto-approved on that axis, byte-identical to pre-0.16.0 behavior).
+  Passing `require_caller_identity=False` is NOT a recommended production
+  setting — it exists only for deployments with no transport-level identity
+  resolution, and re-enables the weaker, spoofable metadata fallback.
+- **Verify:** `pytest packages/kailash-pact/tests/regression/test_issue_1843_mcp_tenant_isolation.py -v`
+  exercises the fail-closed defaults, the impersonation-defeat contract, and
+  the `resources/read` isolation-only surface end-to-end.
+- **Status:** v0 within a pre-1.0 package (`kailash-pact` 0.16.0) — the
+  isolation contract above is stable for this release; the deferred items
+  may change shape (not just grow) before a 1.0 cut.
 
 ## Documentation
 

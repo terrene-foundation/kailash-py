@@ -2,6 +2,85 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.38.0] — 2026-07-20 — Governance gate extended to the provider/backend layer (#1803)
+
+### Added (Security)
+
+- **`governance_required` posture now gates the remaining
+  `kaizen.providers.*` direct-egress construction sites (#1803).** Extends
+  the prior `governance_required` gate (four-axis `LlmClient` +
+  `Delegate`/`AgentLoop`/adapter registry) to every non-retired
+  direct-egress chokepoint that constructs a provider client
+  (`openai`/`anthropic`/`genai`/`aiohttp`/`ollama`) OUTSIDE that surface:
+  - `kaizen.providers.llm.azure.AzureAIFoundryProvider` — gated at each
+    real-egress method (`chat`/`chat_async`/`stream_chat`/`embed`/
+    `embed_async`); construction and metadata-only methods are unaffected.
+  - The document-extraction vision providers
+    (`kaizen.providers.document.{landing_ai_provider,openai_vision_provider,
+ollama_vision_provider}`) — gated at the top of `extract()`.
+  - `kaizen.providers.multi_modal_adapter` — both `OpenAIMultiModalAdapter`
+    and `OllamaMultiModalAdapter` gated before any real egress or
+    availability check.
+  - `kaizen.providers.ollama_provider.OllamaProvider` (re-exported as
+    `kaizen.providers.LegacyOllamaProvider`) — gated at `__init__`, before
+    its unconditional `ollama.list()` availability probe.
+  - `kaizen.nodes.ai.semantic_memory.SimpleEmbeddingProvider` — gated at
+    the top of `embed_text()` (real `aiohttp` egress to an embedding
+    host), a HIGH gap the mechanical parity sweep's original regex missed
+    (no aiohttp/requests pattern) and a security-review follow-up caught
+    same session. The provider is now constructed instance-level (not
+    class-cached) on every consumer node, matching
+    `SemanticHybridSearchNode`'s existing pattern — the class-cache had a
+    sticky-default bug where the FIRST construction's `ungoverned` value
+    silently applied to every later instance of that class.
+
+  An `ungoverned=False` constructor opt-out is threaded end-to-end for
+  every site above (e.g. `ProviderManager` → its sub-providers;
+  `OllamaMultiModalAdapter` → `OllamaVisionConfig`;
+  `kaizen.providers.registry.get_provider(..., ungoverned=...)` → the
+  constructed instance). OFF-posture (the default) is byte-identical to
+  pre-#1803 behavior. A new mechanical parity test greps `kaizen/` (and,
+  as of a same-session follow-up, `kaizen_agents/` too) for
+  openai/anthropic/genai/httpx/aiohttp/ollama/Azure client-construction
+  patterns and asserts every containing file also calls
+  `enforce_governance_posture`, or is explicitly allowlisted with a
+  documented reason.
+
+  `BYOKClientCache` (`kaizen.nodes.ai.client_cache`) was audited and found
+  orphaned (zero production call sites) — documented, not gated.
+  `kaizen.nodes.ai.azure_backends` / `unified_azure_provider` were
+  confirmed already retired by #1820 — nothing to gate.
+
+### Fixed
+
+- **`SemanticMemoryStoreNode` was unconstructible.** A pre-existing bug
+  (unrelated to this release's gating change, caught while wiring the
+  `ungoverned` threading above): `self.metadata = None` ran before
+  `super().__init__()`, and `Node.metadata`'s setter requires
+  `self.config` to already exist — every construction of this registered,
+  exported node raised `AttributeError`. Fixed via
+  `self.config.setdefault("metadata", None)` after `super().__init__()`.
+
+- **`OllamaMultiModalAdapter` gate ran after, not before, its availability
+  check**, so an infra-free environment (no real `ollama` package
+  importable — the case in CI) raised `RuntimeError("Ollama not
+available")` before `enforce_governance_posture` ever ran, masking the
+  gate under posture ON. Reordered to match the sibling
+  `OpenAIMultiModalAdapter` pattern (gate first, availability check
+  second).
+
+- **`BaseAgentConfig.from_domain_config()`'s dict-input branch silently
+  downgraded `structured_output_mode` to the deprecated `"auto"` when the
+  key was absent**, contradicting the dataclass field's own `"explicit"`
+  default two lines above. Every `Agent()` construction routes through
+  this dict branch (`Agent._convert_to_base_agent_config()`'s 5-key dict
+  never sets this key), so every signature-based `Agent` run silently used
+  the deprecated mode and fired `workflow_generator`'s `FutureWarning` on
+  every call. Fixed the stale dict-branch default to match the dataclass
+  default (`"explicit"`); verified against the full
+  `packages/kailash-kaizen/tests/unit/{core,llm}/` suite (2092 tests, 0
+  failures, 0 unexpected warnings) with every optional extra installed.
+
 ## [2.37.3] — 2026-07-19 — Dependency pin fix: require kailash>=2.56.0
 
 ### Fixed

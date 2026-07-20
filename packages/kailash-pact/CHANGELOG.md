@@ -1,5 +1,54 @@
 # PACT Changelog
 
+## [0.16.0] — 2026-07-20 — First-class MCP tenant isolation (#1843)
+
+### Added (Security)
+
+- **`pact.mcp` gains first-class tenant isolation for `tools/call` and
+  `resources/read` (#1843).** Prior to this release, MCP governance had no
+  tenant isolation at all — a tenant-A caller could reach tenant-B's tools,
+  and `resources/read` had no governance layer whatsoever (not even
+  default-deny). `McpGovernanceConfig` gains an additive, optional
+  `tenant_grants: dict[str, McpTenantGrant]` field (new `McpTenantGrant`
+  dataclass: `tenant`, `tools: frozenset[str]`, `resources: frozenset[str]`).
+  Two new types round out the surface: `McpCallerIdentity` (a trusted,
+  non-serialized identity — resolved by the transport/auth layer before
+  governance evaluation — whose `tenant` OVERWRITES any self-asserted
+  `metadata["tenant_id"]`, defeating impersonation) and `McpResourceContext`
+  (the `resources/read` sibling of `McpActionContext`, consumed by the new
+  `McpGovernanceEnforcer.check_resource_read()` /
+  `McpGovernanceMiddleware.invoke_resource_read()` entry points). A single
+  shared restrictiveness function scopes both `tools/call` (keyed on tool
+  name) and `resources/read` (keyed on URI), evaluated at Step 0 — before
+  tool registration — so isolation applies even under
+  `DefaultPolicy.ALLOW`. Tenant rides the existing free-form
+  `metadata["tenant_id"]` channel; no new field was added to the
+  wire-serialized `McpActionContext` envelope, so the fix is byte-neutral
+  when `tenant_grants` is empty (the default — isolation OFF, both surfaces
+  behave exactly as before this release).
+  All four new types (`McpCallerIdentity`, `McpTenantGrant`,
+  `McpResourceContext`, `McpGovernanceConfig.tenant_grants`) are exported
+  from `pact.mcp`.
+
+- **`McpGovernanceConfig.require_caller_identity` defaults to `True`
+  (secure-by-default fix, redteam round 1 on #1843).** Ships in the SAME
+  release as `tenant_grants` — there was no prior release where the weaker
+  default was live, so this is not a behavior change for any existing
+  deployment. When `True` (the default), the tenant resolver never
+  consults the self-asserted `metadata["tenant_id"]` fallback; a deployment
+  that sets `tenant_grants` but never wires `caller_identity` through its
+  transport layer fails closed instead of silently trusting the request
+  body. Pass `require_caller_identity=False` explicitly to opt into the
+  weaker metadata-fallback channel (appropriate only for deployments with
+  no transport-level identity resolution).
+
+### Fixed
+
+- **`McpInvocationResult` was missing from `pact.mcp.middleware.__all__`**
+  (orphan-detection.md Rule 6 gap, caught by the #1843 redteam) —
+  `from pact.mcp.middleware import *` now includes it, matching the
+  existing top-level `pact` re-export.
+
 ## [0.15.0] — 2026-07-15 — SOC 2 evidence-collection primitives at the governance layer (#1711)
 
 ### Added

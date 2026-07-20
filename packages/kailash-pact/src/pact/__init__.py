@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
@@ -118,6 +118,16 @@ from kailash.trust.pact.config import (
 
 # --- Gradient engine (re-exported from kailash.trust.pact.gradient) ---
 from kailash.trust.pact.gradient import EvaluationResult, GradientEngine
+
+# --- SOC 2 compliance-evidence tooling (issue #1711) ---
+from pact.compliance import (
+    ControlEvidence,
+    CriterionEvidence,
+    EvidenceCollectionError,
+    EvidenceCollector,
+    EvidenceItem,
+    EvidencePackage,
+)
 from pact.costs import CostTracker
 
 # --- Enforcement modes ---
@@ -167,16 +177,6 @@ from pact.ml import (
     check_trial_admission,
 )
 from pact.work import WorkResult, WorkSubmission
-
-# --- SOC 2 compliance-evidence tooling (issue #1711) ---
-from pact.compliance import (
-    ControlEvidence,
-    CriterionEvidence,
-    EvidenceCollectionError,
-    EvidenceCollector,
-    EvidenceItem,
-    EvidencePackage,
-)
 
 __all__ = [
     # Error hierarchy

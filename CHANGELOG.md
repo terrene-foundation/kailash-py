@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.58.0] - 2026-07-20
+
+### Added (EATP Trust Plane)
+
+- **Cross-SDK canonical delegation-signing pre-image engine (#1841).** New
+  `kailash.trust.signing.delegation_payload` module: `SigningPayloadVersion`
+  enum (`v1-legacy` / `v2-complete` / `v3-complete` — wire tokens matching the
+  Rust SDK's `delegation.rs::SigningPayloadVersion`) plus
+  `delegation_signing_payload()`, the version-gated canonical pre-image
+  builder shared across the V1 (legacy), V2 (complete-constraint), and V3
+  (multi-sig) signing shapes. `kailash.trust.signing.delegation_record_signing`
+  adds the dispatch layer (`delegation_record_signing_payload()`,
+  `build_delegation_signing_input()`) that resolves a `DelegationRecord`'s
+  `signing_payload_version` field to the matching pre-image builder.
+  `DelegationRecord` gains a new `signing_payload_version: str` field
+  (default `"legacy-python-v0"`) — existing records with no explicit version
+  sign and verify byte-identically to before this release; only a record
+  explicitly opted into `v2-complete` / `v3-complete` uses the new pre-image
+  shapes. Sign callers still emit the legacy shape by default; the v2/v3
+  engine is wired end-to-end and fails closed on an unsupported/un-pinned
+  `signing_payload_version`.
+
+- **Signed revocation ledger + owner-signed anti-rollback anchor (#1842).**
+  Three new modules under `kailash.trust.revocation`: `signed_ledger.py`
+  (`SignedRevocationEvent`, `RevocationLedger`, `revocation_ledger_tip()` —
+  a signed, append-only revocation event log with a foldable tip hash),
+  `head_commitment.py` (`HeadCommitment`, `HeadCommitmentAnchor` — an
+  owner-signed epoch anchor giving the ledger durable anti-rollback /
+  same-epoch equivocation protection), and `verify.py`
+  (`SignedRevocationVerifier`, `SignedRevocationStore`,
+  `DurableHighWaterStore` — the authoritative verify path that now consults
+  the signed ledger instead of trusting an unsigned revocation list).
+  `TrustOperations` gains an optional `revocation_verifier:
+SignedRevocationVerifier | None = None` constructor parameter; the default
+  `None` preserves the pre-existing (unsigned) revocation-check behavior
+  exactly, with a one-time `WARN`-level log noting the authoritative
+  signed-ledger path is available but not configured. Passing a configured
+  `SignedRevocationVerifier` makes ledger consultation authoritative and
+  fail-closed.
+
+### Changed
+
+- **`kailash.trust.pact.governance_posture` coverage docstring extended
+  (#1803).** Documentation-only change describing the additional kaizen
+  provider/backend egress chokepoints (Azure AI Foundry, document-extraction
+  vision providers, multi-modal adapters, the legacy standalone Ollama
+  provider) now gated by `enforce_governance_posture` — see the
+  `kailash-kaizen` 2.38.0 CHANGELOG entry for the actual enforcement change.
+  No functional or public-API change to `kailash` itself.
+
 ## [2.57.0] - 2026-07-20
 
 ### Added (Security)
