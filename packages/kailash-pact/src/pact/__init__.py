@@ -14,7 +14,7 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.16.0"
+__version__ = "0.16.1"
 
 # --- Trust types (re-exported from kailash.trust) ---
 from kailash.trust import (
@@ -155,10 +155,13 @@ from pact.mcp import (
     McpActionContext,
     McpAuditEntry,
     McpAuditTrail,
+    McpCallerIdentity,
     McpGovernanceConfig,
     McpGovernanceEnforcer,
     McpGovernanceMiddleware,
     McpInvocationResult,
+    McpResourceContext,
+    McpTenantGrant,
     McpToolPolicy,
 )
 
@@ -312,10 +315,13 @@ __all__ = [
     "McpActionContext",
     "McpAuditEntry",
     "McpAuditTrail",
+    "McpCallerIdentity",
     "McpGovernanceConfig",
     "McpGovernanceEnforcer",
     "McpGovernanceMiddleware",
     "McpInvocationResult",
+    "McpResourceContext",
+    "McpTenantGrant",
     "McpToolPolicy",
     # kailash-ml integration (W32.c)
     "AdmissionDecision",

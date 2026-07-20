@@ -1,5 +1,18 @@
 # PACT Changelog
 
+## [0.16.1] — 2026-07-20 — Export the tenant-isolation types at the `pact` top level
+
+### Fixed
+
+- **`pact.McpCallerIdentity`, `pact.McpTenantGrant`, and `pact.McpResourceContext`
+  now import at the top level.** The three tenant-isolation types added in 0.16.0
+  (#1843) were exported from `pact.mcp` but omitted from the top-level `pact`
+  package's re-export + `__all__`, unlike their sibling `McpActionContext` —
+  so `from pact import McpCallerIdentity` raised `ImportError` while
+  `from pact.mcp import McpCallerIdentity` worked. Added all three to
+  `pact/__init__.py`'s import block and `__all__` for API consistency. No
+  behavior change; the `pact.mcp` import path is unaffected.
+
 ## [0.16.0] — 2026-07-20 — First-class MCP tenant isolation (#1843)
 
 ### Added (Security)
