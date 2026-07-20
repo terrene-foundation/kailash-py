@@ -266,6 +266,49 @@ def test_multi_sig_record_narrowed_scope_fails_closed() -> None:
         select_signing_version(record)
 
 
+# --- Threshold integer-type guard (cross-SDK byte-parity) --------------------
+
+
+def test_float_threshold_rejected_at_construction() -> None:
+    """A float threshold (2.0 → JCS "2.0") diverges from the rs int contract.
+
+    threshold is folded verbatim into the V3 JCS pre-image; ``json.dumps(2.0)``
+    → ``"2.0"`` while rs (integer type) emits ``"2"`` — a cross-SDK byte-parity
+    hole. Fail closed at construction.
+    """
+    with pytest.raises(ValueError, match="threshold must be an int"):
+        MultiSigSigningPolicy.new(2.0, [_key(1), _key(2), _key(3)])
+
+
+def test_bool_threshold_rejected_at_construction() -> None:
+    """A bool threshold (True → JCS "true") diverges from the rs int contract.
+
+    bool is a subclass of int in Python, so it passes a naive isinstance(int)
+    check yet serializes to ``"true"`` — it MUST be rejected explicitly.
+    """
+    with pytest.raises(ValueError, match="threshold must be an int"):
+        MultiSigSigningPolicy.new(True, [_key(1)])
+
+
+def test_int_threshold_still_constructs() -> None:
+    """A normal int threshold constructs unchanged (the guard rejects non-int only)."""
+    policy = MultiSigSigningPolicy.new(2, [_key(1), _key(2), _key(3)])
+    assert policy.threshold == 2
+    assert isinstance(policy.threshold, int) and not isinstance(policy.threshold, bool)
+
+
+def test_from_dict_float_threshold_rejected() -> None:
+    """from_dict of a persisted policy carrying a float threshold fails closed.
+
+    from_dict re-runs __post_init__, so a store-tampered float threshold is
+    rejected at deserialization (never reconstructs a byte-diverging policy).
+    """
+    d = _v1_policy().to_dict()
+    d["threshold"] = 2.0
+    with pytest.raises(ValueError, match="threshold must be an int"):
+        MultiSigSigningPolicy.from_dict(d)
+
+
 # --- Signer canonical-order invariance ---------------------------------------
 
 

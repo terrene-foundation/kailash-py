@@ -329,6 +329,19 @@ class MultiSigSigningPolicy:
     authorized_signers: tuple[bytes, ...]
 
     def __post_init__(self) -> None:
+        # Threshold MUST be a true int — folded verbatim into the V3 JCS
+        # pre-image (delegation_signing_payload). A float (2.0 → "2.0") or bool
+        # (True → "true") serializes to bytes that DIVERGE from the kailash-rs
+        # integer contract this pre-image is byte-locked to (rs emits "2"),
+        # breaking cross-SDK verification. bool is a subclass of int in Python,
+        # so it must be rejected EXPLICITLY. Fail closed at construction,
+        # matching the rest of the policy's validation posture
+        # (cross-sdk-inspection.md — number-typing byte parity).
+        if not isinstance(self.threshold, int) or isinstance(self.threshold, bool):
+            raise ValueError(
+                "multi_sig threshold must be an int, got "
+                f"{type(self.threshold).__name__}"
+            )
         if not self.authorized_signers:
             raise ValueError("multi-sig policy requires at least one signer")
         if self.threshold < 1:
