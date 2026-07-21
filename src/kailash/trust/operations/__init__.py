@@ -19,7 +19,6 @@ import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -31,7 +30,6 @@ from kailash.trust.authority import (
 from kailash.trust.chain import (
     ActionResult,
     AuditAnchor,
-    AuthorityType,
     CapabilityAttestation,
     CapabilityType,
     Constraint,
@@ -57,13 +55,8 @@ from kailash.trust.exceptions import (
     TrustChainNotFoundError,
     TrustError,
     UnsupportedSigningPayloadVersionError,
-    VerificationFailedError,
 )
-from kailash.trust.execution_context import (
-    ExecutionContext,
-    HumanOrigin,
-    get_current_context,
-)
+from kailash.trust.execution_context import ExecutionContext, get_current_context
 from kailash.trust.signing.crypto import (
     hash_chain,
     serialize_for_signing,
