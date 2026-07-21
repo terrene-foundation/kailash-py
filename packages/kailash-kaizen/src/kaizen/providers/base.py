@@ -212,8 +212,10 @@ class BaseAIProvider(ABC):
     def name(self) -> str:
         """Provider name derived from the class name.
 
-        ``AzureAIFoundryProvider`` → ``"azure"``. Concrete providers may
-        override for explicit control.
+        A ``FooProvider`` subclass whose stripped, lower-cased stem matches a
+        ``known`` family below (e.g. ``AzureProvider`` -> ``"azure"``) reports
+        that family name; otherwise the stripped, lower-cased class name is
+        used verbatim. Concrete providers may override for explicit control.
         """
         class_name = self.__class__.__name__
         if class_name.endswith("Provider"):

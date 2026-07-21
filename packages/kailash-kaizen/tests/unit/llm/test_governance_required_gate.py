@@ -312,8 +312,13 @@ def test_agent_ungoverned_reaches_fallback_node_config() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Fix C — legacy _legacy_provider_chat fallback (no-four-axis-wire providers)
-# is gated (the only legacy egress not routed through the four-axis LlmClient)
+# #1892 — azure_ai_foundry is now four-axis; the legacy _legacy_provider_chat
+# fallback (the only egress not routed through the four-axis LlmClient) was
+# REMOVED along with the last provider it served. Governance for
+# azure_ai_foundry is now covered structurally by the SAME LlmClient.__init__
+# gate every other provider uses (Round-2 T1 below already proves this
+# generically for "openai"; the dedicated test here pins azure_ai_foundry
+# specifically so the migration cannot silently drop its coverage).
 # --------------------------------------------------------------------------- #
 
 
@@ -328,43 +333,58 @@ def test_llm_agent_node_ungoverned_param_stored() -> None:
     assert _make_llm_agent_node()._ungoverned is False
 
 
-def test_legacy_provider_chat_refused_under_posture_on() -> None:
-    """azure_ai_foundry (no four-axis wire) egresses via _legacy_provider_chat,
-    which does NOT construct an LlmClient — so it needs its own explicit gate."""
+def test_no_legacy_provider_chat_method_remains() -> None:
+    """#1892: the legacy registry-based fallback method was removed entirely
+    -- there is no non-four-axis egress path left on LLMAgentNode."""
+    node = _make_llm_agent_node()
+    assert not hasattr(node, "_legacy_provider_chat")
+
+
+def test_provider_llm_response_azure_ai_foundry_refused_under_posture_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """azure_ai_foundry now resolves through the four-axis LlmClient (#1892),
+    so the SAME LlmClient.__init__ gate that covers every other provider
+    covers it too -- no separate egress chokepoint is needed."""
+    monkeypatch.setenv(
+        "AZURE_AI_FOUNDRY_ENDPOINT", "https://myfoundry.services.ai.azure.com"
+    )
+    monkeypatch.setenv("AZURE_AI_FOUNDRY_API_KEY", "test-key")
+    monkeypatch.setenv("AZURE_AI_FOUNDRY_DEPLOYMENT", "gpt-5-nano")
     kailash.set_governance_required(True)
     node = _make_llm_agent_node()
     with pytest.raises(UngovernedEgressRefused):
-        node._legacy_provider_chat(
-            "azure_ai_foundry", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        node._provider_llm_response(
+            "azure_ai_foundry",
+            "gpt-5-nano",
+            [{"role": "user", "content": "hi"}],
+            [],
+            {},
         )
 
 
-def test_legacy_provider_chat_ungoverned_bypasses_gate() -> None:
+def test_provider_llm_response_azure_ai_foundry_ungoverned_bypasses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "AZURE_AI_FOUNDRY_ENDPOINT", "https://myfoundry.services.ai.azure.com"
+    )
+    monkeypatch.setenv("AZURE_AI_FOUNDRY_API_KEY", "test-key")
+    monkeypatch.setenv("AZURE_AI_FOUNDRY_DEPLOYMENT", "gpt-5-nano")
     kailash.set_governance_required(True)
     node = _make_llm_agent_node(ungoverned=True)
-    # The gate must NOT raise UngovernedEgressRefused; any downstream error
-    # (provider unavailable) is fine — we only assert the gate is bypassed.
     try:
-        node._legacy_provider_chat(
-            "azure_ai_foundry", _MODEL, [{"role": "user", "content": "hi"}], [], {}
+        node._provider_llm_response(
+            "azure_ai_foundry",
+            "gpt-5-nano",
+            [{"role": "user", "content": "hi"}],
+            [],
+            {},
         )
     except UngovernedEgressRefused:
-        raise AssertionError("ungoverned=True must bypass the legacy gate")
+        raise AssertionError("ungoverned=True must bypass the four-axis gate")
     except Exception:
-        pass  # provider-unavailable / import error is acceptable here
-
-
-def test_legacy_provider_chat_mock_exempt() -> None:
-    kailash.set_governance_required(True)
-    node = _make_llm_agent_node()
-    try:
-        node._legacy_provider_chat(
-            "mock", _MODEL, [{"role": "user", "content": "hi"}], [], {}
-        )
-    except UngovernedEgressRefused:
-        raise AssertionError("mock provider must be exempt at the legacy gate")
-    except Exception:
-        pass
+        pass  # real network / provider error past the gate is acceptable here
 
 
 def test_agent_off_real_provider_constructs() -> None:
@@ -571,131 +591,35 @@ def test_enforce_fail_closed_exemptions_short_circuit_before_read(
 
 
 # --------------------------------------------------------------------------- #
-# #1803 — AzureAIFoundryProvider direct standalone use (the only legacy chat
-# provider still constructible after #1720 Wave-2 retired openai / anthropic /
-# google / ollama / docker / perplexity / mock; #1820 retired the embedding-
-# legacy + unified-azure stacks). Previously gated ONLY when reached through
-# LLMAgentNode._legacy_provider_chat; direct construction bypassed the gate
-# entirely. Gate lives at each egress method (chat/chat_async/stream_chat/
-# embed/embed_async), NOT __init__ -- construction and metadata-only methods
-# (is_available/get_capabilities/get_available_providers) must never gate.
+# #1892 — AzureAIFoundryProvider (the only legacy chat provider still
+# constructible after #1720 Wave-2 / #1820) is fully RETIRED: its module was
+# deleted, and the registry (kaizen.providers.registry.PROVIDERS) is now
+# empty. There is no more standalone-construction governance gate to test --
+# azure_ai_foundry's egress is covered by the four-axis LlmClient.__init__
+# gate (see the `_provider_llm_response_azure_ai_foundry_*` tests above). The
+# registry's own emptiness + typed-error behavior is pinned here instead.
 # --------------------------------------------------------------------------- #
 
 
-def test_azure_foundry_construction_and_metadata_never_gated() -> None:
-    """Bare construction and metadata-only introspection must NOT gate --
-    only the real-egress methods do (mirrors the deployment-less LlmClient
-    exemption: is_available()/get_available_providers() are not egress)."""
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
+def test_registry_providers_is_empty_after_1892() -> None:
+    from kaizen.providers.registry import PROVIDERS
 
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()  # must not raise
-    assert provider is not None
-    assert provider.is_available() in (True, False)  # must not raise
-    assert provider.capabilities is not None
-
-
-def test_azure_foundry_standalone_chat_refused_under_posture_on() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()
-    with pytest.raises(UngovernedEgressRefused):
-        provider.chat([{"role": "user", "content": "hi"}])
+    # tests/conftest.py (module scope) rebinds PROVIDERS["mock"] =
+    # KaizenMockProvider for unit tests -- a harness artifact, not a real
+    # registry member (in a clean interpreter PROVIDERS is {}). Exclude it,
+    # mirroring tests/unit/providers/test_registry.py's
+    # _HARNESS_INJECTED_KEYS carve-out.
+    _HARNESS_INJECTED_KEYS = {"mock"}
+    assert set(PROVIDERS.keys()) - _HARNESS_INJECTED_KEYS == set()
 
 
-def test_azure_foundry_standalone_ungoverned_bypasses() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider(ungoverned=True)
-    try:
-        provider.chat([{"role": "user", "content": "hi"}])
-    except UngovernedEgressRefused:
-        raise AssertionError("ungoverned=True must bypass the standalone gate")
-    except Exception:
-        pass  # missing azure-ai-inference credentials/endpoint is acceptable
-
-
-def test_azure_foundry_off_posture_byte_identical() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(None)
-    provider = AzureAIFoundryProvider()
-    try:
-        provider.chat([{"role": "user", "content": "hi"}])
-    except UngovernedEgressRefused:
-        raise AssertionError("OFF posture must not gate")
-    except Exception:
-        pass
-
-
-@pytest.mark.asyncio
-async def test_azure_foundry_chat_async_refused() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()
-    with pytest.raises(UngovernedEgressRefused):
-        await provider.chat_async([{"role": "user", "content": "hi"}])
-
-
-@pytest.mark.asyncio
-async def test_azure_foundry_stream_chat_refused() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()
-    with pytest.raises(UngovernedEgressRefused):
-        async for _ in provider.stream_chat([{"role": "user", "content": "hi"}]):
-            pass
-
-
-def test_azure_foundry_embed_refused() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()
-    with pytest.raises(UngovernedEgressRefused):
-        provider.embed(["hello"])
-
-
-@pytest.mark.asyncio
-async def test_azure_foundry_embed_async_refused() -> None:
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
-
-    kailash.set_governance_required(True)
-    provider = AzureAIFoundryProvider()
-    with pytest.raises(UngovernedEgressRefused):
-        await provider.embed_async(["hello"])
-
-
-def test_get_provider_threads_ungoverned_so_node_and_instance_agree() -> None:
-    """registry.get_provider(ungoverned=...) must reach the constructed
-    instance's own gate, so LLMAgentNode._legacy_provider_chat's outer gate
-    and AzureAIFoundryProvider's inner gate agree instead of double-refusing
-    when ungoverned=True."""
+def test_get_provider_azure_ai_foundry_now_unknown() -> None:
+    """azure_ai_foundry no longer resolves through the registry -- it is
+    served end-to-end by the four-axis LlmClient (#1892)."""
     from kaizen.providers.registry import get_provider
 
-    kailash.set_governance_required(True)
-    provider = get_provider("azure_ai_foundry", ungoverned=True)
-    try:
-        provider.chat([{"role": "user", "content": "hi"}])
-    except UngovernedEgressRefused:
-        raise AssertionError(
-            "get_provider(ungoverned=True) must construct an ungoverned instance"
-        )
-    except Exception:
-        pass
-
-
-def test_get_provider_default_ungoverned_false_still_gates() -> None:
-    from kaizen.providers.registry import get_provider
-
-    kailash.set_governance_required(True)
-    provider = get_provider("azure_ai_foundry")
-    with pytest.raises(UngovernedEgressRefused):
-        provider.chat([{"role": "user", "content": "hi"}])
+    with pytest.raises(ValueError, match="Unknown provider"):
+        get_provider("azure_ai_foundry")
 
 
 # --------------------------------------------------------------------------- #

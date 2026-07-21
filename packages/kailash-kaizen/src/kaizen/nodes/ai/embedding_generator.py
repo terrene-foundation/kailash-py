@@ -814,9 +814,10 @@ class EmbeddingGeneratorNode(Node):
         # #1779 governance_required posture: the ollama branch below egresses
         # DIRECTLY (ollama.embeddings) with no four-axis LlmClient, so the
         # construction gate cannot cover it — gate explicitly here, mirroring
-        # LLMAgentNode._legacy_provider_chat (enforcement-surface parity;
-        # security.md § Enforcement-Surface Parity; redteam round-4). mock
-        # exempt; ungoverned honored; OFF posture is a no-op (byte-identical).
+        # every other non-four-axis egress path's explicit gate call
+        # (enforcement-surface parity; security.md § Enforcement-Surface
+        # Parity; redteam round-4). mock exempt; ungoverned honored; OFF
+        # posture is a no-op (byte-identical).
         from kaizen.llm.governance_gate import enforce_governance_posture
 
         enforce_governance_posture(

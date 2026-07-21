@@ -1895,6 +1895,143 @@ _register_and_attach_session_6_presets()
 
 
 # ---------------------------------------------------------------------------
+# Azure AI Foundry preset (#1892) -- the four-axis unified model-inference wire.
+#
+# Distinct from `azure_openai_preset` above: Azure OpenAI's endpoint carries
+# the caller-chosen DEPLOYMENT NAME in the URL path
+# (`/openai/deployments/{deployment}`); Azure AI Foundry's unified
+# model-inference API is MODEL-AGNOSTIC -- one fixed URL suffix
+# (`/models/chat/completions`) serves every deployed model (OpenAI, Meta
+# Llama, Mistral, Cohere, ...) and the model identifier travels in the JSON
+# body's `model` field (the same OpenAI-compatible chat-completions shape
+# every other `WireProtocol.OpenAiChat` preset already emits). Both auth the
+# same way -- a static `api-key: <KEY>` header -- so this preset reuses
+# `AzureEntra`'s api-key variant rather than inventing a second auth
+# strategy for byte-identical wire behavior.
+# ---------------------------------------------------------------------------
+
+# Default Azure AI Foundry model-inference API version. Pinned; matches the
+# GA-preview version validated live against the unified `/models/chat/
+# completions` endpoint (2026-07-21). Overridable via `api_version=` or the
+# `AZURE_AI_FOUNDRY_API_VERSION` env var (kaizen.llm.deployment_resolver).
+AZURE_AI_FOUNDRY_DEFAULT_API_VERSION: str = "2024-05-01-preview"
+
+
+def azure_ai_foundry_preset(
+    endpoint: str,
+    api_key: str,
+    model: str,
+    *,
+    api_version: Optional[str] = None,
+) -> LlmDeployment:
+    """Azure AI Foundry deployment -- the unified model-inference wire.
+
+    Wire:        `OpenAiChat` (the unified Foundry inference endpoint speaks
+                 the same OpenAI-compatible chat-completions JSON as
+                 OpenAI-direct; only the URL + auth differ).
+    Endpoint:    `{endpoint}/models/chat/completions?api-version={api_version}`
+                 -- MODEL-AGNOSTIC: one fixed URL serves every model deployed
+                 to the Foundry project (OpenAI, Llama, Mistral, Cohere, ...).
+    Auth:        `api-key: <KEY>` header via `AzureEntra`'s api-key variant
+                 (identical header shape to `azure_openai_preset`).
+    Model:       `model` is the ACTUAL deployed model name/id -- it travels
+                 in the wire body's `model` field (never in the URL), so
+                 `canonical_model` is left `None` (the wire model already IS
+                 the family; matches the #1859 direct-provider contract).
+
+    Required arguments:
+
+    * `endpoint` -- the Foundry project's unified inference endpoint
+      (e.g. `https://my-foundry-resource.services.ai.azure.com`). Routed
+      through the same SSRF guard every `Endpoint.base_url` uses.
+    * `api_key` -- the Foundry project's inference API key.
+    * `model` -- the deployed model name/id (NEVER hardcode -- read from
+      `AZURE_AI_FOUNDRY_DEPLOYMENT` per `rules/env-models.md`).
+
+    Optional:
+
+    * `api_version` -- defaults to `AZURE_AI_FOUNDRY_DEFAULT_API_VERSION`.
+
+    Fail-closed (`rules/security.md` § Secure-Default): `endpoint` / `api_key`
+    / `model` are all REQUIRED non-empty strings here -- there is no partial-
+    config silent fallback at this layer. The env-driven caller
+    (`kaizen.llm.deployment_resolver._resolve_azure_ai_foundry_deployment`)
+    is the layer that treats a missing endpoint/key as a skip (`None`),
+    matching every other provider's missing-credential contract.
+    """
+    if not isinstance(endpoint, str) or not endpoint.strip():
+        raise ValueError("azure_ai_foundry preset requires a non-empty endpoint URL")
+    if not isinstance(api_key, str) or not api_key:
+        raise ValueError("azure_ai_foundry preset requires a non-empty api_key")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(
+            "azure_ai_foundry preset requires a non-empty model (the deployed "
+            "model name/id -- read from AZURE_AI_FOUNDRY_DEPLOYMENT, never "
+            "hardcoded per rules/env-models.md)"
+        )
+    resolved_api_version = api_version or AZURE_AI_FOUNDRY_DEFAULT_API_VERSION
+    if not isinstance(resolved_api_version, str) or not resolved_api_version:
+        raise ValueError(
+            "azure_ai_foundry api_version must be a non-empty string "
+            f"(default is '{AZURE_AI_FOUNDRY_DEFAULT_API_VERSION}')"
+        )
+
+    deployment_endpoint = Endpoint(
+        base_url=endpoint.rstrip("/"),
+        path_prefix="/models",
+        # The unified model-inference endpoint REQUIRES ?api-version= on
+        # every request; wiring it into query_params means both
+        # _build_completion_url and _build_embed_url emit it (mirrors
+        # azure_openai_preset's query_params contract).
+        query_params={"api-version": resolved_api_version},
+    )
+    auth = AzureEntra(api_key=api_key)
+    deployment = LlmDeployment(
+        wire=WireProtocol.OpenAiChat,
+        endpoint=deployment_endpoint,
+        auth=auth,
+        default_model=model,
+        # model IS the deployed model id (not a routing alias like Azure
+        # OpenAI's caller-chosen deployment name) -- canonical_model stays
+        # None, matching every direct-provider preset (#1859).
+        canonical_model=None,
+        preset_name="azure_ai_foundry",
+    )
+    logger.info(
+        "llm.deployment.azure_ai_foundry.constructed",
+        extra={
+            "deployment_preset": "azure_ai_foundry",
+            "auth_strategy_kind": auth.auth_strategy_kind(),
+            "api_version": resolved_api_version,
+        },
+    )
+    return deployment
+
+
+def _register_and_attach_azure_ai_foundry_preset() -> None:
+    """Register azure_ai_foundry + attach `LlmDeployment.azure_ai_foundry(...)`."""
+    register_preset("azure_ai_foundry", azure_ai_foundry_preset)
+
+    @classmethod  # type: ignore[misc]
+    def azure_ai_foundry_cm(
+        cls,
+        endpoint: str,
+        api_key: str,
+        model: str,
+        *,
+        api_version: Optional[str] = None,
+    ) -> LlmDeployment:
+        return azure_ai_foundry_preset(
+            endpoint, api_key, model, api_version=api_version
+        )
+
+    LlmDeployment.azure_ai_foundry = azure_ai_foundry_cm  # type: ignore[attr-defined]
+
+
+_register_and_attach_azure_ai_foundry_preset()
+
+
+# ---------------------------------------------------------------------------
 # Compatible-endpoint presets — wrap an arbitrary HTTPS endpoint with a
 # canonical wire protocol. Cross-SDK parity with kailash-rs PR #722
 # (openai_compatible) and PR #724 (anthropic_compatible).
@@ -2294,6 +2431,9 @@ __all__ = [
     "vertex_gemini_preset",
     # S6 -- Azure OpenAI
     "azure_openai_preset",
+    # #1892 -- Azure AI Foundry (four-axis unified model-inference wire)
+    "azure_ai_foundry_preset",
+    "AZURE_AI_FOUNDRY_DEFAULT_API_VERSION",
     # S7 -- Compatible-endpoint presets (#761, #762)
     "openai_compatible_preset",
     "anthropic_compatible_preset",

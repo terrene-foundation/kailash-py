@@ -14,8 +14,6 @@ Findings summary lives in ``workspaces/issue-1720-llm-consolidation/
 
 from __future__ import annotations
 
-import pytest
-
 from kaizen.llm import UnsupportedDeploymentProvider, resolve_deployment_for
 from kaizen.llm.wire_protocols import anthropic_messages
 
@@ -42,16 +40,27 @@ def test_fouraxis_anthropic_tools_parsed_correctly():
     ]
 
 
-def test_azure_ai_foundry_is_unsupported_wave_b_blocker():
-    """WAVE-B BLOCKER — ``azure_ai_foundry`` has a legacy provider but NO four-axis wire.
+def test_azure_ai_foundry_wave_b_blocker_is_closed():
+    """WAVE-B BLOCKER CLOSED (#1892) — ``azure_ai_foundry`` now has a
+    confirmed four-axis wire (the unified Foundry model-inference endpoint).
 
-    The shared resolver raises a TYPED ``UnsupportedDeploymentProvider`` (not a
-    silent None) so a Wave-B azure_ai_foundry consumer migration fails loud. This
-    is the one legacy provider the four-axis path cannot yet receive; resolving it
-    is a hard prerequisite before any azure_ai_foundry consumer can be cut over.
+    Was the one legacy provider the four-axis path could not receive
+    (``resolve_deployment_for`` raised ``UnsupportedDeploymentProvider``);
+    #1892 resolves it like every other credential-gated preset instead. The
+    typed-error mechanism itself (``UnsupportedDeploymentProvider``) is
+    retained for a FUTURE known-but-unwired provider -- this test pins that
+    azure_ai_foundry no longer triggers it.
     """
-    with pytest.raises(UnsupportedDeploymentProvider):
-        resolve_deployment_for("azure_ai_foundry", "some-model", api_key="k")
+    deployment = resolve_deployment_for(
+        "azure_ai_foundry",
+        "gpt-5-nano",
+        api_key="k",
+        base_url="https://my-foundry-resource.services.ai.azure.com",
+    )
+    assert deployment is not None
+    assert deployment.preset_name == "azure_ai_foundry"
+    # The mechanism is retained but has no current member.
+    assert issubclass(UnsupportedDeploymentProvider, ValueError)
 
 
 def test_bedrock_vertex_mistral_are_fouraxis_only_one_sided():

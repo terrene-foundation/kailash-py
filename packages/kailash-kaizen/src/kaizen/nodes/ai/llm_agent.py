@@ -9,7 +9,6 @@ import os
 import threading
 import time
 import uuid
-import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
@@ -20,16 +19,6 @@ from kaizen.config.providers import DEFAULT_OPENAI_MODEL
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
-
-# #1720 — one-time deprecation guard for the legacy azure_ai_foundry provider
-# path. azure_ai_foundry is the LAST provider still served by the legacy
-# get_provider(...).chat(...) fallback (every other provider is on the
-# four-axis LlmClient). Per the deprecate-and-remove disposition, the fallback
-# STILL functions but emits a one-time DeprecationWarning + loud WARN so an
-# operator running it learns the path is being retired. Module-level flag →
-# fires once per process, never per-call (rules/observability.md — no hot-loop
-# log spam). The actual removal is a future-minor step (zero-tolerance Rule 6a).
-_AZURE_AI_FOUNDRY_DEPRECATION_WARNED = False
 
 # ---------------------------------------------------------------------------
 # #1720 Wave-2 — dual-run shadow validation (KAIZEN_LLM_DUAL_RUN)
@@ -2402,61 +2391,42 @@ Final Answer: 6 hours"""
                 detection keys off the family regardless of the deployment name.
                 Ignored by every non-Azure provider.
 
-        #1720 Wave-B1a — LIVE CUTOVER. This method now returns the four-axis
-        ``kaizen.llm.client.LlmClient`` result (mapped onto the legacy shape via
-        ``kaizen.llm._legacy_shape.to_legacy_shape``) as the PRIMARY response.
-        The provider->deployment mapping is resolved through the shared
+        #1720 Wave-B1a — LIVE CUTOVER, #1892 — LEGACY PATH REMOVED. This
+        method returns the four-axis ``kaizen.llm.client.LlmClient`` result
+        (mapped onto the legacy shape via
+        ``kaizen.llm._legacy_shape.to_legacy_shape``). Every provider,
+        including ``azure_ai_foundry`` (#1892 four-axis wire), resolves
+        through the shared
         ``kaizen.llm.deployment_resolver.resolve_deployment_for`` (the same
-        surface the Wave-2 dual-run shadow and the parity harness use), and the
-        BYOK ``api_key`` / ``base_url`` per-request overrides thread straight
-        into it (the resolver validates control-char/CRLF/non-ASCII keys —
-        ``rules/security.md`` § Enforcement-Surface Parity). ``azure_ai_foundry``
-        has NO confirmed four-axis wire (``resolve_deployment_for`` raises
-        ``UnsupportedDeploymentProvider``), so it falls back to the legacy
-        ``get_provider(...).chat(...)`` path for that provider ONLY; every other
-        provider goes four-axis. The now-redundant dual-run shadow dispatch was
-        removed from this success path (the four-axis path is now load-bearing,
-        so a second four-axis call would be a pure duplicate); the shadow
-        worker/dispatch/resolver definitions are retained for their direct unit
-        tests.
+        surface the Wave-2 dual-run shadow and the parity harness use), and
+        the BYOK ``api_key`` / ``base_url`` per-request overrides thread
+        straight into it (the resolver validates control-char/CRLF/non-ASCII
+        keys — ``rules/security.md`` § Enforcement-Surface Parity). There is
+        no remaining legacy ``get_provider(...).chat(...)`` fallback — the
+        registry-based path was retired with the last provider it served.
+        The now-redundant dual-run shadow dispatch was removed from this
+        success path (the four-axis path is now load-bearing, so a second
+        four-axis call would be a pure duplicate); the shadow
+        worker/dispatch/resolver definitions are retained for their direct
+        unit tests.
         """
         try:
-            from kaizen.llm.deployment_resolver import (
-                UnsupportedDeploymentProvider,
-                resolve_deployment_for,
-            )
+            from kaizen.llm.deployment_resolver import resolve_deployment_for
 
-            # SCOPE-OUT (#1720 Wave-B1a): azure_ai_foundry has no confirmed
-            # four-axis wire; resolve_deployment_for raises
-            # UnsupportedDeploymentProvider for it. Keep that provider ONLY on
-            # the legacy get_provider(...).chat(...) path until a wire lands.
-            # BYOK overrides are validated inside resolve_deployment_for (the
-            # sibling enforcement surface to LlmClient.complete's api_key guard).
             # #1859: for Azure, thread the deployment NAME + api-version from
             # provider_config so `model` stays the canonical family that
             # reasoning-model detection keys off. Non-Azure providers ignore both.
             _pc = provider_config or {}
             azure_deployment = _pc.get("deployment")
             azure_api_version = _pc.get("api_version")
-            try:
-                deployment = resolve_deployment_for(
-                    provider,
-                    model,
-                    api_key=api_key,
-                    base_url=base_url,
-                    deployment=azure_deployment,
-                    api_version=azure_api_version,
-                )
-            except UnsupportedDeploymentProvider:
-                return self._legacy_provider_chat(
-                    provider,
-                    model,
-                    messages,
-                    tools,
-                    generation_config,
-                    api_key=api_key,
-                    base_url=base_url,
-                )
+            deployment = resolve_deployment_for(
+                provider,
+                model,
+                api_key=api_key,
+                base_url=base_url,
+                deployment=azure_deployment,
+                api_version=azure_api_version,
+            )
 
             # is_available() gate parity (invariant #1): a None deployment means
             # the credential / base_url could not be resolved — the four-axis
@@ -2558,112 +2528,6 @@ Final Answer: 6 hours"""
                 "Provider %s error [%s]: %s", provider, type(e).__name__, sanitized
             )
             raise RuntimeError(sanitized) from e
-
-    def _legacy_provider_chat(
-        self,
-        provider: str,
-        model: str,
-        messages: list[dict],
-        tools: list[dict],
-        generation_config: dict,
-        api_key: str = None,
-        base_url: str = None,
-    ) -> dict[str, Any]:
-        """Legacy provider-registry chat path (#1720 Wave-B1a).
-
-        Retained ONLY for providers with no confirmed four-axis wire — currently
-        ``azure_ai_foundry`` (which ``resolve_deployment_for`` rejects with
-        ``UnsupportedDeploymentProvider``). Every other provider is served by the
-        four-axis ``LlmClient`` in ``_provider_llm_response``. Preserves the
-        legacy ``is_available()`` gate (invariant #1) and the #487 usage
-        total-coercion (invariant #2) byte-for-byte. Exceptions propagate to the
-        caller's ``except ImportError`` / ``except Exception`` handlers (invariants
-        #5 and #6).
-        """
-        # #1720 deprecate-and-remove: azure_ai_foundry is the LAST provider on
-        # this legacy fallback (no confirmed four-axis wire —
-        # resolve_deployment_for raises UnsupportedDeploymentProvider for it).
-        # Emit a ONE-TIME DeprecationWarning + loud WARN so an operator running
-        # the legacy path learns it is being retired. The path STILL functions
-        # (this is the deprecation shim, not the removal — zero-tolerance Rule
-        # 6a; removal follows in a future minor). Guarded on the provider name +
-        # a module-level flag so it fires once per process, never per-call
-        # (rules/observability.md — no hot-loop log spam).
-        if provider == "azure_ai_foundry":
-            global _AZURE_AI_FOUNDRY_DEPRECATION_WARNED
-            if not _AZURE_AI_FOUNDRY_DEPRECATION_WARNED:
-                _AZURE_AI_FOUNDRY_DEPRECATION_WARNED = True
-                _msg = (
-                    "The legacy 'azure_ai_foundry' provider path is deprecated "
-                    "and will be removed in a future minor release. It is the "
-                    "last provider still served by the legacy "
-                    "get_provider(...).chat(...) fallback; every other provider "
-                    "runs on the four-axis kaizen.llm.LlmClient. Migration: for "
-                    "Azure OpenAI models, switch to the 'azure' (or "
-                    "'azure_openai') provider, which is fully supported on the "
-                    "four-axis path (set AZURE_ENDPOINT / AZURE_API_KEY). For "
-                    "non-Azure-OpenAI AI Foundry models (e.g. Meta Llama, "
-                    "Mistral, Cohere served via the AI Foundry inference "
-                    "endpoint) there is no four-axis equivalent yet — a "
-                    "four-axis azure_ai_foundry wire is tracked as future work; "
-                    "such deployments must wait for that wire before migrating."
-                )
-                warnings.warn(_msg, DeprecationWarning, stacklevel=2)
-                logger.warning("llm_agent.azure_ai_foundry.deprecated %s", _msg)
-
-        # #1779 governance_required posture: this is the ONLY legacy egress that
-        # does NOT route through the four-axis LlmClient (providers with no
-        # four-axis wire, e.g. azure_ai_foundry), so the LlmClient construction
-        # gate cannot cover it. Enforce the posture explicitly at this
-        # chokepoint, BEFORE any real egress. Mock exempt; ungoverned= honored;
-        # OFF posture is a no-op (byte-identical to pre-#1779). Redteam Cluster-C.
-        from kaizen.llm.governance_gate import enforce_governance_posture
-
-        enforce_governance_posture(
-            is_mock=(provider == "mock"),
-            ungoverned=self._ungoverned,
-            surface="LLMAgentNode",
-        )
-
-        from kaizen.providers.registry import get_provider
-
-        # #1803: thread the node's opt-out into the constructed instance so
-        # its own egress-method gate (e.g. AzureAIFoundryProvider.chat) agrees
-        # with the outer gate just above instead of double-refusing when
-        # ungoverned=True.
-        provider_instance = get_provider(provider, ungoverned=self._ungoverned)
-
-        # Check if provider is available (skip if per-request key provided)
-        if not api_key and not provider_instance.is_available():
-            raise RuntimeError(
-                f"Provider {provider} is not available. Check dependencies and configuration."
-            )
-
-        # Build chat kwargs with optional per-request overrides
-        chat_kwargs = {
-            "messages": messages,
-            "model": model,
-            "generation_config": generation_config,
-            "tools": tools,
-        }
-        if api_key:
-            chat_kwargs["api_key"] = api_key
-        if base_url:
-            chat_kwargs["base_url"] = base_url
-
-        # Call the provider
-        response = provider_instance.chat(**chat_kwargs)
-
-        # Ensure usage totals are calculated. Custom providers may emit
-        # None counters (see issue #487); coerce to 0 before arithmetic.
-        if response.get("usage"):
-            usage = response["usage"]
-            if not usage.get("total_tokens"):
-                prompt = usage.get("prompt_tokens") or 0
-                completion = usage.get("completion_tokens") or 0
-                usage["total_tokens"] = prompt + completion
-
-        return response
 
     def _dispatch_dual_run_shadow(
         self,

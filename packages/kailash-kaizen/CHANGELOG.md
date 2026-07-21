@@ -2,6 +2,95 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.40.0] — 2026-07-21 — Four-axis azure_ai_foundry wire + legacy provider path removed (#1892, closes #1720)
+
+### BREAKING CHANGE
+
+- **The legacy `azure_ai_foundry` provider path is REMOVED (#1892).** The
+  `kaizen.providers.llm.azure` module, its `AzureAIFoundryProvider` class
+  (built on the `azure-ai-inference` SDK), and `LLMAgentNode`'s
+  `_legacy_provider_chat` fallback method are all DELETED. `kaizen.providers
+.registry.PROVIDERS` is now the empty dict — `azure_ai_foundry` was the
+  last provider it served. `azure_ai_foundry` is now served end-to-end by
+  the four-axis `kaizen.llm.LlmClient` (see Added, below). The
+  `DeprecationWarning` shim that announced this removal shipped in kaizen
+  2.39.0 (one minor cycle) per `rules/zero-tolerance.md` Rule 6a.
+
+  **Migration:** no `LLMAgentNode` / `BaseAgent` code changes are required
+  for callers already setting `llm_provider="azure_ai_foundry"` — only the
+  environment variable names changed:
+
+  | Old (removed)                    | New                                       |
+  | -------------------------------- | ----------------------------------------- |
+  | `AZURE_AI_INFERENCE_ENDPOINT`    | `AZURE_AI_FOUNDRY_ENDPOINT`               |
+  | `AZURE_AI_INFERENCE_API_KEY`     | `AZURE_AI_FOUNDRY_API_KEY`                |
+  | (deployment was passed per-call) | `AZURE_AI_FOUNDRY_DEPLOYMENT` (new)       |
+  | n/a                              | `AZURE_AI_FOUNDRY_API_VERSION` (optional) |
+
+  Direct standalone use of the removed `AzureAIFoundryProvider` class (`from
+kaizen.providers.llm.azure import AzureAIFoundryProvider`) now raises
+  `ModuleNotFoundError` — construct an `azure_ai_foundry` `LlmDeployment`
+  instead (see Added, below).
+
+### Added
+
+- **`azure_ai_foundry` four-axis wire (#1892).** A new preset,
+  `kaizen.llm.presets.azure_ai_foundry_preset` (+ the classmethod
+  `LlmDeployment.azure_ai_foundry(endpoint, api_key, model, *,
+api_version=None)`), targets Azure AI Foundry's unified, MODEL-AGNOSTIC
+  model-inference endpoint — `POST {endpoint}/models/chat/completions`. One
+  fixed URL serves every model deployed to the Foundry project (OpenAI,
+  Meta Llama, Mistral, Cohere, …); the model id travels in the wire body's
+  `model` field, never the URL. Authenticates with the SAME `api-key: <KEY>`
+  header `AzureEntra`'s api-key variant already provides for
+  `azure_openai` — no new auth strategy needed. Wire protocol is
+  `WireProtocol.OpenAiChat` (the same OpenAI-compatible chat-completions
+  JSON every other direct-provider preset speaks), so tool-calling,
+  streaming, and the reasoning-model (`gpt-5*`/`o1*`/`o3*`/`o4*`)
+  `max_completion_tokens` / sampling-parameter filtering all apply
+  automatically.
+
+  `kaizen.llm.deployment_resolver.resolve_deployment_for("azure_ai_foundry",
+...)` now resolves a real deployment (reading `AZURE_AI_FOUNDRY_ENDPOINT` /
+  `AZURE_AI_FOUNDRY_API_KEY` / `AZURE_AI_FOUNDRY_DEPLOYMENT` /
+  `AZURE_AI_FOUNDRY_API_VERSION` when no per-request override is supplied)
+  instead of raising `UnsupportedDeploymentProvider` — closing the Wave-B
+  blocker #1720 left open for this provider. A missing endpoint or api-key
+  is a quiet skip (`None`), matching the `azure` / `azure_openai` contract.
+
+  `kaizen.providers.capabilities` gained a conservative `azure_ai_foundry`
+  capability row (`tools=True`; `vision`/`batch`/`caching`/`audio=False` —
+  the unified endpoint serves arbitrary model families, so the row is the
+  common denominator, not `azure_openai`'s row).
+
+  Validated live end-to-end against the real Azure AI Foundry unified
+  model-inference endpoint (`packages/kailash-kaizen/tests/integration/llm/
+test_azure_ai_foundry_wiring.py::test_azure_ai_foundry_complete_real`) —
+  a real HTTP 200 chat completion round-trip. The endpoint is model-agnostic
+  by construction, so this validates the WIRE MECHANICS (four-axis config →
+  endpoint → api-key auth → chat round-trip); a non-OpenAI Foundry model
+  (Llama/Mistral/Cohere) would traverse the identical path.
+
+### Removed
+
+- `kaizen.providers.llm.azure` module and `AzureAIFoundryProvider` class (see
+  BREAKING CHANGE above).
+- `LLMAgentNode._legacy_provider_chat` — the last non-four-axis egress path
+  on `LLMAgentNode`.
+- `kaizen.providers.registry.PROVIDERS["azure_ai_foundry"]` entry — the
+  registry is now empty (retained as an extensibility mechanism for a
+  future provider with no confirmed four-axis wire).
+- `azure-ai-inference` and `azure-core` from the `providers-azure` extra
+  (their sole consumer, the removed provider, is gone; `azure-identity`
+  remains — `kaizen.llm.auth.azure.AzureEntra`'s workload-identity /
+  managed-identity variants still use it).
+
+### #1720 Status
+
+`azure_ai_foundry` was the LAST provider remaining in
+`packages/kailash-kaizen/src/kaizen/providers/llm/` — that directory now
+contains only `__init__.py`. **Closes #1720.**
+
 ## [2.39.0] — 2026-07-21 — Google Gemini embeddings wire + legacy azure_ai_foundry provider deprecation (#1818, #1720)
 
 ### Added

@@ -23,7 +23,6 @@ from kaizen.providers.base import (
     StreamingProvider,
 )
 from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
-from kaizen.providers.llm.azure import AzureAIFoundryProvider
 from kaizen.providers.provider_names import PROVIDER_NAMES
 
 logger = logging.getLogger(__name__)
@@ -31,19 +30,19 @@ logger = logging.getLogger(__name__)
 
 # Provider registry mapping names to classes.
 #
-# #1820: the embedding-legacy providers (``cohere`` / ``huggingface``) and the
-# unified-azure providers (``azure`` / ``azure_openai``) were RETIRED and their
-# modules deleted. Their transports are served end-to-end by the four-axis
-# ``kaizen.llm.LlmClient`` path, which is consulted BEFORE this registry in
-# every live caller (``llm_agent._provider_llm_response`` and
-# ``embedding_generator._generate_provider_embedding`` both resolve through
-# ``kaizen.llm.deployment_resolver.resolve_deployment_for`` first). The registry
-# is only reached for ``azure_ai_foundry`` — the one KNOWN provider
-# ``resolve_deployment_for`` declines to map (no confirmed four-axis wire; it
-# raises ``UnsupportedDeploymentProvider`` so the caller falls back here).
-PROVIDERS: dict[str, type] = {
-    "azure_ai_foundry": AzureAIFoundryProvider,
-}
+# #1820 retired the embedding-legacy providers (``cohere`` / ``huggingface``)
+# and the unified-azure providers (``azure`` / ``azure_openai``); #1892
+# retired ``azure_ai_foundry`` — the last remaining registry provider — onto
+# its own four-axis wire (``kaizen.llm.presets.azure_ai_foundry_preset``).
+# Every provider's transport is now served end-to-end by the four-axis
+# ``kaizen.llm.LlmClient`` path via
+# ``kaizen.llm.deployment_resolver.resolve_deployment_for`` (consulted by
+# every live caller — ``llm_agent._provider_llm_response`` and
+# ``embedding_generator._generate_provider_embedding``). This registry is
+# retained as the extensibility mechanism for a FUTURE provider with no
+# confirmed four-axis wire (``UnsupportedDeploymentProvider`` in
+# ``deployment_resolver.py``); it is intentionally EMPTY today.
+PROVIDERS: dict[str, type] = {}
 
 
 # Drift tripwire: the pure-data name registry (kaizen.providers.provider_names)
@@ -93,11 +92,12 @@ def get_provider(
             or ``None`` for any.
         ungoverned: #1803 opt-out threaded to the constructed instance's
             ``governance_required`` posture gate (fires at the instance's
-            own egress methods, e.g. ``AzureAIFoundryProvider.chat``) — NOT
-            evaluated here. Callers that will invoke an egress method on the
-            returned instance MUST pass the same ``ungoverned`` value their
-            own gate (e.g. ``LLMAgentNode._legacy_provider_chat``) already
-            enforced, so the two gates agree instead of double-refusing.
+            own egress methods) — NOT evaluated here. Callers that will
+            invoke an egress method on the returned instance MUST pass the
+            same ``ungoverned`` value their own gate already enforced, so the
+            two gates agree instead of double-refusing. As of #1892 every
+            provider registered here is a FUTURE extensibility case (the
+            registry is empty by default); no live caller reaches this path.
 
     Returns:
         Provider instance with the requested capabilities.

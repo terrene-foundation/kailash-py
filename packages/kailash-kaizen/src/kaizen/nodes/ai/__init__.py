@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 # ---------------------------------------------------------------------------
 _LEGACY_PROVIDER_MODULES: dict[str, str] = {
     "LLMProvider": "kaizen.providers.base",
-    "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
     "PROVIDERS": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
@@ -26,7 +25,6 @@ if TYPE_CHECKING:
     # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
     # autodoc still resolve the legacy names kept in ``__all__`` below.
     from kaizen.providers.base import LLMProvider
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
     from kaizen.providers.registry import (
         PROVIDERS,
         get_available_providers,
@@ -125,9 +123,9 @@ __all__ = [
     "QueryAnalysisNode",
     # Embedding and Vector Operations
     "EmbeddingGeneratorNode",
-    # Provider Infrastructure (kept — legacy chat providers retired in #1720 Wave-2)
+    # Provider Infrastructure (kept — legacy chat providers retired in #1720
+    # Wave-2 / #1820 / #1892)
     "LLMProvider",
-    "AzureAIFoundryProvider",
     "get_provider",
     "get_available_providers",
     "PROVIDERS",

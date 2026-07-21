@@ -245,9 +245,12 @@ def test_total_preset_count_after_retrofit() -> None:
       Anthropic, Google, Cohere, Mistral, Perplexity, HuggingFace, Groq,
       Together, Fireworks, OpenRouter, DeepSeek → 42.
     * + 1 `huggingface_chat` chat-schema-routing preset (#1720 F3) → 43.
+    * + 1 `azure_ai_foundry` four-axis preset (#1892 -- the unified,
+      model-agnostic Azure AI Foundry model-inference wire, replacing the
+      legacy `AzureAIFoundryProvider`) → 44.
 
     NB: `azure_entra` is registered as a preset name even though it is
     really an auth-strategy factory; this is pre-existing in the kaizen
     LLM surface. If a future cleanup removes it, decrement this count.
     """
-    assert len(list_presets()) == 43
+    assert len(list_presets()) == 44

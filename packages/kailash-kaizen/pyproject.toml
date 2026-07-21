@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.39.0"
+version = "2.40.0"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -50,9 +50,15 @@ requires-python = ">=3.11"
 # function-local in providers/llm/{azure,google}.py and friends.
 # ─────────────────────────────────────────────────────────────────
 providers-azure = [
-    "azure-ai-inference>=1.0.0b9",
+    # #1892: azure-ai-inference + azure-core were dropped -- their sole
+    # consumer (the legacy kaizen.providers.llm.azure.AzureAIFoundryProvider,
+    # the azure.ai.inference-SDK-based chat/embed client) was removed; Azure
+    # AI Foundry is now served by the four-axis LlmClient (azure_ai_foundry
+    # preset), which speaks plain HTTPS via httpx (already a core dep) -- no
+    # Azure SDK needed. azure-identity remains: kaizen.llm.auth.azure.AzureEntra
+    # (four-axis auth) still uses it for the workload-identity / managed-
+    # identity variants.
     "azure-identity>=1.15.0",
-    "azure-core>=1.38.0",
 ]
 providers-google = [
     "google-genai>=1.21.0",
