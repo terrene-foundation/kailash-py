@@ -1,10 +1,10 @@
 ---
 type: cross-repo-authorization-receipt
 date: 2026-07-21
-timestamp: 2026-07-21T01:30:26.277Z
+timestamp: 2026-07-21T07:48:25.890Z
 requester: jack-hong
 target: esperie-enterprise/kailash-rs
-action: file one cross-SDK mirror issue: audit signed-delegation serializers for fold-field round-trip completeness (Python equivalent of #1841 / Rule 4e)
+action: file one cross-SDK parity issue: add a four-axis azure_ai_foundry provider (unified Azure AI Foundry /models inference endpoint, api-key auth), the Rust sibling of the Python four-axis azure_ai_foundry wire; cross-reference py#1892; cross-sdk label; SDK-API-surface only per upstream-issue-hygiene
 mode: write
 ---
 
@@ -15,13 +15,13 @@ cross-repo-authorized: esperie-enterprise/kailash-rs write
 ## Bounded action
 
 - **Target repo:** esperie-enterprise/kailash-rs
-- **Action (write):** file one cross-SDK mirror issue: audit signed-delegation serializers for fold-field round-trip completeness (Python equivalent of #1841 / Rule 4e)
+- **Action (write):** file one cross-SDK parity issue: add a four-axis azure_ai_foundry provider (unified Azure AI Foundry /models inference endpoint, api-key auth), the Rust sibling of the Python four-axis azure_ai_foundry wire; cross-reference py#1892; cross-sdk label; SDK-API-surface only per upstream-issue-hygiene
 - **Requester (display_id):** jack-hong
-- **Authorized at:** 2026-07-21T01:30:26.277Z
+- **Authorized at:** 2026-07-21T07:48:25.890Z
 
 ## Verbatim user instruction
 
-> User approved filing the cross-SDK mirror against the Rust SDK (response 'approved' to the specific restated ask naming the Rust SDK + the mirror-issue action).
+> Authorize me to file it (user-selected: file one scrubbed issue on esperie-enterprise/kailash-rs for the four-axis azure_ai_foundry provider parity, cross-referencing #1892, per upstream-issue-hygiene)
 
 ## Five-condition attestation (repo-scope-discipline.md § User-Authorized Exception)
 
