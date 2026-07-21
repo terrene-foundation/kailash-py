@@ -211,6 +211,83 @@ Prune-when-unset makes the addition byte-neutral for the not-configured case (th
 
 Evidence: kailash-py #1510 BH5 (PR #1671 → release #1672, kailash 2.48.0, 2026-07-11) — adding `circuit_*` fields to `OperationalConstraintConfig` (nested in the signed `ConstraintEnvelopeConfig`) changed the Ed25519 pre-image for every envelope; a two-round `/redteam` caught the HIGH, fixed via `_envelope_signing_dict` prune-when-unset.
 
+## Rule 4e — Serializer-Set Completeness For A Signed Model's Fold Fields (full example)
+
+```python
+# DO — ONE shared serde owns encode+decode of the fold fields; EVERY signed-model serializer
+#      routes through it, so no serializer can silently drop a field on round-trip.
+# delegation_fold_serde.py  (the single source of truth — real exports: serialize_fold_fields / deserialize_fold_fields)
+_FOLD_FIELDS = ("constraints", "resource_limits", "scope", "multi_sig", "multi_sig_policy")
+def serialize_fold_fields(rec) -> dict:
+    out = {}
+    for f in _FOLD_FIELDS:
+        v = getattr(rec, f, None)
+        if v is not None:                         # prune-when-unset → legacy byte-neutral (Rule 4d pattern)
+            out[f] = v
+    return out
+def deserialize_fold_fields(payload: dict) -> dict:
+    return {f: payload[f] for f in _FOLD_FIELDS if f in payload}
+
+# every serializer (chain/store, W3C-VC, JWT, UCAN) calls the SAME two functions:
+def _serialize_delegation(rec) -> dict:
+    return {"signing_payload_version": rec.signing_payload_version, **serialize_fold_fields(rec)}
+
+# DISCRIMINATING end-to-end regression — FULLY-CONFIGURED record + BOTH polarities (real store API: store_chain / get_chain).
+# A legacy/all-unset record round-trips an EMPTY fold dict and asserts nothing — it is an inert tripwire.
+@pytest.mark.regression
+async def test_v3_delegation_fold_fields_are_load_bearing_after_store_round_trip():
+    store = SqliteTrustStore(tmp_path / "t.db")           # REAL store, not a fixture dict
+    # chain_with_v3_multisig_delegation populates EVERY fold-field type (constraints/resource_limits/
+    # scope/multi_sig/multi_sig_policy) — a configured record is what makes the pin discriminating.
+    await store.store_chain(chain_with_v3_multisig_delegation, expires_at)
+    await store.get_chain(agent_id)                       # reload from the real persistence path
+    assert (await ops.verify_delegation_chain(agent_id)).valid is True   # positive pole; FALSE before the fix
+    # NEGATIVE pole — the field is load-bearing ONLY if stripping it flips verify FALSE:
+    tampered = strip_fold_field(chain_with_v3_multisig_delegation, "scope")
+    await store.store_chain(tampered, expires_at)
+    await store.get_chain(agent_id)
+    assert (await ops.verify_delegation_chain(agent_id)).valid is False   # strip → fail-closed
+
+# STRUCTURAL serializer-set-parity backstop — enumerate the set by a NON-CIRCULAR predicate:
+def test_every_delegation_serializer_routes_through_the_shared_serde():
+    # NON-CIRCULAR: discover by "accepts a chain/DelegationRecord and returns a serialization dict",
+    # enumerated INDEPENDENTLY of serde imports — a predicate keyed on "imports the serde" can only
+    # find compliant functions, never the re-implementing dropper that IS the defect.
+    for fn in _functions_returning_delegation_dict():     # AST-walk on signature+return, not import list
+        assert _routes_through(fn, "delegation_fold_serde"), f"{fn} re-implements instead of delegating"
+
+# CROSS-VERSION non-collidability — the invariant that keeps a field-strip fail-closed ACROSS versions,
+# which the within-version negative pole above does NOT exercise. Per NEW signing_payload_version ship
+# one such pin per prior version it could be downgraded to (n−1 pairs); the single re-tag below is ONE pair:
+@pytest.mark.regression
+async def test_stripped_field_re_tagged_to_other_version_fails_closed():
+    rec = strip_fold_field(chain_with_v3_multisig_delegation, "scope")
+    rec = retag_signing_version(rec, "legacy-python-v0")  # flip discriminator to a would-be colliding pre-image
+    await store.store_chain(rec, expires_at); await store.get_chain(agent_id)
+    assert (await ops.verify_delegation_chain(agent_id)).valid is False   # non-collidable → fail-closed
+
+# DO NOT — a serializer that carries only the version tag and DROPS the fold fields
+def _serialize_delegation(rec) -> dict:
+    return {"signing_payload_version": rec.signing_payload_version}      # constraints/scope/multi_sig gone
+# → reload reconstructs a delegation WITHOUT the fold fields → re-derived pre-image differs →
+#   verify FALSE. Every per-serializer unit test passes (it only round-trips fields IT knows);
+#   the break is visible ONLY at an end-to-end store round-trip / the holistic post-multi-wave redteam.
+```
+
+**BLOCKED rationalizations:**
+
+- "Each serializer's own round-trip test passes" (it round-trips only the fields that serializer emits — it cannot see a field it never wrote)
+- "The version tag is enough to reconstruct the record" (the fold fields ARE the signed pre-image; dropping them breaks verify, not just shape)
+- "One serializer is the primary path; the interop encoders are rarely used" (the security.md Multi-Site Plumbing failure mode — the rare sibling ships the exact break)
+- "I'll re-implement the field list in each serializer" (N copies drift; one shared serde is the Pre-Encoder Consolidation fix)
+- "The per-shard redteam was clean" (per-shard reviews see only their own serializer's diff; the cross-serializer gap needs the holistic round)
+- "The regression asserts verify TRUE, that's coverage" (an all-unset/legacy record round-trips an empty fold dict and would still pass if every serializer dropped every field — the pin is INERT without a configured record AND a negative pole)
+- "A manual grep confirmed every serializer routes through the serde" (manual grep is the exact human-completeness step the originating defect escaped; a mechanical serializer-set-enumeration parity test is the required backstop, not a one-time grep)
+
+The defect polarity is the mirror of Rule 4d: 4d = a field ADDED changes the not-set pre-image (fix: prune-when-unset); 4e = a field ALREADY folded is DROPPED by one serializer on round-trip (fix: one shared serde wired into every path + an end-to-end round-trip pin). Both are byte-for-byte cross-SDK contract breaks the within-serializer suite cannot catch.
+
+Evidence: kailash-py #1841 (kailash 2.59.0, 2026-07-20) — `TrustLineageChain._serialize_delegation` (chain.py) carried `signing_payload_version` but omitted the v2/v3 fold fields across chain-store + W3C-VC + JWT + UCAN; a v2/v3 delegation lost fold fields on store round-trip → verify FALSE → v2/v3 signing non-functional end-to-end. The HIGH was caught by a HOLISTIC post-multi-wave `/redteam` (the per-shard reviews structurally could not see it), reproduced against a REAL `SqliteTrustStore` before the fix, and closed via a shared `delegation_fold_serde.py` wired into all four serializers (prune-when-unset legacy byte-neutral; a `typing.Protocol` broke the CodeQL-flagged import cycle between the serde module and `chain.py`).
+
 ## Rule 6 — Public-Artifact Private-Repo Reference (full example)
 
 ```markdown
