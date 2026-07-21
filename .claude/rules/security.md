@@ -191,46 +191,6 @@ When a fix PROMOTES a field to a fail-closed authorization control at the eval s
 
 Origin: kailash-py #1456 → kailash-pact 0.14.3 (PR #1459). #1456 promoted `McpToolPolicy.clearance_required` to a fail-closed gate at `_check_clearance` (eval, Step 3.5) but left `_validate_monotonic_tightening` (re-registration) blind to it; a `secret`→None / `secret`→`public` re-registration was accepted as "tightening", silently stripping the gate (caught by an adversarial /redteam, NOT by the existing multi-site grep). Cross-SDK sibling: the Rust SDK binding (same shape).
 
-## Secure-Default For A New Security Feature — Fail-Closed Or Loud-WARN, Never A Silent No-Op
-
-When a NEW security feature is gated behind a config field / kwarg / injected dependency whose DEFAULT value makes the feature a SILENT NO-OP — the protection is present in the code but does NOTHING until a deployer explicitly wires it — that default is a FAIL-OPEN default: the feature ships OFF, and every deployment that adopts the surrounding release without also wiring the flag believes it is protected while it is not. The default MUST be either (a) fail-CLOSED — the feature is ON by default and a deployer opts OUT explicitly (the secure-by-default posture) — OR (b) when backward-compat genuinely forbids on-by-default (the feature needs a key/store/identity a pre-upgrade caller has not wired), a LOUD one-time WARN at init or first-use naming the OFF protection + the exact wiring required (`observability.md` Rule 4). A silent-no-op default with neither the fail-closed flip nor the loud WARN is BLOCKED.
-
-```python
-# DO — (a) secure-by-default: the new feature is ON; opt OUT is explicit
-require_caller_identity: bool = True   # a deployment that sets tenant_grants gets isolation;
-                                       # trusting a self-asserted body tenant is an explicit False
-
-# DO — (b) backward-compat opt-in, but LOUD: a one-time WARN names the OFF protection
-if self._revocation_verifier is None and not self._warned:
-    logger.warning("authoritative signed-revocation layer OFF — wire a "
-                   "SignedRevocationVerifier; resurrection/rollback defenses are inactive")
-
-# DO NOT — the enabling default makes the feature a silent no-op
-require_caller_identity: bool = False  # a deployment sets tenant_grants, forgets caller_identity,
-                                       # and silently trusts the body tenant → zero isolation, no signal
-revocation_verifier = None             # default skips the whole signed-ledger gate; resurrection
-                                       # still works for every un-wired caller, with no warning
-```
-
-**BLOCKED rationalizations:** "the flag defaults False for backward-compat" (backward-compat mandates the loud WARN, NOT silence) / "the docs tell deployers to wire it" (a doc is not a runtime signal — the WARN is) / "the protection is present, the deployer just has to turn it on" (a security feature nobody knows is off is a fail-open default) / "a non-default value isn't constructible without the key/store" (then WARN when it is absent — do NOT no-op silently) / "the redteam/next session will catch it" (the deployer, not the redteam, runs the un-wired config in production).
-
-**Why:** A new security feature's headline claim ("#1843 closes cross-tenant access", "#1842 closes revocation-resurrection") is FALSE for every existing caller until they wire the enabling flag; a default that makes the feature a silent no-op ships the claim without the protection, and the gap is invisible precisely because nothing fires. Fail-closed (a) or loud-WARN (b) converts the silent gap into either a secure default or a loud, actionable signal. Recurred TWICE in one session — `McpGovernanceConfig.require_caller_identity=False` (#1843) and `TrustOperations(revocation_verifier=None)` (#1842-S3) — the same fail-open-default shape, both caught by an adversarial /redteam, neither by the feature's own tests.
-
-Origin: 2026-07-20 — kailash-py session codifying #1843 (MCP tenant isolation) + #1842 (signed revocation ledger). Both landed their enabling flag defaulting to the silent-no-op value; the adversarial security-reviewer flagged each as a fail-open secure-default gap; #1843 flipped to `True` (fail-closed), #1842 kept `None` for backward-compat but added the one-time WARN + a deployment-requirement doc.
-
-**Trust Posture Wiring (Secure-Default For A New Security Feature):**
-
-Applies to the **Secure-Default For A New Security Feature** clause (added 2026-07-20). Per `trust-posture.md` MUST-8 grandfather cutoff, this clause lands AT/AFTER the MUST-8 SHA and ships canonical-8-field-compliant; the pre-existing grandfathered sections of this file remain exempt until each is itself `/codify`-touched (the clause-scoped precedent set by this file's own § Enforcement-Surface Parity).
-
-- **Severity:** `halt-and-report` at gate-review (security-reviewer at `/implement` + cc-architect at `/codify` confirm any new security-feature enabling flag either defaults fail-closed OR emits a loud one-time WARN when unwired); `advisory` at the hook layer per `hook-output-discipline.md` MUST-2 (whether a default is a silent no-op is judgment-bearing, not a lexical tool-call signal).
-- **Grace period:** 7 days from clause landing (2026-07-20 → 2026-07-27).
-- **Cumulative posture impact:** same-class violations (a new security feature whose enabling default is a silent no-op with neither the fail-closed flip nor the loud WARN) contribute to `trust-posture.md` MUST-4 cumulative-window math (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
-- **Regression-within-grace:** a same-class violation within the 7-day grace window routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause trigger key (a secure-default-posture property is review-layer-only + semantic; minting a key would drag `trust-posture.md`, a self-referential-codify allowlist file, into a self-ref edit; the universal trigger already covers it). Named deviation from the canonical key-per-clause shape, recorded here per `trust-posture.md` Rule 8 — the same no-dedicated-key disposition § Enforcement-Surface Parity took.
-- **Receipt requirement:** SessionStart soft-gate `[ack: security]` IFF `posture.json::pending_verification` includes the `security` rule_id.
-- **Detection mechanism:** Phase 1 (manual, gate-review) — for any diff adding a security feature gated behind a config flag / kwarg / injected dependency, security-reviewer at `/implement` + cc-architect at `/codify` confirm the enabling default fails closed OR (if backward-compat opt-in) emits a loud one-time WARN naming the OFF protection + the wiring. When the diff takes the WARN-fallback path (b), the reviewer MUST additionally interrogate whether fail-closed (a) was genuinely infeasible — i.e. verify a pre-upgrade caller truly cannot construct the enabling key/store/identity — rather than accept the WARN on presence alone; a WARN fallback whose "backward-compat genuinely forbids on-by-default" precondition was assumed, not tested, is a finding. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — no hook detector; audit fixtures land with the Phase-2 detector at `.claude/audit-fixtures/secure-default-new-feature/` per `cc-artifacts.md` Rule 9.
-- **Violation scope:** the Secure-Default clause ONLY (clause-scoped); pre-existing grandfathered `security.md` sections stay exempt until each is itself `/codify`-touched.
-- **Origin:** See the clause's Origin (kailash-py #1843 + #1842-S3, 2026-07-20).
-
 ## Redactor Contract
 
 Subject-keyed redactors (substring-matching a `subject_id`) MUST enforce a subject-id length floor (≥8 chars), failing closed with a typed error naming floor + received length. A scrubbed matching object KEY MUST scrub BOTH key and value — key → `[REDACTED_KEY_N]`, audit trail via the original-hash return.
@@ -284,7 +244,7 @@ Applies to the **Path Containment** clause (added 2026-07-19, Wave-1 sync-from p
 - **Violation scope:** the Path-Containment clause ONLY (clause-scoped); pre-existing grandfathered `security.md` sections stay exempt until each is itself `/codify`-touched.
 - **Origin:** See the clause's Origin (BUILD `SECURITY-PATH-CONTAINMENT-2026-07-16` + kailash-mcp #1833).
 
-**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body exceeds the 200-line guidance. Named rationale: **defense-surface scope** — security.md is a `priority: 0` baseline rule collecting the always-on security contract across independent surfaces (secrets, parameterized queries, credential-decode helpers, input validation, output encoding, the DataFlow sanitizer contract, multi-site kwarg plumbing, enforcement-surface parity, the secure-default-for-a-new-security-feature contract, the redactor contract, path containment), each carrying the DO/DO-NOT + `**Why:**` + clause-scoped Trust-Posture Wiring the meta-rule mandates. Depth for each clause is EXTRACTED to `.claude/skills/18-security-patterns/` + `.claude/guides/rule-extracts/security.md` to hold the baseline near budget. Per that MUST NOT the 200-line cap is guidance and overage is permitted with a named rationale anchored at Origin. Sibling precedent: `artifact-flow.md` + `recommendation-quality.md` length rationales.
+**Length rationale (per `rules/rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** Rule body exceeds the 200-line guidance. Named rationale: **defense-surface scope** — security.md is a `priority: 0` baseline rule collecting the always-on security contract across independent surfaces (secrets, parameterized queries, credential-decode helpers, input validation, output encoding, the DataFlow sanitizer contract, multi-site kwarg plumbing, enforcement-surface parity, the redactor contract, path containment), each carrying the DO/DO-NOT + `**Why:**` + clause-scoped Trust-Posture Wiring the meta-rule mandates. Depth for each clause is EXTRACTED to `.claude/skills/18-security-patterns/` + `.claude/guides/rule-extracts/security.md` to hold the baseline near budget. Per that MUST NOT the 200-line cap is guidance and overage is permitted with a named rationale anchored at Origin. Sibling precedent: `artifact-flow.md` + `recommendation-quality.md` length rationales.
 
 <!-- /slot:neutral-body -->
 

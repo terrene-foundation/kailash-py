@@ -226,6 +226,15 @@ node .claude/bin/emit.mjs --all         --lang   "$LANG" --out "$OUT"   # AGENTS
 
 **Post-emit idempotency verification (MUST):** after the re-emit lands in the target, a SECOND emit of the same trees into a scratch dir MUST produce zero further `git status` changes at the target — the emitters are deterministic, so a non-empty second-pass diff means the first re-emit did not run OR ran against stale composition. This is the USE-lane analogue (in intent) of the BUILD-lane `sync-tier-aware.mjs --build <target> --verify` gate (F11) — mechanically performable (deterministic emit + `git status`) but, unlike the wired BUILD-lane exit-1 check, not yet an exit-code gate (Phase-2 detector deferred per the Rule 8 Wiring below; Phase-1 enforcement is the manual gate-review sweep) — the check that was ABSENT when two `coc-sync` agents diverged into complementary partials.
 
+**BUILD-lane clause (#181) — a `build_multi_cli` BUILD target re-emits the SAME full derived tree at Gate-2.** For any BUILD target with `repos.<target>.build_multi_cli == true` (today `py` + `rs`; base/prism absent ⇒ false — the positive-opt-in allowlist shape), EVERY `/sync-to-build` MUST ALSO re-emit the full derived CLI tree — `.codex/**` + `.gemini/**` (`emit-cli-artifacts.mjs --target <target>`), `.coc/**` (`emit-coc.mjs --target <target>`), `AGENTS.md` + `GEMINI.md` (`emit.mjs --all --lang <target>`) + the `codex-mcp-guard` symlink/external tree (MUST-5) — into the stage-only worktree via the two-phase flow (`coc-sync.md` § "BUILD multi-CLI targets" / `sync-to-build.md` Step 6), NOT only the engine's `.claude/` apply. Shipping the `.claude/` tree and skipping the derived-tree re-emit for a `build_multi_cli` target is BLOCKED — the CC-only BUILD PR the #181 gap named (both BUILD repos had `.codex/.gemini` absent). The BUILD-lane idempotency check is STRONGER than the USE-lane manual sweep: it is a WIRED exit-code gate — `sync-tier-aware.mjs --build <target> --verify --assert-derived-trees --out <worktree>` asserts every derived tree PRESENT (exit 1 on any missing) and MUST be clean BEFORE `--finalize`. A non-`build_multi_cli` BUILD target ships CC-only and this clause does not apply; the USE-lane clause above is UNCHANGED.
+
+```text
+# DO — build_multi_cli target: two-phase, re-emit the full derived tree, gate it, THEN finalize
+--stage-only → emit-cli-artifacts.mjs/emit-coc.mjs/emit.mjs into <scratch> → --assert-derived-trees (clean) → --finalize
+# DO NOT — bare single-shot on a build_multi_cli target (ships CC-only .claude/, no .codex/.gemini/.coc — the #181 gap)
+node .claude/bin/sync-gate2-worktree.mjs --lane build --target py   # single-shot skips the derived-tree enrichment
+```
+
 **BLOCKED rationalizations:**
 
 - "The step is titled 'scaffold', so symlinks + manifest IS the whole obligation"
@@ -262,6 +271,10 @@ node .claude/bin/emit.mjs --all         --lang   "$LANG" --out "$OUT"   # AGENTS
 - **Ship a multi-CLI `/sync-to-use` that emits only the scaffold (symlinks + manifest) and skips the full derived-CLI-tree re-emit (`.codex/**`, `.gemini/**`, `.coc/**`, `AGENTS.md`, `GEMINI.md`).**
 
 **Why:** The scaffold is not the tree; a scaffold-only multi-cli sync ships stale Codex/Gemini/`.coc` artifacts that silently diverge from the CC source the same cycle (coc-rs #48, 67-file gap).
+
+- **Ship a bare single-shot `/sync-to-build` on a `build_multi_cli` target (`py`/`rs`), skipping the two-phase derived-CLI-tree re-emit (`.codex/**`, `.gemini/**`, `.coc/**`, `AGENTS.md`, `GEMINI.md`) + the `--assert-derived-trees` presence gate (#181).**
+
+**Why:** A single-shot `build_multi_cli` sync ships a CC-only BUILD PR — `.codex/.gemini/.coc` absent, the exact #181 gap — while the CC lane silently advances; the wired `--assert-derived-trees` exit-code gate makes the omission loud before `--finalize`.
 
 ## Trust Posture Wiring
 
@@ -327,12 +340,12 @@ The v6.2 plan ((loom-internal reference)) Shards 1+2 (merged PR #218, commit `75
 
 ### Rule 8 — multi-CLI full-derived-tree re-emit
 
-- **Severity:** `halt-and-report` at gate-review (cc-architect / reviewer at `/codify` confirms every multi-cli `/sync-to-use` re-emitted the full derived tree — `.codex/**` + `.gemini/**` + `.coc/**` + `AGENTS.md` + `GEMINI.md` — not only the scaffold, and that the post-emit idempotency check ran). `advisory` at the hook layer (a full-tree-re-emit property is judgment-bearing over the session's sync sequence, not a single structural tool-call signal, per `hook-output-discipline.md` MUST-2).
+- **Severity:** `halt-and-report` at gate-review (cc-architect / reviewer at `/codify` confirms every multi-cli `/sync-to-use` re-emitted the full derived tree — `.codex/**` + `.gemini/**` + `.coc/**` + `AGENTS.md` + `GEMINI.md` — not only the scaffold, and that the post-emit idempotency check ran). `advisory` at the hook layer for the USE-lane property (a full-tree-re-emit property is judgment-bearing over the session's sync sequence, not a single structural tool-call signal, per `hook-output-discipline.md` MUST-2). **BUILD-lane addendum (#181):** the `build_multi_cli` BUILD lane carries a STRONGER signal — the wired `sync-tier-aware.mjs --build <t> --verify --assert-derived-trees` **exit-code** gate (`block`-eligible structural signal per `hook-output-discipline.md` MUST-2 — a non-zero exit on any missing derived tree, not a prose judgment) — which coc-sync runs after emit and before `--finalize`.
 - **Grace period:** 7 days from rule landing (2026-07-11 → 2026-07-18).
 - **Cumulative posture impact:** same-class violations (a multi-cli target that received the scaffold but not the full derived-tree re-emit) contribute per `trust-posture.md` MUST-4 (3× same-rule in 30d → drop 1 posture; 5× total in 30d → drop 1 posture).
 - **Regression-within-grace:** any same-class violation within 7 days routes through the GENERIC `regression_within_grace` emergency trigger per `trust-posture.md` MUST-4 (1× = drop 1 posture) — no dedicated trigger key, so no self-referential `trust-posture.md` edit is required.
 - **Receipt requirement:** SessionStart `[ack: sync-completeness]` IFF `posture.json::pending_verification` includes this rule_id (shared with the rule's existing ack; soft-gate).
-- **Detection mechanism:** Phase 1 — `cc-architect` / reviewer mechanical sweep at `/codify`: any session transcript citing `/sync-to-use` to a multi-cli target MUST show the three derived-tree emit invocations (`grep`-stable on `emit-cli-artifacts.mjs --target`, `emit-coc.mjs --target`, `emit.mjs --all --lang`) AND the post-emit idempotency check; a completion claim showing only the scaffold (symlinks + manifest) is a HIGH finding. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — audit fixtures land with the detector at `.claude/audit-fixtures/sync-completeness-multi-cli-reemit/` per `cc-artifacts.md` Rule 9.
+- **Detection mechanism:** Phase 1 — `cc-architect` / reviewer mechanical sweep at `/codify`: any session transcript citing `/sync-to-use` to a multi-cli target MUST show the three derived-tree emit invocations (`grep`-stable on `emit-cli-artifacts.mjs --target`, `emit-coc.mjs --target`, `emit.mjs --all --lang`) AND the post-emit idempotency check; a completion claim showing only the scaffold (symlinks + manifest) is a HIGH finding. **BUILD lane (#181):** any transcript citing `/sync-to-build` to a `build_multi_cli` target (`py`/`rs`) MUST show the same three emit invocations INTO the stage-only worktree PLUS a clean `--assert-derived-trees` exit-code gate (the structural check `sync-tier-aware.test.mjs` class N covers) AND the Step-0 `scan-synced-disclosure.mjs --check`; a bare single-shot `--lane build` on a `build_multi_cli` target is a HIGH finding. Phase 2 (deferred per `trust-posture.md` § Two-Phase Rollout) — audit fixtures land with the detector at `.claude/audit-fixtures/sync-completeness-multi-cli-reemit/` per `cc-artifacts.md` Rule 9.
 - **Violation scope:** MUST Rule 8 (multi-CLI full-derived-tree re-emit) fires the Wiring.
 - **Origin:** journal/0465 (2026-07-11, co-owner-directed `/govern` origination) — see Rule 8's Origin line below.
 
