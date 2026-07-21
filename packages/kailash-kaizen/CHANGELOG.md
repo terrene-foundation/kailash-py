@@ -2,6 +2,31 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased]
+
+### Deprecated
+
+- **The legacy `azure_ai_foundry` provider path is deprecated (#1720).**
+  `azure_ai_foundry` is the LAST provider still served by the legacy
+  `get_provider(...).chat(...)` fallback in
+  `LLMAgentNode._provider_llm_response` — every other provider now runs on
+  the four-axis `kaizen.llm.LlmClient`. It has no confirmed four-axis wire
+  (`kaizen.llm.deployment_resolver.resolve_deployment_for` raises
+  `UnsupportedDeploymentProvider` for it), so it stays on the legacy path.
+  When a deployment resolves to that path, the node now emits a one-time
+  `DeprecationWarning` plus a one-time `logger.warning` naming the migration.
+  The path STILL functions — this is the deprecation shim only; removal is
+  planned for a future minor release (per the deprecate-and-remove
+  disposition on #1720).
+
+  **Migration:** For Azure OpenAI models, switch from `azure_ai_foundry` to
+  the `azure` (or `azure_openai`) provider, which is fully supported on the
+  four-axis path — set `AZURE_ENDPOINT` / `AZURE_API_KEY` (the canonical
+  Azure env vars). For non-Azure-OpenAI AI Foundry models (e.g. Meta Llama,
+  Mistral, Cohere served via the AI Foundry inference endpoint) there is no
+  four-axis equivalent yet — a four-axis `azure_ai_foundry` wire is tracked
+  as future work; those deployments must wait for that wire before migrating.
+
 ## [2.38.0] — 2026-07-20 — Governance gate extended to the provider/backend layer (#1803)
 
 ### Added (Security)
