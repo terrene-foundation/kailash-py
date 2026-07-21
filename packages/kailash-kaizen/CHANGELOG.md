@@ -58,7 +58,7 @@ api_version=None)`), targets Azure AI Foundry's unified, MODEL-AGNOSTIC
   blocker #1720 left open for this provider. A missing endpoint or api-key
   is a quiet skip (`None`), matching the `azure` / `azure_openai` contract.
 
-  `kaizen.providers.capabilities` gained a conservative `azure_ai_foundry`
+  `kaizen.llm.capabilities` gained a conservative `azure_ai_foundry`
   capability row (`tools=True`; `vision`/`batch`/`caching`/`audio=False` —
   the unified endpoint serves arbitrary model families, so the row is the
   common denominator, not `azure_openai`'s row).

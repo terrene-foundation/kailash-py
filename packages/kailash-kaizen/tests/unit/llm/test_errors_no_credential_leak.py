@@ -11,6 +11,7 @@ field (str, repr, args).
 from __future__ import annotations
 
 from kailash.utils.url_credentials import fingerprint_secret
+
 from kaizen.llm.errors import Invalid, InvalidEndpoint, MissingCredential, ProviderError
 
 
@@ -154,6 +155,33 @@ def test_provider_error_scrubs_azure_sas_sig() -> None:
     err = ProviderError(status=404, body_snippet=body)
     assert "abc123def456ghi789jkl012mno345" not in str(err)
     assert "[REDACTED-CRED]" in err.body_snippet
+
+
+# --- Wave B redteam MEDIUM (#1892): generic Azure-shaped bare-hex key scrub ---
+def test_provider_error_scrubs_bare_azure_hex_key() -> None:
+    """Azure Cognitive Services / AI Foundry API keys are typically bare
+    32+-char lowercase-hex strings with no vendor prefix (authenticated via
+    `api-key: <KEY>` -- kaizen/llm/auth/azure.py). None of the vendor-prefixed
+    patterns (sk-*, AIza*, AKIA*, Bearer, JWT, sig=) catch this shape, so a
+    direct-use LlmClient/LlmDeployment.azure_ai_foundry(...) 4xx echo of the
+    raw key would previously survive unscrubbed. Mirrors the identical
+    `\\b[a-f0-9]{32,}\\b` pattern already in
+    kaizen/nodes/ai/error_sanitizer.py::_CREDENTIAL_PATTERNS."""
+    raw_key = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"  # 32 lowercase-hex chars
+    body = f"error: invalid api-key: {raw_key}"
+    err = ProviderError(status=401, body_snippet=body)
+    assert raw_key not in str(err)
+    assert raw_key not in err.body_snippet
+    assert "[REDACTED-CRED]" in err.body_snippet
+
+
+def test_provider_error_scrub_does_not_false_positive_on_short_hex() -> None:
+    """A hex-looking string under the 32-char floor MUST survive unscrubbed --
+    e.g. a short request id or commit-sha-shaped token."""
+    body = "error: request_id=a1b2c3d4e5f6 not found"  # 12 hex chars, well under 32
+    err = ProviderError(status=404, body_snippet=body)
+    assert "a1b2c3d4e5f6" in err.body_snippet
+    assert "[REDACTED-CRED]" not in err.body_snippet
 
 
 def test_provider_error_fingerprint_is_8_chars() -> None:
