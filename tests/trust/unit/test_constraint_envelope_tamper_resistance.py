@@ -206,3 +206,105 @@ async def test_untampered_read_action_permitted(ops):
     await _establish_read_only(ops)
     result = await ops.verify(agent_id="agent-tamper", action="read_records")
     assert result.valid is True
+
+
+@pytest.mark.asyncio
+async def test_tamper_strip_genesis_constraint_still_denied(ops, store):
+    """GENESIS vector: strip a read_only carried at the GENESIS level.
+
+    The genesis signature covers the whole ``metadata`` dict, and the enforced-
+    set derivation verifies the genesis signature UNCONDITIONALLY (not only when
+    ``metadata['constraints']`` is currently non-empty). So a store-writer who
+    sets ``genesis.metadata['constraints'] = []`` — which both strips the
+    constraint AND invalidates the genesis signature — is caught fail-closed
+    rather than silently dropping the constraint.
+    """
+    await ops.establish(
+        agent_id="agent-gtamper",
+        authority_id="org-test",
+        capabilities=[
+            CapabilityRequest(
+                capability="write_records", capability_type=CapabilityType.ACTION
+            )
+        ],
+        metadata={"constraints": ["read_only"]},  # genesis-level constraint
+    )
+    base = await ops.verify(agent_id="agent-gtamper", action="write_records")
+    assert base.valid is False, "genesis read_only should deny the write"
+
+    chain = await store.get_chain("agent-gtamper")
+    chain.genesis.metadata["constraints"] = []  # strip (also breaks genesis sig)
+    if chain.constraint_envelope is not None:
+        chain.constraint_envelope.active_constraints = []
+    await store.store_chain(chain)
+
+    result = await ops.verify(agent_id="agent-gtamper", action="write_records")
+    assert result.valid is False, "genesis-constraint strip must NOT escalate"
+
+
+@pytest.mark.asyncio
+async def test_cross_authority_delegation_not_falsely_denied():
+    """Regression: a delegatee established under authority D, delegated into by a
+    delegator under a DIFFERENT authority G, must NOT be falsely denied.
+
+    The derived capability is signed by G's key; verifying every capability
+    against D (the delegatee chain's genesis authority) would wrongly reject the
+    legitimately-G-signed cap and deny every action. The fix resolves each
+    capability's signing authority per its own ``attester_id``.
+    """
+    priv_g, pub_g = generate_keypair()
+    priv_d, pub_d = generate_keypair()
+    km = TrustKeyManager()
+    km.register_key("key-g", priv_g)
+    km.register_key("key-d", priv_d)
+    reg = _Registry()
+    for aid, key, pub in (("auth-g", "key-g", pub_g), ("auth-d", "key-d", pub_d)):
+        reg.register(
+            OrganizationalAuthority(
+                id=aid,
+                name=aid,
+                authority_type=AuthorityType.ORGANIZATION,
+                public_key=pub,
+                signing_key_id=key,
+                permissions=[
+                    AuthorityPermission.CREATE_AGENTS,
+                    AuthorityPermission.DELEGATE_TRUST,
+                    AuthorityPermission.GRANT_CAPABILITIES,
+                ],
+            )
+        )
+    s = InMemoryTrustStore()
+    await s.initialize()
+    ops = TrustOperations(authority_registry=reg, key_manager=km, trust_store=s)
+    await ops.initialize()
+
+    await ops.establish(
+        agent_id="agent-d",
+        authority_id="auth-d",
+        capabilities=[
+            CapabilityRequest(
+                capability="read_records", capability_type=CapabilityType.ACTION
+            )
+        ],
+    )
+    await ops.establish(
+        agent_id="delegator-g",
+        authority_id="auth-g",
+        capabilities=[
+            CapabilityRequest(
+                capability="write_records", capability_type=CapabilityType.ACTION
+            )
+        ],
+    )
+    base = await ops.verify(agent_id="agent-d", action="read_records")
+    assert base.valid is True, "agent-d should verify before the cross-auth delegation"
+
+    await ops.delegate(
+        delegator_id="delegator-g",
+        delegatee_id="agent-d",
+        task_id="t1",
+        capabilities=["write_records"],
+    )
+
+    result = await ops.verify(agent_id="agent-d", action="read_records")
+    assert result.valid is True, "cross-authority delegation must NOT falsely deny"

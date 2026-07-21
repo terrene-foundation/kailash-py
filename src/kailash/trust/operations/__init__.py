@@ -595,50 +595,54 @@ class TrustOperations:
         constraints: List[Constraint] = []
 
         # (1) Genesis-level constraints — SIGNED via genesis.to_signing_payload
-        #     (which covers ``metadata``). Verify the genesis signature before
-        #     trusting genesis.metadata["constraints"]; only when genesis
-        #     actually contributes constraints (a constraint-less genesis is not
-        #     a source, so no new signature gate for the common case).
-        genesis_constraint_names = chain.genesis.metadata.get("constraints", [])
-        if genesis_constraint_names:
-            genesis_payload = serialize_for_signing(chain.genesis.to_signing_payload())
-            try:
-                genesis_ok = await self.key_manager.verify(
-                    genesis_payload,
-                    chain.genesis.signature,
-                    authority.public_key,
+        #     (which covers the WHOLE ``metadata`` dict). Verify the genesis
+        #     signature UNCONDITIONALLY — NOT only when metadata["constraints"]
+        #     is currently non-empty. A store-writer who sets
+        #     metadata["constraints"] = [] (or drops the key) both strips the
+        #     genesis-level constraints AND, under a field-conditional check,
+        #     skips the very signature that covers metadata — so the gate must
+        #     not be keyed on the field being tampered (the genesis analogue of
+        #     the verify-EVERY-capability decision in (2) below). A signed empty-
+        #     metadata is byte-different from a signed populated one, so the
+        #     unconditional check is byte-neutral for legitimate chains. Fails
+        #     closed on any invalid signature.
+        genesis_payload = serialize_for_signing(chain.genesis.to_signing_payload())
+        try:
+            genesis_ok = await self.key_manager.verify(
+                genesis_payload,
+                chain.genesis.signature,
+                authority.public_key,
+            )
+        except InvalidSignatureError:
+            # A malformed / empty / wrong-length signature RAISES rather than
+            # returning False (mirrors _verify_capability_signature). A store-
+            # tampered genesis may carry exactly such a signature; treat it as
+            # invalid and fall through to the fail-closed denial below.
+            logger.warning(
+                "enforced-constraint derivation: genesis signature "
+                "malformed or unverifiable (fail-closed denial)",
+                extra={"genesis_id": chain.genesis.id},
+            )
+            genesis_ok = False
+        if not genesis_ok:
+            logger.warning(
+                "enforced-constraint derivation: genesis signature invalid "
+                "(fail-closed denial)",
+                extra={"genesis_id": chain.genesis.id},
+            )
+            return empty, "Genesis signature invalid — constraints untrusted"
+        # Mirror _compute_constraint_envelope's genesis construction exactly
+        # (type FINANCIAL, source "genesis") so the enforced set is byte-for-byte
+        # the legitimate set on an un-tampered chain.
+        for name in chain.genesis.metadata.get("constraints", []):
+            constraints.append(
+                Constraint(
+                    id=f"con-{uuid4()}",
+                    constraint_type=ConstraintType.FINANCIAL,
+                    value=name,
+                    source="genesis",
                 )
-            except InvalidSignatureError:
-                # A malformed / empty / wrong-length signature RAISES rather
-                # than returning False (mirrors _verify_capability_signature).
-                # A store-tampered genesis may carry exactly such a signature;
-                # treat it as invalid and fall through to the fail-closed
-                # denial below (log + deny) — never a silent swallow.
-                logger.warning(
-                    "enforced-constraint derivation: genesis signature "
-                    "malformed or unverifiable (fail-closed denial)",
-                    extra={"genesis_id": chain.genesis.id},
-                )
-                genesis_ok = False
-            if not genesis_ok:
-                logger.warning(
-                    "enforced-constraint derivation: genesis signature invalid "
-                    "(fail-closed denial)",
-                    extra={"genesis_id": chain.genesis.id},
-                )
-                return empty, "Genesis signature invalid — constraints untrusted"
-            # Mirror _compute_constraint_envelope's genesis construction exactly
-            # (type FINANCIAL, source "genesis") so the enforced set is
-            # byte-for-byte the legitimate set on an un-tampered chain.
-            for name in genesis_constraint_names:
-                constraints.append(
-                    Constraint(
-                        id=f"con-{uuid4()}",
-                        constraint_type=ConstraintType.FINANCIAL,
-                        value=name,
-                        source="genesis",
-                    )
-                )
+            )
 
         # (2) Capability-level constraints — SIGNED via cap.to_signing_payload
         #     (which covers ``constraints``). Verify EVERY capability's
@@ -654,14 +658,28 @@ class TrustOperations:
         #     STANDARD — the constraint-decision soundness cost.) Mirror
         #     _compute_constraint_envelope's capability construction (type
         #     OPERATIONAL, source "capability:<id>").
+        #     Byte-identical duplicate capabilities (a store-writer amplifying
+        #     one validly-signed cap into N copies to force O(N) Ed25519 verifies
+        #     per verify() — an availability vector, `trust-plane-security.md`
+        #     Rule 4) are verified ONCE: the dedup key is the (signed-payload,
+        #     signature) pair, so a crafted cap reusing a valid signature over
+        #     DIFFERENT content has a different key and is still verified (and
+        #     fails). Constraints are still collected from every cap instance.
+        verified_caps: set = set()
         for cap in chain.capabilities:
-            if not await self._verify_capability_signature(
-                chain, cap, authority=authority
-            ):
-                return (
-                    empty,
-                    f"Capability signature invalid — constraints untrusted: {cap.id}",
-                )
+            dedup_key = (
+                serialize_for_signing(cap.to_signing_payload()),
+                cap.signature,
+            )
+            if dedup_key not in verified_caps:
+                if not await self._verify_capability_signature(
+                    chain, cap, authority=authority
+                ):
+                    return (
+                        empty,
+                        f"Capability signature invalid — constraints untrusted: {cap.id}",
+                    )
+                verified_caps.add(dedup_key)
             for name in cap.constraints:
                 constraints.append(
                     Constraint(
@@ -1472,10 +1490,21 @@ class TrustOperations:
         Returns:
             True iff the signature is cryptographically valid.
         """
-        if authority is None:
+        # Resolve the authority that SIGNED THIS capability, keyed on the
+        # capability's own ``attester_id`` — NOT a single chain-wide genesis
+        # authority. A capability delegated into an existing chain is signed by
+        # the DELEGATOR's authority, which may differ from the delegatee chain's
+        # genesis authority; verifying every cap against the genesis authority
+        # would falsely reject a legitimately-signed cross-authority cap (denial
+        # of a legit delegatee). A pre-resolved ``authority`` is used ONLY when
+        # it matches this cap's attester (the same-authority fast path); a
+        # mismatch resolves the cap's actual attester. Falls back to the genesis
+        # authority when a cap carries no attester_id (legacy shape).
+        attester_id = getattr(cap, "attester_id", None) or chain.genesis.authority_id
+        if authority is None or getattr(authority, "id", None) != attester_id:
             try:
                 authority = await self.authority_registry.get_authority(
-                    chain.genesis.authority_id,
+                    attester_id,
                     include_inactive=True,  # historical verification
                 )
             except (AuthorityNotFoundError, AuthorityInactiveError):
@@ -1485,7 +1514,7 @@ class TrustOperations:
                     "capability signature verification failed: signing "
                     "authority unresolved (fail-closed denial)",
                     extra={
-                        "authority_id": chain.genesis.authority_id,
+                        "authority_id": attester_id,
                         "capability_id": cap.id,
                     },
                 )
