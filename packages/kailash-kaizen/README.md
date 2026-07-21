@@ -11,6 +11,7 @@ Kaizen transforms AI agent development through **signature-based programming** a
 ### Core Value Propositions
 
 **Traditional AI Agent Development:**
+
 ```python
 # Build everything from scratch
 class MyAgent:
@@ -26,6 +27,7 @@ class MyAgent:
 ```
 
 **Kaizen Signature-Based Development:**
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
@@ -53,6 +55,7 @@ class MyAgent(BaseAgent):
 ```
 
 **Key Benefits:**
+
 - **Unified Architecture**: BaseAgent provides common infrastructure (87% code reduction)
 - **Type-Safe Signatures**: Define inputs/outputs, framework handles validation
 - **Auto-Optimization**: Automatic async execution, lazy initialization, performance tracking
@@ -68,11 +71,11 @@ class MyAgent(BaseAgent):
 ### Installation
 
 ```bash
-# Install Kaizen framework (latest v0.7.0)
+# Install Kaizen framework (latest v2.40.0)
 pip install kailash-kaizen
 
 # Or specific version
-pip install kailash-kaizen==0.7.0
+pip install kailash-kaizen==2.40.0
 ```
 
 ### Your First Agent (3 Steps)
@@ -176,6 +179,7 @@ class SimpleQAAgent(BaseAgent):
 ### What BaseAgent Provides
 
 **Automatic Features** (inherited by all agents):
+
 1. **Config Auto-Extraction**: Converts domain config → BaseAgentConfig
 2. **Async Execution**: AsyncSingleShotStrategy for 2-3x performance improvement
 3. **Error Handling**: Automatic retries, timeouts, graceful degradation
@@ -186,6 +190,7 @@ class SimpleQAAgent(BaseAgent):
 8. **Workflow Generation**: `to_workflow()` for Core SDK integration
 
 **Code Reduction:**
+
 - Traditional agent: ~496 lines
 - BaseAgent-based: ~65 lines
 - **87% reduction** with more features
@@ -213,6 +218,7 @@ from kaizen.agents import (
 ### Usage Examples
 
 **SimpleQAAgent - Question Answering:**
+
 ```python
 from kaizen.agents import SimpleQAAgent
 from kaizen.agents.specialized.simple_qa import SimpleQAConfig
@@ -225,6 +231,7 @@ print(result["confidence"])  # 0.95
 ```
 
 **ChainOfThoughtAgent - Step-by-Step Reasoning:**
+
 ```python
 from kaizen.agents import ChainOfThoughtAgent
 from kaizen.agents.specialized.chain_of_thought import ChainOfThoughtConfig
@@ -237,6 +244,7 @@ print(result["final_answer"])     # "8 apples"
 ```
 
 **VisionAgent - Image Analysis:**
+
 ```python
 from kaizen.agents import VisionAgent, VisionAgentConfig
 
@@ -252,6 +260,7 @@ print(result['answer'])  # "$42.99"
 ```
 
 **TranscriptionAgent - Audio Transcription:**
+
 ```python
 from kaizen.agents import TranscriptionAgent, TranscriptionAgentConfig
 
@@ -399,15 +408,19 @@ agent = BaseAgent(
 ### 12 Builtin Tools
 
 **File Operations (5 tools):**
+
 - `read_file`, `write_file`, `delete_file`, `list_directory`, `file_exists`
 
 **HTTP Requests (4 tools):**
+
 - `http_get`, `http_post`, `http_put`, `http_delete`
 
 **System Operations (1 tool):**
+
 - `bash_command`
 
 **Web Scraping (2 tools):**
+
 - `fetch_url`, `extract_links`
 
 ### Tool Discovery and Execution
@@ -436,6 +449,7 @@ results = await agent.execute_tool_chain([
 ### Approval Workflows
 
 Tools are classified by danger level:
+
 - **SAFE**: Auto-approved (no side effects) - `list_directory`, `file_exists`
 - **LOW**: Read-only operations - `read_file`, `http_get`
 - **MEDIUM**: Data modification - `write_file`, `http_post`
@@ -798,6 +812,7 @@ examples/
 ## ⚠️ Common Mistakes
 
 ### 1. Missing .env Configuration
+
 ```python
 # ❌ WRONG: Not loading environment variables
 from kaizen.agents import SimpleQAAgent
@@ -811,6 +826,7 @@ agent = SimpleQAAgent(SimpleQAConfig(llm_provider="openai"))  # Works!
 ```
 
 ### 2. Wrong Vision Agent API
+
 ```python
 # ❌ WRONG: Using 'prompt' and 'response'
 result = vision_agent.analyze(image=img, prompt="What is this?")
@@ -822,6 +838,7 @@ answer = result['answer']
 ```
 
 ### 3. Using BaseAgentConfig Directly
+
 ```python
 # ❌ WRONG: Using BaseAgentConfig directly
 from kaizen.core.config import BaseAgentConfig
@@ -836,6 +853,7 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
 ## 🔗 Additional Resources
 
 ### Documentation
+
 - **[CLAUDE.md](CLAUDE.md)** - Quick reference for Claude Code
 - **[Examples](../../../packages/kailash-kaizen/examples/)** - 35+ working implementations
 - **[Core SDK](../../2-core-concepts/)** - Foundation patterns
@@ -843,6 +861,7 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
 - **[Nexus](../nexus/)** - Multi-channel platform integration
 
 ### Guides
+
 - **[Installation Guide](docs/getting-started/installation.md)** - Setup and dependencies
 - **[Quickstart Tutorial](docs/getting-started/quickstart.md)** - Your first agent
 - **[Signature Programming](docs/guides/signature-programming.md)** - Type-safe I/O
@@ -851,11 +870,13 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
 - **[Multi-Agent Coordination](docs/guides/multi-agent.md)** - A2A protocol
 
 ### Reference
+
 - **[API Reference](docs/reference/api-reference.md)** - Complete API docs
 - **[Configuration Guide](docs/reference/configuration.md)** - All config options
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Community
+
 - **[GitHub Repository](https://github.com/terrene-foundation/kailash-py)** - Source code and issues
 - **[Kailash SDK Documentation](../../../CLAUDE.md)** - Main SDK documentation
 

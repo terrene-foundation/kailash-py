@@ -1399,8 +1399,8 @@ class DurableExecutionEngine:
         :class:`~kailash.runtime.dispatcher.Dispatcher` whose ``enqueue``
         catches its own failures.
 
-        Routing — execution_mode contract (issue #882)
-        ----------------------------------------------
+        **Routing — execution_mode contract (issue #882)**
+
         The branch taken is determined by :attr:`execution_mode`:
 
         * ``"in_process_only"`` — runs in-process; skips enqueue even if
