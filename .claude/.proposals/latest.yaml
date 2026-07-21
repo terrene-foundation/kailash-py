@@ -1260,3 +1260,50 @@ changes:
       per-CLI delegation primitive), emits globally with no cross-cli slot partitioning. Companion to the
       security.md secure-default entry above (both from the same #1842-S3 / #1843 evidence). Receipt: this
       codify's journal DECISION/DISCOVERY + workspaces/issue-1720-llm-consolidation.
+  - type: rule_update
+    artifact: cross-sdk-inspection
+    files:
+      - .claude/rules/cross-sdk-inspection.md
+      - .claude/guides/rule-extracts/cross-sdk-inspection.md
+    classification_suggestion: global
+    context:
+      'ADDS one sub-rule: "### 4e. Existing Fold Fields On A Cross-SDK Signed Model MUST Round-Trip
+      Through EVERY Serializer Via One Shared Serde" (sits between Rule 4d and Rule 5), plus the matching
+      "## Rule 4e" section in the guide extract (full example + BLOCKED corpus + evidence).
+
+
+      Lesson: Rule 4d already governs a field ADDED to a cross-SDK signed model (prune-when-unset so
+      existing instances keep their bytes). Rule 4e is the OPPOSITE defect polarity, previously un-named:
+      fields ALREADY folded into a signed model pre-image MUST round-trip through EVERY serialization/
+      persistence path (chain-store + W3C-VC + JWT + UCAN + to_dict/from_dict). When ONE serializer omits
+      a fold field, a value that signs correctly reconstructs WITHOUT that field on round-trip -> re-derived
+      pre-image differs -> verify FALSE -> signing surface non-functional end-to-end, invisible to every
+      per-serializer unit test (each round-trips only the fields IT knows). This is security.md Multi-Site
+      Kwarg Plumbing at the persistence layer; fix is ONE shared encode/decode serde (security.md Pre-Encoder
+      Consolidation) wired into every serializer + an END-TO-END store/interop round-trip regression pinning
+      verify TRUE. Detection is the holistic post-multi-wave redteam (agents.md) — per-shard reviews see
+      only their own serializer diff, so the cross-serializer completeness gap is invisible to each.
+
+
+      Evidence (kailash-py #1841, kailash 2.59.0, 2026-07-20, ground-truth re-verified this session):
+      TrustLineageChain._serialize_delegation (src/kailash/trust/chain.py) carried signing_payload_version
+      but omitted the v2/v3 fold fields (constraints/resource_limits/scope/multi_sig/multi_sig_policy) across
+      four serializers; a v2/v3 delegation lost fold fields on real-SqliteTrustStore round-trip -> verify
+      FALSE. A HOLISTIC post-multi-wave redteam caught the HIGH the per-shard reviews structurally could not;
+      reproduced against the real store before fixing; closed via a shared src/kailash/trust/signing/delegation_fold_serde.py
+      wired into all four serializers (prune-when-unset legacy byte-neutral; a typing.Protocol broke the
+      CodeQL-flagged import cycle between the serde module and chain.py). Sibling of Rule 4d (opposite polarity).
+
+
+      Ships with its canonical-8-field Trust Posture Wiring already authored (clause-scoped, post-MUST-8-cutoff,
+      shared file-level cross-sdk-inspection rule_id / ack — matching 4b/4c/4d). cross-sdk-inspection.md is
+      priority:10 scope:path-scoped, so rule-authoring Rule 10 proximity-band gate does NOT fire (not a baseline
+      rule). Self-referential /codify gate: cross-sdk-inspection.md is NOT on self-referential-codify.md Rule 2
+      allowlist -> standard cc-architect review applies (not the multi-agent self-ref gate); this codify
+      additionally ran reviewer + security-reviewer in parallel (enforcement-bearing + signing/crypto surface,
+      agents.md correctness-clean-is-not-security-clean). Eval-coverage (coc-artifact-eval-coverage MUST-1):
+      no eval-harness present in this BUILD repo (.claude/test-harness/eval-manifest.json + probes/ absent);
+      the probe-set obligation is loom-side Gate-1 per that rule Origin (loom holds the eval ENGINE). Cross-SDK
+      mirror: the Rust SDK carries the same signed-delegation serializer surface; a human-gated cross-SDK mirror
+      issue is offered to the Rust SDK per cross-sdk-inspection Rule 1 (upstream-issue-hygiene MUST-1). Receipt:
+      this codify journal DECISION/DISCOVERY + workspaces/issue-1720-llm-consolidation.'
