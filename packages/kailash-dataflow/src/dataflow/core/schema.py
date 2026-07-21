@@ -7,6 +7,9 @@ This module was migrated from the old core/schema.py to maintain test compatibil
 
 import inspect
 import logging
+import math
+import re
+import reprlib
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -16,13 +19,17 @@ from typing import (
     Dict,
     List,
     Optional,
+    Sequence,
     Type,
     Union,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
 )
 from uuid import UUID
+
+from dataflow.exceptions import DataFlowError
 
 from .type_introspection import (  # issue #772: shared union detection
     union_non_none_args,
@@ -49,6 +56,320 @@ class FieldType(Enum):
     BINARY = "BLOB"
     ENUM = "ENUM"
     ARRAY = "ARRAY"
+    VECTOR = "VECTOR"
+
+    @staticmethod
+    def Vector(dim: int) -> "VectorFieldType":
+        """Parameterized field type for embedding/pgvector columns.
+
+        Carries the vector dimension (issue #1846). Usage::
+
+            embedding: FieldType.Vector(768)
+
+        Cross-dialect DDL (``FieldMeta.get_sql_type``): PostgreSQL emits
+        pgvector's ``vector(N)`` (falls back to ``TEXT`` when the pgvector
+        extension is not enabled -- store the ``encode_vector`` literal in
+        that case); MySQL emits ``JSON``; SQLite emits ``TEXT``.
+
+        The value literal contract (``encode_vector`` / ``decode_vector``)
+        is a byte-pinned cross-SDK contract -- see
+        ``cross-sdk-inspection.md`` Rule 4b before changing the rendering.
+        """
+        return VectorFieldType(dim=dim)
+
+
+class VectorValueError(DataFlowError):
+    """Raised when a ``Vector`` field's dimension or literal value is invalid.
+
+    Fired by:
+
+    - ``VectorFieldType.__post_init__`` -- non-positive / non-``int`` dimension.
+    - ``encode_vector`` -- a non-finite (NaN/±Inf) component, or a
+      component that is not ``int``/``float``.
+    - ``decode_vector`` -- a malformed literal, or a non-finite component.
+
+    Fails closed: no code path silently coerces a non-finite value or an
+    invalid dimension into a usable vector.
+    """
+
+
+# Shared bounds, defined once before every site that needs them:
+#
+# - _TRUNCATED_LITERAL_PREVIEW_LENGTH bounds how much of a (possibly
+#   attacker-supplied) value is echoed verbatim into a VectorValueError
+#   message, so a huge dimension / component / literal cannot blow up a
+#   downstream log line. Reused by both _truncate_repr_for_error (below)
+#   and the literal-string _truncate_for_error near decode_vector.
+# - _MAX_VECTOR_LITERAL_LENGTH bounds the total size of a Vector literal
+#   in either direction: encode_vector's OUTPUT and decode_vector's INPUT.
+#   Neither the regex nor float()/Decimal() is vulnerable to backtracking
+#   or quadratic blowup, but an unbounded literal still costs proportional
+#   CPU/memory to build or parse -- cap it generously (1 MiB is orders of
+#   magnitude beyond any realistic embedding dimension) and fail closed
+#   rather than silently accepting/emitting arbitrary-sized data.
+# - _MAX_VECTOR_COMPONENT_COUNT bounds encode_vector's INPUT (the number of
+#   components in `values`), checked BEFORE the format loop runs -- the
+#   genuine symmetric counterpart to decode_vector's pre-parse
+#   _MAX_VECTOR_LITERAL_LENGTH check on its INPUT. Without this, the
+#   post-format _MAX_VECTOR_LITERAL_LENGTH check on encode_vector's OUTPUT
+#   still runs only AFTER every component has already been formatted --
+#   correct for the byte-cap contract, but not actually symmetric with
+#   decode's cheap pre-parse length check (redteam round 2, PR #1898).
+#   Set well above any real embedding dimension (largest production
+#   embeddings are low thousands of dims).
+# - _MAX_VECTOR_DIM bounds FieldType.Vector(dim)'s magnitude. Without an
+#   upper bound, VectorFieldType.__post_init__ validates type+sign but not
+#   magnitude, so a pathologically huge dim (>4300 digits, >10**4300)
+#   passes validation and later hits CPython's int-to-str digit limit
+#   (sys.set_int_max_str_digits, Python 3.11+) inside _vector_sql_type's
+#   f"vector({dim})" -- raising a raw ValueError, not VectorValueError, an
+#   exception-type-contract violation (redteam round 2, PR #1898). Set
+#   generously (2**31 - 1) -- well above any real vector dimension.
+_TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
+_MAX_VECTOR_LITERAL_LENGTH = 1_048_576
+_MAX_VECTOR_COMPONENT_COUNT = 10_000_000
+_MAX_VECTOR_DIM = 2**31 - 1
+
+# reprlib.Repr, not bare repr()+slice: for str/list/dict/tuple/set/
+# frozenset, reprlib bounds the element count (or slices the string)
+# BEFORE rendering, so a multi-megabyte string or a million-element
+# container costs O(preview length) to render, not O(input size) --
+# security-reviewer LOW finding on PR #1898 (bare repr() on a 5 MB
+# string materializes the full escaped string before the slice ever
+# applies). A custom object with no reprlib handler still falls back to
+# a full repr() via reprlib's own repr_instance -- a pathologically slow
+# custom __repr__ is an accepted residual for a value-codec error path,
+# out of scope here.
+_ERROR_REPR = reprlib.Repr()
+_ERROR_REPR.maxstring = _TRUNCATED_LITERAL_PREVIEW_LENGTH
+_ERROR_REPR.maxother = _TRUNCATED_LITERAL_PREVIEW_LENGTH
+_ERROR_REPR.maxlong = _TRUNCATED_LITERAL_PREVIEW_LENGTH
+
+
+def _truncate_repr_for_error(value: object) -> str:
+    """Bound how much of an (possibly attacker-supplied) value's repr is
+    echoed into an error message (see ``_ERROR_REPR`` above for the cost
+    rationale).
+
+    ``_ERROR_REPR.repr()`` bounds COST for str/list/dict/tuple/set (it
+    slices/limits BEFORE rendering), but does not itself guarantee an
+    unconditional length cap: a nested container of built-in EXACT types
+    (e.g. a list of 6 long strings, each itself under reprlib's own
+    ``maxstring``) can still emit more than ``_TRUNCATED_LITERAL_PREVIEW_LENGTH``
+    characters in total, since each level/element is bounded independently,
+    not the aggregate (security-reviewer finding on PR #1898, follow-up
+    round). This final slice restores the unconditional echo-size cap
+    while keeping ``_ERROR_REPR``'s cost-bounding for the common flat
+    string/large-list case.
+
+    A pathologically large ``int`` (>~4300 decimal digits) makes ``repr()``
+    raise ``ValueError: Exceeds the limit ... for integer string conversion``
+    (CPython's int-to-str digit cap, 3.11+). ``reprlib`` guards this only on
+    some patch versions, so we catch it here directly — otherwise the guard's
+    OWN error message (e.g. ``VectorFieldType``'s dim-magnitude check) would
+    re-raise the raw ``ValueError`` this module promises never to leak.
+    """
+    try:
+        text = _ERROR_REPR.repr(value)
+    except ValueError:
+        # Huge int: never stringify it. Report a magnitude that needs no
+        # decimal conversion instead of echoing thousands of digits.
+        bits = value.bit_length() if isinstance(value, int) else None
+        return f"<{type(value).__name__} too large to render" + (
+            f" (bit_length={bits})>" if bits is not None else ">"
+        )
+    if len(text) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
+        return text
+    return text[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
+
+
+@dataclass(frozen=True)
+class VectorFieldType:
+    """A parameterized ``FieldType.VECTOR`` carrying its dimension.
+
+    Returned by ``FieldType.Vector(dim)``; used as the ``type=`` value on a
+    ``FieldMeta`` (or a model field declaration) for an embedding column.
+    """
+
+    dim: int
+
+    def __post_init__(self) -> None:
+        if isinstance(self.dim, bool) or not isinstance(self.dim, int) or self.dim <= 0:
+            raise VectorValueError(
+                f"Vector dimension must be a positive integer, got "
+                f"{_truncate_repr_for_error(self.dim)}"
+            )
+        if self.dim > _MAX_VECTOR_DIM:
+            # Magnitude guard: a dim this large would otherwise pass the
+            # positive-integer check above and only fail later, inside
+            # _vector_sql_type's f"vector({dim})", where CPython's
+            # int-to-str digit limit (Python 3.11+) raises a raw
+            # ValueError -- breaking the "VectorFieldType always raises
+            # VectorValueError" contract. Fail closed here instead, with
+            # the typed error the rest of this module promises.
+            raise VectorValueError(
+                f"Vector dimension exceeds {_MAX_VECTOR_DIM}-element limit, got "
+                f"{_truncate_repr_for_error(self.dim)}"
+            )
+
+    @property
+    def base_type(self) -> "FieldType":
+        """The discriminator ``FieldType`` member (``FieldType.VECTOR``)."""
+        return FieldType.VECTOR
+
+
+def _vector_sql_type(dim: int, dialect: str) -> str:
+    """Per-dialect DDL for a ``FieldType.Vector(dim)`` column.
+
+    - PostgreSQL: pgvector's ``vector(N)``. When the pgvector extension is
+      not installed/enabled, declare the column ``TEXT`` instead and store
+      the canonical ``encode_vector`` literal (documented fallback).
+    - MySQL: ``JSON`` (no native vector column type).
+    - SQLite (and any other/unrecognized dialect): ``TEXT``.
+    """
+    if dialect == "postgresql":
+        return f"vector({dim})"
+    if dialect == "mysql":
+        return "JSON"
+    return "TEXT"
+
+
+_VECTOR_LITERAL_RE = re.compile(r"^\[(.*)\]$", re.DOTALL)
+
+
+def _format_vector_component(value: Union[int, float]) -> str:
+    """Render one vector component per the canonical byte contract.
+
+    Integers and integer-valued floats render WITHOUT a trailing ``.0``
+    (``2`` not ``2.0``, ``0`` not ``0.0``); other floats render as EXACT,
+    shortest-round-trippable, NON-exponential fixed-decimal (``0.5``,
+    ``-1.5``, ``3.25``, ``0.00001``) -- ``repr()`` alone would switch to
+    scientific notation for magnitudes outside ~[1e-4, 1e16), which breaks
+    the byte-canonical cross-SDK contract for realistic embedding
+    components (routinely <1e-4). Raises ``VectorValueError`` on a
+    non-finite value or a non-numeric type.
+    """
+    if isinstance(value, bool):
+        raise VectorValueError(
+            f"vector component must be int or float, got bool: "
+            f"{_truncate_repr_for_error(value)}"
+        )
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            raise VectorValueError(
+                f"vector component must be finite, got non-finite value: "
+                f"{_truncate_repr_for_error(value)}"
+            )
+        if value.is_integer():
+            return str(int(value))
+        # repr(value) is the shortest string that round-trips to this
+        # exact float -- Decimal(repr(value)) parses it EXACTLY (no
+        # precision loss), and format(..., "f") expands any scientific
+        # notation into fixed-point without adding or dropping digits.
+        # The rstrip is a defensive no-op in practice (the round-trip
+        # repr never carries a spurious trailing zero) but guards
+        # against relying on that invariant silently breaking.
+        fixed = format(Decimal(repr(value)), "f")
+        if "." in fixed:
+            fixed = fixed.rstrip("0").rstrip(".")
+        return fixed
+    raise VectorValueError(
+        f"vector component must be int or float, got "
+        f"{type(value).__name__}: {_truncate_repr_for_error(value)}"
+    )
+
+
+def encode_vector(values: Sequence[Union[int, float]]) -> str:
+    """Encode a sequence of numbers into the canonical Vector literal.
+
+    Canonical form: ``[a,b,c]`` -- no spaces. This is the byte-pinned
+    cross-SDK contract for issue #1846: do not change the rendering rule
+    without a coordinated cross-SDK re-pin (``cross-sdk-inspection.md``
+    Rule 4b). Fails closed (raises ``VectorValueError``) on an oversized
+    component count, a non-finite (NaN/±Inf) component, or an oversized
+    output literal.
+    """
+    # Upfront element-count check, BEFORE the format loop -- the genuine
+    # symmetric counterpart to decode_vector's pre-parse length check on
+    # its input. (The _MAX_VECTOR_LITERAL_LENGTH check below still runs
+    # AFTER formatting -- it bounds OUTPUT size, which is only knowable
+    # once every component is rendered -- but this upfront count check
+    # means a pathologically long `values` fails BEFORE paying the cost
+    # of formatting each one, matching decode's cheap-check-first shape.)
+    component_count = len(values)
+    if component_count > _MAX_VECTOR_COMPONENT_COUNT:
+        raise VectorValueError(
+            f"vector component count exceeds {_MAX_VECTOR_COMPONENT_COUNT}-element "
+            f"limit (count={component_count})"
+        )
+    literal = "[" + ",".join(_format_vector_component(v) for v in values) + "]"
+    if len(literal) > _MAX_VECTOR_LITERAL_LENGTH:
+        # Defense-in-depth symmetric with decode_vector's input cap below:
+        # every component is individually bounded (~342 bytes worst case,
+        # a subnormal float like 5e-324 expanded to fixed-decimal), but a
+        # sufficiently long/high-dimension `values` can still accumulate
+        # past a sane literal size. Fail closed rather than silently
+        # emitting a literal decode_vector's own cap would then reject.
+        raise VectorValueError(
+            f"encoded vector literal exceeds {_MAX_VECTOR_LITERAL_LENGTH}-byte "
+            f"limit (len={len(literal)})"
+        )
+    return literal
+
+
+def _truncate_for_error(literal: str) -> str:
+    """Bound how much of an (possibly attacker-supplied) literal is
+    echoed into an error message, so a huge literal cannot blow up a
+    downstream log line."""
+    if len(literal) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
+        return literal
+    return literal[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
+
+
+def decode_vector(literal: str) -> List[float]:
+    """Decode a canonical Vector literal (``[a,b,c]``) into a list of floats.
+
+    Round-trips byte-identically through ``encode_vector`` --
+    ``encode_vector(decode_vector(s)) == s`` for every canonical ``s``.
+    Fails closed (raises ``VectorValueError``) on malformed input, an
+    oversized literal, or a non-finite (NaN/±Inf) component.
+    """
+    if not isinstance(literal, str):
+        raise VectorValueError(
+            f"vector literal must be a string, got {type(literal).__name__}"
+        )
+    if len(literal) > _MAX_VECTOR_LITERAL_LENGTH:
+        raise VectorValueError(
+            f"vector literal exceeds {_MAX_VECTOR_LITERAL_LENGTH}-byte limit "
+            f"(len={len(literal)})"
+        )
+    match = _VECTOR_LITERAL_RE.match(literal.strip())
+    if match is None:
+        raise VectorValueError(
+            f"malformed vector literal: {_truncate_for_error(literal)!r}"
+        )
+    body = match.group(1)
+    if body == "":
+        return []
+    result: List[float] = []
+    for token in body.split(","):
+        token = token.strip()
+        try:
+            component = float(token)
+        except ValueError as exc:
+            raise VectorValueError(
+                f"malformed vector component {token!r} in literal "
+                f"{_truncate_for_error(literal)!r}"
+            ) from exc
+        if math.isnan(component) or math.isinf(component):
+            raise VectorValueError(
+                f"vector literal contains non-finite component {token!r}: "
+                f"{_truncate_for_error(literal)!r}"
+            )
+        result.append(component)
+    return result
 
 
 @dataclass
@@ -56,7 +377,7 @@ class FieldMeta:
     """Metadata for a model field"""
 
     name: str
-    type: FieldType
+    type: Union[FieldType, VectorFieldType]
     python_type: Type
     nullable: bool = True
     default: Any = None
@@ -119,6 +440,13 @@ class FieldMeta:
                 # Fallback to JSONB for unsupported element types
                 return "JSONB"
 
+        # Handle the parameterized Vector field type (FieldType.Vector(dim)).
+        # Dispatched BEFORE the type_mappings dict below because a
+        # VectorFieldType instance is never a dict key there (only bare
+        # FieldType enum members are) -- issue #1846.
+        if isinstance(self.type, VectorFieldType):
+            return _vector_sql_type(self.type.dim, dialect)
+
         # Standard type mappings (backward compatible)
         type_mappings = {
             "postgresql": {
@@ -139,6 +467,9 @@ class FieldMeta:
                 FieldType.BINARY: "BYTEA",
                 FieldType.ENUM: "VARCHAR(50)",
                 FieldType.ARRAY: "JSONB",
+                # Bare FieldType.VECTOR (no dimension) -- normal usage goes
+                # through FieldType.Vector(dim), which is dispatched above.
+                FieldType.VECTOR: "TEXT",
             },
             "mysql": {
                 FieldType.INTEGER: "INTEGER",
@@ -158,6 +489,7 @@ class FieldMeta:
                 FieldType.BINARY: "BLOB",
                 FieldType.ENUM: "VARCHAR(50)",
                 FieldType.ARRAY: "JSON",
+                FieldType.VECTOR: "JSON",
             },
             "sqlite": {
                 FieldType.INTEGER: "INTEGER",
@@ -175,6 +507,7 @@ class FieldMeta:
                 FieldType.BINARY: "BLOB",
                 FieldType.ENUM: "TEXT",
                 FieldType.ARRAY: "TEXT",
+                FieldType.VECTOR: "TEXT",
             },
         }
 
@@ -235,16 +568,21 @@ class ModelMeta:
 
     def get_unique_fields(self) -> List[str]:
         """Get list of unique field names."""
+        # __post_init__ always normalizes self.fields to a dict; the cast
+        # is a mypy-only narrowing (no runtime effect) of the declared
+        # Union[Dict[str, FieldMeta], List[FieldMeta]] field type.
+        fields = cast(Dict[str, FieldMeta], self.fields)
         unique_fields = []
-        for name, field_meta in self.fields.items():
+        for name, field_meta in fields.items():
             if field_meta.unique:
                 unique_fields.append(name)
         return unique_fields
 
     def get_indexed_fields(self) -> List[str]:
         """Get list of indexed field names."""
+        fields = cast(Dict[str, FieldMeta], self.fields)
         indexed_fields = []
-        for name, field_meta in self.fields.items():
+        for name, field_meta in fields.items():
             if field_meta.index:
                 indexed_fields.append(name)
         return indexed_fields
@@ -394,7 +732,7 @@ class SchemaParser:
     @classmethod
     def _parse_indexes(cls, model_class: Type) -> List[IndexMeta]:
         """Parse index definitions from model class"""
-        indexes = []
+        indexes: List[IndexMeta] = []
 
         # Check for __indexes__ attribute
         if hasattr(model_class, "__indexes__"):
