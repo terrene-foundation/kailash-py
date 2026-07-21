@@ -1,5 +1,13 @@
 # DataFlow Changelog
 
+## [2.19.1] - 2026-07-21
+
+### Docs
+
+- Genericized private cross-SDK repository references in shipped source
+  docstrings (`classification/masking.py`, `migration/security_definer.py`) —
+  disclosure hygiene, behavior-neutral.
+
 ## [Unreleased]
 
 ## [2.19.0] — 2026-07-21 — FieldType.Vector(dim) embedding column type (#1846)

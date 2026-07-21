@@ -2,6 +2,13 @@
 
 All notable changes to the Kailash MCP package will be documented in this file.
 
+## [0.4.3] — 2026-07-21 — Disclosure hygiene (docstrings)
+
+### Docs
+
+- Genericized private cross-SDK repository references in shipped source
+  docstrings (`auth/oauth.py`, `auth/providers.py`) — behavior-neutral.
+
 ## [0.4.2] — 2026-07-19 — Dependency pin fix: require kailash>=2.56.0
 
 ### Fixed

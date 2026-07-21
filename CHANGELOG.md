@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.60.0] - 2026-07-21
+
+### Security (Trust Plane — constraint-enforcement store-tamper hardening)
+
+- **`verify()` now enforces constraints re-derived from signed sources, not the
+  unsigned persisted `constraint_envelope`.** The persisted envelope is an
+  unsigned derived cache covered by no signature at any verification level, so a
+  store-writer (the bounded-trust adversary the signed-revocation layer already
+  defends against) could strip an enforced constraint from a persisted chain —
+  delete a `read_only`, null the whole envelope, or strip it from a capability's
+  own constraint list — and `verify()` would enforce the weakened set,
+  escalating privilege undetected at STANDARD (the default) and FULL. `verify()`
+  now re-derives the enforced set from the signed sources (genesis metadata +
+  every capability's constraints), verifying **every** capability's Ed25519
+  signature (not only constraint-carrying ones, so a stripped-to-empty
+  capability cannot escape verification) plus the genesis signature, and failing
+  closed on any invalid signature; the persisted envelope is treated as an
+  untrusted cache. Delegation tightening is carried into signed derived
+  capabilities so it survives re-derivation. Regression tests:
+  `tests/trust/unit/test_constraint_envelope_tamper_resistance.py`. Reasoning-
+  trace requirement detection still reads the persisted policy (a lower-severity,
+  pre-existing surface tracked for the envelope-signing follow-up).
+
+### Docs
+
+- Corrected the `DelegationRecord.constraint_subset` docstring — the field is
+  advisory / reporting-only, not an enforced tightening guarantee (audit #1896).
+- Genericized private cross-SDK repository references in shipped source
+  docstrings (disclosure hygiene; behavior-neutral).
+
 ## [2.59.0] - 2026-07-21
 
 ### Added (Trust Plane — Delegation Signing)
