@@ -59,7 +59,7 @@ identifiers — they are validated against
 This module enforces ``rules/dataflow-identifier-safety.md`` MUST Rule
 1 (every dynamic DDL identifier routes through ``quote_identifier``)
 and the cross-SDK byte-shape contract pinned by
-``esperie-enterprise/kailash-rs`` PR #579 / #590 — the SQL emitted by
+the Rust SDK's PR #579 / #590 — the SQL emitted by
 the same builder chain is byte-identical across both SDKs.
 
 Example
@@ -120,9 +120,8 @@ __all__ = [
 # definitions; extend the list with explicit additions reviewed under
 # `rules/dataflow-identifier-safety.md`.
 #
-# Cross-SDK parity — MUST stay byte-identical with the Rust crate at
-# `esperie-enterprise/kailash-rs/crates/kailash-dataflow/src/migration/
-# security_definer.rs::ALLOWED_PG_TYPES`. PR #583 (Rust) added
+# Cross-SDK parity — MUST stay byte-identical with the Rust SDK's
+# dataflow migration `security_definer.rs::ALLOWED_PG_TYPES`. PR #583 (Rust) added
 # `smallserial`, `inet`, `cidr`, `citext`, `interval` to the baseline.
 # ----------------------------------------------------------------------
 ALLOWED_PG_TYPES: tuple[str, ...] = (

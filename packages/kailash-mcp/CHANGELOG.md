@@ -292,7 +292,7 @@ Post-release `/redteam` audit of 0.2.6 (gold-standards-validator HIGH-1) surface
 ### Fixed
 
 - Closes #556. Half-implemented public feature (receive half wired, sender half `NotImplementedError`) per `rules/orphan-detection.md` §2a (crypto-pair pattern applied to paired APIs).
-- Cross-SDK parity issue filed at `esperie-enterprise/kailash-rs#443` — Rust SDK has no elicitation surface; Python shape documented as reference for future Rust implementation.
+- Cross-SDK parity issue filed on the Rust SDK (#443) — Rust SDK has no elicitation surface; Python shape documented as reference for future Rust implementation.
 
 ## [0.2.5] - 2026-04-19 — oauth.py optional-extras gating (#514)
 

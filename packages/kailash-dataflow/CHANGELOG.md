@@ -1779,7 +1779,7 @@ Patch release closing issue #759. DataFlow Express's `create` / `update` / `dele
 
 ### Cross-SDK
 
-- See cross-SDK note appended at the bottom of this release-prep PR — kailash-rs DataFlow's CRUD-Express path may carry the same swallow pattern. Companion issue filed against `esperie-enterprise/kailash-rs` per `rules/cross-sdk-inspection.md` MUST Rule 1.
+- See cross-SDK note appended at the bottom of this release-prep PR — the Rust SDK's DataFlow CRUD-Express path may carry the same swallow pattern. Companion issue filed against the Rust SDK per `rules/cross-sdk-inspection.md` MUST Rule 1.
 
 ## [2.7.0] — 2026-04-30 — Sync transaction surface (#711) + #707 test fix
 
