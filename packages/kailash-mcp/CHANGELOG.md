@@ -237,7 +237,7 @@ Patch bump — closes Wave 4 cross-SDK security finding #625 (kailash-rs#599 sib
 
 ### Cross-SDK
 
-- Originating issue: `esperie/kailash-rs#599`
+- Originating issue: the Rust SDK (#599)
 - Rust merging PR: `kailash-rs#602` (v3.23.0)
 - Python merging PR: kailash-py #632 (this release)
 

@@ -243,7 +243,7 @@ Two known divergences from the cross-SDK contract (documented in PR #624 body fo
 
 ### Related
 
-- Cross-SDK: `esperie/kailash-rs#317`
+- Cross-SDK: the Rust SDK (#317)
 - Issues: closes #605 (all 4 shards landed across PRs #622 + #624)
 
 ## [0.10.0] - 2026-04-23

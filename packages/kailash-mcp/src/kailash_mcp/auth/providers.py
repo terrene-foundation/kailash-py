@@ -345,7 +345,7 @@ class BearerTokenAuth(AuthProvider):
         ``options={"require": ["exp", "iss"]}`` on top of the ``issuer=``
         equality check.
 
-        Cross-SDK port of esperie/kailash-rs#599 (PR #602): jsonwebtoken's
+        Cross-SDK port of the Rust SDK (#599) (PR #602): jsonwebtoken's
         ``set_issuer`` (Rust) and PyJWT's ``issuer=`` (Python) only enforce
         equality when the ``iss`` claim is present in the token payload. A
         forged token that OMITS ``iss`` entirely passes the allowlist check
@@ -472,7 +472,7 @@ class JWTAuth(BearerTokenAuth):
         issuer: Token issuer. Used both as the ``iss`` claim on tokens
             issued by :py:meth:`create_token` AND as the ``expected_issuer``
             allowlist on validation. When set, validation REQUIRES ``iss``
-            to be present (cross-SDK port of esperie/kailash-rs#599).
+            to be present (cross-SDK port of the Rust SDK (#599)).
         audience: The canonical resource URI this server identifies as.
             REQUIRED — ``JWTAuth`` always validates JWTs, so an absent
             ``audience`` raises ``ValueError`` at construction (fail-closed,
