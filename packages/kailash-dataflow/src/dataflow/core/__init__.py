@@ -22,7 +22,17 @@ from .logging_config import (
 )
 from .models import DataFlowModel, Environment
 from .nodes import NodeGenerator
-from .schema import FieldMeta, FieldType, IndexMeta, ModelMeta, SchemaParser
+from .schema import (
+    FieldMeta,
+    FieldType,
+    IndexMeta,
+    ModelMeta,
+    SchemaParser,
+    VectorFieldType,
+    VectorValueError,
+    decode_vector,
+    encode_vector,
+)
 from .tenant_context import TenantContextSwitch, TenantInfo, get_current_tenant_id
 from .type_processor import TypeAwareFieldProcessor
 from .workflow_binding import DataFlowWorkflowBinder
@@ -41,6 +51,11 @@ __all__ = [
     "IndexMeta",
     "ModelMeta",
     "SchemaParser",
+    # Vector field type + value codec (issue #1846)
+    "VectorFieldType",
+    "VectorValueError",
+    "encode_vector",
+    "decode_vector",
     "audit_events",
     "audit_integration",
     "audit_trail_manager",
