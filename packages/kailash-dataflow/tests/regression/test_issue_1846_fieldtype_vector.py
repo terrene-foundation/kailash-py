@@ -164,16 +164,76 @@ def test_issue_1846_value_byte_shape(vector: Dict[str, Any]) -> None:
 
 @pytest.mark.regression
 def test_issue_1846_value_fixture_sentinels_present() -> None:
-    """The five pinned sentinel forms from the issue MUST all be present
-    -- a future fixture edit cannot silently drop a sentinel."""
+    """The five pinned sentinel forms from the original issue MUST all
+    still be present, byte-unchanged -- a future fixture edit cannot
+    silently drop or alter a sentinel. This is a subset check (not exact
+    set equality) because the FIX-1 redteam round added further vectors
+    covering the scientific-notation byte-contract bug; see
+    test_issue_1846_fix1_scientific_notation_vectors_present below."""
     names = {v["name"] for v in _VALUE_VECTORS}
-    assert names == {
+    original_sentinels = {
         "integers",
         "empty",
         "single_float",
         "mixed_negative_decimal",
         "all_zero",
     }
+    assert (
+        original_sentinels <= names
+    ), f"original sentinels missing: {original_sentinels - names}"
+    expected_by_name = {v["name"]: v["expected"] for v in _VALUE_VECTORS}
+    assert expected_by_name["integers"] == "[1,2,3]"
+    assert expected_by_name["empty"] == "[]"
+    assert expected_by_name["single_float"] == "[0.5]"
+    assert expected_by_name["mixed_negative_decimal"] == "[-1.5,2,3.25]"
+    assert expected_by_name["all_zero"] == "[0,0,0]"
+
+
+@pytest.mark.regression
+def test_issue_1846_fix1_scientific_notation_vectors_present() -> None:
+    """The FIX-1 redteam-round vectors (scientific-notation byte-contract
+    bug: encode_vector previously emitted exponential notation for
+    magnitudes outside ~[1e-4, 1e16)) MUST all be present, pinning the
+    exact fixed-decimal strings. These are Python-canonical-form pins;
+    cross-SDK byte-identity for sub-1e-4 / very-large magnitudes is a
+    tracked follow-up against the Rust SDK mint spec (not verified here
+    -- this repo cannot reach the private Rust sibling directly per
+    repo-scope-discipline.md)."""
+    names = {v["name"] for v in _VALUE_VECTORS}
+    fix1_vectors = {
+        "small_magnitude_1e_minus_5",
+        "small_magnitude_1e_minus_6",
+        "large_magnitude_non_integer",
+        "large_magnitude_integer_boundary_1e16",
+        "realistic_embedding_component_0_031",
+        "realistic_embedding_component_2e_minus_5",
+        "mixed_realistic_embedding",
+    }
+    assert fix1_vectors <= names, f"FIX-1 vectors missing: {fix1_vectors - names}"
+    expected_by_name = {v["name"]: v["expected"] for v in _VALUE_VECTORS}
+    assert expected_by_name["small_magnitude_1e_minus_5"] == "[0.00001]"
+    assert expected_by_name["small_magnitude_1e_minus_6"] == "[0.000001]"
+    assert expected_by_name["large_magnitude_non_integer"] == "[123456.789]"
+    assert (
+        expected_by_name["large_magnitude_integer_boundary_1e16"]
+        == "[10000000000000000]"
+    )
+    assert expected_by_name["realistic_embedding_component_0_031"] == "[0.031]"
+    assert expected_by_name["realistic_embedding_component_2e_minus_5"] == "[0.00002]"
+    assert expected_by_name["mixed_realistic_embedding"] == "[0.031,-0.00002,1]"
+
+
+@pytest.mark.regression
+def test_issue_1846_encode_rejects_scientific_notation_never_emitted() -> None:
+    """encode_vector MUST NEVER emit Python's scientific-notation float
+    repr (e.g. '1e-05', '1e+16') for a non-integer-valued component --
+    the byte-canonical contract is fixed-decimal only."""
+    for value in [0.00001, 0.000001, 2e-5, -1e-5, 9.999e-05, 123456.789]:
+        encoded = encode_vector([value])
+        assert "e" not in encoded and "E" not in encoded, (
+            f"encode_vector([{value!r}]) produced {encoded!r}, which "
+            f"contains scientific notation -- byte-contract violation"
+        )
 
 
 @pytest.mark.regression
@@ -243,6 +303,30 @@ def test_issue_1846_encode_rejects_non_numeric_component() -> None:
         encode_vector([1, "not-a-number", 3])
     with pytest.raises(VectorValueError):
         encode_vector([1, True, 3])
+
+
+@pytest.mark.regression
+def test_issue_1846_encode_error_message_truncates_huge_value() -> None:
+    """encode_vector MUST NOT echo an unbounded amount of a huge
+    non-numeric component into the exception message (security-reviewer
+    LOW finding -- the encode-side mirror of
+    test_issue_1846_decode_error_message_truncates_huge_literal)."""
+    huge_value = "A" * 5_000_000
+    with pytest.raises(VectorValueError) as exc_info:
+        encode_vector([1, huge_value, 3])
+    assert len(str(exc_info.value)) < 1_000
+
+
+@pytest.mark.regression
+def test_issue_1846_vector_dim_error_message_truncates_huge_dim() -> None:
+    """FieldType.Vector(dim) MUST NOT echo an unbounded amount of a huge
+    invalid dimension into the exception message (security-reviewer LOW
+    finding -- the dimension-validation mirror of the encode/decode
+    truncation tests above)."""
+    huge_dim = "A" * 5_000_000
+    with pytest.raises(VectorValueError) as exc_info:
+        FieldType.Vector(huge_dim)
+    assert len(str(exc_info.value)) < 1_000
 
 
 @pytest.mark.regression

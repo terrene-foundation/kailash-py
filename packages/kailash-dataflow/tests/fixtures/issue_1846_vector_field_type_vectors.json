@@ -69,6 +69,43 @@
       "name": "all_zero",
       "values": [0, 0, 0],
       "expected": "[0,0,0]"
+    },
+    {
+      "_comment": "FIX 1 (redteam round 1, HIGH): encode_vector previously used repr() for non-integer floats, which emits scientific notation for magnitudes outside ~[1e-4, 1e16) -- e.g. 1e-05 -> '1e-05'. Realistic embedding components are routinely <1e-4. Fixed via Decimal(repr(value)) + format(..., 'f') to render exact, shortest-round-trippable, NON-exponential fixed-decimal. The vectors below pin the Python canonical form (fixed-decimal, round-trip-stable). Cross-SDK byte-identity for sub-1e-4 / very-large magnitudes is NOT yet re-pinned against the Rust SDK mint spec -- follow-up required (rs mint spec re-pin, tracked cross-SDK; this repo cannot reach the private Rust sibling directly per repo-scope-discipline.md).",
+      "name": "small_magnitude_1e_minus_5",
+      "values": [0.00001],
+      "expected": "[0.00001]"
+    },
+    {
+      "name": "small_magnitude_1e_minus_6",
+      "values": [0.000001],
+      "expected": "[0.000001]"
+    },
+    {
+      "name": "large_magnitude_non_integer",
+      "values": [123456.789],
+      "expected": "[123456.789]"
+    },
+    {
+      "_comment": "1e16 is exactly representable as a double AND is_integer() -- it renders via the pre-existing integer-valued-float path (str(int(value))), never via the Decimal fixed-decimal path. Pinned here to confirm the boundary stays non-exponential (repr(1e16) alone would be '1e+16').",
+      "name": "large_magnitude_integer_boundary_1e16",
+      "values": [1e16],
+      "expected": "[10000000000000000]"
+    },
+    {
+      "name": "realistic_embedding_component_0_031",
+      "values": [0.031],
+      "expected": "[0.031]"
+    },
+    {
+      "name": "realistic_embedding_component_2e_minus_5",
+      "values": [0.00002],
+      "expected": "[0.00002]"
+    },
+    {
+      "name": "mixed_realistic_embedding",
+      "values": [0.031, -0.00002, 1.0],
+      "expected": "[0.031,-0.00002,1]"
     }
   ]
 }

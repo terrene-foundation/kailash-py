@@ -92,6 +92,24 @@ class VectorValueError(DataFlowError):
     """
 
 
+# Shared bound for how much of a (possibly attacker-supplied) value is
+# echoed verbatim into a VectorValueError message, so a huge dimension /
+# component / literal cannot blow up a downstream log line. Defined once,
+# before every raise site that needs it, and reused by both the
+# generic-value truncator below and the literal-string truncator near
+# decode_vector.
+_TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
+
+
+def _truncate_repr_for_error(value: object) -> str:
+    """Bound how much of an (possibly attacker-supplied) value's repr is
+    echoed into an error message."""
+    text = repr(value)
+    if len(text) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
+        return text
+    return text[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
+
+
 @dataclass(frozen=True)
 class VectorFieldType:
     """A parameterized ``FieldType.VECTOR`` carrying its dimension.
@@ -105,7 +123,8 @@ class VectorFieldType:
     def __post_init__(self) -> None:
         if isinstance(self.dim, bool) or not isinstance(self.dim, int) or self.dim <= 0:
             raise VectorValueError(
-                f"Vector dimension must be a positive integer, got {self.dim!r}"
+                f"Vector dimension must be a positive integer, got "
+                f"{_truncate_repr_for_error(self.dim)}"
             )
 
     @property
@@ -137,26 +156,43 @@ def _format_vector_component(value: Union[int, float]) -> str:
     """Render one vector component per the canonical byte contract.
 
     Integers and integer-valued floats render WITHOUT a trailing ``.0``
-    (``2`` not ``2.0``, ``0`` not ``0.0``); other floats render via their
-    shortest round-trip repr (``0.5``, ``-1.5``, ``3.25``). Raises
-    ``VectorValueError`` on a non-finite value or a non-numeric type.
+    (``2`` not ``2.0``, ``0`` not ``0.0``); other floats render as EXACT,
+    shortest-round-trippable, NON-exponential fixed-decimal (``0.5``,
+    ``-1.5``, ``3.25``, ``0.00001``) -- ``repr()`` alone would switch to
+    scientific notation for magnitudes outside ~[1e-4, 1e16), which breaks
+    the byte-canonical cross-SDK contract for realistic embedding
+    components (routinely <1e-4). Raises ``VectorValueError`` on a
+    non-finite value or a non-numeric type.
     """
     if isinstance(value, bool):
         raise VectorValueError(
-            f"vector component must be int or float, got bool: {value!r}"
+            f"vector component must be int or float, got bool: "
+            f"{_truncate_repr_for_error(value)}"
         )
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
             raise VectorValueError(
-                f"vector component must be finite, got non-finite value: {value!r}"
+                f"vector component must be finite, got non-finite value: "
+                f"{_truncate_repr_for_error(value)}"
             )
         if value.is_integer():
             return str(int(value))
-        return repr(value)
+        # repr(value) is the shortest string that round-trips to this
+        # exact float -- Decimal(repr(value)) parses it EXACTLY (no
+        # precision loss), and format(..., "f") expands any scientific
+        # notation into fixed-point without adding or dropping digits.
+        # The rstrip is a defensive no-op in practice (the round-trip
+        # repr never carries a spurious trailing zero) but guards
+        # against relying on that invariant silently breaking.
+        fixed = format(Decimal(repr(value)), "f")
+        if "." in fixed:
+            fixed = fixed.rstrip("0").rstrip(".")
+        return fixed
     raise VectorValueError(
-        f"vector component must be int or float, got {type(value).__name__}: {value!r}"
+        f"vector component must be int or float, got "
+        f"{type(value).__name__}: {_truncate_repr_for_error(value)}"
     )
 
 
@@ -181,7 +217,8 @@ def encode_vector(values: Sequence[Union[int, float]]) -> str:
 # embedding dimension) and fail closed rather than silently accepting
 # arbitrary-sized input.
 _MAX_VECTOR_LITERAL_LENGTH = 1_048_576
-_TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
+# _TRUNCATED_LITERAL_PREVIEW_LENGTH is defined once, near VectorValueError
+# above (shared with _truncate_repr_for_error).
 
 
 def _truncate_for_error(literal: str) -> str:
