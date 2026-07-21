@@ -2,7 +2,7 @@
 Getting Started
 ===============
 
-Welcome to the Kailash SDK v2.55.0. This guide walks you through core concepts and
+Welcome to the Kailash SDK v2.59.0. This guide walks you through core concepts and
 patterns you will use in every Kailash project.
 
 Prerequisites
@@ -210,14 +210,14 @@ The Core SDK is always available. Frameworks build on top of it for specific use
    * - **Core SDK**
      - Custom workflows, fine-grained control
      - ``pip install kailash``
-   * - **Kaizen** (v1.2.5)
+   * - **Kaizen** (v2.40.0)
      - AI agents, signatures, multi-agent teams
      - ``pip install kailash-kaizen``
-   * - **Nexus** (v1.4.2)
+   * - **Nexus** (v2.14.0)
      - Multi-channel (API + CLI + MCP)
      - ``pip install kailash-nexus``
-   * - **DataFlow** (v0.12.4)
-     - Database operations, auto-generated nodes
+   * - **DataFlow** (v2.19.0)
+     - Database operations, auto-generated nodes, ``FieldType.Vector(dim)`` embeddings
      - ``pip install kailash-dataflow``
 
 All frameworks use the same underlying workflow execution:

@@ -342,6 +342,7 @@ class User:  # Same name, different instance - works!
 - **Deferred Schema Operations**: Better performance with lazy table creation (v0.4.7+)
 - **Vector Similarity Search**: PostgreSQL pgvector support for semantic search, RAG, and AI applications (v0.6.0+)
 - **MongoDB Document Database**: Complete NoSQL support with flexible schema, aggregation pipelines, and 8 specialized workflow nodes (v0.6.0+)
+- **`FieldType.Vector(dim)` Embedding Columns** (v2.19.0+): a declarative, parameterized embedding column type for `@db.model` fields — `vector(N)` DDL via pgvector on PostgreSQL (documented `TEXT` fallback when the extension is off), `TEXT` on SQLite, `JSON` on MySQL. A canonical `[a,b,c]` value codec (`encode_vector`/`decode_vector`) emits fixed-decimal notation (never scientific, so small embedding magnitudes round-trip byte-identically) and fails closed with `VectorValueError` on non-finite values or an invalid dimension. Cross-SDK byte-locked with the Rust SDK.
 
 ### ⚠️ Current Limitations
 

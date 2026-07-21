@@ -41,12 +41,12 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v2.3.0          Nexus v1.5.0        DataFlow v1.2.0     |
+|   Kaizen v2.40.0         Nexus v2.14.0       DataFlow v2.19.0    |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v2.1.0                                 |
+|                    Core SDK v2.59.0                                 |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
@@ -331,6 +331,7 @@ One decorator generates 11 database operation nodes per model. Supports PostgreS
 
 ```python
 from dataflow import DataFlow
+from dataflow.core import FieldType
 
 db = DataFlow("sqlite:///app.db")
 
@@ -340,11 +341,18 @@ class User:
     name: str
     email: str
 
+@db.model
+class Document:
+    id: str
+    embedding: FieldType.Vector(1536)  # pgvector column on PostgreSQL, TEXT elsewhere
+
 # Automatically generated:
 # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
 # UserListNode, UserCountNode, UserUpsertNode,
 # UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 ```
+
+`FieldType.Vector(dim)` is a parameterized embedding column type -- `vector(N)` via pgvector on PostgreSQL (with a documented `TEXT` fallback when the extension is off), `TEXT` on SQLite, `JSON` on MySQL. Values encode/decode through a canonical `[a,b,c]` codec that never emits scientific notation (small embedding magnitudes round-trip byte-identically) and fails closed on non-finite values or a malformed dimension.
 
 `pip install kailash-dataflow` | [Repository](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | [Documentation](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow#readme)
 
@@ -387,7 +395,7 @@ if result.allowed:
 
 ## Key Features
 
-### Core SDK (v0.12.5)
+### Core SDK (v2.59.0)
 
 - **140+ production nodes**: AI, API, code execution, data, database, file, logic, monitoring, transform
 - **Runtime parity**: `LocalRuntime` (sync) and `AsyncLocalRuntime` (async) with identical return structures
@@ -400,15 +408,15 @@ if result.allowed:
 
 ### Ecosystem Frameworks
 
-| Framework                                                                                        | Version | Key Capabilities                                                                                                     |
-| ------------------------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v2.20.0 | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions                   |
-| [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v2.6.2  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API                        |
-| [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v2.8.1  | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions, append-only models |
-| [MCP](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-mcp)           | v0.2.12 | Production-ready MCP client/server, transports (stdio/SSE/HTTP), service discovery                                   |
-| [PACT](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-pact)         | v0.11.0 | Governance — D/T/R addressing, envelopes, clearance, verification gradient                                           |
-| [ML](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-ml)             | v1.7.2  | ML lifecycle — feature stores, model registry, AutoML, drift detection                                               |
-| [Align](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-align)       | v0.7.0  | LLM fine-tuning + alignment (DPO/SFT/LoRA), GGUF export, Ollama/vLLM serving                                         |
+| Framework                                                                                        | Version | Key Capabilities                                                                                                                            |
+| ------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v2.40.0 | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions                                          |
+| [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v2.14.0 | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API                                               |
+| [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v2.19.0 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions, `FieldType.Vector(dim)` embedding columns |
+| [MCP](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-mcp)           | v0.4.2  | Production-ready MCP client/server, transports (stdio/SSE/HTTP), service discovery                                                          |
+| [PACT](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-pact)         | v0.16.1 | Governance — D/T/R addressing, envelopes, clearance, verification gradient                                                                  |
+| [ML](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-ml)             | v2.2.2  | ML lifecycle — feature stores, model registry, AutoML, drift detection                                                                      |
+| [Align](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-align)       | v0.7.4  | LLM fine-tuning + alignment (DPO/SFT/LoRA), GGUF export, Ollama/vLLM serving                                                                |
 
 ---
 
