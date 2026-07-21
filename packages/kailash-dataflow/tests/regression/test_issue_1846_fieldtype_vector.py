@@ -117,6 +117,49 @@ def test_issue_1846_vector_rejects_non_int_dimension(bad_dim: Any) -> None:
 
 
 @pytest.mark.regression
+def test_issue_1846_vector_rejects_oversized_dimension_as_vector_value_error() -> None:
+    """FieldType.Vector(dim) MUST reject a pathologically huge dimension via
+    VectorValueError -- NOT let it pass type+sign validation and later raise
+    a raw ValueError from CPython's int-to-str digit limit inside
+    _vector_sql_type's f"vector({dim})" (redteam round 2 finding: an
+    exception-type-contract violation). A dim just above the documented
+    2**31-1 bound is rejected; a dim AT the bound is accepted."""
+    huge_dim = 10**5000  # far beyond CPython's int-to-str digit limit (~4300)
+    with pytest.raises(VectorValueError):
+        FieldType.Vector(huge_dim)
+
+    with pytest.raises(VectorValueError):
+        FieldType.Vector(2**31)  # one past the documented bound
+
+    # The bound itself is still a valid, usable dimension.
+    accepted = FieldType.Vector(2**31 - 1)
+    assert accepted.dim == 2**31 - 1
+
+
+@pytest.mark.regression
+def test_issue_1846_encode_rejects_oversized_component_count() -> None:
+    """encode_vector MUST fail closed on a pathologically long `values`
+    sequence via an upfront element-count check BEFORE the format loop
+    runs -- the genuine symmetric counterpart to decode_vector's pre-parse
+    length check (redteam round 2 finding: the encode-side cap only ran
+    AFTER formatting every component, which is correct for the byte-cap
+    contract but not actually symmetric with decode's cheap-check-first
+    shape). The rejection MUST be fast (near-instant), not proportional to
+    formatting every component."""
+    import time
+
+    huge_values = [1.0] * 10_000_001
+    start = time.monotonic()
+    with pytest.raises(VectorValueError):
+        encode_vector(huge_values)
+    elapsed = time.monotonic() - start
+    # Generous ceiling: the upfront len() check must short-circuit before
+    # any per-component formatting; this guards against a future regression
+    # that moves the count check back to after the format loop.
+    assert elapsed < 2.0, f"rejection took {elapsed:.3f}s -- expected near-instant"
+
+
+@pytest.mark.regression
 def test_issue_1846_ddl_fixture_vectors_present() -> None:
     """At least one DDL vector per dialect MUST be present -- guards
     against an empty fixture silently making the cross-SDK contract an

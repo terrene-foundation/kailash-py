@@ -107,8 +107,28 @@ class VectorValueError(DataFlowError):
 #   CPU/memory to build or parse -- cap it generously (1 MiB is orders of
 #   magnitude beyond any realistic embedding dimension) and fail closed
 #   rather than silently accepting/emitting arbitrary-sized data.
+# - _MAX_VECTOR_COMPONENT_COUNT bounds encode_vector's INPUT (the number of
+#   components in `values`), checked BEFORE the format loop runs -- the
+#   genuine symmetric counterpart to decode_vector's pre-parse
+#   _MAX_VECTOR_LITERAL_LENGTH check on its INPUT. Without this, the
+#   post-format _MAX_VECTOR_LITERAL_LENGTH check on encode_vector's OUTPUT
+#   still runs only AFTER every component has already been formatted --
+#   correct for the byte-cap contract, but not actually symmetric with
+#   decode's cheap pre-parse length check (redteam round 2, PR #1898).
+#   Set well above any real embedding dimension (largest production
+#   embeddings are low thousands of dims).
+# - _MAX_VECTOR_DIM bounds FieldType.Vector(dim)'s magnitude. Without an
+#   upper bound, VectorFieldType.__post_init__ validates type+sign but not
+#   magnitude, so a pathologically huge dim (>4300 digits, >10**4300)
+#   passes validation and later hits CPython's int-to-str digit limit
+#   (sys.set_int_max_str_digits, Python 3.11+) inside _vector_sql_type's
+#   f"vector({dim})" -- raising a raw ValueError, not VectorValueError, an
+#   exception-type-contract violation (redteam round 2, PR #1898). Set
+#   generously (2**31 - 1) -- well above any real vector dimension.
 _TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
 _MAX_VECTOR_LITERAL_LENGTH = 1_048_576
+_MAX_VECTOR_COMPONENT_COUNT = 10_000_000
+_MAX_VECTOR_DIM = 2**31 - 1
 
 # reprlib.Repr, not bare repr()+slice: for str/list/dict/tuple/set/
 # frozenset, reprlib bounds the element count (or slices the string)
@@ -162,6 +182,18 @@ class VectorFieldType:
         if isinstance(self.dim, bool) or not isinstance(self.dim, int) or self.dim <= 0:
             raise VectorValueError(
                 f"Vector dimension must be a positive integer, got "
+                f"{_truncate_repr_for_error(self.dim)}"
+            )
+        if self.dim > _MAX_VECTOR_DIM:
+            # Magnitude guard: a dim this large would otherwise pass the
+            # positive-integer check above and only fail later, inside
+            # _vector_sql_type's f"vector({dim})", where CPython's
+            # int-to-str digit limit (Python 3.11+) raises a raw
+            # ValueError -- breaking the "VectorFieldType always raises
+            # VectorValueError" contract. Fail closed here instead, with
+            # the typed error the rest of this module promises.
+            raise VectorValueError(
+                f"Vector dimension exceeds {_MAX_VECTOR_DIM}-element limit, got "
                 f"{_truncate_repr_for_error(self.dim)}"
             )
 
@@ -240,9 +272,23 @@ def encode_vector(values: Sequence[Union[int, float]]) -> str:
     Canonical form: ``[a,b,c]`` -- no spaces. This is the byte-pinned
     cross-SDK contract for issue #1846: do not change the rendering rule
     without a coordinated cross-SDK re-pin (``cross-sdk-inspection.md``
-    Rule 4b). Fails closed (raises ``VectorValueError``) on a non-finite
-    (NaN/±Inf) component or an oversized output literal.
+    Rule 4b). Fails closed (raises ``VectorValueError``) on an oversized
+    component count, a non-finite (NaN/±Inf) component, or an oversized
+    output literal.
     """
+    # Upfront element-count check, BEFORE the format loop -- the genuine
+    # symmetric counterpart to decode_vector's pre-parse length check on
+    # its input. (The _MAX_VECTOR_LITERAL_LENGTH check below still runs
+    # AFTER formatting -- it bounds OUTPUT size, which is only knowable
+    # once every component is rendered -- but this upfront count check
+    # means a pathologically long `values` fails BEFORE paying the cost
+    # of formatting each one, matching decode's cheap-check-first shape.)
+    component_count = len(values)
+    if component_count > _MAX_VECTOR_COMPONENT_COUNT:
+        raise VectorValueError(
+            f"vector component count exceeds {_MAX_VECTOR_COMPONENT_COUNT}-element "
+            f"limit (count={component_count})"
+        )
     literal = "[" + ",".join(_format_vector_component(v) for v in values) + "]"
     if len(literal) > _MAX_VECTOR_LITERAL_LENGTH:
         # Defense-in-depth symmetric with decode_vector's input cap below:
