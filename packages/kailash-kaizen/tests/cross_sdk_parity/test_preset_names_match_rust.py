@@ -110,9 +110,16 @@ _PYTHON_CONVENIENCE_PRESETS = frozenset(
 #     body transform), reaching tool-calling that the classic `huggingface`
 #     preset's `/models/{model}` text-generation path drops. Rust sibling: a
 #     PENDING HF chat-schema-routing preset on the Rust SDK.
+#   * `azure_ai_foundry` (#1892) — four-axis Azure AI Foundry unified
+#     model-inference wire (`/models/chat/completions` + `api-key` auth),
+#     distinct from `azure_openai`'s `/openai/deployments/{deployment}` path;
+#     the Python SDK gained it first (#1720 legacy-provider consolidation, the
+#     four-axis replacement for the removed legacy `AzureAIFoundryProvider`).
+#     Rust sibling: a PENDING four-axis azure_ai_foundry preset on the Rust SDK.
 _PENDING_RUST_PARITY_PRESETS = frozenset(
     {
         "huggingface_chat",
+        "azure_ai_foundry",
     }
 )
 
@@ -156,7 +163,7 @@ def test_preset_registry_size_matches_catalog() -> None:
     and their union is the full registry (no silent add/remove of any preset)."""
     assert len(RUST_PRESET_NAMES) == 24
     assert len(_PYTHON_CONVENIENCE_PRESETS) == 18
-    assert len(_PENDING_RUST_PARITY_PRESETS) == 1
+    assert len(_PENDING_RUST_PARITY_PRESETS) == 2
     assert not (
         RUST_PRESET_NAMES & _PYTHON_CONVENIENCE_PRESETS
     ), "a preset appears in BOTH the byte-identical and convenience sets"
