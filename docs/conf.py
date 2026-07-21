@@ -7,17 +7,34 @@ from the SDK's docstrings and provides interactive examples.
 """
 
 import os
+import re
 import sys
+from pathlib import Path
 
 # Add the source directory to Python path
 sys.path.insert(0, os.path.abspath("../../src"))
+
+
+def _read_version() -> str:
+    """Derive the version from the package __version__ so docs never drift.
+
+    Reads the literal ``__version__`` assignment from ``src/kailash/__init__.py``
+    without importing the package (avoids heavy import side effects at doc-build
+    time). Falls back to ``0.0.0`` only if the assignment cannot be found.
+    """
+    init = Path(__file__).resolve().parent.parent / "src" / "kailash" / "__init__.py"
+    match = re.search(
+        r'^__version__\s*=\s*["\']([^"\']+)["\']', init.read_text(), re.MULTILINE
+    )
+    return match.group(1) if match else "0.0.0"
+
 
 # Project information
 project = "Kailash Python SDK"
 copyright = "2026, Terrene Foundation"
 author = "Terrene Foundation"
-release = "2.1.0"
-version = "2.1"
+release = _read_version()
+version = ".".join(release.split(".")[:2])
 
 # General configuration
 extensions = [
