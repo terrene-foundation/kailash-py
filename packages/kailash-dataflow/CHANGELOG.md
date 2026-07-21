@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [2.19.0] — 2026-07-21 — FieldType.Vector(dim) embedding column type (#1846)
+
+### Added
+
+- **`FieldType.Vector(dim)` — a parameterized embedding/pgvector column type
+  (#1846; cross-SDK byte-locked with the Rust SDK).** Per-dialect DDL emission
+  (PostgreSQL `vector(N)` via pgvector, with a documented `TEXT` fallback when
+  the extension is off; SQLite `TEXT`; MySQL `JSON`) plus a canonical `[a,b,c]`
+  value codec (`encode_vector` / `decode_vector`) that emits **fixed-decimal,
+  never scientific notation** (so real embedding magnitudes below `1e-4`
+  round-trip byte-identically), and **fails closed** with a typed
+  `VectorValueError` on non-finite values (`NaN`/`±Inf`, any spelling), a
+  non-positive / non-int / out-of-range dimension, or an oversized input.
+  New public symbols (re-exported from `dataflow.core`): `FieldType.Vector`,
+  `FieldType.VECTOR`, `VectorFieldType`, `VectorValueError`, `encode_vector`,
+  `decode_vector`. Byte-pinned cross-SDK regression vectors ship under
+  `tests/fixtures/issue_1846_vector_field_type_vectors.json`.
+
 ## [2.18.0] — 2026-07-14 — Complete token-based DB auth across every connection path (#1741)
 
 ### Added
