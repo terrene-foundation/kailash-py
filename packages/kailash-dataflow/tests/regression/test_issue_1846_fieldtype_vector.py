@@ -367,6 +367,20 @@ def test_issue_1846_encode_error_message_truncation_is_fast_on_huge_string() -> 
 
 
 @pytest.mark.regression
+def test_issue_1846_error_message_hard_capped_for_nested_container() -> None:
+    """_truncate_repr_for_error MUST enforce an unconditional length cap
+    even for a NESTED container of built-in exact types (e.g. a list of
+    long strings), not just a flat huge string/list -- reprlib bounds
+    each level/element independently, not the aggregate, so a nested
+    shape can otherwise exceed the documented echo-size cap
+    (security-reviewer LOW finding, follow-up round on PR #1898)."""
+    nested = [["A" * 190] * 6] * 6
+    with pytest.raises(VectorValueError) as exc_info:
+        encode_vector([1, nested, 3])
+    assert len(str(exc_info.value)) < 1_000
+
+
+@pytest.mark.regression
 def test_issue_1846_encode_decode_are_finite_sanity() -> None:
     """Sanity check that math.isnan/isinf agree with the fixture's
     finite sentinel values (guards the test itself against a typo)."""

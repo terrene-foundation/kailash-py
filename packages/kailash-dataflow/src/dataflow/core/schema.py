@@ -129,8 +129,23 @@ _ERROR_REPR.maxlong = _TRUNCATED_LITERAL_PREVIEW_LENGTH
 def _truncate_repr_for_error(value: object) -> str:
     """Bound how much of an (possibly attacker-supplied) value's repr is
     echoed into an error message (see ``_ERROR_REPR`` above for the cost
-    rationale)."""
-    return _ERROR_REPR.repr(value)
+    rationale).
+
+    ``_ERROR_REPR.repr()`` bounds COST for str/list/dict/tuple/set (it
+    slices/limits BEFORE rendering), but does not itself guarantee an
+    unconditional length cap: a nested container of built-in EXACT types
+    (e.g. a list of 6 long strings, each itself under reprlib's own
+    ``maxstring``) can still emit more than ``_TRUNCATED_LITERAL_PREVIEW_LENGTH``
+    characters in total, since each level/element is bounded independently,
+    not the aggregate (security-reviewer finding on PR #1898, follow-up
+    round). This final slice restores the unconditional echo-size cap
+    while keeping ``_ERROR_REPR``'s cost-bounding for the common flat
+    string/large-list case.
+    """
+    text = _ERROR_REPR.repr(value)
+    if len(text) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
+        return text
+    return text[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
 
 
 @dataclass(frozen=True)
