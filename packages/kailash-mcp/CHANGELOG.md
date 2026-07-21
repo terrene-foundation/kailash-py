@@ -237,7 +237,7 @@ Patch bump — closes Wave 4 cross-SDK security finding #625 (kailash-rs#599 sib
 
 ### Cross-SDK
 
-- Originating issue: `esperie/kailash-rs#599`
+- Originating issue: the Rust SDK (#599)
 - Rust merging PR: `kailash-rs#602` (v3.23.0)
 - Python merging PR: kailash-py #632 (this release)
 
@@ -292,7 +292,7 @@ Post-release `/redteam` audit of 0.2.6 (gold-standards-validator HIGH-1) surface
 ### Fixed
 
 - Closes #556. Half-implemented public feature (receive half wired, sender half `NotImplementedError`) per `rules/orphan-detection.md` §2a (crypto-pair pattern applied to paired APIs).
-- Cross-SDK parity issue filed at `esperie-enterprise/kailash-rs#443` — Rust SDK has no elicitation surface; Python shape documented as reference for future Rust implementation.
+- Cross-SDK parity issue filed on the Rust SDK (#443) — Rust SDK has no elicitation surface; Python shape documented as reference for future Rust implementation.
 
 ## [0.2.5] - 2026-04-19 — oauth.py optional-extras gating (#514)
 

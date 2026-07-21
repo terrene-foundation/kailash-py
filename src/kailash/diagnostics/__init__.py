@@ -22,7 +22,7 @@ Design principles (see `workspaces/issue-567-mlfp-diagnostics/02-plans/`):
    parity. Adapters may evolve at sub-package minor-bump cadence, but
    these protocols ship stable on first merge.
 
-Related: kailash-py#567, esperie/kailash-rs#449 (audit-chain fingerprint
+Related: kailash-py#567, the Rust SDK (#449) (audit-chain fingerprint
 reconciliation), kailash-rs BP-052 (AgentDiagnostics + TraceEvent parity).
 """
 

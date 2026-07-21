@@ -14,7 +14,7 @@ record-bound classification path could not:
   drop-in :class:`RedactionFilter` (a ``logging.Filter``) for log/telemetry
   redaction outside the data pipeline.
 
-Cross-SDK parity with esperie-enterprise/kailash-rs ``kailash.dataflow``
+Cross-SDK parity with the Rust SDK ``kailash.dataflow``
 masking (#1350 / #1351). See GH #1337.
 
 Usage::

@@ -37,7 +37,7 @@ References
 
 - Spec: ``foundation/docs/02-standards/eatp/08-algorithm-identifier.md@v1.1``.
 - Issue: terrene-foundation/kailash-py ISS-32 (was #604 scaffold).
-- Cross-SDK sibling: esperie-enterprise/kailash-rs ISS-33.
+- Cross-SDK sibling: the Rust SDK (ISS-33).
 """
 
 from __future__ import annotations
@@ -591,9 +591,9 @@ def is_pre_registry_form(value: Any) -> bool:
     exactly **two structurally-distinguishable encodings**:
 
     - the **nested-object** encoding ``{"algorithm": "ed25519+sha256"}`` — the
-      value of a signed ``alg_id`` field (the kailash-rs historical form); and
+      value of a signed ``alg_id`` field (the Rust-SDK historical form); and
     - the algorithm carried only in **unsigned ``algorithm`` metadata** with no
-      signed ``alg_id`` (the kailash-py historical form), which reaches this
+      signed ``alg_id`` (the Python-SDK historical form), which reaches this
       predicate as a dict whose ``algorithm`` key holds the literal (see
       :func:`decode_wire_alg_id`).
 

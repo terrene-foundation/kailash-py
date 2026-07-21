@@ -601,7 +601,7 @@ class JWTManager:
             issuer: Token issuer. When set, ``verify_access_token`` and
                 ``verify_refresh_token`` REQUIRE the ``iss`` claim AND
                 check it equals this value (cross-SDK port of
-                esperie/kailash-rs#599 / PR #602). When ``None``,
+                the Rust SDK (#599) / PR #602). When ``None``,
                 absent-iss tokens still verify so callers that opt out of
                 issuer enforcement see no behaviour change.
         """
@@ -715,7 +715,7 @@ class JWTManager:
         ``options={"require": ["exp", "iss"]}`` on top of the ``issuer=``
         equality check.
 
-        Cross-SDK port of esperie/kailash-rs#599 (PR #602): PyJWT's
+        Cross-SDK port of the Rust SDK (#599) (PR #602): PyJWT's
         ``issuer=`` parameter only enforces equality when the ``iss``
         claim is present in the token payload. A forged token that OMITS
         ``iss`` entirely passes the allowlist check unless ``iss`` is
@@ -802,7 +802,7 @@ class JWTManager:
         """Verify JWT refresh token.
 
         See ``verify_access_token`` for the iss-required rationale (cross-SDK
-        port of esperie/kailash-rs#599 / PR #602). When ``self.issuer`` is
+        port of the Rust SDK (#599) / PR #602). When ``self.issuer`` is
         configured, the ``iss`` claim is REQUIRED and equality-checked at
         decode time. The post-decode manual issuer check below is now
         redundant in the issuer-set case but kept for the ``self.issuer is

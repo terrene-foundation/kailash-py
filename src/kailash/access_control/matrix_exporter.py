@@ -11,7 +11,7 @@ ambiguous access decisions.
 
 Supported export formats: CSV, JSON, Markdown.
 
-Cross-SDK alignment: esperie-enterprise/kailash-rs#84
+Cross-SDK alignment: the Rust SDK (#84)
 """
 
 from __future__ import annotations
@@ -118,9 +118,7 @@ class RBACMatrix:
             roles=list(data.get("roles", [])),
             resources=list(data.get("resources", [])),
             generated_at=str(
-                data.get(
-                    "generated_at", datetime.now(timezone.utc).isoformat()
-                )
+                data.get("generated_at", datetime.now(timezone.utc).isoformat())
             ),
         )
 
@@ -272,9 +270,7 @@ class RBACMatrixExporter:
 
         # Header
         header = "| Role | " + " | ".join(rbac.resources) + " |"
-        separator = "|------|" + "|".join(
-            ["------" for _ in rbac.resources]
-        ) + "|"
+        separator = "|------|" + "|".join(["------" for _ in rbac.resources]) + "|"
 
         lines = [header, separator]
 
@@ -432,8 +428,16 @@ class RBACMatrixExporter:
     def _scopes_overlap(rule_a: Any, rule_b: Any) -> bool:
         """Determine whether two rules could apply to the same user."""
         # If either rule has no scope restrictions it applies to everyone
-        a_open = not rule_a.role and not rule_a.user_id and not getattr(rule_a, "tenant_id", None)
-        b_open = not rule_b.role and not rule_b.user_id and not getattr(rule_b, "tenant_id", None)
+        a_open = (
+            not rule_a.role
+            and not rule_a.user_id
+            and not getattr(rule_a, "tenant_id", None)
+        )
+        b_open = (
+            not rule_b.role
+            and not rule_b.user_id
+            and not getattr(rule_b, "tenant_id", None)
+        )
         if a_open or b_open:
             return True
 

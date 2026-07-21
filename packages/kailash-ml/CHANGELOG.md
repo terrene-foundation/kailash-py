@@ -532,7 +532,7 @@ per the deprecation warning's stated removal version.
 
 ### Cross-SDK posture
 
-Verified ABSENT in `esperie/kailash-rs` — Rust uses trait-object backends
+Verified ABSENT in the Rust SDK — Rust uses trait-object backends
 
 - `DashMap` `InferenceServer` + no `diagnose()` dispatcher, so none of
   the three Python issues have a Rust analog (per
