@@ -75,7 +75,11 @@ def test_legacy_tier_openai_first(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_all_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("OPENAI_PROD_MODEL", "gpt-4o-mini")
-    client = LlmClient.from_env()
+    # Resolving via the legacy tier ALONE emits a DeprecationWarning
+    # (kaizen/llm/from_env.py) -- assert it explicitly rather than let it
+    # leak unhandled into the collection-wide warnings summary.
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        client = LlmClient.from_env()
     assert client.deployment.wire.name == "OpenAiChat"
     assert client.deployment.default_model == "gpt-4o-mini"
 
@@ -89,7 +93,8 @@ def test_legacy_tier_ordering_openai_beats_anthropic(
     monkeypatch.setenv("OPENAI_PROD_MODEL", "gpt-4o-mini")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-3-opus")
-    client = LlmClient.from_env()
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        client = LlmClient.from_env()
     assert client.deployment.wire.name == "OpenAiChat"
 
 
@@ -99,7 +104,8 @@ def test_legacy_tier_anthropic_when_no_openai(
     _clear_all_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-3-opus")
-    client = LlmClient.from_env()
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        client = LlmClient.from_env()
     assert client.deployment.wire.name == "AnthropicMessages"
 
 

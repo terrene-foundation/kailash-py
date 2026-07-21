@@ -9,6 +9,7 @@ Provides:
 """
 
 import asyncio
+import inspect
 import subprocess
 import time
 from functools import wraps
@@ -305,7 +306,7 @@ def require_openai_api_key():
 
     def decorator(func):
         # Check if function is async
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
 
             @wraps(func)
             async def async_wrapper(*args, **kwargs):

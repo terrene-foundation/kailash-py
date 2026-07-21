@@ -25,10 +25,13 @@ The mapping is preserved byte-for-byte from the original shadow resolver:
   ``AzureEntra`` api-key auth strategy (``api-key: <KEY>`` header) — Azure
   OpenAI speaks the same on-wire JSON as OpenAI-direct; only the URL + auth
   header differ. A missing endpoint or api-key returns ``None`` (skip).
-* **known-but-unsupported providers** (``azure_ai_foundry``): raise
-  :class:`UnsupportedDeploymentProvider` — a DOCUMENTED Wave-B blocker
-  (no confirmed four-axis wire), NOT a silent ``None`` fallback
-  (``rules/zero-tolerance.md`` Rule 3).
+* **azure_ai_foundry** (#1892): resolves endpoint + api-key + model
+  (+ api-version) from the per-request overrides else the canonical
+  ``AZURE_AI_FOUNDRY_*`` env vars, and builds an ``OpenAiChat``-wire
+  deployment via :func:`kaizen.llm.presets.azure_ai_foundry_preset` — the
+  unified, MODEL-AGNOSTIC Foundry model-inference endpoint
+  (``/models/chat/completions``). A missing endpoint or api-key returns
+  ``None`` (skip), matching the ``azure`` / ``azure_openai`` contract.
 * **unmapped providers**: return ``None`` (skip) — a provider name this
   resolver has never heard of is a best-effort skip, distinct from a KNOWN
   provider we deliberately decline to map.
@@ -141,11 +144,14 @@ class UnsupportedDeploymentProvider(ValueError):
 
     Raised by :func:`resolve_deployment_for` for a provider the resolver
     recognises but deliberately declines to map because it has no confirmed
-    four-axis wire (currently ``azure_ai_foundry``). This is a DOCUMENTED
-    blocker for the Wave-B cutover — surfacing it as a typed error rather
-    than a silent ``None`` is the ``rules/zero-tolerance.md`` Rule 3
-    (no silent fallbacks) disposition: a Wave-B implementer wiring this
-    provider hits a clear signal instead of a shadow that silently never runs.
+    four-axis wire. This is a DOCUMENTED extensibility hook — surfacing a
+    future such provider as a typed error rather than a silent ``None`` is
+    the ``rules/zero-tolerance.md`` Rule 3 (no silent fallbacks) disposition:
+    an implementer wiring that provider hits a clear signal instead of a
+    shadow that silently never runs. As of #1892 (four-axis ``azure_ai_foundry``
+    wire) ``_UNSUPPORTED_PROVIDERS`` is empty — every KNOWN provider name has
+    a confirmed four-axis mapping; the mechanism is retained for the next
+    provider that needs it.
     """
 
     def __init__(self, provider: str) -> None:
@@ -153,7 +159,7 @@ class UnsupportedDeploymentProvider(ValueError):
         super().__init__(
             f"provider {provider!r} has no confirmed four-axis LlmDeployment "
             "mapping (no confirmed wire); it cannot be resolved for the "
-            "four-axis path. This is a DOCUMENTED Wave-B blocker, not a silent "
+            "four-axis path. This is a DOCUMENTED blocker, not a silent "
             "fallback (rules/zero-tolerance.md Rule 3) — add a confirmed wire "
             "mapping in kaizen.llm.deployment_resolver to enable it."
         )
@@ -162,10 +168,15 @@ class UnsupportedDeploymentProvider(ValueError):
 # Legacy provider names that map onto an Azure-OpenAI four-axis deployment.
 _AZURE_PROVIDERS = frozenset({"azure", "azure_openai"})
 
+# Legacy provider name that maps onto the Azure AI Foundry four-axis
+# deployment (#1892) -- the unified, model-agnostic model-inference wire.
+_AZURE_AI_FOUNDRY_PROVIDERS = frozenset({"azure_ai_foundry"})
+
 # KNOWN providers the resolver deliberately declines to map (no confirmed
 # four-axis wire) — resolving one raises UnsupportedDeploymentProvider rather
-# than silently returning None (rules/zero-tolerance.md Rule 3).
-_UNSUPPORTED_PROVIDERS = frozenset({"azure_ai_foundry"})
+# than silently returning None (rules/zero-tolerance.md Rule 3). Empty as of
+# #1892 -- azure_ai_foundry (the last such provider) now has a confirmed wire.
+_UNSUPPORTED_PROVIDERS: frozenset[str] = frozenset()
 
 
 def _resolve_azure_deployment(
@@ -265,6 +276,74 @@ def _resolve_azure_deployment(
     )
 
 
+def _resolve_azure_ai_foundry_deployment(
+    model: str,
+    api_key: Optional[str],
+    base_url: Optional[str],
+    *,
+    deployment: Optional[str] = None,
+    api_version: Optional[str] = None,
+):
+    """Build an ``OpenAiChat``-wire Azure AI Foundry deployment (#1892).
+
+    Azure AI Foundry's unified model-inference endpoint is MODEL-AGNOSTIC —
+    one fixed URL (``/models/chat/completions``) serves every model deployed
+    to the Foundry project; the model id travels in the wire body's
+    ``model`` field (never the URL), so there is no deployment-name-vs-family
+    split the way ``azure``/``azure_openai`` needs (#1859) — the resolved
+    model name IS both the wire identity and the canonical family.
+
+    Credential / model resolution precedence mirrors
+    ``_resolve_azure_deployment``'s contract:
+
+    * ``base_url`` (per-request override) else ``AZURE_AI_FOUNDRY_ENDPOINT``.
+    * ``api_key`` (per-request override) else ``AZURE_AI_FOUNDRY_API_KEY``.
+    * ``deployment`` (per-request override, from ``provider_config``) else
+      ``AZURE_AI_FOUNDRY_DEPLOYMENT`` else the caller's ``model`` argument —
+      the actual deployed model name/id (``rules/env-models.md``: never
+      hardcode; read from the environment).
+    * ``api_version`` (per-request override) else ``AZURE_AI_FOUNDRY_API_VERSION``
+      else the preset's pinned default (``AZURE_AI_FOUNDRY_DEFAULT_API_VERSION``).
+
+    A missing endpoint or api-key returns ``None`` (skip), matching the
+    ``azure`` / ``azure_openai`` missing-credential contract — a genuinely
+    absent credential is a quiet skip, NOT a raised error (only a KNOWN-but-
+    undeliverable provider name raises ``UnsupportedDeploymentProvider``).
+    """
+    from kaizen.llm.presets import azure_ai_foundry_preset
+
+    resolved_endpoint = (
+        base_url or os.environ.get("AZURE_AI_FOUNDRY_ENDPOINT", "").strip()
+    )
+    if not resolved_endpoint:
+        logger.debug(
+            "llm.dual_run.shadow_skipped",
+            extra={"provider": "azure_ai_foundry", "reason": "missing_base_url"},
+        )
+        return None
+    resolved_key = api_key or os.environ.get("AZURE_AI_FOUNDRY_API_KEY", "").strip()
+    if not resolved_key:
+        logger.debug(
+            "llm.dual_run.shadow_skipped",
+            extra={"provider": "azure_ai_foundry", "reason": "missing_api_key"},
+        )
+        return None
+    resolved_model = (
+        deployment or os.environ.get("AZURE_AI_FOUNDRY_DEPLOYMENT", "").strip() or model
+    )
+    resolved_api_version = (
+        api_version
+        or os.environ.get("AZURE_AI_FOUNDRY_API_VERSION", "").strip()
+        or None
+    )
+    return azure_ai_foundry_preset(
+        resolved_endpoint,
+        resolved_key,
+        resolved_model,
+        api_version=resolved_api_version,
+    )
+
+
 # Providers whose four-axis preset is keyed on an API key + the env var the
 # legacy provider itself reads. Preserved byte-for-byte from the original
 # `_shadow_deployment_for` map.
@@ -358,6 +437,15 @@ def resolve_deployment_for(
 
     if provider_key in _AZURE_PROVIDERS:
         return _resolve_azure_deployment(
+            model,
+            api_key,
+            base_url,
+            deployment=deployment,
+            api_version=api_version,
+        )
+
+    if provider_key in _AZURE_AI_FOUNDRY_PROVIDERS:
+        return _resolve_azure_ai_foundry_deployment(
             model,
             api_key,
             base_url,

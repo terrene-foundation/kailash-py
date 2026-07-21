@@ -129,6 +129,17 @@ _PRESET_CAPABILITIES: Final[Mapping[str, Mapping[str, bool]]] = {
     "azure_openai": _caps(
         tools=True, vision=True, batch=True, caching=True, audio=True
     ),
+    # azure_ai_foundry (#1892) is the unified MODEL-AGNOSTIC model-inference
+    # endpoint -- it serves arbitrary deployed models (OpenAI, Llama, Mistral,
+    # Cohere, ...) through one wire, so its capability row is intentionally
+    # the CONSERVATIVE common denominator rather than azure_openai's row:
+    # tool-calling is broadly supported across the served model families, but
+    # vision/batch/caching/audio vary per underlying model and are NOT
+    # guaranteed by the endpoint itself (per-model gating is the caller's
+    # responsibility, same convention as every other coarse row in this file).
+    "azure_ai_foundry": _caps(
+        tools=True, vision=False, batch=False, caching=False, audio=False
+    ),
     "vertex_claude": _caps(
         tools=True, vision=True, batch=False, caching=True, audio=False
     ),

@@ -348,20 +348,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4e/c3/61f746096d2b6c161bd7f3bf8db1fe741b8805cbf0ac9369b4953c37de35/autodoc-0.5.0.tar.gz", hash = "sha256:c4387c5a0f1c09b055bb2e384542ee1e016542f313b2a33d904ca77f0460ded3", size = 14178, upload-time = "2018-06-03T02:53:33.661Z" }
 
 [[package]]
-name = "azure-ai-inference"
-version = "1.0.0b9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "isodate" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/6a/ed85592e5c64e08c291992f58b1a94dab6869f28fb0f40fd753dced73ba6/azure_ai_inference-1.0.0b9.tar.gz", hash = "sha256:1feb496bd84b01ee2691befc04358fa25d7c344d8288e99364438859ad7cd5a4", size = 182408, upload-time = "2025-02-15T00:37:28.464Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/0f/27520da74769db6e58327d96c98e7b9a07ce686dff582c9a5ec60b03f9dd/azure_ai_inference-1.0.0b9-py3-none-any.whl", hash = "sha256:49823732e674092dad83bb8b0d1b65aa73111fab924d61349eb2a8cdc0493990", size = 124885, upload-time = "2025-02-15T00:37:29.964Z" },
-]
-
-[[package]]
 name = "azure-core"
 version = "1.39.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1800,7 +1786,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.50.0"
+version = "2.59.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2133,7 +2119,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.16.0"
+version = "2.18.0"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2171,7 +2157,7 @@ requires-dist = [
     { name = "google-cloud-storage", marker = "extra == 'cloud'", specifier = ">=2.18" },
     { name = "httpx", marker = "extra == 'fabric'", specifier = ">=0.27" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
-    { name = "kailash", specifier = ">=2.50.0" },
+    { name = "kailash", specifier = ">=2.51.0" },
     { name = "kailash", extras = ["server"], marker = "extra == 'dev'" },
     { name = "kailash-dataflow", extras = ["fabric", "cloud", "excel", "parquet", "streaming"], marker = "extra == 'fabric-all'" },
     { name = "kailash-dataflow", extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", "security", "monitoring", "templates", "fabric-all"], marker = "extra == 'all'" },
@@ -2201,7 +2187,7 @@ provides-extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", 
 
 [[package]]
 name = "kailash-kaizen"
-version = "2.30.0"
+version = "2.40.0"
 source = { editable = "packages/kailash-kaizen" }
 dependencies = [
     { name = "aiohttp" },
@@ -2230,8 +2216,6 @@ observability = [
     { name = "structlog" },
 ]
 providers-azure = [
-    { name = "azure-ai-inference" },
-    { name = "azure-core" },
     { name = "azure-identity" },
 ]
 providers-google = [
@@ -2251,8 +2235,6 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.0.0" },
     { name = "arxiv", marker = "extra == 'research'", specifier = ">=2.0" },
     { name = "asyncpg", marker = "extra == 'db'", specifier = ">=0.28.0" },
-    { name = "azure-ai-inference", marker = "extra == 'providers-azure'", specifier = ">=1.0.0b9" },
-    { name = "azure-core", marker = "extra == 'providers-azure'", specifier = ">=1.38.0" },
     { name = "azure-identity", marker = "extra == 'providers-azure'", specifier = ">=1.15.0" },
     { name = "beautifulsoup4", marker = "extra == 'web-search'", specifier = ">=4.12" },
     { name = "bert-score", marker = "extra == 'evaluation'", specifier = ">=0.3.13" },
@@ -2268,7 +2250,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'providers-google'", specifier = ">=1.21.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12" },
-    { name = "kailash", specifier = ">=2.50.0" },
+    { name = "kailash", specifier = ">=2.56.0" },
     { name = "kailash-kaizen", extras = ["providers-azure", "providers-google", "providers-tokens", "providers-http", "server", "observability", "db", "cache", "rag", "research-validator"], marker = "extra == 'all'" },
     { name = "kailash-mcp", specifier = ">=0.2.4" },
     { name = "networkx", marker = "extra == 'rag'", specifier = ">=3.0" },
@@ -2306,7 +2288,7 @@ provides-extras = ["providers-azure", "providers-google", "providers-tokens", "p
 
 [[package]]
 name = "kailash-mcp"
-version = "0.3.0"
+version = "0.4.2"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "aiohttp" },
@@ -2326,7 +2308,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'platform'", specifier = ">=0.115.12" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.12" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.25.0" },
-    { name = "kailash", specifier = ">=2.50.0" },
+    { name = "kailash", specifier = ">=2.56.0" },
     { name = "kailash-mcp", extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server", "platform", "monitoring"], marker = "extra == 'full'" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.23.0" },
     { name = "prometheus-client", marker = "extra == 'monitoring'", specifier = ">=0.22.1" },
@@ -2449,7 +2431,7 @@ provides-extras = ["dl", "dl-gpu", "rl", "rl-offline", "rl-envpool", "rl-distrib
 
 [[package]]
 name = "kailash-nexus"
-version = "2.12.0"
+version = "2.14.0"
 source = { editable = "packages/kailash-nexus" }
 dependencies = [
     { name = "aiofiles" },
@@ -2501,7 +2483,7 @@ provides-extras = ["metrics", "dev"]
 
 [[package]]
 name = "kailash-pact"
-version = "0.14.3"
+version = "0.16.1"
 source = { editable = "packages/kailash-pact" }
 dependencies = [
     { name = "click" },
@@ -2539,7 +2521,7 @@ provides-extras = ["api", "execution", "dev", "all"]
 
 [[package]]
 name = "kaizen-agents"
-version = "0.9.11"
+version = "0.11.3"
 source = { editable = "packages/kaizen-agents" }
 dependencies = [
     { name = "anthropic" },
@@ -2557,7 +2539,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "kailash", specifier = ">=2.14.0" },
-    { name = "kailash-kaizen", specifier = ">=2.25.1" },
+    { name = "kailash-kaizen", specifier = ">=2.36.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "openai", specifier = ">=1.30.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.2.0" },

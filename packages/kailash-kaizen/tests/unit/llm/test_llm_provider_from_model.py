@@ -202,7 +202,11 @@ def test_from_env_legacy_tier_selects_deepseek(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
     monkeypatch.setenv("DEEPSEEK_PROD_MODEL", "deepseek-chat")
 
-    client = LlmClient.from_env()
+    # Resolving via the legacy tier ALONE emits a DeprecationWarning
+    # (kaizen/llm/from_env.py) -- assert it explicitly rather than let it
+    # leak unhandled into the collection-wide warnings summary.
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        client = LlmClient.from_env()
     dep = client.deployment
     assert dep is not None
     assert dep.preset_name == "deepseek"
@@ -235,15 +239,18 @@ def test_from_env_openai_still_wins_over_deepseek(
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek")
     monkeypatch.setenv("DEEPSEEK_PROD_MODEL", "deepseek-chat")
 
-    assert LlmClient.from_env().deployment.preset_name == "openai"
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        assert LlmClient.from_env().deployment.preset_name == "openai"
 
 
 def test_from_env_deepseek_missing_model_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Key set, model unset → typed MissingCredential (no silent unauthenticated
-    # or model-less deployment).
+    # or model-less deployment). The legacy-tier deprecation warning still
+    # fires before resolution discovers the missing model.
     _clear_provider_env(monkeypatch)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek-test")
-    with pytest.raises(MissingCredential):
-        LlmClient.from_env()
+    with pytest.warns(DeprecationWarning, match="legacy per-provider-key"):
+        with pytest.raises(MissingCredential):
+            LlmClient.from_env()

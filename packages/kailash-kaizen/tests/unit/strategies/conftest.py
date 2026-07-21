@@ -28,17 +28,19 @@ and are both stubbed (the third, a legacy direct-instantiation of
 ``kaizen.providers.llm.openai.OpenAIProvider``, was removed when #1720 Wave-2
 retired that provider and cut ``BaseAgent`` fully onto the four-axis path):
 
-1. **Four-axis path (#1720 Wave-B1a live cutover)** --
-   ``LLMAgentNode._provider_llm_response()`` now resolves a four-axis
+1. **Four-axis path (#1720 Wave-B1a live cutover, #1892 azure_ai_foundry
+   closure)** -- ``LLMAgentNode._provider_llm_response()`` resolves EVERY
+   provider (including ``azure_ai_foundry`` since #1892) through a four-axis
    deployment via ``kaizen.llm.deployment_resolver.resolve_deployment_for``
-   and calls ``kaizen.llm.client.LlmClient.complete(...)`` (the legacy
-   ``get_provider(...).chat(...)`` seam is retained only for
-   ``azure_ai_foundry``). Stubbed by patching ``resolve_deployment_for`` to a
-   sentinel deployment and ``LlmClient.from_deployment_sync`` to a fake client
-   whose ``complete()`` returns a deterministic four-axis response.
+   and calls ``kaizen.llm.client.LlmClient.complete(...)`` -- there is no
+   remaining ``get_provider(...).chat(...)`` fallback branch. Stubbed by
+   patching ``resolve_deployment_for`` to a sentinel deployment and
+   ``LlmClient.from_deployment_sync`` to a fake client whose ``complete()``
+   returns a deterministic four-axis response.
 2. **Registry path** -- ``kaizen.providers.registry.get_provider(name)`` ->
-   ``provider.chat(...)``. Retained for the azure_ai_foundry legacy branch and
-   any other code path still resolving through the registry.
+   ``provider.chat(...)``. The registry is EMPTY as of #1892 (no live caller
+   reaches it); this stub is retained defensively for any future provider
+   that lands there.
 
 Tests that already mock their own network boundary (e.g.
 ``test_single_shot_mcp.py`` patches ``kaizen.strategies.single_shot.

@@ -20,11 +20,7 @@ import importlib
 import warnings
 from typing import TYPE_CHECKING
 
-from kaizen.providers.base import (
-    BaseAIProvider,
-    EmbeddingProvider,
-    UnifiedAIProvider,
-)
+from kaizen.providers.base import BaseAIProvider, EmbeddingProvider, UnifiedAIProvider
 from kaizen.providers.cost import CostConfig, CostTracker, ModelPricing
 from kaizen.providers.errors import (
     AuthenticationError,
@@ -68,12 +64,12 @@ from kaizen.providers.types import (
 # their canonical modules DELETED (delete-now, no deprecation cycle — their
 # transports are served end-to-end by the four-axis ``LlmClient`` path). Their
 # barrel re-exports are removed here too; ``from kaizen.providers import
-# CohereProvider`` now raises AttributeError. The remaining shims (base
-# ``LLMProvider``, the kept ``AzureAIFoundryProvider``, the registry accessors)
-# stay deprecated until Wave-C.
+# CohereProvider`` now raises AttributeError. #1892 retired
+# ``AzureAIFoundryProvider`` the same way (its deprecation cycle — shipped in
+# 2.39.0 — is complete; the module was deleted). The remaining shims (base
+# ``LLMProvider``, the registry accessors) stay deprecated until Wave-C.
 _LEGACY_PROVIDER_MODULES: dict[str, str] = {
     "LLMProvider": "kaizen.providers.base",
-    "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
     "PROVIDERS": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
@@ -83,7 +79,6 @@ if TYPE_CHECKING:
     # Analyzer-only imports so pyright / CodeQL py/undefined-export / Sphinx
     # autodoc still resolve the legacy names kept in ``__all__`` below.
     from kaizen.providers.base import LLMProvider
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider
     from kaizen.providers.registry import (
         PROVIDERS,
         get_available_providers,
@@ -158,9 +153,8 @@ __all__ = [
     "CostTracker",
     "CostConfig",
     "ModelPricing",
-    # Providers (kept — legacy chat providers retired in #1720 Wave-2; the
-    # embedding-legacy + unified-azure providers retired in #1820)
-    "AzureAIFoundryProvider",
+    # Providers -- every legacy chat/embedding/unified-azure provider retired
+    # (#1720 Wave-2, #1820, #1892); LLMProvider is the sole remaining shim.
     # Registry
     "PROVIDERS",
     "get_provider",

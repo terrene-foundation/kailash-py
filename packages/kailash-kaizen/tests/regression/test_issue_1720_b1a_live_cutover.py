@@ -12,8 +12,9 @@ canned-bytes injection the parity harness uses (``tests/parity/_harness.py``):
 
 * (a) an openai-family provider returns the FOUR-AXIS-mapped shape parsed from
   shared canned bytes through the real ``openai_chat`` wire → ``to_legacy_shape``;
-* (b) ``azure_ai_foundry`` (no confirmed four-axis wire) STILL routes to the
-  legacy ``get_provider(...).chat(...)`` path;
+* (b) #1892: ``azure_ai_foundry`` now ALSO routes through the four-axis path
+  (its own confirmed wire) -- there is no remaining
+  ``get_provider(...).chat(...)`` fallback branch on ``LLMAgentNode``;
 * (c) the #487 usage total-coercion still fires on the four-axis path (a falsy
   ``total_tokens`` is recomputed from the parts);
 * (d) the stream-aware per-provider ``tool_choice`` default still yields
@@ -117,60 +118,61 @@ def test_provider_llm_response_returns_four_axis_mapped_shape_for_openai(monkeyp
 
 
 # ---------------------------------------------------------------------------
-# (b) azure_ai_foundry STILL routes to the legacy get_provider chat path.
+# (b) #1892: azure_ai_foundry now ALSO routes through the four-axis path --
+# there is no remaining legacy get_provider(...).chat(...) fallback branch.
 # ---------------------------------------------------------------------------
 
 
-def test_azure_ai_foundry_routes_legacy_provider_chat(monkeypatch):
-    """`azure_ai_foundry` has no confirmed four-axis wire (resolve raises
-    UnsupportedDeploymentProvider), so `_provider_llm_response` falls back to
-    the legacy `get_provider(...).chat(...)` path for that provider ONLY."""
-    legacy_calls: dict = {}
+def test_azure_ai_foundry_routes_through_four_axis_path(monkeypatch):
+    """`azure_ai_foundry` now has a confirmed four-axis wire (#1892), so
+    `_provider_llm_response` resolves it exactly like every other provider --
+    if the (now-deleted) legacy `get_provider(...).chat(...)` path were
+    (wrongly) taken, this would blow up loudly."""
+    canned = load_fixture("openai_response")
 
-    class _FoundryStub:
-        def is_available(self) -> bool:
-            return True
-
-        def chat(self, **kwargs: Any) -> dict:
-            legacy_calls["chat"] = kwargs
-            return {
-                "content": "legacy foundry answer",
-                "role": "assistant",
-                "model": kwargs["model"],
-                "tool_calls": [],
-                "finish_reason": "stop",
-                "usage": {
-                    "prompt_tokens": 3,
-                    "completion_tokens": 2,
-                    "total_tokens": 5,
-                },
-            }
-
-    monkeypatch.setattr(
-        "kaizen.providers.registry.get_provider",
-        lambda name, **kw: _FoundryStub(),
+    deployment = resolve_deployment_for(
+        "azure_ai_foundry",
+        "gpt-5-nano",
+        api_key="k-b1a-foundry-placeholder",
+        base_url="https://my-foundry-resource.services.ai.azure.com",
     )
-    # If the four-axis path were (wrongly) taken, this would blow up loudly.
+    assert deployment is not None
+    real_client = LlmClient.from_deployment(deployment)
+    transport = CapturingTransport(canned)
+    orig_complete = real_client.complete
+
+    async def _complete_via_transport(messages: List[Dict[str, Any]], **kw: Any):
+        kw.pop("http_client", None)
+        return await orig_complete(messages, http_client=transport, **kw)
+
+    monkeypatch.setattr(real_client, "complete", _complete_via_transport)
     monkeypatch.setattr(
         "kaizen.llm.client.LlmClient.from_deployment_sync",
-        classmethod(
-            lambda cls, *a, **kw: (_ for _ in ()).throw(
-                AssertionError("four-axis path taken for azure_ai_foundry")
-            )
+        classmethod(lambda cls, *a, **kw: real_client),
+    )
+    # If the legacy registry path were (wrongly) taken, this would blow up
+    # loudly -- the registry is empty as of #1892, so get_provider would
+    # raise ValueError anyway, but this makes the intent explicit.
+    monkeypatch.setattr(
+        "kaizen.providers.registry.get_provider",
+        lambda name, **kw: (_ for _ in ()).throw(
+            AssertionError("legacy registry path taken for azure_ai_foundry")
         ),
     )
 
     agent = LLMAgentNode()
     response = agent._provider_llm_response(
         provider="azure_ai_foundry",
-        model="phi-4",
+        model="gpt-5-nano",
         messages=_MSGS,
         tools=[],
         generation_config={},
+        api_key="k-b1a-foundry-placeholder",
     )
 
-    assert legacy_calls, "legacy get_provider(...).chat(...) was never called"
-    assert response["content"] == "legacy foundry answer"
+    assert response["content"] == "The capital of France is Paris."
+    assert response["finish_reason"] == "stop"
+    assert len(transport.calls) == 1
 
 
 # ---------------------------------------------------------------------------

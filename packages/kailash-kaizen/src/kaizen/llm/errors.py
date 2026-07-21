@@ -81,6 +81,15 @@ _CRED_PATTERNS = (
     re.compile(r"eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"),
     # Azure storage SAS token pattern (sig= parameter in a query string).
     re.compile(r"sig=[A-Za-z0-9%+/=_\-]{20,}"),
+    # Generic opaque hex token (32+ chars, common in Azure/other services) --
+    # Azure Cognitive Services / AI Foundry API keys are typically bare
+    # 32+-char lowercase-hex strings with no vendor prefix (authenticated via
+    # the `api-key: <KEY>` header -- kaizen/llm/auth/azure.py), so none of the
+    # prefixed patterns above catch them. Mirrors the identical pattern +
+    # intent already in kaizen/nodes/ai/error_sanitizer.py::_CREDENTIAL_PATTERNS
+    # (second-layer LLMAgentNode scrub) so the four-axis LlmClient/LlmDeployment
+    # direct-use path (azure_ai_foundry, #1892) gets the same coverage.
+    re.compile(r"\b[a-f0-9]{32,}\b", re.ASCII),
 )
 
 

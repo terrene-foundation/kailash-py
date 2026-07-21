@@ -14,21 +14,24 @@ Wave-2 then RETIRED the seven legacy chat providers (openai / anthropic /
 google / ollama / docker / perplexity / mock) onto the four-axis LlmClient and
 DELETED their canonical modules. #1820 likewise RETIRED the embedding-legacy
 ``CohereProvider`` / ``HuggingFaceProvider`` (delete-now, no deprecation cycle)
-and the unified-azure provider stack, deleting their modules too. Their barrel
+and the unified-azure provider stack, deleting their modules too. #1892
+completed the SAME end-of-cycle for ``AzureAIFoundryProvider`` -- its
+DeprecationWarning shim shipped in kaizen 2.39.0 (one minor cycle), and this PR
+deletes its canonical module (``kaizen.providers.llm.azure``). Their barrel
 re-exports were removed in the same step — the deprecation cycle for all of
 them is COMPLETE, so accessing them via either barrel now raises
 ``AttributeError`` (no warning, no resolution). The STILL-shimmed names (the
-base ``LLMProvider``, the kept ``AzureAIFoundryProvider``, and the registry
-accessors ``PROVIDERS`` / ``get_provider`` / ``get_available_providers``) stay
-on the warn+resolve shim until Wave-C.
+base ``LLMProvider`` and the registry accessors ``PROVIDERS`` / ``get_provider``
+/ ``get_available_providers``) stay on the warn+resolve shim until Wave-C.
 
 This pins the behavioral contract so a refactor cannot silently change it:
 
-* Accessing a STILL-shimmed legacy name (e.g. ``AzureAIFoundryProvider``) via
-  either barrel emits a ``DeprecationWarning`` AND returns the real class
+* Accessing a STILL-shimmed legacy name (e.g. ``LLMProvider``) via either
+  barrel emits a ``DeprecationWarning`` AND returns the real class
   (identity-equal to the canonical-module symbol).
-* Accessing a REMOVED legacy provider (e.g. ``OpenAIProvider``) via either
-  barrel raises ``AttributeError`` — the end-of-cycle contract.
+* Accessing a REMOVED legacy provider (e.g. ``OpenAIProvider``,
+  ``AzureAIFoundryProvider``) via either barrel raises ``AttributeError`` —
+  the end-of-cycle contract.
 * The registry accessors (``PROVIDERS`` / ``get_provider`` /
   ``get_available_providers``) warn + resolve the same way.
 * A NON-legacy eager export (``EmbeddingGeneratorNode``, ``BaseAIProvider``)
@@ -55,11 +58,11 @@ pytestmark = pytest.mark.regression
 
 
 # Still-shimmed legacy name -> canonical module, per barrel (warn + resolve).
-# The seven Wave-2-retired chat providers are NOT here — their deprecation cycle
-# is complete and they now raise AttributeError (see _REMOVED_LEGACY_PROVIDERS).
+# The seven Wave-2-retired chat providers + azure_ai_foundry (#1892) are NOT
+# here — their deprecation cycle is complete and they now raise
+# AttributeError (see _REMOVED_LEGACY_PROVIDERS).
 _NODES_AI_LEGACY = {
     "LLMProvider": "kaizen.providers.base",
-    "AzureAIFoundryProvider": "kaizen.providers.llm.azure",
     "PROVIDERS": "kaizen.providers.registry",
     "get_provider": "kaizen.providers.registry",
     "get_available_providers": "kaizen.providers.registry",
@@ -76,10 +79,15 @@ _PROVIDERS_LEGACY_WARNS = _PROVIDERS_LEGACY
 # #1720 Wave-2: seven legacy chat providers retired onto the four-axis LlmClient,
 # modules deleted, barrel re-exports removed.
 # #1820: the embedding-legacy CohereProvider / HuggingFaceProvider joined them
-# (delete-now, no deprecation cycle). Accessing any of these now raises
-# AttributeError (no warning, no resolution) — the end-of-cycle contract.
+# (delete-now, no deprecation cycle).
+# #1892: AzureAIFoundryProvider completed its own deprecation cycle (the
+# DeprecationWarning shipped in kaizen 2.39.0) and joins them too — its module
+# is deleted and it is the LAST provider to complete this transition.
+# Accessing any of these now raises AttributeError (no warning, no
+# resolution) — the end-of-cycle contract.
 _REMOVED_LEGACY_PROVIDERS = [
     "AnthropicProvider",
+    "AzureAIFoundryProvider",
     "CohereProvider",
     "DockerModelRunnerProvider",
     "GoogleGeminiProvider",
@@ -114,15 +122,6 @@ def _canonical(name: str, module_path: str) -> object:
 # --------------------------------------------------------------------------
 
 
-def test_nodes_ai_azure_provider_warns_and_resolves_real_class() -> None:
-    with pytest.warns(DeprecationWarning, match=r"kaizen\.nodes\.ai.*#1720"):
-        resolved = nodes_ai.AzureAIFoundryProvider
-
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider as Canonical
-
-    assert resolved is Canonical
-
-
 @pytest.mark.parametrize(("name", "module_path"), sorted(_NODES_AI_LEGACY.items()))
 def test_nodes_ai_every_legacy_name_warns_and_resolves(
     name: str, module_path: str
@@ -135,15 +134,6 @@ def test_nodes_ai_every_legacy_name_warns_and_resolves(
 # --------------------------------------------------------------------------
 # (b) providers — access warns AND returns the real class (identity-equal).
 # --------------------------------------------------------------------------
-
-
-def test_providers_azure_provider_warns_and_resolves_real_class() -> None:
-    with pytest.warns(DeprecationWarning, match=r"kaizen\.providers.*#1720"):
-        resolved = providers.AzureAIFoundryProvider
-
-    from kaizen.providers.llm.azure import AzureAIFoundryProvider as Canonical
-
-    assert resolved is Canonical
 
 
 @pytest.mark.parametrize(
@@ -198,10 +188,8 @@ def test_providers_all_still_contains_every_legacy_name() -> None:
 
 
 def test_nodes_ai_registry_accessors_warn_and_resolve() -> None:
-    from kaizen.providers.registry import (
-        PROVIDERS as CanonPROVIDERS,
-        get_provider as canon_get_provider,
-    )
+    from kaizen.providers.registry import PROVIDERS as CanonPROVIDERS
+    from kaizen.providers.registry import get_provider as canon_get_provider
 
     with pytest.warns(DeprecationWarning, match=r"#1720"):
         assert nodes_ai.PROVIDERS is CanonPROVIDERS
@@ -210,10 +198,8 @@ def test_nodes_ai_registry_accessors_warn_and_resolve() -> None:
 
 
 def test_providers_registry_accessors_warn_and_resolve() -> None:
-    from kaizen.providers.registry import (
-        PROVIDERS as CanonPROVIDERS,
-        get_provider as canon_get_provider,
-    )
+    from kaizen.providers.registry import PROVIDERS as CanonPROVIDERS
+    from kaizen.providers.registry import get_provider as canon_get_provider
 
     with pytest.warns(DeprecationWarning, match=r"#1720"):
         assert providers.PROVIDERS is CanonPROVIDERS
