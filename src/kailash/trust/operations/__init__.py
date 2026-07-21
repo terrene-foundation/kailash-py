@@ -19,7 +19,7 @@ import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from kailash.trust.authority import (
@@ -532,6 +532,226 @@ class TrustOperations:
 
         return envelope
 
+    async def _derive_enforced_envelope(
+        self,
+        chain: TrustLineageChain,
+    ) -> Tuple[ConstraintEnvelope, Optional[str]]:
+        """Re-derive the ENFORCED constraint envelope from SIGNED sources only.
+
+        SECURITY (constraint-envelope tamper resistance): the persisted
+        ``chain.constraint_envelope`` is an UNSIGNED derived cache — no
+        signature covers its ``active_constraints`` at any verification level,
+        so a store-writer can strip an enforced constraint (e.g. delete a
+        ``read_only`` entry, or null the whole envelope) and ``verify()`` would
+        enforce the weakened set. ``verify()`` MUST NOT trust it.
+
+        This rebuilds the enforced set from the two SIGNED sources that
+        :meth:`_compute_constraint_envelope` aggregates —
+        ``genesis.metadata["constraints"]`` and each ``cap.constraints`` — and
+        DELIBERATELY EXCLUDES the UNSIGNED ``delegation.constraint_subset``
+        (advisory only; see #1896). Constraint tightening added via a
+        delegation is carried into a SIGNED derived capability at delegation
+        time (``establish_delegation``), so excluding the raw
+        ``constraint_subset`` here loses no legitimately-enforced constraint.
+
+        Every CONTRIBUTING source's Ed25519 signature is verified before its
+        constraints are trusted (genesis when it carries constraints; each
+        capability that carries constraints — constraint-less capabilities are
+        skipped to bound cost). A tamper of a non-matched capability's
+        constraints or of ``genesis.metadata`` is therefore caught here at
+        STANDARD (the default enforcement level), not only at FULL. Fails
+        CLOSED: an unresolved authority or an invalid contributing signature
+        returns a denial reason and the caller MUST deny.
+
+        Returns:
+            ``(enforced_envelope, denial_reason)``. ``denial_reason`` is
+            non-None iff a contributing source failed verification — the caller
+            MUST return a denial and MUST NOT evaluate the (empty) envelope.
+        """
+        empty = ConstraintEnvelope(
+            id=f"env-{uuid4()}",
+            agent_id=chain.genesis.agent_id,
+            active_constraints=[],
+            computed_at=datetime.now(timezone.utc),
+            valid_until=chain.genesis.expires_at,
+            constraint_hash="",
+        )
+
+        # Resolve the signing authority once (genesis + every capability on a
+        # chain share the genesis authority). Fail closed if it cannot resolve.
+        try:
+            authority = await self.authority_registry.get_authority(
+                chain.genesis.authority_id,
+                include_inactive=True,  # historical verification
+            )
+        except (AuthorityNotFoundError, AuthorityInactiveError):
+            logger.warning(
+                "enforced-constraint derivation: signing authority unresolved "
+                "(fail-closed denial)",
+                extra={"authority_id": chain.genesis.authority_id},
+            )
+            return empty, "Signing authority unresolved — constraints untrusted"
+
+        constraints: List[Constraint] = []
+
+        # (1) Genesis-level constraints — SIGNED via genesis.to_signing_payload
+        #     (which covers ``metadata``). Verify the genesis signature before
+        #     trusting genesis.metadata["constraints"]; only when genesis
+        #     actually contributes constraints (a constraint-less genesis is not
+        #     a source, so no new signature gate for the common case).
+        genesis_constraint_names = chain.genesis.metadata.get("constraints", [])
+        if genesis_constraint_names:
+            genesis_payload = serialize_for_signing(chain.genesis.to_signing_payload())
+            try:
+                genesis_ok = await self.key_manager.verify(
+                    genesis_payload,
+                    chain.genesis.signature,
+                    authority.public_key,
+                )
+            except InvalidSignatureError:
+                # A malformed / empty / wrong-length signature RAISES rather
+                # than returning False (mirrors _verify_capability_signature).
+                # A store-tampered genesis may carry exactly such a signature;
+                # treat it as invalid and fall through to the fail-closed
+                # denial below (log + deny) — never a silent swallow.
+                logger.warning(
+                    "enforced-constraint derivation: genesis signature "
+                    "malformed or unverifiable (fail-closed denial)",
+                    extra={"genesis_id": chain.genesis.id},
+                )
+                genesis_ok = False
+            if not genesis_ok:
+                logger.warning(
+                    "enforced-constraint derivation: genesis signature invalid "
+                    "(fail-closed denial)",
+                    extra={"genesis_id": chain.genesis.id},
+                )
+                return empty, "Genesis signature invalid — constraints untrusted"
+            # Mirror _compute_constraint_envelope's genesis construction exactly
+            # (type FINANCIAL, source "genesis") so the enforced set is
+            # byte-for-byte the legitimate set on an un-tampered chain.
+            for name in genesis_constraint_names:
+                constraints.append(
+                    Constraint(
+                        id=f"con-{uuid4()}",
+                        constraint_type=ConstraintType.FINANCIAL,
+                        value=name,
+                        source="genesis",
+                    )
+                )
+
+        # (2) Capability-level constraints — SIGNED via cap.to_signing_payload
+        #     (which covers ``constraints``). Verify EVERY capability's
+        #     signature — NOT only those that currently carry constraints. A
+        #     store-writer who STRIPS a constraint from a capability makes it
+        #     appear constraint-less; skipping constraint-less caps would let
+        #     that tampered capability escape signature verification and
+        #     silently drop the stripped constraint — the SAME escalation class
+        #     this method closes, via a sibling vector. A legitimately
+        #     constraint-less capability carries a valid signature over its
+        #     (empty) constraints and passes; a stripped one no longer matches
+        #     its signature and fails closed. (Cost: N capability verifies at
+        #     STANDARD — the constraint-decision soundness cost.) Mirror
+        #     _compute_constraint_envelope's capability construction (type
+        #     OPERATIONAL, source "capability:<id>").
+        for cap in chain.capabilities:
+            if not await self._verify_capability_signature(
+                chain, cap, authority=authority
+            ):
+                return (
+                    empty,
+                    f"Capability signature invalid — constraints untrusted: {cap.id}",
+                )
+            for name in cap.constraints:
+                constraints.append(
+                    Constraint(
+                        id=f"con-{uuid4()}",
+                        constraint_type=ConstraintType.OPERATIONAL,
+                        value=name,
+                        source=f"capability:{cap.id}",
+                    )
+                )
+
+        enforced = ConstraintEnvelope(
+            id=f"env-{uuid4()}",
+            agent_id=chain.genesis.agent_id,
+            active_constraints=constraints,
+            computed_at=datetime.now(timezone.utc),
+            valid_until=chain.genesis.expires_at,
+            constraint_hash="",  # recomputed by __post_init__
+        )
+        return enforced, None
+
+    async def _build_signed_derived_caps(
+        self,
+        *,
+        cap_names: List[str],
+        source_capabilities: List[CapabilityAttestation],
+        constraint_subset: List[str],
+        authority: Any,
+        authority_id: str,
+        expires_at: Optional[datetime],
+    ) -> List[CapabilityAttestation]:
+        """Build SIGNED derived capabilities carrying a delegation's tightening.
+
+        Constraint tightening added by a delegation MUST be expressed as SIGNED
+        derived capabilities — NOT only via the UNSIGNED
+        ``DelegationRecord.constraint_subset`` — so that the enforced constraint
+        set (which :meth:`verify` re-derives from SIGNED sources only, see
+        :meth:`_derive_enforced_envelope`) includes the tightening and a
+        store-writer cannot strip it (constraint-envelope tamper resistance).
+
+        This is the SINGLE signing path used by BOTH ``establish_delegation``
+        branches — the new-delegatee-chain branch and the existing-delegatee
+        branch — so the two cannot drift (``security.md`` § Pre-Encoder
+        Consolidation). Each derived capability inherits ``capability_type`` and
+        ``scope`` from the matching delegator capability and carries the
+        tightened ``constraint_subset`` as its (signed) ``constraints``.
+
+        Args:
+            cap_names: Capability names being delegated.
+            source_capabilities: The delegator's capabilities (matched by
+                pattern to inherit type + scope).
+            constraint_subset: The tightened constraint labels to bind.
+            authority: The resolved signing authority.
+            authority_id: The signing authority id (attester).
+            expires_at: The derived capability expiry.
+
+        Returns:
+            A list of signed :class:`CapabilityAttestation` (one per matched
+            delegated capability).
+        """
+        derived: List[CapabilityAttestation] = []
+        for cap_name in cap_names:
+            source_cap = next(
+                (
+                    c
+                    for c in source_capabilities
+                    if self._capability_matches_pattern(c.capability, cap_name)
+                ),
+                None,
+            )
+            if source_cap is None:
+                continue
+            derived_cap = CapabilityAttestation(
+                id=f"cap-{uuid4()}",
+                capability=cap_name,
+                capability_type=source_cap.capability_type,
+                constraints=constraint_subset,
+                attester_id=authority_id,
+                attested_at=datetime.now(timezone.utc),
+                expires_at=expires_at,
+                signature="",
+                scope=source_cap.scope,
+            )
+            cap_payload = serialize_for_signing(derived_cap.to_signing_payload())
+            derived_cap.signature = await self.key_manager.sign(
+                cap_payload,
+                authority.signing_key_id,
+            )
+            derived.append(derived_cap)
+        return derived
+
     # =========================================================================
     # VERIFY Operation
     # =========================================================================
@@ -642,25 +862,50 @@ class TrustOperations:
                     level=level,
                 )
 
-        # Evaluate constraints
-        if chain.constraint_envelope is not None:
-            constraint_result = self._evaluate_constraints(
-                chain.constraint_envelope,
-                action,
-                resource,
-                context,
+        # Evaluate constraints against a set RE-DERIVED from SIGNED, verified
+        # sources — NEVER the persisted chain.constraint_envelope, which is an
+        # unsigned derived cache a store-writer can tamper (constraint-envelope
+        # tamper resistance). Fails closed if a contributing source's signature
+        # is invalid.
+        enforced_envelope, derivation_denial = await self._derive_enforced_envelope(
+            chain
+        )
+        if derivation_denial is not None:
+            return VerificationResult(
+                valid=False,
+                reason=derivation_denial,
+                level=level,
             )
 
-            if not constraint_result.permitted:
-                return VerificationResult(
-                    valid=False,
-                    reason="Constraint violation",
-                    violations=constraint_result.violations,
-                    level=level,
-                )
+        constraint_result = self._evaluate_constraints(
+            enforced_envelope,
+            action,
+            resource,
+            context,
+        )
 
-        # Reasoning trace verification (implemented in Phase 4)
-        # Check if REASONING_REQUIRED constraint is active
+        if not constraint_result.permitted:
+            return VerificationResult(
+                valid=False,
+                reason="Constraint violation",
+                violations=constraint_result.violations,
+                level=level,
+            )
+
+        # Reasoning-trace REQUIREMENT detection is a DIFFERENT mechanism from
+        # constraint ENFORCEMENT above. A REASONING_REQUIRED constraint is
+        # configured by injecting it directly into the persisted envelope — no
+        # SIGNED source produces one (_compute_constraint_envelope only emits
+        # FINANCIAL/OPERATIONAL/DATA_ACCESS constraints, typed by source), so it
+        # is NOT reconstructible from the signed sources and MUST be read from
+        # the persisted policy. This detection therefore reads
+        # chain.constraint_envelope, NOT the re-derived enforced_envelope.
+        # Access-escalation is closed above (access constraints come from signed
+        # sources and cannot be stripped); a store-writer suppressing
+        # REASONING_REQUIRED only bypasses a reasoning-trace requirement
+        # (auditability, not access — lower severity, and pre-existing). Full
+        # tamper-evidence for directly-injected constraints requires signing the
+        # envelope itself (tracked follow-up).
         reasoning_required = chain.constraint_envelope is not None and any(
             c.constraint_type == ConstraintType.REASONING_REQUIRED
             for c in chain.constraint_envelope.active_constraints
@@ -1985,7 +2230,24 @@ class TrustOperations:
             delegatee_chain = await self.trust_store.get_chain(delegatee_id)
             # Add delegation to existing chain
             delegatee_chain.delegations.append(delegation)
-            # Recompute constraint envelope
+            # Express the delegation's tightening as SIGNED derived capabilities
+            # appended to the delegatee's chain, so the enforced set (re-derived
+            # from SIGNED sources at verify) includes it and a store-writer
+            # cannot strip the tightening by editing the unsigned
+            # constraint_subset / the persisted envelope. Mirrors the
+            # new-delegatee branch below via the shared signing path.
+            if constraint_subset:
+                delegatee_chain.capabilities.extend(
+                    await self._build_signed_derived_caps(
+                        cap_names=capabilities,
+                        source_capabilities=delegator_chain.capabilities,
+                        constraint_subset=constraint_subset,
+                        authority=authority,
+                        authority_id=authority_id,
+                        expires_at=expires_at,
+                    )
+                )
+            # Recompute the (advisory) persisted constraint envelope cache.
             delegatee_chain.constraint_envelope = self._compute_constraint_envelope(
                 agent_id=delegatee_id,
                 genesis=delegatee_chain.genesis,
@@ -2020,38 +2282,18 @@ class TrustOperations:
                 authority.signing_key_id,
             )
 
-            # Create capability attestations for delegated capabilities
-            derived_capabilities = []
-            for cap_name in capabilities:
-                # Find matching capability from delegator
-                source_cap = next(
-                    (
-                        c
-                        for c in delegator_chain.capabilities
-                        if self._capability_matches_pattern(c.capability, cap_name)
-                    ),
-                    None,
-                )
-                if source_cap:
-                    derived_cap = CapabilityAttestation(
-                        id=f"cap-{uuid4()}",
-                        capability=cap_name,
-                        capability_type=source_cap.capability_type,
-                        constraints=constraint_subset,
-                        attester_id=authority_id,
-                        attested_at=datetime.now(timezone.utc),
-                        expires_at=expires_at,
-                        signature="",
-                        scope=source_cap.scope,
-                    )
-                    cap_payload = serialize_for_signing(
-                        derived_cap.to_signing_payload()
-                    )
-                    derived_cap.signature = await self.key_manager.sign(
-                        cap_payload,
-                        authority.signing_key_id,
-                    )
-                    derived_capabilities.append(derived_cap)
+            # Create SIGNED capability attestations for the delegated
+            # capabilities, each carrying the tightened constraint_subset, via
+            # the shared signing path (same helper the existing-delegatee branch
+            # uses, so the two cannot drift).
+            derived_capabilities = await self._build_signed_derived_caps(
+                cap_names=capabilities,
+                source_capabilities=delegator_chain.capabilities,
+                constraint_subset=constraint_subset,
+                authority=authority,
+                authority_id=authority_id,
+                expires_at=expires_at,
+            )
 
             # Compute constraint envelope
             constraint_envelope = self._compute_constraint_envelope(
