@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.59.0] - 2026-07-21
+
+### Added (Trust Plane — Delegation Signing)
+
+- **`DelegationRecord` now signs the cross-SDK V2Complete / V3Complete
+  pre-images for new records — the final #1841 shard.** Two independent
+  additions land the record-persisted structured signing data #1841 (2.58.0)
+  wired the engine for but did not yet plumb through the record itself:
+
+  - **V2Complete (non-multi-sig).** A `DelegationRecord` now carries optional
+    `constraints: ConstraintDimensions`, `resource_limits: ResourceLimits`,
+    and `scope: DelegationScope` fields (each `to_dict`/`from_dict`-capable
+    for persistence). When all three are supplied on a non-multi-sig record
+    with the full (unscoped) CARE dimension set,
+    `select_signing_version()` routes it to `v2-complete`, and
+    `delegation_canonical_payload_str()` signs/verifies the cross-SDK
+    V2Complete pre-image (folding constraints, resource limits, and scope
+    into the Ed25519 signature) instead of the legacy pre-image.
+  - **V3Complete (multi-sig quorum integrity).** A multi-sig record now
+    additionally carries `multi_sig: bool` and
+    `multi_sig_policy: MultiSigSigningPolicy` (threshold +
+    canonically-hex-sorted authorized signers). A multi-sig record with all
+    structured fields present signs the V3Complete pre-image — the
+    quorum-integrity headline: the signed threshold and authorized-signer
+    set are now cryptographically bound, so a store-write actor can no
+    longer lower the threshold or swap/remove a signer without breaking the
+    signature. `delegate(..., multi_sig_policy=...)` mints a v3 record
+    directly.
+
+  Both additions are **strictly additive and backward-compatible**: a
+  record supplying none of the structured fields (the pre-#1841 default)
+  continues to sign the legacy `legacy-python-v0` pre-image byte-identically
+  — every existing signature remains valid. Partial or inconsistent supply
+  (some but not all structured fields; a multi-sig flag without a policy;
+  a multi-sig record missing the structured fold) fails closed with a typed
+  `ValueError` rather than silently downgrading to an unsigned or
+  under-signed pre-image.
+
+- **The five new signing fold-fields now survive persistence through every
+  delegation serializer.** `constraints` / `resource_limits` / `scope` /
+  `multi_sig` / `multi_sig_policy` are carried through
+  `TrustLineageChain`'s chain-level serializer (used by every persistent
+  store, including `SqliteTrustStore` and `FilesystemStore`) and the W3C
+  Verifiable Credential, JWT, and UCAN interop serializers — all routed
+  through one new shared helper module,
+  `kailash.trust.signing.delegation_fold_serde`, so a v2/v3 delegation
+  persisted and reloaded from any of these surfaces reconstructs the same
+  signing pre-image and re-verifies correctly. Fields prune-when-unset: a
+  legacy record's serialized form carries none of the five new keys and is
+  byte-identical to a pre-#1841 record.
+
+### Fixed (Trust Plane)
+
+- Resolved a CodeQL `py/unsafe-cyclic-import` finding introduced by the new
+  fold-serde helper (a `TYPE_CHECKING`-only import cycle between the
+  low-level signing module and the high-level chain module) by having the
+  serializer depend on a local structural `Protocol` instead of importing
+  the chain module — the dependency direction is now strictly one-way.
+
 ## [2.58.1] - 2026-07-20
 
 ### Fixed (Trust Plane — Revocation)
