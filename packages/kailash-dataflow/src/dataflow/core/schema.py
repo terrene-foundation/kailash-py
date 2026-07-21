@@ -21,6 +21,7 @@ from typing import (
     Sequence,
     Type,
     Union,
+    cast,
     get_args,
     get_origin,
     get_type_hints,
@@ -402,16 +403,21 @@ class ModelMeta:
 
     def get_unique_fields(self) -> List[str]:
         """Get list of unique field names."""
+        # __post_init__ always normalizes self.fields to a dict; the cast
+        # is a mypy-only narrowing (no runtime effect) of the declared
+        # Union[Dict[str, FieldMeta], List[FieldMeta]] field type.
+        fields = cast(Dict[str, FieldMeta], self.fields)
         unique_fields = []
-        for name, field_meta in self.fields.items():
+        for name, field_meta in fields.items():
             if field_meta.unique:
                 unique_fields.append(name)
         return unique_fields
 
     def get_indexed_fields(self) -> List[str]:
         """Get list of indexed field names."""
+        fields = cast(Dict[str, FieldMeta], self.fields)
         indexed_fields = []
-        for name, field_meta in self.fields.items():
+        for name, field_meta in fields.items():
             if field_meta.index:
                 indexed_fields.append(name)
         return indexed_fields
@@ -561,7 +567,7 @@ class SchemaParser:
     @classmethod
     def _parse_indexes(cls, model_class: Type) -> List[IndexMeta]:
         """Parse index definitions from model class"""
-        indexes = []
+        indexes: List[IndexMeta] = []
 
         # Check for __indexes__ attribute
         if hasattr(model_class, "__indexes__"):
