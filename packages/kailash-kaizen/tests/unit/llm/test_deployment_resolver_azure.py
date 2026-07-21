@@ -26,10 +26,7 @@ import threading
 
 import pytest
 
-from kaizen.llm import (
-    UnsupportedDeploymentProvider,
-    resolve_deployment_for,
-)
+from kaizen.llm import UnsupportedDeploymentProvider, resolve_deployment_for
 from kaizen.llm.deployment import LlmDeployment, WireProtocol
 
 _ENV_LOCK = threading.Lock()

@@ -20,11 +20,7 @@ import importlib
 import warnings
 from typing import TYPE_CHECKING
 
-from kaizen.providers.base import (
-    BaseAIProvider,
-    EmbeddingProvider,
-    UnifiedAIProvider,
-)
+from kaizen.providers.base import BaseAIProvider, EmbeddingProvider, UnifiedAIProvider
 from kaizen.providers.cost import CostConfig, CostTracker, ModelPricing
 from kaizen.providers.errors import (
     AuthenticationError,

@@ -73,8 +73,8 @@ def test_bedrock_vertex_mistral_are_fouraxis_only_one_sided():
     asymmetry and fails if a legacy counterpart is ever added (at which point a
     real parity cell is owed).
     """
-    from kaizen.llm.client import _COMPLETE_DISPATCH
     import kaizen.providers.registry as reg
+    from kaizen.llm.client import _COMPLETE_DISPATCH
 
     four_axis_wires = {w.name for w in _COMPLETE_DISPATCH}
     legacy_providers = set(reg.PROVIDERS.keys())

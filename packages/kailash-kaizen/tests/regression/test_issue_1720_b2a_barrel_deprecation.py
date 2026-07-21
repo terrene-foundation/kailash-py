@@ -188,10 +188,8 @@ def test_providers_all_still_contains_every_legacy_name() -> None:
 
 
 def test_nodes_ai_registry_accessors_warn_and_resolve() -> None:
-    from kaizen.providers.registry import (
-        PROVIDERS as CanonPROVIDERS,
-        get_provider as canon_get_provider,
-    )
+    from kaizen.providers.registry import PROVIDERS as CanonPROVIDERS
+    from kaizen.providers.registry import get_provider as canon_get_provider
 
     with pytest.warns(DeprecationWarning, match=r"#1720"):
         assert nodes_ai.PROVIDERS is CanonPROVIDERS
@@ -200,10 +198,8 @@ def test_nodes_ai_registry_accessors_warn_and_resolve() -> None:
 
 
 def test_providers_registry_accessors_warn_and_resolve() -> None:
-    from kaizen.providers.registry import (
-        PROVIDERS as CanonPROVIDERS,
-        get_provider as canon_get_provider,
-    )
+    from kaizen.providers.registry import PROVIDERS as CanonPROVIDERS
+    from kaizen.providers.registry import get_provider as canon_get_provider
 
     with pytest.warns(DeprecationWarning, match=r"#1720"):
         assert providers.PROVIDERS is CanonPROVIDERS
