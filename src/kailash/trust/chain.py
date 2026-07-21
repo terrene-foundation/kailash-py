@@ -276,7 +276,12 @@ class DelegationRecord:
         delegatee_id: Agent receiving trust
         task_id: Associated task identifier
         capabilities_delegated: Which capabilities are delegated
-        constraint_subset: Additional constraints (tightening only)
+        constraint_subset: Additional advisory constraint labels. Reporting-only:
+            surfaced in VerificationResult.effective_constraints but read by NO
+            allow/deny gate, and NOT part of the signed delegation pre-image.
+            The "tightening" is advisory — establish_delegation unions these
+            labels with no subset check; enforcement lives in constraint_envelope
+            (a separate, signed structure), not here. See issue #1896.
         delegated_at: When delegation occurred
         expires_at: Optional expiration
         signature: Delegator's signature
