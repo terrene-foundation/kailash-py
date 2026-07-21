@@ -215,6 +215,27 @@ def test_issue_1846_decode_rejects_malformed_literal(literal: str) -> None:
 
 
 @pytest.mark.regression
+def test_issue_1846_decode_rejects_oversized_literal() -> None:
+    """decode_vector MUST fail closed on a literal exceeding the
+    defense-in-depth length cap, rather than parsing an unbounded
+    attacker-supplied string (security-reviewer LOW finding)."""
+    huge_literal = "[" + ("1" * 1_100_000) + "]"  # exceeds the 1 MiB cap
+    with pytest.raises(VectorValueError):
+        decode_vector(huge_literal)
+
+
+@pytest.mark.regression
+def test_issue_1846_decode_error_message_truncates_huge_literal() -> None:
+    """A malformed-but-under-the-length-cap literal MUST NOT echo an
+    unbounded amount of attacker-supplied text into the exception
+    message (security-reviewer LOW finding)."""
+    almost_huge_malformed = "(" + ("x" * 10_000)  # malformed, under the cap
+    with pytest.raises(VectorValueError) as exc_info:
+        decode_vector(almost_huge_malformed)
+    assert len(str(exc_info.value)) < 1_000
+
+
+@pytest.mark.regression
 def test_issue_1846_encode_rejects_non_numeric_component() -> None:
     """encode_vector MUST fail closed on a component that is not
     int/float (e.g. a stray string or bool sneaking into the sequence)."""

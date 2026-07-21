@@ -172,21 +172,49 @@ def encode_vector(values: Sequence[Union[int, float]]) -> str:
     return "[" + ",".join(_format_vector_component(v) for v in values) + "]"
 
 
+# Defense-in-depth bounds for decode_vector, which may receive
+# externally-supplied literals (a stored DB row, an API payload) rather
+# than only SDK-internal encode_vector output. Neither the regex nor
+# float() is vulnerable to backtracking/quadratic blowup, but an
+# unbounded literal still costs proportional CPU/memory to parse -- cap
+# it generously (1 MiB is orders of magnitude beyond any realistic
+# embedding dimension) and fail closed rather than silently accepting
+# arbitrary-sized input.
+_MAX_VECTOR_LITERAL_LENGTH = 1_048_576
+_TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
+
+
+def _truncate_for_error(literal: str) -> str:
+    """Bound how much of an (possibly attacker-supplied) literal is
+    echoed into an error message, so a huge literal cannot blow up a
+    downstream log line."""
+    if len(literal) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
+        return literal
+    return literal[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
+
+
 def decode_vector(literal: str) -> List[float]:
     """Decode a canonical Vector literal (``[a,b,c]``) into a list of floats.
 
     Round-trips byte-identically through ``encode_vector`` --
     ``encode_vector(decode_vector(s)) == s`` for every canonical ``s``.
-    Fails closed (raises ``VectorValueError``) on malformed input or a
-    non-finite (NaN/±Inf) component.
+    Fails closed (raises ``VectorValueError``) on malformed input, an
+    oversized literal, or a non-finite (NaN/±Inf) component.
     """
     if not isinstance(literal, str):
         raise VectorValueError(
             f"vector literal must be a string, got {type(literal).__name__}"
         )
+    if len(literal) > _MAX_VECTOR_LITERAL_LENGTH:
+        raise VectorValueError(
+            f"vector literal exceeds {_MAX_VECTOR_LITERAL_LENGTH}-byte limit "
+            f"(len={len(literal)})"
+        )
     match = _VECTOR_LITERAL_RE.match(literal.strip())
     if match is None:
-        raise VectorValueError(f"malformed vector literal: {literal!r}")
+        raise VectorValueError(
+            f"malformed vector literal: {_truncate_for_error(literal)!r}"
+        )
     body = match.group(1)
     if body == "":
         return []
@@ -197,11 +225,13 @@ def decode_vector(literal: str) -> List[float]:
             component = float(token)
         except ValueError as exc:
             raise VectorValueError(
-                f"malformed vector component {token!r} in literal {literal!r}"
+                f"malformed vector component {token!r} in literal "
+                f"{_truncate_for_error(literal)!r}"
             ) from exc
         if math.isnan(component) or math.isinf(component):
             raise VectorValueError(
-                f"vector literal contains non-finite component {token!r}: {literal!r}"
+                f"vector literal contains non-finite component {token!r}: "
+                f"{_truncate_for_error(literal)!r}"
             )
         result.append(component)
     return result
