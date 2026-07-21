@@ -132,7 +132,7 @@ from dataflow.from_brief import from_brief as _from_brief_impl  # noqa: E402
 DataFlow.from_brief = classmethod(_from_brief_impl)  # type: ignore[attr-defined]
 
 # Legacy compatibility - maintain the original imports
-__version__ = "2.18.0"
+__version__ = "2.19.0"
 
 __all__ = [
     "DataFlow",
