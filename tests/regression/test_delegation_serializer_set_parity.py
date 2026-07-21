@@ -14,13 +14,19 @@ the actual defect class #1841 shipped).
 
 This module is the missing mechanical backstop named in workspace journal
 0009 § "For Discussion" item 2 (F6): the #1841 arc already landed (1) the
-shared serde (``delegation_fold_serde.py``) and (2) a DISCRIMINATING
-both-polarity end-to-end round-trip regression
-(``tests/regression/test_issue_1841_chain_serde_roundtrip.py``) — but NOT
-this structural parity test. Complementary to, not a replacement for, that
-e2e regression.
+shared serde (``delegation_fold_serde.py``) and (2) an end-to-end round-trip
+regression (``tests/regression/test_issue_1841_chain_serde_roundtrip.py``)
+that covers POSITIVE polarity across all four production serializers
+(configured record → real round-trip → verify TRUE) PLUS the multi_sig
+fail-closed raise (``_reject_inconsistent_multi_sig``) on the chain-level
+path only (``test_deserialize_rejects_multi_sig_without_policy`` /
+``test_record_from_dict_rejects_multi_sig_without_policy``) — but NOT an
+explicit per-field NEGATIVE polarity across every serializer, and NOT
+non-collidability beyond a single field. THIS file adds those two missing
+backstops (§4 extended + §5 new, below), complementary to — not a
+replacement for — that sibling e2e regression.
 
-Two independent, non-circular checks:
+Five independent, non-circular checks:
 
 1. **Authoritative field-set derivation** (§1 below) — the fold-field names
    are read from ``_FoldSourceRecord`` (the shared serde's OWN structural
@@ -47,9 +53,22 @@ Two independent, non-circular checks:
    one field afterward (the AST check in §2 only proves the CALL exists, not
    that its output survives untouched).
 
-4. **Non-collidability sanity** (§4 below) — two records differing in ONE
-   fold field must not fold to indistinguishable serialized output; proves
-   each field is load-bearing in the wire form, not silently ignored.
+4. **Non-collidability sanity** (§4 below) — for EACH of the 5 authoritative
+   fold fields, two records differing ONLY in that field must not fold to
+   indistinguishable serialized output; proves each field is individually
+   load-bearing in the wire form, not silently ignored.
+
+5. **Negative-pole per-field discrimination** (§5 below) — for EACH of the 5
+   fold fields, through EACH of the 5 discovered serializer pairs: strip
+   that field's key from the REAL wire output, deserialize through the REAL
+   production deserializer, and assert the field's absence is fail-closed
+   (either the deserializer itself raises — the multi_sig/multi_sig_policy
+   consistency guard — or the reconstructed record can no longer recompute
+   a payload that verifies against the original signature — the
+   constraints/resource_limits/scope case, see the empirical correction
+   note in §5). This is Rule 4e Part 2's NEGATIVE pole — the pole that
+   proves a field is load-bearing, not the positive round-trip-preserves-it
+   pole in §3.
 
 Tier-2 style: real Ed25519 (``kailash.trust.signing.crypto``), real chain /
 interop serializers, NO mocking of the serde surface.
@@ -59,6 +78,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, List, Tuple
@@ -74,15 +94,29 @@ from kailash.trust.chain import (
 )
 from kailash.trust.interop import jwt as jwt_interop
 from kailash.trust.interop import w3c_vc
-from kailash.trust.interop.ucan import from_ucan, to_ucan
-from kailash.trust.signing.crypto import generate_keypair
-from kailash.trust.signing.delegation_fold_serde import _FoldSourceRecord
+from kailash.trust.interop.ucan import (
+    _b64url_decode,
+    _b64url_encode,
+    _ed25519_sign,
+    _json_encode_canonical,
+    from_ucan,
+    to_ucan,
+)
+from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
+from kailash.trust.signing.delegation_fold_serde import (
+    _CAMEL_KEYS,
+    _SNAKE_KEYS,
+    _FoldSourceRecord,
+)
 from kailash.trust.signing.delegation_payload import (
     ConstraintDimensions,
     DelegationScope,
     MultiSigSigningPolicy,
     ResourceLimits,
     TrustLevel,
+)
+from kailash.trust.signing.delegation_record_signing import (
+    delegation_canonical_payload_str,
 )
 
 pytestmark = pytest.mark.regression
@@ -515,44 +549,295 @@ def test_roundtrip_pair_count_matches_discovered_serialize_candidate_count() -> 
 
 
 # =============================================================================
-# 4. NON-COLLIDABILITY SANITY — two records differing in ONE fold field MUST
-#    NOT fold to indistinguishable serialized output.
+# 4. NON-COLLIDABILITY SANITY — for EACH of the 5 authoritative fold fields,
+#    two records differing ONLY in that field MUST NOT fold to
+#    indistinguishable serialized output.
 # =============================================================================
 
 
-def test_fold_fields_are_load_bearing_not_collided_in_chain_serialization() -> None:
-    """Two records differing in one fold field serialize to DIFFERENT dicts.
+def _variant_kwargs_for_field(field_name: str) -> Dict[str, Any]:
+    """A DISTINCT, valid override for `field_name`, isolated from the others.
 
-    Proves each authoritative field actually contributes distinguishing
+    `multi_sig` MUST clear `multi_sig_policy` alongside it — leaving a
+    policy set with `multi_sig=False` is the mis-constructed-record shape
+    ``_reject_inconsistent_multi_sig`` fails closed on (correctly), which
+    would break the round-trip half of the non-collidability check for a
+    reason UNRELATED to what this test isolates. Clearing both is still an
+    isolated variation of the `multi_sig` field itself (the boolean flips
+    True -> False; `multi_sig_policy` co-varies only because an
+    inconsistent record cannot exist, not because this test conflates the
+    two fields).
+    """
+    if field_name == "constraints":
+        return {
+            "constraints": ConstraintDimensions(
+                allow_code_execution=True,
+                allow_delegation=False,
+                allow_filesystem=False,
+                allow_network=True,
+                allow_state_mutation=True,
+                allowed_tools=None,
+                max_context_tokens=8192,
+                reasoning_required=False,
+            )
+        }
+    if field_name == "resource_limits":
+        return {
+            "resource_limits": ResourceLimits(
+                max_execution_secs=600,
+                max_llm_calls=100,
+                max_tool_calls=40,
+                max_total_tokens=200000,
+            )
+        }
+    if field_name == "scope":
+        return {"scope": DelegationScope.new("finance").with_operation("write")}
+    if field_name == "multi_sig":
+        return {"multi_sig": False, "multi_sig_policy": None}
+    if field_name == "multi_sig_policy":
+        return {
+            "multi_sig_policy": MultiSigSigningPolicy.new(
+                3, [_key(4), _key(5), _key(6)]
+            )
+        }
+    raise AssertionError(f"no variant defined for fold field {field_name!r}")
+
+
+@pytest.mark.parametrize("field_name", FOLD_FIELDS)
+def test_each_fold_field_is_load_bearing_not_collided_in_chain_serialization(
+    field_name: str,
+) -> None:
+    """For EACH fold field: two records differing ONLY in it serialize DIFFERENTLY.
+
+    Proves each authoritative field individually contributes distinguishing
     bytes to the serialized form (necessary for the round-trip equality
     check in §3 to mean anything beyond "both sides share one default") —
     a serializer that silently ignored a field's actual content while still
     emitting SOME placeholder value would pass a naive equality check only
     when both records happen to share that placeholder; this test uses two
     DISTINCT configured values per field so a collision is directly visible.
+    Extends the original single-field (`scope`-only) check to all 5 fields
+    (F6 redteam round 1 finding).
     """
     base = _fully_configured_v3_record()
-    varied = _fully_configured_v3_record(
-        scope=DelegationScope.new("finance").with_operation("write")
-    )
-    assert base.scope != varied.scope  # sanity: the fixture actually varies
+    varied = _fully_configured_v3_record(**_variant_kwargs_for_field(field_name))
+    assert getattr(base, field_name) != getattr(
+        varied, field_name
+    ), f"fixture bug: the {field_name!r} variant did not actually vary"
 
     base_dict = TrustLineageChain._serialize_delegation(base)
     varied_dict = TrustLineageChain._serialize_delegation(varied)
+    wire_key = _SNAKE_KEYS[field_name]
 
-    assert base_dict["scope"] != varied_dict["scope"], (
-        "two DelegationRecords with DISTINCT `scope` values folded to the "
-        "SAME serialized `scope` bytes — the field is not load-bearing in "
-        "the chain-level wire form (non-collidability violated)."
+    assert base_dict.get(wire_key) != varied_dict.get(wire_key), (
+        f"two DelegationRecords with DISTINCT {field_name!r} values folded to "
+        f"the SAME serialized {wire_key!r} wire value — the field is not "
+        f"load-bearing in the chain-level wire form (non-collidability "
+        f"violated)."
     )
 
     # Round-tripping each separately must keep them distinguishable.
     restored_base = _roundtrip_chain(base)
     restored_varied = _roundtrip_chain(varied)
-    assert restored_base.scope == base.scope
-    assert restored_varied.scope == varied.scope
-    assert restored_base.scope != restored_varied.scope, (
-        "two distinct records collapsed to the SAME reconstructed `scope` "
-        "after an independent chain round-trip each — non-collidability "
-        "violated post-reconstruction."
+    assert getattr(restored_base, field_name) == getattr(base, field_name)
+    assert getattr(restored_varied, field_name) == getattr(varied, field_name)
+    assert getattr(restored_base, field_name) != getattr(restored_varied, field_name), (
+        f"two distinct records collapsed to the SAME reconstructed "
+        f"{field_name!r} after an independent chain round-trip each — "
+        f"non-collidability violated post-reconstruction."
+    )
+
+
+# =============================================================================
+# 5. NEGATIVE-POLE PER-FIELD DISCRIMINATION — for EACH fold field, through
+#    EACH discovered serializer pair: strip the field's key from the REAL
+#    wire output, deserialize through the REAL production deserializer, and
+#    assert the field's absence is fail-closed.
+#
+# EMPIRICAL CORRECTION (evidence-first-claims.md MUST-1 — grounded before
+# asserting): a naive design would assert "verify_signature(...) is False"
+# uniformly. Empirically running each strip against the REAL production code
+# (see PR discussion) shows TWO distinct fail-closed shapes, not one:
+#
+#   - `multi_sig` / `multi_sig_policy` stripped -> deserialize_fold_fields's
+#     `_reject_inconsistent_multi_sig` guard RAISES ValueError immediately
+#     (a bare `multi_sig=True` with no policy, or a lingering policy with
+#     `multi_sig=False`, is a mis-constructed record — fail-closed at
+#     deserialize time, confirmed by direct execution).
+#   - `constraints` / `resource_limits` / `scope` stripped -> deserialize
+#     itself SUCCEEDS (no consistency guard on these three), but recomputing
+#     the payload via `delegation_canonical_payload_str` RAISES ValueError
+#     from `build_delegation_signing_input`'s "field is required for the
+#     engine (v2/v3) pre-image" guard — a SECOND independent fail-closed
+#     layer confirmed by direct execution: even bypassing
+#     `_reject_inconsistent_multi_sig` for the multi_sig pair still raises
+#     at the ENGINE layer (`delegation_signing_payload`), confirming
+#     defense-in-depth across two independent guards.
+#
+# The assertion helper below accepts EITHER fail-closed shape (a raise
+# anywhere in {deserialize, payload-compute}) OR a verify_signature() False
+# — so it is robust to a future refactor that changes which layer raises,
+# without weakening what it proves: the field's absence is NEVER silently
+# accepted as a valid, verifying record.
+# =============================================================================
+
+
+def _wire_key_for(camel: bool, field_name: str) -> str:
+    return (_CAMEL_KEYS if camel else _SNAKE_KEYS)[field_name]
+
+
+def _strip_via_record_to_dict(
+    record: DelegationRecord, field_name: str
+) -> DelegationRecord:
+    data = record.to_dict()
+    data.pop(_wire_key_for(False, field_name), None)
+    return DelegationRecord.from_dict(data)
+
+
+def _strip_via_chain(record: DelegationRecord, field_name: str) -> DelegationRecord:
+    data = TrustLineageChain._serialize_delegation(record)
+    data.pop(_wire_key_for(False, field_name), None)
+    return TrustLineageChain._deserialize_delegation(data)
+
+
+def _strip_via_jwt(record: DelegationRecord, field_name: str) -> DelegationRecord:
+    data = jwt_interop._serialize_delegation(record)
+    data.pop(_wire_key_for(False, field_name), None)
+    return jwt_interop._deserialize_delegation(data)
+
+
+def _strip_via_w3c_vc(record: DelegationRecord, field_name: str) -> DelegationRecord:
+    private_key, _ = generate_keypair()
+    vc = w3c_vc.export_as_verifiable_credential(
+        _chain_with(record), issuer_did="did:eatp:org:acme", signing_key=private_key
+    )
+    (deleg_dict,) = vc["credentialSubject"]["delegations"]
+    deleg_dict.pop(_wire_key_for(True, field_name), None)
+    # public_key=None skips the VC's OWN Ed25519 proof verification (a
+    # separate concern from the EATP delegation signature this test is
+    # about) — production-supported per import_from_verifiable_credential's
+    # own docstring ("Without a key ... importing unverified credentials").
+    restored_chain = w3c_vc.import_from_verifiable_credential(vc, public_key=None)
+    (restored,) = restored_chain.delegations
+    return restored
+
+
+def _strip_via_ucan(record: DelegationRecord, field_name: str) -> DelegationRecord:
+    private_key, public_key = generate_keypair()
+    token = to_ucan(record, private_key)
+    header_b64, payload_b64, _old_signature_b64 = token.split(".")
+
+    payload = json.loads(_b64url_decode(payload_b64))
+    fold = dict(payload["fct"].get("eatp_signing_fold", {}))
+    fold.pop(_wire_key_for(False, field_name), None)
+    payload["fct"]["eatp_signing_fold"] = fold
+
+    # Re-sign the outer UCAN envelope over the MUTATED payload with the SAME
+    # key `to_ucan` used — `from_ucan` verifies this envelope signature
+    # (Step 3) independently of the EATP delegation signature this test is
+    # probing, so it must stay valid for the mutation to reach fold parsing.
+    new_payload_b64 = _b64url_encode(_json_encode_canonical(payload))
+    signing_input = f"{header_b64}.{new_payload_b64}".encode("ascii")
+    new_signature_b64 = _b64url_encode(_ed25519_sign(signing_input, private_key))
+    mutated_token = f"{header_b64}.{new_payload_b64}.{new_signature_b64}"
+
+    return from_ucan(mutated_token, public_key)
+
+
+_NEGATIVE_POLE_STRIP_FNS: Tuple[
+    Tuple[str, Callable[[DelegationRecord, str], DelegationRecord]], ...
+] = (
+    ("DelegationRecord.to_dict/from_dict", _strip_via_record_to_dict),
+    ("TrustLineageChain._serialize_/_deserialize_delegation", _strip_via_chain),
+    ("jwt._serialize_delegation/_deserialize_delegation", _strip_via_jwt),
+    (
+        "w3c_vc.export_as_verifiable_credential/import_from_verifiable_credential",
+        _strip_via_w3c_vc,
+    ),
+    ("ucan.to_ucan/from_ucan", _strip_via_ucan),
+)
+
+
+def _assert_stripped_field_is_load_bearing(
+    *,
+    label: str,
+    field_name: str,
+    strip_fn: Callable[[DelegationRecord, str], DelegationRecord],
+    record: DelegationRecord,
+    original_signature: str,
+    public_key: str,
+) -> None:
+    """Strip `field_name` from `label`'s real wire output; assert fail-closed.
+
+    Accepts EITHER fail-closed shape documented in the §5 module note above:
+    a raise (at deserialize OR at payload-recompute) or a verify_signature()
+    False. Only a record that reconstructs AND recomputes AND STILL verifies
+    against the original signature is a genuine Rule 4e failure.
+    """
+    try:
+        restored = strip_fn(record, field_name)
+        recomputed_payload = delegation_canonical_payload_str(restored)
+    except ValueError:
+        return  # fail-closed (deserialize-time or payload-compute-time guard)
+    assert not verify_signature(recomputed_payload, original_signature, public_key), (
+        f"{label}: stripping fold field {field_name!r} from the real wire "
+        f"output did NOT invalidate the delegation signature — a v2/v3 "
+        f"record missing this field silently reconstructs into something "
+        f"that STILL verifies (cross-sdk-inspection.md Rule 4e negative "
+        f"pole violated)."
+    )
+
+
+@pytest.mark.parametrize(
+    "label,strip_fn",
+    _NEGATIVE_POLE_STRIP_FNS,
+    ids=[p[0] for p in _NEGATIVE_POLE_STRIP_FNS],
+)
+@pytest.mark.parametrize("field_name", FOLD_FIELDS)
+def test_stripped_fold_field_fails_closed_through_every_serializer(
+    field_name: str,
+    label: str,
+    strip_fn: Callable[[DelegationRecord, str], DelegationRecord],
+) -> None:
+    """For EACH field, through EACH serializer: a stripped field fails closed.
+
+    25 cases (5 fields x 5 serializer pairs). A serializer/field pair whose
+    stripped-field reconstruction STILL verifies is the exact Rule 4e defect
+    #1841 shipped — this is the explicit negative-pole backstop the F6
+    redteam round 1 required (the positive round-trip in §3 alone does not
+    pin this; it only proves the CURRENT serializers preserve a PRESENT
+    field, not that an ABSENT field is refused).
+    """
+    record = _fully_configured_v3_record()
+    private_key, public_key = generate_keypair()
+    record.signature = sign(delegation_canonical_payload_str(record), private_key)
+
+    _assert_stripped_field_is_load_bearing(
+        label=label,
+        field_name=field_name,
+        strip_fn=strip_fn,
+        record=record,
+        original_signature=record.signature,
+        public_key=public_key,
+    )
+
+
+def test_negative_pole_strip_fn_count_matches_discovered_serialize_candidate_count() -> (
+    None
+):
+    """The negative-pole strip functions above cover the FULL discovered set.
+
+    Mirrors ``test_roundtrip_pair_count_matches_discovered_serialize_candidate_count``
+    for §3 — ties §2's structural discovery to §5's negative-pole coverage so
+    a future serializer landing without a matching strip function fails
+    loudly here, not silently.
+    """
+    serialize_candidates = [
+        c for c in _discover_all_candidates() if c.kind == "serialize"
+    ]
+    assert len(_NEGATIVE_POLE_STRIP_FNS) == len(serialize_candidates), (
+        f"{len(serialize_candidates)} serialize-shaped candidates discovered "
+        f"structurally, but only {len(_NEGATIVE_POLE_STRIP_FNS)} negative-pole "
+        f"strip functions are wired in this file — a new serializer landed "
+        f"without a matching negative-pole pin."
     )
