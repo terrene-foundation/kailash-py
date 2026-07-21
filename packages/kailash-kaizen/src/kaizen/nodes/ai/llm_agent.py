@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
@@ -19,6 +20,16 @@ from kaizen.config.providers import DEFAULT_OPENAI_MODEL
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
+
+# #1720 — one-time deprecation guard for the legacy azure_ai_foundry provider
+# path. azure_ai_foundry is the LAST provider still served by the legacy
+# get_provider(...).chat(...) fallback (every other provider is on the
+# four-axis LlmClient). Per the deprecate-and-remove disposition, the fallback
+# STILL functions but emits a one-time DeprecationWarning + loud WARN so an
+# operator running it learns the path is being retired. Module-level flag →
+# fires once per process, never per-call (rules/observability.md — no hot-loop
+# log spam). The actual removal is a future-minor step (zero-tolerance Rule 6a).
+_AZURE_AI_FOUNDRY_DEPRECATION_WARNED = False
 
 # ---------------------------------------------------------------------------
 # #1720 Wave-2 — dual-run shadow validation (KAIZEN_LLM_DUAL_RUN)
@@ -2569,6 +2580,37 @@ Final Answer: 6 hours"""
         caller's ``except ImportError`` / ``except Exception`` handlers (invariants
         #5 and #6).
         """
+        # #1720 deprecate-and-remove: azure_ai_foundry is the LAST provider on
+        # this legacy fallback (no confirmed four-axis wire —
+        # resolve_deployment_for raises UnsupportedDeploymentProvider for it).
+        # Emit a ONE-TIME DeprecationWarning + loud WARN so an operator running
+        # the legacy path learns it is being retired. The path STILL functions
+        # (this is the deprecation shim, not the removal — zero-tolerance Rule
+        # 6a; removal follows in a future minor). Guarded on the provider name +
+        # a module-level flag so it fires once per process, never per-call
+        # (rules/observability.md — no hot-loop log spam).
+        if provider == "azure_ai_foundry":
+            global _AZURE_AI_FOUNDRY_DEPRECATION_WARNED
+            if not _AZURE_AI_FOUNDRY_DEPRECATION_WARNED:
+                _AZURE_AI_FOUNDRY_DEPRECATION_WARNED = True
+                _msg = (
+                    "The legacy 'azure_ai_foundry' provider path is deprecated "
+                    "and will be removed in a future minor release. It is the "
+                    "last provider still served by the legacy "
+                    "get_provider(...).chat(...) fallback; every other provider "
+                    "runs on the four-axis kaizen.llm.LlmClient. Migration: for "
+                    "Azure OpenAI models, switch to the 'azure' (or "
+                    "'azure_openai') provider, which is fully supported on the "
+                    "four-axis path (set AZURE_ENDPOINT / AZURE_API_KEY). For "
+                    "non-Azure-OpenAI AI Foundry models (e.g. Meta Llama, "
+                    "Mistral, Cohere served via the AI Foundry inference "
+                    "endpoint) there is no four-axis equivalent yet — a "
+                    "four-axis azure_ai_foundry wire is tracked as future work; "
+                    "such deployments must wait for that wire before migrating."
+                )
+                warnings.warn(_msg, DeprecationWarning, stacklevel=2)
+                logger.warning("llm_agent.azure_ai_foundry.deprecated %s", _msg)
+
         # #1779 governance_required posture: this is the ONLY legacy egress that
         # does NOT route through the four-axis LlmClient (providers with no
         # four-axis wire, e.g. azure_ai_foundry), so the LlmClient construction
