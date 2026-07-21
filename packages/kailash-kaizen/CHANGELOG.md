@@ -27,6 +27,15 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   four-axis equivalent yet — a four-axis `azure_ai_foundry` wire is tracked
   as future work; those deployments must wait for that wire before migrating.
 
+<!-- PENDING: ### Deprecated section for the azure_ai_foundry legacy-provider
+     DeprecationWarning shim (#1720, branch deprecate/1720-azure-ai-foundry-legacy,
+     under review as of 2026-07-21). DO NOT write this entry until that branch is
+     MERGED to main — every claim in it (symbol names, warning message, migration
+     path) MUST be verified against the merged code per verify-claims-before-write.md,
+     not drafted from the branch-in-review. Once merged: append a "### Deprecated"
+     section here (above this comment, still under the 2.39.0 heading) documenting
+     the shim, then delete this placeholder comment. -->
+
 ## [2.38.0] — 2026-07-20 — Governance gate extended to the provider/backend layer (#1803)
 
 ### Added (Security)
