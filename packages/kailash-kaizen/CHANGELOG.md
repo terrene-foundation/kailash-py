@@ -2,41 +2,6 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-## [2.39.0] — 2026-07-21 — Google Gemini embeddings wire (#1818)
-
-### Added
-
-- **`LlmClient.embed()` now supports Google Gemini embeddings — completes
-  the four-axis embed provider set (#1818).** The four-axis `LlmClient`
-  already had a Google CHAT wire (`google_generate_content`) but no Google
-  EMBED wire — a caller with a Gemini embedding deployment previously hit
-  `NotImplementedError` instead of a real vector (a known 2.36.0 CHANGELOG
-  gap). New module `kaizen.llm.wire_protocols.google_embeddings` shapes the
-  request/response for Gemini's `POST /v1beta/models/{model}:batchEmbedContents`
-  endpoint and is wired into `_EMBED_DISPATCH` on the shared
-  `WireProtocol.GoogleGenerateContent` wire family — Gemini serves both chat
-  and embeddings on one wire family, the same way `CohereGenerate` already
-  serves both. The endpoint is called unconditionally in batch form so one
-  shaper handles one-or-many texts, matching the "always send the list"
-  contract every other embed wire (`openai_embeddings`, `cohere_embeddings`)
-  already follows. The model travels in the URL path; each request also
-  carries the `models/`-prefixed model id the Gemini batch contract
-  requires. Reuses the existing `google_preset` auth/endpoint
-  (`X-Goog-Api-Key`, `generativelanguage.googleapis.com/v1beta`). Model and
-  key are env-sourced (`GOOGLE_EMBEDDING_MODEL` / `GOOGLE_API_KEY`), never
-  hardcoded in the wire.
-
-  `LlmClient.embed()`'s supported-wire error message now lists
-  `GoogleGenerateContent` alongside `OpenAiChat`, `OllamaNative`,
-  `CohereGenerate`, and `HuggingFaceInference`.
-
-  The end-to-end integration test
-  (`test_llmclient_embed_google_real`) runs live against Gemini when a real
-  `GOOGLE_API_KEY` is configured, and skips cleanly (rather than failing)
-  when the credential's Google Cloud project has not enabled the
-  Generative Language API — a credential-provisioning gap, not a wire
-  defect.
-
 ## [2.38.0] — 2026-07-20 — Governance gate extended to the provider/backend layer (#1803)
 
 ### Added (Security)
