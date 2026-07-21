@@ -9,6 +9,7 @@ import inspect
 import logging
 import math
 import re
+import reprlib
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -92,22 +93,44 @@ class VectorValueError(DataFlowError):
     """
 
 
-# Shared bound for how much of a (possibly attacker-supplied) value is
-# echoed verbatim into a VectorValueError message, so a huge dimension /
-# component / literal cannot blow up a downstream log line. Defined once,
-# before every raise site that needs it, and reused by both the
-# generic-value truncator below and the literal-string truncator near
-# decode_vector.
+# Shared bounds, defined once before every site that needs them:
+#
+# - _TRUNCATED_LITERAL_PREVIEW_LENGTH bounds how much of a (possibly
+#   attacker-supplied) value is echoed verbatim into a VectorValueError
+#   message, so a huge dimension / component / literal cannot blow up a
+#   downstream log line. Reused by both _truncate_repr_for_error (below)
+#   and the literal-string _truncate_for_error near decode_vector.
+# - _MAX_VECTOR_LITERAL_LENGTH bounds the total size of a Vector literal
+#   in either direction: encode_vector's OUTPUT and decode_vector's INPUT.
+#   Neither the regex nor float()/Decimal() is vulnerable to backtracking
+#   or quadratic blowup, but an unbounded literal still costs proportional
+#   CPU/memory to build or parse -- cap it generously (1 MiB is orders of
+#   magnitude beyond any realistic embedding dimension) and fail closed
+#   rather than silently accepting/emitting arbitrary-sized data.
 _TRUNCATED_LITERAL_PREVIEW_LENGTH = 200
+_MAX_VECTOR_LITERAL_LENGTH = 1_048_576
+
+# reprlib.Repr, not bare repr()+slice: for str/list/dict/tuple/set/
+# frozenset, reprlib bounds the element count (or slices the string)
+# BEFORE rendering, so a multi-megabyte string or a million-element
+# container costs O(preview length) to render, not O(input size) --
+# security-reviewer LOW finding on PR #1898 (bare repr() on a 5 MB
+# string materializes the full escaped string before the slice ever
+# applies). A custom object with no reprlib handler still falls back to
+# a full repr() via reprlib's own repr_instance -- a pathologically slow
+# custom __repr__ is an accepted residual for a value-codec error path,
+# out of scope here.
+_ERROR_REPR = reprlib.Repr()
+_ERROR_REPR.maxstring = _TRUNCATED_LITERAL_PREVIEW_LENGTH
+_ERROR_REPR.maxother = _TRUNCATED_LITERAL_PREVIEW_LENGTH
+_ERROR_REPR.maxlong = _TRUNCATED_LITERAL_PREVIEW_LENGTH
 
 
 def _truncate_repr_for_error(value: object) -> str:
     """Bound how much of an (possibly attacker-supplied) value's repr is
-    echoed into an error message."""
-    text = repr(value)
-    if len(text) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
-        return text
-    return text[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
+    echoed into an error message (see ``_ERROR_REPR`` above for the cost
+    rationale)."""
+    return _ERROR_REPR.repr(value)
 
 
 @dataclass(frozen=True)
@@ -203,22 +226,21 @@ def encode_vector(values: Sequence[Union[int, float]]) -> str:
     cross-SDK contract for issue #1846: do not change the rendering rule
     without a coordinated cross-SDK re-pin (``cross-sdk-inspection.md``
     Rule 4b). Fails closed (raises ``VectorValueError``) on a non-finite
-    (NaN/±Inf) component.
+    (NaN/±Inf) component or an oversized output literal.
     """
-    return "[" + ",".join(_format_vector_component(v) for v in values) + "]"
-
-
-# Defense-in-depth bounds for decode_vector, which may receive
-# externally-supplied literals (a stored DB row, an API payload) rather
-# than only SDK-internal encode_vector output. Neither the regex nor
-# float() is vulnerable to backtracking/quadratic blowup, but an
-# unbounded literal still costs proportional CPU/memory to parse -- cap
-# it generously (1 MiB is orders of magnitude beyond any realistic
-# embedding dimension) and fail closed rather than silently accepting
-# arbitrary-sized input.
-_MAX_VECTOR_LITERAL_LENGTH = 1_048_576
-# _TRUNCATED_LITERAL_PREVIEW_LENGTH is defined once, near VectorValueError
-# above (shared with _truncate_repr_for_error).
+    literal = "[" + ",".join(_format_vector_component(v) for v in values) + "]"
+    if len(literal) > _MAX_VECTOR_LITERAL_LENGTH:
+        # Defense-in-depth symmetric with decode_vector's input cap below:
+        # every component is individually bounded (~342 bytes worst case,
+        # a subnormal float like 5e-324 expanded to fixed-decimal), but a
+        # sufficiently long/high-dimension `values` can still accumulate
+        # past a sane literal size. Fail closed rather than silently
+        # emitting a literal decode_vector's own cap would then reject.
+        raise VectorValueError(
+            f"encoded vector literal exceeds {_MAX_VECTOR_LITERAL_LENGTH}-byte "
+            f"limit (len={len(literal)})"
+        )
+    return literal
 
 
 def _truncate_for_error(literal: str) -> str:

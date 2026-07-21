@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -327,6 +328,42 @@ def test_issue_1846_vector_dim_error_message_truncates_huge_dim() -> None:
     with pytest.raises(VectorValueError) as exc_info:
         FieldType.Vector(huge_dim)
     assert len(str(exc_info.value)) < 1_000
+
+
+@pytest.mark.regression
+def test_issue_1846_encode_rejects_oversized_output_literal() -> None:
+    """encode_vector MUST fail closed when the ENCODED OUTPUT would
+    exceed the same defense-in-depth length cap decode_vector enforces
+    on its INPUT (security-reviewer LOW finding -- symmetric output-size
+    guard). A long, individually-valid sequence of components can still
+    accumulate past a sane literal size even though no single component
+    is oversized."""
+    # Each "0.00001" component is 9 bytes with the separating comma;
+    # 200,000 of them is well over the 1 MiB cap.
+    with pytest.raises(VectorValueError):
+        encode_vector([0.00001] * 200_000)
+
+
+@pytest.mark.regression
+def test_issue_1846_encode_error_message_truncation_is_fast_on_huge_string() -> None:
+    """The truncation helper MUST bound the COST of rendering a huge
+    non-numeric component's repr, not just the final message length --
+    a bare repr()+slice materializes the full escaped string before
+    truncating (security-reviewer LOW finding: O(input size), not
+    O(preview length)). A reprlib-based renderer must stay fast even
+    when the offending value is multiple megabytes."""
+    huge_value = "A" * 5_000_000
+    start = time.monotonic()
+    with pytest.raises(VectorValueError) as exc_info:
+        encode_vector([1, huge_value, 3])
+    elapsed = time.monotonic() - start
+    assert len(str(exc_info.value)) < 1_000
+    # Generous ceiling (bare repr()+slice measured ~7ms locally for this
+    # input; reprlib measured ~30us) -- this guards against a future
+    # regression back to O(input size), not a tight perf assertion.
+    assert (
+        elapsed < 1.0
+    ), f"truncation took {elapsed:.3f}s -- expected O(preview length)"
 
 
 @pytest.mark.regression
