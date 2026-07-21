@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.60.1] - 2026-07-21
+
+### Security (Trust Plane — hotfix for 2.60.0)
+
+A dual-lens adversarial review of the 2.60.0 constraint-enforcement hardening
+surfaced two HIGH issues, both closed here (regression tests added):
+
+- **Genesis-constraint strip (HIGH).** The re-derivation verified the genesis
+  signature only when `metadata["constraints"]` was non-empty; a store-writer
+  setting `metadata["constraints"] = []` both stripped the genesis-level
+  constraints AND skipped the signature check that covers `metadata`. The
+  genesis signature is now verified **unconditionally** at every level.
+- **Cross-authority delegation false-denial (HIGH regression, introduced in
+  2.60.0).** Verifying every capability against the delegatee chain's single
+  genesis authority denied every action for a delegatee established under a
+  _different_ authority (a capability delegated into an existing chain is signed
+  by the delegator's authority). `verify()` now resolves each capability's
+  signer per its own signed `attester_id`. **Upgrade from 2.60.0 is strongly
+  recommended** for any deployment using cross-authority delegation.
+- **Duplicate-capability DoS (MEDIUM).** Byte-identical duplicate capabilities
+  are now verified once, bounding an O(N) signature-verify amplification.
+
+Known residuals (envelope-signing follow-up): whole-capability deletion under
+asymmetric per-cap configs; pre-2.60.0 chains that carried delegation tightening
+only in the unsigned `constraint_subset` lose it under signed-source enforcement.
+
 ## [2.60.0] - 2026-07-21
 
 ### Security (Trust Plane — constraint-enforcement store-tamper hardening)
