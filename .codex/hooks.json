@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/session-start.js"
+          }
+        ]
+      }
+    ],
+
+    "UserPromptSubmit": [],
+
+    "PreToolUse": [
+      {
+        "matcher": "shell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/validate-bash-command.js"
+          }
+        ]
+      }
+    ],
+
+    "PermissionRequest": [],
+
+    "PostToolUse": [
+      {
+        "matcher": "shell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./.claude/hooks/lib/codex-hook-runtime.js ./.claude/hooks/integration-hygiene.js"
+          }
+        ]
+      }
+    ],
+
+    "Stop": []
+  }
+}

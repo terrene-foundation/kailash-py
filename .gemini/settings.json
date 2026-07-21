@@ -1,0 +1,50 @@
+{
+  "_template_note": "Template for .gemini/settings.json emitted to Gemini-aware USE templates (kailash-coc-py, kailash-coc-rs). Merged with repo-local overrides by coc-sync at Step 5-equivalent. Event names are Gemini-native (BeforeTool/AfterTool) — NOT CC's PreToolUse/PostToolUse. Hook event translation: PreToolUse→BeforeTool, PostToolUse→AfterTool, Stop→SessionEnd (see .claude/agents/gemini-architect.md § Hook Event Name Translation). NOTE: Gemini CLI 0.41.2+ rejects `$comment` keys inside object schemas; this `_template_note` lives at top level only and is ignored by gemini.",
+  "model": {
+    "name": "gemini-2.5-pro"
+  },
+  "mcpServers": {
+    "codex-mcp-guard": {
+      "command": "node",
+      "args": ["./.codex-mcp-guard/server.js"]
+    }
+  },
+  "mcp": {
+    "allowed": ["codex-mcp-guard"],
+    "excluded": []
+  },
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $GEMINI_PROJECT_DIR/.claude/hooks/validate-bash-command.js"
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "write_file|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $GEMINI_PROJECT_DIR/.claude/hooks/integration-hygiene.js"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $GEMINI_PROJECT_DIR/.claude/hooks/session-start.js"
+          }
+        ]
+      }
+    ]
+  }
+}
