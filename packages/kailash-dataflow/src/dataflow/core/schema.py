@@ -161,8 +161,23 @@ def _truncate_repr_for_error(value: object) -> str:
     round). This final slice restores the unconditional echo-size cap
     while keeping ``_ERROR_REPR``'s cost-bounding for the common flat
     string/large-list case.
+
+    A pathologically large ``int`` (>~4300 decimal digits) makes ``repr()``
+    raise ``ValueError: Exceeds the limit ... for integer string conversion``
+    (CPython's int-to-str digit cap, 3.11+). ``reprlib`` guards this only on
+    some patch versions, so we catch it here directly — otherwise the guard's
+    OWN error message (e.g. ``VectorFieldType``'s dim-magnitude check) would
+    re-raise the raw ``ValueError`` this module promises never to leak.
     """
-    text = _ERROR_REPR.repr(value)
+    try:
+        text = _ERROR_REPR.repr(value)
+    except ValueError:
+        # Huge int: never stringify it. Report a magnitude that needs no
+        # decimal conversion instead of echoing thousands of digits.
+        bits = value.bit_length() if isinstance(value, int) else None
+        return f"<{type(value).__name__} too large to render" + (
+            f" (bit_length={bits})>" if bits is not None else ">"
+        )
     if len(text) <= _TRUNCATED_LITERAL_PREVIEW_LENGTH:
         return text
     return text[:_TRUNCATED_LITERAL_PREVIEW_LENGTH] + "...(truncated)"
