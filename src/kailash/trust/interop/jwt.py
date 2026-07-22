@@ -51,6 +51,10 @@ from kailash.trust.chain import (
     TrustLineageChain,
 )
 from kailash.trust.reasoning.traces import ConfidentialityLevel
+from kailash.trust.signing.capability_fold_serde import (
+    deserialize_capability_fold_fields,
+    serialize_capability_fold_fields,
+)
 from kailash.trust.signing.delegation_fold_serde import (
     deserialize_fold_fields,
     serialize_fold_fields,
@@ -108,7 +112,7 @@ def _serialize_genesis(genesis: GenesisRecord) -> Dict[str, Any]:
 
 def _serialize_capability(cap: CapabilityAttestation) -> Dict[str, Any]:
     """Serialize a CapabilityAttestation to a JSON-safe dict."""
-    return {
+    d = {
         "id": cap.id,
         "capability": cap.capability,
         "capability_type": cap.capability_type.value,
@@ -119,6 +123,10 @@ def _serialize_capability(cap: CapabilityAttestation) -> Dict[str, Any]:
         "signature": cap.signature,
         "scope": cap.scope,
     }
+    # #1912 signing-payload version (shared serde — prune-when-unset). A v1 cap
+    # must carry its version so a subject-bound signature re-verifies after import.
+    d.update(serialize_capability_fold_fields(cap))
+    return d
 
 
 def _serialize_delegation(delegation: DelegationRecord) -> Dict[str, Any]:
@@ -274,6 +282,8 @@ def _deserialize_capability(data: Dict[str, Any]) -> CapabilityAttestation:
             else None
         ),
         scope=data.get("scope"),
+        # #1912 signing-payload version (shared serde — legacy when absent).
+        **deserialize_capability_fold_fields(data),
     )
 
 

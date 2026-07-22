@@ -199,6 +199,10 @@ async def _establish_agent_with_capability(
         chain = await ops.trust_store.get_chain(agent_id)
         for constraint in constraints:
             chain.constraint_envelope.active_constraints.append(constraint)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
 
@@ -404,6 +408,10 @@ class TestVerifyDetectsTransplantAttack:
         del_payload = serialize_for_signing(transplant_delegation.to_signing_payload())
         transplant_delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(transplant_delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -459,6 +467,10 @@ class TestVerifyDetectsTransplantAttack:
             reasoning_signature=stolen_reasoning_signature,
         )
         chain.audit_anchors.append(transplant_anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(

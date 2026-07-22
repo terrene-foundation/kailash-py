@@ -37,6 +37,9 @@ from kailash.trust.exceptions import (
     TrustError,
     UnsupportedSigningPayloadVersionError,
 )
+from kailash.trust.signing.chain_state_signing import (
+    chain_state_canonical_payload_str,
+)
 from kailash.trust.signing.crypto import (
     generate_keypair,
     serialize_for_signing,
@@ -225,6 +228,23 @@ def _load_private_key(store_dir: str, key_id: str) -> str:
     raise click.ClickException(
         f"Key not found: '{key_id}'. Run 'eatp init' to generate keys."
     )
+
+
+def _issue_chain_state_signature(store_dir: str, chain: TrustLineageChain) -> None:
+    """(Re)issue the #1912 Wave 2 chain-state signature on a CLI-managed chain.
+
+    Signs the canonical chain-state pre-image (capability-SET membership +
+    constraint envelope) with the chain owner's genesis-authority private key
+    and sets ``chain.chain_state_signature`` IN PLACE. Called at every CLI site
+    that creates OR mutates a persisted chain (establish, both delegate
+    branches, revoke) so a stale signature is never persisted — matching the
+    ``TrustOperations`` sign sites, so a CLI-managed chain verifies under
+    ``operations.verify()`` at STANDARD+ (#1912 Wave 2).
+    """
+    authority = _load_authority(store_dir, chain.genesis.authority_id)
+    private_key = _load_private_key(store_dir, authority.signing_key_id)
+    payload = chain_state_canonical_payload_str(chain)
+    chain.chain_state_signature = sign(payload, private_key)
 
 
 def _find_delegation_in_store(store_dir: str, delegation_id: str) -> tuple:
@@ -416,6 +436,7 @@ def establish_cmd(
 
     # Build the chain using the operations primitives directly
     from kailash.trust.chain import (
+        CAPABILITY_SIGNING_VERSION_V1,
         CapabilityAttestation,
         Constraint,
         ConstraintEnvelope,
@@ -449,8 +470,14 @@ def establish_cmd(
             attester_id=auth.id,
             attested_at=datetime.now(timezone.utc),
             signature="",
+            # #1912: mint subject-bound v1 caps so a CLI-created capability
+            # cannot be transplanted into another holder's chain. The holder
+            # is this chain's genesis agent (agent_name).
+            signing_payload_version=CAPABILITY_SIGNING_VERSION_V1,
         )
-        cap_payload = serialize_for_signing(attestation.to_signing_payload())
+        cap_payload = serialize_for_signing(
+            attestation.to_signing_payload(subject_agent_id=agent_name)
+        )
         attestation.signature = sign(cap_payload, private_key)
         cap_attestations.append(attestation)
 
@@ -470,6 +497,9 @@ def establish_cmd(
         constraint_envelope=envelope,
         audit_anchors=[],
     )
+
+    # Issue the #1912 Wave 2 chain-state signature (new chains ALWAYS get it).
+    _issue_chain_state_signature(store_dir, chain)
 
     # Store chain
     _run_async(store.store_chain(chain))
@@ -581,6 +611,7 @@ def delegate_cmd(
     private_key = _load_private_key(store_dir, auth.signing_key_id)
 
     from kailash.trust.chain import (
+        CAPABILITY_SIGNING_VERSION_V1,
         CapabilityAttestation,
         ConstraintEnvelope,
         DelegationRecord,
@@ -621,6 +652,9 @@ def delegate_cmd(
     try:
         delegatee_chain = _run_async(store.get_chain(to_agent))
         delegatee_chain.delegations.append(delegation)
+        # Re-issue the chain-state signature: the appended delegation changed
+        # delegation_ids, so the prior signature is stale (#1912 Wave 2).
+        _issue_chain_state_signature(store_dir, delegatee_chain)
         _run_async(store.update_chain(to_agent, delegatee_chain))
     except TrustChainNotFoundError:
         # Create derived chain for delegatee
@@ -662,8 +696,13 @@ def delegate_cmd(
                 attested_at=datetime.now(timezone.utc),
                 signature="",
                 scope=cap_scope,
+                # #1912: mint subject-bound v1 caps. The holder is the
+                # delegatee chain's genesis agent (to_agent).
+                signing_payload_version=CAPABILITY_SIGNING_VERSION_V1,
             )
-            cap_payload = serialize_for_signing(derived_cap.to_signing_payload())
+            cap_payload = serialize_for_signing(
+                derived_cap.to_signing_payload(subject_agent_id=to_agent)
+            )
             derived_cap.signature = sign(cap_payload, private_key)
             derived_caps.append(derived_cap)
 
@@ -681,6 +720,8 @@ def delegate_cmd(
             constraint_envelope=envelope,
             audit_anchors=[],
         )
+        # Issue the chain-state signature for the new derived chain (#1912 Wave 2).
+        _issue_chain_state_signature(store_dir, delegatee_chain)
         _run_async(store.store_chain(delegatee_chain))
 
     if json_output:
@@ -872,6 +913,11 @@ def revoke_cmd(
     _run_async(store.initialize())
 
     chain.delegations.pop(deleg_idx)
+    # Re-issue the chain-state signature: removing a delegation changed
+    # delegation_ids, so the prior signature is stale (#1912 Wave 2). Only
+    # re-sign a chain that already carries one (a legacy chain stays legacy).
+    if chain.chain_state_signature is not None:
+        _issue_chain_state_signature(store_dir, chain)
     _run_async(store.update_chain(agent_id, chain))
 
     if json_output:
@@ -1365,9 +1411,23 @@ def verify_chain_cmd(
     if not verify_signature(genesis_payload, chain.genesis.signature, auth.public_key):
         issues.append(f"Invalid genesis signature (genesis_id={chain.genesis.id})")
 
-    # Verify capability signatures
+    # Verify capability signatures over the version-gated pre-image (#1912). A
+    # v1 cap binds the holder chain's genesis agent as its subject; passing it
+    # here recomputes the same subject-bound pre-image (a legacy cap ignores the
+    # subject → byte-identical). A cap transplanted from another chain would
+    # recompute a different subject and fail here.
     for cap in chain.capabilities:
-        cap_payload = serialize_for_signing(cap.to_signing_payload())
+        try:
+            cap_payload = serialize_for_signing(
+                cap.to_signing_payload(subject_agent_id=chain.genesis.agent_id)
+            )
+        except ValueError:
+            # v1 cap over an empty holder subject (an anomalous/tampered chain
+            # whose genesis.agent_id is empty) makes to_signing_payload raise
+            # (#1912 empty-subject guard). Treat it as an invalid signature and
+            # fail closed — never crash — mirroring the delegation loop below.
+            issues.append(f"Invalid capability signature (cap_id={cap.id})")
+            continue
         if not verify_signature(cap_payload, cap.signature, auth.public_key):
             issues.append(f"Invalid capability signature (cap_id={cap.id})")
 

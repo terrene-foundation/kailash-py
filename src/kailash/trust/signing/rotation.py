@@ -34,6 +34,9 @@ from kailash.trust.exceptions import (
     TrustError,
 )
 from kailash.trust.operations import TrustKeyManager
+from kailash.trust.signing.chain_state_signing import (
+    chain_state_canonical_payload_str,
+)
 from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
 from kailash.trust.signing.delegation_record_signing import (
     delegation_canonical_payload_str,
@@ -525,11 +528,17 @@ class CredentialRotationManager:
                 new_signature = await self.key_manager.sign(genesis_payload, new_key_id)
                 updated_chain.genesis.signature = new_signature
 
-                # Re-sign capability attestations
+                # Re-sign capability attestations over the version-gated
+                # pre-image (#1912). The cap's version is PRESERVED (a legacy cap
+                # re-signs legacy — byte-identical; a v1 cap re-signs v1 with the
+                # holder subject bound), so key rotation never strips a v1 cap's
+                # subject binding. The subject is the holder chain's genesis agent.
                 for capability in updated_chain.capabilities:
                     if capability.attester_id == authority_id:
                         cap_payload = serialize_for_signing(
-                            capability.to_signing_payload()
+                            capability.to_signing_payload(
+                                subject_agent_id=updated_chain.genesis.agent_id
+                            )
                         )
                         new_signature = await self.key_manager.sign(
                             cap_payload, new_key_id
@@ -548,6 +557,19 @@ class CredentialRotationManager:
                             del_payload, new_key_id
                         )
                         delegation.signature = new_signature
+
+                # Re-issue the #1912 Wave 2 chain-state signature under the NEW
+                # key. The chain-state signature is by the chain's genesis
+                # authority (the authority being rotated for these chains), so the
+                # OLD-key signature would fail closed at verify against the new
+                # public key. Only re-sign a chain that ALREADY carries one — a
+                # legacy chain (no signature) stays legacy (never gains one during
+                # rotation, preserving its pre-Wave-2 byte shape).
+                if updated_chain.chain_state_signature is not None:
+                    cs_payload = chain_state_canonical_payload_str(updated_chain)
+                    updated_chain.chain_state_signature = await self.key_manager.sign(
+                        cs_payload, new_key_id
+                    )
 
                 chain_updates.append((updated_chain.genesis.agent_id, updated_chain))
 

@@ -34,6 +34,10 @@ from kailash.trust.chain import (
     TrustLineageChain,
 )
 from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.capability_fold_serde import (
+    deserialize_capability_fold_fields,
+    serialize_capability_fold_fields,
+)
 from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
 from kailash.trust.signing.delegation_fold_serde import (
     deserialize_fold_fields,
@@ -114,6 +118,8 @@ def _serialize_capability(cap: CapabilityAttestation) -> Dict[str, Any]:
         result["expiresAt"] = _iso(cap.expires_at)
     if cap.scope is not None:
         result["scope"] = cap.scope
+    # #1912 signing-payload version (shared serde, camelCase — prune-when-unset).
+    result.update(serialize_capability_fold_fields(cap, camel=True))
     return result
 
 
@@ -551,6 +557,8 @@ def import_from_verifiable_credential(
                 ),
                 signature=c.get("signature", ""),
                 scope=c.get("scope"),
+                # #1912 signing-payload version (shared serde, camelCase).
+                **deserialize_capability_fold_fields(c, camel=True),
             )
         )
 

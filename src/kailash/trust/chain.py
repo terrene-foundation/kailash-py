@@ -32,6 +32,14 @@ from kailash.trust.signing.crypto import (
 # Safe at module scope: this file already imports kailash.trust.signing.crypto
 # above (initialising the signing package), and delegation_payload depends only
 # on kailash.trust._json — no cycle back to chain.
+from kailash.trust.signing.capability_fold_serde import (
+    deserialize_capability_fold_fields,
+    serialize_capability_fold_fields,
+)
+from kailash.trust.signing.chain_state_serde import (
+    deserialize_chain_state_signature_fields,
+    serialize_chain_state_signature_fields,
+)
 from kailash.trust.signing.delegation_fold_serde import (
     deserialize_fold_fields,
     serialize_fold_fields,
@@ -77,6 +85,29 @@ ALL_DIMENSIONS: frozenset[str] = VALID_DIMENSION_NAMES
 DELEGATION_SIGNING_VERSION_LEGACY: str = "legacy-python-v0"
 DELEGATION_SIGNING_VERSION_V2: str = "v2-complete"
 DELEGATION_SIGNING_VERSION_V3: str = "v3-complete"
+
+# Capability signing-payload version discriminator (#1912 Wave 1).
+#
+# A CapabilityAttestation records WHICH pre-image shape its Ed25519 signature was
+# produced over, so the verifier can dispatch to the matching builder:
+#
+# * ``legacy-python-v0`` (the DEFAULT) — the pre-#1912 pre-image emitted by
+#   ``CapabilityAttestation.to_signing_payload()`` (id / capability /
+#   capability_type / sorted constraints / attester_id / attested_at /
+#   expires_at / scope). It binds the ATTESTER but NO subject, so a genuine cap
+#   copied from chain A into chain B verifies — the transplant vulnerability
+#   (#1912). A cap deserialized with NO version field resolves to this value
+#   (from_dict backward-compat), so every existing signed cap keeps verifying
+#   byte-identically.
+# * ``v1-subject-bound`` — the legacy pre-image PLUS ``subject_agent_id`` = the
+#   HOLDER chain's ``genesis.agent_id`` (derived from the chain at sign AND
+#   verify, NEVER stored on the cap). Transplanting a v1 cap into another chain
+#   recomputes a DIFFERENT pre-image (a different subject) → the signature no
+#   longer verifies. New caps sign v1; verify dispatches on the persisted field
+#   (a v1 cap whose version is stripped defaults to legacy → the legacy verify
+#   recomputes WITHOUT the subject → the v1 signature fails → downgrade-resistant).
+CAPABILITY_SIGNING_VERSION_LEGACY: str = "legacy-python-v0"
+CAPABILITY_SIGNING_VERSION_V1: str = "v1-subject-bound"
 
 if TYPE_CHECKING:
     from kailash.trust.execution_context import HumanOrigin
@@ -239,15 +270,40 @@ class CapabilityAttestation:
     expires_at: Optional[datetime] = None
     scope: Optional[Dict[str, Any]] = None
 
+    # Signing-payload version discriminator (#1912 Wave 1). Records which
+    # pre-image shape the signature was produced over. Defaults to the pre-#1912
+    # legacy schema (``legacy-python-v0``); a cap deserialized with NO version
+    # field also resolves here (from_dict backward-compat), so existing signed
+    # caps verify unchanged. A v1 cap binds the HOLDER subject into the signed
+    # pre-image (see ``to_signing_payload``), closing the cross-chain transplant.
+    signing_payload_version: str = CAPABILITY_SIGNING_VERSION_LEGACY
+
     def is_expired(self) -> bool:
         """Check if this capability attestation has expired."""
         if self.expires_at is None:
             return False
         return datetime.now(timezone.utc) > self.expires_at
 
-    def to_signing_payload(self) -> dict:
-        """Get payload for signature verification."""
-        return {
+    def to_signing_payload(self, subject_agent_id: Optional[str] = None) -> dict:
+        """Get payload for signature verification.
+
+        Dispatches on ``signing_payload_version`` (#1912 Wave 1):
+
+        * ``legacy-python-v0`` (or any non-v1 value) → the pre-#1912 dict EXACTLY
+          (byte-identical — no new key), regardless of ``subject_agent_id``. This
+          keeps every existing signed cap verifying unchanged.
+        * ``v1-subject-bound`` → the legacy dict PLUS ``subject_agent_id`` = the
+          holder chain's ``genesis.agent_id``, passed IN by the caller (derived
+          from the chain, NEVER stored on the cap). Binding the subject into the
+          signed bytes means a cap transplanted into a DIFFERENT chain recomputes
+          a different pre-image and its signature fails.
+
+        Args:
+            subject_agent_id: The HOLDER chain's ``genesis.agent_id``. Bound into
+                the pre-image ONLY for a ``v1-subject-bound`` cap; ignored for a
+                legacy cap (so a legacy caller passing nothing is byte-identical).
+        """
+        payload = {
             "id": self.id,
             "capability": self.capability,
             "capability_type": self.capability_type.value,
@@ -257,6 +313,22 @@ class CapabilityAttestation:
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "scope": self.scope,
         }
+        if self.signing_payload_version == CAPABILITY_SIGNING_VERSION_V1:
+            # v1 binds the holder subject into the signed bytes. A transplanted
+            # cap verified against a DIFFERENT chain recomputes a different
+            # subject → the signature no longer matches (the #1912 fix).
+            # Fail closed on an empty/absent subject: a v1 pre-image with no
+            # holder binding is meaningless and would collapse the transplant
+            # defense (all empty-subject caps share one pre-image). At sign time
+            # this surfaces a caller bug loudly; verify sites catch it and deny
+            # (operations `_verify_capability_signature`). #1912 RT-sec LOW.
+            if not subject_agent_id:
+                raise ValueError(
+                    "v1-subject-bound capability requires a non-empty "
+                    "subject_agent_id (the holder chain's genesis.agent_id)"
+                )
+            payload["subject_agent_id"] = subject_agent_id
+        return payload
 
 
 @dataclass
@@ -803,6 +875,30 @@ class TrustLineageChain:
     constraint_envelope: Optional[ChainConstraintEnvelope] = None
     audit_anchors: List[AuditAnchor] = field(default_factory=list)
 
+    # Chain-state signature (#1912 Wave 2). ONE Ed25519 signature by the genesis
+    # authority over the canonical chain-state pre-image
+    # (kailash.trust.signing.chain_state_signing) — binds capability-SET
+    # membership (delete a cap → capability_ids change → sig breaks: MED-1) AND
+    # the constraint envelope incl REASONING_REQUIRED / directly-injected
+    # constraints (strip one → recomputed constraint_hash changes → sig breaks:
+    # MED-2). Defaults to None (a legacy / pre-Wave-2 chain); prune-when-unset
+    # in to_dict so a legacy chain serializes BYTE-IDENTICALLY to pre-Wave-2.
+    # Verified at STANDARD+ (operations._verify_chain_state_signature). New
+    # chains ALWAYS get it at issuance.
+    #
+    # SCOPE (#1912, Wave 3 A1 LANDED): MED-1/MED-2 are closed against a
+    # store-writer who tampers a signed chain and LEAVES the (now-stale)
+    # signature — the tamper is caught (the recomputed pre-image no longer
+    # matches). A store-writer who ALSO deletes this field (or drops the key from
+    # the persisted dict → None) downgrades the chain to "legacy"; Wave-3 A1
+    # enforcement REJECTS that stripped/absent signature by default
+    # (fail-closed), so the downgrade bypass is closed. The migration window
+    # opt-out ``allow_unsigned_chain_state=True`` accepts an absent signature
+    # with a loud one-time WARN while the installed base is re-signed by the
+    # #1912 migration. (Wave 2 shipped the mechanism verify-if-present; Wave 3
+    # flipped it fail-closed + added the re-signing migration.)
+    chain_state_signature: Optional[str] = None
+
     def __post_init__(self):
         """Initialize constraint envelope if not provided."""
         if self.constraint_envelope is None:
@@ -1149,9 +1245,59 @@ class TrustLineageChain:
             **fold,
         )
 
+    @staticmethod
+    def _serialize_capability(cap: CapabilityAttestation) -> Dict[str, Any]:
+        """Serialize a capability attestation for chain-level serialization.
+
+        Carries the #1912 ``signing_payload_version`` prune-when-unset via the
+        SHARED serde, so a v1 (subject-bound) capability reconstructed by a
+        persistent store recomputes the SAME subject-bound signing pre-image and
+        its signature verifies. A legacy capability emits NO version key
+        (byte-identical to a pre-#1912 dict).
+        """
+        result = {
+            "id": cap.id,
+            "capability": cap.capability,
+            "capability_type": cap.capability_type.value,
+            "constraints": cap.constraints,
+            "attester_id": cap.attester_id,
+            "attested_at": cap.attested_at.isoformat(),
+            "expires_at": cap.expires_at.isoformat() if cap.expires_at else None,
+            "scope": cap.scope,
+        }
+        # #1912 signing-payload version (shared serde — prune-when-unset).
+        result.update(serialize_capability_fold_fields(cap))
+        return result
+
+    @staticmethod
+    def _deserialize_capability(data: Dict[str, Any]) -> CapabilityAttestation:
+        """Deserialize a capability attestation from a chain-level dict.
+
+        Backward compatible — a pre-#1912 dict has no ``signing_payload_version``
+        key, so the shared serde defaults it to legacy and the cap verifies
+        unchanged.
+        """
+        return CapabilityAttestation(
+            id=data["id"],
+            capability=data["capability"],
+            capability_type=CapabilityType(data["capability_type"]),
+            constraints=data["constraints"],
+            attester_id=data["attester_id"],
+            attested_at=datetime.fromisoformat(data["attested_at"]),
+            expires_at=(
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
+            ),
+            signature=data.get("signature", ""),
+            scope=data.get("scope"),
+            # #1912 signing-payload version (shared serde — legacy when absent).
+            **deserialize_capability_fold_fields(data),
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
-        return {
+        result: Dict[str, Any] = {
             "genesis": {
                 "id": self.genesis.id,
                 "agent_id": self.genesis.agent_id,
@@ -1167,19 +1313,7 @@ class TrustLineageChain:
                 "metadata": self.genesis.metadata,
             },
             "capabilities": [
-                {
-                    "id": cap.id,
-                    "capability": cap.capability,
-                    "capability_type": cap.capability_type.value,
-                    "constraints": cap.constraints,
-                    "attester_id": cap.attester_id,
-                    "attested_at": cap.attested_at.isoformat(),
-                    "expires_at": (
-                        cap.expires_at.isoformat() if cap.expires_at else None
-                    ),
-                    "scope": cap.scope,
-                }
-                for cap in self.capabilities
+                self._serialize_capability(cap) for cap in self.capabilities
             ],
             "delegations": [self._serialize_delegation(d) for d in self.delegations],
             "constraint_envelope": (
@@ -1203,6 +1337,12 @@ class TrustLineageChain:
             ),
             "chain_hash": self.hash(),
         }
+        # #1912 Wave 2 chain-state signature (shared serde — prune-when-unset).
+        # A legacy chain emits NO chain_state_signature key (byte-identical to a
+        # pre-Wave-2 dict); a signed chain emits it so from_dict re-binds it and
+        # the chain-state signature re-verifies.
+        result.update(serialize_chain_state_signature_fields(self))
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TrustLineageChain":
@@ -1225,22 +1365,7 @@ class TrustLineageChain:
         )
 
         capabilities = [
-            CapabilityAttestation(
-                id=cap["id"],
-                capability=cap["capability"],
-                capability_type=CapabilityType(cap["capability_type"]),
-                constraints=cap["constraints"],
-                attester_id=cap["attester_id"],
-                attested_at=datetime.fromisoformat(cap["attested_at"]),
-                expires_at=(
-                    datetime.fromisoformat(cap["expires_at"])
-                    if cap.get("expires_at")
-                    else None
-                ),
-                signature=cap.get("signature", ""),
-                scope=cap.get("scope"),
-            )
-            for cap in data.get("capabilities", [])
+            cls._deserialize_capability(cap) for cap in data.get("capabilities", [])
         ]
 
         delegations = [
@@ -1271,6 +1396,9 @@ class TrustLineageChain:
             capabilities=capabilities,
             delegations=delegations,
             constraint_envelope=constraint_envelope,
+            # #1912 Wave 2 chain-state signature (shared serde — None when absent,
+            # so a pre-Wave-2 chain reconstructs as legacy).
+            **deserialize_chain_state_signature_fields(data),
         )
 
 
@@ -1578,6 +1706,8 @@ __all__ = [
     "DELEGATION_SIGNING_VERSION_LEGACY",
     "DELEGATION_SIGNING_VERSION_V2",
     "DELEGATION_SIGNING_VERSION_V3",
+    "CAPABILITY_SIGNING_VERSION_LEGACY",
+    "CAPABILITY_SIGNING_VERSION_V1",
     # Enums
     "AuthorityType",
     "CapabilityType",
