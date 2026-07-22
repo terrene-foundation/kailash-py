@@ -338,6 +338,43 @@ async def test_migration_reports_chain_when_signing_key_absent(
     assert unchanged.chain_state_signature is None
 
 
+async def test_migration_reports_empty_genesis_agent_id_without_aborting(
+    registry, key_manager, memory_store
+):
+    """An anomalous chain with an empty genesis.agent_id is reported
+    un-migratable — the migration MUST NOT raise (which would abort the whole
+    run mid-pass, a run-wide DoS) but fail-soft per-chain (RT-sec-w3 gate).
+    """
+    ops = _fail_closed_ops(registry, key_manager, memory_store)
+    await ops.initialize()
+    await _establish_then_downgrade(ops, key_manager, "agent-empty", ["read_data"])
+
+    # Simulate the anomaly: a persisted chain whose genesis carries no agent_id.
+    chain = await memory_store.get_chain("agent-empty")
+    object.__setattr__(chain.genesis, "agent_id", "")
+    await memory_store.update_chain("agent-empty", chain)
+
+    migration = SubjectBindingMigration(registry, key_manager, memory_store)
+    # The whole point: this returns a report, it does NOT raise.
+    report = await migration.migrate(trust_store_placement=True)
+
+    assert report.migrated_chains == 0
+    assert report.promoted_capabilities == 0
+    assert report.fully_migrated is False
+    empty_items = [
+        u for u in report.unmigratable if "genesis agent_id is empty" in u.reason
+    ]
+    assert len(empty_items) == 1
+    assert empty_items[0].kind == "chain"
+    # Nothing was written — the caps are still legacy, no chain-state sig added.
+    unchanged = await memory_store.get_chain("agent-empty")
+    assert all(
+        c.signing_payload_version == CAPABILITY_SIGNING_VERSION_LEGACY
+        for c in unchanged.capabilities
+    )
+    assert unchanged.chain_state_signature is None
+
+
 # ---------------------------------------------------------------------------
 # Idempotency, dry-run, rollback, failure-atomicity
 # ---------------------------------------------------------------------------

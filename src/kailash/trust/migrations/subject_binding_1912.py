@@ -281,6 +281,24 @@ class SubjectBindingMigration:
         :meth:`_apply_atomically` commits it.
         """
         gen_authority_id = chain.genesis.authority_id
+        # An empty genesis.agent_id cannot be bound as a v1 capability subject
+        # (to_signing_payload raises on an empty subject, chain.py). Without a
+        # subject NO cap in this chain is promotable, so the WHOLE chain is
+        # un-migratable — report it and change nothing, rather than letting the
+        # per-cap re-sign raise and abort the entire migration run mid-pass
+        # (RT-sec-w3 gate-review: fail-soft per-chain, not a run-wide DoS).
+        if not chain.genesis.agent_id:
+            report.unmigratable.append(
+                UnmigratableItem(
+                    agent_id=chain.genesis.agent_id,
+                    kind="chain",
+                    reason=(
+                        "genesis agent_id is empty — cannot bind a v1 capability "
+                        "subject; chain is un-migratable (re-issue the genesis)"
+                    ),
+                )
+            )
+            return False
         # Resolve the genesis authority + confirm the local key can sign. If not,
         # the WHOLE chain is un-migratable locally (report, change nothing).
         try:
