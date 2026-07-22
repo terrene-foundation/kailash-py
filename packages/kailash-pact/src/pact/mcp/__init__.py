@@ -17,8 +17,10 @@ enforcement as a middleware layer:
   .tenant_grants scopes BOTH tools/call and resources/read to the caller's
   tenant through one shared restrictiveness function, fail-closed on an
   absent/unknown/ungranted tenant. Empty tenant_grants (the default) is a
-  byte-neutral no-op. A trusted McpCallerIdentity's tenant overwrites any
-  self-asserted metadata["tenant_id"] (impersonation defeat).
+  byte-neutral no-op. The tenant is resolved only from the server-verified
+  context tenant or a trusted McpCallerIdentity; the self-asserted
+  metadata["tenant_id"] channel is deprecated and no longer consulted for
+  tenant resolution in any mode (issue #1919).
 
 Architecture:
     pact.mcp.types      -- McpToolPolicy, McpGovernanceConfig, McpActionContext,

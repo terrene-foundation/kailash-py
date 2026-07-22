@@ -55,26 +55,31 @@ enforces **today** versus what remains open — read it before relying on
   `dict[str, McpTenantGrant]`) scopes both `tools/call` and `resources/read`
   to the caller's tenant through one shared, fail-closed restrictiveness
   function, evaluated before tool registration (so it applies even under
-  `DefaultPolicy.ALLOW`). `McpCallerIdentity.tenant` — resolved by your
-  transport/auth layer and passed to `check_tool_call`/`check_resource_read`
-  — always overwrites a self-asserted `metadata["tenant_id"]`, defeating
+  `DefaultPolicy.ALLOW`). The effective tenant is resolved from the
+  server-verified `tenant` field (populated server-side at the network
+  boundary, #1878) or a trusted `McpCallerIdentity.tenant` (resolved by your
+  transport/auth layer and passed to `check_tool_call`/`check_resource_read`);
+  the self-asserted `metadata["tenant_id"]` channel is deprecated and no
+  longer consulted for tenant resolution in any mode (#1919), defeating
   impersonation. `require_caller_identity` defaults to `True`: with no
-  trusted identity wired, the self-asserted body value is never trusted and
-  the call fails closed rather than silently falling back to it.
+  verified/trusted tenant the call fails closed.
 - **Deferred:** `resources/read` has ONLY the tenant-isolation check today —
   no cost, argument, clearance, or rate-limit governance layer exists yet
   for that surface (that richer contract exists only for `tools/call` via
-  `McpToolPolicy`). No first-class serialized `tenant_id` field exists on
-  the wire envelope; tenant rides the existing free-form
-  `metadata["tenant_id"]` channel by design (byte-neutral with the Rust
-  SDK's frozen envelope) and may change if the ecosystems converge on a
-  first-class field later.
+  `McpToolPolicy`). The server-verified `tenant` field (#1878) is populated
+  server-side and deliberately excluded from the wire envelope
+  (`to_dict`/`from_dict` never emit it — byte-neutral with the Rust SDK's
+  frozen envelope); it is NOT a client-serialized field, and the self-asserted
+  `metadata["tenant_id"]` channel is no longer consulted for tenant
+  resolution (#1919).
 - **Non-promises:** `tenant_grants` being empty is NOT "tenant isolation
   enabled with an empty allowlist" — it is isolation OFF entirely (every
   call auto-approved on that axis, byte-identical to pre-0.16.0 behavior).
   Passing `require_caller_identity=False` is NOT a recommended production
-  setting — it exists only for deployments with no transport-level identity
-  resolution, and re-enables the weaker, spoofable metadata fallback.
+  setting — it exists only for the documented #1843 weaker-mode surface. As
+  of #1919 it NO LONGER re-enables a trusted metadata fallback: a caller that
+  relied on the self-asserted `metadata["tenant_id"]` now receives a
+  `DeprecationWarning` and the decision fails closed.
 - **Verify:** `pytest packages/kailash-pact/tests/regression/test_issue_1843_mcp_tenant_isolation.py -v`
   exercises the fail-closed defaults, the impersonation-defeat contract, and
   the `resources/read` isolation-only surface end-to-end.
