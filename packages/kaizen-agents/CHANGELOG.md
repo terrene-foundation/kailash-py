@@ -5,6 +5,12 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] — 2026-07-22 — Route agent completion by the passed client, not the model prefix (#1899)
+
+### Fixed
+
+- **`Delegate(base_url=…, api_key=…)` now routes to the passed deployment client's endpoint (#1899).** An explicitly-passed OpenAI-compatible / Azure / custom-endpoint deployment client was silently ignored: `Delegate` accepted `base_url`/`api_key` but dropped them (no `KzConfig` fields), and model-name-prefix detection overrode an explicit endpoint. The passed client's endpoint is now authoritative; prefix detection is demoted to a fallback used only when no explicit client is set (zero-config `gpt-*`/`claude-*` unchanged). `KzConfig.api_key`/`base_url` carry `repr=False` so the credential cannot leak into a config log.
+
 ## [0.11.3] — 2026-07-19 — RAGResearchAgent lazy-loads so bare install imports without numpy (#1849)
 
 ### Fixed
