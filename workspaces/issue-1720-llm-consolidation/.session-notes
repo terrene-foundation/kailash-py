@@ -1,55 +1,70 @@
-# Session Notes — 2026-07-20 (Wave-B/3 EATP + Wave-A, RELEASED)
+# Session Notes — 2026-07-22 (cont-12)
 
 ## Where we are
 
-Wave-B (EATP cross-SDK) + the in-repo Wave-3 items are COMPLETE + RELEASED to PyPI.
-main @ origin/main (post release-prep #1875 merge = 3701b45d7 + 3 tags). 0 open PRs from this session.
-
-**Released to PyPI (verified HTTP 200 + clean-venv import):**
-- kailash 2.58.0 (v2.58.0) — EATP delegation-signing engine (#1841 S1/S2) + signed revocation ledger/HeadCommitment/verify (#1842 S1/S2/S3)
-- kailash-pact 0.16.0 (pact-v0.16.0) — MCP tenant isolation (#1843); + 0.16.1 (pact-v0.16.1) follow-up: export McpCallerIdentity/McpTenantGrant/McpResourceContext at pact top level (#1876, reviewer-caught API-surface gap)
-- kailash-kaizen 2.38.0 (kaizen-v2.38.0) — governance-gate over remaining provider egress (#1803)
+Clean board (0 open PRs). cont-11 shipped + released #1918 (kaizen-agents 0.11.5) and
+#1919 (kailash-pact 0.18.0) to PyPI, both live + verified. This session (cont-12) closed
+out the two remaining tracked follow-ups — **F2 deferred-quality** and **F1 cross-SDK** —
+with NO code changes required. Main @ post-release (c54fc9df1). Phase: post-release, board clean.
 
 ## Read first
-1. `workspaces/issue-1720-llm-consolidation/wave-ledger-2.md` — full per-shard ledger (8 feature PRs + release, redteam rounds incl. the CRITICAL #1842-S3 catch, all findings + dispositions).
-2. `CLAUDE.md` — project rules.
 
-## Issues closed this session
-#1842 (EATP revocation: ledger + HeadCommitment + verify-consults-signed-ledger, security-hardened) · #1843 (MCP tenant isolation) · #1803 (kaizen governance-gate).
-Filed: #1869 (kaizen-providers.md spec split, DQ). Merged: #1865/#1866/#1867/#1868/#1870/#1871/#1872 (features) + #1873 (authz receipt) + #1875 (release-prep).
+1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont12.md` — full cont-12 record
+   (F2 reconciliation verdicts + F1 cross-SDK investigation evidence). START HERE.
+2. `launch-ledger-cont11.md` — prior session (the #1918/#1919 impl + release).
+
+## Executed this session (cont-12)
+
+- **F2 deferred-quality backlog — RECONCILED, all WONT-FIX/STALE (no code change).** Two
+  parallel read-only recon agents verified every item against HEAD c54fc9df1 (wave-loop MUST-7):
+  - DQ-1919-casevariant / -direct-enforcer / -warnflood → all WONT-FIX. #1919 severed the
+    metadata→tenant-decision path entirely; residuals are audit-echo-only (no decision impact),
+    trusted-internal-caller-only, or standard once-per-site DeprecationWarning semantics.
+  - DQ-1918-caseprefix → WONT-FIX (low-value; no real caller supplies capitalized model prefixes).
+  - LATENT-printmode-maxturns → STALE/CLOSED. The single `KzConfig(...)` reconstruction copies
+    all 12 fields incl base_url+api_key (e586eb30f, the PR #1922 fold). #1899-class drop closed.
+  - **Disposition: do NOT re-queue at /sweep.** No substantive change → no redteam-to-converge
+    (manufacturing one = recommendation-quality clean-gate violation).
+- **F1 cross-SDK #1919 → Rust SDK — INVESTIGATED, NO GAP, NOTHING FILED.** User authorized
+  "file if found" (AskUserQuestion, genuine turn). Ran `/cross-repo-authorize` → write-tier
+  receipt (committed 249ce99d6). READ-investigated `esperie-enterprise/kailash-rs` (private)
+  `crates/eatp/src/mcp/governance.rs`. **No #1919-class gap** — different, already-hardened
+  architecture: (1) zero tenant concept in the MCP path (CallerIdentity has only subject+issuer,
+  no tenant field); (2) CallerIdentity derives no Serialize/Deserialize → un-forgeable from client
+  params; (3) network transport passes `permit_self_asserted=false` (mod.rs:328) → self-asserted
+  identity fail-closed over the wire, closing prior #1518 redteam HIGH; (4) regression tests over
+  real run_sse TCP prove it. Adversarial verifier tried to refute on all 5 axes → could not.
+  **Converged (2 independent confirmations) → no issue filed** (gap not found; filing would be noise).
 
 ## In-flight state
-Nothing uncommitted of substance. Local main FF'd to origin/main. Cross-repo READ authz receipt (kailash-rs) upstreamed via #1873. Untracked spend-artifact junk under packages/kaizen-agents/ (pre-existing) — leave.
 
-## CARRY-FORWARD (value-anchored, fresh session)
-| ID | Item | Value | Status |
-| -- | ---- | ----- | ------ |
-| #1841-S2b | Enrich DelegationRecord (structured constraints/resource_limits/scope/multi-sig/trust_level) → records SIGN v3-complete → **quorum-integrity value** | HIGH — the #1841 headline fix; engine+version-gate scaffolding ALREADY merged | OPEN, ~12+ inv byte-CHANGING data-model + cross-SDK lockstep |
-| #1846 | dataflow Vector byte-lockstep | feature parity | BLOCKED on rs#1990 (unmerged; no authored reference vectors). Re-check when rs#1990 lands. |
-| DQ7 | kaizen-providers.md split (>300 lines) | maintainability | tracked #1869 |
-| DQ9 | non-ASCII posture harmonize #1841/#1842 engines (one fail-closes, other trusts RFC-8785) | consistency | deferred-quality |
-| DQ10 | key-zeroization (del b64_priv) both sign sites (signed_ledger + head_commitment) | defense-in-depth | deferred-quality |
-| DQ11 | #1841 rotation.py:546 try/except (unknown-version record aborts rotation batch; fails closed) | robustness | fold into #1841-S2b |
+- Branch `chore/cont12-f1-crossrepo-authz`: authz receipt (249ce99d6) + this .session-notes.
+  → open PR + admin-merge to land the durable cross-repo audit trail on main.
+- No uncommitted code. No package release (no code changed this session).
 
-## Traps / lessons (CODIFY candidates)
-- **correctness-review-clean ≠ security-clean**: RT-verify-corr passed #1842-S3 CLEAN; RT-verify-sec (adversarial) caught a CRITICAL revocation-resurrection bypass (single-file head delete → all revoked delegations silently un-revoked) + a HIGH monotonic-regression + the revocation_verifier=None fail-open. BOTH adversarial lenses non-negotiable on security-critical shards.
-- **secure-default recurrence**: same fail-open-default shape hit #1843 (require_caller_identity=False) AND #1842-S3 (revocation_verifier=None). New security features should default fail-CLOSED (or loud-WARN when a required verifier is unwired).
-- **CodeQL orphan check**: repo has BOTH a "CodeQL Security Scanning" WORKFLOW (real scan) AND an orphaned "CodeQL" default-setup CHECK that hangs `queued`. Verify the WORKFLOW=success on the head, then admin-merge over the orphaned check (it never completes).
-- **duplicate-run race** (git.md): a concurrency-CANCELLED duplicate `build` run shows as "fail" in `gh pr checks` while the real run succeeds — verify the SUCCESS run is on the current head SHA before admin-merging.
-- EATP byte-lockstep: rs LEADS + authored the vectors (committed on rs default branch even though rs#1795/#1849/#1763 tracking issues stay OPEN); NEVER reason bytes — pin the exact rs vectors behind a PROVISIONAL tripwire; re-pin in lockstep.
+## Outstanding ledger (forest)
 
-## Release facts (for next release)
-- Tag convention: core `v<X.Y.Z>`, `pact-v<X.Y.Z>`, `kaizen-v<X.Y.Z>`. Tag-triggered OIDC "Publish to PyPI" workflow. release/* branch auto-skips the heavy PR-gate matrix.
-- Dep-pins this release: NONE needed (sub-pkg kailash>= floors already satisfied; grep-verified no new-core-symbol usage in pact/kaizen).
-- nexus/mcp: no changes since nexus-v2.14.0 / mcp-v0.4.2 — NOT released.
+| ID  | Item                                            | Status                                                       |
+| --- | ----------------------------------------------- | ------------------------------------------------------------ |
+| F1  | Cross-SDK #1919 → Rust SDK MCP-governance check  | **CLOSED** — investigated, no gap, nothing filed (cont-12)   |
+| F2  | Deferred-quality backlog (5 items)              | **CLOSED** — all WONT-FIX/STALE, evidence-backed (cont-12)   |
 
-## Codify complete (2026-07-20)
-- /codify DONE on branch `codify/jack-hong-2026-07-20`: TWO rule clauses landed with canonical-8-field clause-scoped Trust Posture Wiring —
-  - `security.md` § "Secure-Default For A New Security Feature — Fail-Closed Or Loud-WARN, Never A Silent No-Op" (recurred #1843 + #1842-S3).
-  - `agents.md` § "MUST: Correctness-Review-Clean Is Not Security-Clean" (evidence #1842-S3).
-- Self-referential Rule-1 gate (agents.md allowlisted): 3-lens PARALLEL redteam (CODIFY-rev/sec/arch) converged NO-BLOCKER; two non-blocking tightenings applied.
-- posture.json `pending_verification = [security, agents]`; anchor advanced → 2026-07-20T07:41:49Z; BUILD→loom proposal appended (pending_review, Rule-10 headroom = loom Gate-1 action).
-- Journal: `journal/0007-DECISION` + `journal/0008-DISCOVERY`. CodeQL-orphan/duplicate-run lessons remain captured in this notes file (not rule-worthy — CI-environment facts, not SDK/COC contracts).
+Board is now genuinely empty — no tracked follow-ups remain.
+
+## Traps
+
+- Auto-merge DISABLED — pinned-head CI READ then separate MERGE (git.md); `release/*` auto-skips matrix.
+- Cross-repo Rust SDK access requires a committed `/cross-repo-authorize` receipt in
+  `.claude/cross-repo-authz/` BEFORE any `gh --repo esperie-enterprise/kailash-rs` command.
+- Rust SDK slug is `esperie-enterprise/kailash-rs` (private), NOT terrene-foundation.
+- Reviewer/recon fan-out dying on weekly usage limit = ZERO evidence (evidence gate); re-run after swap.
+
+## Hygiene (surface, do NOT act unprompted — feedback_no_bulk_worktree_discard)
+
+- Untracked test-artifact clutter in `packages/kaizen-agents/` (hello_world.py, *.txt/*.json,
+  task_*/, evaluations/, proposal/, rationale/, tasks/) + old workspace launch-ledgers.
+  Pre-existing since before cont-11. User hygiene decision still pending — NOT touched.
 
 ## Open questions for the human
-- Proceed with #1841-S2b (quorum-integrity data-model enrichment) next session? It's the last piece of the #1841 headline value.
+
+- Hygiene cleanup of the untracked kaizen-agents test artifacts + old launch-ledgers — clean up, or leave?
