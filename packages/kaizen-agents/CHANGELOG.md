@@ -5,6 +5,13 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.5] — 2026-07-22 — Infer provider from model prefix in zero-config Delegate (#1918)
+
+### Fixed
+
+- **Zero-config `Delegate(model="claude-*")` no longer routes to the OpenAI wire (#1918).** `KzConfig.provider` defaulted to the non-empty string `"openai"`, which `AgentLoop._build_adapter` forwarded as an _explicit_ provider to `get_adapter_for_model`, short-circuiting the model-name-prefix fallback (`claude-`→anthropic, `gemini-`→google). A zero-config `claude-*`/`gemini-*` model therefore built an OpenAI adapter pointed at `api.openai.com` (sending the wrong provider's key to the wrong endpoint). The default is now the empty-string sentinel `""`, aligning with `get_adapter_for_model`'s own unset sentinel so the prefix fallback runs on the no-client path; explicit `provider=` / `KZ_PROVIDER` / `.kz` config still win, and zero-config `gpt-*`/unknown-prefix models still default to OpenAI (unchanged). The prior regression test called the registry directly (bypassing `Delegate`), masking the bug — new tests exercise the full `Delegate` → adapter path end-to-end.
+- **Print-mode `max_turns` override no longer drops the deployment client (#1918).** `PrintRunner`'s `max_turns`-override branch rebuilt `KzConfig` field-by-field and omitted `base_url`/`api_key`, silently dropping a #1899 deployment client; combined with the provider-default fix, a `claude-*` model pinned to a custom endpoint would then re-infer to the prefix provider's real wire instead of the caller's deployment. The reconstruction now preserves every field.
+
 ## [0.11.4] — 2026-07-22 — Route agent completion by the passed client, not the model prefix (#1899)
 
 ### Fixed
