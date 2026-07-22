@@ -218,6 +218,10 @@ async def _establish_agent_with_capability(
         chain = await ops.trust_store.get_chain(agent_id)
         for constraint in constraints:
             chain.constraint_envelope.active_constraints.append(constraint)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
 
@@ -304,6 +308,10 @@ class TestReasoningEndToEndFlow:
             "agent-e2e-1", reasoning_trace, private_key
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         # Verify at FULL level
@@ -349,6 +357,10 @@ class TestReasoningEndToEndFlow:
             "agent-e2e-2", audit_trace, private_key
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         # Verify at FULL level
@@ -394,6 +406,10 @@ class TestReasoningEndToEndFlow:
             signature=sign("test-payload", private_key),
         )
         chain.delegations.append(del_without)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -441,6 +457,10 @@ class TestReasoningEndToEndFlow:
             signature=sign("test-payload", private_key),
         )
         chain.delegations.append(del_without)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         score = await compute_trust_score("agent-e2e-4", ops.trust_store)
@@ -460,6 +480,10 @@ class TestReasoningEndToEndFlow:
             deleg_id="del-scored-full",
         )
         chain_full.delegations.append(del_full)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain_full)
         await ops.trust_store.store_chain(chain_full)
 
         score_full = await compute_trust_score("agent-e2e-4-full", ops.trust_store)
@@ -506,6 +530,10 @@ class TestReasoningEndToEndFlow:
         )
         anchor.action = "analyze"
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         # Step 4: Verify
@@ -565,6 +593,10 @@ class TestReasoningAdversarial:
         delegation.reasoning_trace_hash = "tampered_hash_0000000000000000"
 
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -612,6 +644,10 @@ class TestReasoningAdversarial:
         delegation.signature = sign(del_payload, private_key)
 
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -790,6 +826,10 @@ class TestReasoningAdversarial:
             "agent-concurrent", reasoning_trace, private_key
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         # Run 10 concurrent verify calls
@@ -847,6 +887,10 @@ class TestReasoningAdversarial:
             "agent-enforce", reasoning_trace, private_key
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1000,6 +1044,10 @@ class TestReasoningBackwardCompat:
             signature=sign("test", private_key),
         )
         chain1.delegations.append(del1)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain1)
         await ops.trust_store.store_chain(chain1)
         score1 = await compute_trust_score("agent-compat-1", ops.trust_store)
 
@@ -1016,6 +1064,10 @@ class TestReasoningBackwardCompat:
             "agent-compat-2", reasoning_trace, private_key, deleg_id="del-compat-2"
         )
         chain2.delegations.append(del2)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain2)
         await ops.trust_store.store_chain(chain2)
         score2 = await compute_trust_score("agent-compat-2", ops.trust_store)
 

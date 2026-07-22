@@ -206,6 +206,10 @@ async def _establish_agent_with_capability(
         chain = await ops.trust_store.get_chain(agent_id)
         for constraint in constraints:
             chain.constraint_envelope.active_constraints.append(constraint)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
 
@@ -367,6 +371,10 @@ class TestVerifyStandardReasoningPresence:
             reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key),
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -402,6 +410,10 @@ class TestVerifyStandardReasoningPresence:
             # No reasoning_trace, reasoning_trace_hash, or reasoning_signature
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -438,6 +450,10 @@ class TestVerifyStandardReasoningPresence:
             reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key),
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -471,6 +487,10 @@ class TestVerifyStandardReasoningPresence:
             # No reasoning trace
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -545,6 +565,10 @@ class TestVerifyFullReasoningCrypto:
         delegation.signature = sign(del_payload, private_key)
 
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -585,6 +609,10 @@ class TestVerifyFullReasoningCrypto:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -625,6 +653,10 @@ class TestVerifyFullReasoningCrypto:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -670,6 +702,10 @@ class TestVerifyFullReasoningCrypto:
             ),
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -706,6 +742,10 @@ class TestVerifyFullReasoningCrypto:
             reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key),
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -825,6 +865,10 @@ class TestVerifyMixedReasoningRecords:
             signature=sign("test-payload-b", private_key),
         )
         chain.delegations.extend([del_with, del_without])
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -881,6 +925,10 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -921,6 +969,10 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             reasoning_signature="AAAA_not_a_real_signature_AAAA",
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -967,6 +1019,10 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1019,6 +1075,10 @@ class TestVerifyStandardMissingReasoningViolations:
             # No reasoning_trace, no reasoning_trace_hash, no reasoning_signature
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1061,6 +1121,10 @@ class TestVerifyStandardMissingReasoningViolations:
             # No reasoning trace
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1104,6 +1168,10 @@ class TestVerifyStandardMissingReasoningViolations:
             reasoning_signature=sign_reasoning_trace(reasoning_trace, private_key),
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1174,6 +1242,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
             # No reasoning_trace, no reasoning_trace_hash, no reasoning_signature
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1226,6 +1298,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1261,6 +1337,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
             # No reasoning trace
         )
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1300,6 +1380,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
             # No reasoning trace
         )
         chain.audit_anchors.append(anchor)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1372,6 +1456,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
         )
 
         chain.delegations.extend([del_with, del_without])
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(
@@ -1418,6 +1506,10 @@ class TestVerifyFullReasoningRequiredHardFailure:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
         chain.delegations.append(delegation)
+        # #1912 Wave 2: re-issue the chain-state signature after the
+        # in-memory mutation above (mirrors ops.delegate) so the stored
+        # chain is internally consistent for verify().
+        await ops._issue_chain_state_signature(chain)
         await ops.trust_store.store_chain(chain)
 
         result = await ops.verify(

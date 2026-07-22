@@ -28,6 +28,8 @@ from kailash.trust.authority import (
     OrganizationalAuthority,
 )
 from kailash.trust.chain import (
+    CAPABILITY_SIGNING_VERSION_LEGACY,
+    CAPABILITY_SIGNING_VERSION_V1,
     ActionResult,
     AuditAnchor,
     CapabilityAttestation,
@@ -57,6 +59,9 @@ from kailash.trust.exceptions import (
     UnsupportedSigningPayloadVersionError,
 )
 from kailash.trust.execution_context import ExecutionContext, get_current_context
+from kailash.trust.signing.chain_state_signing import (
+    chain_state_canonical_payload_str,
+)
 from kailash.trust.signing.crypto import (
     hash_chain,
     serialize_for_signing,
@@ -248,6 +253,9 @@ class TrustOperations:
         trust_store: TrustStore,
         max_delegation_depth: int = MAX_DELEGATION_DEPTH,
         revocation_verifier: "SignedRevocationVerifier | None" = None,
+        *,
+        allow_unbound_legacy_capabilities: bool = False,
+        allow_unsigned_chain_state: bool = False,
     ):
         """
         Initialize TrustOperations.
@@ -265,16 +273,52 @@ class TrustOperations:
                 unverifiable ledger/head, never falling open to the unsigned
                 ``revoked`` flag. When ``None`` (default), verify behaviour is
                 unchanged (the in-memory cascade remains the only surface).
+            allow_unbound_legacy_capabilities: #1912 Wave 3 A1 migration-window
+                opt-out. Default ``False`` = FAIL-CLOSED: :meth:`verify` REJECTS a
+                legacy (pre-#1912, un-subject-bound) capability, because a legacy
+                cap is transplantable across chains (the HIGH #1912 closes). Set
+                ``True`` ONLY during the migration window to accept legacy caps
+                over their legacy pre-image while chains are re-signed by the
+                #1912 re-signing migration (:mod:`kailash.trust.migrations.
+                subject_binding_1912`); verify emits ONE loud WARN that the
+                transplant defense is OFF. This is a hard-to-reverse security
+                relaxation — leave it ``False`` unless actively migrating.
+            allow_unsigned_chain_state: #1912 Wave 3 A1 migration-window opt-out.
+                Default ``False`` = FAIL-CLOSED: :meth:`verify` REJECTS a chain
+                that carries NO chain-state signature, because an unsigned chain
+                has no defense against whole-capability-set deletion (MED-1) or
+                constraint/REASONING_REQUIRED suppression (MED-2). Set ``True``
+                ONLY during the migration window to accept unsigned chains while
+                they are re-signed by the migration; verify emits ONE loud WARN
+                that set-deletion/suppression detection is OFF. Independent of
+                ``allow_unbound_legacy_capabilities`` (they gate distinct
+                security dimensions — a deployment MAY enforce one while migrating
+                the other).
         """
         self.authority_registry = authority_registry
         self.key_manager = key_manager
         self.trust_store = trust_store
         self.max_delegation_depth = max_delegation_depth
         self.revocation_verifier = revocation_verifier
+        # #1912 Wave 3 A1 — fail-closed enforcement opt-outs (default False). Each
+        # gates a DISTINCT security dimension; each has its OWN one-time WARN latch
+        # (below) so the OFF-protection state is observable exactly once whether it
+        # is the fail-closed REJECT (default) or the opt-out ACCEPT (migration
+        # window). security.md § Secure-Default / feedback_no_shims (optimal-clean).
+        self.allow_unbound_legacy_capabilities = allow_unbound_legacy_capabilities
+        self.allow_unsigned_chain_state = allow_unsigned_chain_state
         # FIX 4 (#1842) — one-time WARN latch. When no signed-ledger verifier is
         # wired, the authoritative resurrection/rollback defenses are OFF; verify()
         # emits ONE WARN the first time it runs unprotected (observability Rule 4).
         self._revocation_verifier_absent_warned = False
+        # #1912 Wave 3 — one-time WARN latches for the two A1 enforcement axes.
+        # The chain-state latch fires on the absent-sig path (REJECT by default,
+        # or ACCEPT under allow_unsigned_chain_state); the legacy-cap latch fires
+        # on the legacy-version path (REJECT by default, or ACCEPT under
+        # allow_unbound_legacy_capabilities). One WARN per axis per instance
+        # (observability Rule 4) — the systemic cause, not per-verify spam.
+        self._chain_state_sig_absent_warned = False
+        self._unbound_legacy_cap_warned = False
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -368,6 +412,7 @@ class TrustOperations:
                 authority=authority,
                 global_constraints=constraints,
                 expires_at=expires_at,
+                subject_agent_id=agent_id,
             )
             capability_attestations.append(attestation)
 
@@ -387,6 +432,11 @@ class TrustOperations:
             constraint_envelope=constraint_envelope,
             audit_anchors=[],
         )
+
+        # 8b. Issue the #1912 Wave 2 chain-state signature (new chains ALWAYS get
+        # it — fail-closed at issuance). Binds the capability SET + constraint
+        # envelope under the genesis authority's Ed25519 key.
+        await self._issue_chain_state_signature(chain, authority=authority)
 
         # 9. Store chain
         await self.trust_store.store_chain(chain, expires_at)
@@ -418,6 +468,7 @@ class TrustOperations:
         authority: OrganizationalAuthority,
         global_constraints: List[str],
         expires_at: Optional[datetime],
+        subject_agent_id: str,
     ) -> CapabilityAttestation:
         """
         Create and sign a capability attestation.
@@ -427,6 +478,10 @@ class TrustOperations:
             authority: The attesting authority
             global_constraints: Constraints applied to all capabilities
             expires_at: Optional expiration
+            subject_agent_id: The HOLDER agent this capability is attested FOR
+                (the chain's ``genesis.agent_id``). Bound into the v1 signing
+                pre-image so the cap cannot be transplanted into another chain
+                (#1912).
 
         Returns:
             Signed CapabilityAttestation
@@ -449,10 +504,16 @@ class TrustOperations:
             expires_at=expires_at,
             signature="",
             scope=cap_request.scope,
+            # New caps are v1-subject-bound (#1912): the signature covers the
+            # holder subject, so a genuine cap copied into another chain fails
+            # verification.
+            signing_payload_version=CAPABILITY_SIGNING_VERSION_V1,
         )
 
-        # Sign attestation
-        payload = serialize_for_signing(attestation.to_signing_payload())
+        # Sign attestation over the v1 pre-image (holder subject bound in).
+        payload = serialize_for_signing(
+            attestation.to_signing_payload(subject_agent_id=subject_agent_id)
+        )
         attestation.signature = await self.key_manager.sign(
             payload, authority.signing_key_id
         )
@@ -667,10 +728,34 @@ class TrustOperations:
         #     fails). Constraints are still collected from every cap instance.
         verified_caps: set = set()
         for cap in chain.capabilities:
-            dedup_key = (
-                serialize_for_signing(cap.to_signing_payload()),
-                cap.signature,
-            )
+            # Dedup key reflects the ACTUAL pre-image that will be verified: for a
+            # v1 cap it includes the holder subject (#1912), matching
+            # _verify_capability_signature's dispatch, so two caps that verify
+            # over DIFFERENT bytes never collide. An UNRECOGNISED version emits
+            # legacy-shaped bytes (no raise) and its denial happens in the verify
+            # call below. An empty holder subject on a v1 cap (an anomalous /
+            # tampered chain whose genesis.agent_id is empty) makes
+            # to_signing_payload RAISE (the #1912 empty-subject guard) — this is
+            # a sibling verify-site of _verify_capability_signature, so it MUST
+            # fail closed the same way here, never propagate the ValueError up
+            # the public verify() FULL path.
+            try:
+                dedup_key = (
+                    serialize_for_signing(
+                        cap.to_signing_payload(subject_agent_id=chain.genesis.agent_id)
+                    ),
+                    cap.signature,
+                )
+            except ValueError:
+                logger.warning(
+                    "capability constraint derivation failed: v1 capability over "
+                    "an empty holder subject (fail-closed denial)",
+                    extra={"capability_id": cap.id},
+                )
+                return (
+                    empty,
+                    f"Capability signature invalid — constraints untrusted: {cap.id}",
+                )
             if dedup_key not in verified_caps:
                 if not await self._verify_capability_signature(
                     chain, cap, authority=authority
@@ -709,6 +794,7 @@ class TrustOperations:
         authority: Any,
         authority_id: str,
         expires_at: Optional[datetime],
+        subject_agent_id: str,
     ) -> List[CapabilityAttestation]:
         """Build SIGNED derived capabilities carrying a delegation's tightening.
 
@@ -734,6 +820,10 @@ class TrustOperations:
             authority: The resolved signing authority.
             authority_id: The signing authority id (attester).
             expires_at: The derived capability expiry.
+            subject_agent_id: The HOLDER of the derived capabilities (the
+                ``delegatee_id`` — equal to the delegatee chain's
+                ``genesis.agent_id``). Bound into the v1 signing pre-image so a
+                derived cap cannot be transplanted into another chain (#1912).
 
         Returns:
             A list of signed :class:`CapabilityAttestation` (one per matched
@@ -761,14 +851,158 @@ class TrustOperations:
                 expires_at=expires_at,
                 signature="",
                 scope=source_cap.scope,
+                # Derived caps are v1-subject-bound (#1912) to the delegatee.
+                signing_payload_version=CAPABILITY_SIGNING_VERSION_V1,
             )
-            cap_payload = serialize_for_signing(derived_cap.to_signing_payload())
+            cap_payload = serialize_for_signing(
+                derived_cap.to_signing_payload(subject_agent_id=subject_agent_id)
+            )
             derived_cap.signature = await self.key_manager.sign(
                 cap_payload,
                 authority.signing_key_id,
             )
             derived.append(derived_cap)
         return derived
+
+    async def _issue_chain_state_signature(
+        self,
+        chain: TrustLineageChain,
+        *,
+        authority: Optional[Any] = None,
+    ) -> None:
+        """(Re)issue the #1912 Wave 2 chain-state signature IN PLACE.
+
+        Signs the canonical chain-state pre-image (capability-SET membership +
+        constraint envelope) with the CHAIN OWNER's genesis-authority key and
+        sets ``chain.chain_state_signature``. Called at EVERY site that creates
+        OR mutates a persisted chain (establish + both delegate branches +
+        revoke_delegation) so a stale chain-state signature is never persisted —
+        a mutation that changed ``capability_ids`` / ``delegation_ids`` /
+        ``constraint_hash`` without re-issuing would fail closed at verify.
+
+        The signer is ALWAYS ``chain.genesis.authority_id`` (the chain owner),
+        because verify (:meth:`_verify_chain_state_signature`) resolves that same
+        authority — binding to the mutating delegator's authority instead would
+        make verify resolve the wrong public key. A pre-resolved ``authority`` is
+        used only when it matches the chain's genesis authority (the establish /
+        new-delegatee fast path); otherwise the owner authority is resolved here.
+        """
+        gen_authority_id = chain.genesis.authority_id
+        if authority is None or getattr(authority, "id", None) != gen_authority_id:
+            authority = await self.authority_registry.get_authority(gen_authority_id)
+        payload = chain_state_canonical_payload_str(chain)
+        chain.chain_state_signature = await self.key_manager.sign(
+            payload, authority.signing_key_id
+        )
+
+    async def _verify_chain_state_signature(
+        self,
+        chain: TrustLineageChain,
+        level: VerificationLevel,
+    ) -> Optional[VerificationResult]:
+        """Verify the #1912 Wave 2 chain-state signature (verify-if-present).
+
+        Returns a DENY :class:`VerificationResult` when the chain carries a
+        chain-state signature that does NOT verify over the recomputed pre-image
+        (a store-writer deleted a whole capability — MED-1 — or stripped a
+        constraint / REASONING_REQUIRED entry from the persisted envelope —
+        MED-2), OR when the signing authority cannot be resolved / the signature
+        is malformed (fail-closed). #1912 Wave 3 A1: a chain with NO signature is
+        also DENIED (an unsigned chain has no MED-1/MED-2 defense, and stripping
+        the signature is the downgrade-to-legacy bypass) — UNLESS the deployment
+        set ``allow_unsigned_chain_state=True`` for the migration window, in which
+        case an unsigned chain is accepted with a loud one-time WARN. Returns
+        ``None`` when the signature verifies (or under the opt-out).
+        """
+        sig = getattr(chain, "chain_state_signature", None)
+        if sig is None:
+            # #1912 Wave 3 A1 enforcement. An unsigned chain has NO defense against
+            # whole-capability-set deletion (MED-1) or constraint/REASONING_REQUIRED
+            # suppression (MED-2), and stripping the signature is exactly the
+            # downgrade-to-legacy bypass. FAIL CLOSED: DENY unless the deployment
+            # explicitly opted into the migration window. Both the reject-path
+            # (default) and the opt-out-accept-path emit ONE latched WARN naming
+            # the OFF protection (observability Rule 4).
+            if not self.allow_unsigned_chain_state:
+                if not self._chain_state_sig_absent_warned:
+                    self._chain_state_sig_absent_warned = True
+                    logger.warning(
+                        "trust verify: REJECTING chain with NO chain-state "
+                        "signature (#1912 Wave 3 A1) — whole-capability-set-"
+                        "deletion and constraint-suppression detection require the "
+                        "signature. Re-sign chains with the #1912 migration "
+                        "(kailash.trust.migrations.subject_binding_1912), or set "
+                        "TrustOperations(allow_unsigned_chain_state=True) for the "
+                        "migration window.",
+                        extra={"agent_id": chain.genesis.agent_id},
+                    )
+                return VerificationResult(
+                    valid=False,
+                    reason=(
+                        "Chain has no chain-state signature — set-deletion / "
+                        "constraint-suppression protection is unavailable; re-sign "
+                        "via the #1912 migration or set "
+                        "allow_unsigned_chain_state=True (#1912 Wave 3)"
+                    ),
+                    level=level,
+                )
+            if not self._chain_state_sig_absent_warned:
+                self._chain_state_sig_absent_warned = True
+                logger.warning(
+                    "trust verify: ACCEPTING chains with NO chain-state signature "
+                    "because allow_unsigned_chain_state=True (#1912 Wave 3 "
+                    "migration window) — whole-capability-set-deletion and "
+                    "constraint-suppression detection are OFF. Re-sign chains with "
+                    "the #1912 migration and clear this flag to fail closed.",
+                    extra={"agent_id": chain.genesis.agent_id},
+                )
+            return None
+
+        try:
+            authority = await self.authority_registry.get_authority(
+                chain.genesis.authority_id,
+                include_inactive=True,  # historical verification
+            )
+        except (AuthorityNotFoundError, AuthorityInactiveError):
+            logger.warning(
+                "chain-state signature verification: signing authority "
+                "unresolved (fail-closed deny)",
+                extra={"authority_id": chain.genesis.authority_id},
+            )
+            return VerificationResult(
+                valid=False,
+                reason="Chain-state signature authority unresolved — chain untrusted",
+                level=level,
+            )
+
+        # Build the pre-image + verify INSIDE the fail-closed try: a tampered /
+        # anomalous chain must DENY, never crash the public verify() path
+        # (WAVE-1 lesson — wrap every verify-path pre-image site).
+        try:
+            payload = chain_state_canonical_payload_str(chain)
+            ok = await self.key_manager.verify(payload, sig, authority.public_key)
+        except (InvalidSignatureError, ValueError) as exc:
+            logger.warning(
+                "chain-state signature malformed or unverifiable (fail-closed " "deny)",
+                extra={"agent_id": chain.genesis.agent_id, "error": str(exc)},
+            )
+            ok = False
+
+        if not ok:
+            logger.warning(
+                "chain-state signature INVALID (#1912 Wave 2 fail-closed deny) — "
+                "capability set or constraint envelope may be tampered",
+                extra={"agent_id": chain.genesis.agent_id},
+            )
+            return VerificationResult(
+                valid=False,
+                reason=(
+                    "Chain-state signature invalid — capability set or constraint "
+                    "envelope may be tampered (#1912)"
+                ),
+                level=level,
+            )
+        return None
 
     # =========================================================================
     # VERIFY Operation
@@ -848,6 +1082,18 @@ class TrustOperations:
         # QUICK level: Just check hash and expiration
         if level == VerificationLevel.QUICK:
             return await self._verify_quick(chain, level)
+
+        # #1912 chain-state signature gate (STANDARD+). Verifies the ONE
+        # genesis-authority signature over the chain-state pre-image (capability-
+        # SET membership + constraint envelope) BEFORE the matched-capability and
+        # constraint checks, so a whole-cap deletion (MED-1) or a constraint /
+        # REASONING_REQUIRED suppression (MED-2) fails closed here. Under Wave-3 A1
+        # a chain with NO signature is REJECTED by default (fail-closed); the
+        # migration-window opt-out allow_unsigned_chain_state=True accepts it with
+        # a loud one-time WARN.
+        chain_state_denial = await self._verify_chain_state_signature(chain, level)
+        if chain_state_denial is not None:
+            return chain_state_denial
 
         # STANDARD level: Check capabilities and constraints
         capability = self._match_capability(chain, action)
@@ -1519,19 +1765,83 @@ class TrustOperations:
                     },
                 )
                 return False
-        cap_payload = serialize_for_signing(cap.to_signing_payload())
+        # Dispatch on the capability's signing-payload version (#1912 Wave 1).
+        # An UNRECOGNISED version fails closed (never falls through to the legacy
+        # verifier, which would check the WRONG pre-image). The v1 pre-image binds
+        # THIS chain's holder subject, so a genuine cap transplanted from another
+        # chain recomputes a different subject and its signature no longer matches;
+        # a v1 cap whose version was stripped defaults to legacy and its legacy
+        # re-verification (no subject) also fails (downgrade-resistant).
+        version = getattr(
+            cap, "signing_payload_version", CAPABILITY_SIGNING_VERSION_LEGACY
+        )
+        if version not in (
+            CAPABILITY_SIGNING_VERSION_LEGACY,
+            CAPABILITY_SIGNING_VERSION_V1,
+        ):
+            logger.warning(
+                "capability signature verification failed: unrecognised "
+                "signing_payload_version (fail-closed denial)",
+                extra={
+                    "capability_id": cap.id,
+                    "signing_payload_version": version,
+                },
+            )
+            return False
+        if version == CAPABILITY_SIGNING_VERSION_LEGACY:
+            # #1912 Wave 3 A1 enforcement. A legacy (pre-#1912) capability signs a
+            # pre-image with NO holder subject, so it verifies IDENTICALLY on ANY
+            # chain — the exact capability-transplant HIGH #1912 closes for v1
+            # caps. FAIL CLOSED: reject the legacy cap unless the deployment has
+            # explicitly opted into the migration window. The reject-path and the
+            # opt-out-accept-path EACH emit one latched WARN naming the systemic
+            # cause (this deployment holds un-migrated legacy caps), never
+            # per-verify spam (observability Rule 4).
+            if not self.allow_unbound_legacy_capabilities:
+                if not self._unbound_legacy_cap_warned:
+                    self._unbound_legacy_cap_warned = True
+                    logger.warning(
+                        "trust verify: REJECTING legacy (un-subject-bound) "
+                        "capability (#1912 Wave 3 A1) — legacy caps are "
+                        "transplantable across chains. Re-sign chains with the "
+                        "#1912 migration (kailash.trust.migrations."
+                        "subject_binding_1912), or set "
+                        "TrustOperations(allow_unbound_legacy_capabilities=True) "
+                        "for the migration window.",
+                        extra={"capability_id": cap.id},
+                    )
+                return False
+            if not self._unbound_legacy_cap_warned:
+                self._unbound_legacy_cap_warned = True
+                logger.warning(
+                    "trust verify: ACCEPTING legacy (un-subject-bound) "
+                    "capabilities because allow_unbound_legacy_capabilities=True "
+                    "(#1912 Wave 3 migration window) — the capability-transplant "
+                    "defense is OFF. Re-sign chains with the #1912 migration and "
+                    "clear this flag to fail closed.",
+                    extra={"capability_id": cap.id},
+                )
         try:
+            # Build the pre-image INSIDE the fail-closed try: a v1 cap on a chain
+            # whose genesis.agent_id is empty/absent (an anomalous/tampered state)
+            # makes to_signing_payload raise ValueError; treat that as a denial,
+            # never a crash (#1912 RT-sec LOW — verify fail-closes on the empty
+            # subject the sign-time guard rejects at mint).
+            cap_payload = serialize_for_signing(
+                cap.to_signing_payload(subject_agent_id=chain.genesis.agent_id)
+            )
             return await self.key_manager.verify(
                 cap_payload,
                 cap.signature,
                 authority.public_key,
             )
-        except InvalidSignatureError:
+        except (InvalidSignatureError, ValueError):
             # verify_signature() returns False on a BadSignatureError but RAISES
             # InvalidSignatureError on a malformed / empty / wrong-length
-            # signature. A tampered stored grant may carry exactly such a
-            # signature, so treat the raise as an invalid signature and fail
-            # closed (mirrors _verify_reasoning_traces). Observable, not silent.
+            # signature; a v1 pre-image over an empty subject raises ValueError.
+            # A tampered stored grant may carry exactly such a signature, so treat
+            # the raise as an invalid signature and fail closed (mirrors
+            # _verify_reasoning_traces). Observable, not silent.
             logger.warning(
                 "capability signature verification failed: malformed or "
                 "unverifiable signature (fail-closed denial)",
@@ -1730,6 +2040,37 @@ class TrustOperations:
                 subject_id,
                 f"source chain failed integrity verification: {integrity.reason}",
                 violations=["chain_integrity_failed"],
+            )
+
+        # (d) #1912 Wave 3 — enforce the chain-state signature at the mint surface
+        # too (rules/security.md § Enforcement-Surface Parity). verify() gates the
+        # chain-state signature at STANDARD+ (whole-capability-set deletion MED-1 /
+        # constraint-suppression MED-2); this mint gate is an INDEPENDENT validation
+        # surface that produces a signed, portable artifact, so a store-writer who
+        # deletes a constraint-bearing capability or strips a constraint — breaking
+        # the chain-state signature — must NOT be able to mint from the weakened
+        # chain (RT-sec-w3 Finding B). _verify_capability_signature (called via
+        # _verify_signatures above) already carries the LEGACY-cap A1 flip, so only
+        # the chain-state dimension needs adding here for parity. Honors the same
+        # allow_unsigned_chain_state migration-window opt-out (the check reads it),
+        # and never raises (it returns a DENY VerificationResult or None).
+        chain_state_denial = await self._verify_chain_state_signature(
+            chain, VerificationLevel.STANDARD
+        )
+        if chain_state_denial is not None:
+            logger.warning(
+                "mint refused: source chain-state signature invalid/absent "
+                "(#1912 Wave 3, fail-closed)",
+                extra={
+                    "subject_id": subject_id,
+                    "reason": chain_state_denial.reason,
+                },
+            )
+            raise InvalidTrustChainError(
+                subject_id,
+                f"source chain failed chain-state verification: "
+                f"{chain_state_denial.reason}",
+                violations=["chain_state_verification_failed"],
             )
 
     async def _verify_delegation_signature(
@@ -2274,6 +2615,7 @@ class TrustOperations:
                         authority=authority,
                         authority_id=authority_id,
                         expires_at=expires_at,
+                        subject_agent_id=delegatee_id,
                     )
                 )
             # Recompute the (advisory) persisted constraint envelope cache.
@@ -2283,6 +2625,12 @@ class TrustOperations:
                 capabilities=delegatee_chain.capabilities,
                 delegations=delegatee_chain.delegations,
             )
+            # Re-issue the #1912 Wave 2 chain-state signature: the appended
+            # delegation + derived caps + recomputed envelope changed the pre-
+            # image, so the prior signature is now stale and would fail closed at
+            # verify. Signed by the delegatee chain's OWN genesis authority (the
+            # chain owner), which verify resolves — not the delegator's authority.
+            await self._issue_chain_state_signature(delegatee_chain)
             await self.trust_store.update_chain(delegatee_id, delegatee_chain)
         except TrustChainNotFoundError:
             # Create a derived chain for the delegatee
@@ -2322,6 +2670,7 @@ class TrustOperations:
                 authority=authority,
                 authority_id=authority_id,
                 expires_at=expires_at,
+                subject_agent_id=delegatee_id,
             )
 
             # Compute constraint envelope
@@ -2339,6 +2688,12 @@ class TrustOperations:
                 delegations=[delegation],
                 constraint_envelope=constraint_envelope,
                 audit_anchors=[],
+            )
+            # Issue the #1912 Wave 2 chain-state signature for the new derived
+            # chain (new chains ALWAYS get it). The derived genesis authority ==
+            # the delegator's authority, so the already-resolved authority signs.
+            await self._issue_chain_state_signature(
+                delegatee_chain, authority=authority
             )
             await self.trust_store.store_chain(delegatee_chain, expires_at)
 
@@ -2580,6 +2935,13 @@ class TrustOperations:
             capabilities=chain.capabilities,
             delegations=chain.delegations,
         )
+
+        # Re-issue the #1912 Wave 2 chain-state signature: removing a delegation
+        # changed delegation_ids + the recomputed envelope, so the prior
+        # signature is stale. A legitimate revocation must NOT leave a stale
+        # signature that would then fail closed at verify.
+        if chain.chain_state_signature is not None:
+            await self._issue_chain_state_signature(chain)
 
         await self.trust_store.update_chain(delegatee_id, chain)
 

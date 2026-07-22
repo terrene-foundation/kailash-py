@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security (Trust Plane — #1912 capability subject-binding + chain-state signing)
+
+Three coordinated waves close a capability-transplant HIGH and two store-writer
+MEDIUMs in the trust plane. The bounded-trust adversary is a store-writer with
+write access to persisted trust chains (the same threat model the signed-
+revocation layer already defends against).
+
+- **Wave 1 — capability subject-binding (HIGH).** A capability signature
+  previously bound the attester but NO holder subject, so a genuine capability
+  copied from chain A into chain B verified fine — a cross-chain transplant.
+  New capabilities are now `v1-subject-bound`: the signature covers the holder
+  chain's `genesis.agent_id`, and `verify()` recomputes the subject from the
+  chain, so a transplanted capability recomputes a different pre-image and its
+  signature no longer matches. Downgrade-resistant (stripping the version reverts
+  to the legacy no-subject pre-image, which no longer matches the v1 signature).
+  Wired through every capability sign site (establish, delegate, key rotation,
+  the CLI `establish` / `delegate` commands) and every serializer (chain-level
+  `to_dict`, JWT, W3C VC, SD-JWT) via one shared `capability_fold_serde` helper.
+
+- **Wave 2 — chain-state signature (MEDIUMs).** One Ed25519 signature by the
+  genesis authority over a deterministic chain-state pre-image
+  (`{genesis_id, sorted capability_ids, sorted delegation_ids, recomputed
+constraint_hash}`) detects **MED-1** (whole-capability-set deletion — the
+  deleted id leaves `capability_ids`) and **MED-2** (constraint /
+  `REASONING_REQUIRED` suppression — the recomputed `constraint_hash` changes).
+  The pre-image RE-COMPUTES the constraint hash from live constraints (never the
+  stored field), so a strip-without-rehash is still caught. Re-issued at every
+  chain-mutation site; verified at STANDARD+.
+
+- **Wave 3 (A1) — fail-closed enforcement + re-signing migration. ⚠️ BREAKING.**
+  `verify()` now **REJECTS** a legacy (un-subject-bound) capability and a chain
+  with NO chain-state signature by default (previously accepted-with-WARN). This
+  closes the installed-base residual — an un-migrated chain, or a store-writer
+  who strips the chain-state signature to downgrade a tampered chain to
+  "legacy", is now denied rather than accepted. Two independent migration-window
+  opt-outs on `TrustOperations`, each defaulting to `False` (fail-closed) and
+  each gating a distinct security dimension, restore the prior accept behavior
+  with a loud one-time WARN while chains are migrated:
+  `allow_unbound_legacy_capabilities` (Wave-1 transplant axis) and
+  `allow_unsigned_chain_state` (Wave-2 set-deletion/suppression axis).
+
+  A standalone, idempotent re-signing migration
+  (`kailash.trust.migrations.subject_binding_1912.SubjectBindingMigration`)
+  promotes the installed base to the Wave-3 posture: it enumerates persisted
+  chains, promotes each locally-signable legacy capability to `v1-subject-bound`
+  and re-signs it, and adds a chain-state signature where absent. It is
+  failure-atomic (a mid-apply failure restores every changed chain), explicitly
+  reversible (`rollback()` byte-exact restores the pre-migration snapshots),
+  supports `dry_run=True`, and REPORTS — never silently drops — capabilities it
+  cannot re-sign locally (an external attester, or an absent genesis signing
+  key). It is a deliberate operator action, never auto-run.
+
+  **Upgrade path for trust-plane deployments:** on upgrade, set
+  `allow_unbound_legacy_capabilities=True` and `allow_unsigned_chain_state=True`,
+  then run `SubjectBindingMigration(...).migrate(trust_store_placement=True)`
+  **against a trusted store state**, confirm the report is `fully_migrated`, and
+  clear both flags to enforce. Every re-signing write the migration makes —
+  legacy-cap promotion AND fresh chain-state signing — requires the explicit
+  `trust_store_placement=True` acknowledgment, because the migration re-signs
+  stored content (a legacy cap carries no holder subject; a fresh chain-state
+  signature covers the chain's current, unverifiable constraint envelope) and so
+  can only trust the store's current state; run from a snapshot taken before the
+  store was exposed to untrusted writers. A deployment that does not migrate and
+  does not set the opt-outs will have its legacy chains rejected on upgrade. See
+  `docs/trust/1912-subject-binding-migration.md`.
+
+  Cross-SDK: the capability and chain-state signatures are deployment-local (no
+  fixed cross-deployment byte vector), so this ships Python-independent; the
+  canonical pre-image ENCODINGS are pinned as cross-SDK tripwires
+  (cross-sdk-inspection.md Rule 4b/4d). The sibling SDK needs the equivalent fix
+  before its trust plane interoperates on subject-bound artifacts.
+
 ## [2.60.1] - 2026-07-21
 
 ### Security (Trust Plane — hotfix for 2.60.0)

@@ -1786,7 +1786,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.59.0"
+version = "2.60.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2119,7 +2119,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.18.0"
+version = "2.19.1"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2288,7 +2288,7 @@ provides-extras = ["providers-azure", "providers-google", "providers-tokens", "p
 
 [[package]]
 name = "kailash-mcp"
-version = "0.4.2"
+version = "0.4.3"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "aiohttp" },
