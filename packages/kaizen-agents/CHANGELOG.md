@@ -5,6 +5,12 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] — 2026-07-22 — Thread temperature/max_tokens overrides into the Delegate config build
+
+### Fixed
+
+- **`Delegate(temperature=…, max_tokens=…)` now actually applies the override.** Both params were accepted and documented on `Delegate.__init__` as LLM overrides, but the zero-config `KzConfig` build omitted them — so an explicit caller override was silently dropped and the `KzConfig` defaults (`temperature=0.4`, `max_tokens=16384`) always won. A caller pinning `temperature=0` for determinism silently got `0.4`. Same documented-kwarg-drop class as the #1899 `base_url`/`api_key` fix, one field over. Both are now forwarded onto `KzConfig`, and only when set (an unspecified override still inherits the `KzConfig` default, since the fields are non-Optional). A completeness sweep of `Delegate.__init__` confirmed `temperature`/`max_tokens` were the only two params silently dropped in the config path. (Two further documented-but-unwired params, `signature` and `inner_agent`, are tracked separately in #1927 — they need a wire-vs-remove design decision, not a mechanical thread.)
+
 ## [0.11.5] — 2026-07-22 — Infer provider from model prefix in zero-config Delegate (#1918)
 
 ### Fixed
