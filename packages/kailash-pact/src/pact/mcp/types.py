@@ -219,17 +219,18 @@ class McpGovernanceConfig:
             ``McpGovernanceEnforcer._tenant_isolation_decision`` (enforcer.py)
             -- the ONE shared restrictiveness function both surfaces call.
         require_caller_identity: When True (the default), the tenant resolver
-            NEVER consults the self-asserted ``metadata["tenant_id"]``
-            fallback -- an absent, or tenant-less, trusted ``McpCallerIdentity``
-            resolves straight to no-tenant (fail-closed), rather than trusting
-            a caller-supplied metadata value. SECURE BY DEFAULT: with no
-            existing users of the metadata-fallback behavior, True costs
-            nothing at zero backward-compat risk and closes the bypass where
-            a deployment sets tenant_grants but never wires caller_identity,
-            silently trusting the self-asserted body tenant_id. Pass False
-            explicitly to opt into the weaker metadata-fallback channel (only
-            appropriate for deployments with no transport-level identity
-            resolution). A no-op when tenant_grants is empty (isolation OFF).
+            resolves the tenant ONLY from the server-verified context tenant or
+            a trusted ``McpCallerIdentity``; an absent, or tenant-less, trusted
+            identity resolves straight to no-tenant (fail-closed). SECURE BY
+            DEFAULT: closes the bypass where a deployment sets tenant_grants but
+            never wires caller_identity. As of issue #1919 the self-asserted
+            ``metadata["tenant_id"]`` fallback is DEPRECATED and no longer
+            honored in ANY mode: passing False no longer opts into a trusted
+            metadata channel -- a caller that relied on it now receives a
+            ``DeprecationWarning`` and the decision fails closed (no tenant
+            resolved). False is retained only for the documented #1843
+            weaker-mode surface and no longer grants the metadata channel.
+            A no-op when tenant_grants is empty (isolation OFF).
 
     Raises:
         ValueError: If max_audit_entries is < 1, or a tenant_grants key does
@@ -332,18 +333,17 @@ class McpActionContext:
         metadata: Additional context for governance evaluation. Carries the
             free-form, SELF-ASSERTED ``metadata["tenant_id"]`` channel
             (issue #1843) -- a caller-supplied value the enforcer treats as
-            untrusted input. It is the WEAKER, opt-in fallback consulted ONLY
-            when ``McpGovernanceConfig.require_caller_identity`` is False AND
-            neither the first-class ``tenant`` field nor a trusted
-            ``McpCallerIdentity`` resolves a tenant. Under the secure default
-            (``require_caller_identity=True``) it is NEVER trusted for the
-            governance decision.
+            untrusted input. As of issue #1919 it is NEVER consulted for the
+            tenant governance decision in ANY mode; a caller that still sets it
+            under the deprecated ``require_caller_identity=False`` weaker mode
+            receives a ``DeprecationWarning`` and the decision fails closed.
         tenant: The FIRST-CLASS, SERVER-VERIFIED tenant for this call (issue
             #1878), DISTINCT from the free-form ``metadata`` map. This is the
             AUTHORITATIVE tenant-isolation input: governance enforcement reads
-            THIS field (highest trust), ranking it above both the sidecar
-            ``McpCallerIdentity`` and the self-asserted
-            ``metadata["tenant_id"]``. It is populated SERVER-SIDE at the
+            THIS field (highest trust), ranking it above the sidecar
+            ``McpCallerIdentity``; the self-asserted ``metadata["tenant_id"]``
+            is no longer a ranked resolution source (issue #1919). It is
+            populated SERVER-SIDE at the
             network boundary from the authenticated transport/token (see
             ``from_network_transport`` and ``McpGovernanceMiddleware``), NEVER
             from the client wire body. Deliberately EXCLUDED from the wire
@@ -509,8 +509,9 @@ class McpResourceContext:
         timestamp: When the invocation was initiated.
         metadata: Additional context for governance evaluation. Carries the
             same free-form, self-asserted ``metadata["tenant_id"]`` channel
-            as :attr:`McpActionContext.metadata` -- the weaker, opt-in
-            fallback, never trusted under the secure default.
+            as :attr:`McpActionContext.metadata` -- never consulted for the
+            tenant decision in any mode (issue #1919); exercising it under the
+            deprecated weaker mode emits a ``DeprecationWarning``.
         tenant: The FIRST-CLASS, SERVER-VERIFIED tenant for this resource read
             (issue #1878), DISTINCT from the free-form ``metadata`` map and
             the authoritative tenant-isolation input -- see
@@ -615,18 +616,20 @@ class McpCallerIdentity:
     Deliberately carries NO ``to_dict()`` / ``from_dict()``: this object is
     NOT part of the wire-serialized MCP envelope (``McpActionContext`` /
     ``McpResourceContext`` stay frozen -- byte-neutral per the issue #1843
-    contract). Its ``tenant`` is the AUTHORITATIVE tenant for the call and
-    OVERWRITES any self-asserted ``metadata["tenant_id"]`` on the action or
-    resource context -- the impersonation-defeat mechanism: a caller cannot
-    widen its own access by putting a different tenant in the request body,
-    because the enforcer trusts this identity over the body.
+    contract). Its ``tenant`` is the AUTHORITATIVE tenant for the call when no
+    server-verified context tenant is present -- the impersonation-defeat
+    mechanism: a caller cannot widen its own access by putting a different
+    tenant in the request body, because the self-asserted
+    ``metadata["tenant_id"]`` is no longer consulted for tenant resolution
+    (issue #1919).
 
     Attributes:
         agent_id: Identifier of the authenticated agent/caller.
         tenant: The tenant this caller was authenticated as. None means the
-            transport layer did not resolve a tenant for this caller (the
-            enforcer then falls back to the self-asserted
-            ``metadata["tenant_id"]``, which is weaker but not absent).
+            transport layer did not resolve a tenant for this caller; under
+            active isolation the decision then fails closed -- the
+            self-asserted ``metadata["tenant_id"]`` is no longer consulted
+            (issue #1919).
 
     Raises:
         ValueError: If tenant is not a string or None.

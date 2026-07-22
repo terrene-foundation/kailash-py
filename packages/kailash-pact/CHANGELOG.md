@@ -1,5 +1,15 @@
 # PACT Changelog
 
+## [Unreleased] — Deprecate the untrusted metadata['tenant_id'] tenant fallback (#1919)
+
+### Changed (Security)
+
+- **The client-asserted `metadata['tenant_id']` tenant fallback is deprecated and no longer honored in ANY mode (#1919).** Issue #1843 shipped MCP tenant isolation with a secure default (`require_caller_identity=True`) and a documented weaker mode (`require_caller_identity=False`) that, as a last-resort fallback, trusted a client-supplied `metadata['tenant_id']` as the effective tenant. Under that documented weaker mode a client could influence a tenant-isolation decision via the request body — the exact impersonation surface first-class tenant isolation exists to close, narrowed to one opt-in mode. The single enforcer decision chokepoint (`_resolve_effective_tenant`) now NO LONGER trusts `metadata['tenant_id']` in the weaker branch: when a caller exercises the now-deprecated path a `DeprecationWarning` fires and the resolution returns `None`, which **fails the tenant-isolation decision CLOSED** (never fail-open). A client-asserted tenant can no longer influence a tenant decision in any mode. Defense-in-depth: `McpGovernanceMiddleware.invoke` / `invoke_resource_read` now scrub `metadata['tenant_id']` at the boundary before building the context (mirroring `from_network_transport`), so the client value never propagates into audit/echo surfaces either.
+
+  - **Behavior change:** a deployment on the weaker mode (`require_caller_identity=False`) that relied on the metadata fallback will see previously-approved calls now BLOCKED (fail-closed) plus a `DeprecationWarning`.
+  - **Migration:** provide a trusted caller identity (`McpCallerIdentity.tenant`) or a server-verified context tenant (`McpActionContext.tenant` / `McpResourceContext.tenant`, populated server-side at the network boundary), OR set `McpGovernanceConfig.require_caller_identity=True` (the secure default). The `require_caller_identity=False` mode still exists — only its trust of the client-asserted metadata tenant is removed.
+  - **Unchanged:** the secure default (`require_caller_identity=True`) is byte-identical — it never consulted the metadata channel and does not warn. Verified/trusted tenant precedence (verified context tenant > caller identity) is unchanged.
+
 ## [0.17.0] — 2026-07-22 — First-class server-verified tenant field on McpActionContext (#1878)
 
 ### Added (Security)

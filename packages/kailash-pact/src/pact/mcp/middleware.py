@@ -102,10 +102,11 @@ class McpGovernanceMiddleware:
                 None means no clearance supplied (such tools are BLOCKED).
             caller_identity: The trusted caller identity resolved by the
                 transport/auth layer, if any (issue #1843). Its tenant (when
-                set) OVERWRITES any self-asserted metadata["tenant_id"]
-                (impersonation defeat). Forwarded to the enforcer's tenant
-                isolation gate; a no-op when McpGovernanceConfig.tenant_grants
-                is empty.
+                set) is the authoritative tenant when no server-verified
+                context tenant is present; the self-asserted
+                metadata["tenant_id"] is no longer consulted (issue #1919).
+                Forwarded to the enforcer's tenant isolation gate; a no-op when
+                McpGovernanceConfig.tenant_grants is empty.
             metadata: Additional context for governance evaluation.
 
         Returns:
@@ -120,6 +121,15 @@ class McpGovernanceMiddleware:
         verified_tenant = (
             caller_identity.tenant if caller_identity is not None else None
         )
+        # Defense-in-depth (#1919): scrub any client-asserted
+        # metadata["tenant_id"] at the boundary before building the context,
+        # mirroring McpActionContext.from_network_transport. A client-asserted
+        # tenant can never influence the decision (the enforcer no longer
+        # trusts it) AND must never propagate into audit/echo surfaces. The
+        # verified `tenant` field below is populated ONLY from caller_identity.
+        scrubbed_metadata = {
+            k: v for k, v in (metadata or {}).items() if k != "tenant_id"
+        }
         context = McpActionContext(
             tool_name=tool_name,
             args=args or {},
@@ -127,7 +137,7 @@ class McpGovernanceMiddleware:
             timestamp=now,
             cost_estimate=cost_estimate,
             caller_clearance=caller_clearance,
-            metadata=metadata or {},
+            metadata=scrubbed_metadata,
             tenant=verified_tenant,
         )
 
@@ -183,9 +193,10 @@ class McpGovernanceMiddleware:
             uri: The MCP resource URI to read.
             agent_id: Identifier of the agent making the call.
             caller_identity: The trusted caller identity resolved by the
-                transport/auth layer, if any. Its tenant (when set)
-                OVERWRITES any self-asserted metadata["tenant_id"]
-                (impersonation defeat), mirroring invoke().
+                transport/auth layer, if any. Its tenant (when set) is the
+                authoritative tenant when no server-verified context tenant is
+                present; the self-asserted metadata["tenant_id"] is no longer
+                consulted (issue #1919), mirroring invoke().
             metadata: Additional context for governance evaluation.
 
         Returns:
@@ -199,11 +210,18 @@ class McpGovernanceMiddleware:
         verified_tenant = (
             caller_identity.tenant if caller_identity is not None else None
         )
+        # Defense-in-depth (#1919): scrub any client-asserted
+        # metadata["tenant_id"] at the boundary before building the context,
+        # mirroring McpResourceContext.from_network_transport. The verified
+        # `tenant` field below is populated ONLY from caller_identity.
+        scrubbed_metadata = {
+            k: v for k, v in (metadata or {}).items() if k != "tenant_id"
+        }
         context = McpResourceContext(
             uri=uri,
             agent_id=agent_id,
             timestamp=now,
-            metadata=metadata or {},
+            metadata=scrubbed_metadata,
             tenant=verified_tenant,
         )
 
