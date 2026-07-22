@@ -102,10 +102,11 @@ class McpGovernanceMiddleware:
                 None means no clearance supplied (such tools are BLOCKED).
             caller_identity: The trusted caller identity resolved by the
                 transport/auth layer, if any (issue #1843). Its tenant (when
-                set) OVERWRITES any self-asserted metadata["tenant_id"]
-                (impersonation defeat). Forwarded to the enforcer's tenant
-                isolation gate; a no-op when McpGovernanceConfig.tenant_grants
-                is empty.
+                set) is the authoritative tenant when no server-verified
+                context tenant is present; the self-asserted
+                metadata["tenant_id"] is no longer consulted (issue #1919).
+                Forwarded to the enforcer's tenant isolation gate; a no-op when
+                McpGovernanceConfig.tenant_grants is empty.
             metadata: Additional context for governance evaluation.
 
         Returns:
@@ -192,9 +193,10 @@ class McpGovernanceMiddleware:
             uri: The MCP resource URI to read.
             agent_id: Identifier of the agent making the call.
             caller_identity: The trusted caller identity resolved by the
-                transport/auth layer, if any. Its tenant (when set)
-                OVERWRITES any self-asserted metadata["tenant_id"]
-                (impersonation defeat), mirroring invoke().
+                transport/auth layer, if any. Its tenant (when set) is the
+                authoritative tenant when no server-verified context tenant is
+                present; the self-asserted metadata["tenant_id"] is no longer
+                consulted (issue #1919), mirroring invoke().
             metadata: Additional context for governance evaluation.
 
         Returns:

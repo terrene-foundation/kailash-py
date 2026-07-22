@@ -19,9 +19,11 @@ Security invariants (per pact-governance.md):
    non-empty, BOTH tools/call (keyed on tool name) and resources/read (keyed
    on URI) are scoped through ONE shared restrictiveness function
    (_tenant_isolation_decision), fail-closed on an absent, unrecognized, or
-   ungranted tenant (security.md Enforcement-Surface Parity). A trusted
-   McpCallerIdentity's tenant OVERWRITES any self-asserted
-   metadata["tenant_id"] (impersonation defeat). Empty tenant_grants (the
+   ungranted tenant (security.md Enforcement-Surface Parity). The tenant is
+   resolved ONLY from the server-verified context tenant or a trusted
+   McpCallerIdentity; the self-asserted metadata["tenant_id"] channel is
+   deprecated and no longer consulted for tenant resolution in ANY mode
+   (issue #1919). Empty tenant_grants (the
    default) means isolation is OFF -- byte-neutral backward compatibility.
 """
 
@@ -313,8 +315,10 @@ class McpGovernanceEnforcer:
         0. Check tenant isolation (issue #1843, fail-closed) -- SKIPPED
            entirely when McpGovernanceConfig.tenant_grants is empty (isolation
            OFF, byte-neutral backward compatibility); when non-empty, the
-           trusted caller_identity's tenant (or the self-asserted
-           metadata["tenant_id"] fallback) must hold a grant for this tool.
+           tenant -- from the server-verified context tenant or the trusted
+           caller_identity, NOT the self-asserted metadata["tenant_id"]
+           channel (deprecated + no longer consulted, issue #1919) -- must
+           hold a grant for this tool.
            Evaluated BEFORE tool registration so isolation applies uniformly
            regardless of default_policy (DENY or ALLOW).
         1. Check if tool is registered (default-deny for unregistered)
@@ -333,11 +337,12 @@ class McpGovernanceEnforcer:
         Args:
             context: The MCP action context describing the tool call.
             caller_identity: The trusted caller identity resolved by the
-                transport/auth layer, if any. Its tenant (when set)
-                OVERWRITES any self-asserted context.metadata["tenant_id"]
-                (impersonation defeat). None means no trusted identity was
-                supplied -- the enforcer falls back to the self-asserted
-                metadata channel.
+                transport/auth layer, if any. Its tenant (when set) is the
+                authoritative tenant when no server-verified context tenant is
+                present. None means no trusted identity was supplied; with no
+                context tenant the decision fails closed -- the self-asserted
+                metadata["tenant_id"] channel is no longer consulted
+                (issue #1919).
 
         Returns:
             A GovernanceDecision with the verdict.
@@ -401,9 +406,10 @@ class McpGovernanceEnforcer:
             context: The MCP resource context describing the resources/read
                 invocation.
             caller_identity: The trusted caller identity resolved by the
-                transport/auth layer, if any. Its tenant (when set)
-                OVERWRITES any self-asserted context.metadata["tenant_id"]
-                (impersonation defeat), mirroring check_tool_call.
+                transport/auth layer, if any. Its tenant (when set) is the
+                authoritative tenant when no server-verified context tenant is
+                present; the self-asserted metadata["tenant_id"] channel is no
+                longer consulted (issue #1919), mirroring check_tool_call.
 
         Returns:
             A GovernanceDecision with the verdict.
