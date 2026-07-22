@@ -131,6 +131,15 @@ class KzConfig:
     # LLM settings
     model: str = ""
     provider: str = "openai"
+    # Explicitly-passed deployment client (issue #1899). When ``base_url`` is
+    # set, the client's endpoint wins over model-name-prefix detection — an
+    # OpenAI-compatible / Azure / custom-endpoint deployment is identified by
+    # its endpoint, not a routable model prefix. Programmatic-only (set via the
+    # ``Delegate(base_url=..., api_key=...)`` params); intentionally NOT wired
+    # into the file/env config maps (an endpoint/credential belongs in the
+    # explicit call, not a discovered kz config file).
+    base_url: str | None = None
+    api_key: str | None = None
     effort_level: EffortLevel = EffortLevel.MEDIUM
 
     # Generation settings

@@ -400,9 +400,17 @@ class Delegate:
         if config is not None:
             self._config = config
         else:
+            # Thread the explicitly-passed deployment client (endpoint + key)
+            # onto the config so its provider/endpoint wins over model-name-
+            # prefix detection (issue #1899). Previously base_url/api_key were
+            # stored on the Delegate but never reached the adapter, so an
+            # OpenAI-compatible / Azure / custom-endpoint deployment client was
+            # dropped and every completion hit api.openai.com.
             self._config = KzConfig(
                 model=resolved_model,
                 max_turns=max_turns,
+                base_url=base_url,
+                api_key=api_key,
             )
 
         # Build tool registry

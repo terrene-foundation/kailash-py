@@ -422,9 +422,14 @@ class AgentLoop:
         from kaizen_agents.delegate.adapters.registry import get_adapter_for_model
 
         model = self._config.model or os.environ.get("DEFAULT_LLM_MODEL", "")
+        # Thread the explicitly-passed deployment client (endpoint + key) so it
+        # wins over model-name-prefix detection (issue #1899). When base_url is
+        # unset these are None and routing is byte-identical to zero-config.
         return get_adapter_for_model(
             model=model,
             provider=self._config.provider,
+            api_key=getattr(self._config, "api_key", None),
+            base_url=getattr(self._config, "base_url", None),
             temperature=self._config.temperature,
             max_tokens=self._config.max_tokens,
             ungoverned=getattr(self, "_ungoverned", False),
