@@ -171,7 +171,11 @@ class TestLoadConfig:
         """No config files or env vars -> returns defaults."""
         config = load_config(project_root=tmp_path, user_home=tmp_path / "fakehome")
         assert config.model == ""  # empty until effort preset or CLI flag sets it
-        assert config.provider == "openai"
+        # Empty is the "caller did not set a provider" sentinel (issue #1918):
+        # zero-config leaves provider unset so adapter selection infers it from
+        # the model-name prefix, instead of forwarding a truthy "openai" default
+        # that pre-empts the prefix fallback and routes claude-* to the OpenAI wire.
+        assert config.provider == ""
         assert config.effort_level is EffortLevel.MEDIUM
         assert config.max_turns == 50
         assert config.max_tokens == 16384

@@ -130,7 +130,17 @@ class KzConfig:
 
     # LLM settings
     model: str = ""
-    provider: str = "openai"
+    # Empty string is the "caller did not set a provider" sentinel (issue #1918).
+    # It MUST match get_adapter_for_model's own ``provider: str = ""`` unset
+    # sentinel: when empty, adapter selection falls through to model-name-prefix
+    # inference (``claude-*`` -> anthropic, ``gemini-*`` -> google) and then the
+    # ``openai`` default. A non-empty value (set via a ``.kz`` config file, the
+    # ``KZ_PROVIDER`` env var, or an explicit ``KzConfig(provider=...)``) is
+    # authoritative and wins over prefix inference. Previously this defaulted to
+    # the truthy ``"openai"``, which was forwarded to get_adapter_for_model as an
+    # EXPLICIT provider and short-circuited the prefix fallback, so a zero-config
+    # ``Delegate`` on a ``claude-*`` model silently hit the OpenAI wire.
+    provider: str = ""
     # Explicitly-passed deployment client (issue #1899). When ``base_url`` is
     # set, the client's endpoint wins over model-name-prefix detection — an
     # OpenAI-compatible / Azure / custom-endpoint deployment is identified by

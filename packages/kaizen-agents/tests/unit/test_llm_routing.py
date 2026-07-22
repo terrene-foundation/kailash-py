@@ -126,3 +126,132 @@ class TestLLMBasedSelectBest:
         ):
             best = await strategy.select_best("translate this document", caps)
             assert best is caps[0]
+
+
+# ==========================================================================
+# Issue #1918 — zero-config Delegate MUST infer the provider from the model
+# prefix, not silently route claude-*/gemini-* to the OpenAI wire.
+#
+# Before the fix, KzConfig.provider defaulted to the truthy "openai", which
+# AgentLoop._build_adapter forwarded to get_adapter_for_model as an EXPLICIT
+# provider — short-circuiting the model-name-prefix fallback. A bare
+# Delegate(model="claude-...") built an OpenAIStreamAdapter @ api.openai.com.
+#
+# These tests exercise the routing DISPATCH end-to-end through Delegate (the
+# path the bug lived on — NOT get_adapter_for_model directly, whose own default
+# provider="" already inferred correctly). Adapters construct without a live
+# network call; ungoverned=True bypasses the #1779 governance gate and the
+# api_key is a test-only fixture, not a real secret. The model-name literals are
+# prefix-SHAPE fixtures for the detection logic, not production model selection
+# (rules/env-models.md governs production paths; test fixtures are exempt).
+# --------------------------------------------------------------------------
+
+_FAKE_KEY = "test-routing-key"  # not a real secret; test-only fixture
+
+
+def _loop_adapter(delegate):
+    """The streaming adapter the delegate's loop will drive."""
+    return delegate._loop._adapter
+
+
+class TestZeroConfigDelegateProviderRouting:
+    """A bare Delegate(model=...) infers the provider from the model prefix."""
+
+    def test_zero_config_claude_routes_to_anthropic(self):
+        """Delegate(model="claude-*") builds an Anthropic adapter, NOT OpenAI."""
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            AnthropicStreamAdapter,
+        )
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(
+            model="claude-3-5-sonnet", api_key=_FAKE_KEY, ungoverned=True
+        )
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, AnthropicStreamAdapter), (
+            "zero-config claude-* must route to the Anthropic adapter, got "
+            f"{type(adapter).__name__} (the #1918 regression: it hit OpenAI)"
+        )
+        assert not isinstance(adapter, OpenAIStreamAdapter)
+        endpoint = str(adapter._client.base_url)
+        assert (
+            "api.openai.com" not in endpoint
+        ), f"claude-* routed to {endpoint!r} — the OpenAI wire (issue #1918)"
+        assert "anthropic" in endpoint
+
+    def test_zero_config_gemini_routes_to_google(self):
+        """Delegate(model="gemini-*") builds a Google adapter, NOT OpenAI."""
+        from kaizen_agents.delegate.adapters.google_adapter import GoogleStreamAdapter
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(
+            model="gemini-2.0-flash", api_key=_FAKE_KEY, ungoverned=True
+        )
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, GoogleStreamAdapter), (
+            "zero-config gemini-* must route to the Google adapter, got "
+            f"{type(adapter).__name__} (the #1918 regression: it hit OpenAI)"
+        )
+        # GoogleStreamAdapter constructs a genai.Client (no OpenAI wire); the
+        # isinstance check above is the "not api.openai.com" guarantee.
+        assert not isinstance(adapter, OpenAIStreamAdapter)
+
+    def test_zero_config_gpt_still_routes_to_openai(self):
+        """Non-regression: a bare gpt-* still routes to OpenAI @ api.openai.com."""
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(model="gpt-4o", api_key=_FAKE_KEY, ungoverned=True)
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, OpenAIStreamAdapter)
+        assert "api.openai.com" in str(adapter._client.base_url)
+
+    def test_zero_config_unknown_prefix_still_defaults_to_openai(self):
+        """Non-regression: an unknown-prefix model still defaults to OpenAI."""
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(
+            model="my-custom-deployment", api_key=_FAKE_KEY, ungoverned=True
+        )
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, OpenAIStreamAdapter)
+        assert "api.openai.com" in str(adapter._client.base_url)
+
+    def test_explicit_provider_wins_over_model_prefix(self):
+        """An explicit KzConfig.provider is authoritative over prefix inference:
+        provider="openai" on a claude-* model still builds the OpenAI adapter."""
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.config.loader import KzConfig
+        from kaizen_agents.delegate.delegate import Delegate
+
+        # api_key lives on the KzConfig: when config= is passed, Delegate uses it
+        # verbatim and does not thread the separate api_key= param onto it.
+        cfg = KzConfig(model="claude-3-5-sonnet", provider="openai", api_key=_FAKE_KEY)
+        delegate = Delegate(config=cfg, ungoverned=True)
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, OpenAIStreamAdapter), (
+            "an explicit provider='openai' must win over the claude-* prefix, "
+            f"got {type(adapter).__name__}"
+        )
+        assert "api.openai.com" in str(adapter._client.base_url)
+
+    def test_explicit_base_url_still_wins_over_prefix(self):
+        """Non-regression guard for #1899: a passed deployment endpoint on a
+        claude-* model still routes to the OpenAI-compatible wire at that
+        endpoint (base_url precedence unchanged by the #1918 fix)."""
+        from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
+        from kaizen_agents.delegate.delegate import Delegate
+
+        endpoint = "https://my-deployment.example.com/v1"
+        delegate = Delegate(
+            model="claude-3-5-sonnet",
+            base_url=endpoint,
+            api_key=_FAKE_KEY,
+            ungoverned=True,
+        )
+        adapter = _loop_adapter(delegate)
+        assert isinstance(adapter, OpenAIStreamAdapter)
+        assert str(adapter._client.base_url).rstrip("/") == endpoint
