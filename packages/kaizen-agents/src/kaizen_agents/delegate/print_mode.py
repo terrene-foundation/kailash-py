@@ -57,6 +57,14 @@ class PrintRunner:
             config = KzConfig(
                 model=config.model,
                 provider=config.provider,
+                # Preserve the #1899 deployment client (base_url + api_key).
+                # Omitting them here dropped the explicitly-set endpoint/key on a
+                # max_turns override, so a claude-* model pinned to a custom
+                # base_url silently re-inferred to the prefix provider's real wire
+                # (api.anthropic.com) instead of the caller's deployment (#1918
+                # redteam INVEST-NOW; same base_url-precedence invariant #1899 set).
+                base_url=config.base_url,
+                api_key=config.api_key,
                 effort_level=config.effort_level,
                 max_turns=max_turns,
                 max_tokens=config.max_tokens,
