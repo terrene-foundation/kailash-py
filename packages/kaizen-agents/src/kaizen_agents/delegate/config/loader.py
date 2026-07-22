@@ -138,8 +138,11 @@ class KzConfig:
     # ``Delegate(base_url=..., api_key=...)`` params); intentionally NOT wired
     # into the file/env config maps (an endpoint/credential belongs in the
     # explicit call, not a discovered kz config file).
-    base_url: str | None = None
-    api_key: str | None = None
+    # repr=False: these carry an endpoint + credential; keep them out of the
+    # default dataclass repr so a future diagnostic log of the config object
+    # cannot leak the api_key (security.md § "No secrets in logs").
+    base_url: str | None = field(default=None, repr=False)
+    api_key: str | None = field(default=None, repr=False)
     effort_level: EffortLevel = EffortLevel.MEDIUM
 
     # Generation settings

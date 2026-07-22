@@ -122,3 +122,24 @@ def test_delegate_threads_explicit_client_endpoint_to_loop_adapter() -> None:
     adapter = delegate._loop._adapter
     assert isinstance(adapter, OpenAIStreamAdapter)
     assert _client_base_url(adapter) == _DEPLOYMENT_BASE_URL
+
+
+# --- Credential hygiene: the api_key MUST NOT leak into the config repr --------
+
+
+def test_kzconfig_repr_does_not_leak_api_key() -> None:
+    """KzConfig.api_key/base_url carry a credential + endpoint; they MUST be
+    excluded from the default dataclass repr so a future diagnostic log of the
+    config object cannot leak the key (security.md § 'No secrets in logs')."""
+    from kaizen_agents.delegate.config.loader import KzConfig
+
+    cfg = KzConfig(
+        model="gpt-5-my-deployment",
+        base_url=_DEPLOYMENT_BASE_URL,
+        api_key="sk-super-secret-deployment-key",
+    )
+    rendered = repr(cfg)
+    assert "sk-super-secret-deployment-key" not in rendered
+    assert _DEPLOYMENT_BASE_URL not in rendered
+    # The value is still readable programmatically (only the repr is scrubbed).
+    assert cfg.api_key == "sk-super-secret-deployment-key"
