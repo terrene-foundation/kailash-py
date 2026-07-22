@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import warnings
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -119,17 +120,20 @@ def _resolve_effective_tenant(
     2. ``caller_identity.tenant`` -- the sidecar trusted identity (issue
        #1843), also transport-resolved. Consulted when no first-class
        verified tenant is present.
-    3. ``metadata["tenant_id"]`` -- the self-asserted, attacker-controlled
-       fallback. Consulted ONLY when ``require_caller_identity`` is False AND
-       neither trusted source resolved a tenant. Under the secure default
-       (``require_caller_identity=True``) it is never consulted.
 
-    A caller cannot widen its own access by putting a different tenant in the
-    request body: both trusted sources (1) and (2) win over the body, and the
-    body channel (3) is disabled by default.
+    A client-asserted ``metadata["tenant_id"]`` is NEVER a trusted source of
+    the effective tenant. Under the secure default
+    (``require_caller_identity=True``) the body channel was never consulted.
+    Under the documented weaker mode (``require_caller_identity=False``, the
+    issue #1843 opt-in) it was previously consulted as a last-resort
+    fallback; that fallback is DEPRECATED and no longer honored (issue
+    #1919). A caller relying on it now gets a ``DeprecationWarning`` and the
+    resolution returns ``None`` -- which fails the downstream tenant-isolation
+    decision CLOSED (never fail-open). A caller can no longer influence the
+    tenant decision by putting a tenant in the request body in ANY mode.
 
     Returns:
-        The tenant string, or None if no source resolves one.
+        The tenant string from a trusted source, or None if none resolves.
     """
     if verified_tenant is not None:
         return verified_tenant
@@ -137,8 +141,25 @@ def _resolve_effective_tenant(
         return caller_identity.tenant
     if require_caller_identity:
         return None
+    # require_caller_identity is False: the documented #1843 weaker mode. The
+    # metadata["tenant_id"] fallback that this branch previously trusted is
+    # DEPRECATED (#1919) -- a client-asserted tenant must never influence the
+    # decision. If a caller was relying on that fallback (a str tenant_id is
+    # present), warn with the migration path and return None so the
+    # tenant-isolation decision fails CLOSED downstream.
     metadata_tenant = metadata.get("tenant_id") if metadata else None
-    return metadata_tenant if isinstance(metadata_tenant, str) else None
+    if isinstance(metadata_tenant, str):
+        warnings.warn(
+            "MCP tenant isolation: trusting a client-asserted "
+            "metadata['tenant_id'] as the effective tenant is deprecated and "
+            "is no longer honored (#1919). The request now fails closed (no "
+            "tenant resolved). Migrate by providing a trusted caller identity "
+            "(McpCallerIdentity.tenant) or a server-verified context tenant, "
+            "or set McpGovernanceConfig.require_caller_identity=True.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return None
 
 
 def _tenant_grant_permits(

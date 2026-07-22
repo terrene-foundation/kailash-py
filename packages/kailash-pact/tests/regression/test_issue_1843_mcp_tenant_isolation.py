@@ -361,42 +361,56 @@ class TestImpersonationDefeat:
     def test_metadata_tenant_id_fallback_when_no_caller_identity_supplied(
         self,
     ) -> None:
-        """The metadata["tenant_id"] fallback is now OPT-IN
-        (require_caller_identity defaults to True -- secure by default,
-        issue #1843 redteam round 1). A deployment that explicitly opts
-        into the weaker channel (require_caller_identity=False) still
-        gets the fallback consulted when no trusted identity is supplied."""
+        """CONTRACT CHANGED (issue #1919): the metadata["tenant_id"] fallback
+        under the documented weaker mode (require_caller_identity=False) is
+        DEPRECATED and NO LONGER trusted. A client-asserted tenant can no
+        longer influence the decision in ANY mode. This test previously
+        expected auto_approved via the metadata fallback; it now expects a
+        DeprecationWarning AND a fail-closed BLOCKED decision (no tenant
+        resolved), never auto-approval."""
         enf = McpGovernanceEnforcer(
             _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
         )
         ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
-        decision = enf.check_tool_call(ctx)
-        assert decision.level == "auto_approved"
+        with pytest.warns(DeprecationWarning):
+            decision = enf.check_tool_call(ctx)
+        assert decision.level == "blocked"
+        assert decision.allowed is False
+        assert "no tenant was declared" in decision.reason
 
     def test_metadata_tenant_id_fallback_still_fails_closed_if_ungranted(
         self,
     ) -> None:
-        """Opt-in fallback (require_caller_identity=False) still fails
-        closed when the self-asserted tenant lacks a grant for the tool --
-        the fallback is weaker than trusted identity, never permissive."""
+        """CONTRACT CHANGED (issue #1919): under the weaker mode
+        (require_caller_identity=False) a self-asserted tenant is no longer
+        trusted, so the decision fails closed on "no tenant declared" (not on
+        "not granted") and a DeprecationWarning fires. It remains BLOCKED --
+        the deprecated channel is never permissive."""
         enf = McpGovernanceEnforcer(
             _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
         )
         ctx = _tool_ctx(tool_name="tool-b", metadata={"tenant_id": "tenant-a"})
-        decision = enf.check_tool_call(ctx)
+        with pytest.warns(DeprecationWarning):
+            decision = enf.check_tool_call(ctx)
         assert decision.level == "blocked"
 
-    def test_caller_identity_with_no_tenant_falls_back_to_metadata(self) -> None:
-        """With the opt-in weaker channel (require_caller_identity=False),
-        caller_identity is supplied but its own tenant is None -- the
-        metadata fallback still applies (not a hard override to "no tenant")."""
+    def test_caller_identity_with_no_tenant_no_longer_falls_back_to_metadata(
+        self,
+    ) -> None:
+        """CONTRACT CHANGED (issue #1919): with the weaker mode
+        (require_caller_identity=False) and a caller_identity whose own tenant
+        is None, the metadata fallback is NO LONGER consulted. This test
+        previously expected auto_approved via the metadata fallback; it now
+        expects a DeprecationWarning AND a fail-closed BLOCKED decision."""
         enf = McpGovernanceEnforcer(
             _config(tenant_grants=_two_tenant_grants(), require_caller_identity=False)
         )
         identity = McpCallerIdentity(agent_id="agent-1", tenant=None)
         ctx = _tool_ctx(tool_name="tool-a", metadata={"tenant_id": "tenant-a"})
-        decision = enf.check_tool_call(ctx, caller_identity=identity)
-        assert decision.level == "auto_approved"
+        with pytest.warns(DeprecationWarning):
+            decision = enf.check_tool_call(ctx, caller_identity=identity)
+        assert decision.level == "blocked"
+        assert decision.allowed is False
 
 
 # ---------------------------------------------------------------------------

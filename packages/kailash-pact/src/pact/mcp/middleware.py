@@ -120,6 +120,15 @@ class McpGovernanceMiddleware:
         verified_tenant = (
             caller_identity.tenant if caller_identity is not None else None
         )
+        # Defense-in-depth (#1919): scrub any client-asserted
+        # metadata["tenant_id"] at the boundary before building the context,
+        # mirroring McpActionContext.from_network_transport. A client-asserted
+        # tenant can never influence the decision (the enforcer no longer
+        # trusts it) AND must never propagate into audit/echo surfaces. The
+        # verified `tenant` field below is populated ONLY from caller_identity.
+        scrubbed_metadata = {
+            k: v for k, v in (metadata or {}).items() if k != "tenant_id"
+        }
         context = McpActionContext(
             tool_name=tool_name,
             args=args or {},
@@ -127,7 +136,7 @@ class McpGovernanceMiddleware:
             timestamp=now,
             cost_estimate=cost_estimate,
             caller_clearance=caller_clearance,
-            metadata=metadata or {},
+            metadata=scrubbed_metadata,
             tenant=verified_tenant,
         )
 
@@ -199,11 +208,18 @@ class McpGovernanceMiddleware:
         verified_tenant = (
             caller_identity.tenant if caller_identity is not None else None
         )
+        # Defense-in-depth (#1919): scrub any client-asserted
+        # metadata["tenant_id"] at the boundary before building the context,
+        # mirroring McpResourceContext.from_network_transport. The verified
+        # `tenant` field below is populated ONLY from caller_identity.
+        scrubbed_metadata = {
+            k: v for k, v in (metadata or {}).items() if k != "tenant_id"
+        }
         context = McpResourceContext(
             uri=uri,
             agent_id=agent_id,
             timestamp=now,
-            metadata=metadata or {},
+            metadata=scrubbed_metadata,
             tenant=verified_tenant,
         )
 
