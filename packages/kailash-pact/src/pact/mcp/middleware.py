@@ -112,6 +112,14 @@ class McpGovernanceMiddleware:
             McpInvocationResult with the governance decision and tool result.
         """
         now = datetime.now(UTC)
+        # The middleware IS the network boundary: populate the first-class,
+        # server-verified tenant field (issue #1878) from the AUTHENTICATED
+        # caller_identity (transport/token-resolved), NEVER from the request
+        # body. The enforcer then reads context.tenant as the authoritative
+        # tenant-isolation input.
+        verified_tenant = (
+            caller_identity.tenant if caller_identity is not None else None
+        )
         context = McpActionContext(
             tool_name=tool_name,
             args=args or {},
@@ -120,6 +128,7 @@ class McpGovernanceMiddleware:
             cost_estimate=cost_estimate,
             caller_clearance=caller_clearance,
             metadata=metadata or {},
+            tenant=verified_tenant,
         )
 
         # Governance check
@@ -185,11 +194,17 @@ class McpGovernanceMiddleware:
             configured.
         """
         now = datetime.now(UTC)
+        # Network boundary: populate the first-class verified tenant (issue
+        # #1878) from the authenticated caller_identity, never the body.
+        verified_tenant = (
+            caller_identity.tenant if caller_identity is not None else None
+        )
         context = McpResourceContext(
             uri=uri,
             agent_id=agent_id,
             timestamp=now,
             metadata=metadata or {},
+            tenant=verified_tenant,
         )
 
         decision = self._enforcer.check_resource_read(
