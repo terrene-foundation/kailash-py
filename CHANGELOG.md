@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.61.0] — 2026-07-22 — Trust-plane capability subject-binding + chain-state signing (#1912)
+
 ### Security (Trust Plane — #1912 capability subject-binding + chain-state signing)
 
 Three coordinated waves close a capability-transplant HIGH and two store-writer

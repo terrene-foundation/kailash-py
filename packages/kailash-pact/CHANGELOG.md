@@ -1,5 +1,11 @@
 # PACT Changelog
 
+## [0.17.0] — 2026-07-22 — First-class server-verified tenant field on McpActionContext (#1878)
+
+### Added (Security)
+
+- **`McpActionContext` / `McpResourceContext` gain a first-class, server-verified `tenant` field (#1878).** MCP governance tenant isolation previously keyed on a client-body-copyable `metadata['tenant_id']`, letting an authenticated caller assert an arbitrary tenant. The new `tenant` field is populated server-side from the authenticated transport at the network boundary and is excluded from `to_dict`/`from_dict` (the on-the-wire envelope stays byte-identical to 0.16.x — no cross-SDK wire change). `_resolve_effective_tenant` ranks it above caller-identity and metadata; both enforcement surfaces plus the rate-limit re-resolution read the verified field; `from_network_transport` strips any body-supplied `tenant_id`. Fail-closed: tenant isolation active + no verified tenant → DENY.
+
 ## [0.16.1] — 2026-07-20 — Export the tenant-isolation types at the `pact` top level
 
 ### Fixed
