@@ -104,29 +104,35 @@ def _resolve_effective_tenant(
     metadata: Mapping[str, Any],
     caller_identity: McpCallerIdentity | None,
     *,
+    verified_tenant: str | None = None,
     require_caller_identity: bool = False,
 ) -> str | None:
-    """Resolve the AUTHORITATIVE tenant for an MCP call (issue #1843).
+    """Resolve the AUTHORITATIVE tenant for an MCP call (issue #1843/#1878).
 
-    The trusted ``caller_identity`` -- resolved by the transport/auth layer,
-    never attacker-controlled -- OVERWRITES any self-asserted
-    ``metadata["tenant_id"]`` (impersonation defeat): a caller cannot widen
-    its own access by putting a different tenant in the request body. Only
-    when no trusted identity (or no identity tenant) is supplied does this
-    fall back to the self-asserted metadata channel -- UNLESS
-    ``require_caller_identity`` is set, in which case the metadata fallback is
-    never consulted at all: an absent (or tenant-less) trusted identity
-    resolves straight to None (fail-closed), rather than trusting a
-    caller-supplied ``metadata["tenant_id"]``. Deployments with no
-    transport-level identity resolution (no caller_identity ever wired) MUST
-    set ``McpGovernanceConfig.require_caller_identity=True`` to get a REAL
-    isolation guarantee; without it, the self-asserted metadata channel is a
-    legitimate but attacker-controlled fallback (documented, not a bypass).
+    Trust precedence, highest first:
+
+    1. ``verified_tenant`` -- the first-class, SERVER-VERIFIED
+       ``McpActionContext.tenant`` / ``McpResourceContext.tenant`` field
+       (issue #1878), populated at the network boundary from the
+       authenticated transport/token and never from the client body. When
+       set, it is the authoritative tenant; nothing overrides it.
+    2. ``caller_identity.tenant`` -- the sidecar trusted identity (issue
+       #1843), also transport-resolved. Consulted when no first-class
+       verified tenant is present.
+    3. ``metadata["tenant_id"]`` -- the self-asserted, attacker-controlled
+       fallback. Consulted ONLY when ``require_caller_identity`` is False AND
+       neither trusted source resolved a tenant. Under the secure default
+       (``require_caller_identity=True``) it is never consulted.
+
+    A caller cannot widen its own access by putting a different tenant in the
+    request body: both trusted sources (1) and (2) win over the body, and the
+    body channel (3) is disabled by default.
 
     Returns:
-        The tenant string, or None if neither the caller identity nor the
-        (optionally-disabled) metadata channel carries one.
+        The tenant string, or None if no source resolves one.
     """
+    if verified_tenant is not None:
+        return verified_tenant
     if caller_identity is not None and caller_identity.tenant is not None:
         return caller_identity.tenant
     if require_caller_identity:
@@ -389,6 +395,7 @@ class McpGovernanceEnforcer:
                 timestamp=context.timestamp,
                 metadata=context.metadata,
                 caller_identity=caller_identity,
+                verified_tenant=context.tenant,
             )
             if decision is None:
                 decision = GovernanceDecision(
@@ -440,13 +447,17 @@ class McpGovernanceEnforcer:
         timestamp: datetime,
         metadata: Mapping[str, Any],
         caller_identity: McpCallerIdentity | None,
+        verified_tenant: str | None = None,
     ) -> GovernanceDecision | None:
         """Shared tenant-isolation gate for BOTH tools/call and resources/read.
 
         This is the single decision-building function BOTH _evaluate (Step
         0, tools/call) and check_resource_read (resources/read) call --
         security.md Enforcement-Surface Parity: one shared function so the
-        two enforcement surfaces cannot silently diverge.
+        two enforcement surfaces cannot silently diverge. ``verified_tenant``
+        is the first-class server-verified context field (issue #1878),
+        threaded in from both surfaces so the enforcement point reads the
+        verified value.
 
         Returns None (isolation OFF, or tenant check satisfied -- caller
         continues) or a BLOCKED GovernanceDecision (fail-closed).
@@ -460,6 +471,7 @@ class McpGovernanceEnforcer:
         tenant = _resolve_effective_tenant(
             metadata,
             caller_identity,
+            verified_tenant=verified_tenant,
             require_caller_identity=self._config.require_caller_identity,
         )
         if tenant is None:
@@ -726,6 +738,7 @@ class McpGovernanceEnforcer:
             timestamp=context.timestamp,
             metadata=context.metadata,
             caller_identity=caller_identity,
+            verified_tenant=context.tenant,
         )
         if tenant_decision is not None:
             return tenant_decision
@@ -863,6 +876,7 @@ class McpGovernanceEnforcer:
                 _resolve_effective_tenant(
                     context.metadata,
                     caller_identity,
+                    verified_tenant=context.tenant,
                     require_caller_identity=self._config.require_caller_identity,
                 )
                 if self._config.tenant_grants

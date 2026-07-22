@@ -785,24 +785,40 @@ class TestMiddlewareTenantIsolation:
 
 
 class TestByteNeutralStructuralInvariants:
-    """Pins the byte-diff verdict: NO first-class serialized tenant field
-    was added to McpActionContext / McpResourceContext, and McpCallerIdentity
-    is deliberately NOT serialized. If a future refactor adds a first-class
-    ``tenant`` / ``tenant_id`` field to either wire envelope, or gives
-    McpCallerIdentity to_dict/from_dict, this test forces a re-audit against
-    the issue #1843 byte-neutral contract."""
+    """Pins the byte-neutral WIRE contract. Issue #1878 added a first-class,
+    server-verified ``tenant`` field to McpActionContext / McpResourceContext
+    (the re-audit this pin's earlier form forced), but that field is
+    SERVER-SIDE ONLY: it is DELIBERATELY excluded from the wire serialization
+    (``to_dict`` never emits it; ``from_dict`` never reads it) exactly as
+    McpCallerIdentity is deliberately non-serialized. So the ON-THE-WIRE
+    envelope stays byte-identical to the issue #1843 contract and NO cross-SDK
+    wire lockstep is required. If a future refactor serializes the ``tenant``
+    field (adds it to to_dict/from_dict), or gives McpCallerIdentity
+    to_dict/from_dict, this test forces a re-audit -- that WOULD be a
+    byte-changing wire-envelope change requiring cross-SDK lockstep
+    (cross-sdk-inspection.md Rule 4b)."""
 
-    def test_mcp_action_context_carries_no_first_class_tenant_field(self) -> None:
+    def test_mcp_action_context_verified_tenant_is_not_wire_serialized(self) -> None:
+        """The first-class tenant field EXISTS (issue #1878) but is NOT part
+        of the wire envelope -- to_dict omits it and from_dict never reads
+        it, so the serialized bytes are unchanged from #1843."""
         field_names = {f.name for f in dataclasses.fields(McpActionContext)}
-        assert "tenant" not in field_names
-        assert "tenant_id" not in field_names
-        assert "metadata" in field_names  # the free-form channel
+        assert "tenant" in field_names  # first-class server-verified field (#1878)
+        assert "metadata" in field_names  # the free-form channel (unchanged)
+        ctx = McpActionContext(tool_name="t", tenant="tenant-a", timestamp=_T0)
+        assert "tenant" not in ctx.to_dict()  # server-side only, never on wire
+        # A body-supplied top-level tenant is never trusted on deserialization.
+        assert (
+            McpActionContext.from_dict({"tool_name": "t", "tenant": "x"}).tenant is None
+        )
 
-    def test_mcp_resource_context_carries_no_first_class_tenant_field(self) -> None:
+    def test_mcp_resource_context_verified_tenant_is_not_wire_serialized(self) -> None:
         field_names = {f.name for f in dataclasses.fields(McpResourceContext)}
-        assert "tenant" not in field_names
-        assert "tenant_id" not in field_names
+        assert "tenant" in field_names
         assert "metadata" in field_names
+        ctx = McpResourceContext(uri="u", tenant="tenant-a", timestamp=_T0)
+        assert "tenant" not in ctx.to_dict()
+        assert McpResourceContext.from_dict({"uri": "u", "tenant": "x"}).tenant is None
 
     def test_mcp_caller_identity_is_not_serialized(self) -> None:
         """McpCallerIdentity has no to_dict/from_dict -- it is a trusted,

@@ -332,17 +332,32 @@ class McpActionContext:
         metadata: Additional context for governance evaluation. Carries the
             free-form, SELF-ASSERTED ``metadata["tenant_id"]`` channel
             (issue #1843) -- a caller-supplied value the enforcer treats as
-            untrusted input. When a trusted ``McpCallerIdentity`` is passed
-            to ``check_tool_call`` / ``check_resource_read`` and carries a
-            tenant, that identity's tenant OVERWRITES this self-asserted
-            value (impersonation defeat); ``metadata["tenant_id"]`` is
-            consulted only as a fallback when no trusted identity (or no
-            identity tenant) is supplied. No new first-class serialized
-            field was added to this envelope for tenant isolation --
-            byte-neutral by design.
+            untrusted input. It is the WEAKER, opt-in fallback consulted ONLY
+            when ``McpGovernanceConfig.require_caller_identity`` is False AND
+            neither the first-class ``tenant`` field nor a trusted
+            ``McpCallerIdentity`` resolves a tenant. Under the secure default
+            (``require_caller_identity=True``) it is NEVER trusted for the
+            governance decision.
+        tenant: The FIRST-CLASS, SERVER-VERIFIED tenant for this call (issue
+            #1878), DISTINCT from the free-form ``metadata`` map. This is the
+            AUTHORITATIVE tenant-isolation input: governance enforcement reads
+            THIS field (highest trust), ranking it above both the sidecar
+            ``McpCallerIdentity`` and the self-asserted
+            ``metadata["tenant_id"]``. It is populated SERVER-SIDE at the
+            network boundary from the authenticated transport/token (see
+            ``from_network_transport`` and ``McpGovernanceMiddleware``), NEVER
+            from the client wire body. Deliberately EXCLUDED from the wire
+            serialization (``to_dict`` never emits it; ``from_dict`` never
+            reads it) so a client cannot assert an arbitrary tenant by copying
+            it into the request body, AND so the on-the-wire envelope stays
+            byte-identical to the issue #1843 contract -- no cross-SDK wire
+            lockstep is required (mirrors how ``McpCallerIdentity`` is
+            deliberately non-serialized). None means no verified tenant was
+            resolved; under active isolation that fails closed (BLOCKED).
 
     Raises:
-        ValueError: If cost_estimate is NaN, Inf, or negative.
+        ValueError: If cost_estimate is NaN, Inf, or negative; or if tenant
+            is neither a string nor None.
     """
 
     tool_name: str
@@ -352,6 +367,7 @@ class McpActionContext:
     cost_estimate: float | None = None
     caller_clearance: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    tenant: str | None = None
 
     def __post_init__(self) -> None:
         if not self.tool_name:
@@ -366,6 +382,12 @@ class McpActionContext:
                 raise ValueError(
                     f"cost_estimate must be non-negative, got {self.cost_estimate!r}"
                 )
+        # Defense-in-depth: the verified tenant is a dict-key for grant lookup;
+        # a non-str value would silently never match. Mirror McpCallerIdentity.
+        if self.tenant is not None and not isinstance(self.tenant, str):
+            raise ValueError(
+                f"tenant must be a string or None, got {type(self.tenant).__name__}"
+            )
         # H3: Replace mutable dicts with immutable MappingProxyType.
         object.__setattr__(
             self,
@@ -379,7 +401,13 @@ class McpActionContext:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize to a JSON-compatible dictionary."""
+        """Serialize to a JSON-compatible dictionary.
+
+        The first-class ``tenant`` field is DELIBERATELY omitted -- it is a
+        server-verified, in-memory-only field (issue #1878), never part of
+        the wire envelope, so the serialized bytes stay identical to the
+        issue #1843 byte-neutral contract.
+        """
         return {
             "tool_name": self.tool_name,
             "args": self.args,
@@ -392,7 +420,13 @@ class McpActionContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> McpActionContext:
-        """Deserialize from a dictionary."""
+        """Deserialize from a dictionary.
+
+        NEVER populates the server-verified ``tenant`` field from ``data`` --
+        a wire body cannot set the verified tenant (issue #1878). Use
+        ``from_network_transport`` at the network boundary to populate the
+        verified field from the authenticated transport/token.
+        """
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
@@ -404,6 +438,54 @@ class McpActionContext:
             cost_estimate=data.get("cost_estimate"),
             caller_clearance=data.get("caller_clearance"),
             metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def from_network_transport(
+        cls,
+        data: dict[str, Any],
+        *,
+        verified_tenant: str | None = None,
+    ) -> McpActionContext:
+        """Deserialize an UNTRUSTED wire body at the network boundary (#1878).
+
+        This is the deserializer a network transport (HTTP/SSE/WebSocket) MUST
+        use for a client-supplied body. Unlike ``from_dict`` it:
+
+        * STRIPS any body-supplied top-level ``tenant`` / ``tenant_id`` key --
+          a client cannot set the verified field by putting it in the body.
+        * STRIPS ``metadata["tenant_id"]`` -- the self-asserted tenant channel
+          is not trusted on a network transport; the verified field replaces
+          it.
+        * Sets the first-class ``tenant`` field ONLY from ``verified_tenant``,
+          which the caller resolves from the AUTHENTICATED transport/token
+          (NOT the request body). None means the transport resolved no tenant
+          -- under active isolation the enforcer then fails closed.
+
+        Args:
+            data: The untrusted, client-supplied wire body.
+            verified_tenant: The server-verified tenant from the authenticated
+                transport/token, or None if none resolved.
+        """
+        ts = data.get("timestamp")
+        if isinstance(ts, str):
+            ts = datetime.fromisoformat(ts)
+        raw_metadata = data.get("metadata", {})
+        # Strip the self-asserted tenant_id from the body metadata -- it is
+        # never trusted on a network transport.
+        scrubbed_metadata = {
+            k: v for k, v in dict(raw_metadata).items() if k != "tenant_id"
+        }
+        return cls(
+            tool_name=data["tool_name"],
+            args=data.get("args", {}),
+            agent_id=data.get("agent_id", ""),
+            timestamp=ts or datetime.now(UTC),
+            cost_estimate=data.get("cost_estimate"),
+            caller_clearance=data.get("caller_clearance"),
+            metadata=scrubbed_metadata,
+            # NEVER data.get("tenant") -- the body cannot set the verified field.
+            tenant=verified_tenant,
         )
 
 
@@ -427,21 +509,33 @@ class McpResourceContext:
         timestamp: When the invocation was initiated.
         metadata: Additional context for governance evaluation. Carries the
             same free-form, self-asserted ``metadata["tenant_id"]`` channel
-            as :attr:`McpActionContext.metadata` -- see that field's
-            docstring for the impersonation-defeat contract.
+            as :attr:`McpActionContext.metadata` -- the weaker, opt-in
+            fallback, never trusted under the secure default.
+        tenant: The FIRST-CLASS, SERVER-VERIFIED tenant for this resource read
+            (issue #1878), DISTINCT from the free-form ``metadata`` map and
+            the authoritative tenant-isolation input -- see
+            :attr:`McpActionContext.tenant` for the full contract. Populated
+            server-side at the network boundary; EXCLUDED from the wire
+            serialization (byte-neutral). None fails closed under active
+            isolation.
 
     Raises:
-        ValueError: If uri is empty.
+        ValueError: If uri is empty; or if tenant is neither a string nor None.
     """
 
     uri: str
     agent_id: str = ""
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
+    tenant: str | None = None
 
     def __post_init__(self) -> None:
         if not self.uri:
             raise ValueError("uri must not be empty")
+        if self.tenant is not None and not isinstance(self.tenant, str):
+            raise ValueError(
+                f"tenant must be a string or None, got {type(self.tenant).__name__}"
+            )
         object.__setattr__(
             self,
             "metadata",
@@ -449,7 +543,11 @@ class McpResourceContext:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize to a JSON-compatible dictionary."""
+        """Serialize to a JSON-compatible dictionary.
+
+        The first-class ``tenant`` field is DELIBERATELY omitted (issue
+        #1878) -- server-verified, in-memory-only, never on the wire.
+        """
         return {
             "uri": self.uri,
             "agent_id": self.agent_id,
@@ -459,7 +557,11 @@ class McpResourceContext:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> McpResourceContext:
-        """Deserialize from a dictionary."""
+        """Deserialize from a dictionary.
+
+        NEVER populates the server-verified ``tenant`` field from ``data``
+        (issue #1878); use ``from_network_transport`` at the network boundary.
+        """
         ts = data.get("timestamp")
         if isinstance(ts, str):
             ts = datetime.fromisoformat(ts)
@@ -468,6 +570,35 @@ class McpResourceContext:
             agent_id=data.get("agent_id", ""),
             timestamp=ts or datetime.now(UTC),
             metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def from_network_transport(
+        cls,
+        data: dict[str, Any],
+        *,
+        verified_tenant: str | None = None,
+    ) -> McpResourceContext:
+        """Deserialize an UNTRUSTED wire body at the network boundary (#1878).
+
+        Strips any body-supplied top-level ``tenant`` and
+        ``metadata["tenant_id"]``; sets the verified ``tenant`` field ONLY
+        from ``verified_tenant`` (the authenticated transport/token). See
+        :meth:`McpActionContext.from_network_transport` for the full contract.
+        """
+        ts = data.get("timestamp")
+        if isinstance(ts, str):
+            ts = datetime.fromisoformat(ts)
+        raw_metadata = data.get("metadata", {})
+        scrubbed_metadata = {
+            k: v for k, v in dict(raw_metadata).items() if k != "tenant_id"
+        }
+        return cls(
+            uri=data["uri"],
+            agent_id=data.get("agent_id", ""),
+            timestamp=ts or datetime.now(UTC),
+            metadata=scrubbed_metadata,
+            tenant=verified_tenant,
         )
 
 
