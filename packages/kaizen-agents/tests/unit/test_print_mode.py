@@ -62,6 +62,55 @@ class TestPrintResult:
 # ---------------------------------------------------------------------------
 
 
+class TestPrintRunnerMaxTurnsOverridePreservesClient:
+    """Regression for the #1918 red-team INVEST-NOW finding.
+
+    The ``max_turns`` override in ``PrintRunner.__init__`` rebuilds ``KzConfig``
+    field-by-field, and previously omitted ``base_url`` + ``api_key`` — silently
+    dropping a #1899 deployment client. Combined with the #1918 provider-default
+    fix, a claude-* model pinned to a custom ``base_url`` would then re-infer to
+    the prefix provider's real wire (api.anthropic.com) instead of the caller's
+    deployment. The reconstruction MUST preserve every field.
+    """
+
+    def test_max_turns_override_preserves_base_url_and_api_key(self) -> None:
+        from kaizen_agents.delegate.loop import ToolRegistry
+
+        cfg = KzConfig(
+            model="claude-3-5-sonnet",
+            base_url="https://my-deployment.example.com/v1",
+            api_key="sk-fake-not-real-test-only",
+        )
+        # mock client → no adapter/governance construction; the reconstruction
+        # under the max_turns override is what we assert on (runner._config).
+        runner = PrintRunner(
+            config=cfg,
+            tools=ToolRegistry(),
+            client=AsyncMock(),
+            max_turns=5,
+        )
+        assert runner._config.base_url == "https://my-deployment.example.com/v1"
+        assert runner._config.api_key == "sk-fake-not-real-test-only"
+        # the override itself + the previously-preserved fields still hold
+        assert runner._config.max_turns == 5
+        assert runner._config.model == "claude-3-5-sonnet"
+        assert runner._config.provider == cfg.provider
+
+    def test_no_override_passes_config_through_untouched(self) -> None:
+        from kaizen_agents.delegate.loop import ToolRegistry
+
+        cfg = KzConfig(
+            model="claude-3-5-sonnet",
+            base_url="https://my-deployment.example.com/v1",
+            api_key="sk-fake-not-real-test-only",
+        )
+        runner = PrintRunner(config=cfg, tools=ToolRegistry(), client=AsyncMock())
+        # no max_turns override → the same config object flows through unchanged
+        assert runner._config is cfg
+        assert runner._config.base_url == "https://my-deployment.example.com/v1"
+        assert runner._config.api_key == "sk-fake-not-real-test-only"
+
+
 class TestPrintRunnerFormatting:
     def _make_runner(self) -> PrintRunner:
         """Create a PrintRunner with a mock client to avoid API key checks."""
