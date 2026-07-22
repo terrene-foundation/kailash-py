@@ -279,7 +279,7 @@
     },
     {
       "path": "commands/WORKTREE.md",
-      "sha256": "9950e7f424e32877cb2f12692ea3d0fd4902dccc9e4e6bef9da9cb169d4ee950"
+      "sha256": "3b7e2eab9538b408a8d43fcef6bea559ffa46981bd5ca85048507161ab628a51"
     },
     {
       "path": "commands/WRAPUP.md",
@@ -611,7 +611,7 @@
     },
     {
       "path": "rules/WORKTREE-ISOLATION.md",
-      "sha256": "4a58a8f8f000f0d9ab4ad292e8504647b97abbab919ec767e6c9c8e53cd597c1"
+      "sha256": "1395d87dac2624220e9fd18ac53f77bb4455dc5d0316f763e25d5c2ed8f81b5d"
     },
     {
       "path": "rules/ZERO-TOLERANCE.md",
