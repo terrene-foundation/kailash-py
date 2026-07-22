@@ -1786,7 +1786,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.60.1"
+version = "2.61.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2483,7 +2483,7 @@ provides-extras = ["metrics", "dev"]
 
 [[package]]
 name = "kailash-pact"
-version = "0.16.1"
+version = "0.18.0"
 source = { editable = "packages/kailash-pact" }
 dependencies = [
     { name = "click" },
@@ -2521,7 +2521,7 @@ provides-extras = ["api", "execution", "dev", "all"]
 
 [[package]]
 name = "kaizen-agents"
-version = "0.11.3"
+version = "0.11.6"
 source = { editable = "packages/kaizen-agents" }
 dependencies = [
     { name = "anthropic" },
