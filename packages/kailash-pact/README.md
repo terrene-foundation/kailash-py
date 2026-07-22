@@ -83,7 +83,7 @@ enforces **today** versus what remains open — read it before relying on
 - **Verify:** `pytest packages/kailash-pact/tests/regression/test_issue_1843_mcp_tenant_isolation.py -v`
   exercises the fail-closed defaults, the impersonation-defeat contract, and
   the `resources/read` isolation-only surface end-to-end.
-- **Status:** v0 within a pre-1.0 package (`kailash-pact` 0.16.0) — the
+- **Status:** v0 within a pre-1.0 package (`kailash-pact` 0.18.0) — the
   isolation contract above is stable for this release; the deferred items
   may change shape (not just grow) before a 1.0 cut.
 

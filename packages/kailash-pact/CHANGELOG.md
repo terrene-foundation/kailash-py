@@ -1,6 +1,6 @@
 # PACT Changelog
 
-## [Unreleased] — Deprecate the untrusted metadata['tenant_id'] tenant fallback (#1919)
+## [0.18.0] — 2026-07-22 — Deprecate the untrusted metadata['tenant_id'] tenant fallback (#1919)
 
 ### Changed (Security)
 
