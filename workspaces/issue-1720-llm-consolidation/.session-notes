@@ -1,70 +1,52 @@
-# Session Notes — 2026-07-22 (cont-12)
+# Session Notes — 2026-07-22 (cont-13)
 
 ## Where we are
 
-Clean board (0 open PRs). cont-11 shipped + released #1918 (kaizen-agents 0.11.5) and
-#1919 (kailash-pact 0.18.0) to PyPI, both live + verified. This session (cont-12) closed
-out the two remaining tracked follow-ups — **F2 deferred-quality** and **F1 cross-SDK** —
-with NO code changes required. Main @ post-release (c54fc9df1). Phase: post-release, board clean.
+Independent cross-session `/redteam` of the delivered #1720 surfaces caught + fixed a real
+Delegate bug cont-12 missed, released it, and tracked two deeper same-class follow-ups.
+Main @ `dd0064479`. kaizen-agents 0.11.6 live on PyPI (verified). Board otherwise clean.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont12.md` — full cont-12 record
-   (F2 reconciliation verdicts + F1 cross-SDK investigation evidence). START HERE.
-2. `launch-ledger-cont11.md` — prior session (the #1918/#1919 impl + release).
-
-## Executed this session (cont-12)
-
-- **F2 deferred-quality backlog — RECONCILED, all WONT-FIX/STALE (no code change).** Two
-  parallel read-only recon agents verified every item against HEAD c54fc9df1 (wave-loop MUST-7):
-  - DQ-1919-casevariant / -direct-enforcer / -warnflood → all WONT-FIX. #1919 severed the
-    metadata→tenant-decision path entirely; residuals are audit-echo-only (no decision impact),
-    trusted-internal-caller-only, or standard once-per-site DeprecationWarning semantics.
-  - DQ-1918-caseprefix → WONT-FIX (low-value; no real caller supplies capitalized model prefixes).
-  - LATENT-printmode-maxturns → STALE/CLOSED. The single `KzConfig(...)` reconstruction copies
-    all 12 fields incl base_url+api_key (e586eb30f, the PR #1922 fold). #1899-class drop closed.
-  - **Disposition: do NOT re-queue at /sweep.** No substantive change → no redteam-to-converge
-    (manufacturing one = recommendation-quality clean-gate violation).
-- **F1 cross-SDK #1919 → Rust SDK — INVESTIGATED, NO GAP, NOTHING FILED.** User authorized
-  "file if found" (AskUserQuestion, genuine turn). Ran `/cross-repo-authorize` → write-tier
-  receipt (committed 249ce99d6). READ-investigated `esperie-enterprise/kailash-rs` (private)
-  `crates/eatp/src/mcp/governance.rs`. **No #1919-class gap** — different, already-hardened
-  architecture: (1) zero tenant concept in the MCP path (CallerIdentity has only subject+issuer,
-  no tenant field); (2) CallerIdentity derives no Serialize/Deserialize → un-forgeable from client
-  params; (3) network transport passes `permit_self_asserted=false` (mod.rs:328) → self-asserted
-  identity fail-closed over the wire, closing prior #1518 redteam HIGH; (4) regression tests over
-  real run_sse TCP prove it. Adversarial verifier tried to refute on all 5 axes → could not.
-  **Converged (2 independent confirmations) → no issue filed** (gap not found; filing would be noise).
+1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont13.md` — full cont-13 record
+   (R1/R2 redteam verdicts, the fix, release, security-review, #1927 disposition).
+2. `CLAUDE.md` — project context. Board empty except tracked follow-up #1927; fresh work OK.
 
 ## In-flight state
 
-- Branch `chore/cont12-f1-crossrepo-authz`: authz receipt (249ce99d6) + this .session-notes.
-  → open PR + admin-merge to land the durable cross-repo audit trail on main.
-- No uncommitted code. No package release (no code changed this session).
+- None. Working tree clean (only untracked durable workspace records). No uncommitted code.
+
+## Executed this session
+
+- Released **kaizen-agents 0.11.6** to PyPI (tag `kaizen-agents-v0.11.6`; OIDC publish SUCCESS;
+  clean-venv + fix-behavior verified on the published wheel). Not in this repo's `git log`.
+
+## Wave tracker
+
+None — no waves in flight.
+
+## Unreleased packages
+
+- **kailash core** — one unreleased `src/` commit since `v2.61.0`: the `constraint_subset`
+  docstring correction (`9f2f9755b`). Doc-only / runtime-inert; user approved deferring it rather
+  than cut 2.61.1 for a docstring. Next session: bundle with the next core change, or cut 2.61.1.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                            | Status                                                       |
-| --- | ----------------------------------------------- | ------------------------------------------------------------ |
-| F1  | Cross-SDK #1919 → Rust SDK MCP-governance check  | **CLOSED** — investigated, no gap, nothing filed (cont-12)   |
-| F2  | Deferred-quality backlog (5 items)              | **CLOSED** — all WONT-FIX/STALE, evidence-backed (cont-12)   |
+| ID  | Item                                                                    | Value-anchor (MUST-1)                                          | Status                |
+| --- | ----------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------- |
+| F3  | kaizen Delegate `signature`/`inner_agent` documented but never wired    | user literal "approved" this session of filing + disposition (→ #1927) | queued (design shard) |
 
-Board is now genuinely empty — no tracked follow-ups remain.
+Closed this session: none carried (F1/F2 closed cont-12; the temperature/max_tokens fix is in `git log` + PyPI, not a forest item).
 
 ## Traps
 
-- Auto-merge DISABLED — pinned-head CI READ then separate MERGE (git.md); `release/*` auto-skips matrix.
-- Cross-repo Rust SDK access requires a committed `/cross-repo-authorize` receipt in
-  `.claude/cross-repo-authz/` BEFORE any `gh --repo esperie-enterprise/kailash-rs` command.
-- Rust SDK slug is `esperie-enterprise/kailash-rs` (private), NOT terrene-foundation.
-- Reviewer/recon fan-out dying on weekly usage limit = ZERO evidence (evidence gate); re-run after swap.
-
-## Hygiene (surface, do NOT act unprompted — feedback_no_bulk_worktree_discard)
-
-- Untracked test-artifact clutter in `packages/kaizen-agents/` (hello_world.py, *.txt/*.json,
-  task_*/, evaluations/, proposal/, rationale/, tasks/) + old workspace launch-ledgers.
-  Pre-existing since before cont-11. User hygiene decision still pending — NOT touched.
+- `Delegate.__init__` documented-kwarg-drop is a RECURRING class: #1899 (base_url/api_key),
+  #1926 (temperature/max_tokens), #1927 (signature/inner_agent). #1927 AC asks for a completeness guard.
+- CI flakes here: DataFlow bulk-multi-tenant Postgres isolation race + Windows SQLite "database is
+  locked". Both cleared on re-run; re-run failed jobs (pinned-head READ + separate merge), don't merge over red.
+- `.venv/bin/pre-commit` has a stale shebang (points to a `loom/kailash-py` path) — run `uv run pre-commit`.
 
 ## Open questions for the human
 
-- Hygiene cleanup of the untracked kaizen-agents test artifacts + old launch-ledgers — clean up, or leave?
+- F3/#1927 wire-vs-remove: recommended split (wire `signature`, remove `inner_agent`) — a design shard when you prioritize it.
