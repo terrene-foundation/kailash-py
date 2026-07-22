@@ -21,17 +21,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from kailash.trust.signing.crypto import (
-    hash_trust_chain_state,
-    hash_trust_chain_state_salted,
-)
-
 # Structured engine-fold dataclasses (#1841 S2b-1). A DelegationRecord carrying
 # all three signs the cross-SDK V2Complete pre-image instead of legacy-python-v0
 # (see kailash.trust.signing.delegation_record_signing.select_signing_version).
-# Safe at module scope: this file already imports kailash.trust.signing.crypto
-# above (initialising the signing package), and delegation_payload depends only
-# on kailash.trust._json — no cycle back to chain.
+# Safe at module scope: importing these kailash.trust.signing submodules
+# initialises the signing package, and delegation_payload depends only on
+# kailash.trust._json — no cycle back to chain.
 from kailash.trust.signing.capability_fold_serde import (
     deserialize_capability_fold_fields,
     serialize_capability_fold_fields,
@@ -39,6 +34,10 @@ from kailash.trust.signing.capability_fold_serde import (
 from kailash.trust.signing.chain_state_serde import (
     deserialize_chain_state_signature_fields,
     serialize_chain_state_signature_fields,
+)
+from kailash.trust.signing.crypto import (
+    hash_trust_chain_state,
+    hash_trust_chain_state_salted,
 )
 from kailash.trust.signing.delegation_fold_serde import (
     deserialize_fold_fields,
@@ -348,12 +347,20 @@ class DelegationRecord:
         delegatee_id: Agent receiving trust
         task_id: Associated task identifier
         capabilities_delegated: Which capabilities are delegated
-        constraint_subset: Additional advisory constraint labels. Reporting-only:
-            surfaced in VerificationResult.effective_constraints but read by NO
-            allow/deny gate, and NOT part of the signed delegation pre-image.
-            The "tightening" is advisory — establish_delegation unions these
-            labels with no subset check; enforcement lives in constraint_envelope
-            (a separate, signed structure), not here. See issue #1896.
+        constraint_subset: Additional "tightening-only" constraint labels. The
+            RAW field is reporting-only — surfaced in
+            VerificationResult.effective_constraints but read by NO allow/deny
+            gate, and DELIBERATELY EXCLUDED from the enforced envelope
+            (``_derive_enforced_envelope``, advisory per #1896). Its signing
+            coverage is version-dependent: the legacy (default) pre-image signs
+            it via ``to_signing_payload()`` (so tampering breaks the signature
+            on legacy records), while the v2/v3 engine fold omits it
+            (``_FoldSourceRecord``). The tightening is NOT a no-op, though: the
+            same labels are bound into SIGNED derived capabilities at delegation
+            time (``_build_signed_derived_caps``) and verify() re-derives the
+            enforced constraint set from those signed sources — so the tightening
+            IS enforced and a store-writer editing only the raw field cannot
+            strip it. See issue #1896.
         delegated_at: When delegation occurred
         expires_at: Optional expiration
         signature: Delegator's signature

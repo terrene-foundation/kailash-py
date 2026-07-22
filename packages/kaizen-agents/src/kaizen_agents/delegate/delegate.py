@@ -406,11 +406,26 @@ class Delegate:
             # stored on the Delegate but never reached the adapter, so an
             # OpenAI-compatible / Azure / custom-endpoint deployment client was
             # dropped and every completion hit api.openai.com.
+            #
+            # Thread the documented temperature/max_tokens overrides onto the
+            # config too (same #1899-class drop, one field over): both are
+            # accepted + documented on __init__ but were omitted here, so the
+            # KzConfig defaults (temperature=0.4, max_tokens=16384) silently won
+            # over an explicit caller override. Only forward when set so an
+            # unspecified override still inherits the KzConfig default (the
+            # dataclass fields are non-Optional, so passing None would clobber
+            # the default with None).
+            _gen_overrides: dict[str, Any] = {}
+            if temperature is not None:
+                _gen_overrides["temperature"] = temperature
+            if max_tokens is not None:
+                _gen_overrides["max_tokens"] = max_tokens
             self._config = KzConfig(
                 model=resolved_model,
                 max_turns=max_turns,
                 base_url=base_url,
                 api_key=api_key,
+                **_gen_overrides,
             )
 
         # Build tool registry
