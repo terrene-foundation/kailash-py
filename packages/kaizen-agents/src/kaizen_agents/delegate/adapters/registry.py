@@ -195,14 +195,27 @@ def get_adapter_for_model(
     model: str,
     *,
     provider: str = "",
+    api_key: str | None = None,
+    base_url: str | None = None,
     ungoverned: bool = False,
     **kwargs: Any,
 ) -> StreamingChatAdapter:
-    """Auto-detect the provider from a model name and create an adapter.
+    """Resolve an adapter for ``model``, honouring an explicitly-passed client.
 
-    If ``provider`` is explicitly given and non-empty, it takes precedence
-    over model-name heuristics.  Otherwise the model name prefix is
-    checked against known provider patterns.
+    Provider resolution order (issue #1899 — an explicitly-passed deployment
+    client's provider/endpoint MUST win over the model-name prefix):
+
+    1. Explicit ``provider`` name (if set) — authoritative.
+    2. Explicit client endpoint (``base_url`` set) — an OpenAI-compatible /
+       Azure / custom-endpoint deployment client is identified by its endpoint,
+       NOT a routable model prefix. Its endpoint wins; the OpenAI-compatible
+       wire is used regardless of the model string's prefix (a ``gpt-*`` /
+       ``claude-*`` / short-alias / bare deployment name all route to the
+       passed client). Model-prefix detection is demoted to the fallback below.
+    3. FALLBACK — model-name prefix heuristic (``claude-*`` -> anthropic, etc.),
+       used ONLY when no explicit client provider/endpoint was supplied so the
+       zero-config ``claude-*`` / ``gemini-*`` behaviour is unchanged.
+    4. Default: ``openai``.
 
     Parameters
     ----------
@@ -210,6 +223,13 @@ def get_adapter_for_model(
         The model name (e.g., ``"claude-sonnet-4-6"``, ``"gemini-2.0-flash"``).
     provider:
         Optional explicit provider override.
+    api_key:
+        Optional API key for the explicitly-passed client (Azure / OpenAI-
+        compatible / custom-endpoint deployment). Forwarded to the adapter.
+    base_url:
+        Optional endpoint for the explicitly-passed client. When set (and no
+        ``provider`` is given) the client's endpoint wins over model-prefix
+        detection — the fix for issue #1899.
     ungoverned:
         #1779 opt-out threaded into the constructed adapter's governance gate.
         Default False (fail-closed).
@@ -221,9 +241,35 @@ def get_adapter_for_model(
     A :class:`StreamingChatAdapter` instance.
     """
     if provider:
-        return get_adapter(provider, model=model, ungoverned=ungoverned, **kwargs)
+        return get_adapter(
+            provider,
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            ungoverned=ungoverned,
+            **kwargs,
+        )
 
-    # Auto-detect from model name prefix
+    # An explicitly-passed deployment client (identified by its endpoint) wins
+    # over the model-name prefix. Azure OpenAI / OpenAI-compatible / custom
+    # endpoints speak the OpenAI chat wire, so route to the OpenAI adapter
+    # pointed at that endpoint regardless of the model's prefix (issue #1899).
+    if base_url:
+        logger.debug(
+            "Routing model %r to the explicitly-passed client endpoint "
+            "(base_url set); model-prefix detection demoted to fallback",
+            model,
+        )
+        return get_adapter(
+            "openai",
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            ungoverned=ungoverned,
+            **kwargs,
+        )
+
+    # FALLBACK: auto-detect from model name prefix (zero-config, unchanged).
     for prefix, detected_provider in _MODEL_PREFIX_MAP:
         if model.startswith(prefix):
             logger.debug(
@@ -232,8 +278,20 @@ def get_adapter_for_model(
                 prefix,
             )
             return get_adapter(
-                detected_provider, model=model, ungoverned=ungoverned, **kwargs
+                detected_provider,
+                model=model,
+                api_key=api_key,
+                base_url=base_url,
+                ungoverned=ungoverned,
+                **kwargs,
             )
 
     # Default to OpenAI
-    return get_adapter("openai", model=model, ungoverned=ungoverned, **kwargs)
+    return get_adapter(
+        "openai",
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        ungoverned=ungoverned,
+        **kwargs,
+    )
