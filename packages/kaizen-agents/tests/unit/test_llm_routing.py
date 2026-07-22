@@ -255,3 +255,39 @@ class TestZeroConfigDelegateProviderRouting:
         adapter = _loop_adapter(delegate)
         assert isinstance(adapter, OpenAIStreamAdapter)
         assert str(adapter._client.base_url).rstrip("/") == endpoint
+
+    def test_temperature_max_tokens_overrides_reach_config(self):
+        """Regression guard (#1899-class, one field over): the documented
+        temperature/max_tokens overrides on Delegate.__init__ MUST reach the
+        KzConfig the loop reads. Previously both were accepted + documented but
+        omitted from the zero-config KzConfig build, so the caller's override was
+        silently dropped and the KzConfig defaults (0.4 / 16384) always won."""
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(
+            model="gpt-4o",
+            temperature=0.91,
+            max_tokens=1234,
+            api_key=_FAKE_KEY,
+            ungoverned=True,
+        )
+        assert delegate._config.temperature == 0.91, (
+            "explicit temperature override was dropped before the KzConfig build "
+            "(#1899-class documented-kwarg drop)"
+        )
+        assert delegate._config.max_tokens == 1234, (
+            "explicit max_tokens override was dropped before the KzConfig build "
+            "(#1899-class documented-kwarg drop)"
+        )
+
+    def test_unset_temperature_max_tokens_inherit_config_defaults(self):
+        """A Delegate built WITHOUT temperature/max_tokens MUST inherit the
+        KzConfig defaults (0.4 / 16384), not None — the override plumbing only
+        forwards the values when the caller sets them (the dataclass fields are
+        non-Optional, so forwarding None would clobber the default)."""
+        from kaizen_agents.delegate.config.loader import KzConfig
+        from kaizen_agents.delegate.delegate import Delegate
+
+        delegate = Delegate(model="gpt-4o", api_key=_FAKE_KEY, ungoverned=True)
+        assert delegate._config.temperature == KzConfig.temperature
+        assert delegate._config.max_tokens == KzConfig.max_tokens
