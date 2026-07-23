@@ -1307,3 +1307,57 @@ changes:
       mirror: the Rust SDK carries the same signed-delegation serializer surface; a human-gated cross-SDK mirror
       issue is offered to the Rust SDK per cross-sdk-inspection Rule 1 (upstream-issue-hygiene MUST-1). Receipt:
       this codify journal DECISION/DISCOVERY + workspaces/issue-1720-llm-consolidation.'
+  - type: skill_update
+    artifact: 16-validation-patterns
+    files:
+      - .claude/skills/16-validation-patterns/param-completeness-guard.md
+    classification_suggestion: global
+    context:
+      'PROPOSAL-ONLY (full proposed text below; NO BUILD-side artifact edit — loom Gate-1 owns placement,
+      variant-vs-global classification, and the coc-artifact-eval-coverage probe set). NEW sub-file
+      param-completeness-guard.md under skill 16-validation-patterns, cross-referencing zero-tolerance.md
+      Rule 3c ("Documented Kwargs Accepted But Unused").
+
+
+      WHAT: a structural (AST) test pattern that closes the documented-kwarg-drop class at authoring time.
+      Rule 3c states the PRINCIPLE (a documented public kwarg with zero effect on the body is the
+      silent-fallback mode at the API surface) but a principle is not a tripwire — the SAME class recurred
+      THREE times on ONE constructor before it was structurally closed: kaizen_agents.Delegate.__init__ dropped
+      base_url/api_key (#1899), temperature/max_tokens (#1926), and signature/inner_agent (#1927, this session,
+      resolved by removal + this guard). The defense: parse the constructor source
+      (inspect.getsource + ast.parse) and assert every parameter is READ in a Load context somewhere OTHER than
+      its own self._x = x storage line — i.e. passed to a callee, tested in a branch, or transformed. The
+      discriminator is loads[param] > store_only[param]: self._x = x increments BOTH the Load count (RHS) and
+      the store-only count, so a pure-stored param nets equal and is FLAGGED; any additional Load tips it over
+      and clears. Handle BOTH ast.Assign (self._x = x) AND ast.AnnAssign (self._x: T = x) storage forms;
+      a transform-on-store RHS (self._x = x or default) is deliberately NOT flagged (the transform IS
+      consumption). It is a probe-driven-verification structural probe (no LLM, no regex over prose),
+      deterministic and CI-cheap; mutation-verify it against a synthetic stored-only param (both Assign and
+      AnnAssign) to prove it has teeth (the negative pole, per the meta-lesson that a fix-pattern guard must
+      prove its NEGATIVE pole, not just the positive).
+
+
+      WHY GLOBAL (loom decides variant-vs-global): the INVARIANT — every documented constructor param reaches a
+      real consumer — is language-neutral and applies to any multi-parameter facade SDK-wide; the concrete
+      AST-walk is Python-shaped. loom Gate-1 to classify: global principle in the skill body with a Python
+      concrete template, OR a py-variant for the AST implementation + a language-neutral principle note. The
+      Rust SDK equivalent (a syn::parse_file walk over the same invariant) is the cross-SDK sibling
+      (cross-sdk-inspection Rule 1); a human-gated cross-SDK mirror is NOT filed by this proposal (assessed
+      low-value — Python-facade-specific; surfaced for loom/human decision).
+
+
+      COMPLETENESS-vs-FIX-IMMEDIATELY (loom Gate-1 consideration, non-blocking): the guard, had it shipped with
+      #1899, would have failed the moment #1926/#1927 added a stored-only param at authoring time. This argues a
+      documented-kwarg fix SHOULD land its class structural guard in the same PR (a generalization of
+      autonomous-execution.md fix-immediately-same-class from the code surface to the test-guard surface). loom
+      Gate-1 to decide whether that generalization belongs as a clause vs a skill note.
+
+
+      Self-referential /codify gate: 16-validation-patterns is NOT on self-referential-codify.md Rule 2
+      allowlist -> standard cc-architect review applies (not the multi-agent self-ref gate). Eval-coverage
+      (coc-artifact-eval-coverage MUST-1): no eval-harness present in this BUILD repo
+      (.claude/test-harness/eval-manifest.json + probes/ absent); the probe-set obligation is loom-side Gate-1
+      per that rule Origin (loom holds the eval ENGINE) — matching the Rule 4e entry disposition above. Disclosure
+      scrub: no client/operator/3rd-party tokens (the pattern is generic; the #1899/#1926/#1927 issue numbers are
+      already-public de-org bare numbers). Receipt: this codify journal DECISION 0014 + DISCOVERY 0012
+      (workspaces/issue-1720-llm-consolidation/journal/).'
