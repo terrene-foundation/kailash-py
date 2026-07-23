@@ -41,18 +41,20 @@ failure on main** (unrelated to #1927). Board otherwise clean.
 
 EMPTY. #1927 (F3) closed. No queued code items.
 
-## Open considerations for the human (surfaced, not blocking)
+## Both user-approved follow-ups — DONE this session
 
-1. **Full /codify is a dedicated session, not done here.** The codify backlog enumerator shows
-   **602 items** anchored 2026-07-21 (mostly prior-session `test_pattern` telemetry + other sessions'
-   deltas) — far beyond the single completeness-guard pattern approved this session. This session
-   captured its two learnings as `journal/0012` + `journal/0013` (durable, feeds a future codify)
-   WITHOUT advancing `last_codified` (preserving the backlog). Recommend a dedicated /codify session
-   for the full backlog + a loom Step-7a proposal to cascade the completeness-guard as a cross-SDK
-   validation lens.
-2. **Cross-SDK inspection (#1927)** — checking whether the Rust SDK has an equivalent Delegate with
-   unwired params needs cross-repo READ authorization (not self-authorizable). Assessed LIKELY
-   LOW-VALUE (Python-facade cleanup, not shared-architecture). See `journal/0012` For-Discussion #3.
+1. **Full /codify — DONE (PR #1936 merged).** Backlog was ~99% auto-captured `test_pattern`
+   telemetry (not individually codifiable); actionable delta dispositioned (1 redundant RISK stub
+   deleted, 1 advisory violation reviewed benign). Codified the ONE cascade-valuable pattern — the
+   AST param-completeness-guard — as a `16-validation-patterns` skill_update proposal appended to
+   `.claude/.proposals/latest.yaml` (change #31, `global`; loom Gate-1 owns placement + eval-coverage).
+   Anchor advanced (local, gitignored). cc-architect redteam CLEAN. Learnings: journals 0012/0013;
+   DECISION 0014.
+2. **Cross-SDK inspection (#1927) — DONE (user-authorized READ; receipt committed).** NO equivalent
+   gap in the Rust SDK — its `Delegate` is a trust-plane primitive, its agent facade is
+   `GovernedAgentRuntime` (functional params only), and its live `inner_agent` usage is
+   functionally-wired. The documented-kwarg-drop class is Python-facade-specific. No issue filed
+   (no gap). See `journal/0015`. Confirms the pre-inspection low-value assessment.
 
 ## Traps (carried)
 
