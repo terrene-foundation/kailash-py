@@ -2,64 +2,65 @@
 
 ## Where we are
 
-The last outstanding #1720 forest item — **#1927** (Delegate `signature`/`inner_agent`
-documented-but-silent-no-op) — is RESOLVED, RELEASED, and verified on the published wheel.
-Forest is now EMPTY. Main @ `6484d62db`. kaizen-agents **0.11.7 LIVE on PyPI**. Board clean.
+#1720's last forest item — **#1927** (Delegate `signature`/`inner_agent` no-ops) — RESOLVED,
+RELEASED (kaizen-agents **0.11.7** live on PyPI, wheel-verified), forest EMPTY. Then, while
+handling the two approved dependabot PRs, surfaced + fixed a **pre-existing trust-plane test
+failure on main** (unrelated to #1927). Board otherwise clean.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont14.md` — full cont-14 record
-   (architecture investigation, user-ratified remove-both decision, implementation, 2-round
-   redteam convergence, release + wheel verification).
-2. `CLAUDE.md` — project context.
-
-## In-flight state
-
-- None. Working tree: only the modified `.session-notes` + `launch-ledger-cont14.md` post-release
-  edits (workspace records; persist via a workspace-only carve-out PR — no /release owed).
+1. `launch-ledger-cont14.md` — full cont-14 orchestration + redteam record.
+2. `journal/0012` (param-completeness-guard pattern) + `journal/0013` (per-package CI gating hides
+   sibling failures) — this session's DISCOVERY captures for a future proper /codify.
 
 ## Executed this session (cont-14)
 
-- Resolved **#1927** by REMOVING `Delegate(signature=…)` + `Delegate(inner_agent=…)` (user-ratified
-  "remove both" via AskUserQuestion — both were never-worked silent no-ops; wiring signature would
-  duplicate the BaseAgent/Signature structured-output path across 4 adapters; inner_agent is
-  arch-incompatible with the streaming run()). Fixed the wrong `core_agent` docstring. Added a
-  structural AST **completeness-guard** test (every Delegate.__init__ param must reach a consumer —
-  closes the #1899/#1926/#1927 recurring documented-kwarg-drop class for the Delegate).
-- **PR #1932 MERGED** → `6484d62db`; **#1927 CLOSED**. 3135-test unit suite green; /redteam 2 clean
-  rounds (reviewer + security-reviewer, all genuinely ran).
-- Released **kaizen-agents 0.11.7** (tag `kaizen-agents-v0.11.7`; publish SUCCESS; clean-venv wheel
-  verified). Not in this repo's `git log` (PyPI-side).
+- **#1927** → REMOVED `Delegate(signature=…)`/`inner_agent=…` (user-ratified remove-both; both
+  never-worked no-ops). Fixed the wrong `core_agent` docstring. Added an AST **completeness-guard**
+  test (`test_every_init_param_reaches_a_consumer`, `AnnAssign`-aware, mutation-verified) that
+  closes the #1899/#1926/#1927 documented-kwarg-drop class for the Delegate. PR **#1932** merged;
+  #1927 CLOSED; /redteam 2 clean rounds (reviewer+security). Released **kaizen-agents 0.11.7**
+  (tag `kaizen-agents-v0.11.7`; publish SUCCESS; clean-venv wheel verified: params gone, TypeError
+  on pass). Workspace records persisted PR **#1933**.
+- **Dependabot #1930** (labeler 6→7) → merged clean.
+- **Dependabot #1931** (setup-python 6→7) → its full-matrix run exposed a PRE-EXISTING main failure
+  `test_verify_signatures_validates_delegations` (kailash-kaizen trust suite). Root cause: the test
+  built an un-subject-bound LEGACY cap and expected valid=True, but #1912 Wave 3 A1 rejects legacy
+  caps by default (transplantable); the test predates #1912 and was never migrated (only 1 of 6555
+  failed). Fixed the TEST (code is correct) → migrate to a v1-subject-bound cap. PR **#1934** merged
+  (security-reviewer: SECURITY-APPROPRIATE — tests the secure path, adversarial semantics fully
+  covered in `tests/regression/test_issue_1912_capability_subject_binding.py`). #1931 rebased onto
+  the fixed main → kailash-kaizen job green → [merge state at wrapup].
 
 ## Unreleased packages
 
-- **kailash core** — one unreleased `src/` commit since v2.61.0: the `constraint_subset` docstring
-  correction (`9f2f9755b`). Doc-only / runtime-inert; version NOT bumped (still 2.61.0 == PyPI).
-  User approved deferring. Next core change bundles it, or cut 2.61.1.
+- **kailash core** — 2.61.0 == PyPI; the `constraint_subset` docstring commit `9f2f9755b` did NOT
+  bump version (rides next core release, per cont-13 deferral). No drift on any of the 9 packages.
 
 ## Outstanding ledger (forest)
 
-EMPTY — F3/#1927 closed this session (F1/F2 closed cont-12). No queued items.
+EMPTY. #1927 (F3) closed. No queued code items.
 
 ## Open considerations for the human (surfaced, not blocking)
 
-1. **Cross-SDK inspection (#1927 / cross-sdk-inspection Rule 1)** — NOT completed: checking whether
-   the Rust SDK (kailash-rs) has an equivalent Delegate facade with unwired params needs cross-repo
-   READ authorization (repo-scope-discipline — not self-authorizable). Assessment: LIKELY LOW-VALUE —
-   this was a Python-facade-specific API cleanup, not a shared-architecture bug (trust-plane/DataFlow
-   class). Authorize a check only if you want cross-SDK parity confirmed.
-2. **Codify opportunity** — the AST completeness-guard pattern (assert every documented constructor
-   param reaches a real consumer) is a reusable structural defense against the documented-kwarg-drop
-   class that recurred 3× on the Delegate (#1899/#1926/#1927). Currently lives as a kaizen-agents
-   regression test. Consider /codify to a reusable skill/reviewer-lens if you want it applied to
-   other multi-param facades SDK-wide. Workspace phase shows 05-codify with 2 journal candidates
-   pending. Not auto-run (codify is a structural human gate).
+1. **Full /codify is a dedicated session, not done here.** The codify backlog enumerator shows
+   **602 items** anchored 2026-07-21 (mostly prior-session `test_pattern` telemetry + other sessions'
+   deltas) — far beyond the single completeness-guard pattern approved this session. This session
+   captured its two learnings as `journal/0012` + `journal/0013` (durable, feeds a future codify)
+   WITHOUT advancing `last_codified` (preserving the backlog). Recommend a dedicated /codify session
+   for the full backlog + a loom Step-7a proposal to cascade the completeness-guard as a cross-SDK
+   validation lens.
+2. **Cross-SDK inspection (#1927)** — checking whether the Rust SDK has an equivalent Delegate with
+   unwired params needs cross-repo READ authorization (not self-authorizable). Assessed LIKELY
+   LOW-VALUE (Python-facade cleanup, not shared-architecture). See `journal/0012` For-Discussion #3.
 
 ## Traps (carried)
 
-- CI flakes here: DataFlow bulk-multi-tenant Postgres isolation race + Windows SQLite "database is
-  locked". Both clear on re-run; re-run failed jobs (pinned-head READ + separate merge), don't merge
-  over red. (Did NOT recur on #1932.)
-- `.venv/bin/pre-commit` has a stale shebang (loom/kailash-py path) — run `uv run pre-commit`.
-- Stale `packages/kaizen-agents/build/lib/` holds pre-edit copies (gitignored, not shipped); pyright
-  may read it and show phantom diagnostics — runtime imports resolve to `src/` (verified).
+- **Per-package CI path-gating hides sibling-package failures** (journal/0013) — a kaizen-agents-only
+  PR does NOT run the kailash-kaizen matrix; a pre-existing sibling failure stays hidden until a
+  workflow-touching PR (e.g. dependabot) fires the full matrix. Consider a nightly full-matrix run.
+- CI flakes: DataFlow Postgres isolation race + Windows SQLite lock — clear on re-run; pinned-head
+  READ + separate admin-merge, never merge over red. (Did NOT recur this session.)
+- `.venv/bin/pre-commit` stale shebang (loom path) — use `uv run pre-commit`.
+- Stale `packages/*/build/lib/` copies (gitignored) confuse pyright with phantom diagnostics; runtime
+  imports resolve to `src/` (always verify at runtime, not from pyright).
