@@ -2,65 +2,48 @@
 
 ## Where we are
 
-**SESSION CLOSED (cont-15).** Started clean (cont-14 closed the #1720 forest; board was 0 issues /
-0 PRs / green CI / version-consistent — all re-verified against ground truth, not trusted from
-notes). The one live thread was the WORKSPACE hook's "1 pending journal candidate": an orphaned
-**F-TESTHYG** deferral whose `after-milestone:1720-wave2` revisit trigger had **passed without
-action** (cont-14 shipped kaizen-agents 0.11.7 but never bundled F-TESTHYG). Reconciled it →
-found a real user-facing defect → fixed → **released kaizen-agents 0.11.8** (PyPI, clean-venv
-verified). Board clean again; nothing outstanding except 2 owner-facing residuals below.
+**SESSION CLOSED (cont-15).** Started from a verified-clean board; the one live thread was an
+orphaned **F-TESTHYG** deferral (its "bundle with the kaizen-agents release" trigger had passed
+without action). Reconciling it surfaced a real user-facing defect → fixed in two releases →
+all three owner-approved residuals resolved. Board clean again.
 
 ## Executed this session (cont-15)
 
-- **Reconciled F-TESTHYG (corrected the premise).** The followup doc's "class-2 root-discovery
-  src bug" does NOT exist in the package — `consensus_*.json`/`detailed_proposal.txt` appear in
-  src only as dict/memory keys (no disk-write site); those scratch files were **example-script
-  output**, not shipped behavior. The real defect was narrower AND user-facing:
-- **Fixed the confirmed defect (kaizen-agents 0.11.8).** `BaseAutonomousAgent.__init__` created
-  `./checkpoints/` in the caller's cwd on EVERY construction (unconditional `mkdir` at base.py:222)
-  — even for agents that never checkpoint (base run loop persists via `state_manager`/DataFlow).
-  Fix = **lazy** dir creation (moved `mkdir` into `_save_checkpoint`, first-write). Non-breaking;
-  reads already `.exists()`-guarded. Runtime-walked + 3 behavioral regression tests
-  (`tests/regression/test_checkpoint_dir_no_cwd_litter.py`).
-- **Redteam 2 clean rounds:** reviewer + security-reviewer both NO FINDINGS (genuine ran-signals);
-  round-2 same-class sweep (AST scan for eager fs-writes in `__init__`) found the one candidate
-  `delegate/session.py:54` is legitimately different (required-arg dir, secure 0o700/0o600 pattern).
-- **Shipped:** PR **#1939** merged (all CI matrix green on pinned head `b090408b`; admin-merge).
-  Tag `kaizen-agents-v0.11.8` → Publish-to-PyPI workflow SUCCESS (TestPyPI skipped — patch, user-
-  approved). Clean-venv verify PASS (0.11.8; construct → no dir; lazy write → dir+file). GitHub
-  Release created.
+- **F-TESTHYG reconciled + premise corrected.** The followup doc's "class-2 root-discovery src
+  bug" did NOT exist — those scratch files were example-script output. The real defect:
+  `BaseAutonomousAgent` created `./checkpoints/` in the caller's cwd.
+- **kaizen-agents 0.11.8** (PR #1939) — construct-time fix: lazy dir creation (moved `mkdir` out
+  of `__init__`). Redteam 2 clean rounds. PyPI-published, clean-venv verified.
+- **kaizen-agents 0.12.0** (PR #1941) — the owner-approved residuals #1+#2:
+  - **#1 (default location):** default checkpoints now go to `platformdirs.user_state_dir("kaizen")/
+    checkpoints` (per-user state dir), NOT the cwd. **BREAKING** (documented): old `./checkpoints`
+    not auto-migrated; pass explicit `checkpoint_dir` to restore. New dep `platformdirs>=4.0`.
+  - **#2 (perms):** checkpoint dir/files owner-only on POSIX (`0o700`/`0o600`) with `O_NOFOLLOW`
+    at the write sink (refuses writing through a symlink in a caller-supplied hostile dir).
+  - Redteam 2 rounds: reviewer NO FINDINGS; security-reviewer net-positive, its one LOW (missing
+    `O_NOFOLLOW`) fixed + pinned by a symlink-refusal regression test. 45 tests + full CI matrix.
+  - **TestPyPI-validated first** (minor-release rule) → production PyPI → clean-venv verified
+    (v0.12.0, default off-cwd, modes 0o700/0o600).
+- **#3 (cross-SDK inspection) — DONE, no gap.** User-approved READ-tier cross-repo authorization
+  (receipt committed). The Rust SDK uses an explicit `CheckpointStore` (memory/SQLite at an
+  explicit path), NOT a cwd-defaulting `checkpoint_dir` — **no equivalent defect**; nothing filed.
+  See `cross-sdk-checkpoint-inspection.md` + `04-validate/f-testhyg-followup.md`.
 
 ## Release scope (cont-15)
 
-kaizen-agents 0.11.7 → **0.11.8** ONLY. All 8 sibling packages at PyPI parity — no drift swept.
-
-## Owner-facing residuals (surfaced, NOT actioned — your call)
-
-1. **Running-agent default location.** A *running* codex/claude_code autonomous agent still
-   defaults checkpoints to `./checkpoints` in the user's cwd. Lazy-mkdir fixed construct-time
-   litter only; changing the documented default location (→ temp/XDG state dir) is a
-   behavior-change decision.
-2. **Pre-existing checkpoint perms (different bug class).** Checkpoint dir/files use default umask
-   (world-readable) and `state` may hold PII (security-reviewer, pre-existing — NOT introduced by
-   0.11.8). The delegate `SessionManager` is the in-repo secure reference (`chmod 0o700` +
-   `_secure_write` 0o600). Hardening the checkpoint path to match is a separate, owner-gated change.
-3. **Cross-SDK inspection (cross-sdk-inspection Rule 1).** Not performed — this is a Python-idiom
-   constructor side-effect (`Path("./checkpoints").mkdir()`), low cross-SDK relevance, and a Rust
-   SDK read is repo-scope-gated (needs a grant). Flag if you want the Rust autonomous-agent
-   equivalent inspected.
+kaizen-agents 0.11.7 → 0.11.8 → **0.12.0** (all published + verified). All 8 sibling packages at
+PyPI parity — no drift swept. Core + others unchanged.
 
 ## Outstanding ledger (forest)
 
-EMPTY. F-TESTHYG resolved + released. No queued code items. Board: 0 open issues, 0 open PRs.
+EMPTY. F-TESTHYG fully resolved (0.11.8 + 0.12.0); cross-SDK inspected (no gap). No queued items.
+Board: 0 open issues, 0 open PRs (this receipt PR merges as the close-out).
 
-## Traps (carried from cont-14, still valid)
+## Traps (carried, still valid)
 
 - Per-package CI path-gating hides sibling-package failures (journal/0013).
-- CI flakes (DataFlow Postgres isolation race + Windows SQLite lock) clear on re-run; pinned-head
-  READ + separate admin-merge, never merge over red. (Did NOT recur this session.)
-- `.venv/bin/pre-commit` stale shebang → use `uv run pre-commit`.
-- Stale `packages/*/build/lib/` copies confuse pyright (phantom diagnostics); runtime resolves to
-  `src/`. Confirmed again this session — the base.py pyright warnings were all pre-existing
-  dynamic-attribute noise, unaffected by the fix.
-- PyPI/uv index-cache lag on fresh publish: JSON endpoint reflects the new version before the
-  simple index / uv cache does — retry `uv pip install --refresh` (succeeded on 2nd try this session).
+- CI flakes clear on re-run; pinned-head READ + separate admin-merge, never merge over red.
+- `uv run pre-commit` (stale `.venv/bin` shebang). Stale `packages/*/build/lib/` confuse pyright
+  (all base.py warnings this session were pre-existing dynamic-attribute noise).
+- PyPI/uv index-cache lag on fresh publish → retry `uv pip install --refresh` (needed both releases).
+- TestPyPI install with uv needs `--index-strategy unsafe-best-match` (deps resolve from prod PyPI).
