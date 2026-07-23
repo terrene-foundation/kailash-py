@@ -2521,7 +2521,7 @@ provides-extras = ["api", "execution", "dev", "all"]
 
 [[package]]
 name = "kaizen-agents"
-version = "0.11.8"
+version = "0.12.0"
 source = { editable = "packages/kaizen-agents" }
 dependencies = [
     { name = "anthropic" },
@@ -2530,6 +2530,7 @@ dependencies = [
     { name = "kailash" },
     { name = "kailash-kaizen" },
     { name = "openai" },
+    { name = "platformdirs" },
 ]
 
 [package.metadata]
@@ -2542,6 +2543,7 @@ requires-dist = [
     { name = "kailash-kaizen", specifier = ">=2.36.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "openai", specifier = ">=1.30.0" },
+    { name = "platformdirs", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.2.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
