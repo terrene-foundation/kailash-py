@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import pytest
 from kailash.trust.chain import (
+    CAPABILITY_SIGNING_VERSION_V1,
     CapabilityAttestation,
     CapabilityType,
     ConstraintEnvelope,
@@ -739,7 +740,13 @@ class TestIntegrationWithExistingVerify:
         genesis_payload = serialize_for_signing(genesis.to_signing_payload())
         genesis.signature = sign(genesis_payload, private_key)
 
-        # Create a properly signed capability
+        # Create a properly signed capability. Post-#1912 (Wave 3 A1), an
+        # un-subject-bound legacy cap is rejected by default (transplantable
+        # across chains), so a "properly signed" cap is v1-subject-bound: the
+        # signature binds the HOLDER chain's genesis.agent_id ("agent-A") into
+        # the pre-image, exactly as the verify side recomputes it
+        # (operations `_verify_capability_signature` passes
+        # subject_agent_id=chain.genesis.agent_id).
         capability = CapabilityAttestation(
             id="cap-001",
             capability="analyze_data",
@@ -748,8 +755,11 @@ class TestIntegrationWithExistingVerify:
             attester_id="org-test",
             attested_at=datetime.now(timezone.utc),
             signature="",
+            signing_payload_version=CAPABILITY_SIGNING_VERSION_V1,
         )
-        cap_payload = serialize_for_signing(capability.to_signing_payload())
+        cap_payload = serialize_for_signing(
+            capability.to_signing_payload(subject_agent_id="agent-A")
+        )
         capability.signature = sign(cap_payload, private_key)
 
         # Create a properly signed delegation
