@@ -5,6 +5,7 @@ This module provides agent classes and management capabilities for signature-bas
 AI programming, built on Core SDK workflow patterns.
 """
 
+import hashlib
 import inspect
 import json
 import logging
@@ -14,6 +15,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from kaizen.errors import EnvModelMissing
+
+from ._provider_env import detect_provider_from_env as _detect_provider_from_env
 
 # PERFORMANCE OPTIMIZATION: Lazy loading for Kailash imports
 # WorkflowBuilder imports can bring heavy dependencies
@@ -40,6 +43,31 @@ def _resolve_default_model() -> str:
         or os.environ.get("DEFAULT_LLM_MODEL")
         or DEFAULT_OPENAI_MODEL
     )
+
+
+def _fingerprint_payload(payload: Any) -> str:
+    """Non-reversible ``len=<N> sha256=<8-hex>`` fingerprint for WARN logs.
+
+    Per rules/security.md "No secrets in logs" + rules/observability.md
+    Rule 4/Rule 8: a WARN-level log line MUST NOT dump a caller's raw
+    payload (user prompt, LLM response content) verbatim — that payload may
+    carry PII, and WARN-level aggregators (Datadog/Splunk/CloudWatch) often
+    have broader access than the originating request. The fingerprint keeps
+    the log line grep-able and diffable (same input -> same fingerprint)
+    without ever reproducing the payload's content. Raw content, when
+    useful for local debugging, belongs at DEBUG (off by default in prod).
+
+    Fails closed to a fixed sentinel on ANY exception (e.g. a pathological
+    caller-defined `__repr__` that raises) — a WARN-log helper MUST NEVER
+    itself crash the call site it is meant to make more observable.
+    """
+    try:
+        raw = payload if isinstance(payload, str) else repr(payload)
+        raw_bytes = raw.encode("utf-8", errors="replace")
+        digest = hashlib.sha256(raw_bytes).hexdigest()[:8]
+        return f"len={len(raw_bytes)} sha256={digest}"
+    except Exception:
+        return "len=? sha256=unavailable"
 
 
 if TYPE_CHECKING:
@@ -127,6 +155,12 @@ class Agent:
         # Agent state
         self._workflow: Optional[Any] = None
         self._is_compiled = False
+        # FIX 13: the provider `self._workflow` was BUILT with —
+        # `compile_workflow()` only trusts the `_is_compiled`/`_workflow`
+        # memo when this still matches the CURRENT resolved provider. See
+        # `compile_workflow()` for the full rationale (stale-memo-on-env-drift,
+        # the SAME class of gap FIX12 closed for `BaseAgent.to_workflow()`).
+        self._workflow_provider: Optional[str] = None
         self._execution_history: List[Dict[str, Any]] = []
 
         # MCP integration state
@@ -204,7 +238,21 @@ class Agent:
             >>> workflow = agent.compile_workflow()
             >>> results, run_id = kaizen.execute(workflow.build())
         """
-        if self._is_compiled and self._workflow:
+        # FIX 13: the memo MUST be provider-aware — SAME class of gap FIX12
+        # closed for `BaseAgent.to_workflow()`. `_is_compiled`/`_workflow`
+        # alone answer "was a workflow already built", not "is it still
+        # valid" — `_get_provider_for_config()` is env-dependent, so an
+        # ambient-env change (a real key injected into a long-lived process
+        # AFTER the first compile, with no explicit `update_config()` call)
+        # left the memo trusted forever, serving a stale mock-dispatching
+        # workflow. Trust the memo ONLY when the resolved provider is
+        # unchanged.
+        current_provider = self._get_provider_for_config()
+        if (
+            self._is_compiled
+            and self._workflow
+            and self._workflow_provider == current_provider
+        ):
             logger.debug(f"Using cached workflow for agent: {self.agent_id}")
             return self._workflow
 
@@ -215,7 +263,17 @@ class Agent:
         # Add LLM node using string-based pattern with Core SDK compatible parameters.
         # `_set_default_config` enforces `model` from KAIZEN_DEFAULT_MODEL env var
         # (rules/env-models.md) — index access is correct here; no hardcoded fallback.
+        # PART B: `provider` MUST be set explicitly here — LLMAgentNode's own
+        # parameter default is "mock" (`kaizen/nodes/ai/llm_agent.py::get_parameters`).
+        # Without this, an agent with NO explicit `"provider"` key in `self.config`
+        # (the common case — `_get_provider_for_config()` auto-detects from env)
+        # would silently mock-dispatch via `execute_workflow()`/`.workflow`
+        # regardless of real API keys present. The loop below may still
+        # override with an explicit `self.config["provider"]` value, which is
+        # the SAME value `_get_provider_for_config()` already returns in that
+        # case, so this is a no-op override, not a conflict.
         node_params = {
+            "provider": current_provider,
             "model": self.config["model"],
             "timeout": self.config.get("timeout", 30),
         }
@@ -273,16 +331,22 @@ class Agent:
         # Store compiled workflow
         self._workflow = workflow
         self._is_compiled = True
+        self._workflow_provider = current_provider
 
         logger.info(f"Compiled workflow for agent: {self.agent_id}")
         return workflow
 
     @property
     def workflow(self):  # Return type deferred due to lazy loading
-        """Get the compiled workflow for this agent."""
-        if not self._is_compiled:
-            return self.compile_workflow()
-        return self._workflow
+        """Get the compiled workflow for this agent.
+
+        Always routes through `compile_workflow()` — NOT a direct
+        `self._workflow` return when `_is_compiled` is True — so the
+        provider-aware memo check (FIX 13) applies uniformly. A direct
+        return here would bypass that check and could hand back a
+        workflow built under a since-drifted provider.
+        """
+        return self.compile_workflow()
 
     def execute_workflow(
         self,
@@ -340,6 +404,17 @@ class Agent:
         """
         self.config.update(config_updates)
         self._is_compiled = False  # Force recompilation
+        # Invalidate the cached signature-execution workflow (agents.py
+        # `_execute_with_signature`): that cache bakes `provider` (and every
+        # other config-derived param) into the node config ONCE and reuses
+        # it forever. Without invalidation, a config change (e.g. switching
+        # provider) would silently keep dispatching under the STALE provider
+        # while `_is_mock_provider_active()` reads the NEW one LIVE — the two
+        # would disagree and the mock-upgrade gate would misfire either way.
+        if hasattr(self, "_signature_workflow"):
+            del self._signature_workflow
+        if hasattr(self, "_signature_workflow_provider"):
+            del self._signature_workflow_provider
         logger.info(f"Updated config for agent: {self.agent_id}")
 
     def to_node_config(self) -> Dict[str, Any]:
@@ -349,9 +424,18 @@ class Agent:
         Returns:
             Dict[str, Any]: Node configuration for workflow integration
         """
+        # FIX 9: same LLMAgentNode-param-building bug class as the 6 sites
+        # already fixed (agents.py/base_agent.py/nexus/signatures compiler)
+        # — a consumer feeding this config to `add_node(...)` with no
+        # explicit "provider" key would silently mock-dispatch a
+        # real-provider agent. `setdefault` preserves an explicit
+        # `self.config["provider"]` (matching `_get_provider_for_config()`'s
+        # own precedence) and resolves via the SAME method otherwise.
+        resolved = self.config.copy()
+        resolved.setdefault("provider", self._get_provider_for_config())
         return {
             "type": "LLMAgentNode",
-            "config": self.config.copy(),
+            "config": resolved,
             "signature": (
                 self.signature.name
                 if (self.signature and hasattr(self.signature, "name"))
@@ -560,8 +644,24 @@ class Agent:
         # Store current execution inputs for intelligent mock conversion
         self._current_execution_inputs = inputs.copy()
 
-        # Compile signature to workflow parameters if needed
-        if not hasattr(self, "_signature_workflow"):
+        # Compile signature to workflow parameters if needed.
+        # FIX 15 (Round 5 final-sweep finding — SAME class as FIX 12/13): a
+        # bare `hasattr` guard answers "was a signature-workflow already
+        # built", not "is it still valid" — `_get_provider_for_config()` is
+        # env-dependent, so an ambient-env change (a real key injected into
+        # a long-lived process AFTER the first `_execute_with_signature`
+        # call, with no explicit `update_config()`/`set_signature()`/
+        # `reset()`) left this cache trusted forever, keeping every
+        # subsequent signature-execution dispatch on the STALE provider —
+        # not merely a mock-upgrade-gate misclassification (PART A below
+        # already keeps the gate honest against whatever's dispatched), but
+        # the DISPATCH ITSELF never advancing past the provider resolved at
+        # first build. Rebuild whenever the resolved provider drifts.
+        current_provider = self._get_provider_for_config()
+        if (
+            not hasattr(self, "_signature_workflow")
+            or getattr(self, "_signature_workflow_provider", None) != current_provider
+        ):
             from ..signatures import SignatureCompiler
 
             compiler = SignatureCompiler()
@@ -576,7 +676,7 @@ class Agent:
             # Model defaulted from KAIZEN_DEFAULT_MODEL via `_set_default_config`
             # (rules/env-models.md) — no hardcoded fallback permitted here.
             enhanced_params = {
-                "provider": self._get_provider_for_config(),  # Smart provider selection
+                "provider": current_provider,  # Smart provider selection
                 "model": self.config["model"],
                 "timeout": self.config.get("timeout", 30),
             }
@@ -629,6 +729,7 @@ class Agent:
                 enhanced_params,
             )
             self._signature_workflow = workflow
+            self._signature_workflow_provider = current_provider
 
         # Execute workflow
         if not self.kaizen:
@@ -665,9 +766,17 @@ class Agent:
                     agent_result = node_result
                     break
 
-        # Parse LLM response to structured output based on signature
+        # Parse LLM response to structured output based on signature.
+        # PART A: `enhanced_params["provider"]` (read above from the — possibly
+        # STALE — cached `_signature_workflow` node config) is the value
+        # ACTUALLY placed in the node just dispatched at `updated_workflow.
+        # add_node(...)` two lines above, so threading it through makes the
+        # mock-upgrade gate match dispatch by construction even when the
+        # cache is stale (the mutator invalidations above make config
+        # CHANGES take effect; this threading makes the gate agree with
+        # whatever WAS dispatched regardless).
         structured_result = self._parse_llm_response_to_signature_output(
-            agent_result, signature
+            agent_result, signature, dispatched_provider=enhanced_params.get("provider")
         )
 
         # Track execution history
@@ -747,8 +856,12 @@ class Agent:
         # Extract intelligent response from LLM results
         agent_result = results.get(self.agent_id, {})
 
-        # Handle different response formats from LLMAgentNode
-        intelligent_response = self._extract_intelligent_response(agent_result, inputs)
+        # Handle different response formats from LLMAgentNode.
+        # PART A: thread the provider ACTUALLY dispatched (llm_params["provider"])
+        # into the gate so it can never disagree with live config/env.
+        intelligent_response = self._extract_intelligent_response(
+            agent_result, inputs, dispatched_provider=llm_params["provider"]
+        )
 
         # Track execution history
         self._execution_history.append(
@@ -919,7 +1032,10 @@ CRITICAL RULES:
         return schema
 
     def _extract_intelligent_response(
-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
+        self,
+        llm_result: Dict[str, Any],
+        original_inputs: Dict[str, Any],
+        dispatched_provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Extract intelligent response from LLMAgentNode result.
@@ -927,6 +1043,14 @@ CRITICAL RULES:
         Args:
             llm_result: Raw result from LLMAgentNode execution
             original_inputs: Original user inputs for context
+            dispatched_provider: The provider value ACTUALLY placed in the
+                LLMAgentNode config that produced `llm_result`. When given,
+                the mock-upgrade gate uses this value directly
+                (`_mock_gate_open`) instead of re-deriving provider from
+                live config/env, so gate and dispatch can never disagree.
+                Callers SHOULD pass this; omitting it falls back to
+                `_is_mock_provider_active()` (see its docstring for why
+                that fallback can drift).
 
         Returns:
             Structured intelligent response
@@ -960,12 +1084,25 @@ CRITICAL RULES:
                             response_content = str(candidate["content"])
                             break
 
-            # Check if this is a mock response that needs intelligent conversion
-            is_mock_response = response_content and (
-                response_content.startswith("I understand you want me to work with")
-                or response_content.startswith("Regarding your question about")
-                or response_content.startswith("Based on the provided data and context")
-                or "Mock vision response for testing" in response_content
+            # Check if this is a mock response that needs intelligent conversion.
+            # GATED: reclassifying content as "mock" (and later discarding it
+            # for fabricated keyword-lookup output) is ONLY valid when the
+            # DISPATCHED provider (or, absent that, the live-derived provider)
+            # is genuinely mock. A REAL provider's output MUST be returned
+            # verbatim — see `_mock_gate_open` and rules/zero-tolerance.md
+            # Rule 2 (no hardcoded mock responses on a production path) /
+            # Rule 3 (no silent fallback that discards real output).
+            is_mock_response = (
+                response_content
+                and self._mock_gate_open(dispatched_provider)
+                and (
+                    response_content.startswith("I understand you want me to work with")
+                    or response_content.startswith("Regarding your question about")
+                    or response_content.startswith(
+                        "Based on the provided data and context"
+                    )
+                    or "Mock vision response for testing" in response_content
+                )
             )
 
             if response_content and not is_mock_response:
@@ -978,8 +1115,22 @@ CRITICAL RULES:
             else:
                 # Handle mock responses - replace with intelligent answers
                 if is_mock_response:
-                    logger.info(
-                        f"Converting mock response to intelligent response for: {original_inputs}"
+                    # Raw inputs stay at DEBUG only — WARN carries a
+                    # non-reversible fingerprint (rules/security.md "No
+                    # secrets in logs"; rules/observability.md Rule 4/8).
+                    logger.debug(
+                        f"Mock-upgrade original inputs (mock provider): {original_inputs}"
+                    )
+                    logger.warning(
+                        "Mock-upgrade fired: substituting fabricated "
+                        "intelligent-mock content for mock-provider LLM "
+                        "output (mode=fake, provider=%r, inputs_fingerprint=%s)",
+                        (
+                            dispatched_provider
+                            if dispatched_provider is not None
+                            else self._get_provider_for_config()
+                        ),
+                        _fingerprint_payload(original_inputs),
                     )
                     intelligent_response = self._generate_intelligent_mock_response(
                         original_inputs
@@ -1019,16 +1170,75 @@ CRITICAL RULES:
         if "provider" in self.config:
             return self.config["provider"]
 
-        # Check for API keys to determine available providers
-        import os
+        # Env-first fallback (openai -> anthropic -> mock). This IS the
+        # canonical order every other LLMAgentNode-param-building site in
+        # the Agent deployment surface mirrors via `detect_provider_from_env`
+        # (`kaizen/core/_provider_env.py`) — kept inline here (rather than
+        # delegating) so this method stays the single documented source of
+        # the contract; the shared helper exists for OTHER call sites.
+        return _detect_provider_from_env()
 
-        if os.getenv("OPENAI_API_KEY"):
-            return "openai"
-        elif os.getenv("ANTHROPIC_API_KEY"):
-            return "anthropic"
-        else:
-            # Use mock provider for testing (but we'll extract intelligent responses)
-            return "mock"
+    def _is_mock_provider_active(self) -> bool:
+        """
+        FALLBACK provider check — LIVE re-derivation from config/env.
+
+        Returns True when `_get_provider_for_config()`, evaluated AT THE
+        MOMENT THIS IS CALLED, resolves to the mock/test provider.
+        `_get_provider_for_config()` is the SAME provider-resolution method
+        used to build the ``provider`` param handed to ``LLMAgentNode`` in
+        every execution path (`_execute_direct_llm`, `_execute_with_signature`,
+        `_execute_with_pattern` — used by `execute_cot`/`execute_react`).
+
+        This is a FALLBACK, not the preferred gate: a LIVE re-derivation can
+        disagree with what was ACTUALLY dispatched if `self.config`/env
+        changes between the dispatch-build call and this call — e.g. a
+        direct `agent.config["provider"] = "mock"` mutation (bypasses the
+        cache-invalidating mutators in `update_config`/`set_signature`/
+        `reset`), or an env-derived provider changing mid-call. The
+        PREFERRED path is `_mock_gate_open(dispatched_provider=...)` below,
+        which gates on the provider value actually placed in the dispatched
+        node config — see that method's docstring. This method is used only
+        when no `dispatched_provider` is available to the caller.
+
+        This gate exists so that content returned by a REAL provider
+        (openai/anthropic/...) is NEVER reclassified as a mock template and
+        silently replaced with fabricated keyword-lookup content — see
+        rules/zero-tolerance.md Rule 2 (no hardcoded mock responses on a
+        production path) and Rule 3 (no silent fallback that discards real
+        output). Only genuinely mock/test-transport output (which the mock
+        provider generates) is eligible for the intelligent-mock upgrade.
+        """
+        return self._get_provider_for_config() == "mock"
+
+    def _mock_gate_open(self, dispatched_provider: Optional[str] = None) -> bool:
+        """
+        Resolve whether the mock-upgrade classifier gate is OPEN.
+
+        STRUCTURAL FIX (closes the whack-a-mole gate-vs-dispatch disagreement
+        class): when `dispatched_provider` is supplied, it is the provider
+        VALUE ACTUALLY PLACED in the LLMAgentNode config that produced the
+        result currently being classified. Gating on that value directly —
+        instead of re-deriving provider from `self.config`/env at
+        classification time — makes gate and dispatch agree BY
+        CONSTRUCTION, closing two proven fabrication paths:
+
+        1. A direct `agent.config["provider"] = "mock"` mutation (an idiom
+           real callers use) bypasses the cache-invalidating mutators in
+           `update_config`/`set_signature`/`reset`, so a stale-dispatched
+           REAL response would otherwise still get discarded because a live
+           re-derivation sees the mutated "mock" value.
+        2. `_get_provider_for_config()` can be read once at dispatch-build
+           time and AGAIN later at classification time; an env change (or
+           any config mutation) between the two reads makes them disagree
+           mid-call under live re-derivation.
+
+        `_is_mock_provider_active()` (live re-derivation) is used ONLY as a
+        fallback when `dispatched_provider is None` — i.e. callers that
+        cannot supply the dispatched value.
+        """
+        if dispatched_provider is not None:
+            return dispatched_provider == "mock"
+        return self._is_mock_provider_active()
 
     def _generate_intelligent_mock_response(self, inputs: Dict[str, Any]) -> str:
         """
@@ -1208,18 +1418,29 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
                 return "I understand your question and I'm ready to provide a thoughtful, detailed response based on the information and context available."
 
     def _parse_llm_response_to_signature_output(
-        self, llm_result: Dict[str, Any], signature: Any
+        self,
+        llm_result: Dict[str, Any],
+        signature: Any,
+        dispatched_provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Parse unstructured LLM response into structured output based on signature.
 
         This uses the advanced parsing system to convert raw LLM responses
         to the structured format expected by signature-based programming.
+
+        Args:
+            llm_result: Raw LLM result
+            signature: Signature describing the expected structured output
+            dispatched_provider: The provider value ACTUALLY placed in the
+                LLMAgentNode config that produced `llm_result` — threaded
+                through to `_apply_intelligent_mock_conversion_to_llm_result`
+                so the mock-upgrade gate matches dispatch by construction.
         """
         # First, apply intelligent mock conversion if needed
         # This ensures signature-based execution also gets intelligent responses
         processed_llm_result = self._apply_intelligent_mock_conversion_to_llm_result(
-            llm_result
+            llm_result, dispatched_provider=dispatched_provider
         )
 
         # Use the advanced structured output parser
@@ -1229,7 +1450,7 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
         return parser.parse_signature_response(processed_llm_result, signature)
 
     def _apply_intelligent_mock_conversion_to_llm_result(
-        self, llm_result: Dict[str, Any]
+        self, llm_result: Dict[str, Any], dispatched_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Apply intelligent mock conversion to LLM result if it contains mock responses.
@@ -1238,6 +1459,13 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
 
         Args:
             llm_result: Raw LLM result
+            dispatched_provider: The provider value ACTUALLY placed in the
+                LLMAgentNode config that produced `llm_result`. When given,
+                the mock-upgrade gate uses this value directly
+                (`_mock_gate_open`) instead of re-deriving provider from
+                live config/env, so gate and dispatch can never disagree —
+                even when the signature-execution workflow cache
+                (`self._signature_workflow`) is stale.
 
         Returns:
             LLM result with intelligent responses if mock was detected
@@ -1269,18 +1497,42 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
         # logger.debug(f"LLM result structure: {result_copy}")
         # logger.debug(f"Extracted response content: {response_content}")
 
-        # Check if this is a mock response that needs intelligent conversion
-        is_mock_response = response_content and (
-            response_content.startswith("I understand you want me to work with")
-            or response_content.startswith("Regarding your question about")
-            or response_content.startswith("Based on the provided data and context")
-            or "Mock vision response for testing" in response_content
+        # Check if this is a mock response that needs intelligent conversion.
+        # GATED: see `_mock_gate_open` — the DISPATCHED provider (or, absent
+        # that, the live-derived provider) must genuinely be mock before any
+        # content may be reclassified and substituted; a REAL provider's
+        # output MUST be returned verbatim (rules/zero-tolerance.md Rule 2
+        # no hardcoded mock responses on a production path / Rule 3 no
+        # silent fallback that discards real output).
+        is_mock_response = (
+            response_content
+            and self._mock_gate_open(dispatched_provider)
+            and (
+                response_content.startswith("I understand you want me to work with")
+                or response_content.startswith("Regarding your question about")
+                or response_content.startswith("Based on the provided data and context")
+                or "Mock vision response for testing" in response_content
+            )
         )
 
         if is_mock_response:
             # We need to infer the original inputs from the LLM result context
-            # For signature-based execution, we can extract from the mock response
+            # For signature-based execution, we can extract from the mock response.
+            # Raw content stays at DEBUG only — WARN carries a non-reversible
+            # fingerprint (rules/security.md "No secrets in logs";
+            # rules/observability.md Rule 4/8).
             logger.debug(f"Mock response detected: {response_content}")
+            logger.warning(
+                "Mock-upgrade fired: substituting fabricated intelligent-mock "
+                "content for mock-provider LLM output (mode=fake, provider=%r, "
+                "response_fingerprint=%s)",
+                (
+                    dispatched_provider
+                    if dispatched_provider is not None
+                    else self._get_provider_for_config()
+                ),
+                _fingerprint_payload(response_content),
+            )
 
             # Use current execution inputs if available, otherwise extract from mock response
             if (
@@ -1627,12 +1879,16 @@ Final Answer: [Your complete solution]
         """
 
     def _extract_cot_response(
-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
+        self,
+        llm_result: Dict[str, Any],
+        original_inputs: Dict[str, Any],
+        dispatched_provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Extract Chain-of-Thought response structure."""
-        # Get the intelligent response (handles mock conversion)
+        # Get the intelligent response (handles mock conversion). Threads
+        # `dispatched_provider` per PART A so the gate matches dispatch.
         intelligent_response = self._extract_intelligent_response(
-            llm_result, original_inputs
+            llm_result, original_inputs, dispatched_provider=dispatched_provider
         )
         response_text = intelligent_response.get("answer", "")
 
@@ -1692,12 +1948,16 @@ Final Answer: [Your complete solution]
         return cot_structure
 
     def _extract_react_response(
-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
+        self,
+        llm_result: Dict[str, Any],
+        original_inputs: Dict[str, Any],
+        dispatched_provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Extract ReAct response structure."""
-        # Get the intelligent response (handles mock conversion)
+        # Get the intelligent response (handles mock conversion). Threads
+        # `dispatched_provider` per PART A so the gate matches dispatch.
         intelligent_response = self._extract_intelligent_response(
-            llm_result, original_inputs
+            llm_result, original_inputs, dispatched_provider=dispatched_provider
         )
         response_text = intelligent_response.get("answer", "")
 
@@ -1814,7 +2074,9 @@ Final Answer: [Your complete solution]
         agent_result = results.get(f"{self.agent_id}_cot", {})
 
         # Handle different response formats and extract CoT structure
-        cot_response = self._extract_cot_response(agent_result, inputs)
+        cot_response = self._extract_cot_response(
+            agent_result, inputs, dispatched_provider=llm_params["provider"]
+        )
 
         # Track execution history
         self._execution_history.append(
@@ -1879,7 +2141,9 @@ Final Answer: [Your complete solution]
         agent_result = results.get(f"{self.agent_id}_react", {})
 
         # Handle different response formats and extract ReAct structure
-        react_response = self._extract_react_response(agent_result, inputs)
+        react_response = self._extract_react_response(
+            agent_result, inputs, dispatched_provider=llm_params["provider"]
+        )
 
         # Track execution history
         self._execution_history.append(
@@ -2116,6 +2380,15 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
             from kaizen.config.providers import DEFAULT_OPENAI_MODEL
 
             base_params = {
+                # `provider` MUST be set explicitly — LLMAgentNode's own
+                # parameter default is "mock" (see `get_parameters()` in
+                # `kaizen/nodes/ai/llm_agent.py`), so omitting it here made
+                # every CoT/ReAct execution silently mock-dispatch
+                # regardless of the agent's actual configured provider.
+                # `_get_provider_for_config()` is the SAME env-first
+                # provider resolution used by every other execute path
+                # (`_execute_direct_llm`, `_execute_with_signature`).
+                "provider": self._get_provider_for_config(),
                 "model": self.config.get("model")
                 or os.environ.get("OPENAI_PROD_MODEL")
                 or os.environ.get("DEFAULT_LLM_MODEL")
@@ -2424,6 +2697,14 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
         """
         self.signature = signature
         self._is_compiled = False  # Force recompilation
+        # Invalidate the cached signature-execution workflow — see the same
+        # comment in `update_config`. A new signature changes the compiled
+        # node params (messages/system_prompt/etc.), so the stale cache
+        # would dispatch against the OLD signature's node config.
+        if hasattr(self, "_signature_workflow"):
+            del self._signature_workflow
+        if hasattr(self, "_signature_workflow_provider"):
+            del self._signature_workflow_provider
         logger.info(f"Set signature '{signature.name}' for agent: {self.agent_id}")
 
     def get_execution_history(self) -> List[Dict[str, Any]]:
@@ -2455,7 +2736,16 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
         """Reset agent state and clear execution history."""
         self._workflow = None
         self._is_compiled = False
+        self._workflow_provider = None
         self._execution_history.clear()
+
+        # Invalidate the cached signature-execution workflow — see the same
+        # comment in `update_config`. Reset MUST NOT leave a stale cached
+        # node config (with a stale `provider`) alive across the reset.
+        if hasattr(self, "_signature_workflow"):
+            del self._signature_workflow
+        if hasattr(self, "_signature_workflow_provider"):
+            del self._signature_workflow_provider
 
         # Reset MCP state
         self.mcp_connections = []
@@ -2514,7 +2804,17 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
         # Add communication node with target agent. Target agent's model was
         # validated at its `_set_default_config` (KAIZEN_DEFAULT_MODEL env var,
         # rules/env-models.md) — index access is correct; no hardcoded fallback.
+        # PART B: `provider` MUST be set explicitly — LLMAgentNode's own
+        # parameter default is "mock" (`kaizen/nodes/ai/llm_agent.py::get_parameters`).
+        # Without this, EVERY inter-agent communication silently mock-dispatched
+        # regardless of `target_agent`'s actually configured provider, AND (unlike
+        # every other LLMAgentNode-param site in this file) this path has NO
+        # mock-upgrade gating at all — the raw mock template would be returned
+        # verbatim as the inter-agent reply. `target_agent._get_provider_for_config()`
+        # resolves the RECEIVING agent's own provider (the one whose model/config
+        # this node dispatches under), consistent with every other param above.
         communication_params = {
+            "provider": target_agent._get_provider_for_config(),
             "model": target_agent.config["model"],
             "generation_config": {
                 "temperature": target_agent.config.get("temperature", 0.7),

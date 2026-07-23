@@ -39,6 +39,7 @@ from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
 from .config import BaseAgentConfig
+from ._provider_env import detect_provider_from_env as _detect_provider
 from .mcp_mixin import MCPMixin
 
 __all__ = ["BaseAgent", "BaseAgentConfig"]
@@ -216,6 +217,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         self._framework = None
         self._agent = None
         self._workflow = None
+        self._workflow_provider = None  # provider `_workflow` was built with
 
         # WorkflowGenerator
         from .workflow_generator import WorkflowGenerator
@@ -583,7 +585,9 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         Returns:
             WorkflowBuilder: Workflow representation ready for execution.
         """
-        if self._workflow is not None:
+        # Memo is provider-aware (env-dependent resolution -> rebuild on drift).
+        current_provider = self.config.llm_provider or _detect_provider()
+        if self._workflow is not None and self._workflow_provider == current_provider:
             return self._workflow
 
         workflow = WorkflowBuilder()
@@ -594,16 +598,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
         if self.config.model is not None:
             node_config["model"] = self.config.model
-        if self.config.llm_provider is not None:
-            node_config["provider"] = self.config.llm_provider
-        # Route generation params into the declared `generation_config` dict.
-        # LLMAgentNode.get_parameters() declares `generation_config: dict`
-        # (description: "Generation parameters (temperature, max_tokens, top_p)")
-        # and llm_agent.py reads ONLY generation_config at runtime — top-level
-        # `temperature` / `max_tokens` are not declared NodeParameters and the
-        # Kailash validator (`src/kailash/nodes/base.py:_validate_inputs`) flags
-        # them as "Unknown parameter" on EVERY execution because
-        # BaseAgentConfig.temperature defaults to 0.1 (non-None).
+        node_config["provider"] = current_provider  # required; else defaults to "mock"
+        # generation_config is LLMAgentNode's declared dict param (the only one
+        # llm_agent.py reads at runtime) — top-level temperature/max_tokens
+        # aren't declared NodeParameters and the Kailash validator flags them
+        # as "Unknown parameter" every run since temperature defaults non-None.
         generation_config: Dict[str, Any] = {}
         if self.config.temperature is not None:
             generation_config["temperature"] = self.config.temperature
@@ -621,6 +620,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         workflow.add_node("LLMAgentNode", "agent", node_config)
 
         self._workflow = workflow
+        self._workflow_provider = current_provider
         return workflow
 
     def to_workflow_node(self) -> Node:
@@ -1009,5 +1009,6 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         self._framework = None
         self._agent = None
         self._workflow = None
+        self._workflow_provider = None
 
         logger.debug(f"Cleanup completed for agent {self.agent_id}")

@@ -45,6 +45,19 @@ class NexusDeploymentMixin:
         """
         from kailash.workflow.builder import WorkflowBuilder
 
+        # FIX 5: LLMAgentNode's NodeParameter is named "provider" — it never
+        # reads "llm_provider". Passing "llm_provider" silently dropped the
+        # configured provider and every deployment defaulted to LLMAgentNode's
+        # own "mock" parameter default (`kaizen/nodes/ai/llm_agent.py::
+        # get_parameters`), regardless of a real provider being explicitly
+        # configured. `detect_provider_from_env()` mirrors
+        # `Agent._get_provider_for_config()`'s exact env-first fallback
+        # (openai -> anthropic -> mock) so an unset `llm_provider` never
+        # re-defaults to mock when a real API key is present.
+        from kaizen.core._provider_env import detect_provider_from_env
+
+        provider = self.config.llm_provider or detect_provider_from_env()
+
         # Create workflow from agent's signature
         workflow = WorkflowBuilder()
 
@@ -53,7 +66,7 @@ class NexusDeploymentMixin:
             "LLMAgentNode",
             "agent_node",
             {
-                "llm_provider": self.config.llm_provider,
+                "provider": provider,
                 "model": self.config.model,
                 "temperature": getattr(self.config, "temperature", 0.7),
                 "system_prompt": self._build_system_prompt(),

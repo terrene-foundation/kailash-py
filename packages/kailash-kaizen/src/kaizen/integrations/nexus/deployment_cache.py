@@ -56,7 +56,7 @@ class DeploymentCache:
 
         The cache key is based on:
         - Workflow name
-        - LLM provider
+        - RESOLVED LLM provider (see FIX 8 note below)
         - Model name
         - Signature structure
 
@@ -71,10 +71,36 @@ class DeploymentCache:
         config = getattr(agent, "config", None)
         signature = getattr(agent, "signature", None)
 
+        # FIX 8: hash the RESOLVED provider, not the raw `llm_provider`
+        # attribute, so the key CHANGES the moment ambient key availability
+        # changes for an agent with no explicit `llm_provider` (the common
+        # auto-detect case FIX5/FIX6 target) — otherwise the key stayed
+        # IDENTICAL regardless of what `to_workflow()` would actually
+        # resolve the provider to, and a cache HIT would keep serving a
+        # workflow built under a now-stale provider.
+        #
+        # NOTE (FIX 14 — scope this claim honestly): this key change is
+        # necessary but NOT sufficient on its own to guarantee a fresh
+        # rebuild. A cache MISS still only causes a fresh `to_workflow()`
+        # call — it does NOT, by itself, force that call to re-resolve the
+        # provider if `to_workflow()`'s OWN internal memo
+        # (`self._workflow`/`self._workflow_provider`) is stale in some
+        # OTHER way. The "keys arrive mid-process -> real dispatch" property
+        # is jointly guaranteed by THIS key tracking the resolved provider
+        # AND `to_workflow()`/`compile_workflow()` invalidating their own
+        # memo on the SAME provider drift (see FIX 12/FIX 13 in
+        # `kaizen/core/base_agent.py` and `kaizen/core/agents.py`). This
+        # cache is defense-in-depth for the DEPLOY-time redundant-rebuild
+        # cost, not the sole guarantor of freshness.
+        from kaizen.core._provider_env import detect_provider_from_env
+
+        llm_provider = getattr(config, "llm_provider", None)
+        resolved_provider = llm_provider or detect_provider_from_env()
+
         # Build key data
         key_data = {
             "name": name,
-            "llm_provider": getattr(config, "llm_provider", None),
+            "provider": resolved_provider,
             "model": getattr(config, "model", None),
             "signature": str(signature) if signature else None,
         }
