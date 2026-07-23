@@ -34,10 +34,26 @@ Consumer surface (grep): only delegate.py references the Delegate-specific param
 
 ## Implementation (branch fix/kaizen-delegate-signature-inner-agent-1927)
 
-- delegate.py: removed `signature`/`inner_agent` params + storage + docstrings + `.signature` property; fixed `core_agent` docstring (was wrongly claiming "user-provided inner_agent"). Runtime-verified: both params ABSENT from Delegate.__init__.
+- delegate.py: removed `signature`/`inner_agent` params + storage + docstrings + `.signature` property; fixed `core_agent` docstring (was wrongly claiming "user-provided inner_agent"). Runtime-verified: both params ABSENT from Delegate.**init**.
 - test_delegate_facade.py: swept 4 param-enumeration tests + removed 2 signature-property tests; ADDED `test_removed_params_rejected` (TypeError guard) + `test_signature_property_removed` + `test_every_init_param_reaches_a_consumer` (structural AST completeness guard — #1927 AC#3). Guard teeth-verified against a synthetic stored-only param.
-- CHANGELOG 0.11.7 entry (### Removed). Version bumped atomically: pyproject.toml + __init__.py → 0.11.7.
+- CHANGELOG 0.11.7 entry (### Removed). Version bumped atomically: pyproject.toml + **init**.py → 0.11.7.
 - 559 delegate unit tests pass; collateral grep clean (no other Delegate signature/inner_agent usage). Full unit suite running (bbejg2pfi).
+
+## Redteam wave (durable — orchestration-launch-ledger MUST-1)
+
+Commit c35df4cd8 (branch fix/kaizen-delegate-signature-inner-agent-1927). Diff materialized: redteam-cont14-diff.patch.
+
+| track          | agent                        | scope                                                                 | status                                                                                                                                                    |
+| -------------- | ---------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RT-reviewer R1 | reviewer (ad1c7d35)          | removal correctness / completeness / test quality / CHANGELOG+version | **DONE — CLEAN** (no BUG/INVEST-NOW; mutation-tested the AST guard; version consistency verified 4 locations; 2 INCREMENTAL notes)                        |
+| RT-security R1 | security-reviewer (a7d55f0e) | security implications of removal + diff scrub                         | **DONE — SECURITY-NEUTRAL, 0 findings** (govt/envelope/is_mock gates intact; no secret exposure; AST guard trusted-input; CHANGELOG clean; genuinely ran) |
+| RT-reviewer R2 | reviewer (ad68db4d)          | confirm hardened guard (AnnAssign) + re-confirm removal/version       | **DONE — CLEAN** (reproduced guard vs 6 synthetic cases, no false pos/neg; orphan-grep clean; version 0.11.7 all anchors; no new warnings; genuinely ran) |
+
+**CONVERGENCE REACHED** — 2 consecutive clean rounds on BUG/INVEST-NOW (R1 reviewer+security, R2 reviewer); all 3 reviewers genuinely ran (evidence gate). Deferred INCREMENTAL (value-anchored, NOT blocking): AST guard tuple-target-store edge (`self._x, self._y = x, y` escapes `_is_pure_self_store`) — value-anchor = maximal future-proofing of the #1927 tripwire; NOT present in real Delegate.**init**, theoretical only; diminishing returns to chase further.
+
+## Round 1 → round 2 delta
+
+R1 CLEAN both reviewers (both genuinely ran — evidence gate satisfied). INCREMENTAL note #2 (AST guard didn't handle AnnAssign/transform-RHS stores) FIXED in warm context: added `_is_pure_self_store` helper + AnnAssign branch (commit 14392da83, test-only). Hardened guard mutation-verified to catch AnnAssign-stored no-op. INCREMENTAL note #1 (Rule-6a deprecation tension) = no action (reviewer + security-reviewer both agree hard removal is the correct Rule-6a exception for a never-worked zero-caller param). Production/security surface byte-identical since R1 → security not re-run (test-only delta).
 
 ## Remaining
 
