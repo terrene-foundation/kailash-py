@@ -2,16 +2,20 @@
 
 ## Where we are
 
-#1720's last forest item — **#1927** (Delegate `signature`/`inner_agent` no-ops) — RESOLVED,
-RELEASED (kaizen-agents **0.11.7** live on PyPI, wheel-verified), forest EMPTY. Then, while
-handling the two approved dependabot PRs, surfaced + fixed a **pre-existing trust-plane test
-failure on main** (unrelated to #1927). Board otherwise clean.
+**SESSION CLOSED (cont-14).** #1720's last forest item — **#1927** (Delegate `signature`/`inner_agent`
+no-ops) — RESOLVED, RELEASED (kaizen-agents **0.11.7** live on PyPI, wheel-verified), forest EMPTY.
+While handling the two approved dependabot PRs, surfaced + fixed a **pre-existing trust-plane test
+failure on main** (#1934, unrelated to #1927). Both user-approved follow-ups DONE (full /codify #1936;
+cross-SDK #1927 inspection — no gap, journal 0015). **/sweep clean**: 0 open issues, 0 open PRs, 0
+deferred-quality (see `sweep-cont14-report.md`). Nothing outstanding; fresh session starts clean.
 
 ## Read first
 
-1. `launch-ledger-cont14.md` — full cont-14 orchestration + redteam record.
-2. `journal/0012` (param-completeness-guard pattern) + `journal/0013` (per-package CI gating hides
-   sibling failures) — this session's DISCOVERY captures for a future proper /codify.
+1. `sweep-cont14-report.md` — the closure management decision report (completion status + the 2
+   parked items: core doc-only commit rides next core release; loom proposal awaits loom ingest).
+2. `launch-ledger-cont14.md` — full cont-14 orchestration + redteam record.
+3. `journal/0012`–`0015` — DISCOVERY (completeness-guard; CI-gating blind spot; cross-SDK no-gap) +
+   DECISION 0014 (codify).
 
 ## Executed this session (cont-14)
 
