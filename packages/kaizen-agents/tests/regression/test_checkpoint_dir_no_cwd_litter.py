@@ -1,17 +1,24 @@
-"""Regression: autonomous-agent construction must not litter the caller's cwd.
+"""Regression: autonomous-agent checkpoints never litter the caller's cwd.
 
-Pins the F-TESTHYG fix: ``BaseAutonomousAgent.__init__`` previously created its
-``checkpoint_dir`` (default ``./checkpoints``) unconditionally via ``mkdir`` in
-the constructor, so merely *constructing* an agent dropped an empty
-``checkpoints/`` directory into the caller's current working directory — even
-for agents that never checkpoint (the base run loop persists via
-``state_manager``/DataFlow, not this directory). The directory is now created
-lazily, on the first checkpoint write.
+Pins two related fixes:
+
+- **0.11.8** — ``BaseAutonomousAgent.__init__`` no longer creates its
+  ``checkpoint_dir`` eagerly (construction has no filesystem side effect; the
+  directory is created lazily on the first checkpoint write).
+- **0.12.0** — the DEFAULT checkpoint location is a per-user state directory
+  (``platformdirs.user_state_dir("kaizen")/checkpoints``), NOT ``./checkpoints``
+  in the current working directory; the directory/files are created with
+  owner-only permissions (``0o700``/``0o600``) on POSIX.
 
 Behavioral tests (call the code, observe the filesystem) per rules/testing.md —
-NOT source-grep. NEVER delete (rules/testing.md § Regression Testing).
+NOT source-grep. Write-triggering tests use an EXPLICIT tmp ``checkpoint_dir`` so
+they never write into the real per-user state directory. NEVER delete.
 """
 
+import os
+import stat
+
+import platformdirs
 import pytest
 
 from kaizen.signatures import InputField, OutputField, Signature
@@ -34,46 +41,74 @@ def _make_config() -> AutonomousConfig:
 
 
 @pytest.mark.regression
-def test_construction_does_not_create_checkpoint_dir(tmp_path, monkeypatch):
-    """Constructing an agent must NOT create ./checkpoints in the caller's cwd."""
+def test_construction_creates_no_dir_and_default_is_off_cwd(tmp_path, monkeypatch):
+    """Constructing an agent creates nothing, and the default dir is NOT cwd."""
     monkeypatch.chdir(tmp_path)
 
-    BaseAutonomousAgent(config=_make_config(), signature=_TaskSignature())
+    agent = BaseAutonomousAgent(config=_make_config(), signature=_TaskSignature())
 
-    assert not (tmp_path / "checkpoints").exists(), (
-        "constructing BaseAutonomousAgent created ./checkpoints in the caller's "
-        "cwd — the directory must be created lazily on first checkpoint write"
-    )
+    # 0.11.8: no eager creation anywhere.
+    assert not (tmp_path / "checkpoints").exists()
+    # 0.12.0: the default resolves off the cwd, under the per-user state dir.
+    assert not str(agent.checkpoint_dir).startswith(str(tmp_path))
+    assert agent.checkpoint_dir.is_absolute()
 
 
 @pytest.mark.regression
-def test_checkpoint_write_creates_dir_lazily(tmp_path, monkeypatch):
-    """First checkpoint write must create the dir + file (fix is non-breaking)."""
+def test_default_location_is_user_state_dir(tmp_path, monkeypatch):
+    """The default checkpoint dir is platformdirs' per-user state location."""
     monkeypatch.chdir(tmp_path)
     agent = BaseAutonomousAgent(config=_make_config(), signature=_TaskSignature())
 
-    assert not (tmp_path / "checkpoints").exists()  # precondition: still absent
-
-    agent._save_checkpoint({"status": "ok"}, cycle_num=1)
-
-    assert (tmp_path / "checkpoints").exists(), "dir must be created on first write"
-    assert (
-        tmp_path / "checkpoints" / "checkpoint_cycle_001.jsonl"
-    ).exists(), "checkpoint file must be written under the lazily-created directory"
+    expected_root = platformdirs.user_state_dir("kaizen")
+    assert str(agent.checkpoint_dir).startswith(expected_root)
+    assert agent.checkpoint_dir.name == "checkpoints"
 
 
 @pytest.mark.regression
-def test_explicit_checkpoint_dir_also_lazy(tmp_path, monkeypatch):
-    """An explicit checkpoint_dir is likewise not created until first write."""
-    monkeypatch.chdir(tmp_path)
+def test_explicit_checkpoint_dir_lazy_and_owner_only(tmp_path):
+    """Explicit dir: not created on construction; on first write dir+file exist,
+    owner-only on POSIX (0o700 dir / 0o600 file)."""
     cp_dir = tmp_path / "custom_cp"
     agent = BaseAutonomousAgent(
-        config=_make_config(), signature=_TaskSignature(), checkpoint_dir=cp_dir
+        config=_make_config(),
+        signature=_TaskSignature(),
+        checkpoint_dir=cp_dir,
     )
 
-    assert not cp_dir.exists(), "explicit checkpoint_dir must not be eagerly created"
+    assert not cp_dir.exists()  # construction must not create it
 
     agent._save_checkpoint({"status": "ok"}, cycle_num=2)
 
-    assert cp_dir.exists(), "explicit checkpoint_dir must be created on first write"
-    assert (cp_dir / "checkpoint_cycle_002.jsonl").exists()
+    cp_file = cp_dir / "checkpoint_cycle_002.jsonl"
+    assert cp_dir.exists()
+    assert cp_file.exists()
+
+    if os.name == "posix":
+        assert stat.S_IMODE(cp_dir.stat().st_mode) == 0o700
+        assert stat.S_IMODE(cp_file.stat().st_mode) == 0o600
+
+
+@pytest.mark.regression
+@pytest.mark.skipif(os.name != "posix", reason="O_NOFOLLOW/symlinks are POSIX-only")
+def test_checkpoint_write_refuses_symlink_at_leaf(tmp_path):
+    """A symlink pre-placed at the checkpoint file path must NOT be written
+    through (O_NOFOLLOW sink hardening, security.md § Path Containment)."""
+    cp_dir = tmp_path / "cp"
+    cp_dir.mkdir()
+    target = tmp_path / "victim.txt"
+    target.write_text("original", encoding="utf-8")
+    # Attacker pre-places a symlink where cycle-3's checkpoint file would land.
+    (cp_dir / "checkpoint_cycle_003.jsonl").symlink_to(target)
+
+    agent = BaseAutonomousAgent(
+        config=_make_config(), signature=_TaskSignature(), checkpoint_dir=cp_dir
+    )
+    # _save_checkpoint swallows the write failure (logs a warning); the point is
+    # the victim target is NOT appended to through the symlink.
+    agent._save_checkpoint({"status": "ok"}, cycle_num=3)
+
+    assert target.read_text(encoding="utf-8") == "original", (
+        "checkpoint write followed a symlink and corrupted the target — "
+        "O_NOFOLLOW must refuse the write"
+    )

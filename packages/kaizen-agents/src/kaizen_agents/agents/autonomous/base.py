@@ -32,10 +32,13 @@ Updated: 2025-10-26 (Standardized to .run() interface)
 import asyncio
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
 from typing import Any
+
+import platformdirs
 
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import (
@@ -51,6 +54,50 @@ from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 
 logger = logging.getLogger(__name__)
+
+
+def _default_checkpoint_dir() -> Path:
+    """Per-user state directory for autonomous-agent checkpoints.
+
+    Resolves to the platform's user-state location (``$XDG_STATE_HOME`` /
+    ``~/.local/state`` on Linux, ``~/Library/Application Support`` on macOS,
+    ``%LOCALAPPDATA%`` on Windows) so the SDK never writes checkpoint files into
+    the caller's *current working directory*. Pass an explicit ``checkpoint_dir``
+    to override (e.g. a project-local path).
+    """
+    return Path(platformdirs.user_state_dir("kaizen")) / "checkpoints"
+
+
+def _append_checkpoint_line(directory: Path, filename: str, line: str) -> Path:
+    """Append one line to ``directory/filename`` with owner-only permissions.
+
+    Creates ``directory`` (mode ``0o700`` on POSIX) and the file (mode ``0o600``
+    on POSIX) so checkpoint payloads — which may contain conversation/plan state
+    — are not world-readable. On Windows, POSIX modes do not apply and a plain
+    append is used.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / filename
+    if os.name != "posix":
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line)
+        return path
+    # POSIX: create dir/file with owner-only perms, no world-readable window.
+    try:
+        os.chmod(directory, 0o700)
+    except OSError:
+        pass  # best-effort tightening; a pre-existing dir may be owned elsewhere
+    # O_NOFOLLOW: refuse to write THROUGH a symlink at the leaf path — if a caller
+    # supplies a world-writable checkpoint_dir, an attacker cannot pre-place a
+    # symlink there to redirect checkpoint payloads (security.md § Path Containment,
+    # sink-level enforcement). The default per-user dir is 0o700 so this is
+    # defense-in-depth; the failure (ELOOP) surfaces via the caller's try/except.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+    try:
+        os.write(fd, line.encode("utf-8"))
+    finally:
+        os.close(fd)
+    return path
 
 
 @dataclass
@@ -217,13 +264,18 @@ class BaseAutonomousAgent(BaseAgent):
             **kwargs,
         )
 
-        # Autonomous-specific state
-        self.checkpoint_dir = checkpoint_dir or Path("./checkpoints")
-        # NOTE: the directory is created lazily, on the first checkpoint write
-        # (see _save_checkpoint), NOT here. Creating it in __init__ littered the
-        # caller's cwd with an empty ./checkpoints/ on every construction — even
-        # for agents that never checkpoint (the base run loop persists via
-        # state_manager/DataFlow, not this directory).
+        # Autonomous-specific state.
+        # Default checkpoints go to a per-user state directory (see
+        # _default_checkpoint_dir), NOT the caller's cwd — an SDK must not write
+        # files into whatever directory the process was launched from. Pass an
+        # explicit checkpoint_dir for a project-local location. The directory is
+        # created lazily, on the first checkpoint write (see _save_checkpoint),
+        # so construction has no filesystem side effect at all.
+        self.checkpoint_dir = (
+            Path(checkpoint_dir)
+            if checkpoint_dir is not None
+            else _default_checkpoint_dir()
+        )
         self.current_plan: list[dict[str, Any]] = []
         self.cycle_count: int = 0
 
@@ -722,11 +774,10 @@ class BaseAutonomousAgent(BaseAgent):
 
         Example:
             >>> agent._save_checkpoint(result, cycle_num=5)
-            # Saves to: ./checkpoints/task_<timestamp>_cycle_5.jsonl
+            # Saves to: <checkpoint_dir>/checkpoint_cycle_005.jsonl
+            # (checkpoint_dir defaults to the per-user state dir, not the cwd)
         """
-        checkpoint_file = (
-            self.checkpoint_dir / f"checkpoint_cycle_{cycle_num:03d}.jsonl"
-        )
+        checkpoint_filename = f"checkpoint_cycle_{cycle_num:03d}.jsonl"
 
         checkpoint_data = {
             "cycle": cycle_num,
@@ -735,12 +786,14 @@ class BaseAutonomousAgent(BaseAgent):
         }
 
         try:
-            # Create the checkpoint directory lazily, on first write, so merely
-            # constructing an agent never litters the caller's cwd (see __init__).
-            self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-            with open(checkpoint_file, "a") as f:
-                f.write(json.dumps(checkpoint_data) + "\n")
-
+            # Create dir + file lazily with owner-only permissions on first write
+            # (see _append_checkpoint_line): construction never touches the fs, and
+            # checkpoint payloads (conversation/plan state) are not world-readable.
+            checkpoint_file = _append_checkpoint_line(
+                self.checkpoint_dir,
+                checkpoint_filename,
+                json.dumps(checkpoint_data) + "\n",
+            )
             logger.debug(f"Checkpoint saved: {checkpoint_file}")
         except Exception as e:
             logger.warning(f"Failed to save checkpoint: {e}")

@@ -5,6 +5,16 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-07-23 — Default autonomous-agent checkpoints to a per-user state dir (off cwd) + owner-only permissions
+
+### Changed
+
+- **BREAKING (default location): `BaseAutonomousAgent` now checkpoints to a per-user state directory by default, not `./checkpoints` in the current working directory.** With no explicit `checkpoint_dir`, the default resolves via `platformdirs.user_state_dir("kaizen")` (`$XDG_STATE_HOME`/`~/.local/state/kaizen/checkpoints` on Linux, `~/Library/Application Support/kaizen/checkpoints` on macOS, `%LOCALAPPDATA%\kaizen\checkpoints` on Windows) — so the SDK no longer writes checkpoint files into whatever directory the process was launched from. **Migration:** to keep the old behavior, pass `checkpoint_dir=Path("./checkpoints")` explicitly; existing checkpoint files under a project-local `./checkpoints/` are not auto-migrated and will not be found by the new default (recovery from them requires passing the explicit path). This completes the cwd-litter fix started in 0.11.8 (which stopped the _construct-time_ directory creation); 0.12.0 additionally relocates the _run-time_ checkpoint writes off the cwd.
+
+### Security
+
+- **Checkpoint directory and files are now created with owner-only permissions on POSIX** (`0o700` dir / `0o600` files), matching the delegate `SessionManager` secure-write pattern. Checkpoint payloads can contain conversation and plan state; they were previously created world-readable under the default umask. On Windows, POSIX modes do not apply and a plain append is used.
+
 ## [0.11.8] — 2026-07-23 — Stop `BaseAutonomousAgent` from creating `./checkpoints/` in the caller's cwd on construction
 
 ### Fixed
