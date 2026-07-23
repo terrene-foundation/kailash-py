@@ -4,7 +4,8 @@
 
 Covers:
     - TASK-05-01: Module scaffold and imports
-    - TASK-05-02: Constructor signature with new params (signature, envelope, inner_agent)
+    - TASK-05-02: Constructor signature with new params (envelope, api_key, base_url)
+      (signature/inner_agent removed in 0.11.7, #1927 — documented but never wired)
     - TASK-05-03: Inner BaseAgent core build
     - TASK-05-04/05/06: Wrapper stacking (Monitored, L3Governed, Streaming)
     - TASK-05-07: Model resolution with env fallback
@@ -15,7 +16,7 @@ Covers:
     - TASK-05-27: run() event passthrough
     - TASK-05-28: run_sync() refusal under running loop
     - TASK-05-30: close() proxy
-    - TASK-05-31: Introspection properties (core_agent, signature, model)
+    - TASK-05-31: Introspection properties (core_agent, model)
     - TASK-05-32: consumed_usd / budget_remaining
 """
 
@@ -172,13 +173,16 @@ class TestConstructorSignature:
             ), f"Parameter {param_name} should be keyword-only"
 
     def test_new_parameters_present(self):
-        """SPEC-05 new parameters are present: signature, envelope, inner_agent."""
+        """SPEC-05 new parameters are present: envelope, api_key, base_url, etc.
+
+        ``signature`` and ``inner_agent`` were removed in 0.11.7 (#1927) — they
+        were documented but never wired (silent no-ops). See
+        ``test_removed_params_rejected`` below for the removal guard.
+        """
         sig = inspect.signature(Delegate.__init__)
         params = sig.parameters
 
-        assert "signature" in params
         assert "envelope" in params
-        assert "inner_agent" in params
         assert "api_key" in params
         assert "base_url" in params
         assert "temperature" in params
@@ -188,7 +192,7 @@ class TestConstructorSignature:
     def test_new_parameters_keyword_only(self):
         """All new parameters are keyword-only."""
         sig = inspect.signature(Delegate.__init__)
-        for name in ("signature", "envelope", "inner_agent", "api_key", "base_url"):
+        for name in ("envelope", "api_key", "base_url"):
             p = sig.parameters[name]
             assert (
                 p.kind == inspect.Parameter.KEYWORD_ONLY
@@ -198,9 +202,7 @@ class TestConstructorSignature:
         """New optional params default to None."""
         sig = inspect.signature(Delegate.__init__)
         for name in (
-            "signature",
             "envelope",
-            "inner_agent",
             "api_key",
             "base_url",
             "temperature",
@@ -212,6 +214,106 @@ class TestConstructorSignature:
                 p.default is None
             ), f"Parameter {name} should default to None, got {p.default}"
 
+    def test_removed_params_rejected(self):
+        """#1927 — signature/inner_agent were removed; passing them raises TypeError.
+
+        Both were documented but never wired (silent no-ops). Removal turns the
+        silent no-op into a loud error that points callers at the real
+        structured-output path (the BaseAgent/Signature stack).
+        """
+        sig = inspect.signature(Delegate.__init__)
+        assert "signature" not in sig.parameters
+        assert "inner_agent" not in sig.parameters
+
+        with pytest.raises(TypeError):
+            Delegate(model="test-model", signature=object(), adapter=_simple_adapter())
+        with pytest.raises(TypeError):
+            Delegate(
+                model="test-model", inner_agent=object(), adapter=_simple_adapter()
+            )
+
+    def test_every_init_param_reaches_a_consumer(self):
+        """#1927 completeness guard — no Delegate.__init__ param may be a
+        stored-and-never-read silent no-op.
+
+        This is the structural regression guard for the documented-kwarg-drop
+        class (#1899 base_url/api_key, #1926 temperature/max_tokens, #1927
+        signature/inner_agent): a param accepted + documented but never wired.
+        Every constructor param MUST be READ in the ``__init__`` body somewhere
+        other than its own ``self._x = x`` storage line — i.e. passed to a
+        callee, tested in a branch, or otherwise consumed. A param whose only
+        use is being stored to an attribute fails this test loudly.
+
+        Structural (AST) check — no LLM, no regex over prose.
+        """
+        import ast
+        import textwrap
+
+        from kaizen_agents.delegate import delegate as _delegate_mod
+
+        src = textwrap.dedent(inspect.getsource(_delegate_mod.Delegate.__init__))
+        init_fn = ast.parse(src).body[0]
+        assert isinstance(init_fn, ast.FunctionDef)
+
+        params = [
+            a.arg
+            for a in (
+                init_fn.args.posonlyargs + init_fn.args.args + init_fn.args.kwonlyargs
+            )
+            if a.arg != "self"
+        ]
+
+        loads: dict[str, int] = {p: 0 for p in params}
+        store_only: dict[str, int] = {p: 0 for p in params}
+
+        def _is_pure_self_store(target: ast.expr, value: ast.expr | None) -> str | None:
+            """Return the param name iff this is a pure ``self._x = <param>`` store.
+
+            A pure store is a single ``self.<attr>`` target whose RHS is the bare
+            param Name — no transform. A transform-on-store RHS (``self._x = x or
+            default``, ``self._x = list(x)``) is NOT a pure store: the transform is
+            real logic that consumes the value, so it is left to count as a Load.
+            Both ``ast.Assign`` (``self._x = x``) and ``ast.AnnAssign``
+            (``self._x: T = x``) storage forms are handled so an annotated store
+            cannot slip a silent no-op past the guard.
+            """
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and isinstance(value, ast.Name)
+                and value.id in store_only
+            ):
+                return value.id
+            return None
+
+        for node in ast.walk(init_fn):
+            # Count every Load-context use of a param name.
+            if (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Load)
+                and node.id in loads
+            ):
+                loads[node.id] += 1
+            # Count the `self._x = <param>` / `self._x: T = <param>` storage-only
+            # assignments so we can exclude them: storing a value is not
+            # "consuming" it.
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                stored = _is_pure_self_store(node.targets[0], node.value)
+                if stored is not None:
+                    store_only[stored] += 1
+            elif isinstance(node, ast.AnnAssign):
+                stored = _is_pure_self_store(node.target, node.value)
+                if stored is not None:
+                    store_only[stored] += 1
+
+        silent_noops = [p for p in params if loads[p] <= store_only[p]]
+        assert not silent_noops, (
+            "Delegate.__init__ params accepted but never consumed (stored-and-"
+            f"never-read silent no-ops — the #1927 class): {silent_noops}. "
+            "Wire each into a real consumer or remove it from the constructor."
+        )
+
     def test_minimal_construction_works(self):
         """Delegate(model='x') does not raise."""
         d = Delegate(model="test-model", adapter=_simple_adapter())
@@ -221,7 +323,6 @@ class TestConstructorSignature:
         """Delegate with all new params does not raise."""
         d = Delegate(
             model="test-model",
-            signature=None,
             tools=None,
             system_prompt="You are helpful.",
             temperature=0.5,
@@ -232,7 +333,6 @@ class TestConstructorSignature:
             envelope=None,
             api_key=None,
             base_url=None,
-            inner_agent=None,
             adapter=_simple_adapter(),
         )
         assert d is not None
@@ -454,27 +554,20 @@ class TestCloseProxy:
 
 
 class TestIntrospectionProperties:
-    """TASK-05-31: core_agent, signature, model properties."""
+    """TASK-05-31: core_agent, model properties.
+
+    The ``signature`` property was removed in 0.11.7 (#1927) alongside the
+    unwired ``signature`` constructor param.
+    """
 
     def test_model_property(self):
         d = Delegate(model="my-model", adapter=_simple_adapter())
         assert d.model == "my-model"
 
-    def test_signature_property_none(self):
+    def test_signature_property_removed(self):
+        """#1927 — the .signature property was removed with the unwired param."""
         d = Delegate(model="test-model", adapter=_simple_adapter())
-        assert d.signature is None
-
-    def test_signature_property_set(self):
-        from kaizen.signatures import InputField, OutputField, Signature
-
-        class MySignature(Signature):
-            question: str = InputField(desc="A question")
-            answer: str = OutputField(desc="An answer")
-
-        d = Delegate(
-            model="test-model", signature=MySignature, adapter=_simple_adapter()
-        )
-        assert d.signature is MySignature
+        assert not hasattr(d, "signature")
 
     def test_wrapper_stack_returns_baseagent(self):
         from kaizen.core.base_agent import BaseAgent

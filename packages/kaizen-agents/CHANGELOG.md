@@ -5,6 +5,17 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.7] — 2026-07-23 — Remove documented-but-unwired Delegate `signature`/`inner_agent` params (#1927)
+
+### Removed
+
+- **Removed the unwired `Delegate(signature=…)` and `Delegate(inner_agent=…)` constructor params and the `Delegate.signature` property (#1927).** Both were accepted and documented but never wired — silent no-ops (the same documented-kwarg-drop class as the #1899 `base_url`/`api_key` and #1926 `temperature`/`max_tokens` fixes, but here the resolution is removal, not wiring):
+  - `signature` was documented as "enables structured outputs on the inner BaseAgent" but was only stored and returned by the `.signature` getter — never threaded to the loop/adapter, so structured outputs never took effect. The `Delegate` is a streaming autonomous-execution facade with no structured-output path by design; callers who need structured outputs should use the `BaseAgent` + `Signature` API (`kaizen.core`), which fully supports schema-constrained / response-format generation. Duplicating that into the streaming facade would have meant a second structured-output implementation across every provider adapter.
+  - `inner_agent` was documented as a "pre-built `BaseAgent` escape hatch" but was stored and never read — the `Delegate` always builds its own streaming loop. It is architecturally incompatible with the streaming `run()` (a generic `BaseAgent` exposes only batch `run`/`run_async`, no streaming interface). The `adapter=` and `config=` params remain the supported "bring your own engine" seams.
+  - The `core_agent` property docstring, which incorrectly claimed to return a "user-provided inner_agent", was corrected.
+  - Passing either keyword now raises `TypeError` — a loud, actionable failure — instead of silently doing nothing. Since neither param ever functioned, no caller could depend on the documented behavior; the only migration is to drop the now-rejected keyword.
+  - A structural completeness-guard test now asserts every `Delegate.__init__` param reaches a real consumer, so this documented-kwarg-drop class cannot silently regress.
+
 ## [0.11.6] — 2026-07-22 — Thread temperature/max_tokens overrides into the Delegate config build
 
 ### Fixed
