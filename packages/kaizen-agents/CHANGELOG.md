@@ -5,6 +5,12 @@ All notable changes to the kaizen-agents package will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.8] — 2026-07-23 — Stop `BaseAutonomousAgent` from creating `./checkpoints/` in the caller's cwd on construction
+
+### Fixed
+
+- **`BaseAutonomousAgent` no longer litters the caller's working directory with an empty `checkpoints/` directory on construction.** `__init__` unconditionally called `self.checkpoint_dir.mkdir(parents=True, exist_ok=True)` (default `checkpoint_dir=Path("./checkpoints")`), so merely _constructing_ an autonomous agent — or any subclass, including the Codex and Claude-Code adapters — created a `./checkpoints/` folder in whatever directory the process was launched from, even for agents that never checkpoint (the base run loop persists via `state_manager`/DataFlow, not this directory). Directory creation is now **lazy**: it happens on the first actual checkpoint write inside `_save_checkpoint`. This is non-breaking — agents that do checkpoint get the identical directory at the identical location, created on demand; agents that don't get no stray folder. Reads were already `.exists()`-guarded, so resume/load paths are unaffected. Behavioral regression tests pin all three cases (construction creates no dir; first write creates dir+file; an explicit `checkpoint_dir` is likewise lazy).
+
 ## [0.11.7] — 2026-07-23 — Remove documented-but-unwired Delegate `signature`/`inner_agent` params (#1927)
 
 ### Removed

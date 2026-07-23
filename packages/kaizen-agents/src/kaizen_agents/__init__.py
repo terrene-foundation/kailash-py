@@ -14,7 +14,7 @@ Provides:
 - Governance: accountability, clearance, cascade, vacancy, dereliction, bypass, budget
 """
 
-__version__ = "0.11.7"
+__version__ = "0.11.8"
 
 # Delegate facade — the primary entry point for autonomous AI execution
 from kaizen_agents.delegate import Delegate

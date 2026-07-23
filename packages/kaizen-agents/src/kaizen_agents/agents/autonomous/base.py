@@ -219,7 +219,11 @@ class BaseAutonomousAgent(BaseAgent):
 
         # Autonomous-specific state
         self.checkpoint_dir = checkpoint_dir or Path("./checkpoints")
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        # NOTE: the directory is created lazily, on the first checkpoint write
+        # (see _save_checkpoint), NOT here. Creating it in __init__ littered the
+        # caller's cwd with an empty ./checkpoints/ on every construction — even
+        # for agents that never checkpoint (the base run loop persists via
+        # state_manager/DataFlow, not this directory).
         self.current_plan: list[dict[str, Any]] = []
         self.cycle_count: int = 0
 
@@ -731,6 +735,9 @@ class BaseAutonomousAgent(BaseAgent):
         }
 
         try:
+            # Create the checkpoint directory lazily, on first write, so merely
+            # constructing an agent never litters the caller's cwd (see __init__).
+            self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
             with open(checkpoint_file, "a") as f:
                 f.write(json.dumps(checkpoint_data) + "\n")
 
