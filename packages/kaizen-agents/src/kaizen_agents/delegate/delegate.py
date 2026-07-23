@@ -305,9 +305,6 @@ class Delegate:
     model:
         LLM model name (e.g., ``"claude-sonnet-4-20250514"``).
         Falls back to ``DEFAULT_LLM_MODEL`` env var if empty.
-    signature:
-        Optional Signature class for structured I/O.  When provided,
-        enables structured outputs on the inner BaseAgent.
     tools:
         List of tool names or a pre-built :class:`ToolRegistry`.
         When a list of strings is given, the Delegate creates an empty
@@ -334,9 +331,6 @@ class Delegate:
         Optional API key for the LLM provider.  Read from env if not set.
     base_url:
         Optional base URL override for the LLM provider endpoint.
-    inner_agent:
-        Optional pre-built :class:`BaseAgent` escape hatch.  When provided,
-        the Delegate wraps this agent directly instead of constructing one.
     adapter:
         Optional pre-built :class:`StreamingChatAdapter`.
     config:
@@ -353,7 +347,6 @@ class Delegate:
         self,
         model: str = "",
         *,
-        signature: type[Signature] | None = None,
         tools: ToolRegistry | list[str] | None = None,
         system_prompt: str | None = None,
         temperature: float | None = None,
@@ -364,7 +357,6 @@ class Delegate:
         envelope: ConstraintEnvelope | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
-        inner_agent: BaseAgent | None = None,
         adapter: StreamingChatAdapter | None = None,
         config: KzConfig | None = None,
         ungoverned: bool = False,
@@ -377,10 +369,8 @@ class Delegate:
                 raise ValueError("budget_usd must be non-negative")
 
         # Store new parameters for wrapper/introspection access
-        self._signature = signature
         self._api_key = api_key
         self._base_url = base_url
-        self._inner_agent = inner_agent
         # #1779 governance_required opt-out. Default False (fail-closed). The
         # _LoopAgent bridge below is built with llm_provider="mock" (a BRIDGE
         # ARTIFACT -- the real egress is the loop's adapter, gated with is_mock=
@@ -724,17 +714,12 @@ class Delegate:
 
     @property
     def core_agent(self) -> BaseAgent:
-        """The innermost BaseAgent (or user-provided inner_agent)."""
+        """The innermost BaseAgent in the wrapper stack (the ``_LoopAgent`` bridge)."""
         # Walk the wrapper stack via _loop_agent to the bottom
         agent = self._loop_agent
         while hasattr(agent, "_inner"):
             agent = agent._inner
         return agent
-
-    @property
-    def signature(self) -> type[Signature] | None:
-        """The Signature class passed to the constructor, or None."""
-        return self._signature
 
     @property
     def model(self) -> str:
