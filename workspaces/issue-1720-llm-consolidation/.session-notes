@@ -1,72 +1,66 @@
-# Session Notes — 2026-07-23 (cont-14)
+# Session Notes — 2026-07-23 (cont-15)
 
 ## Where we are
 
-**SESSION CLOSED (cont-14).** #1720's last forest item — **#1927** (Delegate `signature`/`inner_agent`
-no-ops) — RESOLVED, RELEASED (kaizen-agents **0.11.7** live on PyPI, wheel-verified), forest EMPTY.
-While handling the two approved dependabot PRs, surfaced + fixed a **pre-existing trust-plane test
-failure on main** (#1934, unrelated to #1927). Both user-approved follow-ups DONE (full /codify #1936;
-cross-SDK #1927 inspection — no gap, journal 0015). **/sweep clean**: 0 open issues, 0 open PRs, 0
-deferred-quality (see `sweep-cont14-report.md`). Nothing outstanding; fresh session starts clean.
+**SESSION CLOSED (cont-15).** Started clean (cont-14 closed the #1720 forest; board was 0 issues /
+0 PRs / green CI / version-consistent — all re-verified against ground truth, not trusted from
+notes). The one live thread was the WORKSPACE hook's "1 pending journal candidate": an orphaned
+**F-TESTHYG** deferral whose `after-milestone:1720-wave2` revisit trigger had **passed without
+action** (cont-14 shipped kaizen-agents 0.11.7 but never bundled F-TESTHYG). Reconciled it →
+found a real user-facing defect → fixed → **released kaizen-agents 0.11.8** (PyPI, clean-venv
+verified). Board clean again; nothing outstanding except 2 owner-facing residuals below.
 
-## Read first
+## Executed this session (cont-15)
 
-1. `sweep-cont14-report.md` — the closure management decision report (completion status + the 2
-   parked items: core doc-only commit rides next core release; loom proposal awaits loom ingest).
-2. `launch-ledger-cont14.md` — full cont-14 orchestration + redteam record.
-3. `journal/0012`–`0015` — DISCOVERY (completeness-guard; CI-gating blind spot; cross-SDK no-gap) +
-   DECISION 0014 (codify).
+- **Reconciled F-TESTHYG (corrected the premise).** The followup doc's "class-2 root-discovery
+  src bug" does NOT exist in the package — `consensus_*.json`/`detailed_proposal.txt` appear in
+  src only as dict/memory keys (no disk-write site); those scratch files were **example-script
+  output**, not shipped behavior. The real defect was narrower AND user-facing:
+- **Fixed the confirmed defect (kaizen-agents 0.11.8).** `BaseAutonomousAgent.__init__` created
+  `./checkpoints/` in the caller's cwd on EVERY construction (unconditional `mkdir` at base.py:222)
+  — even for agents that never checkpoint (base run loop persists via `state_manager`/DataFlow).
+  Fix = **lazy** dir creation (moved `mkdir` into `_save_checkpoint`, first-write). Non-breaking;
+  reads already `.exists()`-guarded. Runtime-walked + 3 behavioral regression tests
+  (`tests/regression/test_checkpoint_dir_no_cwd_litter.py`).
+- **Redteam 2 clean rounds:** reviewer + security-reviewer both NO FINDINGS (genuine ran-signals);
+  round-2 same-class sweep (AST scan for eager fs-writes in `__init__`) found the one candidate
+  `delegate/session.py:54` is legitimately different (required-arg dir, secure 0o700/0o600 pattern).
+- **Shipped:** PR **#1939** merged (all CI matrix green on pinned head `b090408b`; admin-merge).
+  Tag `kaizen-agents-v0.11.8` → Publish-to-PyPI workflow SUCCESS (TestPyPI skipped — patch, user-
+  approved). Clean-venv verify PASS (0.11.8; construct → no dir; lazy write → dir+file). GitHub
+  Release created.
 
-## Executed this session (cont-14)
+## Release scope (cont-15)
 
-- **#1927** → REMOVED `Delegate(signature=…)`/`inner_agent=…` (user-ratified remove-both; both
-  never-worked no-ops). Fixed the wrong `core_agent` docstring. Added an AST **completeness-guard**
-  test (`test_every_init_param_reaches_a_consumer`, `AnnAssign`-aware, mutation-verified) that
-  closes the #1899/#1926/#1927 documented-kwarg-drop class for the Delegate. PR **#1932** merged;
-  #1927 CLOSED; /redteam 2 clean rounds (reviewer+security). Released **kaizen-agents 0.11.7**
-  (tag `kaizen-agents-v0.11.7`; publish SUCCESS; clean-venv wheel verified: params gone, TypeError
-  on pass). Workspace records persisted PR **#1933**.
-- **Dependabot #1930** (labeler 6→7) → merged clean.
-- **Dependabot #1931** (setup-python 6→7) → its full-matrix run exposed a PRE-EXISTING main failure
-  `test_verify_signatures_validates_delegations` (kailash-kaizen trust suite). Root cause: the test
-  built an un-subject-bound LEGACY cap and expected valid=True, but #1912 Wave 3 A1 rejects legacy
-  caps by default (transplantable); the test predates #1912 and was never migrated (only 1 of 6555
-  failed). Fixed the TEST (code is correct) → migrate to a v1-subject-bound cap. PR **#1934** merged
-  (security-reviewer: SECURITY-APPROPRIATE — tests the secure path, adversarial semantics fully
-  covered in `tests/regression/test_issue_1912_capability_subject_binding.py`). #1931 rebased onto
-  the fixed main → kailash-kaizen job green → [merge state at wrapup].
+kaizen-agents 0.11.7 → **0.11.8** ONLY. All 8 sibling packages at PyPI parity — no drift swept.
 
-## Unreleased packages
+## Owner-facing residuals (surfaced, NOT actioned — your call)
 
-- **kailash core** — 2.61.0 == PyPI; the `constraint_subset` docstring commit `9f2f9755b` did NOT
-  bump version (rides next core release, per cont-13 deferral). No drift on any of the 9 packages.
+1. **Running-agent default location.** A *running* codex/claude_code autonomous agent still
+   defaults checkpoints to `./checkpoints` in the user's cwd. Lazy-mkdir fixed construct-time
+   litter only; changing the documented default location (→ temp/XDG state dir) is a
+   behavior-change decision.
+2. **Pre-existing checkpoint perms (different bug class).** Checkpoint dir/files use default umask
+   (world-readable) and `state` may hold PII (security-reviewer, pre-existing — NOT introduced by
+   0.11.8). The delegate `SessionManager` is the in-repo secure reference (`chmod 0o700` +
+   `_secure_write` 0o600). Hardening the checkpoint path to match is a separate, owner-gated change.
+3. **Cross-SDK inspection (cross-sdk-inspection Rule 1).** Not performed — this is a Python-idiom
+   constructor side-effect (`Path("./checkpoints").mkdir()`), low cross-SDK relevance, and a Rust
+   SDK read is repo-scope-gated (needs a grant). Flag if you want the Rust autonomous-agent
+   equivalent inspected.
 
 ## Outstanding ledger (forest)
 
-EMPTY. #1927 (F3) closed. No queued code items.
+EMPTY. F-TESTHYG resolved + released. No queued code items. Board: 0 open issues, 0 open PRs.
 
-## Both user-approved follow-ups — DONE this session
+## Traps (carried from cont-14, still valid)
 
-1. **Full /codify — DONE (PR #1936 merged).** Backlog was ~99% auto-captured `test_pattern`
-   telemetry (not individually codifiable); actionable delta dispositioned (1 redundant RISK stub
-   deleted, 1 advisory violation reviewed benign). Codified the ONE cascade-valuable pattern — the
-   AST param-completeness-guard — as a `16-validation-patterns` skill_update proposal appended to
-   `.claude/.proposals/latest.yaml` (change #31, `global`; loom Gate-1 owns placement + eval-coverage).
-   Anchor advanced (local, gitignored). cc-architect redteam CLEAN. Learnings: journals 0012/0013;
-   DECISION 0014.
-2. **Cross-SDK inspection (#1927) — DONE (user-authorized READ; receipt committed).** NO equivalent
-   gap in the Rust SDK — its `Delegate` is a trust-plane primitive, its agent facade is
-   `GovernedAgentRuntime` (functional params only), and its live `inner_agent` usage is
-   functionally-wired. The documented-kwarg-drop class is Python-facade-specific. No issue filed
-   (no gap). See `journal/0015`. Confirms the pre-inspection low-value assessment.
-
-## Traps (carried)
-
-- **Per-package CI path-gating hides sibling-package failures** (journal/0013) — a kaizen-agents-only
-  PR does NOT run the kailash-kaizen matrix; a pre-existing sibling failure stays hidden until a
-  workflow-touching PR (e.g. dependabot) fires the full matrix. Consider a nightly full-matrix run.
-- CI flakes: DataFlow Postgres isolation race + Windows SQLite lock — clear on re-run; pinned-head
+- Per-package CI path-gating hides sibling-package failures (journal/0013).
+- CI flakes (DataFlow Postgres isolation race + Windows SQLite lock) clear on re-run; pinned-head
   READ + separate admin-merge, never merge over red. (Did NOT recur this session.)
-- `.venv/bin/pre-commit` stale shebang (loom path) — use `uv run pre-commit`.
-- Stale `packages/*/build/lib/` copies (gitignored) confuse pyright with phantom diagnostics; runtime
-  imports resolve to `src/` (always verify at runtime, not from pyright).
+- `.venv/bin/pre-commit` stale shebang → use `uv run pre-commit`.
+- Stale `packages/*/build/lib/` copies confuse pyright (phantom diagnostics); runtime resolves to
+  `src/`. Confirmed again this session — the base.py pyright warnings were all pre-existing
+  dynamic-attribute noise, unaffected by the fix.
+- PyPI/uv index-cache lag on fresh publish: JSON endpoint reflects the new version before the
+  simple index / uv cache does — retry `uv pip install --refresh` (succeeded on 2nd try this session).
