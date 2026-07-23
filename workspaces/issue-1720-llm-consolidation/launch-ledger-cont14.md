@@ -55,6 +55,14 @@ Commit c35df4cd8 (branch fix/kaizen-delegate-signature-inner-agent-1927). Diff m
 
 R1 CLEAN both reviewers (both genuinely ran — evidence gate satisfied). INCREMENTAL note #2 (AST guard didn't handle AnnAssign/transform-RHS stores) FIXED in warm context: added `_is_pure_self_store` helper + AnnAssign branch (commit 14392da83, test-only). Hardened guard mutation-verified to catch AnnAssign-stored no-op. INCREMENTAL note #1 (Rule-6a deprecation tension) = no action (reviewer + security-reviewer both agree hard removal is the correct Rule-6a exception for a never-worked zero-caller param). Production/security surface byte-identical since R1 → security not re-run (test-only delta).
 
+## SHIPPED + RELEASED (build-repo-release-discipline done-gate satisfied)
+
+- **PR #1932 MERGED** → main `6484d62db`; issue **#1927 auto-CLOSED**; branch deleted. CI: 20 pass / 4 skip / 0 fail on pinned head `f5b0ab35` (no flakes; pinned-head READ separate from admin-merge per git.md).
+- Release scope enumerated (build-repo-release Rule 3): ONLY kaizen-agents (main 0.11.7 > PyPI 0.11.6); all 8 siblings main==PyPI (kailash core 2.61.0==2.61.0 — the 9f2f9755b docstring commit did NOT bump version, rides next core release per cont-13 deferral). Within user-approved scope.
+- Tag `kaizen-agents-v0.11.7` pushed → publish-pypi.yml run 29972794131 **SUCCESS** (OIDC; GitHub Release auto-created).
+- **kaizen-agents 0.11.7 LIVE on PyPI** — clean-venv verified (Rule 2 done-gate): `__version__==0.11.7`; FIX VERIFIED on published wheel (signature/inner_agent ABSENT; `signature=` → TypeError; 14 real params remain).
+- security-reviewer ran (R1, /release mandatory gate): SECURITY-NEUTRAL, 0 findings.
+
 ## Remaining
 
 - Full unit suite green confirm → commit → PR → redteam to convergence → merge → release 0.11.7 (build-repo-release discipline) → uv.lock sync.

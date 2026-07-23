@@ -1,52 +1,65 @@
-# Session Notes — 2026-07-22 (cont-13)
+# Session Notes — 2026-07-23 (cont-14)
 
 ## Where we are
 
-Independent cross-session `/redteam` of the delivered #1720 surfaces caught + fixed a real
-Delegate bug cont-12 missed, released it, and tracked two deeper same-class follow-ups.
-Main @ `dd0064479`. kaizen-agents 0.11.6 live on PyPI (verified). Board otherwise clean.
+The last outstanding #1720 forest item — **#1927** (Delegate `signature`/`inner_agent`
+documented-but-silent-no-op) — is RESOLVED, RELEASED, and verified on the published wheel.
+Forest is now EMPTY. Main @ `6484d62db`. kaizen-agents **0.11.7 LIVE on PyPI**. Board clean.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont13.md` — full cont-13 record
-   (R1/R2 redteam verdicts, the fix, release, security-review, #1927 disposition).
-2. `CLAUDE.md` — project context. Board empty except tracked follow-up #1927; fresh work OK.
+1. `workspaces/issue-1720-llm-consolidation/launch-ledger-cont14.md` — full cont-14 record
+   (architecture investigation, user-ratified remove-both decision, implementation, 2-round
+   redteam convergence, release + wheel verification).
+2. `CLAUDE.md` — project context.
 
 ## In-flight state
 
-- None. Working tree clean (only untracked durable workspace records). No uncommitted code.
+- None. Working tree: only the modified `.session-notes` + `launch-ledger-cont14.md` post-release
+  edits (workspace records; persist via a workspace-only carve-out PR — no /release owed).
 
-## Executed this session
+## Executed this session (cont-14)
 
-- Released **kaizen-agents 0.11.6** to PyPI (tag `kaizen-agents-v0.11.6`; OIDC publish SUCCESS;
-  clean-venv + fix-behavior verified on the published wheel). Not in this repo's `git log`.
-
-## Wave tracker
-
-None — no waves in flight.
+- Resolved **#1927** by REMOVING `Delegate(signature=…)` + `Delegate(inner_agent=…)` (user-ratified
+  "remove both" via AskUserQuestion — both were never-worked silent no-ops; wiring signature would
+  duplicate the BaseAgent/Signature structured-output path across 4 adapters; inner_agent is
+  arch-incompatible with the streaming run()). Fixed the wrong `core_agent` docstring. Added a
+  structural AST **completeness-guard** test (every Delegate.__init__ param must reach a consumer —
+  closes the #1899/#1926/#1927 recurring documented-kwarg-drop class for the Delegate).
+- **PR #1932 MERGED** → `6484d62db`; **#1927 CLOSED**. 3135-test unit suite green; /redteam 2 clean
+  rounds (reviewer + security-reviewer, all genuinely ran).
+- Released **kaizen-agents 0.11.7** (tag `kaizen-agents-v0.11.7`; publish SUCCESS; clean-venv wheel
+  verified). Not in this repo's `git log` (PyPI-side).
 
 ## Unreleased packages
 
-- **kailash core** — one unreleased `src/` commit since `v2.61.0`: the `constraint_subset`
-  docstring correction (`9f2f9755b`). Doc-only / runtime-inert; user approved deferring it rather
-  than cut 2.61.1 for a docstring. Next session: bundle with the next core change, or cut 2.61.1.
+- **kailash core** — one unreleased `src/` commit since v2.61.0: the `constraint_subset` docstring
+  correction (`9f2f9755b`). Doc-only / runtime-inert; version NOT bumped (still 2.61.0 == PyPI).
+  User approved deferring. Next core change bundles it, or cut 2.61.1.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                                                    | Value-anchor (MUST-1)                                          | Status                |
-| --- | ----------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------- |
-| F3  | kaizen Delegate `signature`/`inner_agent` documented but never wired    | user literal "approved" this session of filing + disposition (→ #1927) | queued (design shard) |
+EMPTY — F3/#1927 closed this session (F1/F2 closed cont-12). No queued items.
 
-Closed this session: none carried (F1/F2 closed cont-12; the temperature/max_tokens fix is in `git log` + PyPI, not a forest item).
+## Open considerations for the human (surfaced, not blocking)
 
-## Traps
+1. **Cross-SDK inspection (#1927 / cross-sdk-inspection Rule 1)** — NOT completed: checking whether
+   the Rust SDK (kailash-rs) has an equivalent Delegate facade with unwired params needs cross-repo
+   READ authorization (repo-scope-discipline — not self-authorizable). Assessment: LIKELY LOW-VALUE —
+   this was a Python-facade-specific API cleanup, not a shared-architecture bug (trust-plane/DataFlow
+   class). Authorize a check only if you want cross-SDK parity confirmed.
+2. **Codify opportunity** — the AST completeness-guard pattern (assert every documented constructor
+   param reaches a real consumer) is a reusable structural defense against the documented-kwarg-drop
+   class that recurred 3× on the Delegate (#1899/#1926/#1927). Currently lives as a kaizen-agents
+   regression test. Consider /codify to a reusable skill/reviewer-lens if you want it applied to
+   other multi-param facades SDK-wide. Workspace phase shows 05-codify with 2 journal candidates
+   pending. Not auto-run (codify is a structural human gate).
 
-- `Delegate.__init__` documented-kwarg-drop is a RECURRING class: #1899 (base_url/api_key),
-  #1926 (temperature/max_tokens), #1927 (signature/inner_agent). #1927 AC asks for a completeness guard.
+## Traps (carried)
+
 - CI flakes here: DataFlow bulk-multi-tenant Postgres isolation race + Windows SQLite "database is
-  locked". Both cleared on re-run; re-run failed jobs (pinned-head READ + separate merge), don't merge over red.
-- `.venv/bin/pre-commit` has a stale shebang (points to a `loom/kailash-py` path) — run `uv run pre-commit`.
-
-## Open questions for the human
-
-- F3/#1927 wire-vs-remove: recommended split (wire `signature`, remove `inner_agent`) — a design shard when you prioritize it.
+  locked". Both clear on re-run; re-run failed jobs (pinned-head READ + separate merge), don't merge
+  over red. (Did NOT recur on #1932.)
+- `.venv/bin/pre-commit` has a stale shebang (loom/kailash-py path) — run `uv run pre-commit`.
+- Stale `packages/kaizen-agents/build/lib/` holds pre-edit copies (gitignored, not shipped); pyright
+  may read it and show phantom diagnostics — runtime imports resolve to `src/` (verified).
