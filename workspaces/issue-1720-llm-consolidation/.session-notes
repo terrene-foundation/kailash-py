@@ -1,49 +1,60 @@
-# Session Notes — 2026-07-23 (cont-15)
+# Session Notes — 2026-07-24 (cont)
 
 ## Where we are
 
-**SESSION CLOSED (cont-15).** Started from a verified-clean board; the one live thread was an
-orphaned **F-TESTHYG** deferral (its "bundle with the kaizen-agents release" trigger had passed
-without action). Reconciling it surfaced a real user-facing defect → fixed in two releases →
-all three owner-approved residuals resolved. Board clean again.
+#1947 (LLMAgentNode fail-loud provider — the structural root-cause fix) is DONE,
+merged, redteam-converged (3 rounds / 7 reviews), and RELEASED as
+**kailash-kaizen 2.43.0** on PyPI (clean-venv verified live).
 
-## Executed this session (cont-15)
+## Executed this session
 
-- **F-TESTHYG reconciled + premise corrected.** The followup doc's "class-2 root-discovery src
-  bug" did NOT exist — those scratch files were example-script output. The real defect:
-  `BaseAutonomousAgent` created `./checkpoints/` in the caller's cwd.
-- **kaizen-agents 0.11.8** (PR #1939) — construct-time fix: lazy dir creation (moved `mkdir` out
-  of `__init__`). Redteam 2 clean rounds. PyPI-published, clean-venv verified.
-- **kaizen-agents 0.12.0** (PR #1941) — the owner-approved residuals #1+#2:
-  - **#1 (default location):** default checkpoints now go to `platformdirs.user_state_dir("kaizen")/
-    checkpoints` (per-user state dir), NOT the cwd. **BREAKING** (documented): old `./checkpoints`
-    not auto-migrated; pass explicit `checkpoint_dir` to restore. New dep `platformdirs>=4.0`.
-  - **#2 (perms):** checkpoint dir/files owner-only on POSIX (`0o700`/`0o600`) with `O_NOFOLLOW`
-    at the write sink (refuses writing through a symlink in a caller-supplied hostile dir).
-  - Redteam 2 rounds: reviewer NO FINDINGS; security-reviewer net-positive, its one LOW (missing
-    `O_NOFOLLOW`) fixed + pinned by a symlink-refusal regression test. 45 tests + full CI matrix.
-  - **TestPyPI-validated first** (minor-release rule) → production PyPI → clean-venv verified
-    (v0.12.0, default off-cwd, modes 0o700/0o600).
-- **#3 (cross-SDK inspection) — DONE, no gap.** User-approved READ-tier cross-repo authorization
-  (receipt committed). The Rust SDK uses an explicit `CheckpointStore` (memory/SQLite at an
-  explicit path), NOT a cwd-defaulting `checkpoint_dir` — **no equivalent defect**; nothing filed.
-  See `cross-sdk-checkpoint-inspection.md` + `04-validate/f-testhyg-followup.md`.
+- **#1947 shipped**: `LLMAgentNode` provider default `"mock"`→`None`; `run()` raises
+  `ConfigurationError` on an unresolved provider. Silent-mock (fabricated-content-as-real)
+  class closed across the whole node family: base + `IterativeLLMAgentNode` (own guards) +
+  `A2AAgentNode` + `SelfOrganizingAgentNode` (inherited guard, pinned). Explicit
+  `provider="mock"` preserved.
+  - Redteam found + fixed: HIGH `IterativeLLMAgentNode` swallowed the guard (returned
+    success=True template); INVEST-NOW missed `provider="openai"` twin at synthesis.
+  - PR **#1951** merged (5 commits); PR **#1954** merged (release 2.43.0); tag `kaizen-v2.43.0`
+    → OIDC publish → verified `pip install kailash-kaizen==2.43.0` + fail-loud behavior.
+- **PR #1950** (2.42.0 docs release-record) merged.
+- Filed **#1952** (deferred same-class residuals: keyless `detect_provider_from_env()`→"mock"
+  on Agent/RAG surfaces; `EmbeddingGeneratorNode` silent-mock — both exceed the #1947 shard,
+  need own prod-audit + test sweep) and **#1953** (distinct class: `IterativeLLMAgentNode`
+  synthesis masks a RESOLVED-provider runtime LLM failure as success=True with a template).
 
-## Release scope (cont-15)
+## Cross-SDK check — DONE (user-authorized, no hazard, no issue filed)
 
-kaizen-agents 0.11.7 → 0.11.8 → **0.12.0** (all published + verified). All 8 sibling packages at
-PyPI parity — no drift swept. Core + others unchanged.
+- Cross-repo READ authorized (receipt `.claude/cross-repo-authz/2026-07-24-esperie-enterprise-kailash-rs-*`,
+  user-approved 2026-07-24). Inspected `esperie-enterprise/kailash-rs` (private).
+- **Verdict: the Rust SDK does NOT have the #1947 mock-default hazard** — it is already
+  fail-closed / explicit-opt-in: `LlmProvider` enum has NO `Mock` variant and NO `Default`
+  impl; mock is a separate `MockLlmProvider` reachable ONLY via explicit `LlmClient::from_mock()`
+  / `mock_with_responses()`; `crates/kailash-nodes/src/ai/provider.rs::detect_provider()` returns
+  `Result` (errors on unknown, never a mock fallback). No silent-mock default exists → the
+  conditional filing ("if the hazard exists") does NOT trigger. No issue filed. Scope respected.
 
 ## Outstanding ledger (forest)
 
-EMPTY. F-TESTHYG fully resolved (0.11.8 + 0.12.0); cross-SDK inspected (no gap). No queued items.
-Board: 0 open issues, 0 open PRs (this receipt PR merges as the close-out).
+| ID | Item | Value-anchor | Status |
+| --- | --- | --- | --- |
+| F1 | #1952 — remaining silent-mock sites (env fallback + EmbeddingGeneratorNode) | Fully closes fabricated-content integrity class (redteam HIGH) | QUEUED (own shard; prod-audit + test sweep) |
+| F2 | #1953 — IterativeLLMAgentNode synthesis masks runtime failure as success=True | Redteam finding; distinct error-masking class | QUEUED |
+| F3 | #1948 — provider-handling minor follow-ups (caching/flag-name/literal-fallback) | Redteam residuals from #1943 | QUEUED (non-blocking, pre-existing) |
+| F4 | Cross-SDK Rust-node mock-default check | #1947 note; cross-sdk parity | BLOCKED on user cross-repo authorization (see PENDING) |
 
-## Traps (carried, still valid)
+## Traps
 
-- Per-package CI path-gating hides sibling-package failures (journal/0013).
-- CI flakes clear on re-run; pinned-head READ + separate admin-merge, never merge over red.
-- `uv run pre-commit` (stale `.venv/bin` shebang). Stale `packages/*/build/lib/` confuse pyright
-  (all base.py warnings this session were pre-existing dynamic-attribute noise).
-- PyPI/uv index-cache lag on fresh publish → retry `uv pip install --refresh` (needed both releases).
-- TestPyPI install with uv needs `--index-strategy unsafe-best-match` (deps resolve from prod PyPI).
+- kaizen FAST-tier CI job ("expanded FAST unit tiers") flaked "0 selected / 8328 deselected"
+  on a pull_request run — TRANSIENT (same commit passed on push; local selects 6776/8328;
+  re-run green). Not a code issue; re-run if seen.
+- Regression tests are ENV-INDEPENDENT (node does no env detection; raw node → provider None →
+  raise). `detect_provider_from_env()` STILL returns "mock" keyless — that's the #1952 residual.
+- Release: git tag `kaizen-v<X.Y.Z>` → OIDC publish-pypi.yml; verify PyPI with
+  `uv pip install --refresh` (uv index cache lags even after metadata is live).
+- Reviewer/verifier reasoning can conflict — runtime evidence wins (round-1 reviewer
+  runtime-confirmed the Iterative swallow; the domain agent's reasoning missed it).
+
+## Wave tracker
+
+None in flight. All background agents (audit + 3 redteam rounds + release watchers) completed.
