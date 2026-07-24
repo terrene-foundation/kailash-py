@@ -210,7 +210,7 @@ The Core SDK is always available. Frameworks build on top of it for specific use
    * - **Core SDK**
      - Custom workflows, fine-grained control
      - ``pip install kailash``
-   * - **Kaizen** (v2.40.0)
+   * - **Kaizen** (v2.41.0)
      - AI agents, signatures, multi-agent teams
      - ``pip install kailash-kaizen``
    * - **Nexus** (v2.14.0)

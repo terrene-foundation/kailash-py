@@ -41,7 +41,7 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v2.40.0         Nexus v2.14.0       DataFlow v2.19.0    |
+|   Kaizen v2.41.0         Nexus v2.14.0       DataFlow v2.19.0    |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
@@ -410,7 +410,7 @@ if result.allowed:
 
 | Framework                                                                                        | Version | Key Capabilities                                                                                                                            |
 | ------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v2.40.0 | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions                                          |
+| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v2.41.0 | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions                                          |
 | [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v2.14.0 | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API                                               |
 | [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v2.19.0 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions, `FieldType.Vector(dim)` embedding columns |
 | [MCP](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-mcp)           | v0.4.2  | Production-ready MCP client/server, transports (stdio/SSE/HTTP), service discovery                                                          |
