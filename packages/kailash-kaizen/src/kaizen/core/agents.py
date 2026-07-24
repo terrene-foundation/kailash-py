@@ -507,7 +507,7 @@ class Agent:
         Examples:
             >>> agent = kaizen.create_agent("processor", {"model": "gpt-4"})
             >>> workflow = agent.create_workflow()
-            >>> workflow.add_node("LLMAgentNode", "test", {"model": "gpt-4"})
+            >>> workflow.add_node("LLMAgentNode", "test", {"provider": "openai", "model": "gpt-4"})
         """
         if not self.kaizen:
             raise RuntimeError("Agent not connected to Kaizen framework")
