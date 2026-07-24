@@ -249,9 +249,12 @@ class TestItem4DeploymentCacheKeyDimensions:
 
         Two agents share name+provider+model+signature; the sole difference is
         the discovered-tools set, which changes _generate_system_prompt()'s
-        output — the exact collision the fix closes. `str(signature)` does NOT
-        capture the tool difference, so this fails without the effective-prompt
-        dimension.
+        output — the exact collision the fix closes. This ISOLATES the
+        effective-prompt dimension: with the deterministic signature repr in
+        place, reverting only the effective-prompt keying makes this fail (the
+        signature no longer distinguishes the tool difference). It does NOT
+        guard the determinism fix on its own — test_identical_agents_yield_same_key
+        is that guard.
         """
         agent_a = self._real_agent()
         agent_b = self._real_agent()
