@@ -35,6 +35,7 @@ import pytest
 from kaizen.core.config import BaseAgentConfig
 from kaizen.core.mixins.caching_mixin import CachingMixin
 from kaizen.integrations.nexus.deployment_cache import DeploymentCache
+from kaizen.signatures import InputField, OutputField, Signature
 
 
 def _fake_agent(llm_provider=None):
@@ -215,48 +216,103 @@ class TestItem3WorkflowGeneratorEnvDetection:
 
 
 # ---------------------------------------------------------------------------
-# Item 4 — DeploymentCache key includes system_prompt and temperature
+# Item 4 — DeploymentCache key includes the REAL effective prompt + temperature
+#
+# These tests use a REAL BaseAgent + BaseAgentConfig (NOT SimpleNamespace).
+# The prior SimpleNamespace-based test fabricated a `system_prompt` field that
+# no real config has, so it proved nothing about real agents (the round-1
+# redteam INVEST-NOW). The effective prompt now comes from
+# agent._generate_system_prompt() — which varies by discovered MCP tools and
+# subclass overrides — so these tests exercise the collision that actually
+# occurs in production.
 # ---------------------------------------------------------------------------
+class _QASignature(Signature):
+    question: str = InputField(description="the question")
+    answer: str = OutputField(description="the answer")
+
+
 class TestItem4DeploymentCacheKeyDimensions:
-    def _agent(self, *, system_prompt=None, temperature=0.1):
-        cfg = SimpleNamespace(
-            llm_provider="openai",  # pin provider so it isn't env-dependent
+    def _real_agent(self, *, temperature=0.1):
+        from kaizen.core.base_agent import BaseAgent
+
+        cfg = BaseAgentConfig(
+            llm_provider="openai",  # pin provider so the key isn't env-dependent
             model="test-model",
-            system_prompt=system_prompt,
             temperature=temperature,
         )
-        return SimpleNamespace(config=cfg, signature="SIG")
+        # mcp_servers=[] disables MCP auto-connect so construction is
+        # deterministic and offline (Tier-1); _discovered_mcp_tools stays {}.
+        return BaseAgent(config=cfg, signature=_QASignature(), mcp_servers=[])
 
-    def test_different_system_prompt_yields_different_key(self):
-        key_a = DeploymentCache.create_cache_key(
-            self._agent(system_prompt="You are agent A"), "wf"
-        )
-        key_b = DeploymentCache.create_cache_key(
-            self._agent(system_prompt="You are agent B"), "wf"
-        )
+    def test_different_effective_prompt_yields_different_key(self):
+        """Real agents differing ONLY in discovered MCP tools MUST key apart.
+
+        Two agents share name+provider+model+signature; the sole difference is
+        the discovered-tools set, which changes _generate_system_prompt()'s
+        output — the exact collision the fix closes. `str(signature)` does NOT
+        capture the tool difference, so this fails without the effective-prompt
+        dimension.
+        """
+        agent_a = self._real_agent()
+        agent_b = self._real_agent()
+        agent_a._discovered_mcp_tools = {}
+        agent_b._discovered_mcp_tools = {
+            "srv": [{"name": "read_file", "description": "reads a file"}]
+        }
+        # Sanity: the effective prompts genuinely differ.
+        assert agent_a._generate_system_prompt() != agent_b._generate_system_prompt()
+
+        key_a = DeploymentCache.create_cache_key(agent_a, "wf")
+        key_b = DeploymentCache.create_cache_key(agent_b, "wf")
         assert key_a != key_b, (
             "two agents sharing name+provider+model+signature but different "
-            "system prompts MUST NOT collide (#1948 item 4)"
+            "effective prompts (discovered MCP tools) MUST NOT collide "
+            "(#1948 item 4)"
         )
 
+    def test_custom_prompt_override_yields_different_key(self):
+        """A subclass override of _generate_system_prompt is keyed on."""
+        agent_a = self._real_agent()
+        agent_b = self._real_agent()
+        agent_a._generate_system_prompt = lambda: "You are agent A"
+        agent_b._generate_system_prompt = lambda: "You are agent B"
+
+        key_a = DeploymentCache.create_cache_key(agent_a, "wf")
+        key_b = DeploymentCache.create_cache_key(agent_b, "wf")
+        assert key_a != key_b
+
     def test_different_temperature_yields_different_key(self):
-        key_cold = DeploymentCache.create_cache_key(self._agent(temperature=0.0), "wf")
-        key_warm = DeploymentCache.create_cache_key(self._agent(temperature=0.9), "wf")
+        key_cold = DeploymentCache.create_cache_key(
+            self._real_agent(temperature=0.0), "wf"
+        )
+        key_warm = DeploymentCache.create_cache_key(
+            self._real_agent(temperature=0.9), "wf"
+        )
         assert key_cold != key_warm, (
             "different temperatures build different workflows and MUST key "
             "distinctly (#1948 item 4)"
         )
 
-    def test_identical_config_yields_same_key(self):
+    def test_identical_agents_yield_same_key(self):
         key_a = DeploymentCache.create_cache_key(
-            self._agent(system_prompt="same", temperature=0.3), "wf"
+            self._real_agent(temperature=0.3), "wf"
         )
         key_b = DeploymentCache.create_cache_key(
-            self._agent(system_prompt="same", temperature=0.3), "wf"
+            self._real_agent(temperature=0.3), "wf"
         )
         assert key_a == key_b
 
+    def test_config_system_prompt_field_is_a_no_op_for_real_agents(self):
+        """Guard the redteam finding: system_prompt is NOT a BaseAgentConfig
+        field, so the old getattr(config, 'system_prompt') dimension could
+        never discriminate a real agent. Pin that the field is absent so a
+        future 'fix' cannot silently reintroduce the vacuous dimension."""
+        import dataclasses
+
+        field_names = {f.name for f in dataclasses.fields(BaseAgentConfig)}
+        assert "system_prompt" not in field_names
+
     def test_key_is_sha256_hex(self):
-        key = DeploymentCache.create_cache_key(self._agent(system_prompt="x"), "wf")
+        key = DeploymentCache.create_cache_key(self._real_agent(), "wf")
         assert len(key) == len(hashlib.sha256(b"x").hexdigest())
         assert all(c in "0123456789abcdef" for c in key)
