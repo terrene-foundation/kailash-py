@@ -1757,7 +1757,9 @@ provide your best analysis of the query directly.""",
         try:
             # Use the parent's LLM capabilities to generate synthesis
             synthesis_kwargs = {
-                "provider": kwargs.get("provider", "openai"),
+                # #1947: no silent "openai" substitution — the run() guard
+                # guarantees a resolved provider by the time synthesis dispatches.
+                "provider": kwargs.get("provider"),
                 "model": _resolve_action_model(kwargs),
                 "messages": synthesis_messages,
                 "temperature": kwargs.get("temperature", 0.7),
