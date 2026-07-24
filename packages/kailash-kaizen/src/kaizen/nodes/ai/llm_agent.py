@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
-from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+from kaizen.config.providers import DEFAULT_OPENAI_MODEL, ConfigurationError
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
@@ -367,7 +367,16 @@ class LLMAgentNode(Node):
                 name="provider",
                 type=str,
                 required=False,
-                default="mock",
+                # #1947: default None (was "mock"). A missing provider no longer
+                # silently dispatches the mock provider — run() fails loud on an
+                # unresolved (None) provider instead. This structurally closes the
+                # silent-mock class: a forgotten/new construction site becomes a
+                # typed ConfigurationError, not fabricated content presented as real.
+                # The mock provider stays reachable when requested EXPLICITLY
+                # (provider="mock"). Construction surfaces that resolve the provider
+                # from the environment (Agent via _get_provider_for_config, the RAG
+                # sweep sites) are unaffected — they pass a concrete provider.
+                default=None,
                 description="LLM provider: openai, anthropic, azure, local, or mock",
             ),
             "model": NodeParameter(
@@ -911,7 +920,25 @@ class LLMAgentNode(Node):
             ...     for suggestion in result['recovery_suggestions']:
             ...         print(f"- {suggestion}")  # doctest: +SKIP
         """
-        provider = kwargs["provider"]
+        provider = kwargs.get("provider")
+        # #1947: fail loud on an unresolved provider instead of silently
+        # dispatching the mock provider. The get_parameters() default is now
+        # None (was "mock"), so a construction site that omits `provider` and
+        # does not resolve it (a raw add_node("LLMAgentNode", ...) with no
+        # provider, a forgotten/new site) reaches here with provider=None. That
+        # is the exact silent-mock hazard #1943 fixed site-by-site; closing it
+        # at the node makes a forgotten provider a typed error, not fabricated
+        # content returned as real. provider="mock" passed EXPLICITLY is honored.
+        if provider is None:
+            raise ConfigurationError(
+                "LLMAgentNode: 'provider' is unresolved (None). A missing "
+                "provider no longer silently defaults to the mock provider "
+                "(closes the silent-mock class, #1947). Set a real provider "
+                "explicitly (provider='openai' / 'anthropic' / 'azure' / "
+                "'local'), use a construction surface that resolves it from the "
+                "environment, or pass provider='mock' to use the mock provider "
+                "for testing."
+            )
         model = kwargs["model"]
         messages = kwargs["messages"]
         system_prompt = kwargs.get("system_prompt")
