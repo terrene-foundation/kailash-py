@@ -1103,10 +1103,14 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
                     step_result["success"] = False
             except Exception as e:
+                # #1953 (return/log parity): a bad-key/rate-limit exception can
+                # embed a credential; sanitize ONCE so the stored output that
+                # flows into degraded_synthesis is redacted too (mirrors L1046).
+                error_msg = sanitize_provider_error(e, "LLM")
                 self.logger.error(
-                    f"LLM fallback failed for action {action}: {sanitize_provider_error(e, 'LLM')}"
+                    f"LLM fallback failed for action {action}: {error_msg}"
                 )
-                step_result["output"] = f"Error executing {action}: {str(e)}"
+                step_result["output"] = f"Error executing {action}: {error_msg}"
                 step_result["success"] = False
 
         step_result["duration"] = time.time() - start_time
@@ -1824,6 +1828,10 @@ provide your best analysis of the query directly.""",
                 synthesis_response.get("error")
                 or "synthesis LLM call returned an unsuccessful response"
             )
+            # #1953 (observability parity with the exception branch below): a
+            # non-exception synthesis failure is still a real failure — WARN so
+            # it is visible in logs, not only in the success=False return.
+            self.logger.warning(f"LLM synthesis failed: {synthesis_error}")
         except Exception as e:
             # #1953: a genuine runtime LLM failure (bad key, network,
             # rate-limit) with a resolved, non-mock provider — the #1947 guard
