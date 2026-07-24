@@ -1306,9 +1306,33 @@ class SignatureCompiler:
         self, signature_obj: Signature, config: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Create LLMAgentNode parameters for signature execution."""
+        # ADDITIONAL sibling fix (same class as agents.py's provider-gate
+        # hardening): `config.get("provider", "mock")` silently mock-dispatched
+        # every multi-modal signature whose config had no EXPLICIT "provider"
+        # key, even when a real API key was configured — matching the
+        # LLMAgentNode-param-building bug class fixed across the Agent
+        # deployment surface (rules/zero-tolerance.md Rule 2; no hardcoded
+        # mock responses on a production path). Delegates to the shared
+        # `detect_provider_from_env()` (kaizen/core/_provider_env.py) so an
+        # unconfigured provider resolves to a real key when one is present,
+        # falling back to "mock" only when neither is set — the SAME
+        # env-first order `Agent._get_provider_for_config()` uses.
+        # LOCAL import: `kaizen.core.__init__` imports `kaizen.signatures`
+        # at module scope, and `kaizen.signatures.__init__` imports `.core`
+        # (this file) at module scope — a module-level import here would
+        # risk a circular partial-init depending on which package a caller
+        # imports first. `_provider_env` is a leaf module (only imports
+        # `os`), so a lazy import here is always safe.
+        if "provider" in config:
+            resolved_provider = config["provider"]
+        else:
+            from kaizen.core._provider_env import detect_provider_from_env
+
+            resolved_provider = detect_provider_from_env()
+
         node_params = {
             "model": config["model"],
-            "provider": config.get("provider", "mock"),  # Use mock for testing
+            "provider": resolved_provider,
             "timeout": config.get("timeout", 30),
         }
 

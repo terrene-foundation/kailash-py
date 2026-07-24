@@ -49,6 +49,7 @@ def real_llm_config():
 class TestRealLLMProviderIntegration:
     """Test agents with real LLM provider API calls."""
 
+    @pytest.mark.requires_real_llm
     def test_real_openai_integration_basic_intelligence(self, real_llm_config):
         """Test basic intelligent responses using real OpenAI API."""
         kaizen = Kaizen()
@@ -83,6 +84,7 @@ class TestRealLLMProviderIntegration:
             f"Simple answer should be concise, got {word_count} words: {answer}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_mathematical_reasoning(self, real_llm_config):
         """Test mathematical reasoning with real LLM provider."""
         kaizen = Kaizen()
@@ -122,6 +124,7 @@ class TestRealLLMProviderIntegration:
             f"Must calculate correctly (3.00): {answer}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_domain_knowledge(self, real_llm_config):
         """Test domain-specific knowledge with real LLM."""
         kaizen = Kaizen()
@@ -174,6 +177,7 @@ class TestRealLLMProviderIntegration:
             f"Key concepts lack scientific terms: {key_concepts}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_response_consistency(self, real_llm_config):
         """Test that real LLM responses are consistent but not identical."""
         kaizen = Kaizen()
@@ -214,6 +218,7 @@ class TestRealLLMProviderIntegration:
         assert len(unique_responses) >= 1, "At least one response should exist"
         # Note: With very low temperature, responses might be identical - that's acceptable
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_error_handling(self, real_llm_config):
         """Test error handling with real LLM provider."""
         kaizen = Kaizen()
@@ -240,6 +245,7 @@ class TestRealLLMProviderIntegration:
         )
         assert len(answer) > 0, "Must have some response despite truncation"
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_timeout_handling(self, real_llm_config):
         """Test timeout handling with real LLM provider."""
         kaizen = Kaizen()
@@ -279,6 +285,7 @@ class TestRealLLMProviderIntegration:
 class TestRealLLMSignatureIntegration:
     """Test signature-based programming with real LLM providers."""
 
+    @pytest.mark.requires_real_llm
     def test_complex_signature_real_intelligence(self, real_llm_config):
         """Test complex signatures produce real intelligent structured responses."""
         kaizen = Kaizen(config={"signature_programming_enabled": True})
@@ -361,6 +368,7 @@ class TestRealLLMSignatureIntegration:
             f"Recommendations lack actionable advice: {result['recommendations']}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_signature_pattern_integration_real_llm(self, real_llm_config):
         """Test signature patterns (CoT, ReAct) with real LLM."""
         kaizen = Kaizen()
@@ -426,6 +434,7 @@ class TestRealLLMSignatureIntegration:
 class TestRealLLMPerformanceIntegration:
     """Test performance characteristics with real LLM providers."""
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_response_time_benchmarks(self, real_llm_config):
         """Test response time benchmarks with real LLM."""
         kaizen = Kaizen()
@@ -454,6 +463,7 @@ class TestRealLLMPerformanceIntegration:
 
         print(f"Real LLM response time: {response_time:.2f}s")
 
+    @pytest.mark.requires_real_llm
     def test_real_llm_batch_processing(self, real_llm_config):
         """Test batch processing with real LLM provider."""
         kaizen = Kaizen()
@@ -504,6 +514,7 @@ class TestRealLLMPerformanceIntegration:
 class TestRealLLMWorkflowIntegration:
     """Test workflow integration with real LLM providers."""
 
+    @pytest.mark.requires_real_llm
     def test_agent_workflow_compilation_real_llm(self, real_llm_config):
         """Test that agent workflow compiles correctly for real LLM execution."""
         kaizen = Kaizen()
@@ -554,6 +565,7 @@ class TestRealLLMWorkflowIntegration:
             f"Response should acknowledge greeting: {intelligent_response}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_multi_step_workflow_intelligence(self, real_llm_config):
         """Test multi-step workflows with real LLM intelligence."""
         kaizen = Kaizen()

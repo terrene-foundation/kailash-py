@@ -20,7 +20,7 @@ workflows with cryptographic trust chains, multi-channel deployment, and zero-co
 database operations. From a single workflow to orchestrated multi-agent systems, Kailash
 provides the foundation for verifiable, auditable AI applications.
 
-**Current Release: v2.59.0** (Core SDK) | DataFlow v2.19.0 | Nexus v2.14.0 | Kaizen v2.40.0
+**Current Release: v2.59.0** (Core SDK) | DataFlow v2.19.0 | Nexus v2.14.0 | Kaizen v2.41.0
 
 Quick Links
 -----------
@@ -34,7 +34,7 @@ Quick Links
    :doc:`CARE trust chains <core/trust>`.
 
 **Frameworks**
-   - **Kaizen** (v2.40.0): :doc:`AI agents <frameworks/kaizen>` with signatures, multi-agent coordination, and CARE trust
+   - **Kaizen** (v2.41.0): :doc:`AI agents <frameworks/kaizen>` with signatures, multi-agent coordination, and CARE trust
    - **Nexus** (v2.14.0): :doc:`Multi-channel platform <frameworks/nexus>` -- API + CLI + MCP from one codebase
    - **DataFlow** (v2.19.0): :doc:`Zero-config database <frameworks/dataflow>` with 11 auto-generated nodes per model, including `FieldType.Vector(dim)` embedding columns
 

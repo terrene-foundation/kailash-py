@@ -62,6 +62,7 @@ def kaizen_production():
 class TestCompleteIntelligentWorkflows:
     """Test complete end-to-end intelligent workflows."""
 
+    @pytest.mark.requires_real_llm
     def test_intelligent_business_analysis_workflow(
         self, kaizen_production, production_llm_config
     ):
@@ -168,6 +169,7 @@ class TestCompleteIntelligentWorkflows:
             f"Analysis too verbose for business context: {total_words} words"
         )
 
+    @pytest.mark.requires_real_llm
     def test_intelligent_multi_agent_collaboration(
         self, kaizen_production, production_llm_config
     ):
@@ -313,6 +315,7 @@ class TestCompleteIntelligentWorkflows:
             "Multi-agent workflow lacks topic coherence across all outputs"
         )
 
+    @pytest.mark.requires_real_llm
     def test_intelligent_chain_of_thought_reasoning_e2e(
         self, kaizen_production, production_llm_config
     ):
@@ -456,6 +459,7 @@ class TestCompleteIntelligentWorkflows:
             f"CoT reasoning too superficial: {total_reasoning_words} words"
         )
 
+    @pytest.mark.requires_real_llm
     def test_intelligent_react_pattern_e2e(
         self, kaizen_production, production_llm_config
     ):
@@ -592,6 +596,7 @@ class TestCompleteIntelligentWorkflows:
 class TestIntelligentEnterpriseWorkflows:
     """Test enterprise-grade intelligent workflows."""
 
+    @pytest.mark.requires_real_llm
     def test_enterprise_multi_signature_intelligence(
         self, kaizen_production, production_llm_config
     ):
@@ -748,6 +753,7 @@ class TestIntelligentEnterpriseWorkflows:
             f"Executive summary must reference technical assessment: {executive_result}"
         )
 
+    @pytest.mark.requires_real_llm
     def test_intelligent_performance_monitoring(
         self, kaizen_production, production_llm_config
     ):
