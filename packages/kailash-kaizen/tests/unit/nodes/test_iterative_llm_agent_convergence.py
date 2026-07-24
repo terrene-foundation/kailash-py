@@ -65,6 +65,7 @@ class TestIterativeLLMAgentConvergence:
 
                             # Run with test-driven mode
                             result = agent.execute(
+                                provider="mock",  # #1947: provider now explicit (was silent-mock default)
                                 messages=[{"role": "user", "content": "test"}],
                                 convergence_mode="test_driven",
                                 enable_auto_validation=True,

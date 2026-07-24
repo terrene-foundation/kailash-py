@@ -1351,7 +1351,7 @@ class Kaizen:
 
         Examples:
             >>> workflow = kaizen.create_workflow()
-            >>> workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
+            >>> workflow.add_node("LLMAgentNode", "agent", {"provider": "openai", "model": "gpt-4"})
             >>> results, run_id = kaizen.execute(workflow.build())
         """
         # LAZY LOADING: Load WorkflowBuilder on first use
@@ -1374,7 +1374,7 @@ class Kaizen:
 
         Examples:
             >>> workflow = kaizen.create_workflow()
-            >>> workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
+            >>> workflow.add_node("LLMAgentNode", "agent", {"provider": "openai", "model": "gpt-4"})
             >>> results, run_id = kaizen.execute(workflow.build())
         """
         # Validate workflow parameter
