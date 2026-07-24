@@ -234,3 +234,47 @@ class TestEmbeddingSurfaceKeylessFailsLoud:
         assert any(isinstance(e, ConfigurationError) for e in chain) or (
             "ConfigurationError" in str(exc_info.value)
         ), f"expected ConfigurationError in the failure chain, got {chain!r}"
+
+
+class TestReasoningConfigModellessFailsLoud:
+    """`_resolve_reasoning_config` must not silently mock a modelless real caller.
+
+    Same fabricated-content class as the keyless-provider fail-loud: when neither
+    ``OPENAI_PROD_MODEL`` nor ``DEFAULT_LLM_MODEL`` is configured and no explicit
+    config is passed, a real caller previously received a ``mock`` config that
+    fabricated reasoning as a real answer. It now fails loud unless the explicit
+    test-harness opt-in ``KAIZEN_ALLOW_KEYLESS_MOCK`` is set.
+    """
+
+    def test_modelless_keyless_reasoning_config_fails_loud(self, monkeypatch):
+        from kaizen.llm.reasoning import _resolve_reasoning_config
+
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            _resolve_reasoning_config(None)
+        # Names the env vars to set — actionable, no fabricated reasoning.
+        assert "OPENAI_PROD_MODEL" in str(exc_info.value)
+        assert "DEFAULT_LLM_MODEL" in str(exc_info.value)
+
+    def test_modelless_with_explicit_optin_returns_mock(self, monkeypatch):
+        from kaizen.llm.reasoning import _resolve_reasoning_config
+
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.setenv("KAIZEN_ALLOW_KEYLESS_MOCK", "1")
+
+        cfg = _resolve_reasoning_config(None)
+        assert cfg.llm_provider == "mock"
+
+    def test_model_configured_returns_real_config_not_mock(self, monkeypatch):
+        from kaizen.llm.reasoning import _resolve_reasoning_config
+
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+        monkeypatch.setenv("OPENAI_PROD_MODEL", "gpt-4o-mini")
+
+        cfg = _resolve_reasoning_config(None)
+        assert cfg.llm_provider != "mock"
+        assert cfg.model == "gpt-4o-mini"

@@ -39,6 +39,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
+from kaizen.config.providers import ConfigurationError
+from kaizen.core._provider_env import _keyless_mock_allowed
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -211,9 +213,13 @@ def _resolve_reasoning_config(
     cheap. If no config is supplied, fall back to `.env`-defined model with
     the same defaults per `rules/env-models`.
 
-    Last-resort fallback is the `mock` provider: this keeps unit tests that
-    pass bare `Mock(spec=BaseAgent)` stubs working without real API keys,
-    while production paths always route through an explicit config.
+    If no model is configured (neither `OPENAI_PROD_MODEL` nor
+    `DEFAULT_LLM_MODEL`), this FAILS LOUD with a typed `ConfigurationError`
+    rather than silently returning a `mock` config that would fabricate
+    reasoning as a real answer (#1952 same-class as the keyless-provider
+    fail-loud). The `mock` config is returned ONLY under the explicit
+    test-harness opt-in `KAIZEN_ALLOW_KEYLESS_MOCK` — real callers always
+    route through a real model or an explicit config.
     """
     if config is None:
         model = os.environ.get("OPENAI_PROD_MODEL") or os.environ.get(
@@ -221,7 +227,18 @@ def _resolve_reasoning_config(
         )
         provider = os.environ.get("DEFAULT_LLM_PROVIDER")
         if not model:
-            # Last-resort test/offline fallback: mock provider.
+            # #1952 same-class: a keyless/modelless REAL caller must fail loud,
+            # not silently get mock reasoning presented as a real answer. Mock
+            # is returned ONLY under the explicit test-harness opt-in, mirroring
+            # detect_provider_from_env()'s keyless contract.
+            if not _keyless_mock_allowed():
+                raise ConfigurationError(
+                    "No model configured for the reasoning agent: set "
+                    "OPENAI_PROD_MODEL or DEFAULT_LLM_MODEL, or pass an explicit "
+                    "config. Refusing to silently dispatch the mock provider "
+                    "(which would fabricate reasoning as a real answer)."
+                )
+            # Explicit test/offline opt-in only: mock provider.
             return BaseAgentConfig(
                 llm_provider="mock",
                 model="mock-model",

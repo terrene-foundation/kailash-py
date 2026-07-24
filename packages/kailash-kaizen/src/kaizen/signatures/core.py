@@ -1315,8 +1315,9 @@ class SignatureCompiler:
         # mock responses on a production path). Delegates to the shared
         # `detect_provider_from_env()` (kaizen/core/_provider_env.py) so an
         # unconfigured provider resolves to a real key when one is present,
-        # falling back to "mock" only when neither is set — the SAME
-        # env-first order `Agent._get_provider_for_config()` uses.
+        # else to None (keyless) so LLMAgentNode's #1947 fail-loud gate fires
+        # rather than silently dispatching "mock" — the SAME env-first order
+        # `Agent._get_provider_for_config()` uses (#1952).
         # LOCAL import: `kaizen.core.__init__` imports `kaizen.signatures`
         # at module scope, and `kaizen.signatures.__init__` imports `.core`
         # (this file) at module scope — a module-level import here would
