@@ -430,13 +430,19 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     iteration_state.end_time = time.time()
 
                 except Exception as e:
-                    iteration_state.error = str(e)
+                    # #1953 (return/log parity): iteration_state.error flows into
+                    # the returned "iterations" array via to_dict(); a bad-key/
+                    # rate-limit exception can embed a credential, so sanitize
+                    # ONCE and store the redacted form (same class as the L1109
+                    # + synthesis folds; mirrors the already-sanitized L439 log).
+                    error_msg = sanitize_provider_error(e, "iteration")
+                    iteration_state.error = error_msg
                     iteration_state.success = False
                     iteration_state.end_time = time.time()
 
                     if enable_detailed_logging:
                         self.logger.error(
-                            f"Iteration {iteration_num} failed: {sanitize_provider_error(e, 'iteration')}"
+                            f"Iteration {iteration_num} failed: {error_msg}"
                         )
 
                 iterations.append(iteration_state)
