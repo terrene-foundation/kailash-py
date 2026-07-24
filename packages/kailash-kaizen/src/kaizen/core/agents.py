@@ -1159,23 +1159,30 @@ CRITICAL RULES:
 
         return response_structure
 
-    def _get_provider_for_config(self) -> str:
+    def _get_provider_for_config(self) -> Optional[str]:
         """
         Determine the appropriate LLM provider based on configuration and environment.
 
         Returns:
-            str: Provider name ("openai", "anthropic", "smart_mock", etc.)
+            Optional[str]: Provider name ("openai", "anthropic", "mock", etc.)
+            when explicitly configured or resolvable from a real API key, else
+            ``None`` when keyless (#1952). A ``None`` result flows to
+            ``LLMAgentNode``'s #1947 fail-loud ``ConfigurationError`` gate — a
+            forgotten provider becomes a typed error, never fabricated mock
+            content returned as a real answer.
         """
         # If provider is explicitly set, use it
         if "provider" in self.config:
             return self.config["provider"]
 
-        # Env-first fallback (openai -> anthropic -> mock). This IS the
-        # canonical order every other LLMAgentNode-param-building site in
+        # Env-first fallback (openai -> anthropic -> None when keyless). This IS
+        # the canonical order every other LLMAgentNode-param-building site in
         # the Agent deployment surface mirrors via `detect_provider_from_env`
         # (`kaizen/core/_provider_env.py`) — kept inline here (rather than
         # delegating) so this method stays the single documented source of
-        # the contract; the shared helper exists for OTHER call sites.
+        # the contract; the shared helper exists for OTHER call sites. Returns
+        # None when keyless so the unresolved provider fails loud at the node
+        # (#1952 closes the keyless-mock residual of #1947).
         return _detect_provider_from_env()
 
     def _is_mock_provider_active(self) -> bool:

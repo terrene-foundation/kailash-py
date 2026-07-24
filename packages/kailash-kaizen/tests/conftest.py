@@ -23,6 +23,16 @@ from pathlib import Path
 use_real_providers = os.getenv("USE_REAL_PROVIDERS", "").lower() == "true"
 
 if not use_real_providers:
+    # #1952: the unit suite runs deliberately keyless (the package-root
+    # cost-guard scrubs provider secrets) and relies on the mock provider
+    # registered below. detect_provider_from_env() now returns None when keyless
+    # so REAL callers fail loud at LLMAgentNode's #1947 gate instead of silently
+    # dispatching fabricated mock content. The harness opts back into
+    # keyless->mock via this EXPLICIT flag — set ONLY here, in the same unit-mode
+    # branch that patches the mock registry. A real user never sets it, so real
+    # keyless callers stay fail-loud.
+    os.environ.setdefault("KAIZEN_ALLOW_KEYLESS_MOCK", "1")
+
     # Patch the canonical provider registry for unit tests
     try:
         import kaizen.providers as providers_module

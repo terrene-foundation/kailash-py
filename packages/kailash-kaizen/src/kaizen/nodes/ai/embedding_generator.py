@@ -5,6 +5,8 @@ from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
+from kaizen.config.providers import ConfigurationError
+
 
 @register_node()
 class EmbeddingGeneratorNode(Node):
@@ -236,7 +238,13 @@ class EmbeddingGeneratorNode(Node):
         # four-axis embed egress (_generate_provider_embedding) can honor it,
         # mirroring LLMAgentNode. Fail-closed default False.
         self._ungoverned = kwargs.get("ungoverned", False)
-        provider = kwargs.get("provider", "mock")
+        # #1952: no silent "mock" default. A forgotten provider used to become
+        # "mock" here (kwargs.get("provider", "mock")) and silently return
+        # fabricated mock vectors as real embeddings — the embedding-surface
+        # twin of the #1947 silent-mock hazard. Resolve to None (the param's
+        # get_parameters() default), then fail loud below for any embedding-
+        # PRODUCING operation. provider="mock" passed EXPLICITLY is honored.
+        provider = kwargs.get("provider")
         model = kwargs.get("model", "default")
         input_text = kwargs.get("input_text")
         input_texts = kwargs.get("input_texts", [])
@@ -252,6 +260,27 @@ class EmbeddingGeneratorNode(Node):
         normalize = kwargs.get("normalize", True)
         timeout = kwargs.get("timeout", 60)
         max_retries = kwargs.get("max_retries", 3)
+
+        # #1952: fail loud on an unresolved provider for any embedding-PRODUCING
+        # operation, BEFORE the try block so it propagates as a typed raise (not
+        # a success:False dict). calculate_similarity over two SUPPLIED vectors
+        # needs no provider; every embedding-producing path does. This mirrors
+        # LLMAgentNode's #1947 run() gate so a forgotten provider becomes a
+        # typed ConfigurationError instead of fabricated mock embeddings.
+        _needs_provider = operation in (
+            "embed_text",
+            "embed_batch",
+            "embed_mcp_resource",
+        ) or (operation == "calculate_similarity" and not (embedding_1 and embedding_2))
+        if _needs_provider and provider is None:
+            raise ConfigurationError(
+                "EmbeddingGeneratorNode: 'provider' is unresolved (None) for "
+                f"operation '{operation}'. A missing provider no longer silently "
+                "defaults to the mock provider (closes the keyless-mock residual "
+                "of #1947, #1952). Set a real provider explicitly "
+                "(provider='openai' / 'ollama' / 'cohere' / 'huggingface'), or "
+                "pass provider='mock' to use the mock provider for testing."
+            )
 
         try:
             if operation == "embed_text":
