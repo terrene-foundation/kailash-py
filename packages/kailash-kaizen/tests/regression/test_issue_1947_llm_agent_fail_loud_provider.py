@@ -137,3 +137,30 @@ class TestIterativeSubclassFailsLoud:
         )
         assert isinstance(result, dict)
         assert result.get("success") is True
+
+
+class TestFamilyInheritedClosureIsPinned:
+    """Pin the inheritance-based closure for every LLMAgentNode subclass.
+
+    A2AAgentNode and SelfOrganizingAgentNode carry no own provider guard — they
+    fail loud only because run() dispatches through an UN-try/except'd
+    super().run() that inherits the base guard. That is exactly the round-1
+    failure vector (IterativeLLMAgentNode wrapped its super().run() dispatch in a
+    swallowing try/except and re-opened the class). These pins fail loudly if a
+    future refactor ever wraps the super().run() dispatch, catching the
+    regression at test time instead of shipping fabricated content.
+    """
+
+    def test_a2a_no_provider_fails_loud(self):
+        from kaizen.nodes.ai.a2a import A2AAgentNode
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            A2AAgentNode().run(messages=_MESSAGES)
+        assert "provider" in str(exc_info.value).lower()
+
+    def test_self_organizing_no_provider_fails_loud(self):
+        from kaizen.nodes.ai.self_organizing import SelfOrganizingAgentNode
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            SelfOrganizingAgentNode().run(messages=_MESSAGES)
+        assert "provider" in str(exc_info.value).lower()
