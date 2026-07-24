@@ -37,6 +37,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
+from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -858,6 +859,7 @@ class RAGEvaluationNode(WorkflowNode):
             "LLMAgentNode",
             node_id="faithfulness_evaluator",
             config={
+                "provider": detect_provider_from_env(),
                 "system_prompt": """Evaluate the faithfulness of each generated answer to its retrieved contexts.
 
 Faithfulness measures whether the answer is grounded in the retrieved information.
@@ -885,6 +887,7 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
             "LLMAgentNode",
             node_id="relevance_evaluator",
             config={
+                "provider": detect_provider_from_env(),
                 "system_prompt": """Evaluate the relevance of each answer to its query.
 
 The user message contains one or more numbered tests (Test 1, Test 2, ...). For
@@ -934,6 +937,7 @@ Return a JSON ARRAY with exactly one object per test, in the SAME numbered order
                 "LLMAgentNode",
                 node_id="answer_quality_evaluator",
                 config={
+                    "provider": detect_provider_from_env(),
                     "system_prompt": """Compare each generated answer with its reference answer.
 
 The user message contains one or more numbered tests (Test 1, Test 2, ...). For

@@ -31,6 +31,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
+from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -851,6 +852,7 @@ class ConversationalRAGNode(WorkflowNode):
                 "LLMAgentNode",
                 node_id="coreference_resolver",
                 config={
+                    "provider": detect_provider_from_env(),
                     "system_prompt": """Resolve coreferences in the user query based on conversation context.
 
 Replace pronouns (it, they, this, that, these, those) and other references with their specific antecedents from the conversation history.
@@ -923,6 +925,7 @@ If no coreferences found, return the original query.""",
             "LLMAgentNode",
             node_id="response_generator",
             config={
+                "provider": detect_provider_from_env(),
                 "system_prompt": f"""Generate a contextual response considering the conversation history.
 
 Guidelines:
@@ -956,6 +959,7 @@ Keep responses conversational and engaging.""",
                 "LLMAgentNode",
                 node_id="context_summarizer",
                 config={
+                    "provider": detect_provider_from_env(),
                     "system_prompt": """Summarize the conversation history concisely.
 
 Focus on:

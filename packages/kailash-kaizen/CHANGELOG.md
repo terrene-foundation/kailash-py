@@ -2,6 +2,23 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.42.0] — 2026-07-24 — RAG nodes resolve provider instead of silently mock-dispatching
+
+### Fixed
+
+- **`kaizen.nodes.rag` nodes now resolve a provider at every `LLMAgentNode`
+  construction site.** 2.41.0 (#1943) closed provider omission across the `Agent`
+  deployment surface, but the RAG workflow nodes still built their inner
+  `LLMAgentNode` stages without a `provider` key at 26 sites across 7 files
+  (`query_processing`, `agentic`, `conversational`, `evaluation`, `graph`,
+  `similarity`, `multimodal`). Because `LLMAgentNode`'s `provider` parameter
+  defaults to `"mock"`, those RAG stages silently mock-dispatched regardless of any
+  configured `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. Every omitting site now
+  resolves through the shared `kaizen.core._provider_env.detect_provider_from_env()`
+  helper (env-first: openai → anthropic → mock), so a real API key is honoured
+  instead of being masked by the mock default (zero-tolerance Rule 2/3). Closes
+  #1946. (`workflows.py` already set a provider and is unchanged.)
+
 ## [2.41.0] — 2026-07-24 — Provider-dispatch integrity: mock-upgrade gated, provider resolved at every site
 
 ### Fixed

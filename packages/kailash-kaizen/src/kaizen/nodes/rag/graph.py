@@ -24,6 +24,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401  registers "LLMAgentNode"
+from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -943,6 +944,7 @@ class GraphRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="entity_extractor",
             config={
+                "provider": detect_provider_from_env(),
                 "system_prompt": f"""Extract entities and relationships from text.
 
                 Entity types: {", ".join(self.entity_types)}
@@ -996,6 +998,7 @@ class GraphRAGNode(WorkflowNode):
             "LLMAgentNode",
             node_id="query_processor",
             config={
+                "provider": detect_provider_from_env(),
                 "system_prompt": """Analyze the query to identify:
                 1. Key entities mentioned or implied
                 2. Types of relationships being asked about
@@ -1048,6 +1051,7 @@ class GraphRAGNode(WorkflowNode):
                 "LLMAgentNode",
                 node_id="summary_generator",
                 config={
+                    "provider": detect_provider_from_env(),
                     "system_prompt": """Generate high-level summaries of document communities.
                     Focus on main themes, key entities, and important relationships.
                     Be concise but comprehensive.""",
