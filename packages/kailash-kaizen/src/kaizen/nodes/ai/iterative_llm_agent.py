@@ -8,6 +8,7 @@ from typing import Any
 
 from kailash.nodes.base import NodeParameter, register_node
 
+from kaizen.config.providers import ConfigurationError
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
@@ -279,6 +280,24 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 total_duration (float): Total execution time
                 resource_usage (Dict): Resource consumption metrics
         """
+        # #1947: fail loud on an unresolved provider BEFORE the phase loop.
+        # IterativeLLMAgentNode inherits LLMAgentNode's provider param (default
+        # None), but its 6-phase loop dispatches LLM calls through super().run()
+        # inside try/except blocks that SWALLOW the base ConfigurationError and
+        # fall back to a hand-built synthesis template — silently returning
+        # fabricated content as a real answer with success=True. Guarding here,
+        # before any phase runs, re-closes the silent-mock class for the subclass
+        # exactly as the base node closes it (a forgotten provider is a LOUD,
+        # typed error, not a template answer). provider="mock" explicit is honored.
+        if kwargs.get("provider") is None:
+            raise ConfigurationError(
+                "IterativeLLMAgentNode: 'provider' is unresolved (None). A missing "
+                "provider no longer silently defaults to the mock provider "
+                "(closes the silent-mock class, #1947). Set a real provider "
+                "explicitly (provider='openai' / 'anthropic' / 'azure' / 'local'), "
+                "use a construction surface that resolves it from the environment, "
+                "or pass provider='mock' to use the mock provider for testing."
+            )
         # Extract iterative-specific parameters
         max_iterations = kwargs.get("max_iterations", 5)
         convergence_criteria = kwargs.get("convergence_criteria", {})
@@ -891,9 +910,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                                 "tool_outputs", {}
                             ).get(tool, step_result["output"])
                         else:
-                            execution_results["tool_outputs"][
-                                tool
-                            ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                            execution_results["tool_outputs"][tool] = (
+                                f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                            )
                 else:
                     # Store LLM response output
                     execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
@@ -1017,7 +1036,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
             # Use parent's LLM capabilities
             try:
                 llm_kwargs = {
-                    "provider": kwargs.get("provider", "openai"),
+                    # #1947: no silent "openai" substitution — the run() guard
+                    # guarantees a resolved provider by the time a phase dispatches.
+                    "provider": kwargs.get("provider"),
                     "model": _resolve_action_model(kwargs),
                     "messages": llm_messages,
                     "temperature": kwargs.get("temperature", 0.7),
@@ -1516,9 +1537,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 improvement = current_score - previous_score
 
                 diminishing_returns = improvement < min_improvement
-                convergence_result["criteria_met"][
-                    "diminishing_returns"
-                ] = diminishing_returns
+                convergence_result["criteria_met"]["diminishing_returns"] = (
+                    diminishing_returns
+                )
 
                 # Only stop for diminishing returns if we already have decent confidence
                 if (
@@ -1633,7 +1654,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         total_custom_weight += criterion_weight
                         convergence_result["criteria_met"][
                             f"custom_{criterion_name}"
-                        ] = (criterion_score > 0.5)
+                        ] = criterion_score > 0.5
 
                     except Exception as e:
                         self.logger.warning(

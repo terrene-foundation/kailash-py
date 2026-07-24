@@ -109,3 +109,31 @@ class TestExplicitMockStillWorks:
         # A mock response object is returned — fabricated-but-EXPLICITLY-requested,
         # which is the legitimate test-harness contract (never a silent default).
         assert result.get("response"), "explicit mock provider returned no response"
+
+
+class TestIterativeSubclassFailsLoud:
+    """The `at the node` guarantee MUST hold for the IterativeLLMAgentNode subclass.
+
+    Regression guard for the redteam HIGH: IterativeLLMAgentNode's 6-phase loop
+    dispatches LLM calls through super().run() inside try/except blocks that
+    SWALLOW the base ConfigurationError and fall back to a hand-built synthesis
+    template — silently returning fabricated content with success=True on a
+    forgotten provider. run() now guards BEFORE the phase loop.
+    """
+
+    def test_iterative_no_provider_fails_loud_not_template(self):
+        from kaizen.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            IterativeLLMAgentNode().run(messages=_MESSAGES, max_iterations=1)
+        assert "provider" in str(exc_info.value).lower()
+        assert "#1947" in str(exc_info.value)
+
+    def test_iterative_explicit_mock_still_works(self):
+        from kaizen.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
+
+        result = IterativeLLMAgentNode().execute(
+            provider="mock", messages=_MESSAGES, max_iterations=1
+        )
+        assert isinstance(result, dict)
+        assert result.get("success") is True
