@@ -2,6 +2,49 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.41.0] — 2026-07-24 — Provider-dispatch integrity: mock-upgrade gated, provider resolved at every site
+
+### Fixed
+
+- **Kaizen agents no longer substitute fabricated content for real LLM output.** A
+  test-only "mock-upgrade" mechanism ran on the production agent response path with no
+  provider guard: a genuine LLM answer that opened with a generic phrase (e.g. "Based on
+  the provided data and context…") was misclassified as a mock template and silently
+  replaced with a hardcoded/fabricated answer. The mock-upgrade is now gated on the
+  **actually-dispatched** provider, so real-provider output is always returned verbatim
+  (zero-tolerance Rule 2/3).
+- **Provider is now resolved at every `LLMAgentNode` construction site.** `LLMAgentNode`'s
+  `provider` parameter defaults to `"mock"`, so any site that omitted it silently
+  mock-dispatched. Fixed across the full Agent surface — `Agent.compile_workflow`, the
+  CoT/ReAct pattern executor, `communicate_with`/`broadcast_message`,
+  `Agent.to_node_config`, `BaseAgent.to_workflow`, `NexusDeploymentMixin.to_workflow`
+  (which additionally used the wrong key `llm_provider` instead of `provider`),
+  `DeploymentCache` cache-key resolution, and the multi-modal signature compiler — via a
+  shared `kaizen.core._provider_env.detect_provider_from_env()` helper.
+- **Compiled-workflow memos no longer serve a stale provider.** `BaseAgent.to_workflow`,
+  `Agent.compile_workflow`/`.workflow`, and `Agent._execute_with_signature` cached the
+  built workflow with the provider resolved at first build; they now rebuild when the
+  resolved provider drifts (e.g. an API key becomes available mid-process), so a
+  redeployed agent dispatches the real provider instead of a stale mock.
+- Mock-upgrade WARN logs now fingerprint (length + sha256 prefix) inputs/response instead
+  of logging raw payloads.
+
+### Changed
+
+- **Behavioral:** agents/nodes that previously returned mock output because a provider was
+  never set now dispatch to the real provider when API keys are present in the environment
+  (env-first detection: `OPENAI_API_KEY` → openai, `ANTHROPIC_API_KEY` → anthropic, else
+  mock). Deployments that unintentionally relied on the accidental mock fallback will now
+  make real provider calls.
+
+### Added
+
+- `kaizen.core._provider_env.detect_provider_from_env()` — shared env-first provider
+  resolution used by every construction/cache site.
+- The kaizen test conftest now enforces the `requires_real_llm` marker, so real-LLM
+  integration/e2e tests skip cleanly (instead of vacuously passing against mock) when no
+  API key is present.
+
 ## [2.40.0] — 2026-07-21 — Four-axis azure_ai_foundry wire + legacy provider path removed (#1892, closes #1720)
 
 ### BREAKING CHANGE
