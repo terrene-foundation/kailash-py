@@ -59,6 +59,10 @@ class DeploymentCache:
         - RESOLVED LLM provider (see FIX 8 note below)
         - Model name
         - Signature structure
+        - System prompt (#1948: two agents sharing name+provider+model+
+          signature but different prompts must NOT collide)
+        - Temperature (#1948: same-shape agents at different temperatures
+          build different workflows and must key distinctly)
 
         Args:
             agent: BaseAgent instance
@@ -98,11 +102,19 @@ class DeploymentCache:
         resolved_provider = llm_provider or detect_provider_from_env()
 
         # Build key data
+        #
+        # #1948: include system_prompt and temperature. Two agents that share
+        # name + provider + model + signature but carry different system
+        # prompts (or run at different temperatures) build DIFFERENT workflows;
+        # omitting these dimensions let the second agent collide onto the
+        # first's cached build under the module-global cache.
         key_data = {
             "name": name,
             "provider": resolved_provider,
             "model": getattr(config, "model", None),
             "signature": str(signature) if signature else None,
+            "system_prompt": getattr(config, "system_prompt", None),
+            "temperature": getattr(config, "temperature", None),
         }
 
         # Create deterministic JSON string
