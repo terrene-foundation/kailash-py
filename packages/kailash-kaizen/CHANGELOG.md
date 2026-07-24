@@ -2,6 +2,39 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.43.0] — 2026-07-24 — LLMAgentNode fails loud on an unresolved provider (silent-mock class closed at the node)
+
+### Changed (behavior — potentially breaking)
+
+- **`LLMAgentNode` and `IterativeLLMAgentNode` now RAISE
+  `kaizen.config.providers.ConfigurationError` when `provider` is unresolved
+  (`None`) instead of silently dispatching the mock provider.** The
+  `LLMAgentNode` `provider` NodeParameter default changed from `"mock"` to
+  `None`, and `run()` raises a typed error when the provider is unresolved. This
+  structurally closes the silent-mock class that 2.41.0 (#1943) and 2.42.0
+  (#1946) patched site-by-site: a forgotten or new construction site now fails
+  LOUD instead of returning fabricated content as a real model answer.
+  `IterativeLLMAgentNode` (a public subclass) previously swallowed the inherited
+  guard in its 6-phase loop and returned `success=True` with a hand-built
+  template answer — it is now guarded at the top of `run()`. The closure is
+  pinned across the whole node family (`LLMAgentNode`, `IterativeLLMAgentNode`,
+  `A2AAgentNode`, `SelfOrganizingAgentNode`). Closes #1947.
+
+  **Migration:** pass `provider="mock"` EXPLICITLY where you previously relied on
+  the mock default (tests / dev harnesses); the mock provider remains reachable
+  when requested explicitly. Production sites that resolve a provider from the
+  environment (the `Agent` deployment surface, the RAG nodes) are unaffected —
+  they already pass a concrete provider. Under `node.execute()` / runtime
+  dispatch the `ConfigurationError` surfaces wrapped in `NodeExecutionError` (as
+  `__cause__`); direct `node.run()` raises it cleanly.
+
+### Notes
+
+- Two same-class residuals on other surfaces are tracked separately: the keyless
+  `detect_provider_from_env()` → `"mock"` env fallback and `EmbeddingGeneratorNode`
+  (#1952), and a distinct runtime-error-masking pattern in `IterativeLLMAgentNode`
+  synthesis (#1953).
+
 ## [2.42.0] — 2026-07-24 — RAG nodes resolve provider instead of silently mock-dispatching
 
 ### Fixed
