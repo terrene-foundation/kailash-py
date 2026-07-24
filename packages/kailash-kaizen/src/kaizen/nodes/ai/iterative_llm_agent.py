@@ -605,15 +605,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 )
 
             except Exception as e:
+                # #1953 (return/log parity): this "error" flows into the returned
+                # iterations[].discoveries array via to_dict(); sanitize ONCE and
+                # reuse in both the log and the stored dict (same class as the
+                # L438 iteration fold — closes the last adjacent-log asymmetry).
+                error_msg = sanitize_provider_error(e, "MCP")
                 self.logger.debug(
-                    f"Discovery failed for server {server_id}: {sanitize_provider_error(e, 'MCP')}"
+                    f"Discovery failed for server {server_id}: {error_msg}"
                 )
                 discoveries["new_servers"].append(
                     {
                         "id": server_id,
                         "config": server_config,
                         "discovered_at": datetime.now().isoformat(),
-                        "error": str(e),
+                        "error": error_msg,
                         "tools_count": 0,
                         "resources_count": 0,
                     }
