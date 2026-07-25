@@ -140,12 +140,12 @@ data = [
 # Pins are MINIMUM compatible versions — bumping to unreleased versions
 # breaks release CI which installs from PyPI before the new release publishes.
 # ─────────────────────────────────────────────────────────────────
-dataflow = ["kailash-dataflow>=2.0.12"]
-nexus    = ["kailash-nexus>=2.1.1"]
-kaizen   = ["kailash-kaizen>=2.7.5", "kaizen-agents>=0.9.3"]
-pact     = ["kailash-pact>=0.8.2"]
-ml       = ["kailash-ml>=1.1.0"]
-align    = ["kailash-align>=0.3.2"]
+dataflow = ["kailash-dataflow>=2.19.1"]
+nexus    = ["kailash-nexus>=2.15.0"]
+kaizen   = ["kailash-kaizen>=2.45.0", "kaizen-agents>=0.12.0"]
+pact     = ["kailash-pact>=0.18.0"]
+ml       = ["kailash-ml>=2.2.2"]
+align    = ["kailash-align>=0.7.4"]
 
 # Trust Vault SLIP-0039 Shamir secret-sharing wrapper — see issue #606.
 # Module import succeeds without this extra; call-site raises RuntimeError
@@ -190,8 +190,8 @@ dev = [
     # [dev] here rather than the slim core. Per #890 audit.
     "networkx>=2.7",
     # Sub-packages required for test collection (pact/mcp tests import these)
-    "kailash-pact>=0.8.2",
-    "kailash-mcp>=0.1.0",
+    "kailash-pact>=0.18.0",
+    "kailash-mcp>=0.4.3",
     # psycopg2 is imported at module scope by 3 integration/e2e tests
     # (test_mcp_resource_flow, test_docker_infrastructure_validation,
     # test_mcp_subscriptions) — required for `pytest --collect-only`
@@ -233,13 +233,13 @@ all = [
     # encryption, Ed25519 audit signing, FastAPI gateway, etc.). Heavy ML /
     # fine-tuning stacks (torch, vllm, transformers training extras) remain
     # opt-in via kailash-ml[<extra>] / kailash-align[<extra>].
-    "kailash-dataflow[security,monitoring,api]>=2.0.12",
-    "kailash-nexus>=2.1.1",
-    "kailash-kaizen[providers-azure,providers-google,observability,db,cache,rag]>=2.7.5",
-    "kaizen-agents>=0.9.3",
-    "kailash-pact[api,execution]>=0.8.2",
-    "kailash-ml>=1.1.0",
-    "kailash-align>=0.3.2",
+    "kailash-dataflow[security,monitoring,api]>=2.19.1",
+    "kailash-nexus>=2.15.0",
+    "kailash-kaizen[providers-azure,providers-google,observability,db,cache,rag]>=2.45.0",
+    "kaizen-agents>=0.12.0",
+    "kailash-pact[api,execution]>=0.18.0",
+    "kailash-ml>=2.2.2",
+    "kailash-align>=0.7.4",
 ]
 
 [project.urls]
