@@ -71,11 +71,11 @@ class MyAgent(BaseAgent):
 ### Installation
 
 ```bash
-# Install Kaizen framework (latest v2.43.0)
+# Install Kaizen framework (latest v2.44.0)
 pip install kailash-kaizen
 
 # Or specific version
-pip install kailash-kaizen==2.43.0
+pip install kailash-kaizen==2.44.0
 ```
 
 ### Your First Agent (3 Steps)
