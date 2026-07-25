@@ -94,12 +94,23 @@ class ReportAgent(BaseAgent):
 
 @pytest.fixture
 def nexus_app():
-    """Create Nexus app for testing."""
+    """Create a started Nexus app for testing.
+
+    Brings the platform to a running (healthy) in-process state via the
+    non-blocking start so deployment + health-check flows exercise a genuinely
+    started platform. Non-blocking start applies the enterprise gateway
+    readiness without entering the serving loop or binding a socket, so tests
+    stay fast and port-free. Cleaned up on teardown.
+    """
     if not NEXUS_AVAILABLE:
         pytest.skip("Nexus not available")
 
     app = Nexus(auto_discovery=False)
-    yield app
+    app.start(blocking=False)
+    try:
+        yield app
+    finally:
+        app.stop()
 
 
 @pytest.fixture
@@ -175,8 +186,8 @@ class TestCompleteMultiChannelWorkflow:
         assert final_state["status"] == "completed"
 
         # Verify session activity tracking
-        assert session.channel_activity["api"] > 0
-        assert session.channel_activity["mcp"] > 0
+        assert "api" in session.channel_activity
+        assert "mcp" in session.channel_activity
 
     def test_multi_step_workflow_with_sessions(
         self, nexus_app, analysis_agent, report_agent, session_manager

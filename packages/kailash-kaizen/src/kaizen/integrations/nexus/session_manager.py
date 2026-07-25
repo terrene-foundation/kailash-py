@@ -85,6 +85,7 @@ class CrossChannelSession:
         self.expires_at = datetime.now() + timedelta(hours=1)
 
         if channel:
+            # Record the channel's last-activity wall-clock time.
             self.channel_activity[channel] = datetime.now()
 
     def update_state(self, updates: Dict[str, Any], channel: str = None):
@@ -188,7 +189,18 @@ class NexusSessionManager:
             >>> session = manager.create_session(user_id="user-123", ttl_hours=2)
             >>> print(session.user_id)
             "user-123"
+
+        Raises:
+            ValueError: If ``user_id`` is empty. A session must be owned by an
+                identifiable user; an empty owner makes cross-channel state and
+                metrics unattributable.
         """
+        if not user_id or not user_id.strip():
+            raise ValueError(
+                "user_id is required and must be a non-empty string; "
+                f"received {user_id!r}"
+            )
+
         session = CrossChannelSession(
             session_id=session_id or str(uuid4()),
             user_id=user_id,

@@ -656,6 +656,55 @@ class WorkflowServer:
 
         logger.info(f"Registered workflow '{name}' at {prefix}")
 
+    def deregister_workflow(self, name: str) -> bool:
+        """Remove a previously registered workflow from the server.
+
+        Reverses :meth:`register_workflow`: drops the registration, releases
+        the per-workflow ``WorkflowAPI`` runtime (issue #1285), and unmounts
+        the ``/workflows/{name}`` sub-application so the name is free to be
+        re-registered. This is what makes an idempotent redeploy possible —
+        without it, a second ``register_workflow(name, ...)`` raises
+        ``ValueError: Workflow '{name}' already registered``.
+
+        Args:
+            name: Workflow identifier to remove.
+
+        Returns:
+            True if a workflow was removed, False if none was registered
+            under ``name`` (idempotent no-op).
+        """
+        if name not in self.workflows:
+            return False
+
+        del self.workflows[name]
+
+        # Release the per-workflow API runtime so its AsyncLocalRuntime is
+        # closed rather than leaked (mirrors close(), issue #1285).
+        workflow_api = getattr(self, "_workflow_apis", {}).pop(name, None)
+        if workflow_api is not None:
+            try:
+                workflow_api.close()
+            except Exception as exc:  # pragma: no cover - teardown best-effort
+                logger.debug(
+                    "Error closing WorkflowAPI for '%s': %s: %s",
+                    name,
+                    type(exc).__name__,
+                    exc,
+                )
+
+        # Unmount the sub-application mounted at /workflows/{name}. Starlette
+        # keys a Mount by its (trailing-slash-stripped) path, so match the
+        # exact prefix to avoid removing sibling workflow mounts.
+        prefix = f"/workflows/{name}"
+        self.app.router.routes = [
+            route
+            for route in self.app.router.routes
+            if getattr(route, "path", None) != prefix
+        ]
+
+        logger.info(f"Deregistered workflow '{name}' from {prefix}")
+        return True
+
     def register_mcp_server(self, name: str, mcp_server: Any):
         """Register an MCP server with the workflow server.
 
