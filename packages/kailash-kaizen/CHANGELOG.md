@@ -2,6 +2,59 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.44.0] — 2026-07-25 — Provider-integrity forest: keyless fail-loud completed, synthesis error-masking closed, provider follow-ups
+
+### Changed (behavior — potentially breaking)
+
+- **Keyless provider resolution now fails LOUD across every remaining construction
+  site (#1952).** 2.43.0 (#1947) closed the silent-mock class at `LLMAgentNode` /
+  `IterativeLLMAgentNode`; this release extends the same fail-loud contract to the
+  keyless _environment fallback_ and the last un-audited node in the family:
+  - `detect_provider_from_env()` returns `None` (not `"mock"`) when no provider key
+    is present in the environment; the mock provider is reachable only under the
+    explicit `KAIZEN_ALLOW_KEYLESS_MOCK=1` test opt-in.
+  - `EmbeddingGeneratorNode` raises `ConfigurationError` on an unresolved provider
+    for embedding-producing operations instead of silently dispatching mock; an
+    explicit `provider="mock"` is still honored.
+  - `IterativeLLMAgentNode` reasoning-config resolution raises on a modelless +
+    keyless configuration unless the opt-in is set.
+  - `A2AAgentNode` no longer carries the silent `provider="mock"` default — an
+    omitted provider resolves to `None` (fail-loud on the primary answer path via
+    the #1947 node gate; honest rule-based fallback for the auxiliary insight /
+    summary features), completing #1952's "every construction site" audit.
+
+  **Migration:** pass `provider="mock"` explicitly where you previously relied on
+  the mock default (tests / dev harnesses). Production sites that resolve a provider
+  from the environment are unaffected — they already pass a concrete provider.
+
+### Fixed
+
+- **`IterativeLLMAgentNode` synthesis failure surfaces `success=False`, never a
+  template answer (#1953).** A synthesis-phase failure (an exception, or an
+  unsuccessful sub-agent result) now raises `SynthesisError` → `run()` returns
+  `success=False`, `synthesis_failed=True`, a sanitized `error`, and the partial
+  report under a non-`final_response` `degraded_synthesis` key — instead of
+  `success=True` with a hand-built template. Provider errors are routed through
+  `sanitize_provider_error` at every synthesis / iteration / MCP surface, and — new
+  in this release — at both `_phase_execution` `except` blocks (defense-in-depth
+  parity, so a future refactor cannot leak a raw provider error at those sites).
+- **Provider-handling follow-ups (#1948):**
+  - Cache keys now fold the _resolved_ provider (`_make_cache_key`), so two agents
+    that differ only by provider no longer collide on one cache entry.
+  - `deployment_cache.create_cache_key` keys on the effective
+    `_generate_system_prompt()` output plus temperature, and uses
+    `signature.to_dict()` instead of a `str(signature)` memory-address repr that
+    made every key unique (the deployment cache never hit).
+  - `workflow_generator` resolves the provider via `detect_provider_from_env()`
+    rather than a hardcoded `"openai"` fallback.
+  - The caching-gate docstring names the real gate (`batch_processing_enabled`).
+
+### Notes
+
+- Follow-up hardening — error-sanitizer credential-redaction gaps (#1960), a
+  `MultiProviderNode` sanitize-parity gap, Nexus deployment lifecycle (#1959), and a
+  federated-RAG cache-hit log level (#1961) — ships in a subsequent release.
+
 ## [2.43.0] — 2026-07-24 — LLMAgentNode fails loud on an unresolved provider (silent-mock class closed at the node)
 
 ### Changed (behavior — potentially breaking)
