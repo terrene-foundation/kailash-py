@@ -10,6 +10,7 @@ Design Philosophy:
 """
 
 import json
+import logging
 import time
 import uuid
 from collections import defaultdict, deque
@@ -22,6 +23,8 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # ENHANCED A2A COMPONENTS: Agent Cards and Task Management
@@ -92,7 +95,7 @@ class Capability:
     examples: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
 
-    async def matches_requirement(
+    def matches_requirement(
         self,
         requirement: str,
         *,
@@ -113,6 +116,19 @@ class Capability:
             used substring containment + keyword overlap scoring, which
             failed on synonyms, paraphrases, and any requirement not
             literally mentioning the capability name. The LLM generalises.
+
+        Why this is SYNC (#1973):
+            `llm_capability_match` is itself a sync callable and this body
+            awaits nothing. The whole consuming chain is sync — this is
+            called from `A2AAgentCard.calculate_match_score`, which is
+            reached from `A2ACoordinatorNode._find_best_agents_for_task`
+            inside a Kailash node's sync `run()`. An earlier revision
+            declared this `async def` without updating those callers, so
+            every call site multiplied a coroutine by a tier weight and
+            raised `TypeError` — i.e. all A2A capability matching was broken.
+            Making this async again requires redesigning that whole chain;
+            `tests/regression/test_issue_1973_a2a_capability_match.py` pins
+            the sync contract so the flip cannot happen silently.
 
         Args:
             requirement: Task requirement to score this capability against.
@@ -1834,6 +1850,16 @@ Create a summary that:
 Format the summary as a brief paragraph (max 200 words) that another agent can quickly understand and act upon.
 Focus on actionable intelligence rather than just listing what each agent said."""
 
+        # Bound BEFORE the try because the `except` handler below references
+        # both. Binding them only inside the try means any raise before BOTH
+        # assignments complete leaves a name unbound, and the handler itself
+        # raises UnboundLocalError — turning the silent swallow this block was
+        # written to fix into a crash, which is strictly worse. Pre-binding also
+        # closes the latent trap: a future statement added between `try:` and
+        # these assignments cannot silently break the error path.
+        provider = None
+        model = None
+
         try:
             # Use the current agent's LLM configuration for summarization.
             # #1952 residual: default None (not "mock") — an unset/keyless agent
@@ -1862,8 +1888,39 @@ Focus on actionable intelligence rather than just listing what each agent said."
                     summary = result.get("response", {}).get("content", "")
                     if summary:
                         return f"Shared Context Summary:\n{summary}"
-        except Exception:
-            pass
+                    logger.warning(
+                        "a2a.summarize.empty_llm_summary",
+                        extra={
+                            "provider": provider,
+                            "model": model,
+                            "context_items": len(context_items),
+                        },
+                    )
+                else:
+                    logger.warning(
+                        "a2a.summarize.llm_unsuccessful",
+                        extra={
+                            "provider": provider,
+                            "model": model,
+                            "error": str(result.get("error", "unknown")),
+                            "context_items": len(context_items),
+                        },
+                    )
+        except Exception as exc:
+            # The simple summary below is a legitimate degraded path, but it
+            # MUST NOT be silent (zero-tolerance.md Rule 3). WARN, not ERROR:
+            # the operation still returns a usable summary to the caller
+            # (observability.md MUST Rule 3 — WARN == succeeded via fallback).
+            logger.warning(
+                "a2a.summarize.llm_failed",
+                extra={
+                    "provider": provider,
+                    "model": model,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "context_items": len(context_items),
+                },
+            )
 
         # Fallback to simple summary
         summary_parts = []
@@ -2205,10 +2262,20 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
                             insights.append(insight)
 
                         return insights
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-        except Exception:
-            pass
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        logger.warning(
+                            "a2a.stage1_primary_extraction.unparseable_llm_json",
+                            extra={
+                                "error": str(exc),
+                                "error_type": type(exc).__name__,
+                                "payload_len": len(json_match.group()),
+                            },
+                        )
+        except Exception as exc:
+            logger.warning(
+                "a2a.stage1_primary_extraction.failed",
+                extra={"error": str(exc), "error_type": type(exc).__name__},
+            )
 
         return []
 
@@ -2328,10 +2395,20 @@ Respond with a JSON array matching the input order:
                                 "follow_up_actions", []
                             )
                             insights[i]["stage"] = "quality_enhanced"
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-        except Exception:
-            pass
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        logger.warning(
+                            "a2a.stage3_quality_enhancement.unparseable_llm_json",
+                            extra={
+                                "error": str(exc),
+                                "error_type": type(exc).__name__,
+                                "payload_len": len(json_match.group()),
+                            },
+                        )
+        except Exception as exc:
+            logger.warning(
+                "a2a.stage3_quality_enhancement.failed",
+                extra={"error": str(exc), "error_type": type(exc).__name__},
+            )
 
         return insights
 
@@ -2529,10 +2606,20 @@ Respond with JSON:
                             meta_insights.append(formatted_meta)
 
                         return meta_insights
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-        except Exception:
-            pass
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        logger.warning(
+                            "a2a.stage6_meta_synthesis.unparseable_llm_json",
+                            extra={
+                                "error": str(exc),
+                                "error_type": type(exc).__name__,
+                                "payload_len": len(json_match.group()),
+                            },
+                        )
+        except Exception as exc:
+            logger.warning(
+                "a2a.stage6_meta_synthesis.failed",
+                extra={"error": str(exc), "error_type": type(exc).__name__},
+            )
 
         return []
 

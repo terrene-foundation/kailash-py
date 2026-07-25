@@ -653,8 +653,10 @@ class OrchestrationRuntime:
         """Score a capability against a task using LLM reasoning.
 
         Accepts:
-            - Capability dataclass instances (exposes async `matches_requirement`)
-            - Legacy test mocks that expose a sync `matches_requirement`
+            - Capability dataclass instances (sync `matches_requirement`; it
+              awaits nothing and the whole A2A call chain is sync — see #1973)
+            - Capability-like objects exposing an async `matches_requirement`
+            - Legacy test mocks with a single-positional `matches_requirement`
             - Plain strings (capability name only) — scored via LLM similarity
 
         Returns 0.0 on any exception so a single LLM failure cannot sink the
@@ -691,7 +693,14 @@ class OrchestrationRuntime:
                 return await matcher(
                     task, config=reasoning_config, correlation_id=correlation_id
                 )
-            result = matcher(task)
+            # #1973: `Capability.matches_requirement` is sync (it awaits
+            # nothing), so the judge config MUST be propagated on this branch
+            # too — otherwise the routing judge silently falls back to `.env`
+            # defaults instead of the host agent's model. Legacy single-arg
+            # mocks raise TypeError here and are retried positionally below.
+            result = matcher(
+                task, config=reasoning_config, correlation_id=correlation_id
+            )
             if inspect.iscoroutine(result):
                 return await result
             return float(result)
