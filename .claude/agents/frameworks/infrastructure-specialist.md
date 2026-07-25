@@ -3,6 +3,13 @@ name: infrastructure-specialist
 description: "Kailash infrastructure specialist. Use for connections, dialect-portable SQL, task queues, stores, or idempotency."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
+hooks:
+  PreToolUse:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/provenance-capture-tool.js"'
+          timeout: 5
 ---
 
 # Infrastructure Specialist Agent
