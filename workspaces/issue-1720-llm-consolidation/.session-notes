@@ -74,26 +74,43 @@ a2a.py 11 errors → 8, the 3 lost being exactly the `coroutine * float` sites.
 | F3 | #1972 nexus 3 failures | PARTIALLY SUPERSEDED — 2 of 3 are STALE TESTS asserting behavior production DELIBERATELY BLOCKS (`nexus/core.py:1512-1515`). **Fixing the product to green them RE-INTRODUCES the defect.** Port the tests | queued |
 | F6 | #1981 structured-output root cause | Found by walking a LIVE provider: `CapabilityMatchAgent`/`TextSimilarityAgent` do not enforce structured output → on a non-structured-output provider EVERY real score is 0.0 and A2A ranking is arbitrary. #1980 made it LOUD (`.degraded` WARN, uncached) but did NOT fix it. HIGH, own shard | **FILED #1981**, queued |
 
-## Awaiting user decision (carried)
+## Decisions — ALL THREE RESOLVED (user "approved", 2026-07-25)
 
-- (a) wire `settings-hook-registration` validator into CI (stops the class rebuilding; `/sync` reds until dispositioned)
-- (b) **venv rebuild** — RECOMMENDED, now a blocker not housekeeping (see Traps)
-- (c) kailash-ml release owed? Rule 1a says a CHANGELOG touch ⇒ release; the touch was a 1-line
-  scrub of a HISTORICAL entry changing no wheel byte. Orchestrator read: no release owed.
+- **(a) DONE** — `.github/workflows/coc-hook-registration.yml` gates
+  `validate-emit --check settings-hook-registration` on every PR touching `.claude/hooks/**`,
+  `.claude/settings.json`, or the validator. Proven to bite: an unregistered/unmarked hook →
+  exit 1 naming it; clean tree → exit 0. ~0.1s, no `npm install` (node: builtins only).
+  **Deliberately scoped to ONE check.** A full `validate-emit` run has 6 OTHER blocking failures
+  (provenance-parity, provenance-subagent-hooks, hook-delivery, coc-artifact-ids,
+  codex-policies-fresh, gitignore-learning-parity) — all loom/multi-CLI-emission concerns, not
+  hook-registration. Gating on the full run would red every PR day one, and the predictable
+  response is a blanket `--allow=` that restores the exact silence the gate removes.
+  **Those 6 are open for triage on their own terms — do NOT widen the gate by suppressing them.**
+- **(b) DONE** — venv rebuilt; see Traps for the outcome AND the correct recipe.
+- **(c) RESOLVED — no kailash-ml release owed.** The `CHANGELOG.md` touch that made
+  `build-repo-release-discipline.md` Rule 1a read "release required" was a 1-line scrub of a
+  HISTORICAL entry; it changes no wheel byte, and CHANGELOG.md is not in the wheel
+  (`[tool.hatch.build.targets.wheel] packages = ["src/kailash_ml"]`). Release-drift counts for
+  kailash / kailash-align / kailash-ml are accurate but all chore/test-only.
 
 ## Traps
 
-- **`kailash-ml` and `kailash-align` DO NOT IMPORT.** `_editable_impl_*.pth` still point at the
-  pre-move `/Users/esperie/repos/loom/kailash-py/packages/...`. `packages/kailash-ml/tests` →
-  `99 tests collected, 180 errors`. **An errored collection reads like "no failures"** — do not
-  mistake it for green. Fix: `uv venv --clear && uv sync`. Session-start now warns about this.
-- CORRECTED from an earlier claim: the OTHER 6 packages DO import from live SOURCE at current
-  versions (kaizen 2.45.0, pact 0.18.0, mcp 0.4.3, nexus 2.15.0, dataflow 2.19.1, kailash 2.62.0).
-  Only the `.pth`-filename dist METADATA lags. Tests DO exercise current source.
+- **RESOLVED 2026-07-25 — venv rebuilt (user-approved).** `kailash-ml` / `kailash-align` no longer
+  import-fail; `.venv/bin/pre-commit` works natively again; 0 stale shebangs (was 119); 0 dangling
+  editable pointers (was 2). All 9 packages import at current versions. **`packages/kailash-ml/tests`
+  now collects 2594 tests (was 99 + 180 ERRORS); kailash-align collects 485.** ~3079 tests were
+  previously unrunnable.
+  - **REBUILD RECIPE — get this right or you will make it worse.** `uv venv --clear` alone picks the
+    NEWEST python (3.14.3) and `uv sync` alone installs only the 13-package SLIM CORE, dropping every
+    sub-package and all dev tooling. The correct invocation is:
+    `uv venv --python 3.13 --clear && uv sync --all-extras --dev`
+    (`--all-extras` is what pulls the 8 editable sub-packages via the `all` extra; there is NO
+    `.python-version` pin and `requires-python = ">=3.11"`, so the 3.13 pin must be explicit.)
 - Tests: ALWAYS `.venv/bin/python -m pytest`. Bare python/pyenv dies at conftest with
   `ImportError: Node`. **An errored run is zero evidence, not a failure.**
-- `.venv/bin/pre-commit` is DEAD (`bad interpreter`, stale shebang — 114-119 of 135 scripts
-  affected by the repo move). Use `.venv/bin/python -m pre_commit`.
+- STILL OPEN (real, hook-reported): 7 stale pins in root `pyproject.toml` — e.g. kailash-kaizen
+  pinned `>=2.7.5` vs ACTUAL 2.45.0, kailash-ml `>=1.1.0` vs 2.2.2. Not fixed (changes the
+  dependency contract; wants a deliberate pass).
 - Clear `__pycache__` before running kaizen tests — stale bytecode renders tracebacks against the
   non-existent pre-move path and you will read `???` for source.
 - Duplicate/cancelled CI runs read as red: a `conclusion: cancelled` job with all substantive

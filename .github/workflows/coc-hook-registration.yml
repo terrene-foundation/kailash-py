@@ -1,0 +1,96 @@
+name: COC Hook Registration
+
+# Guards ONE structural invariant: every top-level hook in .claude/hooks/ is
+# either registered in .claude/settings.json OR carries an
+# `@settings-registration:` header marker documenting how it is actually
+# invoked. A hook that is neither is shipped INERT — it fails open and nothing
+# says so (#771).
+#
+# Why this needs a CI gate rather than reviewer discipline: .claude/settings.json
+# is BUILD-owned and PRESERVED verbatim across every loom Gate-2 sync. loom can
+# SHIP a hook but can never WIRE it, and when loom DELETES one the registration
+# stays behind. That asymmetry is permanent, so the drift rebuilds on its own
+# unless something asserts the invariant on every PR. It had accumulated to 18
+# blocking findings before PR #1979 — including a block-severity, rule-mandated
+# guard (analyze-completeness-guard.js) that passed 9/9 of its own fixtures and
+# had never once fired.
+#
+# SCOPE: deliberately ONE check, not the full validator. `validate-emit.mjs`
+# with no --check currently reports 6 other blocking failures (provenance-parity,
+# provenance-subagent-hooks, hook-delivery, coc-artifact-ids,
+# codex-policies-fresh, gitignore-learning-parity), all loom / multi-CLI-emission
+# concerns rather than hook-registration ones. Gating on the full run would red
+# every PR on day one, and the predictable response to that is a blanket
+# --allow= suppression, which restores exactly the silence this gate exists to
+# remove. Those 6 are tracked for triage on their own terms; widening this gate
+# is a deliberate decision, not a default.
+#
+# COST: the validator imports only node: builtins plus sibling .mjs files, so no
+# npm install is needed and the check itself runs in ~0.1s. The job is
+# effectively checkout + setup-node.
+
+on:
+  pull_request:
+    paths:
+      - ".claude/hooks/**"
+      - ".claude/settings.json"
+      - ".claude/bin/validate-emit.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  hook-registration:
+    name: Hooks registered or marked
+    # Release-prep PRs are metadata-only by convention (rules/git.md
+    # § "Release-Prep PRs MUST Use release/v* Branch Convention"); they cannot
+    # change hook registration, so skip rather than burn a runner.
+    if: ${{ !startsWith(github.head_ref, 'release/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Assert every hook is registered or explicitly marked
+        run: node .claude/bin/validate-emit.mjs --check settings-hook-registration
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          {
+            echo "## Hook registration check failed"
+            echo ""
+            echo "A hook under \`.claude/hooks/\` is neither registered in"
+            echo "\`.claude/settings.json\` nor documented with an"
+            echo "\`@settings-registration:\` header marker. Either way it ships **inert** —"
+            echo "it fails open and nothing reports that it never runs."
+            echo ""
+            echo "Two valid fixes, and the choice is not cosmetic:"
+            echo ""
+            echo "1. **Register it** in \`.claude/settings.json\` under the event/matcher its"
+            echo "   own header documents — if the hook is genuinely meant to run here."
+            echo ""
+            echo "2. **Mark it** with \`@settings-registration: <how-it-is-invoked>\` — if it is"
+            echo "   intentionally not wired in this repo (a git hook, a consumer-registered"
+            echo "   gate, a CLI utility, or a coordination-substrate hook that belongs in a"
+            echo "   per-clone \`settings.local.json\` after \`/enroll\`)."
+            echo ""
+            echo "Do **not** silence this with \`--allow=\`. A marker that misdescribes how a"
+            echo "hook is invoked permanently hides a real finding, which is worse than the"
+            echo "failure it suppresses."
+            echo ""
+            echo "Reproduce locally:"
+            echo ""
+            echo '```'
+            echo "node .claude/bin/validate-emit.mjs --check settings-hook-registration"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
