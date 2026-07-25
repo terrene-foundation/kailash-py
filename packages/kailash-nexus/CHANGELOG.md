@@ -1,5 +1,35 @@
 # Nexus Changelog
 
+## [2.15.0] — 2026-07-25 — Deployment lifecycle: deregister + non-blocking start (#1959)
+
+### Added
+
+- **`Nexus.deregister(name)`** — removes a workflow from every channel: the HTTP
+  gateway route, and the MCP server's tool + `workflow://{name}` resource across all
+  four backing stores (`_tool_registry`, `_resource_registry`, and the underlying
+  FastMCP `_tool_manager` / `_resource_manager`). Idempotent; best-effort MCP removal
+  is logged, not silently swallowed. Makes redeploy (register → deregister →
+  re-register) collision-free.
+- **`Nexus.start(blocking=False)`** — non-blocking readiness: registers workflows with
+  the gateway, marks the app running, and reports healthy WITHOUT binding a socket or
+  entering the serving loop (for in-process / test / embedding use). The blocking
+  fallback re-raises worker-thread errors rather than swallowing them.
+
+### Fixed (#1959)
+
+- Redeploy is now idempotent across the MCP surface. Deregistration previously probed
+  non-existent server attributes and left the `workflow://` resource + FastMCP tool
+  registered, so a re-register collided with an "already exists" warning.
+  Deregistration is now symmetric with registration across all four backing stores.
+- `start(blocking=False)` no longer emits a spurious `ERROR: Failed to register
+workflow '...' already registered` when a workflow was registered before start (the
+  documented `register(); start()` flow) — HTTP transport registration is now
+  idempotent (already-registered workflows are skipped at DEBUG).
+
+### Requires
+
+- `kailash>=2.62.0` (uses the new `WorkflowServer.deregister_workflow`).
+
 ## [2.14.0] — 2026-07-20 — PKCE + id_token nonce across the SSO provider suite (#1834)
 
 ### Added (Security)

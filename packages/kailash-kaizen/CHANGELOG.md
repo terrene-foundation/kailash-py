@@ -2,6 +2,23 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [2.45.0] — 2026-07-25 — Follow-up hardening: sanitizer redaction, Nexus lifecycle, RAG log hygiene
+
+### Fixed
+
+- **Error-sanitizer credential-redaction gaps (#1960).** `sanitize_provider_error`
+  now redacts AWS access-key IDs (`AKIA…`), 40-char AWS/base64 secrets, uppercase and
+  mixed-case hex ≥32 chars (the prior rule matched lowercase hex only), and Azure
+  OpenAI endpoints (`https://<resource>.openai.azure.com` → `https://[REDACTED]…`).
+- **Nexus deployment lifecycle (#1959).** Multi-channel redeploy is now idempotent:
+  each `deploy_as_api` / `deploy_as_cli` / `deploy_as_mcp` deregisters any prior
+  registration before re-registering (via the new `Nexus.deregister`). Session
+  activity is tracked with plain `datetime`, and session creation rejects an empty
+  `user_id`. The redeploy path requires `kailash-nexus>=2.15.0`.
+- **Federated RAG cache-hit log hygiene (#1961).** The edge-RAG cache-hit line moved
+  from INFO to DEBUG and no longer implies it logs the query — the logged value is a
+  truncated sha256 digest of the query, not the query text.
+
 ## [2.44.0] — 2026-07-25 — Provider-integrity forest: keyless fail-loud completed, synthesis error-masking closed, provider follow-ups
 
 ### Changed (behavior — potentially breaking)

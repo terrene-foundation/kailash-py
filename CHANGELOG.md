@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.62.0] — 2026-07-25 — WorkflowServer workflow deregistration (#1959)
+
+### Added
+
+- **`WorkflowServer.deregister_workflow(name)`** — removes a previously-registered
+  workflow: unmounts its `/workflows/{name}` sub-application and releases the
+  per-workflow `WorkflowAPI` runtime (#1285). Idempotent (returns `False` when the
+  workflow is absent); route-match is symmetric with `register_workflow` (the exact
+  `/workflows/{name}` prefix, no sibling-mount collateral). Enables Nexus redeploy
+  idempotency (kailash-nexus 2.15.0, #1959).
+
 ## [2.61.0] — 2026-07-22 — Trust-plane capability subject-binding + chain-state signing (#1912)
 
 ### Security (Trust Plane — #1912 capability subject-binding + chain-state signing)
