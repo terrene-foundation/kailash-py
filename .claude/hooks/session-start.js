@@ -601,10 +601,24 @@ function checkSdkPinFreshness(cwd) {
     }
     const pins = [...pinsByName.values()];
 
-    if (pins.length === 0) return; // Not a kailash downstream repo
+    // Structural usability check — a pure filesystem stat, so it runs
+    // independently of the interpreter and covers EVERY editable install, not
+    // only the pinned ones. Detected before the pins early-return so a broken
+    // editable surfaces even in a repo that pins no kailash packages.
+    const brokenEditables = detectBrokenEditableInstalls(cwd);
+    const brokenNames = new Set(
+      brokenEditables.map((b) => b.name.toLowerCase().replace(/-/g, "_")),
+    );
+
+    if (pins.length === 0) {
+      reportBrokenEditables(brokenEditables, pins);
+      return; // Not a kailash downstream repo
+    }
 
     // Check pins against BUILD repo's actual versions
     checkPinsAgainstBuild(cwd, pins);
+    // Reported here so it lands regardless of which path below returns early.
+    reportBrokenEditables(brokenEditables, pins);
 
     // Check if .venv exists
     const venvPython = path.join(cwd, ".venv", "bin", "python");
@@ -618,76 +632,29 @@ function checkSdkPinFreshness(cwd) {
     // Enumerate installed packages via importlib.metadata — works in ANY venv,
     // including uv's default which ships NO pip (`python -m pip` there fails
     // with "No module named pip" on a perfectly healthy interpreter).
-    // Emits the [{name, version}] shape the pip path produced, PLUS a `broken`
-    // field for the pinned packages.
+    // Emits the same [{name, version}] shape the pip path produced.
     //
-    // WHY the `broken` probe: metadata presence is NOT evidence of usability.
-    // `.dist-info` survives a broken editable install, so a package whose
-    // `.pth` points at a moved/deleted source tree still enumerates at its
-    // recorded version while `import <pkg>` raises ModuleNotFoundError and its
-    // test suite cannot run. Reporting that as healthy hides a condition that
-    // silently invalidates test results.
-    //
-    // Two MECHANICAL signals, no module execution:
-    //   1. an editable-pointer `.pth` whose target directory does not exist
-    //      (names the stale path, which is the actionable part)
-    //   2. no top-level module resolves via find_spec
-    // find_spec RESOLVES without importing: 0.02s vs 5.1s for real imports of
-    // these packages, and real imports also dump ~60 lines of library INFO
-    // logging into session start. Limitation: this catches "module cannot be
-    // located" (the ModuleNotFoundError class) — NOT a module that locates but
-    // raises during execution. Scoped to the pinned packages only; probing all
-    // ~288 distributions costs 5.1s, probing the 7 pinned costs 0.44s.
-    const PROBE_INSTALLED = [
-      "import json,sys,pathlib,importlib.util",
+    // Usability is NOT checked here — metadata presence is not evidence a
+    // package can be imported. That check is detectBrokenEditableInstalls()
+    // above: a pure filesystem stat over site-packages .pth pointers, which is
+    // cheaper, covers EVERY editable install rather than only the pinned ones,
+    // and still reports when this interpreter is itself broken.
+    const ENUMERATE_INSTALLED = [
+      "import json,sys",
       "from importlib.metadata import distributions",
-      "wanted={a.lower().replace('-','_') for a in sys.argv[1:]}",
-      "def pth_targets(d):",
-      "    out=[]",
-      "    for f in (d.files or []):",
-      "        if not str(f).endswith('.pth'): continue",
-      "        try: raw=pathlib.Path(d.locate_file(f)).read_text()",
-      "        except Exception: continue",
-      "        for line in raw.splitlines():",
-      "            line=line.strip()",
-      "            if not line or line.startswith(('import ','#')): continue",
-      "            out.append((line, pathlib.Path(line).is_dir()))",
-      "    return out",
-      "def top_levels(d,targets):",
-      "    tl=d.read_text('top_level.txt')",
-      "    if tl: return sorted({x.strip() for x in tl.split() if x.strip()})",
-      "    names=set()",
-      "    for path,ok in targets:",
-      "        if not ok: continue",
-      "        for child in pathlib.Path(path).iterdir():",
-      "            if (child/'__init__.py').is_file(): names.add(child.name)",
-      "    return sorted(names)",
       "out=[]",
       "for d in distributions():",
       "    n=(d.metadata or {}).get('Name')",
       "    v=d.version",
-      "    if not n or not v: continue",
-      "    e={'name':n,'version':v}",
-      "    if n.lower().replace('-','_') in wanted:",
-      "        try:",
-      "            targets=pth_targets(d)",
-      "            broken=[p for p,ok in targets if not ok]",
-      "            if broken: e['broken']='stale editable pointer -> '+broken[0]",
-      "            else:",
-      "                tls=top_levels(d,targets)",
-      "                if tls and not any(importlib.util.find_spec(m) for m in tls):",
-      "                    e['broken']='module does not resolve: '+', '.join(tls)",
-      "        except Exception as ex: e['probe_error']=f'{type(ex).__name__}: {ex}'",
-      "    out.append(e)",
+      "    if n and v: out.append({'name':n,'version':v})",
       "json.dump(out,sys.stdout)",
     ].join("\n");
 
     let stale = 0;
-    const brokenInstalls = [];
     try {
       const installed = execFileSync(
         venvPython,
-        ["-c", PROBE_INSTALLED, ...pins.map((p) => p.name)],
+        ["-c", ENUMERATE_INSTALLED],
         // MUST stay below this hook's own TIMEOUT_MS (10s) so a hung probe is
         // killed here and the hook still reports, rather than the whole hook
         // hitting its fallback. Measured probe cost is ~0.44s (7 pinned pkgs).
@@ -715,20 +682,10 @@ function checkSdkPinFreshness(cwd) {
           stale++;
           continue;
         }
-        if (entry.probe_error) {
-          // Surface rather than swallow; treat as unknown-health, not healthy.
-          console.error(
-            `[SDK-PINS] ${pin.name}: health probe failed (${entry.probe_error}); usability UNKNOWN.`,
-          );
-        }
-        if (entry.broken) {
-          // Metadata present but unusable — MUST NOT count toward the healthy
-          // tally; this package's tests cannot execute.
-          brokenInstalls.push({
-            name: pin.name,
-            version: entry.version,
-            reason: entry.broken,
-          });
+        if (brokenNames.has(normalized)) {
+          // Metadata present but the editable pointer dangles — unusable, so it
+          // MUST NOT count toward the healthy tally. Reported by the dedicated
+          // block below (which also covers non-pinned packages).
           continue;
         }
         const installed_ver = entry.version;
@@ -764,10 +721,13 @@ function checkSdkPinFreshness(cwd) {
       return;
     }
 
-    // Healthy = pinned, installed, at/above pin, AND actually usable. Broken
-    // installs are excluded from this tally so the count never asserts health
-    // for a package that cannot be imported.
-    const healthy = pins.length - stale - brokenInstalls.length;
+    // Healthy = pinned, installed, at/above pin, AND actually usable. Packages
+    // with a dangling editable pointer are excluded so this count never
+    // asserts health for something that cannot be imported.
+    const brokenPinned = pins.filter((p) =>
+      brokenNames.has(p.name.toLowerCase().replace(/-/g, "_")),
+    ).length;
+    const healthy = pins.length - stale - brokenPinned;
     if (stale === 0 && healthy > 0) {
       // Distinct from the STALE-pin check above: that compares pins against the
       // SDK source, this compares the .venv's INSTALLED versions against the pins.
@@ -779,23 +739,108 @@ function checkSdkPinFreshness(cwd) {
         `[SDK-PINS] ${stale} stale pin(s). MUST run: uv sync (not pip install)`,
       );
     }
-
-    if (brokenInstalls.length > 0) {
-      console.error(
-        `[SDK-PINS] ⚠ ${brokenInstalls.length} package(s) have install metadata but FAIL to import ` +
-          `— their test suites cannot run:`,
-      );
-      for (const b of brokenInstalls) {
-        console.error(
-          `[SDK-PINS]   ${b.name} (metadata ${b.version}): ${b.reason}`,
-        );
-      }
-      console.error(
-        `[SDK-PINS]   Cause is usually a stale editable-install pointer after a repo move. ` +
-          `Fix: uv venv --clear && uv sync`,
-      );
-    }
   } catch {}
+}
+
+/**
+ * Report editable installs whose target path no longer exists.
+ * Silent when there are none — a healthy venv emits nothing.
+ */
+function reportBrokenEditables(brokenEditables, pins) {
+  if (!brokenEditables || brokenEditables.length === 0) return;
+  console.error(
+    `[SDK-PINS] ⚠ ${brokenEditables.length} editable install(s) point at a path that no longer ` +
+      `exists — those packages CANNOT be imported and their test suites cannot run:`,
+  );
+  for (const b of brokenEditables) {
+    // The .pth filename carries the normalized (underscore) name; prefer the
+    // pin's exact spelling when one matches, so the operator sees the name
+    // they would actually type.
+    const norm = b.name.toLowerCase().replace(/-/g, "_");
+    const pin = (pins || []).find(
+      (p) => p.name.toLowerCase().replace(/-/g, "_") === norm,
+    );
+    console.error(
+      `[SDK-PINS]   ${pin ? pin.name : b.name} -> ${b.target} (missing)`,
+    );
+  }
+  console.error(
+    `[SDK-PINS]   Usually a stale editable pointer after a repo move. Fix: uv venv --clear && uv sync`,
+  );
+}
+
+/**
+ * Derive the distribution name from an editable-install .pth filename.
+ * Handles both layouts setuptools emits:
+ *   __editable__.kailash_dataflow-2.16.0.pth -> kailash_dataflow
+ *   _editable_impl_kailash_ml.pth            -> kailash_ml
+ */
+function deriveEditableName(pthFilename) {
+  let n = pthFilename.replace(/\.pth$/, "");
+  if (n.startsWith("_editable_impl_")) return n.slice("_editable_impl_".length);
+  if (n.startsWith("__editable__.")) {
+    n = n.slice("__editable__.".length);
+    return n.replace(/-\d[\w.!+]*$/, ""); // strip the trailing -<version>
+  }
+  return n;
+}
+
+/**
+ * Structurally detect broken editable installs — a .pth pointer whose target
+ * directory no longer exists.
+ *
+ * A dangling target is DEFINITIVE proof the package cannot be imported: the
+ * path never joins sys.path, so `import <pkg>` raises ModuleNotFoundError and
+ * that package's test suite cannot execute (it collects with errors, which
+ * reads like "no failures" to anyone not looking closely — a zero-tolerance
+ * Rule 1 landmine after a repo move).
+ *
+ * Cost is a directory read plus one stat per .pth — no imports, no subprocess,
+ * so this still reports when the interpreter itself is broken. Covers EVERY
+ * editable install, not only the pinned ones.
+ *
+ * Fails open: a missing/unreadable .venv or site-packages yields [] silently —
+ * absence of the venv is not evidence of breakage.
+ */
+function detectBrokenEditableInstalls(cwd) {
+  const broken = [];
+  try {
+    const libDir = path.join(cwd, ".venv", "lib");
+    if (!fs.existsSync(libDir)) return broken;
+    for (const pyDir of fs.readdirSync(libDir)) {
+      const sitePackages = path.join(libDir, pyDir, "site-packages");
+      if (!fs.existsSync(sitePackages)) continue;
+      let entries;
+      try {
+        entries = fs.readdirSync(sitePackages);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (!entry.endsWith(".pth")) continue;
+        let raw;
+        try {
+          raw = fs.readFileSync(path.join(sitePackages, entry), "utf8");
+        } catch {
+          continue; // unreadable .pth is not evidence of a dangling target
+        }
+        for (const line of raw.split("\n")) {
+          const t = line.trim();
+          if (!t || t.startsWith("#")) continue;
+          // A .pth line may be executable code (`import foo`) rather than a
+          // path — site.py runs those. SKIP rather than guess at a target.
+          if (/^import\s/.test(t)) continue;
+          // Relative entries resolve against site-packages itself.
+          const target = path.isAbsolute(t) ? t : path.join(sitePackages, t);
+          if (fs.existsSync(target)) continue;
+          broken.push({ name: deriveEditableName(entry), target });
+        }
+      }
+    }
+  } catch {
+    // Fail open per cc-artifacts.md Rule 7 — never block session start.
+  }
+  return broken;
 }
 
 /**
