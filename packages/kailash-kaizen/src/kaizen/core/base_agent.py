@@ -598,7 +598,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
         if self.config.model is not None:
             node_config["model"] = self.config.model
-        node_config["provider"] = current_provider  # required; else defaults to "mock"
+        node_config["provider"] = current_provider  # None keyless → #1947 gate
         # generation_config is LLMAgentNode's declared dict param (the only one
         # llm_agent.py reads at runtime) — top-level temperature/max_tokens
         # aren't declared NodeParameters and the Kailash validator flags them
