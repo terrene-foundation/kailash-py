@@ -722,10 +722,13 @@ class EdgeRAGNode(Node):
         local_data = kwargs.get("local_data") or []
         sync_with_cloud = kwargs.get("sync_with_cloud", False)
 
-        # Check cache first
+        # Check cache first. ``cache_key`` is a truncated sha256 digest of the
+        # query, NOT the query text — it carries no user-query content, so it is
+        # safe to log. Emitted at DEBUG because a per-cache-hit line at INFO is
+        # hot-path noise for a RAG node (observability: no log-spam in hot loops).
         cache_key = hashlib.sha256(query.encode()).hexdigest()[:8]
         if cache_key in self.cache and self.power_mode != "performance":
-            logger.info(f"Cache hit for query: {cache_key}")
+            logger.debug(f"Cache hit (key: {cache_key})")
             return self.cache[cache_key]
 
         # Resource tracking
