@@ -173,17 +173,39 @@ class HTTPTransport(Transport):
             self._register_endpoint_internal(path, methods, func, **kwargs)
         self._endpoint_queue.clear()
 
-        # Register all workflows from registry
+        # Register all workflows from registry.
+        #
+        # The gateway is built once at construction, so Nexus.register() has
+        # ALREADY eagerly registered it with each workflow before start() runs
+        # (the documented ``register(wf); start()`` flow). Re-registering the
+        # same name raises ``ValueError: '<name>' already registered``. Skip
+        # names the gateway already knows rather than catching-and-logging the
+        # collision at ERROR — a false "Failed to register" on the happy path
+        # (a redeploy re-uses this same gateway, so already-present is normal,
+        # not a failure). ``register_workflow`` is still the sole registration
+        # path; the pre-check just avoids driving it into its duplicate guard.
         for wf_name, workflow in registry.list_workflows().items():
+            if wf_name in self._registered_workflow_names():
+                logger.debug(
+                    f"Workflow '{wf_name}' already registered with HTTP gateway; "
+                    f"skipping"
+                )
+                continue
             try:
                 self._gateway.register_workflow(wf_name, workflow)
             except Exception as e:
                 logger.error(f"Failed to register workflow '{wf_name}' with HTTP: {e}")
 
-        # Register handler workflows
+        # Register handler workflows (same idempotency contract as above).
         for handler_def in registry.list_handlers():
             wf = registry._handler_funcs.get(handler_def.name, {}).get("workflow")
             if wf is not None:
+                if handler_def.name in self._registered_workflow_names():
+                    logger.debug(
+                        f"Handler '{handler_def.name}' already registered with HTTP "
+                        f"gateway; skipping"
+                    )
+                    continue
                 try:
                     self._gateway.register_workflow(handler_def.name, wf)
                 except Exception as e:
@@ -193,6 +215,22 @@ class HTTPTransport(Transport):
 
         self._running = True
         logger.info(f"HTTPTransport started on port {self._port}")
+
+    def _registered_workflow_names(self) -> frozenset:
+        """Names the enterprise gateway already has a workflow registered under.
+
+        The gateway (``EnterpriseWorkflowServer``) tracks registrations in a
+        name-keyed ``workflows`` dict. Reading it is the pre-check that lets
+        :meth:`start` skip re-registering a workflow ``Nexus.register()``
+        already installed, rather than driving ``register_workflow`` into its
+        duplicate-name ``ValueError`` guard. Defensive: an unexpected gateway
+        without a mapping ``workflows`` attribute yields an empty set (the loop
+        then falls back to the try/except register path unchanged).
+        """
+        workflows = getattr(self._gateway, "workflows", None)
+        if isinstance(workflows, dict):
+            return frozenset(workflows.keys())
+        return frozenset()
 
     def _install_exception_handlers(self) -> None:
         """Install the NexusError -> HTTP exception handler on the gateway app.
