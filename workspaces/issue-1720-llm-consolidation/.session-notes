@@ -49,6 +49,65 @@ top. Restructuring a 1550-line changelog needs a deliberate pass — do NOT fold
   edits). `session-start.js`: 4 defects fixed + 2 self-found. Security review MERGE-WITH-FIXES
   (no CRIT/HIGH); its 3 in-branch items fixed in-branch.
 
+## validate-emit's 6 failures — TRIAGED (user-approved). 1 was real and LIVE.
+
+`validate-emit.mjs` (full run) went **401 pass / 6 fail → 402 pass / 5 fail**.
+
+**NOT A DISCLOSURE LEAK — do not re-escalate `gitignore-learning-parity`.** Verified twice
+(orchestrator + agent, independently): `git ls-files .claude/learning/` is EMPTY, `.gitignore:121/:123`
+ignore the whole dir, and the only tracked identity-shaped file `.claude/operators.roster.json` is
+all-PLACEHOLDER (`PLACEHOLDER-owner`, root_commit `0000000`, fingerprint `DEADBEEF…`). The check is a
+PRODUCER-side fence on what loom DISTRIBUTES (`sync-manifest.yaml::gitignore_additions` ⊇ loom's own
+`.gitignore`), asserting nothing about this repo's exposure. Its red is fail-closed-on-missing-input.
+
+**THE REAL ONE — `codex-policies-fresh`, and it was LIVE (FIXED).** The un-enrolled posture that
+`settings.json` carefully preserves was being BYPASSED for Codex sessions. Committed
+`.codex-mcp-guard/policies.json` was a loom-shaped SUPERSET declaring 3 gates the live extraction
+does not: `genesis-anchor-guard.js`, `signing-mutation-guard.js`, `operator-gate.js` — all three
+present on disk but deliberately UNREGISTERED in `settings.json` (grep count 0). And it was wired:
+`.codex/config.toml` runs `.codex-mcp-guard/server.js`, whose contract is `exit 0 ⇒ allow; exit 2 ⇒
+deny`, while `genesis-anchor-guard.js:14` "hard-`block`s (exit 2) every `git commit` / `git push`"
+absent an enrollment marker. **So a forker running Codex here could be hard-blocked from committing
+— the exact fork-bricking mode the un-enrolled posture exists to prevent, leaked in via a SYNCED
+file while settings.json was correctly preserved.** Same class as the `coc-drift-warn` defect that
+opened this session, but with teeth. Regenerated → diff is REMOVALS ONLY (loosens Codex to match CC,
+cannot tighten) → `[ok] codex-policies-fresh`.
+
+**TRAP — the validator's own printed remediation command DOES NOT WORK.** It prints
+`node .claude/codex-mcp-guard/extract-policies.mjs …`, but `.claude/codex-mcp-guard` is a SYMLINK to
+`../.codex-mcp-guard`, and the script's run-as-main guard at `extract-policies.mjs:640`
+(`import.meta.url === \`file://${process.argv[1]}\``) compares a realpath against the symlink path →
+mismatch → **silent no-op at exit 0, nothing written**. Use the REAL path:
+`node .codex-mcp-guard/extract-policies.mjs .claude/hooks --write-policies .codex-mcp-guard/policies.json --settings .claude/settings.json`
+
+**Incidental real drift (FIXED):** `.claude/agents/frameworks/infrastructure-specialist.md` was the
+only 1 of 32 agents missing the `provenance-capture-tool.js` PreToolUse frontmatter hook — it was
+carve-out-`PRESERVED` (see `.claude/VERSION` changelog 1.0.2) across the sync that added it to the
+other 31. Now 32/32.
+
+**The remaining 5 are MIS-SCOPED, not defects here — do NOT `--allow=` them.** `provenance-parity`,
+`provenance-subagent-hooks`, `hook-delivery`, `coc-artifact-ids`, `gitignore-learning-parity` all
+assert contracts over `.claude/sync-manifest.yaml`, which has NEVER existed here and is not tracked
+or ignored — it is loom's DISTRIBUTION manifest. `validate-emit.mjs` references it at ~40 sites and
+**never reads `.claude/VERSION`**, so it has no repo-type awareness. Root cause of 5 of 6.
+- `coc-artifact-ids` additionally has a STRUCTURALLY DEFECTIVE skip predicate: `:3196` guards on
+  `resolve(root) !== EMIT_REPO` intending "am I loom?", but `EMIT_REPO` is
+  `path.resolve(__dirname,"..","..","..")` = *the repo containing the script*, so it is ALWAYS false
+  and the "loom checkout only" SKIP **can never fire in any repo loom syncs to**. A class defect.
+- Residual, stated not inferred: because that emit cannot run, the id-grammar/collision invariant
+  over this repo's 197 tracked `.coc/` files is **UNVERIFIED** — SKIP would be honest, not green.
+
+**ROUTING DECISION (orchestrator call, answers the agent's open question): the `validate-emit.mjs`
+predicate fix routes UPSTREAM via `/codify` Step 7a — do NOT patch it locally.** Three reasons:
+(1) `issue-triage-routing.md` binds it — this repo is `.claude/VERSION::type = coc-build`, so a
+COC-tooling fix goes cross-SDK-first → `/codify` proposal, never a local edit; (2) the `EMIT_REPO`
+bug is loom's and mis-fires in EVERY repo loom syncs this validator to — a local patch fixes 1 of N;
+(3) `validate-emit.mjs` matches the `self-referential-codify.md` Bin allowlist glob
+(`.claude/bin/{validate-*}.mjs`), so a local patch would need the Tier-1 full multi-agent redteam AND
+be Class-A non-durable — rebuilt away by the next `/sync-to-build`.
+**Corollary: do NOT widen `coc-hook-registration.yml` past `--check settings-hook-registration`
+until the upstream re-scoping lands.**
+
 ## Wave tracker
 
 None in flight. All 7 agents reported and are done: `w2-loom-sync`, `w2-backlog-reconcile`,
@@ -108,9 +167,17 @@ a2a.py 11 errors → 8, the 3 lost being exactly the `coroutine * float` sites.
     `.python-version` pin and `requires-python = ">=3.11"`, so the 3.13 pin must be explicit.)
 - Tests: ALWAYS `.venv/bin/python -m pytest`. Bare python/pyenv dies at conftest with
   `ImportError: Node`. **An errored run is zero evidence, not a failure.**
-- STILL OPEN (real, hook-reported): 7 stale pins in root `pyproject.toml` — e.g. kailash-kaizen
-  pinned `>=2.7.5` vs ACTUAL 2.45.0, kailash-ml `>=1.1.0` vs 2.2.2. Not fixed (changes the
-  dependency contract; wants a deliberate pass).
+- **RESOLVED 2026-07-25 — 8 stale inter-package pins bumped (PR #1986, user-approved).** Root
+  `pyproject.toml` floors were last touched 2026-05-08 (`ea8d956e3`). Hook now reports 0 stale pins.
+  - **BEFORE BUMPING A PIN, READ THE COMMENT ABOVE THEM:** "bumping to unreleased versions breaks
+    release CI which installs from PyPI before the new release publishes." Local
+    `packages/*/pyproject.toml` versions are NOT automatically on PyPI — verify each against
+    `pypi.org/pypi/<pkg>/json` first. All 8 were published (local == PyPI) this time.
+  - `kailash-ml` crossed a MAJOR floor (1.x → 2.x): `kailash[ml]`/`kailash[all]` now fail to resolve
+    for anyone holding kailash-ml 1.x. Intended (lockstep monorepo) but a real tightening.
+  - `uv lock` also picked up 3 STALE RECORDED versions (kailash 2.61.0→2.62.0, kaizen
+    2.40.0→2.45.0, nexus 2.14.0→2.15.0) — the lock had drifted from the packages.
+  - Line 305's `kailash-dataflow>=2.0.3` is PROSE in a comment, not a live constraint. Leave it.
 - Clear `__pycache__` before running kaizen tests — stale bytecode renders tracebacks against the
   non-existent pre-move path and you will read `???` for source.
 - Duplicate/cancelled CI runs read as red: a `conclusion: cancelled` job with all substantive
