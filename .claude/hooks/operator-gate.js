@@ -2,6 +2,26 @@
 /**
  * Hook: operator-gate
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. UNLIKE its five sibling coordination guards
+ *   this hook carries NO `isCoordinationEnabled()` gate: `detectTrigger` is a
+ *   purely lexical SlashCommand match with NO enrollment precondition, so on an
+ *   UN-ENROLLED repo it still evaluates /release, /posture upgrade|override,
+ *   /codify and /whoami --register|--depart. Each of those §6.4 rows except the
+ *   two `signing_context: "n/a"` rows requires a signed gate-approval, and the
+ *   no-`tool_input.gate_approval` branch is `emitGateHalt("... requires a signed
+ *   gate-approval record ...; none provided")`. WHETHER that halt fires in a real
+ *   CC session is UNVERIFIED: the buildEvalCtx doc-comment asserts "Real CC
+ *   invocations populate the requester / approver / roster / folded_state from
+ *   the session-start hook's pre-computed state cache", but NO producer of
+ *   `tool_input.gate_approval` exists in this repo (grep: only commands/release.md
+ *   describes verifying it), and CC's `tool_input` is the tool's own arguments.
+ *   The absence is therefore conservative: an un-gated /release path is not worth
+ *   risking on a public repo that ships un-enrolled, and the enrolled operator
+ *   registers it per-clone. Intentionally absent from .claude/settings.json; the
+ *   validate-emit `settings-hook-registration` check reads this marker (#771).
+ *
  * @coc-codex-edit-gate — STATELESS trust gate (multi-operator 4-eyes
  *   gate-approval); the policy extractor fans its CC edit-matcher
  *   registration out to the Codex `apply_patch` lane (mcp-guard,

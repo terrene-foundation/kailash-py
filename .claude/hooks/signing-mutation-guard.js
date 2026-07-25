@@ -2,6 +2,19 @@
 /**
  * signing-mutation-guard.js — §2.3 + §4.3 pre-tool-use guard.
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. This repo ships un-enrolled (the committed
+ *   .claude/operators.roster.json carries the PLACEHOLDER-owner genesis), so the
+ *   MO-OPT opt-in gate below (`if (!isCoordinationEnabled(resolveMainCheckout(
+ *   repoDir) || repoDir)) passthrough()`) makes the guard inert today. Committed
+ *   registration would ARM it the moment ANY clone runs `/enroll`: an absent
+ *   signing key would then read as "degraded" rather than "un-enrolled" and
+ *   `severity: block` every tracked-path mutation (Edit/Write/git commit) for a
+ *   forker with no GPG/SSH signing key configured. Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
+ *
  * @coc-codex-edit-gate — STATELESS trust gate (degraded-mode signing-key
  *   mutation discipline); the policy extractor fans its CC edit-matcher
  *   registration out to the Codex `apply_patch` lane (mcp-guard,

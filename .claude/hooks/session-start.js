@@ -383,6 +383,56 @@ function initializeSession(data) {
 }
 
 /**
+ * Resolve a package's __version__ when __init__.py re-exports it from a sibling
+ * module instead of assigning a literal (`from kailash_ml._version import __version__`).
+ *
+ * The module name is PARSED from the import statement — never assumed to be
+ * `_version` — so a package using any other version-module name resolves too.
+ * Handles absolute (`from <pkg>.<mod> import ...`), relative (`from .<mod> ...`),
+ * and parent-relative (`from ..<mod> ...`) forms.
+ *
+ * Returns { version, file } or null when no re-exported literal resolves.
+ */
+function resolveReexportedVersion(initPath, initContent) {
+  const initDir = path.dirname(initPath);
+  const pkgName = path.basename(initDir);
+
+  // `from <module> import <names>` — names captured up to EOL/comment.
+  const importRe = /^[ \t]*from[ \t]+([.\w]+)[ \t]+import[ \t]+([^\n#]+)/gm;
+  let m;
+  while ((m = importRe.exec(initContent)) !== null) {
+    const moduleRef = m[1];
+    const names = m[2];
+    // __version__ must appear as a whole imported name, not a substring.
+    if (!/(^|[\s,(])__version__([\s,)]|$)/.test(names)) continue;
+
+    const leadingDots = (moduleRef.match(/^\.+/) || [""])[0].length;
+    let rel = moduleRef.slice(leadingDots);
+    let baseDir = initDir;
+
+    if (leadingDots === 0) {
+      // Absolute: only resolvable when rooted at this package.
+      if (!rel.startsWith(pkgName + ".")) continue;
+      rel = rel.slice(pkgName.length + 1);
+    } else {
+      // `.mod` = sibling; `..mod` = parent package, etc.
+      for (let i = 1; i < leadingDots; i++) baseDir = path.dirname(baseDir);
+    }
+    if (!rel) continue;
+
+    const stem = path.join(baseDir, ...rel.split("."));
+    for (const candidate of [stem + ".py", path.join(stem, "__init__.py")]) {
+      if (!fs.existsSync(candidate)) continue;
+      const lit = fs
+        .readFileSync(candidate, "utf8")
+        .match(/^[ \t]*__version__\s*=\s*["']([^"']+)["']/m);
+      if (lit) return { version: lit[1], file: candidate };
+    }
+  }
+  return null;
+}
+
+/**
  * Check version consistency across pyproject.toml and __init__.py for all packages.
  * Also check COC sync freshness for USE repos.
  */
@@ -439,20 +489,36 @@ function checkPythonPackageFreshness(cwd) {
       const init = fs.readFileSync(initPath, "utf8");
 
       const pyVersionMatch = pyproject.match(/version\s*=\s*"([^"]+)"/);
-      const initVersionMatch = init.match(/__version__\s*=\s*"([^"]+)"/);
 
-      if (pyVersionMatch && initVersionMatch) {
-        if (pyVersionMatch[1] !== initVersionMatch[1]) {
+      // __version__ may be a literal in __init__.py OR re-exported from a
+      // sibling module. Both are valid single-source-of-truth layouts; only
+      // "neither resolves" is a real finding.
+      let initVersion = null;
+      let initVersionSource = pkg.init;
+      const initLiteral = init.match(/__version__\s*=\s*"([^"]+)"/);
+      if (initLiteral) {
+        initVersion = initLiteral[1];
+      } else {
+        const reexported = resolveReexportedVersion(initPath, init);
+        if (reexported) {
+          initVersion = reexported.version;
+          initVersionSource = path.relative(cwd, reexported.file);
+        }
+      }
+
+      if (pyVersionMatch && initVersion) {
+        if (pyVersionMatch[1] !== initVersion) {
           console.error(
             `[FRESHNESS] VERSION MISMATCH in ${pkg.name}: ` +
-              `pyproject.toml=${pyVersionMatch[1]}, __init__.py=${initVersionMatch[1]}. ` +
-              `Update __init__.py before release!`,
+              `pyproject.toml=${pyVersionMatch[1]}, ${initVersionSource}=${initVersion}. ` +
+              `Update ${initVersionSource} before release!`,
           );
           mismatches++;
         }
-      } else if (pyVersionMatch && !initVersionMatch) {
+      } else if (pyVersionMatch && !initVersion) {
         console.error(
-          `[FRESHNESS] ${pkg.name}: __init__.py missing __version__. ` +
+          `[FRESHNESS] ${pkg.name}: no __version__ resolvable from ${pkg.init} ` +
+            `(no literal, no re-export). ` +
             `Add __version__ = "${pyVersionMatch[1]}" to ${pkg.init}`,
         );
         mismatches++;
@@ -510,13 +576,30 @@ function checkSdkPinFreshness(cwd) {
     const content = fs.readFileSync(pyprojectPath, "utf8");
 
     // Extract kailash-* dependency pins from pyproject.toml
-    // Matches: kailash>=1.2.3, kailash-dataflow>=1.0.0, etc.
-    const pinRegex = /(?:^|\n)\s*"?(kailash(?:-[\w]+)?)"?\s*>=\s*([\d.]+)/g;
-    const pins = [];
+    // Matches: kailash>=1.2.3, kailash-dataflow>=1.0.0, and the extras form
+    // kailash-dataflow[security,monitoring,api]>=2.0.12 (the bracket is
+    // consumed but NOT captured, so pin.name stays the bare dist name).
+    //
+    // The (?:^|\n) line-start anchor is DELIBERATE: dropping it would also
+    // match `kailash-dataflow>=2.0.3` inside the prose comment above
+    // [tool.uv.sources], inventing a pin that does not exist. Every kailash-*
+    // package pinned in a one-liner extra (`dataflow = ["kailash-dataflow>=..."]`)
+    // is also pinned line-anchored in the [all] array, so the anchor costs
+    // no coverage here.
+    const pinRegex =
+      /(?:^|\n)\s*"?(kailash(?:-[\w]+)?)(?:\[[^\]]*\])?"?\s*>=\s*([\d.]+)/g;
+    const pinsByName = new Map();
     let match;
     while ((match = pinRegex.exec(content)) !== null) {
-      pins.push({ name: match[1], version: match[2] });
+      const [name, version] = [match[1], match[2]];
+      // A package pinned in more than one place (bare + extras form): keep the
+      // WEAKEST pin, so a stale pin anywhere in the manifest still surfaces.
+      const seen = pinsByName.get(name);
+      if (!seen || isOlderThan(version, seen.version)) {
+        pinsByName.set(name, { name, version });
+      }
     }
+    const pins = [...pinsByName.values()];
 
     if (pins.length === 0) return; // Not a kailash downstream repo
 
@@ -532,29 +615,124 @@ function checkSdkPinFreshness(cwd) {
       return;
     }
 
-    // Check installed versions via pip list (fast, no import needed)
+    // Enumerate installed packages via importlib.metadata — works in ANY venv,
+    // including uv's default which ships NO pip (`python -m pip` there fails
+    // with "No module named pip" on a perfectly healthy interpreter).
+    // Emits the [{name, version}] shape the pip path produced, PLUS a `broken`
+    // field for the pinned packages.
+    //
+    // WHY the `broken` probe: metadata presence is NOT evidence of usability.
+    // `.dist-info` survives a broken editable install, so a package whose
+    // `.pth` points at a moved/deleted source tree still enumerates at its
+    // recorded version while `import <pkg>` raises ModuleNotFoundError and its
+    // test suite cannot run. Reporting that as healthy hides a condition that
+    // silently invalidates test results.
+    //
+    // Two MECHANICAL signals, no module execution:
+    //   1. an editable-pointer `.pth` whose target directory does not exist
+    //      (names the stale path, which is the actionable part)
+    //   2. no top-level module resolves via find_spec
+    // find_spec RESOLVES without importing: 0.02s vs 5.1s for real imports of
+    // these packages, and real imports also dump ~60 lines of library INFO
+    // logging into session start. Limitation: this catches "module cannot be
+    // located" (the ModuleNotFoundError class) — NOT a module that locates but
+    // raises during execution. Scoped to the pinned packages only; probing all
+    // ~288 distributions costs 5.1s, probing the 7 pinned costs 0.44s.
+    const PROBE_INSTALLED = [
+      "import json,sys,pathlib,importlib.util",
+      "from importlib.metadata import distributions",
+      "wanted={a.lower().replace('-','_') for a in sys.argv[1:]}",
+      "def pth_targets(d):",
+      "    out=[]",
+      "    for f in (d.files or []):",
+      "        if not str(f).endswith('.pth'): continue",
+      "        try: raw=pathlib.Path(d.locate_file(f)).read_text()",
+      "        except Exception: continue",
+      "        for line in raw.splitlines():",
+      "            line=line.strip()",
+      "            if not line or line.startswith(('import ','#')): continue",
+      "            out.append((line, pathlib.Path(line).is_dir()))",
+      "    return out",
+      "def top_levels(d,targets):",
+      "    tl=d.read_text('top_level.txt')",
+      "    if tl: return sorted({x.strip() for x in tl.split() if x.strip()})",
+      "    names=set()",
+      "    for path,ok in targets:",
+      "        if not ok: continue",
+      "        for child in pathlib.Path(path).iterdir():",
+      "            if (child/'__init__.py').is_file(): names.add(child.name)",
+      "    return sorted(names)",
+      "out=[]",
+      "for d in distributions():",
+      "    n=(d.metadata or {}).get('Name')",
+      "    v=d.version",
+      "    if not n or not v: continue",
+      "    e={'name':n,'version':v}",
+      "    if n.lower().replace('-','_') in wanted:",
+      "        try:",
+      "            targets=pth_targets(d)",
+      "            broken=[p for p,ok in targets if not ok]",
+      "            if broken: e['broken']='stale editable pointer -> '+broken[0]",
+      "            else:",
+      "                tls=top_levels(d,targets)",
+      "                if tls and not any(importlib.util.find_spec(m) for m in tls):",
+      "                    e['broken']='module does not resolve: '+', '.join(tls)",
+      "        except Exception as ex: e['probe_error']=f'{type(ex).__name__}: {ex}'",
+      "    out.append(e)",
+      "json.dump(out,sys.stdout)",
+    ].join("\n");
+
     let stale = 0;
+    const brokenInstalls = [];
     try {
       const installed = execFileSync(
         venvPython,
-        ["-m", "pip", "list", "--format=json"],
+        ["-c", PROBE_INSTALLED, ...pins.map((p) => p.name)],
+        // MUST stay below this hook's own TIMEOUT_MS (10s) so a hung probe is
+        // killed here and the hook still reports, rather than the whole hook
+        // hitting its fallback. Measured probe cost is ~0.44s (7 pinned pkgs).
         { encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
       );
       const packages = JSON.parse(installed);
       const pkgMap = {};
       for (const p of packages) {
-        pkgMap[p.name.toLowerCase().replace(/-/g, "_")] = p.version;
+        const key = p.name.toLowerCase().replace(/-/g, "_");
+        // FIRST-wins, not last: distributions() yields in sys.path order, so the
+        // first entry for a name is the one Python actually imports. A venv can
+        // legitimately carry two .dist-info dirs for one name at DIFFERENT
+        // versions (stale editable + newer install); last-wins would report the
+        // shadowed one. (`pip list` deduped for us; this enumeration does not.)
+        if (!(key in pkgMap)) pkgMap[key] = p;
       }
 
       for (const pin of pins) {
         const normalized = pin.name.toLowerCase().replace(/-/g, "_");
-        const installed_ver = pkgMap[normalized];
-        if (!installed_ver) {
+        const entry = pkgMap[normalized];
+        if (!entry) {
           console.error(
             `[SDK-PINS] ${pin.name}>=${pin.version} pinned but NOT installed. Run: uv sync`,
           );
           stale++;
-        } else if (
+          continue;
+        }
+        if (entry.probe_error) {
+          // Surface rather than swallow; treat as unknown-health, not healthy.
+          console.error(
+            `[SDK-PINS] ${pin.name}: health probe failed (${entry.probe_error}); usability UNKNOWN.`,
+          );
+        }
+        if (entry.broken) {
+          // Metadata present but unusable — MUST NOT count toward the healthy
+          // tally; this package's tests cannot execute.
+          brokenInstalls.push({
+            name: pin.name,
+            version: entry.version,
+            reason: entry.broken,
+          });
+          continue;
+        }
+        const installed_ver = entry.version;
+        if (
           installed_ver !== pin.version &&
           isOlderThan(installed_ver, pin.version)
         ) {
@@ -564,49 +742,124 @@ function checkSdkPinFreshness(cwd) {
           stale++;
         }
       }
-    } catch {
-      // pip list failed — .venv might be broken
+    } catch (e) {
+      // Surface the ACTUAL error rather than a guessed cause. Do NOT advise
+      // recreating the venv: this path no longer implies a broken interpreter
+      // (the old `python -m pip` probe failed on every pip-less uv venv), so
+      // "uv venv && uv sync" would destroy a working environment for a
+      // cause that may not exist.
+      // Prefer the child's own stderr and keep only its last non-empty line:
+      // e.message embeds the whole -c script, and for a Python failure the
+      // last line is the actual exception. Keeps session start readable.
+      const detail =
+        String(e.stderr || e.message || "")
+          .trim()
+          .split("\n")
+          .filter((l) => l.trim())
+          .pop() || "unknown error";
       console.error(
-        `[SDK-PINS] Could not read installed packages. Recreate: uv venv && uv sync`,
+        `[SDK-PINS] Could not enumerate installed packages: ${detail}. ` +
+          `Verify the interpreter with \`.venv/bin/python -V\` before changing anything.`,
       );
       return;
     }
 
-    if (stale === 0 && pins.length > 0) {
-      console.error(`[SDK-PINS] ${pins.length} kailash packages up to date`);
+    // Healthy = pinned, installed, at/above pin, AND actually usable. Broken
+    // installs are excluded from this tally so the count never asserts health
+    // for a package that cannot be imported.
+    const healthy = pins.length - stale - brokenInstalls.length;
+    if (stale === 0 && healthy > 0) {
+      // Distinct from the STALE-pin check above: that compares pins against the
+      // SDK source, this compares the .venv's INSTALLED versions against the pins.
+      console.error(
+        `[SDK-PINS] ${healthy} kailash packages installed at or above their pin`,
+      );
     } else if (stale > 0) {
       console.error(
         `[SDK-PINS] ${stale} stale pin(s). MUST run: uv sync (not pip install)`,
+      );
+    }
+
+    if (brokenInstalls.length > 0) {
+      console.error(
+        `[SDK-PINS] ⚠ ${brokenInstalls.length} package(s) have install metadata but FAIL to import ` +
+          `— their test suites cannot run:`,
+      );
+      for (const b of brokenInstalls) {
+        console.error(
+          `[SDK-PINS]   ${b.name} (metadata ${b.version}): ${b.reason}`,
+        );
+      }
+      console.error(
+        `[SDK-PINS]   Cause is usually a stale editable-install pointer after a repo move. ` +
+          `Fix: uv venv --clear && uv sync`,
       );
     }
   } catch {}
 }
 
 /**
- * Compare pyproject.toml pins against sdk_packages from the repo's own .claude/VERSION.
+ * Compare pyproject.toml pins against the current SDK package versions.
  *
- * /sync writes sdk_packages into the target repo's VERSION (Gate 2 step 8).
- * This function reads it locally — no cross-repo dependency, works on any machine.
- * A mismatch means /sync updated VERSION but skipped the pyproject.toml pin bump.
+ * Two sources, in priority order:
+ *   1. `packages/<pkg>/pyproject.toml::version` — the LIVE version, used
+ *      whenever that file exists. In this monorepo the SDK packages sit right
+ *      next to the root pyproject, so this is ground truth.
+ *   2. `.claude/VERSION::upstream.sdk_packages` — a /sync-time SNAPSHOT
+ *      (Gate 2 step 8), used only for packages not present locally (the
+ *      downstream-consumer case, which has no packages/ tree).
+ *
+ * The snapshot is written once per /sync and goes stale between syncs, so it
+ * MUST NOT override a locally-present package's real version — doing so
+ * reports every number wrong and hides packages the snapshot never listed.
+ *
+ * A mismatch means the pyproject.toml pin was not bumped alongside the SDK.
  */
 function checkPinsAgainstBuild(cwd, pins) {
-  const versionPath = path.join(cwd, ".claude", "VERSION");
-  if (!fs.existsSync(versionPath)) return;
-
-  let sdkPackages;
-  try {
-    const version = JSON.parse(fs.readFileSync(versionPath, "utf8"));
-    sdkPackages = (version.upstream || {}).sdk_packages;
-  } catch {
-    return;
-  }
-
-  if (!sdkPackages || Object.keys(sdkPackages).length === 0) return;
-
   const sdkVersions = {};
-  for (const [name, ver] of Object.entries(sdkPackages)) {
-    sdkVersions[name.toLowerCase().replace(/-/g, "_")] = ver;
+
+  // Source 2 (fallback): the /sync-time snapshot, loaded first so live
+  // package versions below overwrite it.
+  const versionPath = path.join(cwd, ".claude", "VERSION");
+  if (fs.existsSync(versionPath)) {
+    try {
+      const version = JSON.parse(fs.readFileSync(versionPath, "utf8"));
+      const sdkPackages = (version.upstream || {}).sdk_packages;
+      for (const [name, ver] of Object.entries(sdkPackages || {})) {
+        sdkVersions[name.toLowerCase().replace(/-/g, "_")] = ver;
+      }
+    } catch (e) {
+      console.error(
+        `[SDK-PINS] .claude/VERSION unreadable (${e.message}); using local packages/ only.`,
+      );
+    }
   }
+
+  // Source 1 (preferred): the live version in each local package manifest.
+  for (const pin of pins) {
+    const baseName = pin.name.replace(/\[.*\]/, "");
+    const localManifest = path.join(
+      cwd,
+      "packages",
+      baseName,
+      "pyproject.toml",
+    );
+    if (!fs.existsSync(localManifest)) continue;
+    try {
+      const localVer = fs
+        .readFileSync(localManifest, "utf8")
+        .match(/^version\s*=\s*"([^"]+)"/m);
+      if (localVer) {
+        sdkVersions[baseName.toLowerCase().replace(/-/g, "_")] = localVer[1];
+      }
+    } catch (e) {
+      console.error(
+        `[SDK-PINS] ${baseName}: could not read ${path.relative(cwd, localManifest)} (${e.message}).`,
+      );
+    }
+  }
+
+  if (Object.keys(sdkVersions).length === 0) return;
 
   let staleCount = 0;
   const staleList = [];
@@ -628,7 +881,8 @@ function checkPinsAgainstBuild(cwd, pins) {
 
   if (staleCount > 0) {
     console.error(
-      `[SDK-PINS] ⚠ ${staleCount} STALE pin(s) — pyproject.toml is behind the SDK version in .claude/VERSION:`,
+      `[SDK-PINS] ⚠ ${staleCount} STALE pin(s) — pyproject.toml is behind the current SDK version ` +
+        `(source: packages/<pkg>/pyproject.toml, falling back to .claude/VERSION):`,
     );
     for (const msg of staleList) {
       console.error(`[SDK-PINS]   ${msg}`);

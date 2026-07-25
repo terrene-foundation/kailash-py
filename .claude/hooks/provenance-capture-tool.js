@@ -2,6 +2,22 @@
 /**
  * provenance-capture-tool.js — F101-2 (loom#411 governance-as-DNA, loom lane).
  *
+ * @settings-registration: opt-in-ledger — registered per-clone in the gitignored
+ *   .claude/settings.local.json by an operator who wants the F101-2 provenance
+ *   stream, NEVER in the committed .claude/settings.json of this PUBLIC repo.
+ *   On PreToolUse(*) this is a node spawn on EVERY tool call that appends to a
+ *   per-session ledger at .claude/learning/provenance/<session>.jsonl — a stream
+ *   whose only consumer is the csq drain lane, which does not exist in a clone of
+ *   this repo. It is NOT coordination-gated and NOT a guard (it never blocks), so
+ *   the reason it is unregistered is cost/disclosure profile, not inertness: the
+ *   ledger records verbatim mutation `file_path`s and sha256 commitments of every
+ *   Bash command and Task prompt. Residual, stated so it is not silently lost:
+ *   with capture unregistered, journal-author-discipline.md MUST-1's backing
+ *   check reads an absent ledger as "undetermined" (provenance-author-backing.js
+ *   fails OPEN) — it never yields a false "unbacked" verdict. Intentionally
+ *   absent from .claude/settings.json; the validate-emit
+ *   `settings-hook-registration` check reads this marker (#771).
+ *
  * Event: PreToolUse (*)
  * Severity: NEVER blocks. {continue:true} on every path. Captured at PreToolUse
  *           so it is DETERMINISTIC — the model cannot skip the record by routing

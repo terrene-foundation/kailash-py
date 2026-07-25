@@ -2,6 +2,19 @@
 /**
  * emit-artifact-activation-session.js — loom#1209 (W1-b, activation-event PRODUCER, loom lane).
  *
+ * @settings-registration: opt-in-ledger — registered per-clone in the gitignored
+ *   .claude/settings.local.json by an operator running the S-3 observability
+ *   lane, NEVER in the committed .claude/settings.json. It is the SessionStart
+ *   half of the same producer pair as emit-artifact-activation.js and writes to
+ *   the same local STAGING sink (.claude/learning/artifact-activation/
+ *   <session>.jsonl) — one rule-availability sweep + one hook self-report per
+ *   session. That sink exists to be DRAINED by the kailash S-3 consumer; nothing
+ *   in this repo reads it. Registering only the session half would emit a
+ *   half-stream (rule/hook events with no agent/skill activations), so the pair
+ *   is registered together per-clone or not at all. It never blocks (fail-open
+ *   observability emitter). Intentionally absent from .claude/settings.json; the
+ *   validate-emit `settings-hook-registration` check reads this marker (#771).
+ *
  * PRODUCER of the ArtifactActivationEvent stream at the **session-start** lifecycle moment
  * (CLI-neutral; CC SessionStart ≈ Gemini `@hooks.session_start` ≈ Codex `session-init`). It
  * emits the two artifact types the pre-tool-use tool stream CANNOT observe:

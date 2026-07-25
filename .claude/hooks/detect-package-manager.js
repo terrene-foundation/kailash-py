@@ -2,6 +2,20 @@
 /**
  * Package Manager Detection Hook for Kailash Setup
  *
+ * @settings-registration: not-a-hook — despite the filename and the legacy
+ *   "Hook" in the title line, this file is a LIBRARY + CLI UTILITY, not a
+ *   PreToolUse/PostToolUse/SessionStart hook. It has no hook event, no matcher,
+ *   and emits NO hook-control payload: `outputResult()` prints a package-manager
+ *   detection object and `process.exit(0)`s — it never writes `{continue: ...}`
+ *   and never uses lib/instruct-and-wait.js. Its interfaces are (a) `module.exports
+ *   = { detectPackageManager, getInstallCommand, getRunCommand, getExecCommand,
+ *   PACKAGE_MANAGERS }` for require()-ing callers, and (b) the documented CLI
+ *   `node detect-package-manager.js [--cwd /path] [--help]` (the stdin-JSON path
+ *   accepts only `{"cwd": "..."}`). Registering it under any settings.json event
+ *   would emit non-hook JSON into the hook channel. Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
+ *
  * Detects which package manager is used in the current project:
  * - npm (package-lock.json)
  * - pnpm (pnpm-lock.yaml)

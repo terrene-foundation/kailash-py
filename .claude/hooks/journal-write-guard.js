@@ -2,6 +2,19 @@
 /**
  * journal-write-guard.js — §4.3 pre-tool-use hook for `Write` on journal/.
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. This repo ships un-enrolled (the committed
+ *   .claude/operators.roster.json carries the PLACEHOLDER-owner genesis), so the
+ *   MO-OPT opt-in gate below (`if (!isCoordinationEnabled(repoDir))
+ *   passthrough()`) makes the guard inert today. Committed registration would
+ *   ARM the slot-reservation fold check the moment ANY clone runs `/enroll`,
+ *   halt-and-reporting "slot unreserved" on every solo journal Write (solo
+ *   numbering is race-free via the pure fs high-water reserveJournalSlot, which
+ *   emits no coordination-log reservation record). Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
+ *
  * Shard B3a (workspaces/multi-operator-coc/02-plans/01-architecture.md
  * §2.3 + §4.3 hook-table row).
  *
