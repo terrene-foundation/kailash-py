@@ -2,6 +2,41 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+## [Unreleased]
+
+### Changed (behavior — potentially breaking)
+
+- **`Capability.matches_requirement` is now synchronous (#1973).** It shipped as
+  `async def` in 2.45.0 but contained no `await` — the coroutine wrapper was the
+  bug, not the contract. Third-party code doing
+  `await cap.matches_requirement(...)` must drop the `await`. No deprecation shim:
+  the method has raised `TypeError` at its only in-SDK call site since the
+  regression landed, so no working caller can exist via the A2A path.
+
+### Fixed
+
+- **A2A capability matching raised `TypeError` on every call (#1973).**
+  `A2AAgentCard.calculate_match_score` multiplied the un-awaited coroutine by a
+  float, so every `A2ACoordinatorNode._find_best_agents_for_task` call with
+  non-empty requirements raised. Agent selection did not work at all. The
+  reasoning bridges now also forward `config=` / `correlation_id=` on the sync
+  branch, so the judge uses the host agent's model rather than falling back to
+  `.env` defaults.
+- **Four silent-swallow handlers in `a2a.py` now log before falling back
+  (#1973).** `_summarize_with_llm` plus the three stage-extraction siblings
+  caught exceptions and took a fallback with no record. Each now emits a WARN
+  with structured `error` / `error_type` fields (WARN, not ERROR — the operation
+  still returns a usable result).
+- **Degraded capability/similarity judgments are no longer reported as successes
+  or cached (#1973).** When structured-output parsing fails, the score coerces to
+  `0.0`; `llm_capability_match` and `llm_text_similarity` previously logged
+  `*.ok` and cached that fabricated zero for the process lifetime. They now log
+  `*.degraded` at WARN with the underlying error and skip the cache. The `0.0`
+  return contract is unchanged — the bridges absorb one judge failure rather than
+  sink a selection round. The root cause (these agents do not enforce structured
+  output, so on providers without it every real score is `0.0` and A2A ranking is
+  arbitrary) is tracked separately in #1981 and is NOT fixed here.
+
 ## [2.45.0] — 2026-07-25 — Follow-up hardening: sanitizer redaction, Nexus lifecycle, RAG log hygiene
 
 ### Fixed
