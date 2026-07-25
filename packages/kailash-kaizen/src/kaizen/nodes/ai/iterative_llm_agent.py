@@ -904,15 +904,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
 
             except Exception as e:
+                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
+                # error flows into the user-visible execution_results dict; a
+                # bad-key/rate-limit provider exception can embed a credential,
+                # so sanitize ONCE and store the redacted form at every surface.
+                error_msg = sanitize_provider_error(e, "LLM")
                 error_result = {
                     "step": 1,
                     "action": "direct_llm_response",
                     "tools_used": [],
-                    "error": str(e),
+                    "error": error_msg,
                     "success": False,
                 }
                 execution_results["steps_completed"].append(error_result)
-                execution_results["errors"].append(str(e))
+                execution_results["errors"].append(error_msg)
                 execution_results["success"] = False
 
             return execution_results
@@ -977,15 +982,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
 
             except Exception as e:
+                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
+                # error flows into the user-visible execution_results dict; a
+                # bad-key/rate-limit provider exception can embed a credential,
+                # so sanitize ONCE and store the redacted form at every surface.
+                error_msg = sanitize_provider_error(e, "LLM")
                 error_result = {
                     "step": step_num,
                     "action": action,
                     "tools_used": tools,
-                    "error": str(e),
+                    "error": error_msg,
                     "success": False,
                 }
                 execution_results["steps_completed"].append(error_result)
-                execution_results["errors"].append(str(e))
+                execution_results["errors"].append(error_msg)
                 execution_results["success"] = False
 
         return execution_results
