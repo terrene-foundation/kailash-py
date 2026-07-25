@@ -100,8 +100,14 @@ class CachingMixin:
 
     Cache can be bypassed by passing cache_bypass=True to run().
 
+    Enabled via the ``batch_processing_enabled`` config flag — that is the
+    field BaseAgent maps to this mixin (see ``BaseAgent._MIXIN_MAP``). There
+    is no ``caching_enabled`` field on BaseAgentConfig; passing one has no
+    effect on caching. The TTL is read from ``config.cache_ttl`` when present
+    (falling back to the ``apply(ttl=...)`` default of 300s otherwise).
+
     Example:
-        config = BaseAgentConfig(caching_enabled=True, cache_ttl=600)
+        config = BaseAgentConfig(batch_processing_enabled=True)
         agent = SimpleQAAgent(config)
 
         # First call - executes and caches
@@ -206,8 +212,25 @@ class CachingMixin:
         Returns:
             SHA256 hash of inputs
         """
+        # #1948: include the RESOLVED provider so a response computed under
+        # one provider is never replayed after the provider changes (an agent
+        # with no explicit llm_provider resolves via ambient env keys, so the
+        # same inputs can dispatch to a different provider across calls). The
+        # resolved provider is a bare name ("openai"/"anthropic"/"mock"), never
+        # a credential — safe to embed in the key.
+        from kaizen.core._provider_env import detect_provider_from_env
+
+        config = getattr(agent, "config", None)
+        llm_provider = (
+            getattr(config, "llm_provider", None) if config is not None else None
+        )
+        resolved_provider = llm_provider or detect_provider_from_env()
+
         key_data = {
             "agent_class": agent.__class__.__name__,
+            # str() the provider so the key is JSON-serializable and stable
+            # for any config shape (matches the args/kwargs treatment below).
+            "provider": str(resolved_provider),
             "args": [str(a) for a in args] if args else [],
             "kwargs": {k: str(v) for k, v in sorted(kwargs.items())},
         }

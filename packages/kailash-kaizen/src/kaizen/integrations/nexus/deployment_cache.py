@@ -14,7 +14,10 @@ Features:
 
 import hashlib
 import json
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+if TYPE_CHECKING:
+    from ...core.base_agent import BaseAgent
 
 
 class DeploymentCache:
@@ -59,6 +62,11 @@ class DeploymentCache:
         - RESOLVED LLM provider (see FIX 8 note below)
         - Model name
         - Signature structure
+        - Effective system prompt (#1948: two agents sharing name+provider+
+          model+signature but different prompts — e.g. different discovered
+          MCP tools or a custom prompt override — must NOT collide)
+        - Temperature (#1948: same-shape agents at different temperatures
+          build different workflows and must key distinctly)
 
         Args:
             agent: BaseAgent instance
@@ -97,12 +105,50 @@ class DeploymentCache:
         llm_provider = getattr(config, "llm_provider", None)
         resolved_provider = llm_provider or detect_provider_from_env()
 
+        # #1948: key on the agent's REAL EFFECTIVE system prompt plus
+        # temperature. Two agents that share name + provider + model +
+        # signature but carry different prompts (or run at different
+        # temperatures) build DIFFERENT workflows; omitting these dimensions
+        # let the second agent collide onto the first's cached build under the
+        # module-global cache.
+        #
+        # `system_prompt` is NOT a BaseAgentConfig field, so reading it off the
+        # config was a no-op for every real agent. The effective prompt comes
+        # from `agent._generate_system_prompt()` — the same method
+        # `to_workflow()` invokes — which captures the signature, the
+        # discovered MCP tools (`_discovered_mcp_tools`), and any subclass
+        # prompt override. That is the value that actually differentiates two
+        # otherwise-identical agents. A non-BaseAgent that carries an explicit
+        # `config.system_prompt` falls back to it.
+        prompt_gen = getattr(agent, "_generate_system_prompt", None)
+        if callable(prompt_gen):
+            effective_system_prompt = prompt_gen()
+        else:
+            effective_system_prompt = getattr(config, "system_prompt", None)
+
+        # #1948: a DETERMINISTIC signature representation. `str(signature)` fell
+        # to Signature's default object repr (`<Sig object at 0x...>`), whose
+        # embedded memory address made the cache key UNIQUE PER AGENT INSTANCE —
+        # so two structurally-identical agents never shared a cache entry and
+        # the cache never hit for real agents. `to_dict()` is the stable
+        # structural form (identical across instances of the same signature).
+        if signature is None:
+            signature_repr = None
+        elif hasattr(signature, "to_dict"):
+            signature_repr = json.dumps(
+                signature.to_dict(), sort_keys=True, default=str
+            )
+        else:
+            signature_repr = str(signature)
+
         # Build key data
         key_data = {
             "name": name,
             "provider": resolved_provider,
             "model": getattr(config, "model", None),
-            "signature": str(signature) if signature else None,
+            "signature": signature_repr,
+            "system_prompt": effective_system_prompt,
+            "temperature": getattr(config, "temperature", None),
         }
 
         # Create deterministic JSON string
@@ -142,7 +188,7 @@ class DeploymentCache:
         # Store workflow
         self._cache[cache_key] = workflow
 
-    def invalidate(self, cache_key: str = None):
+    def invalidate(self, cache_key: Optional[str] = None):
         """
         Invalidate cache entry or entire cache.
 

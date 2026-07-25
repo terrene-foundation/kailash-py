@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.credentials import get_credential_store
 
+from kaizen.core._provider_env import detect_provider_from_env
 from kaizen.core.config import BaseAgentConfig
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.signatures import Signature
@@ -158,6 +159,11 @@ class WorkflowGenerator:
             if hasattr(self.config, "llm_provider")
             else self.config.get("llm_provider")
         )
+        # #1948: when no provider is explicitly configured, resolve it from the
+        # environment (openai -> anthropic -> mock) instead of hardcoding
+        # "openai". An agent with only ANTHROPIC_API_KEY set would otherwise be
+        # dispatched to OpenAI and fail with an auth error.
+        resolved_provider = llm_provider or detect_provider_from_env()
         model = (
             getattr(self.config, "model", None)
             if hasattr(self.config, "model")
@@ -213,7 +219,7 @@ class WorkflowGenerator:
         # - Google/Gemini: Translates to response_mime_type + response_json_schema
         # - Azure: Translates to JsonSchemaFormat
         providers_with_structured_output = ["openai", "google", "gemini", "azure"]
-        effective_provider = llm_provider or "openai"
+        effective_provider = resolved_provider
 
         if structured_output_mode == "off":
             response_format = None
@@ -269,7 +275,7 @@ class WorkflowGenerator:
 
         # Create LLMAgentNode with signature-based configuration
         node_config = {
-            "provider": llm_provider or "openai",
+            "provider": resolved_provider,
             "model": model or os.environ.get("DEFAULT_LLM_MODEL"),
             "system_prompt": self._get_system_prompt(),
             "generation_config": generation_config,
@@ -367,7 +373,7 @@ class WorkflowGenerator:
 
                     # Convert to provider-specific format
                     provider_tools = get_tools_for_provider(
-                        mcp_tools, llm_provider or "openai"
+                        mcp_tools, resolved_provider
                     )
 
                     # Add to node config
@@ -418,8 +424,10 @@ class WorkflowGenerator:
             generation_config["max_tokens"] = self.config.max_tokens
 
         # Create simple LLMAgentNode configuration (no signature)
+        # #1948: resolve the provider from the environment when unset instead of
+        # hardcoding "openai" (see _build_llm_node_config above for rationale).
         node_config = {
-            "provider": self.config.llm_provider or "openai",
+            "provider": self.config.llm_provider or detect_provider_from_env(),
             "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
             "generation_config": generation_config,
         }
