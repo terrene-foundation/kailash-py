@@ -1736,6 +1736,91 @@ Check the documentation or explore available resources.
             f"   ⏱️  Registration time: {registration_time:.3f}s"
         )
 
+    def deregister(self, name: str) -> bool:
+        """Remove a previously registered workflow from all channels.
+
+        Reverses :meth:`register`: drops the workflow from the internal
+        registry and from the enterprise gateway (unmounting its
+        ``/workflows/{name}`` routes), plus best-effort removal from the MCP
+        tool/resource surface. This makes redeployment idempotent — a caller
+        can ``deregister(name)`` then ``register(name, ...)`` to replace an
+        existing registration instead of hitting
+        ``ValueError: Workflow '{name}' already registered``.
+
+        Args:
+            name: Workflow identifier to remove.
+
+        Returns:
+            True if a workflow was registered under ``name`` and removed,
+            False if none was registered (idempotent no-op).
+        """
+        existed = name in self._registry.list_workflows()
+
+        # Internal registry (name -> Workflow + metadata).
+        self._registry._workflows.pop(name, None)
+        self._registry._workflow_metadata.pop(name, None)
+
+        # Enterprise gateway: unmount /workflows/{name} and release its runtime.
+        gateway = self._http_transport.gateway
+        if gateway is not None and hasattr(gateway, "deregister_workflow"):
+            try:
+                gateway.deregister_workflow(name)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to deregister workflow '{name}' from gateway: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+        # MCP channel (enhanced MCP mode), if it exposes a removal hook.
+        if getattr(self, "_mcp_channel", None) is not None and hasattr(
+            self._mcp_channel, "deregister_workflow"
+        ):
+            try:
+                self._mcp_channel.deregister_workflow(name)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to deregister workflow '{name}' from MCP channel: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+        # MCP server (WebSocket wrapper): drop the tool + workflow:// resource
+        # so a re-register re-installs a fresh handler rather than colliding.
+        self._deregister_workflow_mcp(name)
+
+        if existed:
+            logger.info(f"Workflow '{name}' deregistered from all channels")
+        return existed
+
+    def _deregister_workflow_mcp(self, name: str) -> None:
+        """Best-effort removal of a workflow's MCP tool + resource.
+
+        The Core SDK ``MCPServer`` keeps tools in ``_tool_registry`` and
+        resources in a resource manager; the exact shape varies by MCP backend
+        (official FastMCP, WebSocket wrapper, mock). Removal is best-effort and
+        never raises: a stale tool/resource is a soft issue, whereas a raised
+        error here would abort an otherwise-valid redeploy.
+        """
+        server = getattr(self, "_mcp_server", None)
+        if server is None:
+            return
+
+        uri = f"workflow://{name}"
+        # Tool registries seen across backends: `_tool_registry` (Core SDK),
+        # `_tools` (FastMCP fallback shim).
+        for attr in ("_tool_registry", "_tools"):
+            registry = getattr(server, attr, None)
+            if isinstance(registry, dict):
+                registry.pop(name, None)
+                registry.pop(f"workflow_{name}", None)
+        # Resource registries: a `_resources` dict, or a resource manager.
+        resources = getattr(server, "_resources", None)
+        if isinstance(resources, dict):
+            resources.pop(uri, None)
+        manager = getattr(server, "_resource_manager", None)
+        mgr_resources = getattr(manager, "_resources", None)
+        if isinstance(mgr_resources, dict):
+            mgr_resources.pop(uri, None)
+
     # Multi-channel registration is handled automatically by the enterprise gateway
     # No need for custom channel registry - the gateway provides this natively
 
@@ -3581,13 +3666,60 @@ Check the documentation or explore available resources.
         except Exception as e:
             logger.warning(f"MCP server error: {e}. Continuing with other channels.")
 
-    def start(self):
+    def _start_transport_ready(self) -> None:
+        """Bring the HTTP transport to the ready state without a serving loop.
+
+        Applies any queued middleware/routers/endpoints and registers the
+        registry's workflows with the enterprise gateway (the async
+        :meth:`HTTPTransport.start`), running it to completion synchronously.
+        This does NOT bind a socket — it is the in-process readiness half of
+        ``start(blocking=False)``.
+        """
+        import asyncio
+
+        async def _ready() -> None:
+            await self._http_transport.start(self._registry)
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (the common sync/embedding case): run inline.
+            asyncio.run(_ready())
+            return
+
+        # A loop is already running on this thread — run the readiness in a
+        # dedicated worker thread with its own loop rather than nesting.
+        box: Dict[str, BaseException] = {}
+
+        def _runner() -> None:
+            try:
+                asyncio.run(_ready())
+            except BaseException as exc:  # surface, never swallow
+                box["error"] = exc
+
+        worker = threading.Thread(target=_runner)
+        worker.start()
+        worker.join()
+        if "error" in box:
+            raise box["error"]
+
+    def start(self, blocking: bool = True):
         """Start the Nexus platform using the enterprise gateway.
 
         Zero-configuration startup that leverages the SDK's enterprise server
         with built-in multi-channel support (API, CLI, MCP).
 
-        This method blocks until the server is stopped (Ctrl+C or .stop() call).
+        Args:
+            blocking: When ``True`` (default) the HTTP server loop runs and this
+                method blocks until the platform is stopped (Ctrl+C or
+                :meth:`stop`). When ``False`` the platform is brought to a
+                ready/running state **in-process** — queued middleware, routers
+                and endpoints are applied, workflows are registered with the
+                gateway, and :meth:`health_check` reports ``"healthy"`` — then
+                control returns immediately. Non-blocking mode does NOT enter
+                the serving loop or bind the MCP socket; it is for embedding
+                Nexus inside another process or a test harness that drives
+                execution programmatically.
         """
         if self._running:
             logger.warning("Nexus is already running")
@@ -3605,12 +3737,25 @@ Check the documentation or explore available resources.
         with self._shutdown_hooks_fired_lock:
             self._shutdown_hooks_fired = False
 
-        logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
-
         # Auto-discover workflows if enabled
         if self._auto_discovery_enabled:
             logger.info("🔍 Auto-discovering workflows...")
             self._auto_discover_workflows()
+
+        if not blocking:
+            # In-process readiness: apply queued config + register workflows
+            # with the gateway, then mark running WITHOUT the serving loop or
+            # an MCP socket. The platform can execute workflows programmatically
+            # and reports healthy.
+            self._start_transport_ready()
+            self._running = True
+            logger.info(
+                "✅ Nexus ready (non-blocking, in-process) — "
+                f"{len(self._workflows)} workflow(s) registered"
+            )
+            return
+
+        logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
 
         # Start MCP server in background thread
         if hasattr(self, "_mcp_server"):

@@ -50,6 +50,11 @@ def deploy_as_api(
         - Initial deployment: ~500ms
         - Cached deployment: ~50ms (90% faster)
     """
+    # Idempotent redeploy: drop any prior registration under this name so a
+    # second deploy replaces it instead of raising "already registered". No-op
+    # when the name is not yet registered.
+    nexus_app.deregister(endpoint_name)
+
     # Check cache first
     if use_cache:
         cache_key = _deployment_cache.create_cache_key(agent, endpoint_name)
@@ -104,6 +109,11 @@ def deploy_as_cli(
         - Initial deployment: ~500ms
         - Cached deployment: ~50ms (90% faster)
     """
+    # Idempotent redeploy: drop any prior registration under this name so a
+    # second deploy replaces it instead of raising "already registered". No-op
+    # when the name is not yet registered.
+    nexus_app.deregister(command_name)
+
     # Check cache first
     if use_cache:
         cache_key = _deployment_cache.create_cache_key(agent, command_name)
@@ -158,6 +168,11 @@ def deploy_as_mcp(
         - Initial deployment: ~500ms
         - Cached deployment: ~50ms (90% faster)
     """
+    # Idempotent redeploy: drop any prior registration under this name so a
+    # second deploy replaces it instead of raising "already registered". No-op
+    # when the name is not yet registered.
+    nexus_app.deregister(tool_name)
+
     # Check cache first
     if use_cache:
         cache_key = _deployment_cache.create_cache_key(agent, tool_name)
