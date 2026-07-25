@@ -19,7 +19,19 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
 
 ## In-flight state
 
-**NONE.** All three PRs merged; working tree clean except `workspaces/` notes+ledger.
+**NONE.** PRs #1978 / #1979 / #1980 / #1982 / #1983 all merged. Open-PR board clean.
+Only untracked leftovers are the PRIOR session's `04-validate/*.diff` + `mock-guard-*` artifacts.
+
+**#1973 is documented as well as fixed:** PR #1983 added a kaizen `[Unreleased]` CHANGELOG entry.
+The async→sync flip IS a breaking API change — verified against the released tag, not reconstructed:
+`git show kaizen-v2.45.0:...a2a.py` → `async def matches_requirement` (:95); main → `def` (:98).
+`/release` owns the version bump and folds `[Unreleased]` in.
+
+**FLAGGED, deliberately not touched — `packages/kailash-kaizen/CHANGELOG.md` is structurally odd:**
+it carries a SECOND Keep-a-Changelog preamble and a stranded, EMPTY `## [Unreleased]` heading at
+~line 1550, mid-history above the 2.20.0 entry. Two changelogs were almost certainly concatenated.
+A reader scanning for unreleased work can land on the empty one instead of the real entry at the
+top. Restructuring a 1550-line changelog needs a deliberate pass — do NOT fold it into an unrelated PR.
 
 ## Executed this session
 
