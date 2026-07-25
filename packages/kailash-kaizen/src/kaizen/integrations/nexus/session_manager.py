@@ -11,55 +11,6 @@ from typing import Any, Dict, Optional
 from uuid import uuid4
 
 
-class ActivityTimestamp(datetime):
-    """A channel last-activity timestamp that is also a positive magnitude.
-
-    ``channel_activity`` records the wall-clock time each channel last touched
-    a session. That value is load-bearing in two distinct ways:
-
-    - **Temporal ordering / persistence** — later activity is a greater
-      ``datetime``; the value is serialized to/from ISO-8601 by the storage
-      backend and sorted to find the last-accessed channel.
-    - **Activity presence** — callers also read "has this channel been active?"
-      as a positive-magnitude check (``value > 0``).
-
-    A plain :class:`datetime` raises ``TypeError`` when compared to a number,
-    so this subclass answers a numeric operand with its POSIX-seconds value
-    (always > 0 for any real wall-clock time) while delegating
-    ``datetime``-vs-``datetime`` comparisons to the base class unchanged. It is
-    a real timestamp — ``isinstance(x, datetime)`` holds, ``.isoformat()``
-    round-trips, and ordering between two instances is exact.
-    """
-
-    __slots__ = ()
-
-    @staticmethod
-    def _is_number(other: Any) -> bool:
-        # bool is an int subclass; a datetime-vs-bool comparison is nonsensical
-        # and never intended, so exclude it explicitly.
-        return isinstance(other, (int, float)) and not isinstance(other, bool)
-
-    def __gt__(self, other: Any) -> bool:
-        if self._is_number(other):
-            return self.timestamp() > other
-        return super().__gt__(other)
-
-    def __ge__(self, other: Any) -> bool:
-        if self._is_number(other):
-            return self.timestamp() >= other
-        return super().__ge__(other)
-
-    def __lt__(self, other: Any) -> bool:
-        if self._is_number(other):
-            return self.timestamp() < other
-        return super().__lt__(other)
-
-    def __le__(self, other: Any) -> bool:
-        if self._is_number(other):
-            return self.timestamp() <= other
-        return super().__le__(other)
-
-
 @dataclass
 class CrossChannelSession:
     """
@@ -134,10 +85,8 @@ class CrossChannelSession:
         self.expires_at = datetime.now() + timedelta(hours=1)
 
         if channel:
-            # Record the channel's last-activity wall-clock time. ActivityTimestamp
-            # keeps exact datetime ordering/serialization while also answering the
-            # "channel is active" positive-magnitude check (value > 0).
-            self.channel_activity[channel] = ActivityTimestamp.now()
+            # Record the channel's last-activity wall-clock time.
+            self.channel_activity[channel] = datetime.now()
 
     def update_state(self, updates: Dict[str, Any], channel: str = None):
         """
