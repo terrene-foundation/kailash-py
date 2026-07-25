@@ -1671,9 +1671,15 @@ class A2AAgentNode(LLMAgentNode):
             if memory_result.get("success"):
                 shared_context = memory_result.get("memories", [])
 
-        # Store provider and model for use in summarization
-        self._current_provider = kwargs.get("provider", "mock")
-        self._current_model = kwargs.get("model", "mock-model")
+        # Store provider and model for use in summarization.
+        # #1952 residual: resolve to None (not the string "mock") when omitted so
+        # a keyless caller never carries a silent "mock" default. The primary
+        # answer path (super().run below) is #1947-fail-loud-gated on a None
+        # provider; the secondary insight/summary discriminators below treat an
+        # unresolved (None) provider identically to an explicit "mock" — honest
+        # rule-based/simple degradation, no fabrication.
+        self._current_provider = kwargs.get("provider")
+        self._current_model = kwargs.get("model")
 
         # Enhance messages with shared context
         messages = kwargs.get("messages", [])
@@ -1696,9 +1702,12 @@ Relevant shared context from other agents:
 
             # Use LLM to extract insights if provider supports it
             use_llm_extraction = kwargs.get("use_llm_insight_extraction", True)
-            provider = kwargs.get("provider", "mock")
+            # #1952 residual: None (omitted) resolves to the rule-based fallback
+            # exactly as "mock" does — the LLM insight path runs ONLY for a real,
+            # explicitly-provided provider.
+            provider = kwargs.get("provider")
 
-            if use_llm_extraction and provider not in ["mock"]:
+            if use_llm_extraction and provider not in ["mock", None]:
                 # Use LLM to extract and analyze insights
                 insights = self._extract_insights_with_llm(
                     response_content, agent_role, agent_id, kwargs
@@ -1714,7 +1723,7 @@ Relevant shared context from other agents:
                 "by_type": {},
                 "extraction_method": (
                     "llm"
-                    if use_llm_extraction and provider not in ["mock"]
+                    if use_llm_extraction and provider not in ["mock", None]
                     else "rule-based"
                 ),
             }
@@ -1826,11 +1835,13 @@ Format the summary as a brief paragraph (max 200 words) that another agent can q
 Focus on actionable intelligence rather than just listing what each agent said."""
 
         try:
-            # Use the current agent's LLM configuration for summarization
-            provider = getattr(self, "_current_provider", "mock")
-            model = getattr(self, "_current_model", "mock-model")
+            # Use the current agent's LLM configuration for summarization.
+            # #1952 residual: default None (not "mock") — an unset/keyless agent
+            # falls through to the simple summary below exactly as "mock" did.
+            provider = getattr(self, "_current_provider", None)
+            model = getattr(self, "_current_model", None)
 
-            if provider not in ["mock"]:
+            if provider not in ["mock", None]:
                 summary_kwargs = {
                     "provider": provider,
                     "model": model,
