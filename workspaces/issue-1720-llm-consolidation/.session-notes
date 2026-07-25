@@ -1,60 +1,96 @@
-# Session Notes — 2026-07-24 (cont)
+# Session Notes — 2026-07-25 (session B: hook-registration class + forest drain)
 
 ## Where we are
 
-#1947 (LLMAgentNode fail-loud provider — the structural root-cause fix) is DONE,
-merged, redteam-converged (3 rounds / 7 reviews), and RELEASED as
-**kailash-kaizen 2.43.0** on PyPI (clean-venv verified live).
+Two PRs merged to main this session. The COC hook layer went from "3 visible errors" to
+"registration class closed": `validate-emit --check settings-hook-registration` **18 blocking → 0**,
+`/sync` unblocked. `session-start.js` startup banner repaired (it was mostly emitting false
+positives). #1973 (a2a) is IN FLIGHT in the working tree — NOT committed, NOT landed.
+
+Workspace issue-1720-llm-consolidation, phase 05-codify.
+
+## Read first
+
+1. `workspaces/issue-1720-llm-consolidation/04-validate/launch-ledger.md` — AUTHORITATIVE
+   orchestration record. Session-B sections at the END carry the full Wave 1–4 findings.
+2. This file's **In-flight state** + **Traps** below before touching anything.
+3. Follow-ups #1970–#1974 — but READ the reconciliation in the ledger first: it changed what
+   THREE of the five items ARE. Do not implement from the issue text alone.
+
+## In-flight state
+
+**NONE.** All three PRs merged; working tree clean except `workspaces/` notes+ledger.
 
 ## Executed this session
 
-- **#1947 shipped**: `LLMAgentNode` provider default `"mock"`→`None`; `run()` raises
-  `ConfigurationError` on an unresolved provider. Silent-mock (fabricated-content-as-real)
-  class closed across the whole node family: base + `IterativeLLMAgentNode` (own guards) +
-  `A2AAgentNode` + `SelfOrganizingAgentNode` (inherited guard, pinned). Explicit
-  `provider="mock"` preserved.
-  - Redteam found + fixed: HIGH `IterativeLLMAgentNode` swallowed the guard (returned
-    success=True template); INVEST-NOW missed `provider="openai"` twin at synthesis.
-  - PR **#1951** merged (5 commits); PR **#1954** merged (release 2.43.0); tag `kaizen-v2.43.0`
-    → OIDC publish → verified `pip install kailash-kaizen==2.43.0` + fail-loud behavior.
-- **PR #1950** (2.42.0 docs release-record) merged.
-- Filed **#1952** (deferred same-class residuals: keyless `detect_provider_from_env()`→"mock"
-  on Agent/RAG surfaces; `EmbeddingGeneratorNode` silent-mock — both exceed the #1947 shard,
-  need own prod-audit + test sweep) and **#1953** (distinct class: `IterativeLLMAgentNode`
-  synthesis masks a RESOLVED-provider runtime LLM failure as success=True with a template).
-
-## Cross-SDK check — DONE (user-authorized, no hazard, no issue filed)
-
-- Cross-repo READ authorized (receipt `.claude/cross-repo-authz/2026-07-24-esperie-enterprise-kailash-rs-*`,
-  user-approved 2026-07-24). Inspected `esperie-enterprise/kailash-rs` (private).
-- **Verdict: the Rust SDK does NOT have the #1947 mock-default hazard** — it is already
-  fail-closed / explicit-opt-in: `LlmProvider` enum has NO `Mock` variant and NO `Default`
-  impl; mock is a separate `MockLlmProvider` reachable ONLY via explicit `LlmClient::from_mock()`
-  / `mock_with_responses()`; `crates/kailash-nodes/src/ai/provider.rs::detect_provider()` returns
-  `Result` (errors on unknown, never a mock fallback). No silent-mock default exists → the
-  conditional filing ("if the hazard exists") does NOT trigger. No issue filed. Scope respected.
-
-## Outstanding ledger (forest)
-
-| ID | Item | Value-anchor | Status |
-| --- | --- | --- | --- |
-| F1 | #1952 — remaining silent-mock sites (env fallback + EmbeddingGeneratorNode) | Fully closes fabricated-content integrity class (redteam HIGH) | QUEUED (own shard; prod-audit + test sweep) |
-| F2 | #1953 — IterativeLLMAgentNode synthesis masks runtime failure as success=True | Redteam finding; distinct error-masking class | QUEUED |
-| F3 | #1948 — provider-handling minor follow-ups (caching/flag-name/literal-fallback) | Redteam residuals from #1943 | QUEUED (non-blocking, pre-existing) |
-| F4 | Cross-SDK Rust-node mock-default check | #1947 note; cross-sdk parity | BLOCKED on user cross-repo authorization (see PENDING) |
-
-## Traps
-
-- kaizen FAST-tier CI job ("expanded FAST unit tiers") flaked "0 selected / 8328 deselected"
-  on a pull_request run — TRANSIENT (same commit passed on push; local selects 6776/8328;
-  re-run green). Not a code issue; re-run if seen.
-- Regression tests are ENV-INDEPENDENT (node does no env detection; raw node → provider None →
-  raise). `detect_provider_from_env()` STILL returns "mock" keyless — that's the #1952 residual.
-- Release: git tag `kaizen-v<X.Y.Z>` → OIDC publish-pypi.yml; verify PyPI with
-  `uv pip install --refresh` (uv index cache lags even after metadata is live).
-- Reviewer/verifier reasoning can conflict — runtime evidence wins (round-1 reviewer
-  runtime-confirmed the Iterative swallow; the domain agent's reasoning missed it).
+- **PR #1978 merged** (5e1ae832f) — the 3 reported errors. `settings.json` registered
+  `.claude/hooks/coc-drift-warn.js`, deleted by loom sync 717c0f6e3 (SUBSUMED into
+  `multi-operator-sessionstart.js`, F13 closure). Reported issues 1 + 3 were ONE defect
+  (`cjs/loader:1478` is the top frame of that MODULE_NOT_FOUND stack). Also removed 7
+  `Write(...)` deny entries — CC ≥2.1.210 matches file-perm rules on `Edit()`/`Read()` ONLY,
+  so they were already inert; `Edit()` covers all file-editing tools. No enforcement lost.
+- **PR #1979 merged** (3 commits) — closed the CLASS. 4 hooks REGISTERED
+  (`analyze-completeness-guard` at PreToolUse(Skill) — block-severity, 9/9 fixtures, had NEVER
+  fired; `cross-ecosystem-disclosure-guard`; `wrapup-after-landing`;
+  `session-notes-incorporation-guard`), 14 MARKED `@settings-registration:`, `NotebookEdit` added
+  to every edit matcher (was missing everywhere → 7-8 registered hooks never fired on notebook
+  edits). `session-start.js`: 4 defects fixed + 2 self-found. Security review MERGE-WITH-FIXES
+  (no CRIT/HIGH); its 3 in-branch items fixed in-branch.
 
 ## Wave tracker
 
-None in flight. All background agents (audit + 3 redteam rounds + release watchers) completed.
+None in flight. All 7 agents reported and are done: `w2-loom-sync`, `w2-backlog-reconcile`,
+`w2-freshness`, `w3-markers`, `w3-sessionstart-fix`, `w3-secreview`, `w4-a2a-1973`.
+
+**PR #1980 merged** — #1973 a2a fixed. `matches_requirement` was `async def` with ZERO `await`
+tokens (regression traced to `24dcc4bb5`); made sync, not propagated async (the awaited callee
+`llm_capability_match` is itself sync). Bridges now forward `config=`/`correlation_id=` on the
+sync branch — without that the fix would have silently dropped judge config to `.env` defaults.
+3 extra silent-swallow siblings fixed. A review-found `UnboundLocalError` in the new WARN handler
+(provider/model bound inside the same try) fixed + 2 regression tests. 22 new Tier-1 tests
+(fail-first verified), 903 kaizen regression, 17/17 CI green. pyright independently confirms:
+a2a.py 11 errors → 8, the 3 lost being exactly the `coroutine * float` sites.
+
+## Outstanding ledger (forest) — RECONCILED, ranking inverted
+
+| ID | Item | Reconciliation verdict | Status |
+| -- | ---- | ---------------------- | ------ |
+| F-1973 | a2a unawaited coroutine | RANK 1 — was the only provably-100%-broken shipped feature | **DONE — PR #1980 merged** |
+| F1 | #1970 kaizen sanitize sweep | STILL-REAL. Issue's file path AND class name BOTH WRONG (`MultiProviderNode` exists nowhere; real owner `KaizenAIModelNode` at `ai_nodes.py:1498`, path has no `/ai/`). **DECOMPOSE** — 55 load-bearing sites | queued |
+| F2 | #1971 DataFlow 63-char id | STILL-REAL but 3 corrections: **kaizen** file not dataflow; **SQLite** path raising the **Postgres** limit (SQLite's is 128); wrong-DIALECT-selection, not over-long-id | queued |
+| F5 | #1974 sanitizer patterns | STILL-REAL (gaps 1-2). AC-3 premise CONTRADICTED — over-redaction already intentional+documented (`error_sanitizer.py:42-54`); a test written to AC-3 as worded FAILS on landing | queued |
+| F3 | #1972 nexus 3 failures | PARTIALLY SUPERSEDED — 2 of 3 are STALE TESTS asserting behavior production DELIBERATELY BLOCKS (`nexus/core.py:1512-1515`). **Fixing the product to green them RE-INTRODUCES the defect.** Port the tests | queued |
+| F6 | #1981 structured-output root cause | Found by walking a LIVE provider: `CapabilityMatchAgent`/`TextSimilarityAgent` do not enforce structured output → on a non-structured-output provider EVERY real score is 0.0 and A2A ranking is arbitrary. #1980 made it LOUD (`.degraded` WARN, uncached) but did NOT fix it. HIGH, own shard | **FILED #1981**, queued |
+
+## Awaiting user decision (carried)
+
+- (a) wire `settings-hook-registration` validator into CI (stops the class rebuilding; `/sync` reds until dispositioned)
+- (b) **venv rebuild** — RECOMMENDED, now a blocker not housekeeping (see Traps)
+- (c) kailash-ml release owed? Rule 1a says a CHANGELOG touch ⇒ release; the touch was a 1-line
+  scrub of a HISTORICAL entry changing no wheel byte. Orchestrator read: no release owed.
+
+## Traps
+
+- **`kailash-ml` and `kailash-align` DO NOT IMPORT.** `_editable_impl_*.pth` still point at the
+  pre-move `/Users/esperie/repos/loom/kailash-py/packages/...`. `packages/kailash-ml/tests` →
+  `99 tests collected, 180 errors`. **An errored collection reads like "no failures"** — do not
+  mistake it for green. Fix: `uv venv --clear && uv sync`. Session-start now warns about this.
+- CORRECTED from an earlier claim: the OTHER 6 packages DO import from live SOURCE at current
+  versions (kaizen 2.45.0, pact 0.18.0, mcp 0.4.3, nexus 2.15.0, dataflow 2.19.1, kailash 2.62.0).
+  Only the `.pth`-filename dist METADATA lags. Tests DO exercise current source.
+- Tests: ALWAYS `.venv/bin/python -m pytest`. Bare python/pyenv dies at conftest with
+  `ImportError: Node`. **An errored run is zero evidence, not a failure.**
+- `.venv/bin/pre-commit` is DEAD (`bad interpreter`, stale shebang — 114-119 of 135 scripts
+  affected by the repo move). Use `.venv/bin/python -m pre_commit`.
+- Clear `__pycache__` before running kaizen tests — stale bytecode renders tracebacks against the
+  non-existent pre-move path and you will read `???` for source.
+- Duplicate/cancelled CI runs read as red: a `conclusion: cancelled` job with all substantive
+  steps green is NOT a failure. Re-run it; pin the head SHA; check-then-merge as SEPARATE steps.
+- `.env` `OPENAI_API_KEY` is INVALID (live 401). Anthropic works.
+- `framework-first` hook false-positives "raw SQL string detected" on `session-start.js` (a Node
+  file, no SQL, no DB). Advisory only — but a detector that cries wolf trains operators to ignore it.
+
+## Unreleased packages
+
+None new. Release-drift counts are accurate but NONE are release-worthy (chore/test-only; nothing
+in any wheel) — see (c) above.
