@@ -1794,25 +1794,52 @@ Check the documentation or explore available resources.
     def _deregister_workflow_mcp(self, name: str) -> None:
         """Best-effort removal of a workflow's MCP tool + resource.
 
-        The Core SDK ``MCPServer`` keeps tools in ``_tool_registry`` and
-        resources in a resource manager; the exact shape varies by MCP backend
-        (official FastMCP, WebSocket wrapper, mock). Removal is best-effort and
-        never raises: a stale tool/resource is a soft issue, whereas a raised
-        error here would abort an otherwise-valid redeploy.
+        Reverses exactly what :meth:`_register_workflow_as_mcp_tool` and
+        :meth:`_register_workflow_as_mcp_resource` add. On the REAL
+        ``kailash_mcp.MCPServer``, register writes each artifact to TWO stores:
+        the wrapper's own registry dict AND the underlying official-FastMCP
+        manager (``server._mcp``). Both MUST be cleared or the artifact leaks:
+
+        * tool ``name`` → ``server._tool_registry`` (wrapper) AND
+          ``server._mcp._tool_manager._tools`` (FastMCP);
+        * resource ``workflow://{name}`` → ``server._resource_registry``
+          (wrapper) AND ``server._mcp._resource_manager._resources`` (FastMCP).
+
+        Clearing only the wrapper dicts (the pre-#1959 behaviour) left the
+        FastMCP managers populated, so a redeploy (deregister → re-register)
+        emitted ``Tool already exists`` / ``Resource already exists`` warnings
+        and the resource half never dropped at all — the wrapper's resource
+        store is ``_resource_registry``, NOT the ``_resources`` /
+        ``_resource_manager`` attrs the old probes looked for (those exist only
+        on the mock/shim backends). The ``_resources`` / ``_resource_manager``
+        probes below are RETAINED as defensive fallbacks for those backends.
+
+        Removal is best-effort and never raises: a stale tool/resource is a
+        soft issue, whereas a raised error here would abort an otherwise-valid
+        redeploy.
         """
         server = getattr(self, "_mcp_server", None)
         if server is None:
             return
 
         uri = f"workflow://{name}"
-        # Tool registries seen across backends: `_tool_registry` (Core SDK),
-        # `_tools` (FastMCP fallback shim).
+
+        # --- Tool stores ---------------------------------------------------
+        # Wrapper registries seen across backends: `_tool_registry` (Core SDK
+        # wrapper), `_tools` (FastMCP fallback shim / mock server).
         for attr in ("_tool_registry", "_tools"):
             registry = getattr(server, attr, None)
             if isinstance(registry, dict):
                 registry.pop(name, None)
                 registry.pop(f"workflow_{name}", None)
-        # Resource registries: a `_resources` dict, or a resource manager.
+
+        # --- Resource stores -----------------------------------------------
+        # Real Core SDK wrapper store (the store register actually writes to).
+        resource_registry = getattr(server, "_resource_registry", None)
+        if isinstance(resource_registry, dict):
+            resource_registry.pop(uri, None)
+        # Defensive fallbacks for mock/shim backends: a `_resources` dict, or a
+        # `_resource_manager._resources` dict directly on the server.
         resources = getattr(server, "_resources", None)
         if isinstance(resources, dict):
             resources.pop(uri, None)
@@ -1820,6 +1847,22 @@ Check the documentation or explore available resources.
         mgr_resources = getattr(manager, "_resources", None)
         if isinstance(mgr_resources, dict):
             mgr_resources.pop(uri, None)
+
+        # --- Underlying official-FastMCP managers (server._mcp) ------------
+        # register mirrors both artifacts here via the `tool()` / `resource()`
+        # decorators; drop them so a re-register installs a fresh handler
+        # instead of colliding with the stale one (the duplicate-warning path).
+        mcp = getattr(server, "_mcp", None)
+        if mcp is not None:
+            tool_manager = getattr(mcp, "_tool_manager", None)
+            mcp_tools = getattr(tool_manager, "_tools", None)
+            if isinstance(mcp_tools, dict):
+                mcp_tools.pop(name, None)
+                mcp_tools.pop(f"workflow_{name}", None)
+            resource_manager = getattr(mcp, "_resource_manager", None)
+            mcp_resources = getattr(resource_manager, "_resources", None)
+            if isinstance(mcp_resources, dict):
+                mcp_resources.pop(uri, None)
 
     # Multi-channel registration is handled automatically by the enterprise gateway
     # No need for custom channel registry - the gateway provides this natively
