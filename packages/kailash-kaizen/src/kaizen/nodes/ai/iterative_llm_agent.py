@@ -13,6 +13,26 @@ from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
+class SynthesisError(Exception):
+    """Raised when the synthesis-phase LLM call genuinely fails.
+
+    #1953: the run() provider guard (#1947) guarantees a resolved, non-mock
+    provider by the time synthesis dispatches, so a synthesis LLM call that
+    throws OR returns an unsuccessful response is a GENUINE runtime failure
+    (bad key, network, rate-limit) — NOT a missing-provider config error. The
+    old code swallowed that failure and returned a hand-built ``## Analysis
+    Results`` template inside ``{"success": True, "final_response": ...}``,
+    masking a real LLM failure as success. This typed error carries the
+    sanitized underlying error plus the degraded process-report (a summary of
+    the real iteration results) so run() can surface ``success=False`` with the
+    report under a clearly-named non-``final_response`` key.
+    """
+
+    def __init__(self, message: str, degraded_report: str = "") -> None:
+        super().__init__(message)
+        self.degraded_report = degraded_report
+
+
 def _resolve_action_model(kwargs: dict) -> str:
     """Env-first model for the action/synthesis LLM call.
 
@@ -410,13 +430,19 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     iteration_state.end_time = time.time()
 
                 except Exception as e:
-                    iteration_state.error = str(e)
+                    # #1953 (return/log parity): iteration_state.error flows into
+                    # the returned "iterations" array via to_dict(); a bad-key/
+                    # rate-limit exception can embed a credential, so sanitize
+                    # ONCE and store the redacted form (same class as the L1109
+                    # + synthesis folds; mirrors the already-sanitized L439 log).
+                    error_msg = sanitize_provider_error(e, "iteration")
+                    iteration_state.error = error_msg
                     iteration_state.success = False
                     iteration_state.end_time = time.time()
 
                     if enable_detailed_logging:
                         self.logger.error(
-                            f"Iteration {iteration_num} failed: {sanitize_provider_error(e, 'iteration')}"
+                            f"Iteration {iteration_num} failed: {error_msg}"
                         )
 
                 iterations.append(iteration_state)
@@ -444,6 +470,32 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 "convergence_reason": convergence_reason,
                 "total_iterations": len(iterations),
                 "total_duration": total_duration,
+                "resource_usage": self._calculate_resource_usage(iterations),
+                "metadata": {
+                    "max_iterations": max_iterations,
+                    "discovery_mode": discovery_mode,
+                    "reflection_enabled": reflection_enabled,
+                    "adaptation_strategy": adaptation_strategy,
+                },
+            }
+
+        except SynthesisError as e:
+            # #1953: the iterations ran, but the synthesis-phase LLM call
+            # genuinely failed (resolved, non-mock provider). Surface
+            # success=False with the underlying error and preserve the degraded
+            # process-report under a clearly-named NON-`final_response` key so no
+            # caller mistakes the template for a real model answer.
+            return {
+                "success": False,
+                "synthesis_failed": True,
+                "error": str(e),
+                "error_type": "SynthesisError",
+                "degraded_synthesis": e.degraded_report,
+                "iterations": [iter_state.to_dict() for iter_state in iterations],
+                "discoveries": global_discoveries,
+                "total_iterations": len(iterations),
+                "total_duration": time.time() - start_time,
+                "convergence_reason": convergence_reason,
                 "resource_usage": self._calculate_resource_usage(iterations),
                 "metadata": {
                     "max_iterations": max_iterations,
@@ -553,15 +605,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 )
 
             except Exception as e:
+                # #1953 (return/log parity): this "error" flows into the returned
+                # iterations[].discoveries array via to_dict(); sanitize ONCE and
+                # reuse in both the log and the stored dict (same class as the
+                # L438 iteration fold — closes the last adjacent-log asymmetry).
+                error_msg = sanitize_provider_error(e, "MCP")
                 self.logger.debug(
-                    f"Discovery failed for server {server_id}: {sanitize_provider_error(e, 'MCP')}"
+                    f"Discovery failed for server {server_id}: {error_msg}"
                 )
                 discoveries["new_servers"].append(
                     {
                         "id": server_id,
                         "config": server_config,
                         "discovered_at": datetime.now().isoformat(),
-                        "error": str(e),
+                        "error": error_msg,
                         "tools_count": 0,
                         "resources_count": 0,
                     }
@@ -910,9 +967,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                                 "tool_outputs", {}
                             ).get(tool, step_result["output"])
                         else:
-                            execution_results["tool_outputs"][tool] = (
-                                f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
-                            )
+                            execution_results["tool_outputs"][
+                                tool
+                            ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
                 else:
                     # Store LLM response output
                     execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
@@ -1057,10 +1114,14 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
                     step_result["success"] = False
             except Exception as e:
+                # #1953 (return/log parity): a bad-key/rate-limit exception can
+                # embed a credential; sanitize ONCE so the stored output that
+                # flows into degraded_synthesis is redacted too (mirrors L1046).
+                error_msg = sanitize_provider_error(e, "LLM")
                 self.logger.error(
-                    f"LLM fallback failed for action {action}: {sanitize_provider_error(e, 'LLM')}"
+                    f"LLM fallback failed for action {action}: {error_msg}"
                 )
-                step_result["output"] = f"Error executing {action}: {str(e)}"
+                step_result["output"] = f"Error executing {action}: {error_msg}"
                 step_result["success"] = False
 
         step_result["duration"] = time.time() - start_time
@@ -1537,9 +1598,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 improvement = current_score - previous_score
 
                 diminishing_returns = improvement < min_improvement
-                convergence_result["criteria_met"]["diminishing_returns"] = (
-                    diminishing_returns
-                )
+                convergence_result["criteria_met"][
+                    "diminishing_returns"
+                ] = diminishing_returns
 
                 # Only stop for diminishing returns if we already have decent confidence
                 if (
@@ -1654,7 +1715,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         total_custom_weight += criterion_weight
                         convergence_result["criteria_met"][
                             f"custom_{criterion_name}"
-                        ] = criterion_score > 0.5
+                        ] = (criterion_score > 0.5)
 
                     except Exception as e:
                         self.logger.warning(
@@ -1754,6 +1815,7 @@ provide your best analysis of the query directly.""",
             },
         ]
 
+        synthesis_error: str | None = None
         try:
             # Use the parent's LLM capabilities to generate synthesis
             synthesis_kwargs = {
@@ -1769,12 +1831,34 @@ provide your best analysis of the query directly.""",
             synthesis_response = super().run(**synthesis_kwargs)
             if synthesis_response.get("success") and synthesis_response.get("response"):
                 return synthesis_response["response"].get("content", "")
-        except Exception as e:
-            self.logger.warning(
-                f"LLM synthesis failed: {sanitize_provider_error(e, 'LLM')}"
+            # #1953: resolved provider returned an UNSUCCESSFUL synthesis (no
+            # exception, but success=False or no response). Do NOT fall through
+            # to the template presented as a real answer — record it as a
+            # genuine synthesis failure so run() surfaces success=False.
+            synthesis_error = (
+                synthesis_response.get("error")
+                or "synthesis LLM call returned an unsuccessful response"
             )
+            # #1953 (observability parity with the exception branch below): a
+            # non-exception synthesis failure is still a real failure — WARN so
+            # it is visible in logs, not only in the success=False return.
+            self.logger.warning(f"LLM synthesis failed: {synthesis_error}")
+        except Exception as e:
+            # #1953: a genuine runtime LLM failure (bad key, network,
+            # rate-limit) with a resolved, non-mock provider — the #1947 guard
+            # already ruled out the missing-provider config case. Record it;
+            # the swallow-then-raise below propagates it to run() as
+            # success=False instead of masking it behind the template.
+            synthesis_error = sanitize_provider_error(e, "LLM")
+            self.logger.warning(f"LLM synthesis failed: {synthesis_error}")
 
-        # Fallback to basic synthesis if LLM fails
+        # Reached ONLY when the synthesis LLM call threw OR returned an
+        # unsuccessful response. Build the degraded process-report (a summary of
+        # the REAL iteration results — it carries value) but raise SynthesisError
+        # so run() returns success=False with the report under a clearly-named
+        # NON-`final_response` key. Returning this template as the answer with
+        # success=True would mask a real LLM failure (#1953 error-masking class;
+        # consistent with the #1947 fabricated-content-as-real guard above).
         synthesis = f"## Analysis Results for: {user_query}\n\n"
 
         if all_results:
@@ -1793,7 +1877,12 @@ provide your best analysis of the query directly.""",
             f"- {successful_iterations}/{len(iterations)} iterations successful\n\n"
         )
 
-        return synthesis
+        # #1953: surface the synthesis failure to run() (success=False) with the
+        # degraded process-report attached — never return it as final_response.
+        raise SynthesisError(
+            synthesis_error or "synthesis LLM call failed",
+            degraded_report=synthesis,
+        )
 
     def _update_global_discoveries(
         self, global_discoveries: dict[str, Any], new_discoveries: dict[str, Any]
