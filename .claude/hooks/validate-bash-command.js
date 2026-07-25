@@ -495,7 +495,7 @@ function validateBashCommand(data) {
   // NEVER a Bash node -e — so a flat Bash block over-blocks nothing. (Distinct
   // from coordination-mode.json below, which DOES need enrolled-vs-solo gating.)
   const STATE_PATH_RX =
-    /\.claude\/(?:learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|observations\.jsonl(?:\.[A-Za-z0-9_-]+)?|coordination-log\.jsonl|presence-mechanism\.json|\.initialized|\.heartbeat-cache(?:[A-Za-z0-9_.-]*)?|\.session-end-cache(?:[A-Za-z0-9_.-]*)?)|operators\.roster\.(?:json|schema\.json))\b/;
+    /\.claude\/(?:learning\/(?:posture\.json(?:\.bak|\.tmp\.\d+)?|violations\.jsonl(?:\.[A-Za-z0-9_-]+)?|observations\.jsonl(?:\.[A-Za-z0-9_-]+)?|coordination-log\.jsonl|presence-mechanism\.json|\.initialized|\.posture-upgrade-nonce|\.heartbeat-cache(?:[A-Za-z0-9_.-]*)?|\.session-end-cache(?:[A-Za-z0-9_.-]*)?)|operators\.roster\.(?:json|schema\.json))\b/;
   const stateFileMutation = detectStateFileMutationSegmentAware(
     command,
     STATE_PATH_RX,

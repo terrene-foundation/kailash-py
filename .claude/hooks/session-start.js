@@ -796,8 +796,15 @@ function deriveEditableName(pthFilename) {
  * Rule 1 landmine after a repo move).
  *
  * Cost is a directory read plus one stat per .pth — no imports, no subprocess,
- * so this still reports when the interpreter itself is broken. Covers EVERY
- * editable install, not only the pinned ones.
+ * so this still reports when the interpreter itself is broken. Covers every
+ * editable install in the STATIC layout (the .pth is a bare path), pinned or
+ * not. It does NOT cover the HOOK layout, where the .pth is an `import
+ * __editable___<name>_<ver>_finder` line and the real target lives in a
+ * generated _finder.py mapping: that line is skipped as code (below), so a
+ * broken hook-layout editable is not detected. Skipping is the correct call —
+ * guessing a target out of a code line would stat nonsense and report a healthy
+ * venv as broken — but the coverage limit is real, so do not read a clean
+ * result as proof that every editable install resolves.
  *
  * Fails open: a missing/unreadable .venv or site-packages yields [] silently —
  * absence of the venv is not evidence of breakage.
@@ -820,7 +827,17 @@ function detectBrokenEditableInstalls(cwd) {
         if (!entry.endsWith(".pth")) continue;
         let raw;
         try {
-          raw = fs.readFileSync(path.join(sitePackages, entry), "utf8");
+          const pthPath = path.join(sitePackages, entry);
+          // lstat (symlink-NOT-following) + size cap before the read. A .pth
+          // that is a symlink to /dev/zero reports size 0 through statSync and
+          // would drag readFileSync into an unbounded synchronous read — which
+          // blocks the event loop, so the Rule-7 setTimeout can never fire and
+          // session start hangs. Real .pth files are a line or two; 64KB is
+          // orders of magnitude of headroom. Same guard shape as
+          // session-notes-incorporation-guard.js::readNotesFileGuarded.
+          const st = fs.lstatSync(pthPath);
+          if (!st.isFile() || st.size > 64 * 1024) continue;
+          raw = fs.readFileSync(pthPath, "utf8");
         } catch {
           continue; // unreadable .pth is not evidence of a dangling target
         }
