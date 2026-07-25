@@ -3,10 +3,12 @@ Sync/async bridge for LLM-first capability matching inside patterns.
 
 Multi-agent patterns (`meta_controller`, `supervisor_worker`, `ensemble`,
 `blackboard`) expose a synchronous `run()` contract — that is a public API
-guarantee that pipeline callers rely on. Capability scoring, however, is
-delegated to an async LLM reasoning helper (`Capability.matches_requirement`
-is now `async def`). This module bridges the two so patterns stay sync on
-the outside while the decision logic lives in the LLM.
+guarantee that pipeline callers rely on. Capability scoring is delegated to
+an LLM reasoning helper, and a scorer may be EITHER sync (the built-in
+`Capability.matches_requirement`, which awaits nothing — see #1973) or async
+(third-party capability objects, custom matchers). This module bridges both
+so patterns stay sync on the outside while the decision logic lives in the
+LLM, and so the judge config reaches the matcher on either shape.
 
 Why a dedicated module:
     Without a shared bridge, each pattern file would re-implement the same
@@ -63,9 +65,9 @@ async def _score_capability_async(
 ) -> float:
     """Single-capability async scoring helper.
 
-    Accepts dataclass Capability (async matcher), legacy sync mocks, and
-    plain strings. All error paths return 0.0 with a WARN log so one LLM
-    failure cannot sink a whole selection round.
+    Accepts dataclass Capability (sync matcher since #1973), async matchers,
+    legacy sync mocks, and plain strings. All error paths return 0.0 with a
+    WARN log so one LLM failure cannot sink a whole selection round.
     """
     if isinstance(cap, str):
         try:
@@ -91,7 +93,12 @@ async def _score_capability_async(
             return await matcher(
                 task, config=reasoning_config, correlation_id=correlation_id
             )
-        result = matcher(task)
+        # #1973: `Capability.matches_requirement` is sync (it awaits nothing),
+        # so the judge config MUST be propagated on this branch too — otherwise
+        # the judge silently falls back to `.env` defaults instead of the host
+        # agent's model. Legacy single-arg mocks raise TypeError here and are
+        # retried positionally by the handler below.
+        result = matcher(task, config=reasoning_config, correlation_id=correlation_id)
         if inspect.iscoroutine(result):
             return await result
         return float(result)

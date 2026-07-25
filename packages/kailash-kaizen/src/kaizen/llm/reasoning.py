@@ -394,8 +394,26 @@ def llm_text_similarity(
         raise
 
     latency_ms = (time.monotonic() - t0) * 1000
+    raw_similarity = result.get("similarity")
+    similarity = _coerce_float(raw_similarity)
+
+    if raw_similarity is None or result.get("error"):
+        # Sibling of the `llm_capability_match` degradation guard above — same
+        # shape, same failure mode, fixed at both sites in one change so the
+        # helpers cannot drift. See that guard for the full rationale.
+        logger.warning(
+            "llm_text_similarity.degraded",
+            extra={
+                "correlation_id": cid,
+                "model": model,
+                "latency_ms": latency_ms,
+                "error": str(result.get("error") or "response carried no similarity"),
+                "similarity": similarity,
+            },
+        )
+        return similarity
+
     _CACHE._similarity_results[cache_key] = result
-    similarity = _coerce_float(result.get("similarity"))
     logger.info(
         "llm_text_similarity.ok",
         extra={
@@ -476,8 +494,36 @@ def llm_capability_match(
         raise
 
     latency_ms = (time.monotonic() - t0) * 1000
+    raw_score = result.get("match_score")
+    score = _coerce_float(raw_score)
+
+    if raw_score is None or result.get("error"):
+        # The agent returned WITHOUT a usable score — e.g. the provider emitted
+        # prose and structured-output parsing failed ("JSON_PARSE_FAILED"), so
+        # `match_score` is absent and `_coerce_float(None)` yields 0.0. Every
+        # capability then ties at 0.0 and the caller's ranking becomes
+        # arbitrary. Reporting that as `.ok` is a silent fallback
+        # (zero-tolerance.md Rule 3); WARN so the degradation is triageable
+        # (observability.md MUST Rule 3 — WARN == returned via a degraded path).
+        #
+        # The degraded result is deliberately NOT cached: the cache exists to
+        # avoid recomputing a VALID score, and memoising a parse failure would
+        # pin 0.0 for this (model, capability, requirement) key for the rest of
+        # the process — outliving the transient condition that caused it.
+        logger.warning(
+            "llm_capability_match.degraded",
+            extra={
+                "correlation_id": cid,
+                "model": model,
+                "latency_ms": latency_ms,
+                "capability_name": capability_name,
+                "error": str(result.get("error") or "response carried no match_score"),
+                "match_score": score,
+            },
+        )
+        return score
+
     _CACHE._match_results[cache_key] = result
-    score = _coerce_float(result.get("match_score"))
     logger.info(
         "llm_capability_match.ok",
         extra={
