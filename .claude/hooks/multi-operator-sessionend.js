@@ -2,6 +2,19 @@
 /**
  * multi-operator-sessionend.js — F14 M5 B2 session-end hook.
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json (asymmetric with its registered SessionStart
+ *   sibling, which surfaces read-only banners; THIS half WRITES). Its
+ *   `isCoordinationEnabled()` gate covers only `writeSessionNotesAtomic`, NOT the
+ *   teardown as a whole: `runParent` gates on identity alone, so on a clone where
+ *   the operator merely has `git config user.signingkey` set it spawns the
+ *   DETACHED worker and `performTeardown` runs the GPG-heavy fold →
+ *   `releaseOwnClaims` → `emitCheckpoint` path, appending release /
+ *   compaction-checkpoint records to a coordination log an un-enrolled repo never
+ *   reads. Intentionally absent from .claude/settings.json; the validate-emit
+ *   `settings-hook-registration` check reads this marker (#771).
+ *
  * Architecture ref: §4.3 hook table row "multi-operator-sessionend.js"
  *
  * Event: Stop (also wires SessionEnd).

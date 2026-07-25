@@ -2,6 +2,19 @@
 /**
  * adjacency-leasecheck.js — §4.3 pre-tool-use hook for Edit|Write.
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. This repo ships un-enrolled (the committed
+ *   .claude/operators.roster.json carries the PLACEHOLDER-owner genesis), so the
+ *   MO-OPT opt-in gate below (`if (!isCoordinationEnabled(resolveMainCheckout(
+ *   repoDir) || repoDir)) passthrough()`) makes the guard inert today. Committed
+ *   registration would ARM the §4.1 SAME/ADJACENT relation the moment ANY clone
+ *   runs `/enroll` — halt-and-report on SAME-class Edit/Write and the §4.2
+ *   `severity: block` sibling-worktree-porcelain branch, which a solo dev running
+ *   their own parallel worktrees would hit. Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
+ *
  * The first user-visible behavior in F14: every Edit/Write in a
  * multi-operator session now surfaces sibling activity per §4.1's
  * SAME / ADJACENT / INDEPENDENT relation.

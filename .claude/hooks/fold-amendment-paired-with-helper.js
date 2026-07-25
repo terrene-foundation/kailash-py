@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 /**
  * Hook: fold-amendment-paired-with-helper
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. It carries no `isCoordinationEnabled()`
+ *   gate, but it is scoped to the substrate by construction: `isGitCommit()`
+ *   filters to `git commit`, and it halts only when a commit's diff touches the
+ *   F86 dispatch-contract symbols in .claude/hooks/lib/genesis-ceremony.js or
+ *   .claude/hooks/lib/fold-rule-9c.js without the paired surface. Both are
+ *   loom-authored synced coordination-substrate libs, and the invariant it
+ *   enforces — multi-operator-coordination.md MUST-7 acceptance criterion (6) —
+ *   is inert on a repo that ships un-enrolled. Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
  * Event: PostToolUse(Bash) — fires after every `git commit` (and other
  *        Bash invocations the validator filters out below).
  * Severity: halt-and-report (per hook-output-discipline.md MUST-1+2 —

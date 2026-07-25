@@ -2,6 +2,19 @@
 /**
  * adjacency-heartbeat.js — F14 M5 B2 heartbeat hook.
  *
+ * @settings-registration: coordination-substrate — registered per-clone in the
+ *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
+ *   committed .claude/settings.json. It carries NO `isCoordinationEnabled()`
+ *   gate; it self-limits on identity (`resolveIdentitySafely` → passthrough when
+ *   no verified_id) and on `COC_OPERATOR_KEY_PATH` (appendHeartbeat returns early
+ *   without it). But its PURPOSE is the coordination substrate: signing a
+ *   `heartbeat` record into .claude/learning/coordination-log.jsonl for sibling
+ *   operators to fold. On a PreToolUse(*) + Stop registration that is a node
+ *   spawn on EVERY tool call, writing a per-operator signed liveness stream that
+ *   an un-enrolled repo has no reader for. Intentionally absent from
+ *   .claude/settings.json; the validate-emit `settings-hook-registration` check
+ *   reads this marker (#771).
+ *
  * Architecture ref: §4.3 hook table row "adjacency-heartbeat.js"
  *
  * Events: PreToolUse (*) + Stop

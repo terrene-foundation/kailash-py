@@ -2,6 +2,21 @@
 /**
  * emit-artifact-activation.js — loom#1209 (W1-b, the S-3 activation-event PRODUCER, loom lane).
  *
+ * @settings-registration: opt-in-ledger — registered per-clone in the gitignored
+ *   .claude/settings.local.json by an operator running the S-3 observability
+ *   lane, NEVER in the committed .claude/settings.json. On PreToolUse(*) this is
+ *   a node spawn on EVERY tool call that appends an ArtifactActivationEvent to a
+ *   local STAGING sink at .claude/learning/artifact-activation/<session>.jsonl.
+ *   The sink exists to be DRAINED by the kailash S-3 consumer
+ *   (`C-observability-eval.md` §2.5); nothing in this repo reads it — the only
+ *   references to `artifact-activation` here are this producer, its SessionStart
+ *   sibling, and the two libs they write through. It is not coordination-gated
+ *   and never blocks (fail-open observability emitter), so the reason it is
+ *   unregistered is that committed registration would bill every clone a
+ *   per-tool-call spawn for a stream that clone has no consumer for.
+ *   Intentionally absent from .claude/settings.json; the validate-emit
+ *   `settings-hook-registration` check reads this marker (#771).
+ *
  * PRODUCER of the ArtifactActivationEvent stream at the **pre-tool-use** lifecycle moment
  * (CLI-neutral; CC PreToolUse ≈ Gemini `@hooks.tool_use` ≈ Codex `pre-tool`). It inspects the
  * about-to-run tool call and, when that call IS an artifact activation, emits an event naming
@@ -83,7 +98,11 @@ function resolveMainCheckoutSafely(repoDir) {
 function skillNameOf(toolInput) {
   const ti = toolInput || {};
   const raw = ti.skill || ti.name || ti.command || "";
-  return String(raw).trim().replace(/^\//, "").toLowerCase().split(/[\s/]+/)[0];
+  return String(raw)
+    .trim()
+    .replace(/^\//, "")
+    .toLowerCase()
+    .split(/[\s/]+/)[0];
 }
 
 /**
@@ -102,7 +121,11 @@ function classifyActivation(tool, toolInput) {
         ? ti.subagent_type
         : null;
     if (!id) return null; // a delegation with no named subagent carries no artifact identity
-    return { artifactType: "agent", artifactId: id, observationTier: "observed" };
+    return {
+      artifactType: "agent",
+      artifactId: id,
+      observationTier: "observed",
+    };
   }
 
   if (SKILL_TOOLS.has(tool)) {
@@ -110,7 +133,11 @@ function classifyActivation(tool, toolInput) {
     // consultation of an already-loaded skill is NOT observable here — the G2 residual.)
     const id = skillNameOf(ti);
     if (!id) return null;
-    return { artifactType: "skill", artifactId: id, observationTier: "observed" };
+    return {
+      artifactType: "skill",
+      artifactId: id,
+      observationTier: "observed",
+    };
   }
 
   // Any other tool (Read/Write/Bash/Grep/…) is NOT an artifact activation — it is a plain tool
@@ -185,4 +212,9 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { classifyActivation, skillNameOf, DELEGATION_TOOLS, SKILL_TOOLS };
+module.exports = {
+  classifyActivation,
+  skillNameOf,
+  DELEGATION_TOOLS,
+  SKILL_TOOLS,
+};
