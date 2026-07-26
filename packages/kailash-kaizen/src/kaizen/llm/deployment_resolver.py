@@ -17,8 +17,16 @@ The mapping is preserved byte-for-byte from the original shadow resolver:
   credential from the per-request ``api_key`` override, else the provider's
   own ``<PROVIDER>_API_KEY`` env var (``rules/env-models.md``); a missing
   credential returns ``None`` (skip).
-* **base-url providers** (``ollama`` / ``docker``): require a ``base_url``;
-  a missing one returns ``None`` (skip).
+* **keyless LOCAL providers** (``ollama`` / ``docker``): resolve WITHOUT any
+  credential -- they are local runtimes with ``StaticNone()`` auth, so
+  availability is an ENDPOINT question only. The endpoint comes from the
+  per-request ``base_url`` override, else the provider-scoped endpoint env
+  var (``OLLAMA_BASE_URL`` / ``DOCKER_MODEL_RUNNER_URL``), else the
+  provider's own canonical loopback default. Because a canonical default
+  always exists, these providers NEVER return ``None`` -- a local runtime
+  that is simply not running surfaces as a real connection error from the
+  wire layer at call time, which names the actual failure, rather than as a
+  reasonless "provider is not available" at resolve time.
 * **azure providers** (``azure`` / ``azure_openai``): resolve endpoint +
   api-key (+ api-version) from the per-request overrides else the canonical
   ``AZURE_*`` env vars, and build an ``OpenAiChat``-wire deployment with an
@@ -229,17 +237,23 @@ def _resolve_azure_deployment(
     resolved_endpoint = base_url or resolve_azure_env(
         "AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT"
     )
-    if not resolved_endpoint:
-        logger.debug(
-            "llm.dual_run.shadow_skipped",
-            extra={"provider": "azure", "reason": "missing_base_url"},
-        )
-        return None
     resolved_key = api_key or resolve_azure_env("AZURE_API_KEY", "AZURE_OPENAI_API_KEY")
-    if not resolved_key:
-        logger.debug(
+    # rules/observability.md Rule 3: an entirely UNCONFIGURED provider is a
+    # normal, expected skip (DEBUG). A PARTIALLY configured one -- the
+    # operator set one half and believes Azure is wired -- is a
+    # misconfiguration the operator must see (WARN).
+    if not resolved_endpoint or not resolved_key:
+        partially_configured = bool(resolved_endpoint) or bool(resolved_key)
+        logger.log(
+            logging.WARNING if partially_configured else logging.DEBUG,
             "llm.dual_run.shadow_skipped",
-            extra={"provider": "azure", "reason": "missing_api_key"},
+            extra={
+                "provider": "azure",
+                "reason": (
+                    "missing_base_url" if not resolved_endpoint else "missing_api_key"
+                ),
+                "partially_configured": partially_configured,
+            },
         )
         return None
     resolved_api_version = (
@@ -315,17 +329,20 @@ def _resolve_azure_ai_foundry_deployment(
     resolved_endpoint = (
         base_url or os.environ.get("AZURE_AI_FOUNDRY_ENDPOINT", "").strip()
     )
-    if not resolved_endpoint:
-        logger.debug(
-            "llm.dual_run.shadow_skipped",
-            extra={"provider": "azure_ai_foundry", "reason": "missing_base_url"},
-        )
-        return None
     resolved_key = api_key or os.environ.get("AZURE_AI_FOUNDRY_API_KEY", "").strip()
-    if not resolved_key:
-        logger.debug(
+    # rules/observability.md Rule 3 -- see _resolve_azure_deployment.
+    if not resolved_endpoint or not resolved_key:
+        partially_configured = bool(resolved_endpoint) or bool(resolved_key)
+        logger.log(
+            logging.WARNING if partially_configured else logging.DEBUG,
             "llm.dual_run.shadow_skipped",
-            extra={"provider": "azure_ai_foundry", "reason": "missing_api_key"},
+            extra={
+                "provider": "azure_ai_foundry",
+                "reason": (
+                    "missing_base_url" if not resolved_endpoint else "missing_api_key"
+                ),
+                "partially_configured": partially_configured,
+            },
         )
         return None
     resolved_model = (
@@ -369,14 +386,87 @@ def _api_key_preset_map() -> dict[str, tuple[Callable[..., Any], str]]:
     }
 
 
-# Providers whose four-axis preset is keyed on a base_url (local runtimes).
-def _base_url_preset_map() -> dict[str, Callable[..., Any]]:
+# ---------------------------------------------------------------------------
+# KEYLESS LOCAL providers — availability is an ENDPOINT question, never a
+# credential question (#1720 forest-drain).
+# ---------------------------------------------------------------------------
+#
+# ``ollama`` and ``docker`` are LOCAL runtimes reached over plain HTTP on a
+# loopback port with NO credential of any kind -- both presets pin
+# ``StaticNone()`` auth. A keyless provider therefore
+# MUST NOT be gated on credential presence, and MUST NOT be gated on the
+# caller happening to pass a ``base_url``: a local runtime publishes a
+# canonical loopback endpoint, so "the caller named no endpoint" means "use
+# the provider's own default", NOT "the provider is unavailable".
+#
+# Each keyless provider declares, DECLARATIVELY (no per-name ``if`` branch in
+# the resolve path -- a new local runtime is one row here):
+#
+#   * ``factory``      -- the parametrised preset builder;
+#   * ``env_var``      -- the provider-scoped endpoint env var. Reading the
+#                         endpoint from the environment is the ``base_url``
+#                         analogue of the api-key family's
+#                         ``<PROVIDER>_API_KEY`` fallback and keeps the
+#                         environment the single source of truth
+#                         (``rules/env-models.md``);
+#   * ``default_url``  -- the provider's OWN canonical loopback endpoint,
+#                         used when neither the per-request override nor the
+#                         env var supplies one.
+#
+# ``default_url`` is a documented module-level named constant, overridable via
+# a provider-SCOPED env var, and NOT chained to any provider-agnostic default
+# -- the three conditions of the ``rules/env-models.md`` § "Provider-Intrinsic
+# Named-Constant Defaults" carve-out, applied to the ENDPOINT axis rather than
+# the model axis. Both values mirror the endpoints ``kaizen.config.providers``
+# already publishes for these runtimes (``get_ollama_config`` /
+# ``get_docker_config``), so the four-axis resolver and the legacy config
+# surface agree on one endpoint per provider instead of drifting.
+#
+# Endpoint semantics: ``env_var`` / ``default_url`` carry the COMPLETE
+# endpoint base the wire appends its path to (hence ``path_prefix=""``) --
+# matching how ``kaizen.config.providers`` probes them
+# (``f"{base_url}/api/tags"``, ``f"{base_url}/models"``). A per-request
+# ``base_url`` override keeps its PRE-EXISTING meaning (the preset's own
+# default ``path_prefix`` still applies), so no caller that passes an explicit
+# ``base_url`` today changes behaviour.
+#
+# Both defaults use the ``localhost`` HOSTNAME rather than a literal loopback
+# IP: ``url_safety.check_url`` allowlists the localhost LABEL for http, but
+# rejects a literal ``127.0.0.1`` / ``::1`` at ``Endpoint`` construction
+# (reason=``loopback``). Verified empirically -- a literal-IP default would
+# raise ``InvalidEndpoint`` before any request was ever built.
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_DOCKER_MODEL_RUNNER_BASE_URL = "http://localhost:12434/engines/llama.cpp/v1"
+
+
+def _local_provider_map() -> dict[str, tuple[Callable[..., Any], str, str]]:
+    """Keyless local runtimes -> (factory, endpoint env var, canonical URL)."""
     from kaizen.llm.presets import docker_model_runner_preset, ollama_preset
 
     return {
-        "ollama": ollama_preset,
-        "docker": docker_model_runner_preset,
+        "ollama": (
+            ollama_preset,
+            "OLLAMA_BASE_URL",
+            DEFAULT_OLLAMA_BASE_URL,
+        ),
+        "docker": (
+            docker_model_runner_preset,
+            "DOCKER_MODEL_RUNNER_URL",
+            DEFAULT_DOCKER_MODEL_RUNNER_BASE_URL,
+        ),
     }
+
+
+def requires_credential(provider: str) -> bool:
+    """Whether ``provider`` needs a credential to resolve at all.
+
+    The DECLARATIVE property callers should branch on instead of testing the
+    provider name against a hardcoded ``"ollama"`` literal. ``False`` for the
+    keyless local runtimes above (they resolve on endpoint configuration
+    alone); ``True`` for every credentialed family and for unknown names
+    (fail-closed: an unrecognised provider is not assumed keyless).
+    """
+    return (provider or "").strip().lower() not in _local_provider_map()
 
 
 def resolve_deployment_for(
@@ -392,11 +482,23 @@ def resolve_deployment_for(
 
     Maps the legacy provider name (``kaizen.providers.registry.PROVIDERS``)
     onto the matching four-axis preset builder. Returns ``None`` when the
-    provider has no four-axis mapping, or a required credential / base_url
-    cannot be resolved -- callers treat ``None`` as "skip, already logged at
-    DEBUG". Raises :class:`UnsupportedDeploymentProvider` for a KNOWN provider
-    with no confirmed wire (``azure_ai_foundry``) — a documented Wave-B
-    blocker, not a silent fallback.
+    provider has no four-axis mapping, or a required CREDENTIAL cannot be
+    resolved -- callers treat ``None`` as "skip, already logged". Raises
+    :class:`UnsupportedDeploymentProvider` for a KNOWN provider with no
+    confirmed wire — a documented Wave-B blocker, not a silent fallback.
+
+    **Availability means CONFIGURED, not REACHABLE.** This function performs
+    NO network I/O: it is called per-request on the ``llm_agent`` hot path,
+    so probing an endpoint here would add a round-trip and a second failure
+    mode to every completion. A provider resolves when its configuration is
+    resolvable; whether the far end answers is decided by the wire layer at
+    call time, where a refused connection is reported as a refused connection
+    (``kaizen.config.providers.check_*_available`` remains the explicit
+    opt-in reachability probe for callers that want one up front).
+
+    Consequently the keyless local runtimes (``ollama`` / ``docker``, see
+    :func:`requires_credential`) ALWAYS resolve — they are configured by
+    construction via their canonical loopback default.
 
     ``api_key`` mirrors the legacy provider's own resolution: when the caller
     did not pass a per-request override, the same ``<PROVIDER>_API_KEY`` env
@@ -468,16 +570,30 @@ def resolve_deployment_for(
             kwargs["base_url"] = base_url
         return factory(resolved_key, model, **kwargs)
 
-    base_url_map = _base_url_preset_map()
-    if provider_key in base_url_map:
-        if not base_url:
-            logger.debug(
-                "llm.dual_run.shadow_skipped",
-                extra={"provider": provider, "reason": "missing_base_url"},
-            )
-            return None
-        factory = base_url_map[provider_key]
-        return factory(base_url, model)
+    local_map = _local_provider_map()
+    if provider_key in local_map:
+        factory, env_var, default_url = local_map[provider_key]
+        # A keyless LOCAL runtime is never "unavailable for want of an
+        # endpoint" -- it publishes a canonical loopback one. Precedence
+        # mirrors the api-key family exactly: per-request override, else the
+        # provider-scoped env var, else the provider's own default.
+        if base_url:
+            # Pre-existing per-request semantics: the preset's own default
+            # `path_prefix` still applies (unchanged for every current caller).
+            return factory(base_url, model)
+        env_url = os.environ.get(env_var, "").strip() or None
+        resolved_url = env_url or default_url
+        logger.debug(
+            "llm.deployment_resolver.local_endpoint_resolved",
+            extra={
+                "provider": provider,
+                "source": "env" if env_url else "provider_default",
+                "env_var": env_var,
+            },
+        )
+        # `env_var` / `default_url` carry the COMPLETE endpoint base (see the
+        # `_local_provider_map` note), so the preset appends no engine path.
+        return factory(resolved_url, model, path_prefix="")
 
     logger.debug(
         "llm.dual_run.shadow_skipped",
@@ -486,8 +602,61 @@ def resolve_deployment_for(
     return None
 
 
+def describe_unresolved_precondition(provider: str) -> str:
+    """Name WHICH precondition made ``provider`` unresolvable.
+
+    ``resolve_deployment_for`` returning ``None`` tells a caller only THAT
+    resolution failed. Surfacing that to a user as a bare "provider is not
+    available" is the ``rules/zero-tolerance.md`` Rule 3 failure mode: the
+    caller cannot act, because the message names no failed precondition.
+    This renders the missing precondition for the caller's error message.
+
+    It RENDERS the same declarative tables the resolve path branches on
+    (``_api_key_preset_map`` / ``_local_provider_map``) rather than restating
+    the precedence rules, so the message cannot drift from the behaviour.
+    """
+    provider_key = (provider or "").strip().lower()
+
+    if provider_key in _local_provider_map():
+        # Unreachable in practice: keyless local providers always resolve.
+        _, env_var, default_url = _local_provider_map()[provider_key]
+        return (
+            f"{provider_key} is a keyless local runtime and resolves without "
+            f"credentials (endpoint: ${env_var}, default {default_url})"
+        )
+
+    api_key_map = _api_key_preset_map()
+    if provider_key in api_key_map:
+        _, env_var = api_key_map[provider_key]
+        return (
+            f"no API key for {provider_key}: ${env_var} is unset or empty in "
+            f"the environment and no per-request api_key override was supplied"
+        )
+
+    if provider_key in _AZURE_PROVIDERS:
+        return (
+            "Azure endpoint or API key unresolved: set $AZURE_ENDPOINT and "
+            "$AZURE_API_KEY (or pass base_url / api_key per request)"
+        )
+
+    if provider_key in _AZURE_AI_FOUNDRY_PROVIDERS:
+        return (
+            "Azure AI Foundry endpoint or API key unresolved: set "
+            "$AZURE_AI_FOUNDRY_ENDPOINT and $AZURE_AI_FOUNDRY_API_KEY "
+            "(or pass base_url / api_key per request)"
+        )
+
+    known = sorted({*api_key_map, *_local_provider_map(), *_AZURE_PROVIDERS})
+    return (
+        f"{provider_key!r} has no four-axis deployment mapping; known "
+        f"providers: {', '.join(known)}"
+    )
+
+
 __all__ = [
     "resolve_deployment_for",
+    "requires_credential",
+    "describe_unresolved_precondition",
     "UnsupportedDeploymentProvider",
     "legacy_tool_choice_default",
 ]
