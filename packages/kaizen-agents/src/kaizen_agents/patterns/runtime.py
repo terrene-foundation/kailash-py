@@ -970,6 +970,13 @@ class OrchestrationRuntime:
         Returns:
             Workflow results dictionary with completion status and task results
 
+        Raises:
+            ReasoningDegradedError: `error_handling="fail-fast"` ONLY, and
+                only when SEMANTIC routing degraded for a task (#1981). Under
+                the default `"graceful"` mode the degradation is recorded as a
+                failed task carrying `degraded: True` instead — mirroring how
+                the execution phase below already honours `error_handling`.
+
         Example:
             results = await runtime.execute_multi_agent_workflow(
                 tasks=["Analyze data", "Generate code", "Write documentation"],
@@ -984,17 +991,73 @@ class OrchestrationRuntime:
         workflow_status = WorkflowStatus(
             workflow_id=workflow_id, total_tasks=len(tasks)
         )
-        self.workflows[workflow_id] = workflow_status
 
-        # Route tasks to agents
-        selected_agents = []
+        # INVARIANT: `self.workflows` only ever holds workflows whose ROUTING
+        # phase completed.
+        #
+        # `route_task` below can raise (`ReasoningDegradedError`, #1981) and
+        # `error_handling="fail-fast"` re-raises it. Publishing the status
+        # object BEFORE the fallible routing loop left a phantom entry behind
+        # on that path: `get_workflow_status()` reported it as perpetually
+        # in-flight (total_tasks=N, completed=0, failed=0) and NOTHING could
+        # ever clear it, because the caller never received the generated
+        # `workflow_id` — the function raised before returning it. Publishing
+        # AFTER routing is chosen over rolling back on the error path because
+        # it has no rollback race and loses no observability: the id is not
+        # knowable to any caller until this method returns.
+        # (`workflow_status` is a local until then, so the routing loop's own
+        # bookkeeping below is unaffected.)
+
+        # Route tasks to agents. Pair each agent WITH its task so a task that
+        # fails to route cannot shift the agent->task mapping of the tasks
+        # that follow it.
+        routed: list[tuple[BaseAgent, str]] = []
         for task in tasks:
-            agent = await self.route_task(
-                task,
-                strategy=(
-                    RoutingStrategy(routing_strategy) if routing_strategy else None
-                ),
-            )
+            try:
+                agent = await self.route_task(
+                    task,
+                    strategy=(
+                        RoutingStrategy(routing_strategy) if routing_strategy else None
+                    ),
+                )
+            except ReasoningDegradedError as exc:
+                # #1981 second-order: SEMANTIC routing raises when the
+                # capability judge degraded for EVERY candidate, rather than
+                # handing back an arbitrarily-ordered agent. Honour the same
+                # `error_handling` policy the execution phase below uses.
+                logger.warning(
+                    "execute_multi_agent_workflow.routing_degraded",
+                    extra={
+                        "workflow_id": workflow_id,
+                        "error_handling": error_handling,
+                        "correlation_id": exc.correlation_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                if error_handling == "fail-fast":
+                    # Nothing was published to `self.workflows`, so the
+                    # invariant above holds with no cleanup needed.
+                    raise
+                # Graceful: this task failed, the workflow continues. The
+                # `degraded` marker is what keeps a total judge failure
+                # distinguishable from the genuine "No agents available"
+                # no-match recorded below — the same float/`[]`/`None`
+                # collision #1981 exists to eliminate.
+                workflow_status.failed_tasks += 1
+                workflow_status.results.append(
+                    {
+                        "task": task,
+                        "status": "failed",
+                        "degraded": True,
+                        "error": str(exc),
+                        "degraded_helper": exc.helper,
+                        "degraded_model": exc.model,
+                        "correlation_id": exc.correlation_id,
+                    }
+                )
+                continue
 
             if agent is None:
                 # No agents available for this task
@@ -1003,14 +1066,16 @@ class OrchestrationRuntime:
                     {"task": task, "status": "failed", "error": "No agents available"}
                 )
             else:
-                selected_agents.append(agent)
+                routed.append((agent, task))
+
+        # Routing completed — the workflow is now admitted and observable.
+        self.workflows[workflow_id] = workflow_status
+
+        selected_agents = [agent for agent, _task in routed]
 
         # Build workflow from agents (enables level-based parallelism)
         if selected_agents:
-            # Filter tasks to only those with assigned agents
-            assigned_tasks = [
-                task for i, task in enumerate(tasks) if i < len(selected_agents)
-            ]
+            assigned_tasks = [task for _agent, task in routed]
 
             workflow = self._build_workflow_from_agents(
                 selected_agents,
@@ -1561,6 +1626,11 @@ class OrchestrationRuntime:
 
         Returns:
             Selected agent ID or None
+
+        Raises:
+            ReasoningDegradedError: SEMANTIC strategy only — every candidate
+                capability degraded (#1981), so no ranking exists. Sibling
+                contract of `_route_semantic`; see its Raises section.
         """
         if not available_agents:
             return None
@@ -1595,9 +1665,22 @@ class OrchestrationRuntime:
             # Least loaded: pick agent with fewest active tasks
             return min(active_agents, key=lambda aid: self.agents[aid].active_tasks)
         elif strategy == RoutingStrategy.SEMANTIC:
-            # Semantic routing: LLM-first scoring (no keyword overlap)
+            # Semantic routing: LLM-first scoring (no keyword overlap).
+            #
+            # Degraded judgments (#1981) follow `_route_semantic` exactly:
+            # `_score_capability` re-raises the typed signal, a degraded
+            # capability is SKIPPED (its fit is UNKNOWN, not zero, so it can
+            # never out-rank or tie a real score), and only an entirely
+            # unscoreable round raises. Pre-fix the FIRST degraded capability
+            # escaped this loop uncaught and aborted the whole helper — a
+            # documented `-> str | None` surface raising on one bad judgment
+            # while its `_route_semantic` sibling shrugged the same failure
+            # off.
             best_score = -1.0
             best_agent = active_agents[0]  # fallback
+            scored_capabilities = 0
+            degraded_agents: list[str] = []
+            degraded_model = "unknown"
             reasoning_tuples = [(aid, self.agents[aid]) for aid in active_agents]
             reasoning_config = self._resolve_reasoning_config(reasoning_tuples)
             for agent_id in active_agents:
@@ -1609,13 +1692,47 @@ class OrchestrationRuntime:
                 capabilities = getattr(metadata.a2a_card, "capabilities", [])
                 if isinstance(capabilities, dict):
                     capabilities = capabilities.get("capabilities", [])
+                agent_scored = 0
+                agent_degraded = 0
                 for cap in capabilities:
-                    score = await self._score_capability(
-                        cap, task, reasoning_config, agent_id=agent_id
-                    )
+                    try:
+                        score = await self._score_capability(
+                            cap, task, reasoning_config, agent_id=agent_id
+                        )
+                    except ReasoningDegradedError as exc:
+                        agent_degraded += 1
+                        degraded_model = exc.model
+                        continue
+
+                    agent_scored += 1
+                    scored_capabilities += 1
                     if score > best_score:
                         best_score = score
                         best_agent = agent_id
+
+                if agent_degraded and agent_scored == 0:
+                    degraded_agents.append(agent_id)
+
+            if degraded_agents:
+                if scored_capabilities == 0:
+                    raise ReasoningDegradedError(
+                        "runtime.route_task_semantic",
+                        model=degraded_model,
+                        correlation_id=f"route_task_{uuid.uuid4().hex[:8]}",
+                        error=(
+                            f"the capability judge degraded for all "
+                            f"{len(degraded_agents)} candidate agent(s): "
+                            f"{', '.join(degraded_agents)}"
+                        ),
+                    )
+                logger.warning(
+                    "route_task.degraded",
+                    extra={
+                        "candidates": len(active_agents),
+                        "scored_capabilities": scored_capabilities,
+                        "degraded_agents": degraded_agents,
+                    },
+                )
             return best_agent
         else:
             # Default: round-robin

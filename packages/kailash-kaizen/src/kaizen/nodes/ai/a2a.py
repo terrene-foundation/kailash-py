@@ -141,6 +141,16 @@ class Capability:
 
         Returns:
             float: Match confidence in [0.0, 1.0].
+
+        Raises:
+            ReasoningDegradedError: Propagated unchanged from
+                `llm_capability_match` when the judge returned no usable score
+                (#1981). Deliberately NOT coerced to a float here: this method
+                is the leaf of the scoring chain, so a fabricated number would
+                be indistinguishable from a genuine no-match at every layer
+                above it. `A2AAgentCard.calculate_match_score` propagates it
+                further and `_find_best_agents_for_task` is the layer that
+                decides what to do about it.
         """
         # Local import keeps `kaizen.nodes.ai.a2a` importable even when the
         # llm.reasoning module has not been exercised yet, and avoids a hard
@@ -2892,9 +2902,23 @@ class A2ACoordinatorNode(CycleAwareNode):
                 success (bool): Whether action succeeded
                 cycle_info (dict): Iteration and history information
                 Additional action-specific fields
+                degraded (bool): Present and True ONLY when the LLM capability
+                    judge returned no usable score for any candidate. Carries
+                    `degraded_helper`, `degraded_model` and `correlation_id`
+                    so the caller can join the result to the WARN log line.
 
         Raises:
-            None - errors returned in result dictionary
+            None - errors returned in result dictionary. This includes the
+            `ReasoningDegradedError` that `_find_best_agents_for_task` raises
+            when the LLM capability judge degrades for EVERY candidate card
+            (#1981): the delegation/matching actions reach that raise through
+            `_enhanced_delegate_task` and `_match_agents_to_task`, and this is
+            a Kailash node's `run()` — an escaping exception aborts the whole
+            workflow rather than letting the graph route on a failed step.
+            The degradation is NOT swallowed: it is logged at WARN and
+            surfaced in the returned dict under a dedicated `degraded` flag,
+            so a total judge failure stays distinguishable from a genuine
+            "no agent matched" (`success: False` with no `degraded` key).
 
         Side Effects:
             Updates internal agent registry
@@ -2927,38 +2951,83 @@ class A2ACoordinatorNode(CycleAwareNode):
             coordination_history = prev_state.get("coordination_history", [])
             agent_performance_history = prev_state.get("agent_performance", {})
 
-        # Execute the coordination action - enhanced actions first
-        if action == "register_with_card":
-            result = self._register_agent_with_card(kwargs, context)
-        elif action == "create_task":
-            result = self._create_structured_task(kwargs)
-        elif action == "update_task_state":
-            result = self._update_task_state(kwargs)
-        elif action == "get_task_insights":
-            result = self._get_task_insights(kwargs)
-        elif action == "match_agents_to_task":
-            result = self._match_agents_to_task(kwargs)
-        # Original actions with enhancement support
-        elif action == "register":
-            result = self._register_agent(kwargs, context)
-        elif action == "delegate":
-            # Check if we should use enhanced delegation
-            if self.agent_cards or kwargs.get("task_id") in self.active_tasks:
-                result = self._enhanced_delegate_task(
-                    kwargs, context, coordination_history, agent_performance_history
-                )
+        # Local import for the same reason `_find_best_agents_for_task` imports
+        # it locally: `kaizen.llm.reasoning` pulls in `kaizen.core.base_agent`,
+        # and a module-scope import here would close an import cycle back
+        # through this module.
+        from kaizen.llm.reasoning import ReasoningDegradedError
+
+        # Execute the coordination action - enhanced actions first.
+        #
+        # #1981 second-order contract (S3): `_enhanced_delegate_task` and
+        # `_match_agents_to_task` both reach `_find_best_agents_for_task`,
+        # which now RAISES `ReasoningDegradedError` when the capability judge
+        # degraded for every candidate card instead of returning a fabricated
+        # 0.0 ranking. This method is a Kailash node's `run()` and its
+        # documented contract is "errors returned in result dictionary" — an
+        # escaping exception aborts the whole workflow instead of letting the
+        # graph route on a failed step. Only the TYPED degradation signal is
+        # converted; every other exception still propagates, because turning
+        # an `AttributeError` into `{"success": False}` would hide a genuine
+        # defect (`rules/zero-tolerance.md` Rule 3).
+        try:
+            if action == "register_with_card":
+                result = self._register_agent_with_card(kwargs, context)
+            elif action == "create_task":
+                result = self._create_structured_task(kwargs)
+            elif action == "update_task_state":
+                result = self._update_task_state(kwargs)
+            elif action == "get_task_insights":
+                result = self._get_task_insights(kwargs)
+            elif action == "match_agents_to_task":
+                result = self._match_agents_to_task(kwargs)
+            # Original actions with enhancement support
+            elif action == "register":
+                result = self._register_agent(kwargs, context)
+            elif action == "delegate":
+                # Check if we should use enhanced delegation
+                if self.agent_cards or kwargs.get("task_id") in self.active_tasks:
+                    result = self._enhanced_delegate_task(
+                        kwargs, context, coordination_history, agent_performance_history
+                    )
+                else:
+                    result = self._delegate_task(
+                        kwargs, context, coordination_history, agent_performance_history
+                    )
+            elif action == "broadcast":
+                result = self._broadcast_message(kwargs, context)
+            elif action == "consensus":
+                result = self._manage_consensus(kwargs, context, coordination_history)
+            elif action == "coordinate":
+                result = self._coordinate_workflow(kwargs, context, iteration)
             else:
-                result = self._delegate_task(
-                    kwargs, context, coordination_history, agent_performance_history
-                )
-        elif action == "broadcast":
-            result = self._broadcast_message(kwargs, context)
-        elif action == "consensus":
-            result = self._manage_consensus(kwargs, context, coordination_history)
-        elif action == "coordinate":
-            result = self._coordinate_workflow(kwargs, context, iteration)
-        else:
-            result = {"success": False, "error": f"Unknown action: {action}"}
+                result = {"success": False, "error": f"Unknown action: {action}"}
+        except ReasoningDegradedError as exc:
+            # NOT a silent swallow: WARN keeps the degradation triageable
+            # (`rules/observability.md` MUST Rule 3) and the returned dict
+            # carries a dedicated `degraded` flag plus the error's model /
+            # helper / correlation_id, so a caller can tell "the judge could
+            # not tell" from "no agent matched" — the whole point of #1981.
+            logger.warning(
+                "a2a.coordinator.run.degraded",
+                extra={
+                    "action": action,
+                    "iteration": iteration,
+                    "correlation_id": exc.correlation_id,
+                    "helper": exc.helper,
+                    "model": exc.model,
+                    "error": exc.error,
+                },
+            )
+            result = {
+                "success": False,
+                "degraded": True,
+                "error": str(exc),
+                "degraded_helper": exc.helper,
+                "degraded_model": exc.model,
+                "correlation_id": exc.correlation_id,
+                "action": action,
+            }
 
         # Track coordination history for cycle learning
         coordination_event = {

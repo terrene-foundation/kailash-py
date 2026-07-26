@@ -39,6 +39,27 @@ against it BEFORE reacting (MUST-2 / MUST-3).
   which `MCPServer` assigns to `self._mcp`, never to itself; the JSON-RPC handler iterates
   `_tool_registry`.
 
+### AF-3 RESOLVED by orchestrator probe — do NOT re-open
+
+The credential audit flagged `kaizen/llm/client.py:863,1402,1603` (`raise Timeout() from exc`)
+as _possibly_ S4 sites and correctly refused to assert either way, since it needed httpx
+behavior not readable from this repo. Probed directly:
+
+| exception                                             | `str()` renders the URL?                          |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `TimeoutException` / `ConnectTimeout` / `ReadTimeout` | **NO** — `'timed out'` only                       |
+| `ConnectError`                                        | **NO**                                            |
+| `HTTPStatusError` **from `raise_for_status()`**       | **YES** — full URL incl. userinfo AND query token |
+
+So the three `raise Timeout() from exc` sites are **NOT** message/traceback leaks and need no
+`from None` treatment. `e.request.url` still holds the credential as an ATTRIBUTE, but nothing
+in kaizen/kaizen-agents reads it (`http_client.py:235` takes `.host` only).
+
+**This makes S4 concrete rather than theoretical.** All four `raise_for_status()` call sites
+(`multi_modal.py:169,412`; `landing_ai_provider.py:240`; `ollama_vision_provider.py:216`) are
+ALREADY in the S4 list (A6, A7, B11-B14, B9/B10) — so the enumeration is complete for this
+class, and the `__cause__` those sites carry is a real credentialed URL, not a hypothetical one.
+
 ### Open concern to challenge at report time
 
 `DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH` (128, the LOOSEST budget)

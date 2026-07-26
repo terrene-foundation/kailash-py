@@ -5,11 +5,16 @@ Provides user-filtered agent discovery and skill metadata for UI integration.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.llm.reasoning import ReasoningDegradedError
+
 from .registry import AgentRegistry
 from .runtime import AgentMetadata, AgentStatus
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -293,7 +298,16 @@ class AgentSkillMetadata:
                 return None
 
             return schema
-        except Exception:
+        except Exception as exc:
+            # Introspecting an arbitrary signature object is best-effort — a
+            # malformed/foreign signature yields "no schema", not a failure.
+            # It is NOT silent: the fallback is logged so a systematically
+            # unreadable signature is triageable (`rules/zero-tolerance.md`
+            # Rule 3, `rules/observability.md` MUST Rule 3).
+            logger.warning(
+                "discovery.input_schema_extraction_failed",
+                extra={"error": str(exc), "signature": type(signature).__name__},
+            )
             return None
 
     @staticmethod
@@ -309,7 +323,14 @@ class AgentSkillMetadata:
                         output_types.append(name)
 
             return output_types if output_types else ["text"]
-        except Exception:
+        except Exception as exc:
+            # Sibling of `_extract_input_schema` above — same best-effort
+            # introspection, same documented fallback, same WARN so the
+            # fallback is never taken silently.
+            logger.warning(
+                "discovery.output_types_extraction_failed",
+                extra={"error": str(exc), "signature": type(signature).__name__},
+            )
             return ["text"]
 
 
@@ -361,12 +382,39 @@ class UserFilteredAgentDiscovery:
 
         Returns:
             List of AgentWithAccess with access metadata
+
+        Raises:
+            ReasoningDegradedError: `capability_filter` ONLY — the LLM
+                capability judge degraded for EVERY registered agent (#1981),
+                so the registry has no ranking to filter. Deliberately
+                PROPAGATED rather than converted to an empty list: `[]` is
+                exactly what `find_agents_by_capability` used to return on a
+                total judge failure, and every caller read it as "no agent has
+                this capability". Swallowing it here would reinstate the bug
+                #1981 exists to eliminate, one layer higher up. A WARN is
+                emitted first so the degradation is triageable at THIS layer
+                too (`rules/observability.md` MUST Rule 3).
         """
         # Get all agents from registry
         if capability_filter:
-            agents = await self._registry.find_agents_by_capability(
-                capability_filter, status_filter
-            )
+            try:
+                agents = await self._registry.find_agents_by_capability(
+                    capability_filter, status_filter
+                )
+            except ReasoningDegradedError as exc:
+                logger.warning(
+                    "discovery.find_agents_for_user.degraded",
+                    extra={
+                        "user_id": user_id,
+                        "organization_id": organization_id,
+                        "capability_filter": capability_filter,
+                        "correlation_id": exc.correlation_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                raise
         else:
             agents = await self._registry.list_agents(status_filter=status_filter)
 
@@ -433,9 +481,30 @@ class UserFilteredAgentDiscovery:
                     permission_level="execute",
                     constraints=constraints,
                 )
-            except Exception:
-                # Fall through to default behavior
-                pass
+            except Exception as exc:
+                # Fall through to default behaviour (grant with default
+                # constraints). This is a FAIL-OPEN disposition and is now
+                # LOUD instead of silent: the checker erroring is materially
+                # different from the checker returning `valid=False`, and the
+                # previous bare `pass` made the two indistinguishable in
+                # production (`rules/zero-tolerance.md` Rule 3).
+                #
+                # NOTE: the fail-open disposition itself is deliberately left
+                # unchanged here — flipping an authorization default to
+                # fail-closed changes the security posture of a public API
+                # (a transient checker outage would deny every user) and is
+                # a decision for its own change with security review, not a
+                # side-effect of an error-contract fix. The ERROR-level log
+                # is what makes it detectable in the meantime.
+                logger.error(
+                    "discovery.permission_check_failed_open",
+                    extra={
+                        "user_id": user_id,
+                        "organization_id": organization_id,
+                        "agent_id": agent_metadata.agent_id,
+                        "error": str(exc),
+                    },
+                )
 
         # Default: grant access with default constraints
         return True, AccessMetadata(
