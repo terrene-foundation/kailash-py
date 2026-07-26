@@ -11,13 +11,42 @@ Branch `fix/issue-1720-forest-drain`. Forest work SECURED at commit `0066e4fcb`
 Check this table BEFORE spawning anything. Match every completion notification
 against it BEFORE reacting (MUST-2 / MUST-3).
 
-| track            | scope (files owned EXCLUSIVELY)                                      | specialist        | status    |
-| ---------------- | -------------------------------------------------------------------- | ----------------- | --------- |
-| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | in-flight |
-| w7-cred-audit    | S4 `__cause__` sites, fallback.py:91, sweep autouse-skip (READ-ONLY) | security-reviewer | in-flight |
-| w7-nexus         | packages/kailash-nexus/** — S8 atomicity, `_tools`, MINOR bump       | nexus-spec        | in-flight |
-| w7-core-dialect  | src/kailash/db/dialect.py, connection_parser.py, staging_utilities   | infra-spec        | in-flight |
-| w7-2nd-scrubber  | kaizen/llm/errors.py (S1)                                            | kaizen-spec       | in-flight |
+| track            | scope (files owned EXCLUSIVELY)                                      | specialist        | status                    |
+| ---------------- | -------------------------------------------------------------------- | ----------------- | ------------------------- |
+| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | in-flight                 |
+| w7-cred-audit    | S4 `__cause__` sites, fallback.py:91, sweep autouse-skip (READ-ONLY) | security-reviewer | **DONE** — report applied |
+| w7-nexus         | packages/kailash-nexus/** — S8 atomicity, `_tools`, MINOR bump       | nexus-spec        | **DONE** — `84f08d203`    |
+| w7-core-dialect  | src/kailash/db/dialect.py, connection_parser.py, staging_utilities   | infra-spec        | in-flight                 |
+| w7-2nd-scrubber  | kaizen/llm/errors.py (S1)                                            | kaizen-spec       | in-flight                 |
+| w7-nexus-del     | `Nexus.__del__` -> close() deadlock (patterns.md); nexus tests       | nexus-spec        | in-flight                 |
+
+### Landed this wave
+
+- `0066e4fcb` — the five-issue forest, secured from its uncommitted state (73 files)
+- `cd6b82950` — S2 (`FallbackResult.to_dict` raw leak) + S6 (sweep autouse-skipped in CI)
+- `84f08d203` — S8 nexus register() all-or-nothing + `_tools` removal + 2.16.0 MINOR
+
+### Verified, do NOT re-derive
+
+- **S4 is 23 sites, not the ledger's 8.** 9 explicit `raise … from e` + 14 BARE raises inside
+  `except` where Python sets `__context__` implicitly. The 14 are invisible to a `from e` grep —
+  that is why the original sweep missed them. `packages/kaizen-agents/` has ZERO sites.
+- **Nexus registration touches SEVEN stores**, not four (2 registry + 1 gateway + 4 MCP). The
+  ledger's "four" was the MCP subset.
+- **`_register_handler_workflow` never existed** anywhere in kailash-nexus — it was a phantom
+  method name in the CHANGELOG and a code comment. Real surface is `Nexus.register_handler`.
+- **`_tools` writes register nothing reachable**: it exists only on the FastMCP fallback shim,
+  which `MCPServer` assigns to `self._mcp`, never to itself; the JSON-RPC handler iterates
+  `_tool_registry`.
+
+### Open concern to challenge at report time
+
+`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH` (128, the LOOSEST budget)
+in `src/kailash/db/dialect.py`. Documented as a deliberate greppable marker rather than a silent
+fail-open, which is defensible — but it does NOT close NEW-1 for PostgreSQL deployments, where a
+100-char identifier still passes validation and is then truncated server-side at 63, aliasing two
+models onto one table. DataFlow's engine DOES know its dialect (`_fit_identifier_to_dialect`), so
+those call sites can pass the real budget. Do not accept "documented + greppable" as closure.
 
 Exclusive-ownership split is deliberate: no two tracks may edit the same file.
 `a2a.py` error-CONTRACT belongs to w7-1981-contract; `a2a.py` credential-sanitize
