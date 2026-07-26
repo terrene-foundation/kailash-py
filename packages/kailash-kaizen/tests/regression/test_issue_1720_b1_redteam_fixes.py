@@ -39,6 +39,7 @@ import pytest
 import kaizen.llm as kllm
 import kaizen.llm.client as llm_client_mod
 import kaizen.llm.deployment_resolver as resolver_mod
+import kaizen.nodes.ai.embedding_generator as embedding_mod
 import kaizen.nodes.ai.error_sanitizer as sanitizer_mod
 from kaizen.core.base_agent import BaseAgent
 from kaizen.llm.wire_protocols.google_generate_content import _map_finish_reason
@@ -108,8 +109,14 @@ def test_embed_error_routes_through_sanitizer(monkeypatch):
     sentinel = "SANITIZED-EMBED-MESSAGE"
     monkeypatch.setattr(kllm, "resolve_deployment_for", lambda *a, **k: object())
     monkeypatch.setattr(kllm, "LlmClient", _RaisingEmbedClient)
+    # #1970 hoisted ``sanitize_provider_error`` to module scope in
+    # ``embedding_generator``, so the name is bound at import time. Patch where
+    # it is USED, not where it is DEFINED — patching ``sanitizer_mod`` rebinds
+    # the source module attribute, which the already-imported name never reads.
+    # This is also the more robust target: it keeps intercepting regardless of
+    # which import style the consuming module uses.
     monkeypatch.setattr(
-        sanitizer_mod, "sanitize_provider_error", lambda e, provider: sentinel
+        embedding_mod, "sanitize_provider_error", lambda e, provider: sentinel
     )
 
     node = EmbeddingGeneratorNode()

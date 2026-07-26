@@ -14,6 +14,7 @@ Test Tier: 3 (E2E with real infrastructure, NO MOCKING)
 
 import asyncio
 import logging
+import os
 import tempfile
 import time
 from datetime import datetime
@@ -57,25 +58,59 @@ def sqlite_db():
 
 @pytest.fixture
 def postgres_db():
-    """
-    Create PostgreSQL database connection.
+    """Real PostgreSQL connection for the PostgreSQL leg of the comparison.
 
-    Note: Requires PostgreSQL running locally or in Docker.
-    Falls back to SQLite if PostgreSQL not available.
+    Gated on ``POSTGRES_TEST_URL`` (repo convention) and a real reachability
+    probe. When PostgreSQL is unavailable these tests SKIP — they MUST NOT
+    fall back to SQLite.
+
+    The previous implementation constructed ``DataFlow(...)`` inside a
+    ``try`` and yielded a SQLite temp file from the ``except``. That fallback
+    was broken twice over:
+
+    1. It never fired. DataFlow connects lazily, so constructing it against an
+       unreachable server does not raise; the fixture yielded the PostgreSQL
+       URL regardless and the test failed later with the connection error.
+    2. Had it fired, ``test_postgres_vs_sqlite_*`` would compare SQLite
+       against SQLite and report green while asserting nothing about
+       PostgreSQL — a silent fallback (zero-tolerance Rule 3).
+
+    It also placed ``yield`` inside the ``try``: an exception raised by the
+    TEST BODY propagates back into the fixture at the yield point, is caught
+    by ``except Exception``, and hits a second ``yield`` — which pytest
+    reports as a fixture error, masking the real failure.
     """
-    # Try PostgreSQL first
-    postgres_url = "postgresql://test:test@localhost:5433/test_db"
+    postgres_url = os.environ.get("POSTGRES_TEST_URL")
+    if not postgres_url:
+        pytest.skip(
+            "POSTGRES_TEST_URL not set; this test compares real PostgreSQL "
+            "against real SQLite and MUST NOT substitute SQLite for the "
+            "PostgreSQL leg. Export "
+            "POSTGRES_TEST_URL=postgresql://user:pass@host:port/db to run."
+        )
 
     try:
-        db = DataFlow(database_url=postgres_url, auto_migrate=True)
-        # Test connection
-        yield postgres_url
-    except Exception as e:
-        logger.warning(f"PostgreSQL not available: {e}, using SQLite fallback")
-        # Fallback to SQLite
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "fallback_postgres.db"
-            yield f"sqlite:///{db_path}"
+        import asyncpg
+    except ImportError as exc:  # pragma: no cover - asyncpg is a DataFlow dep
+        pytest.skip(f"asyncpg required to probe PostgreSQL reachability: {exc}")
+
+    async def _probe() -> None:
+        conn = await asyncpg.connect(postgres_url)
+        try:
+            await conn.fetchval("SELECT 1")
+        finally:
+            await conn.close()
+
+    try:
+        asyncio.run(_probe())
+    except Exception as exc:
+        pytest.skip(
+            f"PostgreSQL at POSTGRES_TEST_URL is not reachable "
+            f"({type(exc).__name__}); refusing to substitute SQLite for the "
+            f"PostgreSQL leg of a PostgreSQL-vs-SQLite comparison."
+        )
+
+    yield postgres_url
 
 
 @pytest.fixture
@@ -185,9 +220,9 @@ async def test_postgres_vs_sqlite_persistence(
 
     # Validate data integrity
     print("\n5. Validating data integrity across backends...")
-    assert sqlite_loaded[0]["user"] == postgres_loaded[0]["user"], (
-        "Data should match across backends"
-    )
+    assert (
+        sqlite_loaded[0]["user"] == postgres_loaded[0]["user"]
+    ), "Data should match across backends"
     assert (
         sqlite_loaded[1]["metadata"]["topic"] == postgres_loaded[1]["metadata"]["topic"]
     ), "Metadata should match"
@@ -288,9 +323,9 @@ async def test_postgres_vs_sqlite_performance(
 
     # Both should be under cold tier target (<100ms per operation)
     assert sqlite_read_time < 500, f"SQLite read too slow: {sqlite_read_time:.2f}ms"
-    assert postgres_read_time < 500, (
-        f"PostgreSQL read too slow: {postgres_read_time:.2f}ms"
-    )
+    assert (
+        postgres_read_time < 500
+    ), f"PostgreSQL read too slow: {postgres_read_time:.2f}ms"
 
     print("\n" + "=" * 70)
     print("✓ PostgreSQL vs SQLite - Performance: PASSED")

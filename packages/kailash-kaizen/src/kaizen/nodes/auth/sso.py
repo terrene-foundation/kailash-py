@@ -24,6 +24,8 @@ from kaizen.nodes.auth.signatures import (
     SSORoleAssignmentSignature,
 )
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -236,7 +238,9 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
 
         except Exception as e:
             logger.warning(
-                f"AI field mapping failed for {provider}, falling back to rule-based: {e}"
+                "AI field mapping failed for %s, falling back to rule-based: %s",
+                provider,
+                sanitize_provider_error(e, "LLM"),
             )
             # Fallback to Core SDK rule-based mapping
             return self._map_attributes(attributes, provider)
@@ -319,6 +323,9 @@ Return ONLY the JSON object, no explanation."""
             return roles
 
         except Exception as e:
-            logger.warning(f"AI role assignment failed, falling back to default: {e}")
+            logger.warning(
+                "AI role assignment failed, falling back to default: %s",
+                sanitize_provider_error(e, "LLM"),
+            )
             # Fallback to safe default - always include "user" role
             return ["user"]

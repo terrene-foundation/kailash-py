@@ -33,6 +33,15 @@ DANGEROUS_KEYS = [
 # Maximum key length to prevent memory attacks
 MAX_KEY_LENGTH = 256
 
+# Characters permitted in a workflow name. This is the MCP tool-name charset
+# (SEP-986) and is also safe as an HTTP path segment, an ``AnyUrl`` authority
+# in ``workflow://<name>``, and a CLI argument — the four surfaces a
+# registered name has to travel through. Membership is checked per character
+# so the error message can name exactly which characters were rejected.
+_WORKFLOW_NAME_ALLOWED = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz" "0123456789" "_-."
+).__contains__
+
 
 def validate_workflow_inputs(
     inputs: Any, max_size: int = DEFAULT_MAX_INPUT_SIZE
@@ -128,7 +137,17 @@ def validate_workflow_inputs(
 
 def validate_workflow_name(name: str) -> str:
     """
-    Validate workflow name for security.
+    Validate workflow name for security and multi-channel addressability.
+
+    A registered name is simultaneously (a) an HTTP path segment
+    (``/workflows/{name}/execute``), (b) an MCP tool name, (c) an MCP
+    resource URI authority (``workflow://{name}``), and (d) a CLI
+    subcommand argument. The only character set safe in all four is the
+    MCP tool-name charset from SEP-986: ``A-Z a-z 0-9 _ . -``. Anything
+    outside it is rejected here so the failure surfaces once, at
+    registration, with the offending characters named — instead of as an
+    opaque third-party URL-parser error or as a workflow that registers
+    successfully and then 400s on every execute request.
 
     Args:
         name: Workflow name to validate
@@ -140,10 +159,10 @@ def validate_workflow_name(name: str) -> str:
         ValueError: If validation fails
 
     Security Checks:
-        1. Must be non-empty string
-        2. Must not contain path separators (prevents directory traversal)
-        3. Must not contain dangerous characters
-        4. Must be reasonable length
+        1. Must be a non-empty string
+        2. Must be a reasonable length (<= 128 chars)
+        3. Must not contain path separators (prevents directory traversal)
+        4. Must contain only SEP-986 tool-name characters
     """
     if not isinstance(name, str):
         raise ValueError(f"Workflow name must be a string, got {type(name).__name__}")
@@ -151,26 +170,33 @@ def validate_workflow_name(name: str) -> str:
     if not name or not name.strip():
         raise ValueError("Workflow name cannot be empty")
 
-    # Check for path separators (prevents directory traversal)
+    # Check length
+    if len(name) > 128:
+        raise ValueError(
+            f"Workflow name too long: {len(name)} chars (max: 128). Use a shorter name."
+        )
+
+    # Check for path separators first — the traversal case gets its own
+    # message because "use a different charset" is unhelpful advice for
+    # someone who typed a path.
     if "/" in name or "\\" in name:
         raise ValueError(
             f"Workflow name cannot contain path separators: {name}. "
             f"Use simple names like 'my_workflow' instead."
         )
 
-    # Check for dangerous characters
-    dangerous_chars = ["<", ">", "|", "&", ";", "$", "`", "!", "*", "?"]
-    found_dangerous = [char for char in dangerous_chars if char in name]
-    if found_dangerous:
+    # Allowlist, not a blocklist. A blocklist of "dangerous" shell
+    # metacharacters lets through characters that are equally fatal
+    # downstream: a space or '^' aborts ``AnyUrl("workflow://<name>")``
+    # inside the MCP resource registration, and a non-ASCII character is
+    # silently percent-encoded there so the resource no longer round-trips
+    # to the registered name.
+    invalid = sorted({char for char in name if not _WORKFLOW_NAME_ALLOWED(char)})
+    if invalid:
         raise ValueError(
-            f"Workflow name contains dangerous characters: {found_dangerous}. "
-            f"Use alphanumeric characters, hyphens, and underscores only."
-        )
-
-    # Check length
-    if len(name) > 128:
-        raise ValueError(
-            f"Workflow name too long: {len(name)} chars (max: 128). Use a shorter name."
+            f"Workflow name contains invalid characters: {invalid}. "
+            f"Use letters, digits, and the characters '_', '-', '.' only "
+            f"(MCP tool-name charset, SEP-986)."
         )
 
     return name

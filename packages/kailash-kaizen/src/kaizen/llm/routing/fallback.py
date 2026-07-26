@@ -347,11 +347,22 @@ class FallbackRouter(LLMRouter):
                 except Exception as e:
                     last_error = e
                     error_type = type(e).__name__
-                    error_message = str(e)
+                    # execute_fn dispatches to an LLM provider; its exception can
+                    # embed the API key. Sanitize before the message reaches the
+                    # WARN log or any FallbackEvent below (#1970 sweep).
+                    from kaizen.nodes.ai.error_sanitizer import (
+                        sanitize_provider_error,
+                    )
+
+                    error_message = sanitize_provider_error(
+                        e, model, include_error_type=False
+                    )
 
                     logger.warning(
-                        f"Execution failed: model={model}, "
-                        f"error={error_type}: {error_message}"
+                        "Execution failed: model=%s, error=%s: %s",
+                        model,
+                        error_type,
+                        error_message,
                     )
 
                     # Check if this is a non-fallback error
@@ -495,11 +506,21 @@ class FallbackRouter(LLMRouter):
                         if model_idx + 1 < len(execution_order)
                         else "none"
                     )
+                    # FallbackEvent.error_message is returned to the caller in
+                    # FallbackResult.fallback_events; execute_fn dispatches to an
+                    # LLM provider whose exception can embed the API key
+                    # (#1970 sweep — sibling of the async path above).
+                    from kaizen.nodes.ai.error_sanitizer import (
+                        sanitize_provider_error,
+                    )
+
                     event = FallbackEvent(
                         original_model=model,
                         fallback_model=next_model,
                         error_type=error_type,
-                        error_message=str(e)[:200],
+                        error_message=sanitize_provider_error(
+                            e, model, include_error_type=False
+                        )[:200],
                         attempt_number=attempt,
                     )
                     fallback_events.append(event)

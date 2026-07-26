@@ -382,8 +382,42 @@ class TestStreamingExecutorErrorHandling:
         # Should have error event
         error_events = [e for e in events if isinstance(e, ErrorEvent)]
         assert len(error_events) == 1
-        assert error_events[0].message == "Test error"
+        # #1970: ErrorEvent crosses a process boundary to the consumer, so the
+        # agent/provider exception is routed through ``sanitize_provider_error``
+        # rather than raw ``str(e)``. The diagnostic text is preserved verbatim;
+        # only credential-bearing shapes are redacted (asserted below).
+        assert (
+            error_events[0].message == "Agent execution error (ValueError): Test error"
+        )
         assert error_events[0].error_type == "ValueError"
+
+    @pytest.mark.asyncio
+    async def test_error_event_message_is_credential_sanitized(self):
+        """A credential embedded in an agent exception MUST NOT reach ErrorEvent.
+
+        Guards the #1970 routing above: without ``sanitize_provider_error`` the
+        raw ``str(e)`` would ship the DSN password to every stream consumer.
+        """
+        agent = MockAgent(
+            raise_error=ValueError("connect failed: postgres://admin:hunter2@db:5432/x")
+        )
+        executor = StreamingExecutor()
+
+        events = []
+        with pytest.raises(ValueError):
+            async for event in executor.execute_with_events(
+                agent=agent,
+                task="Test task",
+            ):
+                events.append(event)
+
+        error_events = [e for e in events if isinstance(e, ErrorEvent)]
+        assert len(error_events) == 1
+        assert "hunter2" not in error_events[0].message, (
+            "a DSN password reached ErrorEvent.message — the #1970 sanitize "
+            "routing on the streaming error path has regressed"
+        )
+        assert "[REDACTED]" in error_events[0].message
 
     @pytest.mark.asyncio
     async def test_recoverable_error_detection(self):

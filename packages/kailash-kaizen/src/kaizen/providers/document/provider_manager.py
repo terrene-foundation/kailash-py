@@ -33,6 +33,8 @@ Example:
 import logging
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.url_credentials import mask_error_text
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
     ExtractionResult,
@@ -209,7 +211,13 @@ class ProviderManager:
                 return result
 
             except Exception as e:
-                error_msg = f"{provider_name} failed: {e}"
+                # #1970: document providers (Landing AI, OpenAI Vision) are
+                # credentialed cloud APIs; ``errors`` is joined into the terminal
+                # RuntimeError below, which reaches the caller.
+                error_msg = (
+                    f"{provider_name} failed: "
+                    f"{mask_error_text(sanitize_provider_error(e, provider_name))}"
+                )
                 logger.warning(error_msg)
                 errors.append(error_msg)
                 continue

@@ -29,9 +29,11 @@ Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
+import logging
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -47,6 +49,8 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+logger = logging.getLogger(__name__)
 
 
 class MetaControllerPipeline(Pipeline):
@@ -141,6 +145,21 @@ class MetaControllerPipeline(Pipeline):
                 if best_agent is not None and best_score > 0:
                     return best_agent
 
+        except ReasoningDegradedError as exc:
+            # #1981: EVERY agent's capability scoring degraded, so the fallback
+            # below is an unjudged pick. `run()` is a sync public contract that
+            # must not start raising, so the fallback stands — but the total
+            # judge failure MUST be observable rather than swallowed by the
+            # generic handler (`rules/zero-tolerance.md` Rule 3).
+            logger.warning(
+                "meta_controller.select_agent.degraded",
+                extra={
+                    "correlation_id": exc.correlation_id,
+                    "model": exc.model,
+                    "error": exc.error,
+                    "fallback": "first_agent",
+                },
+            )
         except Exception:
             # Fall through to fallback selection
             pass

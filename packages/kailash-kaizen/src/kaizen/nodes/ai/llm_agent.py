@@ -1614,7 +1614,9 @@ class LLMAgentNode(Node):
 
                     except TimeoutError as e:
                         self.logger.warning(
-                            f"MCP server '{server_config.get('name', 'unknown')}' timed out after 30 seconds: {e}"
+                            "MCP server '%s' timed out after 30 seconds: %s",
+                            server_config.get("name", "unknown"),
+                            sanitize_provider_error(e, "MCP"),
                         )
                         # Fall back to mock for this server
                         context_data.append(
@@ -3111,7 +3113,13 @@ Final Answer: 6 hours"""
 
             except (ValueError, json.JSONDecodeError) as e:
                 # Handle extraction errors specifically
-                self.logger.error(f"Tool call extraction failed: {e}")
+                # #1970: the try body dispatches ``_execute_mcp_tool_call`` /
+                # ``_execute_regular_tool`` — a ValueError from an MCP transport
+                # can carry a URL-embedded credential.
+                self.logger.error(
+                    "Tool call extraction failed: %s",
+                    sanitize_provider_error(e, "tool"),
+                )
                 # Try to get minimal info for error reporting
                 if isinstance(tool_call, dict):
                     tool_id = tool_call.get("id", "unknown")

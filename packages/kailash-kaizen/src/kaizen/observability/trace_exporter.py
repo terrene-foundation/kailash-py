@@ -372,7 +372,21 @@ class TraceExporter:
                 self._run_async(maybe_awaitable)
         except Exception as exc:  # noqa: BLE001 — we re-raise below
             self._errored_count += 1
-            logger.exception(
+            # The sink is caller-supplied and commonly pushes to a credentialed
+            # observability backend; its exception can echo the ingest token.
+            # Log the SANITIZED message and drop exc_info: logger.exception()
+            # dumps the raw exception via the traceback's final line, defeating
+            # the sanitizer entirely. This log path runs on EVERY sink error
+            # while the raise below is gated on raise_on_error (False by default
+            # at all three constructors), so the LOG — not the raise — is the
+            # surface that actually fires for the default configuration.
+            # (#1970 sweep; observability.md Rule 6.3 — mask at EVERY surface.
+            # Same idiom as judges/_judge.py, tools/native/task_tool.py,
+            # strategies/multi_cycle.py, nodes/ai/llm_agent.py.)
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            sanitized = sanitize_provider_error(exc, "Trace sink")
+            logger.error(
                 "kaizen.observability.trace_exporter.sink_error",
                 extra={
                     "trace_exporter_run_id": self._run_id,
@@ -381,11 +395,13 @@ class TraceExporter:
                     "trace_exporter_event_type": event.event_type.value,
                     "trace_exporter_fingerprint": fingerprint,
                     "mode": "real",
+                    "error": sanitized,
                 },
             )
             if self._raise_on_error:
                 raise TraceExportError(
-                    f"TraceExporter sink failed for event_id={event.event_id!r}: {exc}"
+                    f"TraceExporter sink failed for event_id={event.event_id!r}: "
+                    f"{sanitized}"
                 ) from exc
             return fingerprint
 
@@ -418,7 +434,21 @@ class TraceExporter:
                 await maybe_awaitable
         except Exception as exc:  # noqa: BLE001 — we re-raise below
             self._errored_count += 1
-            logger.exception(
+            # The sink is caller-supplied and commonly pushes to a credentialed
+            # observability backend; its exception can echo the ingest token.
+            # Log the SANITIZED message and drop exc_info: logger.exception()
+            # dumps the raw exception via the traceback's final line, defeating
+            # the sanitizer entirely. This log path runs on EVERY sink error
+            # while the raise below is gated on raise_on_error (False by default
+            # at all three constructors), so the LOG — not the raise — is the
+            # surface that actually fires for the default configuration.
+            # (#1970 sweep; observability.md Rule 6.3 — mask at EVERY surface.
+            # Same idiom as judges/_judge.py, tools/native/task_tool.py,
+            # strategies/multi_cycle.py, nodes/ai/llm_agent.py.)
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            sanitized = sanitize_provider_error(exc, "Trace sink")
+            logger.error(
                 "kaizen.observability.trace_exporter.sink_error",
                 extra={
                     "trace_exporter_run_id": self._run_id,
@@ -427,11 +457,13 @@ class TraceExporter:
                     "trace_exporter_event_type": event.event_type.value,
                     "trace_exporter_fingerprint": fingerprint,
                     "mode": "real",
+                    "error": sanitized,
                 },
             )
             if self._raise_on_error:
                 raise TraceExportError(
-                    f"TraceExporter sink failed for event_id={event.event_id!r}: {exc}"
+                    f"TraceExporter sink failed for event_id={event.event_id!r}: "
+                    f"{sanitized}"
                 ) from exc
             return fingerprint
 

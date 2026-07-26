@@ -469,7 +469,11 @@ class TestNexusEdgeCases:
     """Test edge cases and boundary conditions."""
 
     def test_empty_workflow_name(self):
-        """Test registration with empty name."""
+        """Empty name is rejected — it is not addressable on any channel.
+
+        ``/workflows//execute`` is not a routable path and "" is not a legal
+        MCP tool name, so an empty-named workflow could never be invoked.
+        """
         from nexus import Nexus
 
         from kailash.workflow.builder import WorkflowBuilder
@@ -478,14 +482,14 @@ class TestNexusEdgeCases:
         workflow = WorkflowBuilder()
         workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
 
-        # Empty name is allowed - stored like any other name
-        app.register("", workflow)
+        with pytest.raises(ValueError, match="cannot be empty"):
+            app.register("", workflow)
 
-        # Workflow is registered with empty string as key
-        assert "" in app._workflows
+        # Rejected before any state was mutated.
+        assert "" not in app._workflows
 
     def test_very_long_workflow_name(self):
-        """Test registration with very long name."""
+        """Names above the 128-char cap are rejected with the length named."""
         from nexus import Nexus
 
         from kailash.workflow.builder import WorkflowBuilder
@@ -494,15 +498,29 @@ class TestNexusEdgeCases:
         workflow = WorkflowBuilder()
         workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
 
-        # Very long name
         long_name = "a" * 1000
 
-        # Should handle gracefully
-        app.register(long_name, workflow)
-        assert long_name in app._workflows
+        with pytest.raises(ValueError, match="too long: 1000 chars"):
+            app.register(long_name, workflow)
+
+        assert long_name not in app._workflows
+
+        # The cap itself is inclusive — exactly 128 chars registers fine.
+        at_limit = "a" * 128
+        app.register(at_limit, workflow)
+        assert at_limit in app._workflows
 
     def test_special_characters_in_name(self):
-        """Test registration with special characters."""
+        """Special characters are rejected at register(), naming each one.
+
+        Before this contract, ``register()`` accepted the name, wrote it to
+        ``_workflows`` and the gateway, and then raised an opaque pydantic
+        ``ValidationError`` from inside FastMCP's ``AnyUrl(workflow://<name>)``
+        — leaving a half-registered workflow.  Names that happened to survive
+        AnyUrl (``a&b``, ``a$b``) registered "successfully" and then returned
+        HTTP 400 from ``/workflows/{name}/execute`` forever, because the
+        execute route runs this same validator.
+        """
         from nexus import Nexus
 
         from kailash.workflow.builder import WorkflowBuilder
@@ -511,12 +529,24 @@ class TestNexusEdgeCases:
         workflow = WorkflowBuilder()
         workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
 
-        # Special characters
         special_name = "test-workflow_123!@#$%^&*()"
 
-        # Should handle special characters
-        app.register(special_name, workflow)
-        assert special_name in app._workflows
+        with pytest.raises(ValueError) as exc_info:
+            app.register(special_name, workflow)
+
+        message = str(exc_info.value)
+        assert "invalid characters" in message
+        # Every offending character is named, so the user can fix the name
+        # without guessing which one was the problem.
+        for char in "!@#$%^&*()":
+            assert repr(char) in message, f"{char!r} missing from error: {message}"
+
+        # Nothing was registered.
+        assert special_name not in app._workflows
+
+        # The legal prefix of the same name registers without complaint.
+        app.register("test-workflow_123", workflow)
+        assert "test-workflow_123" in app._workflows
 
     def test_health_check_when_not_started(self):
         """Test health_check() when Nexus is not started."""

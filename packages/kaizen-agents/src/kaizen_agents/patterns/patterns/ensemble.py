@@ -40,9 +40,11 @@ Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
+import logging
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -58,6 +60,8 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+logger = logging.getLogger(__name__)
 
 
 class EnsemblePipeline(Pipeline):
@@ -160,6 +164,22 @@ class EnsemblePipeline(Pipeline):
                 if top_agents:
                     return top_agents
 
+        except ReasoningDegradedError as exc:
+            # #1981: EVERY agent's capability scoring degraded, so the
+            # first-top_k fallback below is an unjudged pick. `run()` is a sync
+            # public contract that must not start raising, so the fallback
+            # stands — but the total judge failure MUST be observable rather
+            # than swallowed by the generic handler
+            # (`rules/zero-tolerance.md` Rule 3).
+            logger.warning(
+                "ensemble.discover_agents.degraded",
+                extra={
+                    "correlation_id": exc.correlation_id,
+                    "model": exc.model,
+                    "error": exc.error,
+                    "fallback": "first_top_k_agents",
+                },
+            )
         except Exception:
             # Fall through to fallback
             pass

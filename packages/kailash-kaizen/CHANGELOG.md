@@ -2,6 +2,9 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
 
 ### Changed (behavior — potentially breaking)
@@ -28,14 +31,60 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   with structured `error` / `error_type` fields (WARN, not ERROR — the operation
   still returns a usable result).
 - **Degraded capability/similarity judgments are no longer reported as successes
-  or cached (#1973).** When structured-output parsing fails, the score coerces to
-  `0.0`; `llm_capability_match` and `llm_text_similarity` previously logged
-  `*.ok` and cached that fabricated zero for the process lifetime. They now log
-  `*.degraded` at WARN with the underlying error and skip the cache. The `0.0`
-  return contract is unchanged — the bridges absorb one judge failure rather than
-  sink a selection round. The root cause (these agents do not enforce structured
-  output, so on providers without it every real score is `0.0` and A2A ranking is
-  arbitrary) is tracked separately in #1981 and is NOT fixed here.
+  or cached (#1973).** `llm_capability_match` and `llm_text_similarity`
+  previously logged `*.ok` and cached a fabricated zero for the process
+  lifetime. They now log `*.degraded` at WARN with the underlying error and skip
+  the cache.
+
+### Changed (BREAKING) — degraded reasoning judgments raise instead of returning `0.0` (#1981)
+
+- **`llm_capability_match` and `llm_text_similarity` now raise
+  `kaizen.llm.reasoning.ReasoningDegradedError`** when the judge returns no
+  usable score, instead of returning `0.0`. A returned `0.0` was
+  indistinguishable from a genuine no-match, so A2A ranking silently degraded to
+  arbitrary order — the defect #1981 exists to close. A WARN line is not
+  reachable by a caller, so observability alone could not fix it; the signal had
+  to reach the API surface.
+- **`ReasoningDegradedError` is exported** from `kaizen.llm.reasoning` (and
+  `kaizen.llm`) so callers can distinguish "could not judge" from "judged zero".
+- **Callers updated in the same change.** `A2AAgentCard.calculate_match_score` /
+  `_find_best_agents_for_task` and every `kaizen-agents` ranking surface
+  (`_reasoning_bridge`, `runtime`, `registry`, `llm_routing`,
+  `patterns/patterns/*`) now catch it PER CANDIDATE: a degraded candidate is
+  EXCLUDED from the ranking rather than scored `0.0`, and the error is re-raised
+  only when EVERY candidate degraded — so one judge failure never sinks a round,
+  and an all-degraded round never returns an arbitrary pick presented as a
+  judged one.
+- **Migration:** a caller that treated the return as always-numeric must now
+  handle `ReasoningDegradedError`. Catching it and substituting `0.0` restores
+  the old behaviour but reinstates the defect.
+
+### Fixed — credential sanitization (#1970, #1974)
+
+- **Provider exceptions are routed through `sanitize_provider_error` across the
+  kaizen surface (#1970)** — ~120 call sites — so a bad-key / rate-limit / auth
+  error cannot echo a credential into a user-visible dict field, a raised
+  message, or a log record.
+- **Log surfaces are sanitized at parity with raised messages.**
+  `observability/trace_exporter.py` and the `llm/reasoning.py` `.error` handlers
+  logged the raw exception via `logger.exception`'s traceback even where the
+  raised message was already scrubbed; both now log the sanitized text and drop
+  `exc_info`. In `trace_exporter` the raise is gated on `raise_on_error`
+  (`False` by default), so the log was the only surface that fired for the
+  default configuration.
+- **`error_sanitizer` pattern coverage broadened (#1974):** any RFC-3986 scheme
+  (not just `http(s)`), empty-userinfo DSNs (`redis://:pass@`), userinfo longer
+  than the DoS bound, userinfo with no password half (`scheme://token@host`),
+  Slack `xox[baprse]-`, bare three-segment JWTs, GitHub `ghp_`/`github_pat_`,
+  and Stripe `sk_live_`/`rk_test_`.
+
+### Changed — `ErrorEvent.message` is sanitized
+
+- `StreamingExecutor` emits `ErrorEvent.message` through
+  `sanitize_provider_error`, so the field is now prefixed
+  (`"Agent execution error (<Type>): <message>"`) rather than a bare `str(e)`.
+  The event stream crosses a process boundary to consumers, so an unsanitized
+  agent exception could ship a credential.
 
 ## [2.45.0] — 2026-07-25 — Follow-up hardening: sanitizer redaction, Nexus lifecycle, RAG log hygiene
 
@@ -1578,11 +1627,6 @@ Minor release shipping the kailash-kaizen side of the kailash 2.18.0 / #890 slim
 
 - **Bare imports of moved subsystems on a slim install raise raw `ModuleNotFoundError`** — e.g. `from kaizen.observability import ...` requires `[observability]`. The migration table above is the authoritative recovery path.
 - This is a **packaging / install-shape change only** — every Python public-API symbol that existed in 2.20.0 still exists in 2.21.0 with the same signature and semantics. Users on `pip install 'kailash-kaizen[all]'` see no behavior change.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
 
 ## [2.20.0] — 2026-05-06 — LLM-first trait derivation per agent-reasoning.md Rule 1 (#829)
 

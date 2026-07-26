@@ -1,0 +1,427 @@
+diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
+index 50e5c8043..a9811c4ca 100644
+--- a/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
++++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
+@@ -1671,9 +1671,15 @@ class A2AAgentNode(LLMAgentNode):
+             if memory_result.get("success"):
+                 shared_context = memory_result.get("memories", [])
+ 
+-        # Store provider and model for use in summarization
+-        self._current_provider = kwargs.get("provider", "mock")
+-        self._current_model = kwargs.get("model", "mock-model")
++        # Store provider and model for use in summarization.
++        # #1952 residual: resolve to None (not the string "mock") when omitted so
++        # a keyless caller never carries a silent "mock" default. The primary
++        # answer path (super().run below) is #1947-fail-loud-gated on a None
++        # provider; the secondary insight/summary discriminators below treat an
++        # unresolved (None) provider identically to an explicit "mock" — honest
++        # rule-based/simple degradation, no fabrication.
++        self._current_provider = kwargs.get("provider")
++        self._current_model = kwargs.get("model")
+ 
+         # Enhance messages with shared context
+         messages = kwargs.get("messages", [])
+@@ -1696,9 +1702,12 @@ Relevant shared context from other agents:
+ 
+             # Use LLM to extract insights if provider supports it
+             use_llm_extraction = kwargs.get("use_llm_insight_extraction", True)
+-            provider = kwargs.get("provider", "mock")
++            # #1952 residual: None (omitted) resolves to the rule-based fallback
++            # exactly as "mock" does — the LLM insight path runs ONLY for a real,
++            # explicitly-provided provider.
++            provider = kwargs.get("provider")
+ 
+-            if use_llm_extraction and provider not in ["mock"]:
++            if use_llm_extraction and provider not in ["mock", None]:
+                 # Use LLM to extract and analyze insights
+                 insights = self._extract_insights_with_llm(
+                     response_content, agent_role, agent_id, kwargs
+@@ -1714,7 +1723,7 @@ Relevant shared context from other agents:
+                 "by_type": {},
+                 "extraction_method": (
+                     "llm"
+-                    if use_llm_extraction and provider not in ["mock"]
++                    if use_llm_extraction and provider not in ["mock", None]
+                     else "rule-based"
+                 ),
+             }
+@@ -1826,11 +1835,13 @@ Format the summary as a brief paragraph (max 200 words) that another agent can q
+ Focus on actionable intelligence rather than just listing what each agent said."""
+ 
+         try:
+-            # Use the current agent's LLM configuration for summarization
+-            provider = getattr(self, "_current_provider", "mock")
+-            model = getattr(self, "_current_model", "mock-model")
++            # Use the current agent's LLM configuration for summarization.
++            # #1952 residual: default None (not "mock") — an unset/keyless agent
++            # falls through to the simple summary below exactly as "mock" did.
++            provider = getattr(self, "_current_provider", None)
++            model = getattr(self, "_current_model", None)
+ 
+-            if provider not in ["mock"]:
++            if provider not in ["mock", None]:
+                 summary_kwargs = {
+                     "provider": provider,
+                     "model": model,
+diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
+index 5ae952a72..797090063 100644
+--- a/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
++++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
+@@ -904,15 +904,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
+                     )
+ 
+             except Exception as e:
++                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
++                # error flows into the user-visible execution_results dict; a
++                # bad-key/rate-limit provider exception can embed a credential,
++                # so sanitize ONCE and store the redacted form at every surface.
++                error_msg = sanitize_provider_error(e, "LLM")
+                 error_result = {
+                     "step": 1,
+                     "action": "direct_llm_response",
+                     "tools_used": [],
+-                    "error": str(e),
++                    "error": error_msg,
+                     "success": False,
+                 }
+                 execution_results["steps_completed"].append(error_result)
+-                execution_results["errors"].append(str(e))
++                execution_results["errors"].append(error_msg)
+                 execution_results["success"] = False
+ 
+             return execution_results
+@@ -977,15 +982,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
+                     )
+ 
+             except Exception as e:
++                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
++                # error flows into the user-visible execution_results dict; a
++                # bad-key/rate-limit provider exception can embed a credential,
++                # so sanitize ONCE and store the redacted form at every surface.
++                error_msg = sanitize_provider_error(e, "LLM")
+                 error_result = {
+                     "step": step_num,
+                     "action": action,
+                     "tools_used": tools,
+-                    "error": str(e),
++                    "error": error_msg,
+                     "success": False,
+                 }
+                 execution_results["steps_completed"].append(error_result)
+-                execution_results["errors"].append(str(e))
++                execution_results["errors"].append(error_msg)
+                 execution_results["success"] = False
+ 
+         return execution_results
+diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1952_a2a_provider_residual.py b/packages/kailash-kaizen/tests/regression/test_issue_1952_a2a_provider_residual.py
+new file mode 100644
+index 000000000..4f23ce12e
+--- /dev/null
++++ b/packages/kailash-kaizen/tests/regression/test_issue_1952_a2a_provider_residual.py
+@@ -0,0 +1,178 @@
++"""Regression test — A2AAgentNode drops the silent provider="mock" default (#1952).
++
++#1952 eliminated the silent ``kwargs.get("provider", "mock")`` default across the
++LLM-node family so a keyless/omitted provider fails LOUD (resolves ``None`` → the
++#1947 node gate raises ``ConfigurationError``) instead of silently dispatching the
++mock provider and returning fabricated content as a real answer.
++
++A holistic closure-parity review of #1952 found ``A2AAgentNode`` (a subclass of
++``LLMAgentNode``) was NOT among #1952's audited construction sites and still
++carried the exact anti-pattern SHAPE at 8 sites in ``kaizen/nodes/ai/a2a.py``
++(``kwargs.get("provider", "mock")`` / ``getattr(self, "_current_provider",
++"mock")`` / ``"mock-model"``).
++
++Here ``"mock"`` was a DISCRIMINATOR default, NOT a fabrication path: the
++secondary LLM insight-extraction / summarization branches skip to honest
++rule-based / simple degradation when the provider is ``"mock"``. The PRIMARY
++answer path (``super().run(**kwargs)``) is ALREADY #1947-fail-loud-gated, so a
++keyless A2A call raises today. The residual closed here is the fragile SHAPE —
++the ``"mock"`` string default when provider is omitted — which #1952's AC
++("audit EVERY construction site") required removing. The fix is a
++behavior-preserving ``"mock"``→``None`` substitution: an omitted provider now
++resolves ``None`` (never the string ``"mock"``) and the discriminators route the
++unresolved provider to the SAME rule-based / simple fallback ``"mock"`` did.
++
++These tests pin three observable behaviors:
++
++(a) keyless primary path → fail-loud ConfigurationError (NOT fabricated success);
++(b) provider-omitted → ``_current_provider`` is ``None``, never the string "mock"
++    (the residual SHAPE is gone);
++(c) explicit ``provider="mock"`` is still honored (the explicit-opt-in mock path
++    works — legitimate deterministic testing, never a silent default).
++
++Env discipline mirrors ``test_issue_1952_keyless_provider_fail_loud.py``: the
++keyless fixture reproduces a REAL keyless user by removing the provider keys AND
++the harness's ``KAIZEN_ALLOW_KEYLESS_MOCK`` opt-in via ``monkeypatch`` (restored
++at teardown). ``LLMAgentNode.run`` reads ``provider`` straight from kwargs and
++never consults the env fallback, so the primary-path gate fires regardless — the
++env control keeps the test faithful to a real keyless caller.
++"""
++
++import pytest
++
++from kaizen.config.providers import ConfigurationError
++from kaizen.nodes.ai.a2a import A2AAgentNode
++
++pytestmark = pytest.mark.regression
++
++_MESSAGES = [{"role": "user", "content": "What is 2 + 2?"}]
++
++
++@pytest.fixture
++def _keyless_env(monkeypatch):
++    """Reproduce a REAL keyless user: no provider key, no test-mode opt-in.
++
++    Mirrors the fixture in ``test_issue_1952_keyless_provider_fail_loud.py`` so
++    the A2A residual is asserted against the same real-keyless-caller conditions.
++    """
++    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
++    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
++    monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
++    # A model is required to construct/execute an Agent (env-models.md); the
++    # provider fail-loud fires before any model is used, but construction needs
++    # the value present.
++    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", "gpt-4o-mini")
++
++
++class TestA2AKeylessPrimaryPathFailsLoud:
++    """Deliverable (a): keyless A2A primary answer path fails loud, not fabricated."""
++
++    def test_keyless_a2a_run_raises_configuration_error(self, _keyless_env):
++        # A2AAgentNode.run reads provider via kwargs.get("provider") (None when
++        # omitted after the fix), sets _current_provider, then calls
++        # super().run(**kwargs) — the #1947-gated LLMAgentNode path — which
++        # raises ConfigurationError on the unresolved (None) provider. No
++        # fabricated mock answer is producible on the keyless primary path.
++        with pytest.raises(ConfigurationError) as exc_info:
++            A2AAgentNode().run(agent_id="agent-1", messages=_MESSAGES)
++        assert "provider" in str(exc_info.value).lower()
++
++    def test_keyless_a2a_never_returns_fabricated_success(self, _keyless_env):
++        # Structural: the keyless call must RAISE, never return a success dict
++        # with fabricated content. Assert the failure shape explicitly.
++        raised = None
++        result = None
++        try:
++            result = A2AAgentNode().run(agent_id="agent-2", messages=_MESSAGES)
++        except ConfigurationError as e:
++            raised = e
++        assert raised is not None, (
++            "keyless A2AAgentNode.run returned instead of failing loud; "
++            f"got result={result!r} — the silent-mock class re-opened."
++        )
++
++
++class TestA2AProviderOmittedShapeIsNone:
++    """Deliverable (b): omitted provider yields None, never the string 'mock'."""
++
++    def test_current_provider_is_none_when_omitted(self, _keyless_env):
++        # _current_provider is assigned at the top of run() (before the primary
++        # super().run() fail-loud), so it is inspectable after the raise. The
++        # load-bearing SHAPE pin: if a future edit reverts to
++        # kwargs.get("provider", "mock"), this flips to "mock" and fails.
++        node = A2AAgentNode()
++        with pytest.raises(ConfigurationError):
++            node.run(agent_id="agent-3", messages=_MESSAGES)
++        assert node._current_provider is None, (
++            f"_current_provider is {node._current_provider!r} when provider was "
++            f'omitted; expected None. A "mock" default re-opens the fragile '
++            f"silent-mock SHAPE (#1952 residual in A2AAgentNode)."
++        )
++        assert node._current_provider != "mock"
++        assert node._current_model is None
++        assert node._current_model != "mock-model"
++
++    def test_source_carries_no_mock_string_default(self):
++        # Mechanical grep pin: the fragile string defaults must be gone from the
++        # source. Guards against a merge silently re-inlining the pre-fix shape.
++        from pathlib import Path
++
++        import kaizen.nodes.ai.a2a as a2a_mod
++
++        src = Path(a2a_mod.__file__).read_text()
++        assert 'kwargs.get("provider", "mock")' not in src, (
++            'A2AAgentNode source still contains kwargs.get("provider", "mock") — '
++            "the #1952 residual SHAPE was reintroduced."
++        )
++        assert 'kwargs.get("model", "mock-model")' not in src
++        assert '"_current_provider", "mock"' not in src
++        assert '"_current_model", "mock-model"' not in src
++
++
++class TestA2AExplicitMockStillHonored:
++    """Deliverable (c): explicit provider="mock" is still honored (opt-in works)."""
++
++    def test_explicit_mock_provider_does_not_fail_loud(self):
++        # The explicit-opt-in mock path is legitimate deterministic testing and
++        # MUST still work — provider="mock" passed EXPLICITLY never triggers the
++        # #1947 fail-loud gate. Env-independent: explicit provider bypasses any
++        # env resolution.
++        node = A2AAgentNode()
++        result = node.run(
++            provider="mock",
++            model="mock-model",
++            messages=_MESSAGES,
++            agent_id="agent-4",
++        )
++        assert isinstance(result, dict)
++        assert result.get("success") is True, (
++            f"explicit provider='mock' did not succeed on A2AAgentNode; "
++            f"got {result!r} — the explicit-opt-in mock path regressed."
++        )
++        # The explicit value is honored and stored — not coerced away.
++        assert node._current_provider == "mock"
++        assert node._current_model == "mock-model"
++
++    def test_explicit_mock_uses_rulebased_insight_fallback(self):
++        # Behavior-preservation of the DISCRIMINATOR: explicit provider="mock"
++        # (like an omitted/None provider) routes insight extraction to the
++        # honest rule-based fallback, NOT the LLM path. Exercised end-to-end
++        # through a real SharedMemoryPoolNode so the insight branch runs.
++        from kaizen.nodes.ai.a2a import SharedMemoryPoolNode
++
++        pool = SharedMemoryPoolNode()
++        node = A2AAgentNode()
++        result = node.run(
++            provider="mock",
++            model="mock-model",
++            messages=_MESSAGES,
++            agent_id="agent-5",
++            agent_role="analyst",
++            memory_pool=pool,
++        )
++        assert isinstance(result, dict)
++        assert result.get("success") is True
++        stats = result.get("a2a_metadata", {}).get("insight_statistics", {})
++        # Discriminator preserved: mock provider → rule-based extraction, never
++        # the LLM path (which "mock" and None both skip, identically).
++        assert stats.get("extraction_method") == "rule-based"
+diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1953_phase_exec_sanitize_parity.py b/packages/kailash-kaizen/tests/regression/test_issue_1953_phase_exec_sanitize_parity.py
+new file mode 100644
+index 000000000..285a6ded0
+--- /dev/null
++++ b/packages/kailash-kaizen/tests/regression/test_issue_1953_phase_exec_sanitize_parity.py
+@@ -0,0 +1,122 @@
++"""Regression test — _phase_execution error paths sanitize provider errors (#1953).
++
++Defense-in-depth parity with the #1953 folds. #1953 folded
++``sanitize_provider_error`` into the synthesis / iteration / MCP error paths of
++``IterativeLLMAgentNode`` (``iterative_llm_agent.py`` L438/612/1057/1120/1852).
++Two holistic reviewers (correctness + security) flagged FOUR sibling
++``except Exception as e:`` sites in ``_phase_execution`` that stored a raw
++``str(e)`` into the user-visible ``execution_results`` dict WITHOUT the local
++sanitize the sibling folds use:
++
++  * first except block (the no-execution-steps ``direct_llm`` path):
++    ``error_result["error"] = str(e)`` and ``execution_results["errors"].append(str(e))``
++  * second except block (the per-step execution path): the SAME shape.
++
++These are SAFE TODAY because the base ``LLMAgentNode.run`` re-raises
++``RuntimeError(sanitize_provider_error(e, provider))`` before the exception
++reaches ``_phase_execution`` — so ``str(e)`` is already the sanitized message
++and the raw exception survives only in ``__cause__`` (which ``str()`` omits).
++The gap is defense-in-depth: a FUTURE refactor that adds a raw-raising provider
++path (or changes the base node to ``raise e``) would leak a credential at these
++four sites with no local guard.
++
++This test SIMULATES that future refactor by monkeypatching the provider-dispatch
++boundary (``LLMAgentNode.run`` — the ``super().run()`` ``_phase_execution``
++dispatches through) to raise an exception carrying a RAW (fake) credential in
++its message, then drives ``_phase_execution`` down BOTH except paths and asserts
++the user-visible ``execution_results`` never carries the raw credential AND does
++carry the sanitizer's ``[REDACTED]`` marker.
++
++Tier 1 unit test: it monkeypatches the base ``run`` to raise a
++credential-bearing exception (the future-refactor scenario) and observes the
++REAL returned ``execution_results`` dict, never a mock that hides the leak.
++
++The fake credential is a synthetic OpenAI-style key that matches the
++``sanitize_provider_error`` credential regex (``sk-[A-Za-z0-9_-]{20,}``). It is
++NOT a real secret.
++"""
++
++import pytest
++
++from kaizen.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
++from kaizen.nodes.ai.llm_agent import LLMAgentNode
++
++pytestmark = pytest.mark.regression
++
++_MESSAGES = [{"role": "user", "content": "Why did revenue drop last quarter?"}]
++
++# Synthetic OpenAI-style key — matches the sanitizer's sk-[A-Za-z0-9_-]{20,}
++# pattern. NOT a real credential.
++_FAKE_CREDENTIAL = "sk-FAKE1234567890abcdefghijKLMNOP"
++_RAW_ERROR = f"provider error: api_key={_FAKE_CREDENTIAL} leaked from upstream SDK"
++
++
++def _raise_with_raw_credential(self, **kwargs):
++    """Simulate a future refactor where the base node re-raises WITHOUT sanitizing:
++    a raw provider exception whose message embeds a live credential reaches
++    ``_phase_execution``."""
++    raise RuntimeError(_RAW_ERROR)
++
++
++def _assert_no_raw_credential_but_redacted(execution_results):
++    """Every user-visible error surface MUST redact the credential, never carry it raw."""
++    # (a) the per-step error_result stored in steps_completed
++    error_results = [
++        step for step in execution_results["steps_completed"] if not step.get("success")
++    ]
++    assert error_results, "expected at least one failed step recording the error"
++    for step in error_results:
++        error_field = str(step.get("error", ""))
++        assert (
++            _FAKE_CREDENTIAL not in error_field
++        ), f"raw credential leaked into steps_completed[].error: {error_field!r}"
++        assert (
++            "[REDACTED]" in error_field
++        ), f"expected sanitizer redaction marker in steps_completed[].error: {error_field!r}"
++
++    # (b) the execution_results["errors"] list
++    errors_joined = " ".join(str(e) for e in execution_results["errors"])
++    assert execution_results[
++        "errors"
++    ], "expected the errors[] list to record the failure"
++    assert (
++        _FAKE_CREDENTIAL not in errors_joined
++    ), f"raw credential leaked into execution_results['errors']: {errors_joined!r}"
++    assert (
++        "[REDACTED]" in errors_joined
++    ), f"expected sanitizer redaction marker in execution_results['errors']: {errors_joined!r}"
++
++    # The failure is still surfaced (defense-in-depth must not swallow the error).
++    assert execution_results["success"] is False
++
++
++class TestPhaseExecutionSanitizesProviderErrors:
++    """A raw-credential-bearing provider exception reaching _phase_execution's
++    except paths is sanitized before it lands in the user-visible dict."""
++
++    def test_direct_llm_except_sanitizes_credential(self, monkeypatch):
++        """First except block — the ``direct_llm`` no-execution-steps path."""
++        monkeypatch.setattr(LLMAgentNode, "run", _raise_with_raw_credential)
++
++        node = IterativeLLMAgentNode()
++        plan = {"planning_mode": "direct_llm"}
++        result = node._phase_execution(
++            {"provider": "mock", "messages": _MESSAGES}, plan, discoveries={}
++        )
++
++        _assert_no_raw_credential_but_redacted(result)
++
++    def test_per_step_except_sanitizes_credential(self, monkeypatch):
++        """Second except block — the per-step (no-tools direct-LLM) execution path."""
++        monkeypatch.setattr(LLMAgentNode, "run", _raise_with_raw_credential)
++
++        node = IterativeLLMAgentNode()
++        plan = {
++            "execution_steps": [{"step": 1, "action": "analyze", "tools": []}],
++            "user_query": "Why did revenue drop last quarter?",
++        }
++        result = node._phase_execution(
++            {"provider": "mock", "messages": _MESSAGES}, plan, discoveries={}
++        )
++
++        _assert_no_raw_credential_but_redacted(result)

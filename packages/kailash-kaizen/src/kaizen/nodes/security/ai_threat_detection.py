@@ -437,14 +437,17 @@ Your analysis should help security teams understand:
             return result
 
         except Exception as e:
-            logger.error(f"AI threat detection failed: {e}")
+            # #1970: ``_call_llm_for_intelligence`` dispatches to a credentialed
+            # provider; both dict surfaces below reach the caller.
+            sanitized = sanitize_provider_error(e, "AI threat detection")
+            logger.error("AI threat detection failed: %s", sanitized)
             return {
-                "error": str(e),
+                "error": sanitized,
                 "threats": [],
                 "threat_summary": {},
                 "rule_based_analysis": {},
                 "analysis_metadata": {
-                    "error": str(e),
+                    "error": sanitized,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             }

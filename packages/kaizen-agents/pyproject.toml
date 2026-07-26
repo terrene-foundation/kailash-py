@@ -74,7 +74,9 @@ testpaths = ["tests"]
 markers = [
     "unit: fast isolated unit tests (Tier 1)",
     "integration: integration tests against real infrastructure (Tier 2)",
+    "e2e: end-to-end tests against real everything (Tier 3)",
     "regression: regression tests pinning a fixed bug (NEVER delete)",
+    "requires_real_llm: Tests that make real (billed) LLM provider calls; skipped unless KAIZEN_ALLOW_REAL_LLM=1",
 ]
 
 [tool.black]

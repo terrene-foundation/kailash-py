@@ -381,6 +381,17 @@ class A2AAgentCard:
         Calculate how well this agent matches given requirements.
 
         Returns a score between 0.0 and 1.0.
+
+        Raises:
+            ReasoningDegradedError: Propagated from
+                `Capability.matches_requirement` when the LLM judge returned
+                no usable score for ANY capability (#1981). Deliberately not
+                caught here: this method takes `max()` across the card's
+                capabilities, so a single unscoreable capability could be the
+                one that would have won — a max over the survivors is an
+                under-estimate presented as a real score. The card's total is
+                unknown, and `_find_best_agents_for_task` is the layer that
+                decides what to do about it.
         """
         if not requirements:
             return 0.5  # Neutral score for no requirements
@@ -3585,16 +3596,61 @@ class A2ACoordinatorNode(CycleAwareNode):
         )
 
     def _find_best_agents_for_task(self, task: A2ATask) -> List[Tuple[str, float]]:
-        """Find best agents for a task using agent cards."""
+        """Find best agents for a task using agent cards.
+
+        Returns `(agent_id, score)` pairs sorted best-first, covering only the
+        cards the LLM judge could actually score.
+
+        Degraded judgments (#1981): a card whose capability scoring returned
+        no usable number is EXCLUDED from the ranking and logged at WARN,
+        never ranked at 0.0 — a fabricated zero is indistinguishable from a
+        genuine no-match, and when every card degraded the whole ranking
+        collapsed to `[('eng', 0.0), ('des', 0.0)]` with "best" decided by
+        sort order rather than by fit.
+
+        Raises:
+            ReasoningDegradedError: Every candidate card degraded, so no
+                ranking exists. Delegating on an empty result here would fall
+                through to keyword-based delegation and hide a total judge
+                failure behind a plausible-looking assignment.
+        """
+        # Local import for the same reason `Capability.matches_requirement`
+        # imports its helper locally: `kaizen.llm.reasoning` pulls in
+        # `kaizen.core.base_agent`, and a module-scope import here would close
+        # an import cycle back through this module.
+        from kaizen.llm.reasoning import ReasoningDegradedError
+
         matches = []
+        degraded: List[str] = []
+        degraded_model = "unknown"
+        candidates = 0
 
         for agent_id, card in self.agent_cards.items():
             # Skip if incompatible
             if task.delegated_by and not card.is_compatible_with(task.delegated_by):
                 continue
 
+            candidates += 1
+
             # Calculate match score
-            score = card.calculate_match_score(task.requirements)
+            try:
+                score = card.calculate_match_score(task.requirements)
+            except ReasoningDegradedError as exc:
+                # This card's fit is UNKNOWN, not zero. Ranking it at 0.0 is
+                # what made the whole selection arbitrary in #1981.
+                degraded.append(agent_id)
+                degraded_model = exc.model
+                logger.warning(
+                    "a2a.find_best_agents.card_degraded",
+                    extra={
+                        "task_id": task.task_id,
+                        "agent_id": agent_id,
+                        "correlation_id": exc.correlation_id,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                continue
 
             # Apply collaboration style bonus
             if len(task.assigned_to) > 0:
@@ -3608,6 +3664,30 @@ class A2ACoordinatorNode(CycleAwareNode):
                 score *= 0.8 + 0.2 * card.performance.success_rate
 
             matches.append((agent_id, score))
+
+        if degraded:
+            if not matches:
+                # Nothing was scoreable: there is no ranking to return, and an
+                # empty list would be read as "no suitable agent" by the
+                # caller's fallback path.
+                raise ReasoningDegradedError(
+                    "a2a.find_best_agents",
+                    model=degraded_model,
+                    correlation_id=task.task_id,
+                    error=(
+                        f"the capability judge degraded for all {candidates} "
+                        f"candidate card(s): {', '.join(degraded)}"
+                    ),
+                )
+            logger.warning(
+                "a2a.find_best_agents.degraded",
+                extra={
+                    "task_id": task.task_id,
+                    "candidates": candidates,
+                    "ranked": len(matches),
+                    "degraded_agents": degraded,
+                },
+            )
 
         # Sort by score descending
         matches.sort(key=lambda x: x[1], reverse=True)

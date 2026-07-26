@@ -141,8 +141,14 @@ class WebSearchTool(BaseTool):
                 provider="duckduckgo",
             )
         except Exception as e:
-            logger.error(f"DuckDuckGo search failed: {e}")
-            return NativeToolResult.from_error(f"Search failed: {str(e)}")
+            # The search runs against an external HTTP API; its exception can
+            # echo a query-string token / proxy credential into the returned
+            # tool result and onto the log (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            sanitized = sanitize_provider_error(e, "Web search")
+            logger.error("DuckDuckGo search failed: %s", sanitized)
+            return NativeToolResult.from_error(f"Search failed: {sanitized}")
 
     def get_schema(self) -> Dict[str, Any]:
         return {
@@ -309,7 +315,13 @@ class WebFetchTool(BaseTool):
                 f"Request timed out after {self.timeout} seconds"
             )
         except Exception as e:
-            return NativeToolResult.from_error(f"Fetch failed: {str(e)}")
+            # aiohttp exceptions embed the request URL, which can carry a
+            # presigned-URL token or userinfo credential (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            return NativeToolResult.from_error(
+                f"Fetch failed: {sanitize_provider_error(e, 'Web fetch')}"
+            )
 
     def _extract_text(self, html: str) -> str:
         """Extract text content from HTML.

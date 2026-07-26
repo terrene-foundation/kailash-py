@@ -488,7 +488,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
             return {
                 "success": False,
                 "synthesis_failed": True,
-                "error": str(e),
+                # #1970: the synthesis-phase LLM call genuinely failed against a
+                # resolved provider — the underlying message can carry a key.
+                "error": sanitize_provider_error(e, "synthesis LLM"),
                 "error_type": "SynthesisError",
                 "degraded_synthesis": e.degraded_report,
                 "iterations": [iter_state.to_dict() for iter_state in iterations],
@@ -508,7 +510,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e),
+                # #1970: this catch-all spans every phase, including the
+                # provider-dispatching execution/synthesis phases.
+                "error": sanitize_provider_error(e, "iterative agent"),
                 "error_type": type(e).__name__,
                 "iterations": [iter_state.to_dict() for iter_state in iterations],
                 "discoveries": global_discoveries,

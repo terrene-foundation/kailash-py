@@ -29,7 +29,23 @@ __all__ = [
     "MySQLDialect",
     "SQLiteDialect",
     "detect_dialect",
+    "POSTGRES_MAX_IDENTIFIER_LENGTH",
+    "MYSQL_MAX_IDENTIFIER_LENGTH",
+    "SQLITE_MAX_IDENTIFIER_LENGTH",
 ]
+
+# ---------------------------------------------------------------------------
+# Per-dialect identifier length limits — SINGLE SOURCE OF TRUTH (issue #1971)
+# ---------------------------------------------------------------------------
+# These are the canonical values for the whole platform. DataFlow's
+# ``dataflow.adapters.dialect`` imports them rather than restating the
+# integers, so the two live dialect hierarchies (core SDK ``QueryDialect``
+# for kailash.tracking/kailash.trust, DataFlow ``SQLDialect`` for the
+# generated CRUD nodes) can never drift on the value that decides whether an
+# identifier is legal.
+POSTGRES_MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
+MYSQL_MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
+SQLITE_MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
@@ -416,7 +432,7 @@ class QueryDialect(ABC):
 class PostgresDialect(QueryDialect):
     """PostgreSQL dialect — uses ``$1, $2, ...`` numbered placeholders."""
 
-    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
+    _MAX_IDENTIFIER_LENGTH = POSTGRES_MAX_IDENTIFIER_LENGTH
     _QUOTE_CHAR = '"'
 
     @property
@@ -493,7 +509,7 @@ class PostgresDialect(QueryDialect):
 class MySQLDialect(QueryDialect):
     """MySQL dialect — uses ``%s`` positional placeholders."""
 
-    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
+    _MAX_IDENTIFIER_LENGTH = MYSQL_MAX_IDENTIFIER_LENGTH
     _QUOTE_CHAR = "`"
 
     @property
@@ -597,7 +613,7 @@ class MySQLDialect(QueryDialect):
 class SQLiteDialect(QueryDialect):
     """SQLite dialect — uses ``?`` positional placeholders (canonical)."""
 
-    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
+    _MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
     _QUOTE_CHAR = '"'
 
     @property

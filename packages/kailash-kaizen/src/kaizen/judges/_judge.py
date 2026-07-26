@@ -435,11 +435,15 @@ class LLMJudge:
             # Per rules/zero-tolerance.md Rule 3 exception: cleanup
             # paths may swallow with a WARN so the process keeps
             # running but the failure is grep-able.
+            # The delegate wraps a credentialed provider client, so a close()
+            # failure can echo the API key onto this record (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
             logger.warning(
                 "kaizen.judges.close.error",
                 extra={
                     "judge_run_id": self.run_id,
-                    "judge_error": str(exc),
+                    "judge_error": sanitize_provider_error(exc, "Judge delegate"),
                     "mode": "real",
                 },
             )
@@ -658,13 +662,20 @@ class LLMJudge:
         except JudgeBudgetExhaustedError:
             raise
         except Exception as exc:
-            logger.exception(
+            # This IS the LLM provider call surface — the exception routinely
+            # carries the provider's auth error text. Log the SANITIZED message
+            # and drop exc_info: logger.exception() would dump the raw provider
+            # exception via the traceback even though judge_error is sanitized
+            # (#1970 sweep; same idiom as agent.py / llm_agent.py).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            logger.error(
                 "kaizen.judges.delegate_error",
                 extra={
                     "judge_run_id": self.run_id,
                     "judge_sub_run_id": sub_run_id,
                     "judge_model": self._model_name,
-                    "judge_error": str(exc),
+                    "judge_error": sanitize_provider_error(exc, "Judge delegate"),
                     "mode": "real",
                 },
             )

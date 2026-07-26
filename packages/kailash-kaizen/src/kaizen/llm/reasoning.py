@@ -18,12 +18,28 @@ Why this exists:
     generalises across natural language variation while remaining observable
     and cacheable.
 
+Structured output (#1981):
+    Both agents request structured output derived from THEIR OWN signature.
+    Providers whose wire carries a schema (OpenAI family) get a strict
+    `json_schema` and the provider itself guarantees the score field exists;
+    the rest get `json_object` plus an explicit JSON instruction in the
+    system prompt, which is the only thing that makes a provider without a
+    `response_format` parameter (Anthropic `/v1/messages`) answer in a
+    parseable shape. Without both halves the model answers in prose, the
+    score never arrives, and every candidate ties at 0.0.
+
+Degradation:
+    A judgment that arrives without a usable score raises
+    `ReasoningDegradedError` rather than returning 0.0. A degraded judgment
+    and a genuine "no match" are the same float, so a numeric return cannot
+    express the difference — see the exception's docstring.
+
 Caching:
     LLM similarity / capability judgments are memoised per (model, inputs)
     tuple for the lifetime of the agent. Patterns that loop over candidates
     (router, ensemble, supervisor) therefore issue one LLM call per unique
     (task, capability) pair even if the same comparison is requested
-    repeatedly inside one selection round.
+    repeatedly inside one selection round. Only VALID judgments are cached.
 
 Observability:
     Every invocation emits entry and exit log lines with correlation_id,
@@ -36,17 +52,20 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Optional, Tuple
 
 from kaizen.config.providers import ConfigurationError
 from kaizen.core._provider_env import _keyless_mock_allowed
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.core.prompt_utils import generate_prompt_from_signature, json_prompt_suffix
+from kaizen.core.structured_output import StructuredOutput
 from kaizen.signatures import InputField, OutputField, Signature
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ReasoningDegradedError",
     "TextSimilaritySignature",
     "CapabilityMatchSignature",
     "TextSimilarityAgent",
@@ -57,6 +76,56 @@ __all__ = [
     "get_capability_match_agent",
     "clear_reasoning_cache",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+
+class ReasoningDegradedError(Exception):
+    """The LLM judge returned without a usable score (#1981).
+
+    Raised instead of returning a fabricated ``0.0``. A degraded judgment and
+    a genuine "no match" are the SAME float, so a numeric return cannot
+    express the difference: every caller that ranks candidates would tie them
+    all at zero and pick whichever the sort emitted first. A typed exception
+    is the one shape an existing caller cannot silently coerce back to zero.
+
+    Attributes:
+        helper: Name of the helper that degraded (``llm_capability_match`` /
+            ``llm_text_similarity``).
+        model: Model the judgment was dispatched to.
+        correlation_id: Correlation ID shared with the ``*.degraded`` WARN
+            line, so the log and the exception can be joined during triage.
+        error: The underlying failure — the strategy's ``error`` value (e.g.
+            ``"JSON_PARSE_FAILED"``) or a description of the unusable score.
+            Provider exceptions reach this field already sanitised by
+            ``LLMAgentNode._provider_llm_response``.
+        raw_response: The model's actual answer when one was returned. The
+            live #1981 case had a correct ``0.92`` in prose here — keeping it
+            reachable is what lets a caller tell "the model was wrong" from
+            "the number did not survive the transport".
+    """
+
+    def __init__(
+        self,
+        helper: str,
+        *,
+        model: str,
+        correlation_id: str,
+        error: str,
+        raw_response: Optional[str] = None,
+    ) -> None:
+        self.helper = helper
+        self.model = model
+        self.correlation_id = correlation_id
+        self.error = error
+        self.raw_response = raw_response
+        super().__init__(
+            f"{helper} returned no usable score (model={model}, "
+            f"correlation_id={correlation_id}): {error}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +187,60 @@ class CapabilityMatchSignature(Signature):
 
 
 # ---------------------------------------------------------------------------
+# Structured output
+# ---------------------------------------------------------------------------
+
+
+def _structured_output_for(
+    signature: Signature, provider: Optional[str]
+) -> Dict[str, Any]:
+    """Return the `response_format` a reasoning agent must request (#1981).
+
+    Delegates to the framework primitive `StructuredOutput.for_provider`, so
+    the per-provider translation lives in ONE place: OpenAI-family providers
+    get a strict `json_schema` (constrained sampling — the provider itself
+    guarantees the score field exists); everything else gets `json_object`,
+    which each wire protocol renders as it can (Ollama's top-level `format`,
+    Cohere's `response_format.schema`) or drops when the provider has no
+    equivalent (Anthropic `/v1/messages`).
+
+    The schema is ALWAYS derived from the reasoning signature passed here,
+    never from a caller-supplied config: `runtime.py` / `registry.py` hand
+    the HOST agent's config to the judge so the model selection is shared,
+    and copying that config's `response_format` would force the judge to
+    answer in a schema with no score field at all.
+    """
+    return StructuredOutput.from_signature(signature).for_provider(provider or "")
+
+
+def _provider_enforces_schema(response_format: Optional[Dict[str, Any]]) -> bool:
+    """True when the PROVIDER guarantees the shape (strict `json_schema`)."""
+    return (
+        isinstance(response_format, dict)
+        and response_format.get("type") == "json_schema"
+    )
+
+
+def _reasoning_system_prompt(
+    role: str, signature: Signature, response_format: Optional[Dict[str, Any]]
+) -> str:
+    """Compose role prose + the signature's output contract (#1981).
+
+    The role paragraph alone names no output field and never says "JSON", so
+    a model that is not schema-constrained answers in prose and the score is
+    lost in transport. `generate_prompt_from_signature` is the framework's
+    single source of truth for the field listing; `json_prompt_suffix` adds
+    the explicit JSON instruction — appended ONLY when the provider does not
+    already enforce the schema, per `create_structured_output_config`'s
+    contract (strict mode needs no prompt-level restatement).
+    """
+    parts = [role, "", generate_prompt_from_signature(signature)]
+    if not _provider_enforces_schema(response_format):
+        parts.append(json_prompt_suffix(getattr(signature, "output_fields", None)))
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Agents
 # ---------------------------------------------------------------------------
 
@@ -131,14 +254,18 @@ class TextSimilarityAgent(BaseAgent):
     about its structured inputs.
     """
 
+    _ROLE = (
+        "You are a semantic similarity judge. Given two texts, rate how "
+        "close their meaning is on a 0.0-1.0 scale and justify the score "
+        "in one sentence. Focus on intent and topic, not surface wording."
+    )
+
     def _default_signature(self) -> Signature:
         return TextSimilaritySignature()
 
     def _generate_system_prompt(self) -> str:
-        return (
-            "You are a semantic similarity judge. Given two texts, rate how "
-            "close their meaning is on a 0.0-1.0 scale and justify the score "
-            "in one sentence. Focus on intent and topic, not surface wording."
+        return _reasoning_system_prompt(
+            self._ROLE, self.signature, self.config.response_format
         )
 
 
@@ -149,16 +276,20 @@ class CapabilityMatchAgent(BaseAgent):
     as `TextSimilarityAgent`.
     """
 
+    _ROLE = (
+        "You are a capability matcher for multi-agent routing. Given an "
+        "agent capability (name + description) and a task requirement, "
+        "decide if the capability can fulfil the requirement and return a "
+        "confidence score on a 0.0-1.0 scale. Reason about intent and "
+        "domain overlap, not keyword presence."
+    )
+
     def _default_signature(self) -> Signature:
         return CapabilityMatchSignature()
 
     def _generate_system_prompt(self) -> str:
-        return (
-            "You are a capability matcher for multi-agent routing. Given an "
-            "agent capability (name + description) and a task requirement, "
-            "decide if the capability can fulfil the requirement and return a "
-            "confidence score on a 0.0-1.0 scale. Reason about intent and "
-            "domain overlap, not keyword presence."
+        return _reasoning_system_prompt(
+            self._ROLE, self.signature, self.config.response_format
         )
 
 
@@ -213,6 +344,14 @@ def _resolve_reasoning_config(
     cheap. If no config is supplied, fall back to `.env`-defined model with
     the same defaults per `rules/env-models`.
 
+    Structured output is NOT resolved here — it depends on which reasoning
+    signature the agent will run, which only the `get_*_agent` factories
+    know. They pass this config through `_with_structured_output` (#1981).
+    A caller-supplied `response_format` is deliberately dropped rather than
+    cloned: `runtime.py` / `registry.py` hand the HOST agent's config to the
+    judge so the model selection is shared, and the host's schema has no
+    score field in it.
+
     If no model is configured (neither `OPENAI_PROD_MODEL` nor
     `DEFAULT_LLM_MODEL`), this FAILS LOUD with a typed `ConfigurationError`
     rather than silently returning a `mock` config that would fabricate
@@ -252,18 +391,34 @@ def _resolve_reasoning_config(
             mcp_enabled=False,
         )
 
-    # Clone and harden
+    # Clone and harden. `response_format` is deliberately absent — see the
+    # docstring; `_with_structured_output` supplies the correct one.
     return BaseAgentConfig(
         llm_provider=config.llm_provider,
         model=config.model,
         temperature=0.0,
         max_tokens=config.max_tokens,
         provider_config=config.provider_config,
-        response_format=config.response_format,
-        structured_output_mode=config.structured_output_mode,
         api_key=config.api_key,
         base_url=config.base_url,
         mcp_enabled=False,
+    )
+
+
+def _with_structured_output(
+    config: BaseAgentConfig, signature: Signature
+) -> BaseAgentConfig:
+    """Return `config` with structured output derived from `signature` (#1981).
+
+    Applied by the `get_*_agent` factories, which are the only places that
+    know which reasoning signature the agent will run. `replace` is used so a
+    field added to `BaseAgentConfig` later cannot be silently dropped by a
+    hand-listed re-construction.
+    """
+    return replace(
+        config,
+        response_format=_structured_output_for(signature, config.llm_provider),
+        structured_output_mode="explicit",
     )
 
 
@@ -280,7 +435,9 @@ def get_text_similarity_agent(
     config: Optional[BaseAgentConfig] = None,
 ) -> TextSimilarityAgent:
     """Return a cached `TextSimilarityAgent` for the resolved config."""
-    resolved = _resolve_reasoning_config(config)
+    resolved = _with_structured_output(
+        _resolve_reasoning_config(config), TextSimilaritySignature()
+    )
     key = _agent_cache_key(resolved, "text_similarity")
     agent = _CACHE._agents.get(key)
     if agent is None:
@@ -296,7 +453,9 @@ def get_capability_match_agent(
     config: Optional[BaseAgentConfig] = None,
 ) -> CapabilityMatchAgent:
     """Return a cached `CapabilityMatchAgent` for the resolved config."""
-    resolved = _resolve_reasoning_config(config)
+    resolved = _with_structured_output(
+        _resolve_reasoning_config(config), CapabilityMatchSignature()
+    )
     key = _agent_cache_key(resolved, "capability_match")
     agent = _CACHE._agents.get(key)
     if agent is None:
@@ -313,16 +472,72 @@ def get_capability_match_agent(
 # ---------------------------------------------------------------------------
 
 
-def _coerce_float(value: Any, default: float = 0.0) -> float:
-    try:
+def _usable_score(value: Any) -> Optional[float]:
+    """Clamp a judge-supplied score to [0.0, 1.0], or None when unusable.
+
+    Returning None instead of a default is the point (#1981): a score the
+    judge never produced — absent, prose, NaN, a bool — is NOT zero. The old
+    `float(value)`-with-default form turned every unusable value into a
+    plausible 0.0 that ranked identically to a genuine no-match.
+
+    `bool` is rejected explicitly: it is an `int` subclass, so `float(True)`
+    is 1.0 — a model answering `"match_score": true` would otherwise be read
+    as a perfect-confidence match.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
         score = float(value)
-    except (TypeError, ValueError):
-        return default
+    elif isinstance(value, str):
+        try:
+            score = float(value.strip())
+        except (TypeError, ValueError):
+            return None
+    else:
+        return None
+    if score != score:  # NaN — comparisons below would silently pass it through
+        return None
     if score < 0.0:
         return 0.0
     if score > 1.0:
         return 1.0
     return score
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    """Clamped float for values already known to be usable (cache reads)."""
+    score = _usable_score(value)
+    return default if score is None else score
+
+
+def _degradation_reason(result: Dict[str, Any], score_field: str) -> Optional[str]:
+    """Describe why `result` carries no usable score, or None when it does.
+
+    Three shapes reach here, all of which used to collapse to a fabricated
+    0.0: the strategy's error envelope (`JSON_PARSE_FAILED`, a sanitised
+    provider error, a signature-validation failure), an absent score field,
+    and a present-but-unusable value.
+    """
+    error = result.get("error")
+    if error:
+        return str(error)
+    raw = result.get(score_field)
+    if raw is None:
+        return f"response carried no {score_field}"
+    if _usable_score(raw) is None:
+        return (
+            f"{score_field} was not a usable number "
+            f"(got {type(raw).__name__}: {raw!r})"
+        )
+    return None
+
+
+def _raw_response_of(result: Dict[str, Any]) -> Optional[str]:
+    """Best-effort text of what the model actually said, for triage."""
+    response = result.get("response")
+    if response is None:
+        return None
+    return response if isinstance(response, str) else str(response)
 
 
 def llm_text_similarity(
@@ -347,7 +562,16 @@ def llm_text_similarity(
             fresh UUID is generated if not supplied.
 
     Returns:
-        float: Similarity in [0.0, 1.0].
+        float: Similarity in [0.0, 1.0]. ``0.0`` here always means the LLM
+        judged the texts unrelated — a judgment that did not arrive raises
+        instead (see below), so the two are distinguishable.
+
+    Raises:
+        ReasoningDegradedError: The judge returned without a usable
+            similarity (#1981) — e.g. the provider answered in prose and
+            structured-output parsing failed. Sibling contract of
+            `llm_capability_match`; see its Raises section for the rationale.
+        Exception: Whatever the agent raised, propagated unchanged.
     """
     if not text_a or not text_b:
         return 0.0
@@ -382,23 +606,31 @@ def llm_text_similarity(
         result = agent.run(text_a=text_a, text_b=text_b)
     except Exception as exc:
         latency_ms = (time.monotonic() - t0) * 1000
-        logger.exception(
+        # ``agent.run`` above IS the provider dispatch, so this exception
+        # routinely carries the provider's auth error text. TWO surfaces leaked
+        # here: the ``error`` field (raw ``str(exc)``) AND the traceback that
+        # ``logger.exception`` emits — dropping exc_info is what stops the raw
+        # message re-entering via the traceback's final line (#1970 sweep;
+        # observability.md Rule 6.3). The bare ``raise`` is deliberate: the
+        # caller owns what it does with the exception object itself.
+        from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+        logger.error(
             "llm_text_similarity.error",
             extra={
                 "correlation_id": cid,
                 "model": model,
                 "latency_ms": latency_ms,
-                "error": str(exc),
+                "error": sanitize_provider_error(exc, "llm_text_similarity"),
             },
         )
         raise
 
     latency_ms = (time.monotonic() - t0) * 1000
-    raw_similarity = result.get("similarity")
-    similarity = _coerce_float(raw_similarity)
+    degradation = _degradation_reason(result, "similarity")
 
-    if raw_similarity is None or result.get("error"):
-        # Sibling of the `llm_capability_match` degradation guard above — same
+    if degradation is not None:
+        # Sibling of the `llm_capability_match` degradation guard below — same
         # shape, same failure mode, fixed at both sites in one change so the
         # helpers cannot drift. See that guard for the full rationale.
         logger.warning(
@@ -407,12 +639,18 @@ def llm_text_similarity(
                 "correlation_id": cid,
                 "model": model,
                 "latency_ms": latency_ms,
-                "error": str(result.get("error") or "response carried no similarity"),
-                "similarity": similarity,
+                "error": degradation,
             },
         )
-        return similarity
+        raise ReasoningDegradedError(
+            "llm_text_similarity",
+            model=model,
+            correlation_id=cid,
+            error=degradation,
+            raw_response=_raw_response_of(result),
+        )
 
+    similarity = _coerce_float(result.get("similarity"))
     _CACHE._similarity_results[cache_key] = result
     logger.info(
         "llm_text_similarity.ok",
@@ -449,7 +687,22 @@ def llm_capability_match(
         correlation_id: Optional correlation ID for logs.
 
     Returns:
-        float: Match confidence in [0.0, 1.0].
+        float: Match confidence in [0.0, 1.0]. ``0.0`` here always means the
+        LLM judged the capability a non-match.
+
+    Raises:
+        ReasoningDegradedError: The judge returned without a usable
+            `match_score` (#1981) — the provider answered in prose and
+            structured-output parsing failed, the field was absent, or the
+            value was not a number. Returning 0.0 for this case made a failed
+            judgment indistinguishable from a genuine no-match, so callers
+            that RANK capabilities tied every candidate at zero and picked
+            whichever the sort emitted first. A caller that would rather
+            drop one judgment than fail a whole round should catch this
+            explicitly — the point is that it can no longer happen by
+            accident.
+        Exception: Whatever the agent raised, propagated unchanged (already
+            logged at `llm_capability_match.error`).
     """
     if not requirement or not capability_name:
         return 0.0
@@ -482,34 +735,41 @@ def llm_capability_match(
         )
     except Exception as exc:
         latency_ms = (time.monotonic() - t0) * 1000
-        logger.exception(
+        # Sibling of the llm_text_similarity guard above — same provider-dispatch
+        # seam, same two leak surfaces (raw ``error`` field + exc_info traceback),
+        # kept in lockstep per security.md § Multi-Site Kwarg Plumbing (#1970).
+        from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+        logger.error(
             "llm_capability_match.error",
             extra={
                 "correlation_id": cid,
                 "model": model,
                 "latency_ms": latency_ms,
-                "error": str(exc),
+                "error": sanitize_provider_error(exc, "llm_capability_match"),
             },
         )
         raise
 
     latency_ms = (time.monotonic() - t0) * 1000
-    raw_score = result.get("match_score")
-    score = _coerce_float(raw_score)
+    degradation = _degradation_reason(result, "match_score")
 
-    if raw_score is None or result.get("error"):
+    if degradation is not None:
         # The agent returned WITHOUT a usable score — e.g. the provider emitted
         # prose and structured-output parsing failed ("JSON_PARSE_FAILED"), so
-        # `match_score` is absent and `_coerce_float(None)` yields 0.0. Every
-        # capability then ties at 0.0 and the caller's ranking becomes
-        # arbitrary. Reporting that as `.ok` is a silent fallback
-        # (zero-tolerance.md Rule 3); WARN so the degradation is triageable
-        # (observability.md MUST Rule 3 — WARN == returned via a degraded path).
+        # `match_score` is absent. Returning the 0.0 that
+        # `_coerce_float(None)` produced tied every capability at zero and made
+        # the caller's ranking arbitrary — a fabricated answer presented as a
+        # real one (zero-tolerance.md Rule 3), and unreachable by the caller
+        # because it lived only in a log line. #1981 raises instead: WARN keeps
+        # the degradation triageable (observability.md MUST Rule 3) and the
+        # typed error makes it impossible to consume as a score.
         #
         # The degraded result is deliberately NOT cached: the cache exists to
         # avoid recomputing a VALID score, and memoising a parse failure would
-        # pin 0.0 for this (model, capability, requirement) key for the rest of
-        # the process — outliving the transient condition that caused it.
+        # pin the failure for this (model, capability, requirement) key for the
+        # rest of the process — outliving the transient condition that caused
+        # it.
         logger.warning(
             "llm_capability_match.degraded",
             extra={
@@ -517,12 +777,18 @@ def llm_capability_match(
                 "model": model,
                 "latency_ms": latency_ms,
                 "capability_name": capability_name,
-                "error": str(result.get("error") or "response carried no match_score"),
-                "match_score": score,
+                "error": degradation,
             },
         )
-        return score
+        raise ReasoningDegradedError(
+            "llm_capability_match",
+            model=model,
+            correlation_id=cid,
+            error=degradation,
+            raw_response=_raw_response_of(result),
+        )
 
+    score = _coerce_float(result.get("match_score"))
     _CACHE._match_results[cache_key] = result
     logger.info(
         "llm_capability_match.ok",

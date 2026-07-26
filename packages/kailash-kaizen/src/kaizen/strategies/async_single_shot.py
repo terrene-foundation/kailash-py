@@ -386,7 +386,13 @@ class AsyncSingleShotStrategy:
 
         except Exception as e:
             # Error handling - propagate real errors, only use skeleton for missing providers
+            # ``error_msg`` stays RAW for the internal classification below and
+            # for _get_recovery_suggestions (both match on provider substrings and
+            # neither echoes the message); every surface that LEAVES this frame
+            # uses ``sanitized`` — a provider exception can echo an API key into
+            # the returned dict / log (#1970 sweep).
             error_msg = str(e)
+            sanitized = sanitize_provider_error(e, "LLM")
 
             # Only use skeleton fallback for truly missing providers (e.g., in unit tests without API keys)
             # NOT for API errors which should be propagated to reveal real issues
@@ -403,13 +409,13 @@ class AsyncSingleShotStrategy:
                 import logging
 
                 logging.getLogger(__name__).warning(
-                    f"Using skeleton result due to missing provider: {error_msg}"
+                    "Using skeleton result due to missing provider: %s", sanitized
                 )
                 return self._generate_skeleton_result(agent, inputs)
 
             # For all other errors (including API errors), return error info to reveal issues
             return {
-                "error": error_msg,
+                "error": sanitized,
                 "status": "failed",
                 "recovery_suggestions": self._get_recovery_suggestions(error_msg),
             }

@@ -2643,14 +2643,22 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
                 )
 
             except Exception as e:
+                # A round drives an LLM execution; its exception can echo a
+                # credential into the round record and onto the log (#1970 sweep).
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+                sanitized = sanitize_provider_error(e, "Agent execution")
                 logger.error(
-                    f"Error in round {round_num + 1} for agent {self.agent_id}: {e}"
+                    "Error in round %d for agent %s: %s",
+                    round_num + 1,
+                    self.agent_id,
+                    sanitized,
                 )
                 # Add error information to round
                 round_info = {
                     "round": round_num + 1,
                     "inputs": round_input,
-                    "error": str(e),
+                    "error": sanitized,
                     "timestamp": time.time(),
                 }
                 execution_rounds.append(round_info)
@@ -2913,12 +2921,19 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
                 response = self.communicate_with(target_agent, message, context)
                 responses.append(response)
             except Exception as e:
-                logger.error(f"Failed to communicate with {target_agent.name}: {e}")
+                # Inter-agent communication drives an LLM call; its exception can
+                # echo a credential into the returned response record (#1970 sweep).
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+                sanitized = sanitize_provider_error(e, "Agent communication")
+                logger.error(
+                    "Failed to communicate with %s: %s", target_agent.name, sanitized
+                )
                 responses.append(
                     {
                         "sender": target_agent.name,
                         "receiver": self.name,
-                        "error": str(e),
+                        "error": sanitized,
                         "context": context,
                         "timestamp": time.time(),
                     }

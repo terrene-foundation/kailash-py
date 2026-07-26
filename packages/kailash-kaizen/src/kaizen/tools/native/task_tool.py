@@ -247,15 +247,22 @@ class TaskTool(BaseTool):
             )
 
         except Exception as e:
-            logger.exception(f"Subagent execution failed: {e}")
+            # A subagent run drives an LLM provider call; its exception can echo
+            # the API key into the returned tool result AND onto the log. Drop
+            # exc_info for the same reason (the traceback re-leaks the raw
+            # message) — #1970 sweep; same idiom as agent.py / llm_agent.py.
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            sanitized = sanitize_provider_error(e, "Subagent execution")
+            logger.error("Subagent execution failed: %s", sanitized)
             result = SubagentResult.from_error(
                 subagent_id=subagent_id,
-                error_message=str(e),
+                error_message=sanitized,
                 error_type=type(e).__name__,
                 specialist_name=subagent_type,
             )
             return NativeToolResult.from_error(
-                f"Subagent execution failed: {e}",
+                f"Subagent execution failed: {sanitized}",
                 subagent_result=result.to_dict(),
             )
 

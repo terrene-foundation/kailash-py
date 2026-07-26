@@ -280,6 +280,11 @@ class TestMCPServerLifecycle:
         mock_new_loop.assert_called_once()
         mock_set_loop.assert_called_once_with(mock_loop)
 
+        # The loop assertions above hold even if the channel is never touched
+        # (they only observe the patches). Assert the injected channel was
+        # actually driven, so a regression that stops calling start() fails.
+        app._mcp_channel.start.assert_called_once()
+
     @patch("asyncio.set_event_loop")
     @patch("asyncio.new_event_loop")
     def test_run_mcp_server_no_server(self, mock_new_loop, mock_set_loop):
@@ -328,6 +333,9 @@ class TestMCPServerLifecycle:
                 assert mock_new_loop.called
                 assert mock_set_loop.called
 
+                # ...and the channel MUST be the thing that loop drove.
+                app._mcp_channel.stop.assert_called_once()
+
     def test_stop_mcp_server_fallback(self):
         """Test stopping simple MCP server."""
         from nexus.core import Nexus
@@ -356,6 +364,11 @@ class TestMCPServerLifecycle:
                 # Should create loop for stopping
                 assert mock_new_loop.called
                 assert mock_set_loop.called
+
+                # The fallback branch (no channel) MUST reach _mcp_server.stop;
+                # without this the test passes even if stop() never runs the
+                # branch the test is named for.
+                app._mcp_server.stop.assert_called_once()
 
 
 class TestErrorHandling:

@@ -42,9 +42,11 @@ Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
+import logging
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -60,6 +62,8 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+logger = logging.getLogger(__name__)
 
 
 class BlackboardPipeline(Pipeline):
@@ -168,6 +172,22 @@ class BlackboardPipeline(Pipeline):
                 if best_specialist is not None and best_score > 0:
                     return best_specialist
 
+        except ReasoningDegradedError as exc:
+            # #1981: EVERY specialist's capability scoring degraded. The
+            # documented no-match return (None) stands — this method's sync
+            # contract must not start raising — but "no specialist matches"
+            # and "the judge could not tell" are opposite facts, so the
+            # degradation MUST be observable rather than swallowed by the
+            # generic handler (`rules/zero-tolerance.md` Rule 3).
+            logger.warning(
+                "blackboard.select_specialist.degraded",
+                extra={
+                    "correlation_id": exc.correlation_id,
+                    "model": exc.model,
+                    "error": exc.error,
+                    "fallback": "no_specialist",
+                },
+            )
         except Exception:
             # Fall through to None
             pass

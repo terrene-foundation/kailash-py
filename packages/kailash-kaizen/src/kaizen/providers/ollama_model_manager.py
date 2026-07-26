@@ -1,8 +1,14 @@
 """Ollama model management for Kaizen multi-modal processing."""
 
+import logging
 import subprocess
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
+
+from kailash.utils.url_credentials import mask_error_text
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -85,7 +91,12 @@ class OllamaModelManager:
 
             return models
         except Exception as e:
-            raise RuntimeError(f"Failed to list Ollama models: {e}")
+            # #1970: ``ollama.list`` can fail against a credentialed remote
+            # OLLAMA_HOST with the credential embedded in the message.
+            raise RuntimeError(
+                "Failed to list Ollama models: "
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
+            )
 
     def model_exists(self, model_name: str) -> bool:
         """Check if a specific model exists locally."""
@@ -139,7 +150,14 @@ class OllamaModelManager:
             return True
 
         except Exception as e:
-            print(f"❌ Failed to download model {model_name}: {e}")
+            # #1970 + observability Rule 1: a pull failure is an ERROR log
+            # (not stdout), and ``ollama.pull`` can surface a credential
+            # from a credentialed remote host.
+            logger.error(
+                "Failed to download model %s: %s",
+                model_name,
+                mask_error_text(sanitize_provider_error(e, "Ollama")),
+            )
             return False
 
     def ensure_model_available(

@@ -6729,8 +6729,25 @@ class DataFlow(DataFlowEventMixin):
                     fields = index_config.get("fields", [])
                     if not fields:
                         continue
-                    index_name = index_config.get(
-                        "name", f"idx_{table_name}_{fields[0]}"
+                    # Issue #1971: an explicit ``name`` is the user's own
+                    # identifier and is passed through unchanged (an
+                    # over-length one fails loudly at validate_identifier /
+                    # the server). The DERIVED default is DataFlow-generated
+                    # and MUST be fitted to the dialect's budget: table_name
+                    # already consumes the whole budget, so
+                    # ``idx_{table_name}_{field}`` overflows by construction
+                    # and PostgreSQL truncates it server-side at 63 bytes —
+                    # collapsing every index on that table to ONE identifier,
+                    # which the ``IF NOT EXISTS`` clause then silently skips.
+                    # ``is None`` (not truthiness): an explicitly-supplied
+                    # empty name MUST keep failing loudly at
+                    # validate_identifier rather than being silently replaced
+                    # by the derived default.
+                    explicit_index_name = index_config.get("name")
+                    index_name = (
+                        self._fit_identifier_to_dialect(f"idx_{table_name}_{fields[0]}")
+                        if explicit_index_name is None
+                        else explicit_index_name
                     )
                     unique = index_config.get("unique", False)
 
@@ -6760,7 +6777,11 @@ class DataFlow(DataFlowEventMixin):
             if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
                 foreign_key = rel_info["foreign_key"]
                 _validate_id(foreign_key)
-                index_name = f"idx_{table_name}_{foreign_key}"
+                # Issue #1971: DataFlow-generated, so fit to the dialect
+                # budget (see the custom-index branch above).
+                index_name = self._fit_identifier_to_dialect(
+                    f"idx_{table_name}_{foreign_key}"
+                )
                 _validate_id(index_name)
                 # MySQL rejects IF NOT EXISTS on CREATE INDEX (see above).
                 if_not_exists = (
@@ -6798,7 +6819,14 @@ class DataFlow(DataFlowEventMixin):
                 target_table = rel_info["target_table"]
                 target_key = rel_info.get("target_key", "id")
 
-                constraint_name = f"fk_{table_name}_{foreign_key}"
+                # Issue #1971: DataFlow-generated constraint name derived from
+                # an already-budget-consuming table_name. PostgreSQL truncates
+                # an over-length constraint name server-side, so two FKs on the
+                # same long table collide on ONE constraint identifier and the
+                # second ALTER TABLE fails with a duplicate-object error.
+                constraint_name = self._fit_identifier_to_dialect(
+                    f"fk_{table_name}_{foreign_key}"
+                )
 
                 # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 1):
                 # validate every identifier before interpolation into DDL.
@@ -10933,7 +10961,55 @@ class DataFlow(DataFlowEventMixin):
 
         # Apply proper English pluralization
         table_name = self._pluralize(snake_case)
-        return table_name
+
+        # Issue #1971: fit the GENERATED identifier to the target dialect's
+        # length budget. This is the single generator for DataFlow-derived
+        # table names — registration (``_register_model``), the
+        # ``_get_table_name`` fallback, bulk operations and express all route
+        # through here, so DDL and DML agree on the same physical name.
+        return self._fit_identifier_to_dialect(table_name)
+
+    def _fit_identifier_to_dialect(self, identifier: str) -> str:
+        """Fit a DataFlow-GENERATED identifier to the target dialect's limit.
+
+        Identifier length limits are dialect-owned: PostgreSQL 63, MySQL 64,
+        SQLite 128. A 69-char table name is legal on SQLite and illegal on
+        PostgreSQL, so the budget MUST come from the connection's dialect —
+        never from a hardcoded constant on a shared path.
+
+        Over-budget names are truncated with a deterministic digest suffix
+        (see ``SQLDialect.normalize_identifier``). Without this, PostgreSQL
+        truncates server-side at NAMEDATALEN-1 and two models whose names
+        share the first 63 chars silently resolve to ONE physical table.
+
+        Scope: DataFlow-GENERATED names only. An explicit ``__tablename__``
+        is the user's own identifier and is passed through unchanged — an
+        over-length one still raises ``InvalidIdentifierError`` at
+        ``quote_identifier``, which is the correct loud failure for a name
+        the user chose.
+        """
+        from ..adapters.dialect import DialectManager
+
+        database_type = self._detect_database_type()
+        try:
+            dialect = DialectManager.get_dialect(database_type)
+        except ValueError as exc:
+            # Non-SQL target (e.g. mongodb, which ConnectionParser detects but
+            # DialectManager has no SQL dialect for): SQL identifier length
+            # budgets do not apply. This is a documented pass-through, not a
+            # swallowed error — the collection name goes to the document store
+            # unchanged by design, and the reason is logged.
+            logger.debug(
+                "engine.identifier_fit_skipped_non_sql_dialect",
+                extra={
+                    "database_type": database_type,
+                    "identifier_length": len(identifier),
+                    "reason": str(exc),
+                },
+            )
+            return identifier
+
+        return dialect.normalize_identifier(identifier)
 
     def _foreign_key_to_relationship_name(self, foreign_key_column: str) -> str:
         """Convert foreign key column name to relationship name."""

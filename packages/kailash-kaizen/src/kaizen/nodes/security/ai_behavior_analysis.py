@@ -420,14 +420,17 @@ Your analysis should help security teams understand:
             return result
 
         except Exception as e:
-            logger.error(f"AI behavior analysis failed: {e}")
+            # #1970: ``_call_llm_for_analysis`` dispatches to a credentialed
+            # provider; both dict surfaces below reach the caller.
+            sanitized = sanitize_provider_error(e, "AI behavior analysis")
+            logger.error("AI behavior analysis failed: %s", sanitized)
             return {
-                "error": str(e),
+                "error": sanitized,
                 "anomalies": [],
                 "risk_score": 0.0,
                 "statistical_analysis": {},
                 "analysis_metadata": {
-                    "error": str(e),
+                    "error": sanitized,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             }

@@ -1635,7 +1635,17 @@ Be precise, helpful, and focused on the signature requirements."""
 
                         return result
                     except Exception as e:
-                        audit_logger.error(f"Signature execution failed: {str(e)}")
+                        # Signature execution drives the LLM node; the provider
+                        # exception can echo an API key onto the audit log
+                        # (#1970 sweep; rules/security.md "No secrets in logs").
+                        from kaizen.nodes.ai.error_sanitizer import (
+                            sanitize_provider_error,
+                        )
+
+                        audit_logger.error(
+                            "Signature execution failed: %s",
+                            sanitize_provider_error(e, "Signature execution"),
+                        )
                         raise
 
                 return audited_signature_processor

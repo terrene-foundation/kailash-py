@@ -14,6 +14,8 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 
 from ..ai.llm_agent import LLMAgentNode
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 # Default routing model resolved from the environment (.env is the single
@@ -133,7 +135,10 @@ class RAGStrategyRouterNode(Node):
             strategy_decision = self._parse_llm_response(llm_response)
 
         except Exception as e:
-            logger.warning(f"LLM strategy selection failed: {e}, using fallback")
+            logger.warning(
+                "LLM strategy selection failed: %s, using fallback",
+                sanitize_provider_error(e, "LLM"),
+            )
             strategy_decision = self._fallback_strategy_selection(analysis)
 
         # Combine analysis with decision

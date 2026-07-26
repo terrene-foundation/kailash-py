@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
 
 from kailash.nodes.base import NodeParameter, register_node
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 from ..signatures import Signature
 from ._env_model import resolve_default_model
 from .base_advanced import AINodeBase
@@ -206,7 +208,12 @@ class KaizenNode(AINodeBase):
             return outputs
 
         except Exception as e:
-            self.logger.error(f"KaizenNode execution failed: {e}")
+            # #1970: ``_execute_ai_model`` is the provider seam — an auth /
+            # rate-limit exception from it can embed the caller's API key.
+            self.logger.error(
+                "KaizenNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenNode"),
+            )
             raise
 
     def _execute_ai_model(
@@ -251,8 +258,12 @@ class KaizenNode(AINodeBase):
         try:
             return self.run(**kwargs)
         except Exception as e:
-            self.logger.error(f"Node execution failed: {e}")
-            return {"error": str(e), "status": "failed"}
+            # #1970: ``execute`` is the convergence point for EVERY KaizenNode
+            # subclass — any node whose ``run`` re-raises a provider exception
+            # lands here, and this dict is returned straight to the caller.
+            sanitized = sanitize_provider_error(e, type(self).__name__)
+            self.logger.error("Node execution failed: %s", sanitized)
+            return {"error": sanitized, "status": "failed"}
 
     def pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

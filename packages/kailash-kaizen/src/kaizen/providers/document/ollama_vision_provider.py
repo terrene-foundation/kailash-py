@@ -30,6 +30,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from kailash.utils.url_credentials import mask_error_text
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
     ExtractionResult,
@@ -228,11 +230,21 @@ class OllamaVisionProvider(BaseDocumentProvider):
                         all_tables.append(table)
 
                 except httpx.HTTPStatusError as e:
-                    logger.error(f"Ollama API error for page {idx + 1}: {e}")
-                    raise RuntimeError(f"Ollama Vision API call failed: {e}")
+                    # #1970: an httpx error against a credentialed / proxied
+                    # OLLAMA_HOST renders the request URL and auth headers into
+                    # its message. Log AND raise the same sanitized string
+                    # (return/log parity).
+                    sanitized = mask_error_text(
+                        sanitize_provider_error(e, "Ollama Vision")
+                    )
+                    logger.error("Ollama API error for page %s: %s", idx + 1, sanitized)
+                    raise RuntimeError(f"Ollama Vision API call failed: {sanitized}")
                 except Exception as e:
-                    logger.error(f"Error processing page {idx + 1}: {e}")
-                    raise RuntimeError(f"Ollama Vision processing failed: {e}")
+                    sanitized = mask_error_text(
+                        sanitize_provider_error(e, "Ollama Vision")
+                    )
+                    logger.error("Error processing page %s: %s", idx + 1, sanitized)
+                    raise RuntimeError(f"Ollama Vision processing failed: {sanitized}")
 
         # Combine all text
         extracted_text = "\n\n".join(all_text_parts)
@@ -298,7 +310,12 @@ class OllamaVisionProvider(BaseDocumentProvider):
             # For now, assume available if base_url is set
             return self.base_url is not None
         except Exception as e:
-            logger.warning(f"Ollama health check failed: {e}")
+            # #1970: an httpx error against a credentialed / proxied OLLAMA_HOST
+            # renders the request URL (and any auth header) into its message.
+            logger.warning(
+                "Ollama health check failed: %s",
+                mask_error_text(sanitize_provider_error(e, "Ollama Vision")),
+            )
             return False
 
     def get_capabilities(self) -> Dict[str, Any]:

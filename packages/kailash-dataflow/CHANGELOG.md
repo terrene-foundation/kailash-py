@@ -1,5 +1,7 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
 ## [2.19.1] - 2026-07-21
 
 ### Docs
@@ -7,8 +9,6 @@
 - Genericized private cross-SDK repository references in shipped source
   docstrings (`classification/masking.py`, `migration/security_definer.py`) —
   disclosure hygiene, behavior-neutral.
-
-## [Unreleased]
 
 ## [2.19.0] — 2026-07-21 — FieldType.Vector(dim) embedding column type (#1846)
 
@@ -1929,7 +1929,7 @@ Patch release closing the merged-but-unreleased gap on `kailash-dataflow` main. 
 - Updated `specs/dataflow-ml-integration.md` § 4A.2 — replaced the "Caller is responsible for sanitizing" docstring contract with the emitter-redacted contract, referencing `format_error_for_event` and `rules/event-payload-classification.md` § 1.
 - Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-_ and dataflow-ml-_ specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
 
-## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
+## [2.3.2] (cont.) — 2026-04-27 — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
 
 ### Tests
 

@@ -21,6 +21,8 @@ from kailash.nodes.auth.directory_integration import (
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -285,7 +287,9 @@ Example output:
 
         except Exception as e:
             logger.warning(
-                f"AI search analysis failed for '{query}', falling back to default: {e}"
+                "AI search analysis failed for '%s', falling back to default: %s",
+                query,
+                sanitize_provider_error(e, "LLM"),
             )
             # Fallback to safe default - search for users with basic attributes
             return {
@@ -469,7 +473,10 @@ Example output:
             return roles
 
         except Exception as e:
-            logger.warning(f"AI role assignment failed, falling back to default: {e}")
+            logger.warning(
+                "AI role assignment failed, falling back to default: %s",
+                sanitize_provider_error(e, "LLM"),
+            )
             # Fallback to safe default - always include "user" role
             return ["user"]
 
@@ -539,7 +546,10 @@ Example output:
             return permissions
 
         except Exception as e:
-            logger.warning(f"AI permission mapping failed, using defaults: {e}")
+            logger.warning(
+                "AI permission mapping failed, using defaults: %s",
+                sanitize_provider_error(e, "LLM"),
+            )
             # Fallback to safe default - read-only permission
             return ["read"]
 
@@ -606,7 +616,10 @@ Example output:
             return settings
 
         except Exception as e:
-            logger.warning(f"AI security settings failed, using defaults: {e}")
+            logger.warning(
+                "AI security settings failed, using defaults: %s",
+                sanitize_provider_error(e, "LLM"),
+            )
             # Fallback to safe defaults
             return {
                 "mfa_required": False,

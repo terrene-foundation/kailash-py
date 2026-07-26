@@ -246,7 +246,14 @@ class HTTPTransport(Transport):
                     raise ConnectionError(f"HTTP error {response.status}: {error_text}")
 
         except aiohttp.ClientError as e:
-            raise ConnectionError(f"Failed to write to transport: {e}") from e
+            # aiohttp embeds the request URL in its exception text; the control
+            # base_url can carry userinfo or a query-string token (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise ConnectionError(
+                f"Failed to write to transport: "
+                f"{sanitize_provider_error(e, 'Control transport')}"
+            ) from e
 
     def read_messages(self) -> AsyncIterator[str]:
         """
@@ -347,9 +354,16 @@ class HTTPTransport(Transport):
                     continue
 
         except aiohttp.ClientError as e:
-            # Log error but don't crash
-            # In production, this would use proper logging
-            print(f"Error reading from SSE stream: {e}", file=sys.stderr)
+            # Log error but don't crash.
+            # aiohttp embeds the stream URL in its exception text; the control
+            # base_url can carry userinfo or a query-string token (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            print(
+                "Error reading from SSE stream: "
+                f"{sanitize_provider_error(e, 'Control transport')}",
+                file=sys.stderr,
+            )
             return
 
     async def close(self) -> None:

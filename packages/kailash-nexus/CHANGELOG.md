@@ -1,5 +1,45 @@
 # Nexus Changelog
 
+## [Unreleased]
+
+### Changed (BREAKING) — workflow-name validation now runs at `register()` (#1972)
+
+- **`Nexus.register(name, workflow)` validates `name` before mutating any state.**
+  `register()` skipped `nexus.validation.validate_workflow_name` while
+  `_execute_workflow` (the `/workflows/{name}/execute` route) and
+  `_register_handler_workflow` already ran it. A name the validator rejects could
+  therefore be registered successfully and then return HTTP 400 on every execute
+  request forever. Names are now rejected up front, and a rejected name leaves
+  nothing behind (no registry entry, no gateway route, no half-registered MCP tool).
+- **`HandlerRegistry.register_workflow(name, workflow)` validates `name` too.**
+  `HandlerRegistry` is publicly exported from `nexus`, making it an INDEPENDENT
+  registration surface; validating only `Nexus.register()` would have left a
+  supported path that still admits a name the execute route later rejects — the
+  same asymmetry this change closes. Per the enforcement-surface-parity discipline,
+  a new fail-closed dimension lands at every independent validation surface in the
+  same change.
+- **The name charset is now an allowlist, not a blocklist of shell metacharacters.**
+  Permitted: `A-Z a-z 0-9 _ - .` — the MCP tool-name charset (SEP-986), which is also
+  safe as an HTTP path segment, as the authority in the `workflow://{name}` MCP
+  resource URI, and as a CLI argument. The previous blocklist let through characters
+  that are equally fatal downstream: a space or `^` aborts `AnyUrl("workflow://<name>")`
+  inside MCP resource registration with an opaque pydantic `ValidationError`, and a
+  non-ASCII character is silently percent-encoded so the resource stops round-tripping
+  to the registered name. The error message names every offending character.
+
+  **Migration:** rename workflows to the SEP-986 charset. Names previously accepted by
+  `register()` but outside it (spaces, `!@#$%^&*()`, non-ASCII) now raise `ValueError`
+  at registration instead of failing later at execute or MCP-resource time.
+
+### Fixed (#1972)
+
+- **MCP tool registration no longer fails silently.** When neither the MCPServer
+  `tool()` decorator path nor the FastMCP-shim `_tools` fallback can accept the
+  workflow, `_register_workflow_as_mcp_tool` now raises `RuntimeError` naming the
+  server type and the `tools/list` consequence. It previously logged a warning and
+  returned, so `register()` went on to report "Workflow registered successfully!" for
+  a tool that `tools/list` would never advertise.
+
 ## [2.15.0] — 2026-07-25 — Deployment lifecycle: deregister + non-blocking start (#1959)
 
 ### Added

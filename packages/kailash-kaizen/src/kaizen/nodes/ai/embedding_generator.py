@@ -6,6 +6,7 @@ from typing import Any
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 from kaizen.config.providers import ConfigurationError
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
 @register_node()
@@ -381,9 +382,12 @@ class EmbeddingGeneratorNode(Node):
 
             if isinstance(e, UngovernedEgressRefused):
                 raise
+            # #1970: the embed paths dispatch to a credentialed provider
+            # (``_generate_provider_embedding`` / ``ollama.embeddings``); this
+            # dict is the public run() return.
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitize_provider_error(e, provider or "embedding provider"),
                 "error_type": type(e).__name__,
                 "operation": operation,
                 "provider": provider,
@@ -782,8 +786,6 @@ class EmbeddingGeneratorNode(Node):
             # (llm_agent._provider_llm_response). The four-axis embed wire
             # re-raises a raw httpx exception whose text can echo a
             # user-supplied base_url; scrub before it reaches the caller.
-            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-
             raise RuntimeError(sanitize_provider_error(e, provider)) from e
 
     def _run_embed_coro(self, coro):
@@ -866,7 +868,9 @@ class EmbeddingGeneratorNode(Node):
                     "Ollama library not installed. Install with: pip install ollama"
                 )
             except Exception as e:
-                raise RuntimeError(f"Ollama embedding error: {str(e)}")
+                raise RuntimeError(
+                    "Ollama embedding error: " f"{sanitize_provider_error(e, 'Ollama')}"
+                )
 
         # A non-ollama provider reaching this fallback means its four-axis
         # deployment could NOT be resolved (missing/unavailable credential) or

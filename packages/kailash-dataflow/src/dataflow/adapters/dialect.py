@@ -12,16 +12,33 @@ Architecture:
     └── SQLiteDialect
 """
 
+import hashlib
 import logging
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple
+
+# Issue #1971: the per-dialect identifier length limits are owned by the core
+# SDK (kailash.db.dialect) and imported here rather than restated, so the two
+# live dialect hierarchies cannot drift on the value that decides whether an
+# identifier is legal. ``kailash`` is a hard dependency of kailash-dataflow.
+from kailash.db.dialect import (
+    MYSQL_MAX_IDENTIFIER_LENGTH,
+    POSTGRES_MAX_IDENTIFIER_LENGTH,
+    SQLITE_MAX_IDENTIFIER_LENGTH,
+)
 
 from .exceptions import InvalidIdentifierError
 
 logger = logging.getLogger(__name__)
 
 _SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+# Length of the hex digest appended when an identifier is fitted to a dialect's
+# length budget. 8 hex chars = 32 bits of the SHA-256 of the FULL original
+# identifier — enough to keep two identifiers that share a truncation prefix
+# distinct, short enough to leave the human-readable head intact.
+_IDENTIFIER_DIGEST_LENGTH = 8
 
 
 class SQLDialect(ABC):
@@ -79,6 +96,102 @@ class SQLDialect(ABC):
     def returning_clause(self, cols: List[str]) -> str:
         """RETURNING clause (empty string when unsupported)."""
 
+    # ------------------------------------------------------------------
+    # Identifier length budget (issue #1971)
+    # ------------------------------------------------------------------
+
+    #: Maximum identifier length for this dialect. Every concrete subclass
+    #: binds this to the canonical constant in ``kailash.db.dialect``.
+    _MAX_IDENTIFIER_LENGTH: int
+
+    @property
+    def max_identifier_length(self) -> int:
+        """Maximum identifier length this dialect accepts.
+
+        Public accessor for the per-dialect budget so callers that GENERATE
+        identifiers can fit them ahead of validation instead of discovering
+        the limit as an :class:`InvalidIdentifierError` at query time.
+        """
+        return self._MAX_IDENTIFIER_LENGTH
+
+    def normalize_identifier(self, name: str) -> str:
+        """Fit *name* to this dialect's identifier length budget.
+
+        Identifiers within the budget are returned UNCHANGED — a 69-char
+        table name is perfectly legal on SQLite (limit 128) and MUST NOT be
+        rewritten just because it would overflow on PostgreSQL (limit 63).
+
+        An over-budget identifier is truncated and suffixed with 8 hex chars
+        of the SHA-256 of the FULL original name. The mapping is:
+
+        * **deterministic** — SHA-256, not the per-process-randomised builtin
+          ``hash()``, so the same model resolves to the same table in every
+          process, on every host, in every release;
+        * **collision-resistant** — two model names sharing a truncation
+          prefix get different digests, where raw truncation would silently
+          alias them onto ONE physical table (PostgreSQL truncates at
+          NAMEDATALEN-1 server-side and does exactly that — see issue #1971);
+        * **injection-safe** — the result still matches
+          ``_SAFE_IDENTIFIER_RE`` when the input does, so ``quote_identifier``
+          remains the single validation gate.
+
+        Raises:
+            InvalidIdentifierError: If *name* is not a non-empty string, or
+                the dialect's budget is too small to hold a digest suffix.
+        """
+        if not isinstance(name, str) or not name:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
+                f"must be a non-empty string"
+            )
+
+        limit = self._MAX_IDENTIFIER_LENGTH
+        if len(name) <= limit:
+            return name
+
+        # +1 for the "_" separator between the truncated head and the digest.
+        head_length = limit - (_IDENTIFIER_DIGEST_LENGTH + 1)
+        if head_length < 1:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
+                f"dialect identifier limit ({limit}) is too small to fit a "
+                f"{_IDENTIFIER_DIGEST_LENGTH}-char disambiguating digest"
+            )
+
+        digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[
+            :_IDENTIFIER_DIGEST_LENGTH
+        ]
+        # rstrip("_") avoids a doubled separator when the cut lands on one.
+        head = name[:head_length].rstrip("_")
+        normalized = f"{head}_{digest}"
+
+        logger.warning(
+            "dialect.identifier_normalized_to_length_budget",
+            extra={
+                "dialect": type(self).__name__,
+                "limit": limit,
+                "original_length": len(name),
+                "normalized": normalized,
+                "original_fingerprint": _identifier_fingerprint(name),
+            },
+        )
+        return normalized
+
+
+def _identifier_fingerprint(name: Any) -> str:
+    """Stable 4-hex-char fingerprint of *name* for error/log correlation.
+
+    Uses SHA-256 rather than the builtin ``hash()``: PYTHONHASHSEED is
+    randomised per process, so a ``hash()``-derived fingerprint differs
+    between the process that logged it and the process reading the log — the
+    exact correlation the fingerprint exists to provide.
+    """
+    if not isinstance(name, str):
+        name = repr(name)
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:4]
+
 
 # ======================================================================
 # PostgreSQL
@@ -88,7 +201,7 @@ class SQLDialect(ABC):
 class PostgreSQLDialect(SQLDialect):
     """PostgreSQL dialect."""
 
-    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN-1
+    _MAX_IDENTIFIER_LENGTH = POSTGRES_MAX_IDENTIFIER_LENGTH
 
     def get_parameter_placeholder(self, position: int) -> str:
         return f"${position}"
@@ -97,20 +210,20 @@ class PostgreSQLDialect(SQLDialect):
         if not isinstance(name, str) or not name:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must be a non-empty string"
             )
         if len(name) > self._MAX_IDENTIFIER_LENGTH:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char PostgreSQL limit "
                 f"(len={len(name)})"
             )
         if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f'"{name}"'
@@ -189,7 +302,7 @@ class PostgreSQLDialect(SQLDialect):
 class MySQLDialect(SQLDialect):
     """MySQL dialect."""
 
-    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
+    _MAX_IDENTIFIER_LENGTH = MYSQL_MAX_IDENTIFIER_LENGTH
 
     def get_parameter_placeholder(self, position: int) -> str:
         return "%s"
@@ -198,20 +311,20 @@ class MySQLDialect(SQLDialect):
         if not isinstance(name, str) or not name:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must be a non-empty string"
             )
         if len(name) > self._MAX_IDENTIFIER_LENGTH:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char MySQL limit "
                 f"(len={len(name)})"
             )
         if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f"`{name}`"
@@ -286,7 +399,7 @@ class MySQLDialect(SQLDialect):
 class SQLiteDialect(SQLDialect):
     """SQLite dialect."""
 
-    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
+    _MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
 
     def get_parameter_placeholder(self, position: int) -> str:
         return "?"
@@ -295,20 +408,20 @@ class SQLiteDialect(SQLDialect):
         if not isinstance(name, str) or not name:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must be a non-empty string"
             )
         if len(name) > self._MAX_IDENTIFIER_LENGTH:
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char SQLite limit "
                 f"(len={len(name)})"
             )
         if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
-                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"(fingerprint={_identifier_fingerprint(name)}): "
                 f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f'"{name}"'

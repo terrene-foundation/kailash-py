@@ -45,6 +45,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents._model_env import resolve_default_model
@@ -246,6 +247,23 @@ class SupervisorAgent(BaseAgent):
                             return {"worker": best_worker, "score": best_score}
                         return best_worker
 
+            except ReasoningDegradedError as exc:
+                # #1981: EVERY worker's capability scoring degraded, so the
+                # round-robin fallback below is an unjudged pick (and the
+                # 0.5 score it reports is not a judgment). This method's sync
+                # contract must not start raising, so the fallback stands —
+                # but the total judge failure MUST be observable rather than
+                # swallowed by the generic handler
+                # (`rules/zero-tolerance.md` Rule 3).
+                logger.warning(
+                    "supervisor.select_worker.degraded",
+                    extra={
+                        "correlation_id": exc.correlation_id,
+                        "model": exc.model,
+                        "error": exc.error,
+                        "fallback": "round_robin",
+                    },
+                )
             except Exception:
                 # Fall through to fallback selection
                 pass

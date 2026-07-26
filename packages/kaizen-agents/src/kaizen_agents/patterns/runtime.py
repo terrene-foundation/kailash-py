@@ -86,7 +86,7 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.autonomy.hooks import HookManager
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.llm.reasoning import llm_text_similarity
+from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
 from kaizen.memory.shared_memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)
@@ -536,6 +536,11 @@ class OrchestrationRuntime:
         Returns:
             Selected agent or None if no agents available
 
+        Raises:
+            ReasoningDegradedError: SEMANTIC strategy only — every candidate
+                capability degraded (#1981), so no ranking exists. See
+                `_route_semantic`.
+
         Example:
             agent = await runtime.route_task("Analyze sales data", strategy="semantic")
         """
@@ -582,9 +587,25 @@ class OrchestrationRuntime:
         and `kaizen.llm.reasoning.llm_text_similarity` (for plain-string
         capability names). Deterministic word-overlap scoring was removed to
         comply with `rules/agent-reasoning.md` MUST Rule 1.
+
+        Degraded judgments (#1981): a capability the judge could not score is
+        SKIPPED, never scored at a fabricated 0.0. An agent all of whose
+        capabilities degraded has UNKNOWN fit and takes no part in the
+        ranking.
+
+        Raises:
+            ReasoningDegradedError: Every candidate capability degraded, so
+                nothing was scoreable. Falling through to round-robin here
+                would hide a total judge failure behind a plausible-looking
+                assignment — the arbitrary order #1981 exists to eliminate.
+                A round where capabilities WERE scored but all scored 0.0 is
+                a genuine no-match and keeps the round-robin fallback.
         """
         best_agent = None
         best_score = 0.0
+        scored_capabilities = 0
+        degraded_agents: list[str] = []
+        degraded_model = "unknown"
 
         reasoning_config = self._resolve_reasoning_config(agents)
 
@@ -611,13 +632,48 @@ class OrchestrationRuntime:
                 continue
 
             # Calculate capability match score via LLM (not keyword overlap)
+            agent_scored = 0
+            agent_degraded = 0
             for cap in capabilities:
-                score = await self._score_capability(
-                    cap, task, reasoning_config, agent_id=agent_id
-                )
+                try:
+                    score = await self._score_capability(
+                        cap, task, reasoning_config, agent_id=agent_id
+                    )
+                except ReasoningDegradedError as exc:
+                    # This capability's fit is UNKNOWN, not zero.
+                    agent_degraded += 1
+                    degraded_model = exc.model
+                    continue
+
+                agent_scored += 1
+                scored_capabilities += 1
                 if score > best_score:
                     best_agent = metadata.agent
                     best_score = score
+
+            if agent_degraded and agent_scored == 0:
+                degraded_agents.append(agent_id)
+
+        if degraded_agents:
+            if scored_capabilities == 0:
+                raise ReasoningDegradedError(
+                    "runtime.route_semantic",
+                    model=degraded_model,
+                    correlation_id=f"route_semantic_{uuid.uuid4().hex[:8]}",
+                    error=(
+                        f"the capability judge degraded for all "
+                        f"{len(degraded_agents)} candidate agent(s): "
+                        f"{', '.join(degraded_agents)}"
+                    ),
+                )
+            logger.warning(
+                "route_semantic.degraded",
+                extra={
+                    "candidates": len(agents),
+                    "scored_capabilities": scored_capabilities,
+                    "degraded_agents": degraded_agents,
+                },
+            )
 
         # Fallback to round-robin if no match found
         if best_agent is None:
@@ -659,9 +715,15 @@ class OrchestrationRuntime:
             - Legacy test mocks with a single-positional `matches_requirement`
             - Plain strings (capability name only) — scored via LLM similarity
 
-        Returns 0.0 on any exception so a single LLM failure cannot sink the
-        entire routing decision; a WARN log captures the failure so
-        `rules/observability.md` MUST Rule 5 still triages it.
+        Returns 0.0 on any INFRASTRUCTURE exception so a single LLM failure
+        cannot sink the entire routing decision; a WARN log captures the
+        failure so `rules/observability.md` MUST Rule 5 still triages it.
+
+        Raises:
+            ReasoningDegradedError: The judge returned no usable score
+                (#1981). Deliberately NOT flattened to 0.0 — the caller
+                (`_route_semantic`) skips the capability instead, so a
+                degraded judgment can never out-rank or tie a real one.
         """
         correlation_id = f"route_{agent_id or 'unknown'}"
 
@@ -673,6 +735,18 @@ class OrchestrationRuntime:
                     config=reasoning_config,
                     correlation_id=correlation_id,
                 )
+            except ReasoningDegradedError as exc:
+                logger.warning(
+                    "route_semantic.similarity_degraded",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                raise
             except Exception as exc:
                 logger.warning(
                     "route_semantic.similarity_failed",
@@ -704,11 +778,38 @@ class OrchestrationRuntime:
             if inspect.iscoroutine(result):
                 return await result
             return float(result)
+        except ReasoningDegradedError as exc:
+            # `Capability.matches_requirement` delegates to
+            # `llm_capability_match`, so the typed signal reaches here too.
+            # Ordered BEFORE the generic handler so it is not flattened.
+            logger.warning(
+                "route_semantic.capability_match_degraded",
+                extra={
+                    "correlation_id": correlation_id,
+                    "agent_id": agent_id,
+                    "helper": exc.helper,
+                    "model": exc.model,
+                    "error": exc.error,
+                },
+            )
+            raise
         except TypeError:
             # Legacy sync mock with single-arg signature
             try:
                 result = matcher(task)
                 return float(result)
+            except ReasoningDegradedError as exc:
+                logger.warning(
+                    "route_semantic.legacy_capability_match_degraded",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                raise
             except Exception as exc:
                 logger.warning(
                     "route_semantic.capability_match_failed",

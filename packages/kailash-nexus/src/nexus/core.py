@@ -1361,32 +1361,6 @@ Check the documentation or explore available resources.
 
         logger.debug(f"Workflow '{name}' registered as MCP resource at {uri}")
 
-    def _create_mock_mcp_server(self):
-        """Create a simple mock MCP server for testing."""
-
-        class MockMCPServer:
-            def __init__(self):
-                self._tools = {}
-                self._resources = {}
-                self._prompts = {}
-
-            def tool(self, name=None, **kwargs):
-                def decorator(func):
-                    tool_name = name or func.__name__
-                    self._tools[tool_name] = func
-                    return func
-
-                return decorator
-
-            def resource(self, pattern):
-                def decorator(func):
-                    self._resources[pattern] = func
-                    return func
-
-                return decorator
-
-        return MockMCPServer()
-
     def _create_sdk_mcp_server(self):
         """Create production-ready MCP server using Core SDK.
 
@@ -1510,9 +1484,14 @@ Check the documentation or explore available resources.
         the dict ``_handle_list_tools`` reads to answer ``tools/list``.
 
         Direct writes to ``_mcp_server._tools`` are BLOCKED: that dict only
-        exists on the FastMCP fallback shim (kailash_mcp/server.py:236) and
-        is invisible to the MCPServer's JSON-RPC handlers, so tools added
-        that way never appear in ``tools/list`` over WebSocket.
+        exists on the FastMCP fallback shim
+        (``kailash_mcp/server.py:1338`` — ``FallbackMCPServer._tools``,
+        populated by its own ``tool()`` decorator at
+        ``kailash_mcp/server.py:1348``) and is invisible to the MCPServer's
+        JSON-RPC handlers: ``_handle_list_tools``
+        (``kailash_mcp/server.py:2837``) iterates ``_tool_registry``, so
+        tools added by a direct ``_tools`` write never appear in
+        ``tools/list`` over WebSocket.
 
         Uses self.runtime (server-level shared runtime) instead of creating
         a new AsyncLocalRuntime per invocation (M3-001 fix).
@@ -1580,6 +1559,7 @@ Check the documentation or explore available resources.
 
         # Register via the proper @tool() decorator path — this writes to
         # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from.
+        decorator_error: Optional[Exception] = None
         if hasattr(self._mcp_server, "tool") and callable(
             getattr(self._mcp_server, "tool")
         ):
@@ -1590,6 +1570,7 @@ Check the documentation or explore available resources.
                 )
                 return
             except Exception as e:
+                decorator_error = e
                 logger.warning(
                     f"MCPServer.tool() registration for '{name}' failed: {e}; "
                     f"falling back to direct registry write"
@@ -1602,11 +1583,25 @@ Check the documentation or explore available resources.
             logger.info(
                 f"Workflow '{name}' registered as MCP tool via fallback _tools dict"
             )
-        else:
-            logger.warning(
-                f"Could not register workflow '{name}' as MCP tool - "
-                f"neither tool() decorator nor _tools attribute available"
+            return
+
+        # Neither path landed the tool anywhere a JSON-RPC handler reads.
+        # Raising is mandatory: register() otherwise returns normally and logs
+        # "registered successfully" while ``tools/list`` will never advertise
+        # the workflow — the same silent-undiscoverability defect the
+        # ``_tool_registry`` contract above exists to prevent, just reached
+        # through the failure path instead of the happy path.
+        raise RuntimeError(
+            f"Could not register workflow '{name}' as an MCP tool: the MCP "
+            f"server ({type(self._mcp_server).__name__}) exposes neither a "
+            f"callable tool() decorator nor a _tools dict, so the tool would "
+            f"be invisible to tools/list."
+            + (
+                f" tool() decorator failed with: {decorator_error}"
+                if decorator_error
+                else ""
             )
+        )
 
     def _get_api_keys(self) -> Dict[str, str]:
         """Get API keys for authentication.
@@ -1657,8 +1652,24 @@ Check the documentation or explore available resources.
             name: Workflow identifier
             workflow: Workflow instance or WorkflowBuilder
             metadata: Optional structured metadata (version, author, tags, description, etc.)
+
+        Raises:
+            ValueError: If ``name`` is not addressable on every channel
+                (see :func:`nexus.validation.validate_workflow_name`).
         """
         import time
+
+        from nexus.validation import validate_workflow_name
+
+        # Validate the name BEFORE any state is mutated. The execute route
+        # (``_execute_workflow``) and the handler-registration path
+        # (``_register_handler_workflow``) already run this validator;
+        # register() was the one registration surface that skipped it, so a
+        # name it rejects could be registered and then 400 on every execute
+        # request forever. Validating first also means a rejected name
+        # leaves nothing behind — no registry entry, no gateway route, no
+        # half-registered MCP tool.
+        validate_workflow_name(name)
 
         registration_start = time.time()
 
@@ -3970,7 +3981,25 @@ Check the documentation or explore available resources.
 
         for name, workflow in discovered.items():
             if name not in self._workflows:
-                self.register(name, workflow)
+                try:
+                    self.register(name, workflow)
+                except ValueError as exc:
+                    # #1972 made register() reject names outside the MCP
+                    # tool-name charset. Discovery derives names from FILENAMES
+                    # (`file_path.stem`), and a filename may legally contain a
+                    # space, parenthesis or non-ASCII character that is not a
+                    # legal workflow name. Without this guard ONE such file
+                    # aborts the whole loop, so every OTHER discovered workflow
+                    # silently fails to register — a far worse outcome than
+                    # skipping the one that cannot be named.
+                    logger.warning(
+                        "Skipped auto-discovered workflow with an invalid name: "
+                        "%s (%s). Rename the file to use only letters, digits, "
+                        "underscore, dash or dot.",
+                        name,
+                        exc,
+                    )
+                    continue
                 logger.info(f"Auto-registered workflow: {name}")
 
     def health_check(self) -> Dict[str, Any]:
