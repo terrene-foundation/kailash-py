@@ -80,7 +80,29 @@ class FallbackResult:
         return len(self.fallback_events) > 0
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
+        """Convert to dictionary.
+
+        ``error`` holds the RAW provider exception — every
+        ``FallbackResult(error=...)`` site in ``FallbackRouter`` assigns the
+        caught exception object directly — and ``execute_fn`` dispatches to an
+        LLM provider whose exception can embed the API key or a credentialed
+        ``base_url``. ``str(self.error)`` therefore put the credential onto the
+        caller's serialization surface, two lines below ``fallback_events``,
+        whose ``error_message`` was sanitized from the SAME exception at
+        construction. One dict emitted the same provider exception twice:
+        scrubbed under ``fallback_events[*].error_message``, raw under
+        ``error``. Same sanitizer and same ``include_error_type=False`` as those
+        sites, so both halves of this dict now agree (#1970 sweep gap;
+        ``rules/security.md`` § Multi-Site Kwarg Plumbing).
+
+        ``model_used`` is ``""`` on the capability-filter-failure and
+        empty-``execution_order`` paths, hence the ``or "LLM"`` provider label.
+        """
+        # Local import mirrors the two existing call sites in this module and
+        # avoids a module-load-time dependency from kaizen.llm.routing on
+        # kaizen.nodes.ai.
+        from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
         return {
             "success": self.success,
             "model_used": self.model_used,
@@ -88,7 +110,15 @@ class FallbackResult:
             "fallback_occurred": self.fallback_occurred,
             "fallback_events": [e.to_dict() for e in self.fallback_events],
             "total_time_ms": self.total_time_ms,
-            "error": str(self.error) if self.error else None,
+            "error": (
+                sanitize_provider_error(
+                    self.error,
+                    self.model_used or "LLM",
+                    include_error_type=False,
+                )
+                if self.error
+                else None
+            ),
         }
 
 

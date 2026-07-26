@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+### Fixed — generated identifiers are fitted to the connection's dialect (#1971)
+
+- **DataFlow-GENERATED identifiers are now fitted to the target dialect's length
+  budget instead of a hardcoded constant.** Identifier limits are dialect-owned —
+  PostgreSQL 63, MySQL 64, SQLite 128 — so a 69-character table name is legal on
+  SQLite and illegal on PostgreSQL. The limits are now imported from
+  `kailash.db.dialect` (`POSTGRES_MAX_IDENTIFIER_LENGTH`, `MYSQL_…`, `SQLITE_…`)
+  rather than restated here, so the core SDK's `QueryDialect` hierarchy and
+  DataFlow's `SQLDialect` hierarchy cannot drift on the value that decides
+  whether an identifier is legal.
+- **Over-budget generated names are truncated with a deterministic digest suffix**
+  (`SQLDialect.normalize_identifier`): 8 hex characters of the SHA-256 of the FULL
+  original name. Previously an over-length name was handed to the server, and
+  PostgreSQL truncates at NAMEDATALEN-1 server-side — so two models whose names
+  shared the first 63 characters silently resolved to ONE physical table. The
+  digest uses SHA-256 rather than the per-process-randomised builtin `hash()`, so
+  the same model resolves to the same table in every process, on every host, in
+  every release.
+- **The fix covers derived index and foreign-key constraint names, not just table
+  names.** `idx_{table}_{field}` and `fk_{table}_{field}` are derived from a table
+  name that already consumes the whole budget, so they overflowed by construction.
+  On PostgreSQL every index on a long table collapsed to one identifier that
+  `CREATE INDEX IF NOT EXISTS` then silently skipped, and a second foreign key on
+  the same table failed with a duplicate-object error.
+- **Scope: DataFlow-generated names only.** An explicit `__tablename__`, or an
+  explicit `name` on an index config, is the user's own identifier and is passed
+  through unchanged — an over-length one still raises `InvalidIdentifierError`,
+  which is the correct loud failure for a name the user chose. An explicitly
+  supplied empty index name also still fails loudly rather than being silently
+  replaced by the derived default.
+
+  **Migration — read this if you have model names longer than your dialect's
+  limit.** On PostgreSQL, a model whose generated table name exceeded 63
+  characters was previously truncated server-side to the first 63 characters. It
+  now resolves to a name of the form `<truncated-head>_<8-hex-digest>`. That is a
+  DIFFERENT physical table. Affected deployments must rename the existing table to
+  the new generated name before upgrading, or pin the old name explicitly with
+  `__tablename__`. Models whose generated names are within the dialect budget are
+  unaffected — short names are returned unchanged, not rewritten.
+
 ## [2.19.1] - 2026-07-21
 
 ### Docs

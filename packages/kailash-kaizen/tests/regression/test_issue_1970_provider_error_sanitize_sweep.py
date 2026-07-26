@@ -33,30 +33,46 @@ stands in for the surface under test.
 """
 
 import logging
-import os
 
 import pytest
 
 pytestmark = pytest.mark.regression
 
 
+# Non-dispatching placeholder model identifier.
+#
+# ``rules/env-models.md`` governs which model PRODUCTION code talks to. It does
+# not require a test that never reaches a provider to depend on a live model
+# name — and reading ``DEFAULT_LLM_MODEL`` here made this whole file autouse-SKIP
+# in CI, because ``.env`` is gitignored and CI has no model env var. All 14 tests
+# reported green while verifying nothing: coverage-shaped with zero coverage,
+# which is strictly worse than a placeholder literal. Every leak this sweep
+# exists to catch went unverified on the only surface that gates merges.
+#
+# The literal is deliberately NOT a real model. It satisfies exactly the two
+# things the constructors under test do with it:
+#   1. ``kaizen.nodes._env_model.resolve_default_model`` returns it verbatim (it
+#      performs no validation) instead of raising ``EnvModelMissing``;
+#   2. ``kaizen.nodes._env_model.detect_provider`` substring-classifies it — the
+#      ``gpt`` fragment routes it to the openai family rather than raising.
+# Every provider seam below is monkeypatched to raise, so no request is ever
+# constructed and this string never leaves the process. Same convention as
+# tests/unit/conftest.py (``KAIZEN_DEFAULT_MODEL`` -> "gpt-4o-mini") and
+# tests/unit/llm/test_governance_required_gate.py (``"gpt-test"``); the
+# regression directory does not inherit tests/unit/conftest.py, which is why
+# this module needs its own fixture.
+_PLACEHOLDER_MODEL = "gpt-sanitize-sweep-placeholder"
+
+
 @pytest.fixture(autouse=True)
 def _kaizen_default_model(monkeypatch):
-    """Supply ``KAIZEN_DEFAULT_MODEL`` from ``.env`` — never a hardcoded literal.
+    """Give every node constructor a resolvable, non-dispatching model name.
 
-    ``rules/env-models.md``: model identifiers come from ``.env``. The AI-node
-    constructors under test resolve through ``resolve_default_model`` and raise
-    ``EnvModelMissing`` when the env var is unset. The root ``conftest.py``
-    auto-loads ``.env``; these tests reuse the model name declared there. No
-    provider call is ever made — the seam is monkeypatched to raise.
+    MUST NOT skip. This file tests SANITIZATION — a pure string transform with
+    no provider dependency — so there is no environment in which skipping is the
+    honest disposition.
     """
-    model = os.environ.get("DEFAULT_LLM_MODEL") or os.environ.get("OPENAI_DEV_MODEL")
-    if not model:
-        pytest.skip(
-            "no DEFAULT_LLM_MODEL / OPENAI_DEV_MODEL in .env — cannot resolve a "
-            "model name without hardcoding one (rules/env-models.md)"
-        )
-    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", model)
+    monkeypatch.setenv("KAIZEN_DEFAULT_MODEL", _PLACEHOLDER_MODEL)
 
 
 # --------------------------------------------------------------------------
@@ -494,4 +510,79 @@ class TestShape7NodeReturnDicts:
             str(result["analysis_metadata"]["error"]),
             raw_secret=FAKE_OPENAI_KEY,
             label="AIBehaviorAnalysisNode.run -> analysis_metadata['error']",
+        )
+
+
+# ==========================================================================
+# SHAPE 8 — FallbackResult.to_dict()["error"]: the RAW provider exception on
+#           the caller's serialization surface.
+#
+#           This shape is the reason a per-SHAPE sweep beats a per-SITE one.
+#           ``FallbackRouter`` already sanitized the SAME exception into
+#           ``FallbackEvent.error_message`` at both construction sites, so a
+#           reviewer reading the file saw sanitization and moved on — while
+#           ``to_dict`` two lines below serialized ``str(self.error)`` raw.
+#           One dict emitted one provider exception twice: scrubbed under
+#           ``fallback_events[*]``, raw under ``error``.
+# ==========================================================================
+
+
+class TestShape8FallbackResultSerialization:
+    """``FallbackResult.error`` holds the raw ``Exception`` object; every
+    ``FallbackResult(error=...)`` site in ``FallbackRouter`` assigns the caught
+    provider exception directly, and ``execute_fn`` dispatches to an LLM
+    provider whose exception can embed the API key."""
+
+    def test_to_dict_error_field_is_sanitized(self):
+        from kaizen.llm.routing.fallback import FallbackEvent, FallbackResult
+
+        result = FallbackResult(
+            success=False,
+            model_used="primary-model",
+            attempts=3,
+            fallback_events=[
+                FallbackEvent(
+                    original_model="primary-model",
+                    fallback_model="none",
+                    error_type="AuthenticationError",
+                    error_message="primary-model error: 401 [REDACTED]",
+                )
+            ],
+            error=RuntimeError(RAW_PROVIDER_ERROR),
+        )
+
+        payload = result.to_dict()
+
+        assert_scrubbed(
+            str(payload["error"]),
+            raw_secret=FAKE_OPENAI_KEY,
+            label="FallbackResult.to_dict() -> ['error']",
+        )
+        # The whole serialized payload, not just the field we patched — a future
+        # field that re-introduces the raw exception fails here too.
+        assert FAKE_OPENAI_KEY not in str(payload), (
+            "the credential survived elsewhere in the serialized FallbackResult: "
+            f"{payload!r}"
+        )
+
+    def test_to_dict_error_is_none_when_no_error(self):
+        """The sanitizer must not fabricate a message on the success path."""
+        from kaizen.llm.routing.fallback import FallbackResult
+
+        assert FallbackResult(success=True, model_used="m").to_dict()["error"] is None
+
+    def test_to_dict_survives_empty_model_used(self):
+        """``model_used`` is ``""`` on the capability-filter-failure and
+        empty-``execution_order`` paths; the provider label must still resolve
+        rather than passing an empty string to the sanitizer."""
+        from kaizen.llm.routing.fallback import FallbackResult
+
+        payload = FallbackResult(
+            success=False, model_used="", error=RuntimeError(RAW_PROVIDER_ERROR)
+        ).to_dict()
+
+        assert_scrubbed(
+            str(payload["error"]),
+            raw_secret=FAKE_OPENAI_KEY,
+            label="FallbackResult.to_dict() with empty model_used",
         )

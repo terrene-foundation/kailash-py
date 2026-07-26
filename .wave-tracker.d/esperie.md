@@ -1,23 +1,47 @@
 # Wave tracker — esperie
 
-## Status: NO WAVES IN FLIGHT
+## Status: WAVE 7 IN FLIGHT (2026-07-26, session C)
 
-All agents idle as of 2026-07-26. Nothing to resume, nothing to re-launch.
+Branch `fix/issue-1720-forest-drain`. Forest work SECURED at commit `0066e4fcb`
+(73 files, all five issues) — the prior session's uncommitted-tree risk is CLOSED.
+`black --check` clean on all 77 changed .py files; pre-commit passed on the commit.
 
-## Waves this session (all closed)
+## Launch ledger — Wave 7 (orchestration-launch-ledger.md MUST-1)
 
-- **Wave 5** — 6 shards over the #1970/#1971/#1972/#1974/#1981 forest. ALL SIX died
-  mid-flight on a usage limit (not a code failure). Work survived because shards edited
-  the SHARED tree, not `isolation: "worktree"` — a worktree wave would have left 6 orphan
-  checkouts to recover.
-- **Wave 6** — 4 shards re-dispatched to finish + verify. All reported or were verified
-  orchestrator-side from the tree.
-- **Redteam round 1** — 3 lenses. Only SECURITY reported; correctness + teeth went silent.
-- **Redteam round 2** — 3 lenses. All eventually reported (2 required a resume message).
+Check this table BEFORE spawning anything. Match every completion notification
+against it BEFORE reacting (MUST-2 / MUST-3).
 
-## Standing operational note for the next wave
+| track            | scope (files owned EXCLUSIVELY)                                      | specialist        | status    |
+| ---------------- | -------------------------------------------------------------------- | ----------------- | --------- |
+| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | in-flight |
+| w7-cred-audit    | S4 `__cause__` sites, fallback.py:91, sweep autouse-skip (READ-ONLY) | security-reviewer | in-flight |
+| w7-nexus         | packages/kailash-nexus/** — S8 atomicity, `_tools`, MINOR bump       | nexus-spec        | in-flight |
+| w7-core-dialect  | src/kailash/db/dialect.py, connection_parser.py, staging_utilities   | infra-spec        | in-flight |
+| w7-2nd-scrubber  | kaizen/llm/errors.py (S1)                                            | kaizen-spec       | in-flight |
 
-Agents go idle WITHOUT delivering a final report — **6 occurrences this session**. The
+Exclusive-ownership split is deliberate: no two tracks may edit the same file.
+`a2a.py` error-CONTRACT belongs to w7-1981-contract; `a2a.py` credential-sanitize
+belongs to NO track this wave (w7-cred-audit is read-only and reports only).
+Version anchors + CHANGELOGs belong to w7-nexus (nexus only) and the orchestrator.
+
+## Findings queue — session B redteam round 2, the "recorded, NOT fixed" table
+
+| id    | sev      | assigned to                                                                                                                 |
+| ----- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| NEW-1 | CRITICAL | w7-core-dialect                                                                                                             |
+| NEW-2 | HIGH     | w7-core-dialect                                                                                                             |
+| S1    | HIGH     | w7-2nd-scrubber                                                                                                             |
+| S3    | HIGH     | w7-1981-contract                                                                                                            |
+| S4    | MED-HIGH | w7-cred-audit                                                                                                               |
+| S2    | MED      | w7-cred-audit                                                                                                               |
+| S6    | MED      | w7-cred-audit                                                                                                               |
+| S7    | MED      | w7-1981-contract                                                                                                            |
+| S8    | MED      | w7-nexus                                                                                                                    |
+| W9    | —        | UNASSIGNED — sweep-completeness CI ratchet (enumerator already exists at `04-validate/find-unsanitized-provider-errors.py`) |
+
+## Standing operational note (carried from session B — still live)
+
+Agents go idle WITHOUT delivering a final report — **6 occurrences in session B**. The
 working remedy is to RESUME via message rather than re-dispatch: it recovered 3 of 4,
 including the round-1 security report that found both HIGH credential leaks, and a
 round-1 lens that surfaced ~6 hours late carrying the session's only commit-blocker.
@@ -26,6 +50,12 @@ round — that manufactures a convergence that never happened.
 
 ## Concurrency
 
-Cold-start ~3 concurrent agents (`rules/worktree-isolation.md` Rule 4). Also run heavy
-test suites SERIALLY: concurrent suite runs alongside live agents produced `sqlite3 disk
-I/O error` and perf-threshold failures that were self-inflicted, not real.
+Cold-start ~3 concurrent (`rules/worktree-isolation.md` Rule 4); Wave 7 opened at 3 and
+stepped to 5 with NO throttle signal observed. Back off only on the falsifiable signal
+(≥2 agents dying in a ~30–48s window carrying `not your usage limit`). Session B lost all
+6 shards of Wave 5 to a usage limit — work survived ONLY because shards edited the SHARED
+tree rather than `isolation: "worktree"`, which would have left 6 orphan checkouts to
+recover. Keep using the shared tree with exclusive file ownership.
+
+Run heavy test suites SERIALLY: concurrent suite runs alongside live agents produced
+`sqlite3 disk I/O error` and perf-threshold failures that were self-inflicted, not real.
