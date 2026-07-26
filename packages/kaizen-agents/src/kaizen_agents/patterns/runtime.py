@@ -94,6 +94,14 @@ logger = logging.getLogger(__name__)
 # Set availability flag for AsyncLocalRuntime
 ASYNC_RUNTIME_AVAILABLE = True
 
+# Execution modes `_build_workflow_from_agents` implements. Anything else
+# raises rather than silently degrading to "parallel".
+#
+# "sequential" and "hybrid" were previously DOCUMENTED here but neither ever
+# worked (see `_build_workflow_from_agents`), so restricting the set removes no
+# working behaviour — it replaces two broken paths with one actionable error.
+_WORKFLOW_BUILD_MODES = frozenset({"parallel"})
+
 # Optional imports (may not be available in all versions)
 try:
     from kailash.runtime import ResourceRegistry
@@ -1793,6 +1801,86 @@ class OrchestrationRuntime:
             history = history[-limit:]
         return history
 
+    @staticmethod
+    def _llm_node_config_for(agent: BaseAgent, task: str) -> dict[str, Any]:
+        """Map one agent + its task onto ``LLMAgentNode``'s declared parameters.
+
+        ``BaseAgent.to_workflow()`` is the SINGLE source of truth for the
+        agent -> ``LLMAgentNode`` config mapping (provider, model,
+        system_prompt, generation_config, provider_config, response_format,
+        ungoverned). This method reuses it rather than re-deriving the mapping,
+        so there is exactly ONE implementation of that contract.
+
+        The task is conveyed as the node's ``messages`` parameter — the OpenAI
+        conversation shape ``LLMAgentNode.get_parameters()`` declares and
+        ``_prepare_conversation()`` consumes. It MUST NOT be passed as a
+        ``task`` key: ``task`` is not a declared node parameter, so the runtime
+        drops it with only a ``WARNING [NODE] Unknown parameter(s)`` line and
+        the node then runs with ``messages=[]`` — an LLM call carrying NO
+        instruction, whose mock/provider response still returns
+        ``success: True``. ``execute_multi_agent_workflow`` counts that as a
+        completed task, reporting a 100% success rate for a workflow that never
+        conveyed any work (``rules/zero-tolerance.md`` Rule 2, "fake
+        integration via a missing handoff field").
+
+        Args:
+            agent: Agent whose config supplies provider/model/system_prompt.
+            task: Task description conveyed to the LLM as the user turn.
+
+        Returns:
+            Node config dict using only parameters ``LLMAgentNode`` declares.
+
+        Raises:
+            TypeError: ``agent`` does not expose ``to_workflow()`` (e.g. the
+                deprecated ``kaizen.core.agents.Agent``, which is not a
+                ``BaseAgent`` and exposes ``compile_to_workflow()`` instead).
+            ValueError: ``agent.to_workflow()`` does not map onto exactly one
+                ``LLMAgentNode``, so no level-parallel node can be built for it.
+        """
+        # Typed guard rather than an opaque `AttributeError: 'X' object has no
+        # attribute 'to_workflow'` from the line below
+        # (`rules/zero-tolerance.md` Rule 3a). `register_agent` is typed
+        # `BaseAgent`; the deprecated `kaizen.core.agents.Agent` is a separate
+        # class hierarchy with `compile_to_workflow()` and no `to_workflow()`.
+        if not hasattr(agent, "to_workflow"):
+            raise TypeError(
+                f"Agent {getattr(agent, 'agent_id', agent)!r} of type "
+                f"{type(agent).__name__} does not expose to_workflow(); "
+                "OrchestrationRuntime requires a kaizen.core.base_agent."
+                "BaseAgent to derive its LLMAgentNode configuration."
+            )
+
+        agent_workflow = agent.to_workflow()
+        llm_specs = [
+            spec
+            for spec in agent_workflow.nodes.values()
+            if spec.get("type") == "LLMAgentNode"
+        ]
+        if len(llm_specs) != 1:
+            raise ValueError(
+                f"Agent {agent.agent_id!r} does not map onto exactly one "
+                f"LLMAgentNode (to_workflow() produced {len(llm_specs)}); "
+                "OrchestrationRuntime cannot build a level-parallel workflow "
+                "node for it."
+            )
+
+        # Copy: WorkflowBuilder.add_node stores the config dict BY REFERENCE and
+        # to_workflow() memoizes its builder, so mutating it in place would
+        # corrupt the agent's own workflow with this task's messages.
+        node_config = dict(llm_specs[0].get("config") or {})
+
+        # Provider/model are whatever `to_workflow()` resolved from the agent's
+        # config and the environment. No hardcoded fallbacks here: a literal
+        # provider would silently override an agent configured for another one
+        # (`agent.config` exposes `llm_provider`, never `provider`, so the old
+        # `hasattr(agent.config, "provider")` probe was ALWAYS False and every
+        # agent was forced onto "openai"), and a literal model name is BLOCKED
+        # by `rules/env-models.md`. An unresolvable provider stays None and
+        # reaches LLMAgentNode's typed #1947 ConfigurationError, which the
+        # caller's `error_handling` policy then reports per task.
+        node_config["messages"] = [{"role": "user", "content": task}]
+        return node_config
+
     def _build_workflow_from_agents(
         self, agents: list[BaseAgent], tasks: list[str], mode: str = "parallel"
     ) -> WorkflowBuilder:
@@ -1805,11 +1893,15 @@ class OrchestrationRuntime:
         Args:
             agents: List of BaseAgent instances
             tasks: List of task descriptions (1:1 with agents)
-            mode: Execution mode - "parallel" (no dependencies),
-                  "sequential" (chain nodes), "hybrid" (batch parallelism)
+            mode: Execution mode. Only ``"parallel"`` (no dependencies between
+                agent nodes) is implemented; any other value raises.
 
         Returns:
             WorkflowBuilder instance with nodes for each agent
+
+        Raises:
+            ValueError: ``mode`` is not a supported mode, or an agent does not
+                map onto exactly one ``LLMAgentNode``.
 
         Example:
             workflow = self._build_workflow_from_agents(
@@ -1821,38 +1913,59 @@ class OrchestrationRuntime:
                 workflow.build(), inputs={}
             )
         """
+        # Fail loud on an unsupported mode. Two modes were previously
+        # advertised in this docstring and neither ever worked:
+        #
+        #   "hybrid"     — its entire implementation was the comment
+        #                  `# hybrid mode: implement batch-based connections
+        #                  (future enhancement)`, so it silently behaved as
+        #                  "parallel": a deferred-implementation placeholder
+        #                  (`rules/zero-tolerance.md` Rule 2) presenting as a
+        #                  silent fallback (Rule 3). No batch-size parameter
+        #                  exists on this signature or on
+        #                  OrchestrationRuntimeConfig to give it a meaning, so
+        #                  it is rejected rather than guessed at.
+        #
+        #   "sequential" — chained via
+        #                  `add_connection(prev, node_id, "output", "input")`,
+        #                  but WorkflowBuilder.add_connection's signature is
+        #                  (from_node, from_output, to_node, to_input). That
+        #                  call therefore asked for a node literally named
+        #                  "output" and raised WorkflowValidationError
+        #                  ("Target node 'output' not found in workflow") on
+        #                  every use since introduction. Correcting the
+        #                  argument order alone does NOT make it work: the only
+        #                  declared LLMAgentNode input that could receive a
+        #                  prior agent's turn is `messages` (a list), while the
+        #                  node emits `response` (a dict) — a field-mapped
+        #                  connection between them would deliver a dict where
+        #                  `_prepare_conversation()` extends a list, producing
+        #                  garbage. Real chaining needs a transform node
+        #                  between the two agents, which no caller specifies.
+        #
+        # Both call sites pass mode="parallel". Restricting the set removes no
+        # working behaviour; it replaces a broken build and a silent alias with
+        # one actionable error. A typo ("squential") is now loud too.
+        if mode not in _WORKFLOW_BUILD_MODES:
+            raise ValueError(
+                f"Unsupported workflow build mode {mode!r}. "
+                f"Supported modes: {sorted(_WORKFLOW_BUILD_MODES)}. "
+                "('sequential' and 'hybrid' were previously documented but "
+                "never implemented — see the comment in "
+                "_build_workflow_from_agents.)"
+            )
+
         workflow = WorkflowBuilder()
 
-        # Create LLMAgentNode for each agent
+        # Create LLMAgentNode for each agent. parallel mode adds no
+        # connections: the nodes execute independently, which is what gives
+        # AsyncLocalRuntime its level-based concurrency.
         for i, (agent, task) in enumerate(zip(agents, tasks, strict=False)):
             node_id = f"agent_{i}_{agent.agent_id}"
-
-            # Configure node with agent and task
             workflow.add_node(
                 "LLMAgentNode",
                 node_id,
-                {
-                    "agent": agent,
-                    "task": task,
-                    "provider": (
-                        agent.config.provider
-                        if hasattr(agent.config, "provider")
-                        else "openai"
-                    ),
-                    "model": (
-                        agent.config.model
-                        if hasattr(agent.config, "model")
-                        else "gpt-4o-mini"
-                    ),
-                },
+                self._llm_node_config_for(agent, task),
             )
-
-            # Connect nodes based on mode
-            if mode == "sequential" and i > 0:
-                # Chain: previous node output feeds into current node
-                prev_node_id = f"agent_{i - 1}_{agents[i - 1].agent_id}"
-                workflow.add_connection(prev_node_id, node_id, "output", "input")
-            # parallel mode: no connections (nodes execute independently)
-            # hybrid mode: implement batch-based connections (future enhancement)
 
         return workflow

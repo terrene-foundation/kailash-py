@@ -13,18 +13,31 @@ against it BEFORE reacting (MUST-2 / MUST-3).
 
 | track            | scope (files owned EXCLUSIVELY)                                      | specialist        | status                    |
 | ---------------- | -------------------------------------------------------------------- | ----------------- | ------------------------- |
-| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | in-flight                 |
+| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | **DONE** — `2a54f134f`    |
 | w7-cred-audit    | S4 `__cause__` sites, fallback.py:91, sweep autouse-skip (READ-ONLY) | security-reviewer | **DONE** — report applied |
 | w7-nexus         | packages/kailash-nexus/** — S8 atomicity, `_tools`, MINOR bump       | nexus-spec        | **DONE** — `84f08d203`    |
 | w7-core-dialect  | src/kailash/db/dialect.py, connection_parser.py, staging_utilities   | infra-spec        | in-flight                 |
 | w7-2nd-scrubber  | kaizen/llm/errors.py (S1)                                            | kaizen-spec       | in-flight                 |
 | w7-nexus-del     | `Nexus.__del__` -> close() deadlock (patterns.md); nexus tests       | nexus-spec        | in-flight                 |
+| w7-ollama-deploy | `kaizen/llm/deployment_resolver.py` — keyless provider resolution    | kaizen-spec       | in-flight                 |
+| w7-task-handoff  | `kaizen_agents/patterns/runtime.py::_build_workflow_from_agents`     | kaizen-spec       | in-flight                 |
 
 ### Landed this wave
 
 - `0066e4fcb` — the five-issue forest, secured from its uncommitted state (73 files)
 - `cd6b82950` — S2 (`FallbackResult.to_dict` raw leak) + S6 (sweep autouse-skipped in CI)
 - `84f08d203` — S8 nexus register() all-or-nothing + `_tools` removal + 2.16.0 MINOR
+- `2510092e0` — AF-1 SSE read-error path logs instead of `print`-ing to stderr
+- `2a54f134f` — S3 + S7 #1981 second-order breaks (a2a `run()`, runtime state invariant)
+
+### WAVE-LEVEL PROCESS RISK — whole-file `cp` restore during teeth verification
+
+Two tracks (and the orchestrator) used `cp /tmp/saved.py <file>` to restore after a teeth
+revert. With concurrent agents that is a clobber window: any edit landing in those ~2 minutes
+is silently lost, with no conflict and no signal. Nothing was lost this wave (verified: the
+scrubber's work is confined to `llm/errors.py`, `nodes/ai/error_sanitizer.py`,
+`utils/credential_scrub.py`; `a2a.py` carried exactly the 1981 track's 5 hunks). **Revert the
+specific hunk, never the whole file, whenever another agent is live.**
 
 ### Verified, do NOT re-derive
 
