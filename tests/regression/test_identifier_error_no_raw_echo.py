@@ -40,25 +40,35 @@ class TestCoreSDKValidateIdentifierNoRawEcho:
     """Verify _validate_identifier() uses fingerprint, not raw input."""
 
     def test_injection_payload_not_echoed(self):
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
         payload = 'users"; DROP TABLE customers; --'
         with pytest.raises(ValueError) as exc_info:
-            _validate_identifier(payload)
+            _validate_identifier(
+                payload, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
         error_msg = str(exc_info.value)
-        assert payload not in error_msg, (
-            f"Error message must NOT contain the raw payload. Got: {error_msg}"
-        )
-        assert _FINGERPRINT_RE.search(error_msg), (
-            f"Error message must contain a hex fingerprint. Got: {error_msg}"
-        )
+        assert (
+            payload not in error_msg
+        ), f"Error message must NOT contain the raw payload. Got: {error_msg}"
+        assert _FINGERPRINT_RE.search(
+            error_msg
+        ), f"Error message must contain a hex fingerprint. Got: {error_msg}"
 
     @pytest.mark.parametrize("payload", _PAYLOADS)
     def test_no_payload_echoed_parametrized(self, payload: str):
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
         with pytest.raises(ValueError) as exc_info:
-            _validate_identifier(payload)
+            _validate_identifier(
+                payload, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
         error_msg = str(exc_info.value)
         # For empty string, skip the "not in" check (empty is substring of everything)
         if payload:
@@ -79,12 +89,12 @@ class TestCoreSDKValidateJsonPathNoRawEcho:
         with pytest.raises(ValueError) as exc_info:
             _validate_json_path(payload)
         error_msg = str(exc_info.value)
-        assert payload not in error_msg, (
-            f"Error message must NOT contain the raw payload. Got: {error_msg}"
-        )
-        assert _FINGERPRINT_RE.search(error_msg), (
-            f"Error message must contain a hex fingerprint. Got: {error_msg}"
-        )
+        assert (
+            payload not in error_msg
+        ), f"Error message must NOT contain the raw payload. Got: {error_msg}"
+        assert _FINGERPRINT_RE.search(
+            error_msg
+        ), f"Error message must contain a hex fingerprint. Got: {error_msg}"
 
     @pytest.mark.parametrize(
         "payload",
@@ -126,12 +136,12 @@ class TestDataFlowQuoteIdentifierNoRawEcho:
         with pytest.raises(InvalidIdentifierError) as exc_info:
             dialect.quote_identifier(payload)
         error_msg = str(exc_info.value)
-        assert payload not in error_msg, (
-            f"Error message must NOT contain the raw payload. Got: {error_msg}"
-        )
-        assert _FINGERPRINT_RE.search(error_msg), (
-            f"Error message must contain a hex fingerprint. Got: {error_msg}"
-        )
+        assert (
+            payload not in error_msg
+        ), f"Error message must NOT contain the raw payload. Got: {error_msg}"
+        assert _FINGERPRINT_RE.search(
+            error_msg
+        ), f"Error message must contain a hex fingerprint. Got: {error_msg}"
 
     @pytest.mark.parametrize("payload", _PAYLOADS)
     def test_no_payload_echoed_parametrized(self, dialect, payload: str):

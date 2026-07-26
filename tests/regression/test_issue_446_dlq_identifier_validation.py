@@ -92,7 +92,10 @@ def test_dlq_identifier_validator_rejects_injection_attempts() -> None:
     """Issue #446: The validator used by the DLQ MUST reject SQL injection
     payloads. Proves the validator is the right defense, not just a no-op.
     """
-    from kailash.db.dialect import _validate_identifier
+    from kailash.db.dialect import (
+        DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+        _validate_identifier,
+    )
 
     injection_payloads = [
         'dlq"; DROP TABLE customers; --',
@@ -104,7 +107,9 @@ def test_dlq_identifier_validator_rejects_injection_attempts() -> None:
     ]
     for payload in injection_payloads:
         with pytest.raises(ValueError):
-            _validate_identifier(payload)
+            _validate_identifier(
+                payload, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
 
 @pytest.mark.regression
@@ -121,7 +126,10 @@ def test_dlq_identifier_validator_raises_valueerror_on_unhashable_input() -> Non
     unhashable inputs and return a fallback marker so the caller sees
     the typed ValueError it expected.
     """
-    from kailash.db.dialect import _validate_identifier
+    from kailash.db.dialect import (
+        DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+        _validate_identifier,
+    )
 
     unhashable_payloads = [
         {"a": 1},
@@ -130,4 +138,4 @@ def test_dlq_identifier_validator_raises_valueerror_on_unhashable_input() -> Non
     ]
     for payload in unhashable_payloads:
         with pytest.raises(ValueError, match="must be a string"):
-            _validate_identifier(payload)  # type: ignore[arg-type]
+            _validate_identifier(payload, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)  # type: ignore[arg-type]

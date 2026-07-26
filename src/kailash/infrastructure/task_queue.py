@@ -201,9 +201,14 @@ class SQLTaskQueue:
         table_name: str = "kailash_task_queue",
         default_visibility_timeout: int = 300,
     ) -> None:
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
-        _validate_identifier(table_name)
+        _validate_identifier(
+            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
         self._conn = conn
         self._table = table_name
         self._default_visibility_timeout = default_visibility_timeout

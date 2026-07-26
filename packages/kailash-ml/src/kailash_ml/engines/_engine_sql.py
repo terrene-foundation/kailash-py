@@ -39,7 +39,10 @@ import logging
 from typing import Any, Optional
 
 from kailash.db.connection import ConnectionManager
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +83,19 @@ async def create_engine_tables(conn: ConnectionManager) -> None:
     # rules/dataflow-identifier-safety.md MUST Rule 5 still applies:
     # if a future refactor makes the name dynamic, the validator is
     # already in place and catches the drift.
-    _validate_identifier("_kml_engine_versions")
-    _validate_identifier("_kml_engine_audit")
-    _validate_identifier("idx_kml_engine_versions_tenant_name")
-    _validate_identifier("idx_kml_engine_audit_tenant")
+    _validate_identifier(
+        "_kml_engine_versions", max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+    )
+    _validate_identifier(
+        "_kml_engine_audit", max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+    )
+    _validate_identifier(
+        "idx_kml_engine_versions_tenant_name",
+        max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    )
+    _validate_identifier(
+        "idx_kml_engine_audit_tenant", max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+    )
 
     # `(tenant_id, name, version)` is the identity scope (§5.1 MUST 4).
     # A UNIQUE constraint on `(tenant_id, name, version)` enforces the

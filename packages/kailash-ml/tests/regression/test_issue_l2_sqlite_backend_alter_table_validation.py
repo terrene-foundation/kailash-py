@@ -25,7 +25,11 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.db.dialect import IdentifierError, _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    IdentifierError,
+    _validate_identifier,
+)
 
 
 @pytest.mark.regression
@@ -48,7 +52,7 @@ def test_l2_columns_added_in_0_14_all_pass_identifier_validator() -> None:
         # If this raises, the production ALTER TABLE loop would also
         # raise — the defense-in-depth validator would block the
         # migration, and ops would see the typed error.
-        _validate_identifier(name)
+        _validate_identifier(name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
 
 
 @pytest.mark.regression
@@ -74,7 +78,9 @@ def test_l2_validator_rejects_injection_payloads_that_would_reach_alter_table() 
     ]
     for payload in injection_payloads:
         with pytest.raises((IdentifierError, ValueError, TypeError)):
-            _validate_identifier(payload)
+            _validate_identifier(
+                payload, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
 
 @pytest.mark.regression

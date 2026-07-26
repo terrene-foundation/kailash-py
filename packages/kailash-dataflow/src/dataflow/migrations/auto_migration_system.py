@@ -1801,41 +1801,32 @@ class AutoMigrationSystem:
         pass
 
     def _detect_database_type(self, connection_string: str) -> str:
-        """Detect database type from connection string."""
-        connection_lower = connection_string.lower()
+        """Detect database type from connection string.
 
-        # SQLite detection patterns
-        if (
-            connection_lower.startswith("sqlite")
-            or connection_lower == ":memory:"
-            or connection_lower.endswith(".db")
-            or connection_lower.endswith(".sqlite")
-            or connection_lower.endswith(".sqlite3")
-            or "/" in connection_string
-            and "://" not in connection_string
-        ):  # File path
-            return "sqlite"
-        elif connection_lower.startswith("postgresql") or connection_lower.startswith(
-            "postgres"
-        ):
-            return "postgresql"
-        elif connection_lower.startswith("mysql"):
-            # Covers ``mysql://`` and every SQLAlchemy driver variant
-            # (``mysql+pymysql://``, ``mysql+aiomysql://``, ``mysql+mysqldb://``).
-            # Mirrors the mysql-detection precedent in
-            # ``core/connection_builder.py`` (``driver.startswith("mysql")``).
-            # Without this branch a ``mysql://`` URL fell through to the
-            # ``"://" -> postgresql`` default below (issue #1559), so the legacy
-            # migration fallback emitted Postgres-only DDL against MySQL.
-            return "mysql"
-        else:
-            # Try to infer from connection string format
-            if "://" in connection_string:
-                # Looks like a URL - likely PostgreSQL
-                return "postgresql"
-            else:
-                # Looks like a file path - likely SQLite
-                return "sqlite"
+        Delegates to ``ConnectionParser.detect_database_type`` — the single
+        source of truth (DRY) — so this surface inherits the fail-closed
+        contract instead of maintaining a third, divergent scheme table.
+
+        This method previously carried its own prefix ladder that ended in
+        ``if "://" in connection_string: return "postgresql"`` — a GUESS,
+        with no log line. Two concrete defects followed
+        (``rules/security.md`` § Enforcement-Surface Parity):
+
+        * ``mariadb://`` and ``mariadb+pymysql://`` matched none of the
+          prefixes and were reported as ``"postgresql"``, so the legacy
+          migration fallback emitted PostgreSQL-only DDL against MariaDB —
+          the same failure mode issue #1559 fixed for ``mysql://``.
+        * Any unknown scheme (``oracle://``, ``mssql://``) silently became
+          ``"postgresql"``.
+
+        Raises:
+            AdapterError: If the scheme is not recognised. Guessing an
+                engine emits SQL for the wrong database; a loud raise is the
+                only disposition that cannot corrupt data.
+        """
+        from ..adapters.connection_parser import ConnectionParser
+
+        return ConnectionParser.detect_database_type(connection_string)
 
     async def auto_migrate(
         self,

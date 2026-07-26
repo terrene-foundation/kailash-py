@@ -74,11 +74,19 @@ class DBDeadLetterQueue:
         # overrides `TABLE_NAME` is rejected immediately, not when the
         # first INSERT happens to fire. Validating once in `__init__`
         # is the single enforcement point for every interpolation site.
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
-        _validate_identifier(self.TABLE_NAME)
+        _validate_identifier(
+            self.TABLE_NAME, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
         for suffix in ("status", "next_retry", "created"):
-            _validate_identifier(f"idx_{self.TABLE_NAME}_{suffix}")
+            _validate_identifier(
+                f"idx_{self.TABLE_NAME}_{suffix}",
+                max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            )
 
         self._conn = conn_manager
         self._base_delay = base_delay

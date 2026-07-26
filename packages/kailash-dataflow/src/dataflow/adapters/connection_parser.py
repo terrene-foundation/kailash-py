@@ -15,6 +15,41 @@ from .exceptions import AdapterError
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Scheme -> database-type mapping (issue #1971 follow-up: fail CLOSED)
+# ---------------------------------------------------------------------------
+# Keyed by the BASE driver of a SQLAlchemy-style scheme: everything before the
+# first "+". ``postgresql+asyncpg`` -> ``postgresql``, ``mariadb+pymysql`` ->
+# ``mariadb``. Handling the base uniformly is what lets every driver variant
+# resolve without a per-driver prefix test; the pre-fix code tested
+# ``startswith("postgresql+")`` but NOT ``postgres+``, so the perfectly
+# ordinary ``postgres+asyncpg://`` and ``postgres+psycopg2://`` DSNs fell
+# through to the unknown-scheme path.
+_SCHEME_TO_DATABASE_TYPE = {
+    # PostgreSQL and its aliases
+    "postgresql": "postgresql",
+    "postgres": "postgresql",
+    "pgsql": "postgresql",
+    # MySQL and wire-compatible forks. MariaDB speaks the MySQL protocol and
+    # shares MySQL's 64-char identifier budget, so it maps to "mysql" — NOT to
+    # the pre-fix "postgresql" that ``AutoMigrationSystem`` guessed for it.
+    "mysql": "mysql",
+    "mariadb": "mysql",
+    # SQLite
+    "sqlite": "sqlite",
+    # MongoDB
+    "mongodb": "mongodb",
+}
+
+
+def _base_scheme(scheme: str) -> str:
+    """Return the base driver of a SQLAlchemy-style scheme.
+
+    ``postgresql+asyncpg`` -> ``postgresql``; ``mysql`` -> ``mysql``.
+    """
+    return scheme.split("+", 1)[0].strip().lower()
+
+
 class ConnectionParser:
     """Parser for database connection strings."""
 
@@ -290,63 +325,92 @@ class ConnectionParser:
             Database type: 'postgresql', 'mysql', 'sqlite', or 'mongodb'
 
         Raises:
-            AdapterError: If database type cannot be determined
+            AdapterError: If the database type cannot be determined.
+
+        Fail-closed contract (issue #1971 follow-up)
+        --------------------------------------------
+        An UNRECOGNISED scheme RAISES. It does NOT fall back to a default.
+
+        Pre-fix, the deliberate ``AdapterError("Unsupported database
+        scheme")`` below was raised INSIDE a ``try`` whose ``except
+        Exception:`` swallowed it and returned ``"sqlite"`` — the exact
+        silent-fallback shape ``rules/zero-tolerance.md`` Rule 3 blocks. The
+        consequences were not merely cosmetic:
+
+        * ``postgres+asyncpg://``, ``postgres+psycopg2://``, ``mariadb://``
+          and ``mariadb+pymysql://`` are ordinary SQLAlchemy DSNs; every one
+          of them resolved to ``"sqlite"``.
+        * That answer selects the identifier budget used by
+          ``_fit_identifier_to_dialect``: SQLite's 128 instead of
+          PostgreSQL's 63 / MySQL's 64. Generated names then exceed the real
+          server limit, PostgreSQL truncates server-side at 63, and two
+          distinct models silently ALIAS onto one physical table (#1971
+          verified this against real PostgreSQL 15.18).
+        * The only signal was a ``logger.debug``.
+
+        RAISING is the only disposition that cannot corrupt data. This
+        function returns an ENGINE SELECTOR, not a length — it decides the
+        adapter, the SQL dialect, the placeholder syntax and the DDL types.
+        There is no "tightest" engine to fall back to: answering ``sqlite``
+        makes DataFlow open a local file named after the DSN (writes land in
+        the wrong database entirely), and answering ``postgresql`` emits
+        PostgreSQL-only DDL against a server that rejects it. A loud raise
+        naming the scheme is recoverable; either guess is not.
         """
+        # Handle None connection string
+        if connection_string is None:
+            raise AdapterError("Connection string is None")
+
+        if not isinstance(connection_string, str):
+            raise AdapterError(
+                f"Connection string must be a string, got "
+                f"{type(connection_string).__name__}"
+            )
+
+        connection_lower = connection_string.lower()
+
+        # MongoDB detection (before SQLite patterns)
+        if connection_lower.startswith(("mongodb://", "mongodb+srv://")):
+            return "mongodb"
+
+        # Common SQLite indicators
+        if (
+            connection_string == ":memory:"
+            or connection_lower.endswith((".db", ".sqlite", ".sqlite3"))
+            or connection_lower.startswith("sqlite")
+            or
+            # File path without URL scheme (likely SQLite)
+            ("/" in connection_string and "://" not in connection_string)
+        ):
+            return "sqlite"
+
+        # URL parsing for everything else. A parse FAILURE and an
+        # unsupported SCHEME are distinct outcomes and are raised
+        # separately — neither is swallowed into a default.
         try:
-            # Handle None connection string
-            if connection_string is None:
-                raise AdapterError("Connection string is None")
+            components = ConnectionParser.parse_connection_string(connection_string)
+        except AdapterError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive
+            raise AdapterError(
+                f"Failed to detect database type: connection string could not "
+                f"be parsed ({type(exc).__name__})"
+            ) from exc
 
-            # Enhanced SQLite pattern detection
-            connection_lower = connection_string.lower()
+        scheme = components.get("scheme", "") or ""
 
-            # MongoDB detection (before SQLite patterns)
-            if connection_lower.startswith("mongodb://") or connection_lower.startswith(
-                "mongodb+srv://"
-            ):
-                return "mongodb"
+        if not scheme:
+            # No scheme at all - a bare file path, i.e. SQLite. This is an
+            # explicit recognised case, NOT a fallback.
+            return "sqlite"
 
-            # Common SQLite indicators
-            if (
-                connection_string == ":memory:"
-                or connection_lower.endswith(".db")
-                or connection_lower.endswith(".sqlite")
-                or connection_lower.endswith(".sqlite3")
-                or connection_lower.startswith("sqlite")
-                or
-                # File path without URL scheme (likely SQLite)
-                ("/" in connection_string and "://" not in connection_string)
-            ):
-                return "sqlite"
-
-            # Try URL parsing for other databases
-            try:
-                components = ConnectionParser.parse_connection_string(connection_string)
-                scheme = components.get("scheme", "").lower()
-
-                # Map database schemes to AsyncSQLDatabaseNode database types
-                # Handle SQLAlchemy-style schemes like mysql+pymysql, postgresql+asyncpg, etc.
-                if scheme in ["postgresql", "postgres"] or scheme.startswith(
-                    "postgresql+"
-                ):
-                    return "postgresql"
-                elif scheme == "mysql" or scheme.startswith("mysql+"):
-                    return "mysql"
-                elif scheme in ["sqlite"]:
-                    return "sqlite"
-                elif scheme in ["mongodb"] or scheme.startswith("mongodb+"):
-                    return "mongodb"
-                elif not scheme:
-                    # No scheme found - likely a file path (SQLite)
-                    return "sqlite"
-                else:
-                    raise AdapterError(f"Unsupported database scheme: {scheme}")
-            except Exception:
-                # If URL parsing fails, check if it's a MongoDB URI
-                if "mongodb" in connection_lower:
-                    return "mongodb"
-                # Otherwise assume it's a file path (SQLite)
-                return "sqlite"
-
-        except Exception as e:
-            raise AdapterError(f"Failed to detect database type: {e}")
+        database_type = _SCHEME_TO_DATABASE_TYPE.get(_base_scheme(scheme))
+        if database_type is None:
+            raise AdapterError(
+                f"Unsupported database scheme: {scheme}. Supported schemes: "
+                f"{', '.join(sorted(_SCHEME_TO_DATABASE_TYPE))} "
+                f"(optionally with a SQLAlchemy '+driver' suffix, e.g. "
+                f"'postgresql+asyncpg'). Refusing to guess — an incorrect "
+                f"engine emits SQL for the wrong database."
+            )
+        return database_type

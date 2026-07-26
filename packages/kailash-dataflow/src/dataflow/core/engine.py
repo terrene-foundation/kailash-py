@@ -47,7 +47,10 @@ FailedDDLRecord = _namedtuple(
 # __init__ rather than silently degrading to fail-fast.
 _AUTO_MIGRATE_WARN = "warn"
 
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
@@ -5318,7 +5321,9 @@ class DataFlow(DataFlowEventMixin):
                 # one before interpolating into PRAGMA DDL so a future refactor
                 # that reads table names from a different (user-influenced)
                 # source cannot silently reopen an injection vector.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
 
                 # Get columns for this table using PRAGMA table_info
                 columns_query = f"PRAGMA table_info({table_name})"
@@ -5341,7 +5346,9 @@ class DataFlow(DataFlowEventMixin):
                 # Get foreign keys using PRAGMA foreign_key_list
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
                 fk_query = f"PRAGMA foreign_key_list({table_name})"
                 fk_result = await adapter.execute_query(fk_query)
 
@@ -5370,7 +5377,9 @@ class DataFlow(DataFlowEventMixin):
                 # Get indexes using PRAGMA index_list and index_info
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
                 indexes_query = f"PRAGMA index_list({table_name})"
                 indexes_result = await adapter.execute_query(indexes_query)
 
@@ -6835,11 +6844,21 @@ class DataFlow(DataFlowEventMixin):
                 # `foreign_key` / `target_table` / `target_key` come from
                 # model-relationship metadata which is model-registry-derived
                 # today but may be caller-influenced after a future refactor.
-                _validate_identifier(table_name)
-                _validate_identifier(constraint_name)
-                _validate_identifier(foreign_key)
-                _validate_identifier(target_table)
-                _validate_identifier(target_key)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    constraint_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    foreign_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    target_table, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    target_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
 
                 sql = (
                     f"ALTER TABLE {table_name} "
@@ -8112,13 +8131,17 @@ class DataFlow(DataFlowEventMixin):
         # interpolation. table_name comes from the migration framework but
         # MigrationOperation.details may carry caller-influenced column names
         # and types — refuse anything that fails the allowlist.
-        _validate_identifier(table_name)
+        _validate_identifier(
+            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
 
         if operation_type == "ADD_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
             # Get the field info for this column from the model
             # issue #1573 (sibling of #1541): match the physical ``table_name``
@@ -8151,14 +8174,18 @@ class DataFlow(DataFlowEventMixin):
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
             return f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
 
         elif operation_type == "MODIFY_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
             # Get new type from changes or details
             changes = details.get("changes", {})

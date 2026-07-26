@@ -22,7 +22,10 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 from kailash.utils.url_credentials import mask_url
 
 # Issue #1550: this executor is the LOWEST layer that touches the raw driver
@@ -89,26 +92,40 @@ class SyncDDLExecutor:
         self._db_type = self._detect_db_type()
 
     def _detect_db_type(self) -> str:
-        """Detect the database type from the URL."""
-        if "postgresql" in self.database_url or "postgres" in self.database_url:
-            return "postgresql"
-        elif "sqlite" in self.database_url or self.database_url == ":memory:":
-            return "sqlite"
-        elif "mysql" in self.database_url:
-            return "mysql"
-        elif "mongodb" in self.database_url:
-            # MongoDB is a document database - no SQL DDL needed
-            return "mongodb"
-        else:
-            # Default to SQLite for safety.
-            # Round 2 red team fix: route the URL through mask_url so
-            # operators see a hint about what failed without leaking
-            # the userinfo into the log. See rules/security.md
-            # § "No secrets in logs".
-            logger.warning(
-                f"Unknown database type in URL, defaulting to SQLite: {mask_url(self.database_url)}"
+        """Detect the database type from the URL.
+
+        Delegates to ``ConnectionParser.detect_database_type`` — the single
+        source of truth — so this surface inherits the fail-closed contract
+        (``rules/security.md`` § Enforcement-Surface Parity).
+
+        The previous implementation had two defects, both of which pick the
+        WRONG SQL dialect for the DDL this class executes:
+
+        * **Substring matching.** ``"postgres" in url`` matches a MySQL DSN
+          whose *database* is named ``my_postgres_db``, routing MySQL DDL
+          through the PostgreSQL branch.
+        * **Fail-open default.** An unrecognised scheme (including the
+          ordinary ``mariadb://``) returned ``"sqlite"`` behind a WARNING —
+          so a DDL executor pointed at a real server silently emitted
+          SQLite DDL. A warning is not a gate.
+
+        Raises:
+            AdapterError: If the scheme is unrecognised. Emitting DDL for a
+                guessed engine is not recoverable; refusing to construct is.
+        """
+        from ..adapters.connection_parser import ConnectionParser
+
+        try:
+            return ConnectionParser.detect_database_type(self.database_url)
+        except Exception:
+            # Re-raise, but log the MASKED url first so operators get an
+            # actionable hint without the userinfo leaking into the log
+            # (rules/security.md § "No secrets in logs").
+            logger.error(
+                "sync_ddl_executor.unsupported_database_url",
+                extra={"url": mask_url(self.database_url)},
             )
-            return "sqlite"
+            raise
 
     def _get_sync_connection(self):
         """
@@ -564,7 +581,9 @@ class SyncDDLExecutor:
             # rules/dataflow-identifier-safety.md MUST 1: identifiers in DDL/PRAGMA
             # paths MUST be validated against the canonical regex before
             # interpolation. PRAGMA arguments are not parameterizable.
-            _validate_identifier(table_name)
+            _validate_identifier(
+                table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
             sql = f"PRAGMA table_info({table_name})"
             result = self.execute_query(sql)
         else:

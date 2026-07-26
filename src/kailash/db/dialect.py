@@ -32,6 +32,7 @@ __all__ = [
     "POSTGRES_MAX_IDENTIFIER_LENGTH",
     "MYSQL_MAX_IDENTIFIER_LENGTH",
     "SQLITE_MAX_IDENTIFIER_LENGTH",
+    "DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH",
 ]
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,21 @@ __all__ = [
 POSTGRES_MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
 MYSQL_MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
 SQLITE_MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
+
+#: Budget for call sites that have **no dialect bound** at validation time.
+#:
+#: This is the LOOSEST supported budget (SQLite's 128) and it is deliberately
+#: NOT a safe default — it is the *explicit, greppable* marker of a call site
+#: that could not name its target engine. A site passing this accepts an
+#: identifier PostgreSQL would truncate server-side at 63 (issue #1971:
+#: server-side truncation silently ALIASES two models onto one physical
+#: table). Every site using it is a standing invitation to wire the real
+#: budget: ``grep -rn DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` enumerates the
+#: remaining work.
+#:
+#: Code that HAS a dialect MUST pass that dialect's own budget instead —
+#: ``QueryDialect._validate_identifier`` does this automatically.
+DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
@@ -85,7 +101,7 @@ def _identifier_fingerprint(name: object) -> str:
         return "____"
 
 
-def _validate_identifier(name: str, *, max_length: int = 128) -> None:
+def _validate_identifier(name: str, *, max_length: int) -> None:
     """Validate a SQL identifier (table or column name).
 
     This is the validate-only primitive for sites that interpolate
@@ -101,13 +117,35 @@ def _validate_identifier(name: str, *, max_length: int = 128) -> None:
     which both validates AND wraps in dialect-appropriate quotes
     (per ``rules/dataflow-identifier-safety.md`` MUST Rule 1).
 
+    ``max_length`` is REQUIRED — it has no default, deliberately.
+    An identifier budget is a property of the TARGET ENGINE, and this
+    free function cannot know the engine. Both candidate defaults are
+    wrong in opposite directions:
+
+    * **128 (SQLite, the loosest)** — the pre-fix default — is
+      fail-OPEN. It let ``PostgresDialect.upsert()`` accept a 100-char
+      identifier that the SAME object's ``quote_identifier()``
+      rejected, then interpolate the bare name into SQL. PostgreSQL
+      truncates server-side at 63, silently ALIASING two distinct
+      models onto one physical table (issue #1971 verified this
+      against real PostgreSQL 15.18).
+    * **63 (PostgreSQL, the tightest)** would reject identifiers that
+      are perfectly legal on SQLite; the codebase demonstrably
+      generates names in the 64..128 band for SQLite connections.
+
+    There is no correct default, so there is none. Callers holding a
+    dialect MUST use :meth:`QueryDialect._validate_identifier`, which
+    binds the budget to ``self``. Callers with genuinely no dialect in
+    hand pass :data:`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` so the
+    gap is explicit and greppable rather than silently inherited.
+
     Parameters
     ----------
     name
         The identifier to validate.
     max_length
-        Maximum allowed length (default 128, the SQLite limit;
-        PostgreSQL is 63, MySQL is 64).
+        Maximum allowed length. REQUIRED (see above). PostgreSQL 63,
+        MySQL 64, SQLite 128.
 
     Raises
     ------
@@ -218,6 +256,50 @@ class QueryDialect(ABC):
     SQL strings.  The canonical placeholder character is ``?``.
     """
 
+    #: Maximum identifier length for this dialect. Every concrete subclass
+    #: binds this to the canonical per-dialect constant defined at the top of
+    #: this module. Declared here so that inherited concrete methods (e.g.
+    #: :meth:`insert_ignore`) can resolve ``self._MAX_IDENTIFIER_LENGTH``.
+    _MAX_IDENTIFIER_LENGTH: int
+
+    @property
+    def max_identifier_length(self) -> int:
+        """Maximum identifier length this dialect accepts.
+
+        Public accessor for the per-dialect budget, mirroring DataFlow's
+        ``SQLDialect.max_identifier_length`` so callers that GENERATE
+        identifiers can fit them ahead of validation instead of discovering
+        the limit as an :class:`IdentifierError` at query time.
+        """
+        return self._MAX_IDENTIFIER_LENGTH
+
+    def _validate_identifier(self, name: str) -> None:
+        """Validate *name* against **this dialect's own** length budget.
+
+        Every SQL-generating method on this class MUST validate through
+        this bound method rather than the module-level
+        :func:`_validate_identifier` free function. The binding to
+        ``self._MAX_IDENTIFIER_LENGTH`` is the structural defense against
+        the defect this method exists to prevent: a validator reachable
+        from a dialect object MUST NOT be able to apply a DIFFERENT
+        dialect's budget.
+
+        Before this method existed, all 21 in-class call sites invoked the
+        free function with no ``max_length``, silently inheriting a 128-char
+        (SQLite) budget. The observable consequence was that
+        ``PostgresDialect.upsert()`` ACCEPTED a 100-char identifier that the
+        same object's ``quote_identifier()`` REJECTED — two validators on one
+        object disagreeing — and then interpolated the unvalidated bare name
+        into SQL. Identifiers cannot be parameter-bound, so this validation
+        IS the injection defense for that path (``rules/security.md``
+        § Parameterized Queries).
+
+        Raises:
+            IdentifierError: If *name* is not a string, exceeds this
+                dialect's budget, or fails the allowlist regex.
+        """
+        _validate_identifier(name, max_length=self._MAX_IDENTIFIER_LENGTH)
+
     @property
     @abstractmethod
     def database_type(self) -> DatabaseType:
@@ -307,11 +389,11 @@ class QueryDialect(ABC):
 
         Returns SQL with ``?`` placeholders.
         """
-        _validate_identifier(table)
+        self._validate_identifier(table)
         for col in columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
         for key in conflict_keys:
-            _validate_identifier(key)
+            self._validate_identifier(key)
         cols = ", ".join(columns)
         placeholders = ", ".join(["?"] * len(columns))
         conflict = ", ".join(conflict_keys)
@@ -458,15 +540,15 @@ class PostgresDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
-        _validate_identifier(table)
+        self._validate_identifier(table)
         for col in columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
         for key in conflict_keys:
-            _validate_identifier(key)
+            self._validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
         for col in update_columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
 
         placeholders = ", ".join(self.placeholder(i) for i in range(len(columns)))
         col_list = ", ".join(columns)
@@ -492,7 +574,7 @@ class PostgresDialect(QueryDialect):
         return "JSONB"
 
     def json_extract(self, column: str, path: str) -> str:
-        _validate_identifier(column)
+        self._validate_identifier(column)
         _validate_json_path(path)
         return f"{column}->>'{path}'"
 
@@ -535,15 +617,15 @@ class MySQLDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
-        _validate_identifier(table)
+        self._validate_identifier(table)
         for col in columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
         for key in conflict_keys:
-            _validate_identifier(key)
+            self._validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
         for col in update_columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
 
         placeholders = ", ".join(self.placeholder(i) for i in range(len(columns)))
         col_list = ", ".join(columns)
@@ -558,11 +640,11 @@ class MySQLDialect(QueryDialect):
     def insert_ignore(
         self, table: str, columns: List[str], conflict_keys: List[str]
     ) -> str:
-        _validate_identifier(table)
+        self._validate_identifier(table)
         for col in columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
         for key in conflict_keys:
-            _validate_identifier(key)
+            self._validate_identifier(key)
         cols = ", ".join(columns)
         placeholders = ", ".join(["?"] * len(columns))
         return f"INSERT IGNORE INTO {table} ({cols}) VALUES ({placeholders})"
@@ -596,7 +678,7 @@ class MySQLDialect(QueryDialect):
         return "JSON"
 
     def json_extract(self, column: str, path: str) -> str:
-        _validate_identifier(column)
+        self._validate_identifier(column)
         _validate_json_path(path)
         return f"JSON_EXTRACT({column}, '$.{path}')"
 
@@ -641,15 +723,15 @@ class SQLiteDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
-        _validate_identifier(table)
+        self._validate_identifier(table)
         for col in columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
         for key in conflict_keys:
-            _validate_identifier(key)
+            self._validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
         for col in update_columns:
-            _validate_identifier(col)
+            self._validate_identifier(col)
 
         placeholders = ", ".join("?" for _ in columns)
         col_list = ", ".join(columns)
@@ -677,7 +759,7 @@ class SQLiteDialect(QueryDialect):
         return "REAL"
 
     def json_extract(self, column: str, path: str) -> str:
-        _validate_identifier(column)
+        self._validate_identifier(column)
         _validate_json_path(path)
         return f"json_extract({column}, '$.{path}')"
 
@@ -731,20 +813,33 @@ def detect_dialect(url: str) -> QueryDialect:
 
     url_lower = url.lower()
 
-    # PostgreSQL
-    if url_lower.startswith(("postgresql://", "postgresql+", "postgres://")):
-        logger.debug("Detected PostgreSQL dialect from URL: %s", mask_url(url))
-        return PostgresDialect()
+    # Resolve the BASE driver of a SQLAlchemy-style scheme — everything
+    # before the first "+" — so every driver variant maps uniformly.
+    # Pre-fix this used a per-prefix test list that covered
+    # ``postgresql+`` but NOT ``postgres+``, so the ordinary
+    # ``postgres+asyncpg://`` / ``postgres+psycopg2://`` DSNs raised
+    # "Unsupported scheme", as did every ``mariadb`` form. Matching on the
+    # base keeps this surface in parity with DataFlow's
+    # ``ConnectionParser.detect_database_type``
+    # (``rules/security.md`` § Enforcement-Surface Parity).
+    if "://" in url_lower:
+        base_scheme = url_lower.split("://", 1)[0].split("+", 1)[0]
 
-    # MySQL
-    if url_lower.startswith(("mysql://", "mysql+")):
-        logger.debug("Detected MySQL dialect from URL: %s", mask_url(url))
-        return MySQLDialect()
+        # PostgreSQL and its aliases
+        if base_scheme in ("postgresql", "postgres", "pgsql"):
+            logger.debug("Detected PostgreSQL dialect from URL: %s", mask_url(url))
+            return PostgresDialect()
 
-    # SQLite
-    if url_lower.startswith("sqlite://"):
-        logger.debug("Detected SQLite dialect from URL: %s", mask_url(url))
-        return SQLiteDialect()
+        # MySQL and wire-compatible forks. MariaDB speaks the MySQL
+        # protocol and shares MySQL's 64-char identifier budget.
+        if base_scheme in ("mysql", "mariadb"):
+            logger.debug("Detected MySQL dialect from URL: %s", mask_url(url))
+            return MySQLDialect()
+
+        # SQLite
+        if base_scheme == "sqlite":
+            logger.debug("Detected SQLite dialect from URL: %s", mask_url(url))
+            return SQLiteDialect()
 
     # Plain file path (relative or absolute) -> SQLite
     if url.startswith(("/", "./", "../")) or not re.match(

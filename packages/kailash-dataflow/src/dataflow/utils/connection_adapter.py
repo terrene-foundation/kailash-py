@@ -543,24 +543,24 @@ class ConnectionManagerAdapter:
         return self._transaction_started
 
     def _detect_database_type(self) -> str:
-        """Detect database type from connection string."""
-        connection_lower = self._connection_string.lower()
+        """Detect database type from connection string.
 
-        if (
-            connection_lower.startswith("sqlite")
-            or connection_lower == ":memory:"
-            or connection_lower.endswith(".db")
-            or connection_lower.endswith(".sqlite")
-            or connection_lower.endswith(".sqlite3")
-        ):
-            return "sqlite"
-        elif connection_lower.startswith("postgresql") or connection_lower.startswith(
-            "postgres"
-        ):
-            return "postgresql"
-        else:
-            # Default to PostgreSQL
-            return "postgresql"
+        Delegates to ``ConnectionParser.detect_database_type`` — the single
+        source of truth — so this surface inherits the fail-closed contract
+        (``rules/security.md`` § Enforcement-Surface Parity).
+
+        The previous implementation had NO MySQL branch at all and ended in
+        a bare ``return "postgresql"`` with no log, so ``mysql://`` and
+        ``mariadb://`` connection strings were both reported as PostgreSQL —
+        the adapter then spoke PostgreSQL placeholder syntax and DDL to a
+        MySQL server. Every unknown scheme silently became PostgreSQL too.
+
+        Raises:
+            AdapterError: If the scheme is unrecognised.
+        """
+        from ..adapters.connection_parser import ConnectionParser
+
+        return ConnectionParser.detect_database_type(self._connection_string)
 
     def _convert_to_legacy_format(
         self, data: List[Dict[str, Any]], original_sql: str

@@ -28,7 +28,10 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
 from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 
 __all__ = ["SqliteTrackerStore"]
 
@@ -408,7 +411,9 @@ class SqliteTrackerStore:
                         # check survives any future refactor that makes
                         # the list dynamic. ``sql_type`` is pinned to
                         # ``TEXT`` in :data:`_COLUMNS_ADDED_IN_0_14`.
-                        _validate_identifier(name)
+                        _validate_identifier(
+                            name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                        )
                         await conn.execute(
                             f"ALTER TABLE experiment_runs "
                             f"ADD COLUMN {name} {sql_type}"
