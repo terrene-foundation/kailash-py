@@ -103,6 +103,41 @@ class MountInfo:
     added_at: datetime
 
 
+@dataclass
+class _RegistrationSnapshot:
+    """Pre-mutation state captured by :meth:`Nexus.register` for rollback.
+
+    ``register()`` writes several stores in sequence and any of them can
+    fail partway through. This records enough of the prior state to undo
+    those writes: whether the name was already registered (so a failed
+    RE-registration restores the previous entry instead of deleting it),
+    and the ``metadata`` attribute of the caller's ``Workflow`` object,
+    which ``register()`` reassigns.
+
+    Attributes:
+        name: The workflow name being registered.
+        workflow: The built ``Workflow`` object passed to the registry.
+        was_registered: True if ``name`` already had a registry entry.
+        prior_workflow: The ``Workflow`` previously registered under
+            ``name``, or None when there was none.
+        had_registry_metadata: True if the registry held a metadata entry
+            for ``name`` (distinct from holding an empty dict).
+        prior_registry_metadata: The registry's prior metadata dict.
+        had_workflow_metadata_attr: True if the workflow object had a
+            ``metadata`` attribute before registration.
+        prior_workflow_metadata: The workflow object's prior ``metadata``.
+    """
+
+    name: str
+    workflow: Any
+    was_registered: bool
+    prior_workflow: Any
+    had_registry_metadata: bool
+    prior_registry_metadata: Optional[Dict[str, Any]]
+    had_workflow_metadata_attr: bool
+    prior_workflow_metadata: Any
+
+
 @runtime_checkable
 class NexusPluginProtocol(Protocol):
     """Protocol for Nexus plugins.
@@ -1483,15 +1518,23 @@ Check the documentation or explore available resources.
         ``tool()`` decorator path, which populates ``_tool_registry`` —
         the dict ``_handle_list_tools`` reads to answer ``tools/list``.
 
-        Direct writes to ``_mcp_server._tools`` are BLOCKED: that dict only
-        exists on the FastMCP fallback shim
-        (``kailash_mcp/server.py:1338`` — ``FallbackMCPServer._tools``,
-        populated by its own ``tool()`` decorator at
-        ``kailash_mcp/server.py:1348``) and is invisible to the MCPServer's
-        JSON-RPC handlers: ``_handle_list_tools``
-        (``kailash_mcp/server.py:2837``) iterates ``_tool_registry``, so
-        tools added by a direct ``_tools`` write never appear in
-        ``tools/list`` over WebSocket.
+        Direct writes to ``_mcp_server._tools`` are BLOCKED, and no branch
+        below performs one. That dict exists only on the FastMCP fallback
+        SHIM (``kailash_mcp/server.py:1333-1348`` — ``FallbackMCPServer``,
+        whose ``__init__`` creates ``_tools`` at line 1338 and whose own
+        ``tool()`` decorator populates it at line 1348). ``MCPServer``
+        assigns that shim to ``self._mcp`` (``server.py:1327``, and the
+        sibling construction at ``server.py:612``), never to itself, so
+        ``_mcp_server._tools`` does not exist on any server type this
+        package builds. Even where it did exist it is invisible to the
+        MCPServer's JSON-RPC handlers: ``_handle_list_tools``
+        (``kailash_mcp/server.py:2832-2837``) iterates ``_tool_registry``,
+        so a tool added by a direct ``_tools`` write would never appear in
+        ``tools/list`` over WebSocket — a registration that reports success
+        and advertises nothing. A fallback that writes ``_tools`` therefore
+        cannot make a tool reachable; it can only convert a loud failure
+        into a silent one (zero-tolerance Rule 3), which is why the failure
+        path raises instead.
 
         Uses self.runtime (server-level shared runtime) instead of creating
         a new AsyncLocalRuntime per invocation (M3-001 fix).
@@ -1558,49 +1601,71 @@ Check the documentation or explore available resources.
         workflow_tool.__doc__ = f"Execute workflow '{name}'"
 
         # Register via the proper @tool() decorator path — this writes to
-        # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from.
-        decorator_error: Optional[Exception] = None
-        if hasattr(self._mcp_server, "tool") and callable(
-            getattr(self._mcp_server, "tool")
-        ):
+        # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from. It is
+        # the ONLY surface that makes the tool reachable, so it is also the
+        # only surface attempted.
+        tool_decorator = getattr(self._mcp_server, "tool", None)
+        if callable(tool_decorator):
             try:
-                self._mcp_server.tool()(workflow_tool)
-                logger.info(
-                    f"Workflow '{name}' registered as MCP tool (WebSocket mode)"
-                )
-                return
+                tool_decorator()(workflow_tool)
             except Exception as e:
-                decorator_error = e
-                logger.warning(
-                    f"MCPServer.tool() registration for '{name}' failed: {e}; "
-                    f"falling back to direct registry write"
-                )
-
-        # Fallback: write to the FastMCP-shim _tools dict for compatibility
-        # with simple/mock MCP servers used in tests.
-        if hasattr(self._mcp_server, "_tools"):
-            self._mcp_server._tools[name] = workflow_tool
-            logger.info(
-                f"Workflow '{name}' registered as MCP tool via fallback _tools dict"
-            )
+                # No usable fallback exists (see the ``_tools`` discussion in
+                # the docstring), so the failure is surfaced rather than
+                # downgraded to a warning: register() would otherwise report
+                # "registered successfully" for a tool ``tools/list`` will
+                # never advertise.
+                raise RuntimeError(
+                    f"Could not register workflow '{name}' as an MCP tool: the "
+                    f"MCP server ({type(self._mcp_server).__name__}) tool() "
+                    f"decorator failed with: {e}. The tool would be invisible "
+                    f"to tools/list."
+                ) from e
+            logger.info(f"Workflow '{name}' registered as MCP tool (WebSocket mode)")
             return
 
-        # Neither path landed the tool anywhere a JSON-RPC handler reads.
-        # Raising is mandatory: register() otherwise returns normally and logs
-        # "registered successfully" while ``tools/list`` will never advertise
-        # the workflow — the same silent-undiscoverability defect the
-        # ``_tool_registry`` contract above exists to prevent, just reached
-        # through the failure path instead of the happy path.
+        # No registration surface the JSON-RPC handlers read.
         raise RuntimeError(
             f"Could not register workflow '{name}' as an MCP tool: the MCP "
-            f"server ({type(self._mcp_server).__name__}) exposes neither a "
-            f"callable tool() decorator nor a _tools dict, so the tool would "
-            f"be invisible to tools/list."
-            + (
-                f" tool() decorator failed with: {decorator_error}"
-                if decorator_error
-                else ""
-            )
+            f"server ({type(self._mcp_server).__name__}) exposes no callable "
+            f"tool() decorator, so the tool would be invisible to tools/list."
+        )
+
+    def _precheck_mcp_tool_surface(self, name: str) -> None:
+        """Raise if MCP tool registration for ``name`` cannot possibly land.
+
+        :meth:`register` writes several stores in sequence, and the MCP tool
+        is the LAST of them. Whether a tool-registration surface exists at
+        all is a property of the SERVER, not of this workflow, so it is
+        checkable before any store is touched. Checking it here turns
+        "registry entry + gateway route land, then the MCP step raises" into
+        a clean up-front rejection.
+
+        Mirrors the branch conditions in :meth:`register` exactly: an
+        MCPChannel owns its own registration surface, and a server exposing
+        ``register_workflow`` handles the tool itself.
+
+        Raises:
+            RuntimeError: If the configured MCP server exposes no callable
+                ``tool()`` decorator, so a registered tool would never be
+                advertised by ``tools/list``.
+        """
+        if getattr(self, "_mcp_channel", None):
+            return
+
+        server = getattr(self, "_mcp_server", None)
+        if server is None:
+            return
+
+        if hasattr(server, "register_workflow"):
+            return
+
+        if callable(getattr(server, "tool", None)):
+            return
+
+        raise RuntimeError(
+            f"Could not register workflow '{name}' as an MCP tool: the MCP "
+            f"server ({type(server).__name__}) exposes no callable tool() "
+            f"decorator, so the tool would be invisible to tools/list."
         )
 
     def _get_api_keys(self) -> Dict[str, str]:
@@ -1648,6 +1713,31 @@ Check the documentation or explore available resources.
         Zero-config registration: Single registration → Multi-channel exposure (API, CLI, MCP)
         Leverages the enterprise gateway's built-in multi-channel support.
 
+        **Failure contract.** Registration writes seven stores across three
+        subsystems — registry, gateway, MCP server (see
+        :meth:`_remove_from_all_channels` for the full enumeration).
+        Everything checkable up front is checked before the first store is
+        touched: the name here, the MCP server's tool-registration surface
+        here, and the caller's metadata inside
+        :meth:`HandlerRegistry.register_workflow`, which validates it
+        before its own (first) write. Anything that can only fail
+        mid-sequence is undone by a compensating rollback, so:
+
+        * registering a NEW name either succeeds completely or leaves
+          nothing behind in any store — no registry entry, no gateway
+          route, no half-registered MCP tool or ``workflow://`` resource;
+        * re-registering an EXISTING name that fails (the enterprise
+          gateway raises ``ValueError: Workflow '<name>' already
+          registered``) restores the previous registry entry rather than
+          leaving the new workflow half-installed over it. The channel
+          artifacts already installed under that name address the same
+          name and keep serving the previous registration; use
+          :meth:`deregister` before re-registering.
+
+        Rollback is compensating, not transactional: the MCP stores belong
+        to a third-party server object with no transaction support, so the
+        undo is the same best-effort removal :meth:`deregister` performs.
+
         Args:
             name: Workflow identifier
             workflow: Workflow instance or WorkflowBuilder
@@ -1655,78 +1745,105 @@ Check the documentation or explore available resources.
 
         Raises:
             ValueError: If ``name`` is not addressable on every channel
-                (see :func:`nexus.validation.validate_workflow_name`).
+                (see :func:`nexus.validation.validate_workflow_name`), if
+                ``metadata`` is not JSON-serializable or exceeds the registry
+                size cap, or if the gateway already has this name registered.
+            RuntimeError: If the configured MCP server exposes no
+                tool-registration surface, so the workflow could never be
+                advertised by ``tools/list``.
         """
         import time
 
         from nexus.validation import validate_workflow_name
 
-        # Validate the name BEFORE any state is mutated. The execute route
-        # (``_execute_workflow``) and the handler-registration path
-        # (``_register_handler_workflow``) already run this validator;
-        # register() was the one registration surface that skipped it, so a
-        # name it rejects could be registered and then 400 on every execute
-        # request forever. Validating first also means a rejected name
-        # leaves nothing behind — no registry entry, no gateway route, no
-        # half-registered MCP tool.
+        # ----- Phase 1: validate everything BEFORE any store is mutated ----
+        #
+        # The execute route (``_execute_workflow``) and the handler
+        # registration path (``register_handler``) already ran this
+        # validator; register() was the one registration surface that
+        # skipped it, so a name it rejects could be registered and then 400
+        # on every execute request forever.
         validate_workflow_name(name)
-
-        registration_start = time.time()
 
         # Handle WorkflowBuilder
         if hasattr(workflow, "build"):
             workflow = workflow.build()
 
-        # Store internally via HandlerRegistry FIRST so metadata
-        # validation (JSON-serializable, size cap) runs before we touch
-        # the workflow object. If validation fails, the caller's
-        # workflow is left untouched and the ValueError surfaces
-        # cleanly — no half-mutated state to clean up.
-        self._registry.register_workflow(name, workflow, metadata=metadata)
+        # Whether an MCP tool can be registered at all is a property of the
+        # server, not of this workflow, so it is checkable now — before the
+        # registry entry and gateway route land and have to be unwound.
+        self._precheck_mcp_tool_surface(name)
 
-        # Merge caller-supplied metadata into the Workflow object itself
-        # so downstream consumers that read workflow.metadata (MCP
-        # workflow:// resource, OpenAPI schema derivation, etc.) see the
-        # supplied fields without a second lookup. Caller values take
-        # precedence over existing keys. We assign a NEW dict rather
-        # than mutating in place: the same Workflow instance may be
-        # registered under multiple names (shared builder output), and
-        # in-place mutation would leak metadata across registrations.
-        if metadata and hasattr(workflow, "metadata"):
-            existing = workflow.metadata if workflow.metadata else {}
-            workflow.metadata = {**existing, **metadata}
+        registration_start = time.time()
 
-        # Validate PythonCodeNode sandbox issues at registration time
-        self._validate_workflow_sandbox(name, workflow)
+        # ----- Phase 2: mutate stores under a compensating rollback --------
+        snapshot = self._snapshot_registration(name, workflow)
+        try:
+            # Store internally via HandlerRegistry FIRST so metadata
+            # validation (JSON-serializable, size cap) runs before we touch
+            # the workflow object. If validation fails, the caller's
+            # workflow is left untouched and the ValueError surfaces
+            # cleanly — no half-mutated state to clean up.
+            self._registry.register_workflow(name, workflow, metadata=metadata)
 
-        # Register with enterprise gateway - this automatically exposes on all channels
-        if self._http_transport.gateway:
+            # Merge caller-supplied metadata into the Workflow object itself
+            # so downstream consumers that read workflow.metadata (MCP
+            # workflow:// resource, OpenAPI schema derivation, etc.) see the
+            # supplied fields without a second lookup. Caller values take
+            # precedence over existing keys. We assign a NEW dict rather
+            # than mutating in place: the same Workflow instance may be
+            # registered under multiple names (shared builder output), and
+            # in-place mutation would leak metadata across registrations.
+            if metadata and hasattr(workflow, "metadata"):
+                existing = workflow.metadata if workflow.metadata else {}
+                workflow.metadata = {**existing, **metadata}
+
+            # Validate PythonCodeNode sandbox issues at registration time
+            self._validate_workflow_sandbox(name, workflow)
+
+            # Register with enterprise gateway - this automatically exposes on all channels
+            if self._http_transport.gateway:
+                try:
+                    self._http_transport.register_workflow(name, workflow)
+                    logger.info(f"Workflow '{name}' registered with enterprise gateway")
+                except Exception as e:
+                    logger.error(f"Failed to register workflow '{name}': {e}")
+                    raise
+
+            # Register with MCP channel for full protocol support
+            if hasattr(self, "_mcp_channel") and self._mcp_channel:
+                # MCPChannel automatically exposes workflow as tool
+                self._mcp_channel.register_workflow(name, workflow)
+                logger.info(f"Workflow '{name}' registered with enhanced MCP channel")
+                # Also register as a workflow:// resource so resources/list
+                # surfaces the workflow descriptor for AI-agent discovery.
+                self._register_workflow_as_mcp_resource(name, workflow)
+            elif hasattr(self, "_mcp_server") and self._mcp_server:
+                # Register workflow as MCP tool when using WebSocket wrapper
+                # Core SDK MCPServer uses decorators, so we register dynamically
+                if hasattr(self._mcp_server, "register_workflow"):
+                    # Simple MCP server has register_workflow method
+                    self._mcp_server.register_workflow(name, workflow)
+                else:
+                    # Core SDK MCPServer - register as tool manually
+                    self._register_workflow_as_mcp_tool(name, workflow)
+                # Register as workflow:// resource for resources/list discovery.
+                self._register_workflow_as_mcp_resource(name, workflow)
+        except BaseException:
+            # BaseException, not Exception: a KeyboardInterrupt landing
+            # between two store writes leaves exactly the half-registered
+            # state this block exists to prevent.
             try:
-                self._http_transport.register_workflow(name, workflow)
-                logger.info(f"Workflow '{name}' registered with enterprise gateway")
-            except Exception as e:
-                logger.error(f"Failed to register workflow '{name}': {e}")
-                raise
-
-        # Register with MCP channel for full protocol support
-        if hasattr(self, "_mcp_channel") and self._mcp_channel:
-            # MCPChannel automatically exposes workflow as tool
-            self._mcp_channel.register_workflow(name, workflow)
-            logger.info(f"Workflow '{name}' registered with enhanced MCP channel")
-            # Also register as a workflow:// resource so resources/list
-            # surfaces the workflow descriptor for AI-agent discovery.
-            self._register_workflow_as_mcp_resource(name, workflow)
-        elif hasattr(self, "_mcp_server") and self._mcp_server:
-            # Register workflow as MCP tool when using WebSocket wrapper
-            # Core SDK MCPServer uses decorators, so we register dynamically
-            if hasattr(self._mcp_server, "register_workflow"):
-                # Simple MCP server has register_workflow method
-                self._mcp_server.register_workflow(name, workflow)
-            else:
-                # Core SDK MCPServer - register as tool manually
-                self._register_workflow_as_mcp_tool(name, workflow)
-            # Register as workflow:// resource for resources/list discovery.
-            self._register_workflow_as_mcp_resource(name, workflow)
+                self._rollback_registration(snapshot)
+            except Exception as rollback_error:  # pragma: no cover - defensive
+                # Never let a rollback failure mask the original error; log
+                # it loudly and re-raise what actually went wrong.
+                logger.error(
+                    f"Rollback after a failed register('{name}') did not "
+                    f"complete: {type(rollback_error).__name__}: "
+                    f"{rollback_error}"
+                )
+            raise
 
         # Track performance metric
         registration_time = time.time() - registration_start
@@ -1745,6 +1862,81 @@ Check the documentation or explore available resources.
             f"   🤖 MCP Tool: workflow_{name}\n"
             f"   💻 CLI Command: nexus execute {name}\n"
             f"   ⏱️  Registration time: {registration_time:.3f}s"
+        )
+
+    def _snapshot_registration(self, name: str, workflow) -> _RegistrationSnapshot:
+        """Capture the state :meth:`register` is about to overwrite.
+
+        Reads only; performs no mutation. Taken AFTER a ``WorkflowBuilder``
+        has been built so the snapshot refers to the same object the
+        registry will hold.
+
+        Args:
+            name: Workflow name about to be registered.
+            workflow: The built ``Workflow`` about to be registered.
+
+        Returns:
+            The pre-mutation snapshot :meth:`_rollback_registration` needs.
+        """
+        registry = self._registry
+        return _RegistrationSnapshot(
+            name=name,
+            workflow=workflow,
+            was_registered=name in registry._workflows,
+            prior_workflow=registry._workflows.get(name),
+            had_registry_metadata=name in registry._workflow_metadata,
+            prior_registry_metadata=registry._workflow_metadata.get(name),
+            had_workflow_metadata_attr=hasattr(workflow, "metadata"),
+            prior_workflow_metadata=getattr(workflow, "metadata", None),
+        )
+
+    def _rollback_registration(self, snapshot: _RegistrationSnapshot) -> None:
+        """Undo the store writes of a :meth:`register` call that raised.
+
+        Two cases, because "undo" means different things for each:
+
+        * **New name** — remove it from every store
+          (:meth:`_remove_from_all_channels`), so a failed registration
+          leaves nothing behind: no registry entry, no gateway route, no
+          MCP tool, no ``workflow://`` resource.
+        * **Existing name** (a re-registration that failed) — restore the
+          previous registry entry. The channel artifacts installed under
+          that name belong to the PREVIOUS registration and were never
+          removed by this call, so they stay and keep serving it; deleting
+          them here would turn a rejected re-registration into an outage
+          for a workflow that was working.
+
+        Always restores the ``metadata`` attribute on the caller's
+        ``Workflow`` object, which :meth:`register` reassigns.
+
+        Args:
+            snapshot: State captured by :meth:`_snapshot_registration`.
+        """
+        name = snapshot.name
+
+        # The caller's Workflow object is theirs; a failed register() must
+        # not leave merged metadata on it.
+        if snapshot.had_workflow_metadata_attr:
+            snapshot.workflow.metadata = snapshot.prior_workflow_metadata
+
+        if snapshot.was_registered:
+            self._registry._workflows[name] = snapshot.prior_workflow
+            if snapshot.had_registry_metadata:
+                self._registry._workflow_metadata[name] = (
+                    snapshot.prior_registry_metadata
+                )
+            else:
+                self._registry._workflow_metadata.pop(name, None)
+            logger.warning(
+                f"register('{name}') failed; restored the previous "
+                f"registration for that name"
+            )
+            return
+
+        self._remove_from_all_channels(name)
+        logger.warning(
+            f"register('{name}') failed; rolled back the partial registration "
+            f"so no channel is left advertising it"
         )
 
     def deregister(self, name: str) -> bool:
@@ -1767,6 +1959,42 @@ Check the documentation or explore available resources.
         """
         existed = name in self._registry.list_workflows()
 
+        self._remove_from_all_channels(name)
+
+        if existed:
+            logger.info(f"Workflow '{name}' deregistered from all channels")
+        return existed
+
+    def _remove_from_all_channels(self, name: str) -> None:
+        """Drop ``name`` from every store :meth:`register` writes.
+
+        The write set register() covers, in the order register() fills it:
+
+        1. ``HandlerRegistry._workflows[name]`` — the registry Nexus owns
+           and every channel reads through.
+        2. ``HandlerRegistry._workflow_metadata[name]`` — caller metadata.
+        3. The enterprise gateway's ``/workflows/{name}`` mount plus the
+           per-workflow ``WorkflowAPI`` runtime behind it.
+        4. The MCP tool, in TWO stores — ``server._tool_registry`` (the
+           wrapper dict ``tools/list`` reads) AND
+           ``server._mcp._tool_manager._tools`` (FastMCP).
+        5. The ``workflow://{name}`` resource, likewise in TWO stores —
+           ``server._resource_registry`` AND
+           ``server._mcp._resource_manager._resources``.
+
+        Items 4 and 5 are the "four backing stores" the MCP surface keeps
+        per workflow; :meth:`_deregister_workflow_mcp` clears all four.
+
+        Shared by :meth:`deregister` (the public path) and
+        :meth:`_rollback_registration` (the failure path), so the undo can
+        never drift from what registration installed.
+
+        Removal is best-effort per store and never raises: this runs on the
+        failure path, where an exception would mask the original error.
+
+        Args:
+            name: Workflow identifier to remove from every store.
+        """
         # Internal registry (name -> Workflow + metadata).
         self._registry._workflows.pop(name, None)
         self._registry._workflow_metadata.pop(name, None)
@@ -1797,10 +2025,6 @@ Check the documentation or explore available resources.
         # MCP server (WebSocket wrapper): drop the tool + workflow:// resource
         # so a re-register re-installs a fresh handler rather than colliding.
         self._deregister_workflow_mcp(name)
-
-        if existed:
-            logger.info(f"Workflow '{name}' deregistered from all channels")
-        return existed
 
     def _deregister_workflow_mcp(self, name: str) -> None:
         """Best-effort removal of a workflow's MCP tool + resource.
