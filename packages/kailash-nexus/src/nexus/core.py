@@ -282,6 +282,15 @@ class Nexus:
     configurable at construction time or via attributes.
     """
 
+    # Class-level defaults for ``__del__`` safety. ``__init__`` can raise before
+    # ``self.runtime`` is bound (invalid preset, port validation, gateway
+    # construction failure) and CPython still finalizes the partially-built
+    # object. Without a class-level default the finalizer would raise
+    # ``AttributeError`` from inside GC, which Python can only print as
+    # "Exception ignored in: <function Nexus.__del__>" — hiding the real
+    # constructor error. Same pattern as ``WebSocketTransport``.
+    runtime: Any = None
+
     def __init__(
         self,
         api_port: int = 8000,
@@ -4092,6 +4101,13 @@ Check the documentation or explore available resources.
         Closes child servers first (they hold acquired references to the
         runtime), then releases the Nexus-level runtime reference.
         Idempotent: safe to call multiple times.
+
+        Best-effort per child: one failing child MUST NOT strand the remaining
+        runtime references. Every swallowed error is logged at DEBUG (teardown
+        failures are expected and non-actionable for the caller, but a silent
+        swallow leaves no trace at all — ``rules/zero-tolerance.md`` Rule 3).
+        This method is caller-driven only; it is NOT reachable from ``__del__``
+        (see the finalizer's docstring for why that matters).
         """
         # Close MCP servers first — they hold acquired runtime refs
         for attr in ("_mcp_server", "_ws_server"):
@@ -4099,8 +4115,13 @@ Check the documentation or explore available resources.
             if server is not None and hasattr(server, "close"):
                 try:
                     server.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Error closing %s during Nexus.close(): %s: %s",
+                        attr,
+                        type(exc).__name__,
+                        exc,
+                    )
 
         # Close the HTTP gateway (EnterpriseWorkflowServer). It acquires a
         # reference to self.runtime at construction and owns the per-workflow
@@ -4110,8 +4131,12 @@ Check the documentation or explore available resources.
         if gateway is not None and hasattr(gateway, "close"):
             try:
                 gateway.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Error closing gateway during Nexus.close(): %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
 
         # Release runtime refs held by transports (MCP/WS lazily acquire a
         # _shared_runtime on tool invocation and release it only in async
@@ -4122,8 +4147,13 @@ Check the documentation or explore available resources.
             if hasattr(transport, "close"):
                 try:
                     transport.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Error closing %s during Nexus.close(): %s: %s",
+                        type(transport).__name__,
+                        type(exc).__name__,
+                        exc,
+                    )
 
         # Release or close the runtime itself
         if hasattr(self, "runtime") and self.runtime is not None:
@@ -4131,16 +4161,43 @@ Check the documentation or explore available resources.
             self.runtime = None
 
     def __del__(self, _warnings=warnings):
-        if getattr(self, "runtime", None) is not None:
+        """Emit a ``ResourceWarning`` for a leaked Nexus — and do nothing else.
+
+        This finalizer MUST NOT call ``close()`` (nor anything that can emit a
+        log line or touch an event loop). ``__del__`` runs at an arbitrary GC
+        point, including from inside Python's logging machinery while the root
+        logging lock is held by this very thread. ``Nexus.close()`` reaches at
+        least three logging/event-loop sites:
+
+        * ``WebSocketTransport.close()`` → ``logger.info("WebSocketTransport
+          stopped")`` (``nexus/transports/websocket.py``);
+        * ``EnterpriseWorkflowServer.close()`` → ``WorkflowServer.close()`` →
+          ``logger.debug("Error closing WorkflowAPI …")``;
+        * ``self.runtime.release()`` → ``LocalRuntime.close()`` →
+          ``_cleanup_event_loop()`` → ``logger.debug``/``logger.warning`` plus
+          ``loop.run_until_complete(...)`` and lazy ``import`` of
+          ``AsyncSQLDatabaseNode``.
+
+        Re-entering ``logging`` (or the import lock) from a finalizer that was
+        itself triggered by ``logging`` deadlocks the interpreter — the
+        2026-04-16 "DataFlow unit suite hangs" incident. See ``rules/patterns.md``
+        § "Async Resource Cleanup".
+
+        Real cleanup is the caller's responsibility: ``app.close()``,
+        ``app.stop()``, or ``with Nexus(...) as app:``.
+
+        ``_warnings`` is bound as a default argument so the finalizer still
+        works during interpreter shutdown, when module globals are torn down.
+        """
+        if self.runtime is not None:
             _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                f"Unclosed {type(self).__name__}. Call app.close() explicitly, "
+                f"or use 'with {type(self).__name__}(...) as app:' — the shared "
+                "runtime and gateway are NOT released by garbage collection.",
                 ResourceWarning,
                 source=self,
+                stacklevel=2,
             )
-            try:
-                self.close()
-            except Exception:
-                pass
 
     def __enter__(self):
         return self
