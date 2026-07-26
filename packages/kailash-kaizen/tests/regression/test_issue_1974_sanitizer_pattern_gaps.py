@@ -484,9 +484,28 @@ def test_scheme_broadening_is_linear_on_input_with_no_scheme() -> None:
 
     Possessive quantifiers do NOT fix it (backtracking is over start positions,
     not inside the group); only bounding the scheme does.
+
+    PAYLOAD SHAPE IS LOAD-BEARING. This test originally used ``"a" * n``, which
+    disarmed it completely: ``a`` is a hex digit, so ``\\b[a-fA-F0-9]{32,}\\b``
+    collapsed the whole payload to a 10-char sentinel BEFORE any URL rule ran.
+    Re-injecting the unbounded scheme and re-running this test PASSED — 62 KB
+    cost 0.14 ms. ``"a:" * n`` fails for a different reason (``:`` is outside
+    the scheme class, so the run dies after one char). The payload must be all
+    scheme-class characters AND unclaimable by every vendor pattern: ``.`` and
+    ``-`` are in ``[A-Za-z0-9+.-]`` but are neither hex nor in the AWS-secret
+    class ``[A-Za-z0-9/+]``. With this payload and the ReDoS present:
+    3.9 KB 11 ms / 15.6 KB 161 ms / 62.5 KB 2846 ms.
     """
-    small = "a" * 8_000
-    large = "a" * 64_000  # 8x
+    unit = "a.b-"  # every char in the scheme class; claimed by no vendor rule
+    small = unit * 2_000  # ~7.8 KB
+    large = unit * 16_000  # 8x, ~62.5 KB
+
+    # Guard the guard: a payload that gets redacted first makes the timing
+    # assertion below pass vacuously on a 10-char string.
+    assert sanitize_provider_error(RuntimeError(small), "t").endswith(small), (
+        "the linearity payload is being consumed by a credential pattern "
+        "before the URL rules run; this test would pass vacuously"
+    )
 
     def cost(text: str, reps: int = 5) -> float:
         best = float("inf")
