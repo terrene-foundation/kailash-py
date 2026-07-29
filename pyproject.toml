@@ -125,7 +125,7 @@ telemetry = [
 scheduler = ["apscheduler>=3.10"]
 
 # MCP — Model Context Protocol server/client integration.
-mcp = ["mcp[cli]>=1.23.0,<2.0"]
+mcp = ["mcp[cli]>=1.23.0,<3.0"]
 
 # Data / numeric — only required if you use the few function-local pandas/numpy
 # paths (sanitize_input, vector_db helpers). NOT required by the workflow
