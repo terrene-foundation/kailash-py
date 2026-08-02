@@ -2,20 +2,13 @@
 /**
  * adjacency-heartbeat.js — F14 M5 B2 heartbeat hook.
  *
- * @settings-registration: coordination-substrate — registered per-clone in the
- *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
- *   committed .claude/settings.json. It carries NO `isCoordinationEnabled()`
- *   gate; it self-limits on identity (`resolveIdentitySafely` → passthrough when
- *   no verified_id) and on `COC_OPERATOR_KEY_PATH` (appendHeartbeat returns early
- *   without it). But its PURPOSE is the coordination substrate: signing a
- *   `heartbeat` record into .claude/learning/coordination-log.jsonl for sibling
- *   operators to fold. On a PreToolUse(*) + Stop registration that is a node
- *   spawn on EVERY tool call, writing a per-operator signed liveness stream that
- *   an un-enrolled repo has no reader for. Intentionally absent from
- *   .claude/settings.json; the validate-emit `settings-hook-registration` check
- *   reads this marker (#771).
- *
  * Architecture ref: §4.3 hook table row "adjacency-heartbeat.js"
+ *
+ * @hook-event: PreToolUse:* (telemetry) — records liveness, never gates; "any
+ *   tool call" genuinely IS the subject, which is what licenses the `*` matcher
+ *   (hook-event-selection.md MUST-3 reserves it for lifecycle/telemetry).
+ * @hook-event: Stop (telemetry) — the turn boundary is the subject: fold the log
+ *   and write a final heartbeat once the turn's work is done.
  *
  * Events: PreToolUse (*) + Stop
  * Severity: NEVER blocks. {continue:true} on every path.
@@ -53,6 +46,8 @@ const COALESCE_WINDOW_MS = 60_000;
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 const { readStdinBounded } = require("./lib/read-stdin-bounded.js");
+// loom#1349 — the ONE hardened append primitive; see lib/append-sink.js for the six defenses.
+const { appendSinkLine } = require("./lib/append-sink.js");
 
 function passthrough() {
   clearTimeout(fallback);
@@ -149,8 +144,13 @@ function appendHeartbeat(repoDir, identity, opts) {
         "learning",
         "coordination-log.jsonl",
       );
-      fs.mkdirSync(path.dirname(logPath), { recursive: true });
-      fs.appendFileSync(logPath, JSON.stringify(record) + "\n");
+      // loom#1349 — hardened append. Best-effort for the HALTING path (a refusal never throws into
+      // the hook), but NOT silent: a security refusal is reported on stderr per R1 F5. Dropping it
+      // silently would let an attacker who plants a symlink/FIFO/hard-link at the sink suppress
+      // every heartbeat with no signal — trading a leak for an undetectable denial-of-observability.
+      // stderr only: stdout is the hook's protocol channel.
+      const w = appendSinkLine({ repoDir, sinkPath: logPath, line: JSON.stringify(record) });
+      if (!w.ok) console.error(`[adjacency-heartbeat] sink append refused: ${w.error} — ${w.reason}`);
     } catch {
       // best-effort
     }
@@ -173,8 +173,11 @@ function appendHeartbeat(repoDir, identity, opts) {
       "learning",
       "coordination-log.jsonl",
     );
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.appendFileSync(logPath, JSON.stringify(signed) + "\n");
+    // loom#1349 — hardened append. This is the PRODUCTION signed row: it carries verified_id +
+    // person_id, so a symlinked sink escaping the gitignore fence leaks operator-correlatable
+    // identity. Best-effort for the halting path, loud on stderr for a refusal (R1 F5), as above.
+    const w = appendSinkLine({ repoDir, sinkPath: logPath, line: JSON.stringify(signed) });
+    if (!w.ok) console.error(`[adjacency-heartbeat] sink append refused: ${w.error} — ${w.reason}`);
   } catch {
     // best-effort
   }

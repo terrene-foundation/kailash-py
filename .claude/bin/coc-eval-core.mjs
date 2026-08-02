@@ -19,6 +19,11 @@
  * caller — coc-eval-all.mjs — skips probe-only entries whose scanner is null
  * BEFORE reaching this engine).
  *
+ * NOT A CLI. This module exports a function and has no command-line entry point.
+ * Running it directly used to be a silent NO-OP (zero bytes out, exit 0) that was
+ * cited in PR bodies as a passing local parity check; it now REFUSES loudly and
+ * exits 2 (see the entry-point guard at the foot of this file, loom#1368 part 2).
+ *
  * Public API:
  *   runEvalHarness({ scanner, fixturesDir, expected }) -> { passed, fixtures[], summary }
  *
@@ -35,8 +40,9 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Per-scanner wall-clock budget (ms). Env-overridable — read PER CALL, not at
 // module load — so the `scanner-timeout` regression test can drive a sleeping
@@ -257,4 +263,51 @@ export function runEvalHarness({ scanner, fixturesDir, expected }) {
   };
 
   return { passed: allPassed, fixtures, summary };
+}
+
+// --------------------------------------------------------------------------
+// Entry-point guard (loom#1368 part 2) — this module is a LIBRARY, not a CLI.
+//
+// Before this guard, `node .claude/bin/coc-eval-core.mjs` did nothing at all:
+// it defined its exports, wrote zero bytes to stdout AND stderr, and exited 0.
+// That silent success is indistinguishable from a genuine clean run, and it was
+// cited in PR bodies as a passing local parity check — a "gate" that could not
+// fail. Direct invocation now REFUSES on stderr and exits 2 (misuse), distinct
+// from coc-eval-all's exit 1 (findings).
+//
+// Keyed on being the process ENTRY-POINT, compared through realpathSync on BOTH
+// sides so a symlinked bin (or a symlinked repo path, e.g. macOS /tmp ->
+// /private/tmp) neither dodges the refusal nor mis-fires it. Under `import` —
+// coc-eval-all.mjs's own dependency load — process.argv[1] is the IMPORTER, so
+// the guard stays silent (asserted by the control test in coc-eval-core.test.mjs).
+// --------------------------------------------------------------------------
+function isDirectInvocation() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  const canonical = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return resolve(p);
+    }
+  };
+  return canonical(entry) === canonical(fileURLToPath(import.meta.url));
+}
+
+if (isDirectInvocation()) {
+  console.error(
+    [
+      "ERROR: coc-eval-core.mjs is a LIBRARY, not a CLI — it has no command-line entry point.",
+      "Running it directly performs NO checks and verifies NOTHING; it must never be cited",
+      "as a passing parity check (loom#1368 part 2).",
+      "",
+      "Run the CI structural gate instead:",
+      "  node .claude/bin/coc-eval-all.mjs            # iterates the eval-manifest, exits 1 on failure",
+      "  node .claude/bin/coc-manifest-integrity.mjs  # manifest <-> probes <-> on-disk tripwire",
+      "",
+      "To use the engine programmatically:",
+      '  import { runEvalHarness } from "./coc-eval-core.mjs";',
+    ].join("\n"),
+  );
+  process.exit(2);
 }
