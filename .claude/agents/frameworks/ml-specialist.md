@@ -25,12 +25,18 @@ Entry point for kailash-ml 1.0.0 work. Use when implementing any ML lifecycle su
 
 ## Step 0: Working Directory Self-Check
 
-Before any file edit, if launched with `isolation: "worktree"`:
+Before any file edit — AFTER the prompt's STEP-0 `cd` — run this BARE (no `-C`, and do NOT wrap it in a `cd`):
 
-    git rev-parse --show-toplevel
+    [ "$(git rev-parse --show-toplevel)" = "$(pwd -P)" ] || STOP
+    main=$(cd "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" && pwd -P)
+    [ "$(pwd -P)" != "$main" ] || STOP
     git rev-parse --abbrev-ref HEAD
 
-If top-level does NOT match the worktree path in the prompt, STOP and emit "worktree drift detected — refusing to edit main checkout".
+If either check fails, STOP and emit "worktree drift detected — refusing to edit main checkout". The second line is load-bearing: MAIN is itself a valid worktree root, so the root check alone PASSES there — which is precisely the drift this self-check exists to catch when cwd has reverted mid-session.
+
+**BARE is correct HERE.** This check runs after cwd is established, so a bare `rev-parse` is the only form that OBSERVES where you actually ended up: `git -C <wt> …` would answer about the worktree instead of about you, and a `cd` would re-establish the very thing under test. Compare RESOLVED paths (`pwd -P`) — never the path string from the prompt, since `--show-toplevel` returns the symlink-resolved form and a symlinked worktree would false-refuse.
+
+Write every file under the pinned absolute path, and re-assert location per invocation for later edits/tests (`rules/worktree-isolation.md` Rule 2a — cwd can revert mid-session; Rule 2 owns this self-check).
 
 ## Architecture (1.0.0 — engine-first)
 

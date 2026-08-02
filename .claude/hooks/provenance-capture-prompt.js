@@ -2,22 +2,6 @@
 /**
  * provenance-capture-prompt.js — F101-2 (loom#411 governance-as-DNA, loom lane).
  *
- * @settings-registration: opt-in-ledger — registered per-clone in the gitignored
- *   .claude/settings.local.json by an operator who wants the F101-2 provenance
- *   stream, NEVER in the committed .claude/settings.json of this PUBLIC repo.
- *   On UserPromptSubmit(*) this is a node spawn on EVERY human turn that appends
- *   a `HumanInput` event (prompt_sha256 + char_count — never raw text) to
- *   .claude/learning/provenance/<session>.jsonl, a stream whose only consumer is
- *   the csq drain lane, which does not exist in a clone of this repo. It is NOT
- *   coordination-gated and NOT a guard (it never blocks), so the reason it is
- *   unregistered is cost/disclosure profile, not inertness. Residual, stated so
- *   it is not silently lost: this hook is the substrate
- *   journal-author-discipline.md MUST-1 reads, and with it unregistered the
- *   backing check reads an absent ledger as "undetermined"
- *   (provenance-author-backing.js fails OPEN) — it never yields a false
- *   "unbacked" verdict. Intentionally absent from .claude/settings.json; the
- *   validate-emit `settings-hook-registration` check reads this marker (#771).
- *
  * Event: UserPromptSubmit (*)
  * Severity: NEVER blocks. {continue:true} on every path (capture is observational
  *           — the model cannot bypass it, but it never halts the human's turn).

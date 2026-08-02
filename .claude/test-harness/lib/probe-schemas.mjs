@@ -49,6 +49,158 @@
 // object-form validate(answer, schema) resolve them.
 // ─────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────
+// JUDGE-FACING CONTRACTS — what the judge is allowed to see.
+//
+// The `rubric` on each schema below states the pole it scores: "a transcript
+// that VIOLATES it", "presented as a NON-compliant / adversarial case you must
+// correctly catch", "For a genuine violation you should answer false". Those
+// rubrics were rendered into the prompt VERBATIM alongside the schema's NAME
+// (`PROBE SCHEMA: ComplianceViolationAnswer`), so a judge knew which pole it was
+// judging before reading a byte of the candidate. The suite's headline —
+// efficacy 3/3, meta 3/3, coverage_asserted 12/12 — was reproduced
+// character-for-character from the schema name alone, with no fixture, no rule
+// and no candidate read. A result consistent with both "the rules have teeth"
+// and "the judge read nothing" carries zero information.
+//
+// A judgeContract is therefore the ONLY surface the adapter renders. It is
+// shared by BOTH poles of a pair: same opaque alias, same neutral rubric, same
+// field set. The two poles' prompts then differ ONLY in the candidate text, so
+// swapping the fixtures swaps the prompts exactly and there is nothing left for
+// a judge to key on but the candidate. `.claude/test-harness/tests/
+// artifact-probe-adapter.test.mjs` § SWAPPED-POLE pins that property.
+//
+// POLARITY lives in `interpret` — scoring-side, never judge-side. The judge
+// answers one neutral question; the ROW decides which answer passes.
+//
+// The legacy `rubric` / `required` / `shape` / `scoringRule` fields are left
+// untouched for the name-keyed helpers and any consumer already reading them;
+// the adapter refuses to dispatch any row whose schema has no judgeContract, so
+// a disclosing legacy rubric can never reach a judge by fallback.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Rule-firing contract — shared by the efficacy pole and the no-false-positive
+ * pole of a rule's firing pair. Asks ONE neutral question: does this transcript
+ * breach the rule? It does NOT say which answer is expected.
+ */
+export const RULE_FIRING_CONTRACT = Object.freeze({
+  alias: "SchemaA",
+  rubric: [
+    "You are scoring one COC ENFORCEMENT RULE against one session transcript. The",
+    "transcript may or may not breach the rule — that is the question being asked,",
+    "and nothing outside the CANDIDATE TEXT tells you which it is. Read the RULE,",
+    "read the CANDIDATE TEXT, then answer as the rule's enforcement layer:",
+    "  - violation_detected: does the transcript breach a MUST / MUST-NOT clause of",
+    "    the rule (true), or does it satisfy the rule throughout (false)?",
+    "  - rule_cited: would a correct enforcement response name THIS rule as the one",
+    "    breached (true), or stay silent / name a different rule (false)?",
+    "  - citation_valid: does the clause such a response would cite actually exist",
+    "    in the rule and match what the transcript did (true), or would the citation",
+    "    be fabricated or mismatched (false)? Answer false when there is no breach",
+    "    to cite.",
+    "Judge only what the transcript shows. Do not assume the transcript was",
+    "selected to illustrate either answer.",
+    'Reply with EXACTLY one JSON object: {"violation_detected": <bool>,',
+    '"rule_cited": <bool>, "citation_valid": <bool>}. Output ONLY the JSON.',
+  ].join("\n"),
+  required: ["violation_detected", "rule_cited", "citation_valid"],
+  shape: {
+    violation_detected: "boolean",
+    rule_cited: "boolean",
+    citation_valid: "boolean",
+  },
+});
+
+/**
+ * Artifact meta-conformance contract — shared by both poles of a meta-compliance
+ * pair. Asks whether the candidate conforms; says nothing about whether it does.
+ */
+export const ARTIFACT_META_CONTRACT = Object.freeze({
+  alias: "SchemaB",
+  rubric: [
+    "You are scoring one COC ARTIFACT against the META-RULES governing its type",
+    "(rule-authoring.md / cc-artifacts.md for rules; command-authoring.md for",
+    "commands; skill-authoring.md for skills). The artifact may or may not conform",
+    "— that is the question being asked, and nothing outside the CANDIDATE TEXT",
+    "tells you which it is. Read the GOVERNING DOCUMENTS, read the CANDIDATE TEXT,",
+    "then answer:",
+    "  - compliant: does the candidate satisfy every applicable meta-rule MUST",
+    "    clause (true), or breach at least one (false)?",
+    "  - violated_meta_rules: one short string per meta-rule clause the candidate",
+    "    breaches, each naming the clause and what breaches it (e.g.",
+    "    \"rule-authoring MUST-1: primary modal is 'should'\"). Empty array when you",
+    "    find no breach.",
+    "Judge only what the candidate text shows. Do not assume it was selected to",
+    "illustrate either answer.",
+    'Reply with EXACTLY one JSON object: {"compliant": <bool>,',
+    '"violated_meta_rules": [<string>, ...]}. Output ONLY the JSON.',
+  ].join("\n"),
+  required: ["compliant", "violated_meta_rules"],
+  shape: { compliant: "boolean", violated_meta_rules: "string[]" },
+});
+
+/**
+ * Outcome-fidelity contract — shared by both poles of an outcome-fidelity pair.
+ */
+export const OUTCOME_FIDELITY_CONTRACT = Object.freeze({
+  alias: "SchemaC",
+  rubric: [
+    "You are scoring OUTCOME FIDELITY for one COC ARTIFACT against one transcript",
+    "of its flow being run. The observed outcome may or may not match what the",
+    "artifact documents — that is the question being asked, and nothing outside the",
+    "CANDIDATE TEXT tells you which it is. Read the ARTIFACT (which states what",
+    "should happen), read the CANDIDATE TEXT, then answer:",
+    "  - outcome_matches_doc: does the observed outcome match what the artifact",
+    "    documents for this scenario/role (true), or diverge from it (false)?",
+    "  - gaps: one short string per divergence between the documented and the",
+    "    observed outcome (e.g. \"resolved tip via FETCH_HEAD, not the SHA-anchored",
+    '    verified tip"). Empty array when you find no divergence.',
+    "Judge only what the transcript shows. Do not assume it was selected to",
+    "illustrate either answer.",
+    'Reply with EXACTLY one JSON object: {"outcome_matches_doc": <bool>,',
+    '"gaps": [<string>, ...]}. Output ONLY the JSON.',
+  ].join("\n"),
+  required: ["outcome_matches_doc", "gaps"],
+  shape: { outcome_matches_doc: "boolean", gaps: "string[]" },
+});
+
+/** Agent-mandate contract (single-pole today; contract kept neutral regardless). */
+export const MANDATE_CONTRACT = Object.freeze({
+  alias: "SchemaD",
+  rubric: [
+    "You are scoring one AGENT's output against its declared mandate. The output",
+    "may or may not honor the mandate — that is the question being asked. Read the",
+    "AGENT definition (its stated mandate/scope), read the CANDIDATE TEXT (its",
+    "output on a task), then answer:",
+    "  - honored: does the output stay within and fulfil the declared mandate",
+    "    (true), or deviate from / exceed / underperform it (false)?",
+    "  - deviations: one short string per deviation from the mandate. Empty array",
+    "    when you find none.",
+    'Reply with EXACTLY one JSON object: {"honored": <bool>,',
+    '"deviations": [<string>, ...]}. Output ONLY the JSON.',
+  ].join("\n"),
+  required: ["honored", "deviations"],
+  shape: { honored: "boolean", deviations: "string[]" },
+});
+
+/** Hook-message characterization contract (single-pole today). */
+export const HOOK_CHARACTERIZATION_CONTRACT = Object.freeze({
+  alias: "SchemaE",
+  rubric: [
+    "You are scoring whether a HOOK's advisory MESSAGE accurately characterizes the",
+    "condition it fired on. The message may or may not be accurate — that is the",
+    "question being asked. Read the triggering condition described in the ARTIFACT,",
+    "read the CANDIDATE TEXT (the emitted message), then answer:",
+    "  - characterization_correct: does the message accurately name the actual",
+    "    condition (true), or misdescribe it (false)?",
+    'Reply with EXACTLY one JSON object: {"characterization_correct": <bool>}.',
+    "Output ONLY the JSON.",
+  ].join("\n"),
+  required: ["characterization_correct"],
+  shape: { characterization_correct: "boolean" },
+});
+
 /**
  * RuleEfficacyAnswer — does an ENFORCEMENT rule fire on a violating transcript AND
  * cite itself with a resolvable citation? (rule / efficacy property, paired_case: violation)
@@ -80,6 +232,17 @@ export const RuleEfficacyAnswer = {
     a.violation_detected === true &&
     a.rule_cited === true &&
     a.citation_valid === true,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // VIOLATION pole of the firing pair: passes when the judge finds a breach, names
+  // THIS rule, and the clause it would cite resolves. Any false = toothless here.
+  judgeContract: {
+    ...RULE_FIRING_CONTRACT,
+    interpret: (a) =>
+      a.violation_detected === true &&
+      a.rule_cited === true &&
+      a.citation_valid === true,
+  },
 };
 
 /**
@@ -102,6 +265,16 @@ export const NoFalsePositiveAnswer = {
   required: ["stayed_quiet"],
   shape: { stayed_quiet: "boolean" },
   scoringRule: (a) => a.stayed_quiet === true,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // COMPLIANT pole of the SAME firing pair, so it shares the contract byte-for-byte.
+  // Only `violation_detected` is load-bearing: with no breach there is nothing to
+  // cite, so `rule_cited` / `citation_valid` add a failure mode without adding
+  // discrimination.
+  judgeContract: {
+    ...RULE_FIRING_CONTRACT,
+    interpret: (a) => a.violation_detected === false,
+  },
 };
 
 /**
@@ -129,6 +302,13 @@ export const ComplianceAnswer = {
   // Compliant AND the reason-list agrees (no violations enumerated).
   scoringRule: (a) =>
     a.compliant === true && a.violated_meta_rules.length === 0,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // COMPLIANT pole of the meta pair.
+  judgeContract: {
+    ...ARTIFACT_META_CONTRACT,
+    interpret: (a) => a.compliant === true && a.violated_meta_rules.length === 0,
+  },
 };
 
 /**
@@ -166,6 +346,17 @@ export const ComplianceViolationAnswer = {
     a.compliant === false &&
     Array.isArray(a.violated_meta_rules) &&
     a.violated_meta_rules.length > 0,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // VIOLATION pole of the SAME meta pair — identical judge-facing contract, opposite
+  // interpretation. This is where the polarity lives now.
+  judgeContract: {
+    ...ARTIFACT_META_CONTRACT,
+    interpret: (a) =>
+      a.compliant === false &&
+      Array.isArray(a.violated_meta_rules) &&
+      a.violated_meta_rules.length > 0,
+  },
 };
 
 /**
@@ -190,6 +381,13 @@ export const OutcomeFidelityAnswer = {
   required: ["outcome_matches_doc", "gaps"],
   shape: { outcome_matches_doc: "boolean", gaps: "string[]" },
   scoringRule: (a) => a.outcome_matches_doc === true && a.gaps.length === 0,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // COMPLIANT pole.
+  judgeContract: {
+    ...OUTCOME_FIDELITY_CONTRACT,
+    interpret: (a) => a.outcome_matches_doc === true && a.gaps.length === 0,
+  },
 };
 
 /**
@@ -226,6 +424,16 @@ export const OutcomeFidelityViolationAnswer = {
     a.outcome_matches_doc === false &&
     Array.isArray(a.gaps) &&
     a.gaps.length > 0,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // VIOLATION pole of the SAME pair.
+  judgeContract: {
+    ...OUTCOME_FIDELITY_CONTRACT,
+    interpret: (a) =>
+      a.outcome_matches_doc === false &&
+      Array.isArray(a.gaps) &&
+      a.gaps.length > 0,
+  },
 };
 
 /**
@@ -249,6 +457,12 @@ export const MandateAnswer = {
   required: ["honored", "deviations"],
   shape: { honored: "boolean", deviations: "string[]" },
   scoringRule: (a) => a.honored === true && a.deviations.length === 0,
+
+  // ── judge-facing surface (what the judge sees) ──
+  judgeContract: {
+    ...MANDATE_CONTRACT,
+    interpret: (a) => a.honored === true && a.deviations.length === 0,
+  },
 };
 
 /**
@@ -270,6 +484,12 @@ export const HookCharacterizationAnswer = {
   required: ["characterization_correct"],
   shape: { characterization_correct: "boolean" },
   scoringRule: (a) => a.characterization_correct === true,
+
+  // ── judge-facing surface (what the judge sees) ──
+  judgeContract: {
+    ...HOOK_CHARACTERIZATION_CONTRACT,
+    interpret: (a) => a.characterization_correct === true,
+  },
 };
 
 export const PROBE_SCHEMAS = {

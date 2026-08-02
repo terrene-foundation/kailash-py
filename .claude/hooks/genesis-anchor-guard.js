@@ -3,19 +3,6 @@
  * Hook: genesis-anchor-guard
  * Event: PreToolUse on sign / `git commit` / `git push` / roster-touching writes
  *
- * @settings-registration: coordination-substrate — registered per-clone in the
- *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
- *   committed .claude/settings.json. This repo ships un-enrolled (the committed
- *   .claude/operators.roster.json carries the PLACEHOLDER-owner genesis), so the
- *   MO-OPT W1 opt-in gate below (`if (!isCoordinationEnabled(repoDir))
- *   passthrough()`) makes the guard inert today. Committed registration would
- *   ARM its fail-CLOSED branch the moment ANY clone runs `/enroll`: with no
- *   verifying owner-bound genesis-anchor in the log and no in-progress
- *   enrollment marker, it hard-`block`s (exit 2) every `git commit` / `git push`
- *   / roster-touching write. Intentionally absent from .claude/settings.json;
- *   the validate-emit `settings-hook-registration` check reads this marker
- *   (#771).
- *
  * Shard A0b-2a (workspaces/multi-operator-coc/02-plans/01-architecture.md §4.3).
  *
  * BEHAVIOR — fail-CLOSED:
