@@ -38,7 +38,13 @@ codify_session:
   See changes[] tail. APPEND 2026-07-11b (third-pass redteam codify): added a GATE-1 FOLLOW-UP to the
   cross-sdk-inspection Rule 4d changes[] entry (306-line length-rationale/extraction + cross-repo-grant-scoping
   process note) so loom picks it up; surfacing-only, NO new changes[] entries and NO rule edits this pass.
-  Receipt: workspaces/sdk-backlog/journal/0017."
+  Receipt: workspaces/sdk-backlog/journal/0017. APPEND 2026-08-03 (loom Gate-2 merge session): ONE
+  artifact_update entry appended — the effortLevel key in the CC settings file, xhigh -> high, the
+  ecosystem-wide default per co-owner directive. Suggested global. Committed locally as 1a961f058, but
+  the LOCAL commit is non-durable on its own: that settings file is a loom-DELIVERED artifact (present
+  in the PR #1992 Gate-2 file set), so the next /sync-to-build reverts it unless loom changes the
+  delivered default. Status stays pending_review per artifact-flow Append-Never-Overwrite (the
+  2026-06-23 batch below is still unreviewed). See changes[] tail."
 changes:
   - type: rule_update
     artifact: dependencies
@@ -1361,3 +1367,57 @@ changes:
       scrub: no client/operator/3rd-party tokens (the pattern is generic; the #1899/#1926/#1927 issue numbers are
       already-public de-org bare numbers). Receipt: this codify journal DECISION 0014 + DISCOVERY 0012
       (workspaces/issue-1720-llm-consolidation/journal/).'
+
+  - type: artifact_update
+    artifact: settings-effort-level-default
+    files:
+      - .claude/settings.json
+    classification_suggestion: global
+    context:
+      'CHANGES one key in the CC settings file: effortLevel from "xhigh" to "high".
+
+
+      Directive: "high" is now the correct effortLevel default across the ENTIRE ecosystem (co-owner
+      directive, 2026-08-03). The DELIVERED value is the stale one, not the local edit.
+
+
+      Provenance (verified in kailash-py, not inferred): the line has exactly two commits here — 755d11c22
+      introduced "high"; eab9867c7 (2026-06-03, "chore(coc): land /sync-to-build delivery — effortLevel
+      xhigh") raised it to "xhigh" as part of a loom /sync-to-build delivery. The current loom Gate-2 sync
+      (kailash-py PR #1992, "chore(sync): Gate-2 build py from loom 43167a54921f") left the line UNCHANGED
+      — a diff of that sync commit restricted to the settings file returns zero effortLevel hunks. So
+      "xhigh" is a loom-delivered value dating to 2026-06-03, NOT a regression introduced this cycle.
+
+
+      WHY THIS MUST GO UPSTREAM (load-bearing): the settings file is a loom-DELIVERED artifact — it is in
+      the PR #1992 Gate-2 file set. A local-only fix is therefore NON-DURABLE: the next /sync-to-build
+      re-delivers whatever loom holds and silently reverts it. Not hypothetical — the local "high" edit
+      was an uncommitted working-tree modification that the #1992 merge WOULD have overwritten had it not
+      been parked and restored. Only a loom-side change to the delivered default makes "high" stick here
+      and for every other consumer.
+
+
+      WHY GLOBAL (loom decides): effortLevel is a CLI-runtime execution setting with no language- or
+      variant-specific content, and the directive is explicitly ecosystem-WIDE. Suggested global so
+      /sync-to-build and /sync-to-use carry it to every BUILD repo and USE template. loom Gate-1 to
+      confirm the delivered default and to sweep any sibling surface this repo cannot see.
+
+
+      SCOPE LIMIT (stated, not glossed): the verified footprint is exactly ONE tracked file in kailash-py
+      — a repo-wide grep for effortLevel returns only the settings file, line 4; no .codex, .gemini, or
+      variant surface here carries the key. What loom currently holds, and what the other ecosystem repos
+      hold, was NOT verified: repo-scope-discipline confines this session to kailash-py, so "upstream is
+      xhigh" is an INFERENCE from the 2026-06-03 delivery, not a read of loom today. loom Gate-1 owns that
+      check.
+
+
+      Local action taken: committed 1a961f058 on branch fix/issue-1720-forest-drain (one line, explicit
+      path, no other files staged). THIS ENTRY is what carries the change upstream; the commit alone does
+      not.
+
+
+      Self-referential /codify gate: the CC settings file is NOT on self-referential-codify.md Rule 2
+      allowlist (which covers rules/commands/skills/hooks/bin/fixtures), so the multi-agent self-ref gate
+      does NOT fire; this is a one-key config value carrying no enforcement logic. Disclosure scrub: no
+      client/operator/3rd-party tokens (the value is a CLI effort enum; the PR and commit refs are
+      already-public bare numbers). Receipt: commit 1a961f058 + this session.'
