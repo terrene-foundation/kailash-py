@@ -23,11 +23,27 @@
  * defense-in-depth atop manifest-integrity check (d) so a tool whose coverage
  * silently vanished (e.g. downgraded to scanner:null) cannot exit 0.
  *
- * Usage:
- *   node .claude/bin/coc-eval-all.mjs [--json] [--manifest <path>]
+ * DECLARED-EMPTY vs UNCONFIGURED (loom#1368 part 2). A zero-entry run verifies
+ * NOTHING, so it may never print `ALL STRUCTURAL PASS`:
+ *   - manifest ABSENT / unparseable / present-but-empty-with-no-declaration
+ *     → UNCONFIGURED → exit 1. Silence can no longer read as coverage.
+ *   - manifest present, zero entries, carrying an explicit
+ *     `_declared_empty: { reason, graduation }` → exit 0, under a loud
+ *     NO-STRUCTURAL-COVERAGE banner quoting the declaration (loom's own C2 §3.2
+ *     steady state: the eval ENGINE adopted with no local structural scanners).
+ *   - a stale `_declared_empty` alongside real entries → exit 1 (integrity (k)).
+ * `--json` carries the same signal as `summary.coverage_asserted`.
  *
- * Exit 0: every structural entry's fixtures matched expectations.
- * Exit 1: any structural fixture mismatched, or a genuine coverage-gap error.
+ * `--require-coverage` turns `coverage_asserted` into an exit code for repos that
+ * HAVE structural coverage (R1 HIGH-2 — otherwise nothing machine-reads the field).
+ *
+ * Usage:
+ *   node .claude/bin/coc-eval-all.mjs [--json] [--manifest <path>] [--require-coverage]
+ *
+ * Exit 0: every structural entry's fixtures matched expectations (or a declared
+ *         zero-coverage run — see above; check `coverage_asserted`, not the exit).
+ * Exit 1: any structural fixture mismatched, a genuine coverage-gap error, or an
+ *         unconfigured/undeclared-empty manifest.
  *
  * Dependencies: Node.js built-ins + coc-eval-core.mjs. Zero external deps.
  */
@@ -44,6 +60,14 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
 
 const args = process.argv.slice(2);
 const jsonMode = args.includes("--json");
+// --require-coverage (loom#1368 R1 HIGH-2): turn `coverage_asserted` into an
+// EXIT CODE. Without it the field is reported but nothing reads it, so a run
+// that verified zero artifacts and a run that verified all of them produce the
+// same CI outcome. A repo that HAS structural coverage passes this flag to make
+// losing it a hard failure; loom's own CI cannot (its steady state is the
+// declared-empty manifest), so at loom the equivalent guarantee comes from
+// integrity check (k)'s bidirectional declaration<->coverage equivalence.
+const requireCoverage = args.includes("--require-coverage");
 let manifestPath = join(REPO_ROOT, ".claude", "test-harness", "eval-manifest.json");
 const mi = args.indexOf("--manifest");
 if (mi !== -1 && args[mi + 1]) {
@@ -54,21 +78,27 @@ if (args.includes("--help") || args.includes("-h")) {
   console.log(`coc-eval-all — CI structural gate over the COC eval-manifest.
 
 Usage:
-  node .claude/bin/coc-eval-all.mjs [--json] [--manifest <path>]
+  node .claude/bin/coc-eval-all.mjs [--json] [--manifest <path>] [--require-coverage]
+
+  --require-coverage   exit non-zero when the run asserted ZERO structural
+                       coverage, even if the manifest declares that state.
 
 Exit 0: every structural entry passed. Exit 1: any structural failure or coverage gap.`);
   process.exit(0);
 }
 
-// An ABSENT manifest is BENIGN — treat it as 0 entries → exit 0. This lets the
-// harness ENGINE ship to a BUILD repo that has not yet declared its own
-// eval-manifest (or receives the engine before its manifest), and lets loom's
-// own empty steady-state pass, WITHOUT loom shipping its (empty) manifest to
-// clobber a BUILD repo's populated one — the manifest is NOT distributed
-// (test-harness/eval-manifest.json stays under the harness-wide exclude). A
-// PRESENT-but-corrupt manifest is still a HARD error (a coverage gap is never a
-// silent pass — zero-tolerance.md Rule 2), and a PRESENT manifest's integrity is
-// still hard-checked below.
+// An ABSENT manifest is an UNCONFIGURED harness — HARD FAIL (loom#1368 part 2).
+//
+// This bin previously treated an absent manifest as "0 entries → exit 0", so a
+// repo that received the eval ENGINE without ever declaring a manifest reported
+// `ALL STRUCTURAL PASS` on every PR. coc-artifact-eval-coverage.md calls this
+// exit-0 a hard gate with `block` severity, so that green vouched for nothing —
+// a gate structurally unable to fail. A repo adopting the engine now MUST say
+// what it expects: real entries, or an explicit `_declared_empty` declaration
+// (one object) stating that zero IS the intended steady state. Both are cheap;
+// silence is the one thing that can no longer read as coverage.
+//
+// A PRESENT-but-corrupt manifest was, and remains, a HARD error.
 const manifestPresent = existsSync(manifestPath);
 let manifest = {};
 if (manifestPresent) {
@@ -98,21 +128,27 @@ let anyFail = false;
 // phantom artifact_id, or an on-disk COC artifact has no manifest entry. A
 // declared-but-missing scanner is a FAIL here, never a downstream SKIP.
 // ---------------------------------------------------------------------------
-// An absent manifest has nothing to check — SKIP the gate (0 entries, exit 0);
-// integrity.ok stays true so the entries loop + coverage floor below are no-ops.
+// An ABSENT manifest is UNCONFIGURED, not clean — it fails closed here rather
+// than SKIPping to a vacuous exit 0 (loom#1368 part 2).
+const absentManifestError = `no eval-manifest at ${manifestPath} — the eval harness is UNCONFIGURED, which is a FAILURE, not a pass. This run verified ZERO artifacts and cannot vouch for anything. Declare a manifest: register real entries, OR — if zero structural entries IS the intended steady state for this repo — declare it explicitly with a top-level {"_declared_empty": {"reason": "...", "graduation": "..."}}`;
 const integrity = manifestPresent
   ? checkManifestIntegrity({ manifestPath, repoRoot: REPO_ROOT })
-  : { ok: true, errors: [], skipped: true };
+  : { ok: false, errors: [absentManifestError], absent: true };
 report.push({
   id: "manifest-integrity",
   type: "gate",
-  status: integrity.skipped ? "SKIP" : integrity.ok ? "PASS" : "ERROR",
-  reason: integrity.skipped
-    ? `no eval-manifest at ${manifestPath} — 0 entries, nothing to check`
-    : integrity.ok
-      ? "manifest ↔ probes ↔ on-disk artifacts consistent"
-      : integrity.errors.join("; "),
+  status: integrity.ok ? "PASS" : "ERROR",
+  reason: integrity.ok ? "manifest ↔ probes ↔ on-disk artifacts consistent" : integrity.errors.join("; "),
   errors: integrity.errors,
+  // Declared-but-unregistered coverage (e.g. `_deferred_probes`). Legal, but a
+  // GAP — surfaced into the CI log so it is never invisibly clean.
+  notes: integrity.notes ?? [],
+  // UNDECLARED coverage gaps (loom#1393): a gate that asserted NOTHING in this
+  // repo because its class routes the pin sets to a manifest declaration this
+  // repo has not made. Non-fatal by design (a hard fail would regress a
+  // never-surveyed consumer — security.md § Secure-Default), so it MUST be loud
+  // in the CI log or it is the vacuous pass all over again.
+  warnings: integrity.warnings ?? [],
 });
 if (!integrity.ok) {
   anyFail = true;
@@ -215,6 +251,30 @@ if (integrity.ok) {
 const structural = report.filter((r) => (r.status === "PASS" || r.status === "FAIL") && r.type !== "gate");
 const passCount = structural.filter((r) => r.status === "PASS").length;
 
+// A run that executed ZERO structural entries asserts NO coverage, whatever its
+// exit code (loom#1368 part 2). This covers BOTH the declared-empty manifest and
+// the all-probe-only manifest (every entry `scanner:null` — also 0 scanners run,
+// and equally misreported as "ALL STRUCTURAL PASS" before this change). The exit
+// code says "nothing is broken"; `coverage_asserted` says whether anything was
+// actually checked. Consumers citing this gate MUST read the second one.
+const coverageAsserted = structural.length > 0;
+// Under --require-coverage a zero-coverage run is a FAILURE even when every
+// declaration is in order — the caller has stated this repo must verify
+// something. Applied before the output block so text/JSON/exit all agree.
+if (requireCoverage && !coverageAsserted && !anyFail) {
+  anyFail = true;
+  report.push({
+    id: "coverage-floor",
+    type: "gate",
+    status: "ERROR",
+    reason:
+      "--require-coverage was passed but this run asserted ZERO structural coverage. Nothing was verified. Either register a structural entry, or drop --require-coverage if zero coverage is genuinely intended here (and declare it via _declared_empty).",
+    errors: [],
+    notes: [],
+  });
+}
+const declaredEmpty = manifestPresent && manifest && typeof manifest._declared_empty === "object" && manifest._declared_empty !== null && !Array.isArray(manifest._declared_empty) ? manifest._declared_empty : null;
+
 if (jsonMode) {
   console.log(
     JSON.stringify(
@@ -229,6 +289,9 @@ if (jsonMode) {
           structural_fail: structural.length - passCount,
           skipped: report.filter((r) => r.status === "SKIP").length,
           errored: report.filter((r) => r.status === "ERROR").length,
+          coverage_asserted: coverageAsserted,
+          declared_empty: declaredEmpty !== null,
+          declared_empty_reason: declaredEmpty ? declaredEmpty.reason : null,
         },
       },
       null,
@@ -242,11 +305,21 @@ if (jsonMode) {
     if (r.type === "gate") {
       if (r.status === "PASS") {
         console.log(`  [PASS]  ${r.id} — ${r.reason}`);
-      } else if (r.status === "SKIP") {
-        console.log(`  [SKIP]  ${r.id} — ${r.reason}`);
+        for (const n of r.notes ?? []) console.log(`          NOTE: ${n}`);
+        for (const w of r.warnings ?? []) console.log(`       !! WARN: ${w}`);
       } else {
-        console.log(`  [ERROR] ${r.id} — manifest integrity FAILED:`);
-        for (const e of r.errors ?? []) console.log(`            - ${e}`);
+        // A gate row is PASS or ERROR only. The former SKIP branch (absent
+        // manifest) is gone — an unconfigured harness is a failure, not a skip.
+        // Errors are itemised when the gate carries them (manifest-integrity);
+        // otherwise the reason line IS the finding (coverage-floor).
+        const errs = r.errors ?? [];
+        if (errs.length > 0) {
+          console.log(`  [ERROR] ${r.id} — FAILED:`);
+          for (const e of errs) console.log(`            - ${e}`);
+        } else {
+          console.log(`  [ERROR] ${r.id} — ${r.reason}`);
+        }
+        for (const w of r.warnings ?? []) console.log(`       !! WARN: ${w}`);
       }
     } else if (r.status === "PASS" || r.status === "FAIL") {
       const s = r.summary;
@@ -263,8 +336,29 @@ if (jsonMode) {
     }
   }
   console.log("=".repeat(58));
+  // The NO-COVERAGE banner. `ALL STRUCTURAL PASS (0/0 structural entries)` was
+  // the string that made a vacuous run read as a verified one in every CI log;
+  // a zero-entry run never prints it again.
+  if (!anyFail && !coverageAsserted) {
+    console.log("  !!  NO STRUCTURAL COVERAGE — THIS RUN IS NOT EVIDENCE  !!");
+    console.log("  This run verified ZERO artifacts. Exit 0 means 'nothing declared is");
+    console.log("  broken', NOT 'the artifacts are verified'. Do not cite it as coverage.");
+    if (declaredEmpty) {
+      console.log(`  Declared reason: ${declaredEmpty.reason}`);
+      console.log(`  Graduation:      ${declaredEmpty.graduation}`);
+    } else {
+      console.log("  Every manifest entry is probe-only (scanner: null) — no structural");
+      console.log("  scanner ran. Semantic efficacy is checked by /test-harness-probe.");
+    }
+    console.log("=".repeat(58));
+  }
+  const verdict = anyFail
+    ? "FAILURES DETECTED"
+    : coverageAsserted
+      ? "ALL STRUCTURAL PASS"
+      : "NO STRUCTURAL COVERAGE (exit 0 by declaration — NOT a pass over any artifact)";
   console.log(
-    `Result: ${anyFail ? "FAILURES DETECTED" : "ALL STRUCTURAL PASS"} ` +
+    `Result: ${verdict} ` +
       `(${passCount}/${structural.length} structural entries; ` +
       `${report.filter((r) => r.status === "SKIP").length} skipped)`,
   );

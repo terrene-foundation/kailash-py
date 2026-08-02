@@ -31,7 +31,7 @@ Launch independent operations in parallel via the CLI's delegation primitive, wa
 
 ### MUST: The Default Execution Mode Is The Triad — Parallelize + /autonomize + /redteam-to-convergence
 
-**The default execution mode for every actionable input is the TRIAD, each DEFAULT-ON (not only under `/autonomize`, not serial/inline):** (1) **parallelize** — decompose onto the parallel primitive wherever the input has **≥2 independent sub-parts OR a multi-stage shape**; (2) **/autonomize** — execute autonomously under the permission envelope (`commands/autonomize.md`); (3) **/redteam-to-convergence** — adversarially verify every substantive change to 2 consecutive clean rounds before "done" (reinforces § Quality Gates + § Holistic Post-Multi-Wave Redteam + `rules/self-referential-codify.md` Rule 1). Drops to serial/inline ONLY for a genuinely-atomic single-item task OR a factual/confirmation/recommendation reply. Executing a decomposable input inline-serially, or idling while independent work is dispatchable, is BLOCKED. The triad FILLS the default posture, NEVER overrides a gate — BOUNDED by the same gates as `rules/wave-loop.md` MUST-6; `/autonomize` is self-bounding. **DO/DO-NOT, full BLOCKED corpus, bounding-gate enumeration, Why: `skills/30-claude-code-patterns/parallel-dispatch-default.md`; CLI dispatch syntax → the `examples` slot.**
+**The default execution mode for every actionable input is the TRIAD, each DEFAULT-ON** (not only under `/autonomize`, not serial/inline): (1) **parallelize** wherever the input has **≥2 independent sub-parts OR a multi-stage shape**; (2) **/autonomize** — execute autonomously under the permission envelope; (3) **/redteam-to-convergence** — adversarially verify every substantive change to 2 consecutive clean rounds before "done". Drops to serial/inline ONLY for a genuinely-atomic single-item task OR a factual/confirmation/recommendation reply. Executing a decomposable input inline-serially, or idling while independent work is dispatchable, is BLOCKED. The triad FILLS the default posture, NEVER overrides a gate. **Bounding gates, DO/DO-NOT, BLOCKED corpus, Why: `skills/30-claude-code-patterns/parallel-dispatch-default.md`; CLI dispatch syntax → the `examples` slot.**
 
 ### MUST: Parallel Brief-Claim Verification When Issue Count ≥ 3
 
@@ -61,7 +61,13 @@ A plan shipped across ≥3 sharded waves MUST run ONE holistic redteam round acr
 
 ### MUST: Redteam Reviewer Dispatch — Errored/Empty Is Zero Evidence, Never A Clean Round
 
-A `/redteam` round dispatches reviewers in PARALLEL; a throttled fan-out can return errored/empty, reading as "0 findings" → false convergence. **(1) EVIDENCE GATE** — every dispatched reviewer MUST return a ran/evidence signal; an errored/empty/timed-out return is ZERO evidence (`rules/evidence-first-claims.md` MUST-3), MUST be re-run, MUST NOT count clean; convergence is claimable ONLY when EVERY agent genuinely ran. **(2) CONCURRENCY BACK-OFF** — on a throttle signal, reduce concurrency (`rules/worktree-isolation.md` Rule 4) and re-run the throttled reviewers. Complements parallel-by-default, does not override it. DO/DO-NOT + BLOCKED corpus + Wiring + Why: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
+A `/redteam` round dispatches reviewers in PARALLEL, and a throttled fan-out returns errored/empty — which reads as "0 findings". **(1) EVIDENCE GATE** — every dispatched reviewer MUST return a ran/evidence signal; an errored/empty/timed-out return is ZERO evidence, MUST be re-run, and MUST NOT count clean. Convergence is claimable ONLY when EVERY agent genuinely ran. **(2) CONCURRENCY BACK-OFF** — on a throttle signal, reduce concurrency and re-run the throttled reviewers. DO/DO-NOT + BLOCKED corpus + Wiring + Why: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
+
+### MUST: Correctness-Review-Clean Is Not Security-Clean
+
+A correctness / closure-parity reviewer returning CLEAN is NOT evidence a change is SECURITY-clean (tested-path correctness ≠ off-path adversarial defeat). A security-critical change (auth, signing, revocation, tenant-isolation, any fail-closed gate / trust-boundary) MUST be redteamed by BOTH a correctness reviewer AND an adversarial security-reviewer prompted to REFUTE — both with a genuine ran-signal — before convergence. Counting a CLEAN correctness verdict AS the security round, or dispatching only a correctness reviewer, is BLOCKED.
+
+**Why:** The correctness lens is blind to off-tested-path attacks; in #1842-S3 a CLEAN correctness verdict co-occurred with a CRITICAL revocation bypass the SAME-round security-reviewer caught. Depth: `skills/30-claude-code-patterns/redteam-dispatch-evidence-gate.md`.
 
 ## Zero-Tolerance
 
@@ -81,15 +87,15 @@ When delegating IMPLEMENTATION work (file edits, commits, build/test invocation,
 
 ## MUST: Audit/Closure-Parity Verification Specialist Has Bash + Read
 
-When delegating a /redteam round including **closure-parity verification** (mapping prior-wave findings to delivered code via `gh pr view`, `pytest --collect-only`, `grep`, `ast.parse()`), the orchestrator MUST select a specialist with `Bash` AND `Read`. Read-only analyst MUST NOT be assigned — its tool set silently FORWARDS verification rows the next round must redo. Extends the tool-inventory MUST above from IMPLEMENTATION to AUDIT delegation. Examples 4+5 (dispatch + delegation-time scan), the BLOCKED corpus, the delegation-time detection signals, and the multi-incident Origin live in `.claude/skills/30-claude-code-patterns/closure-parity-specialist-discipline.md`.
+When delegating a /redteam round including **closure-parity verification** (mapping prior-wave findings to delivered code), the orchestrator MUST select a specialist with `Bash` AND `Read`. Read-only analyst MUST NOT be assigned — its tool set silently FORWARDS verification rows the next round must redo. Extends the tool-inventory MUST above from IMPLEMENTATION to AUDIT delegation. Examples, BLOCKED corpus, detection signals, Origin: `.claude/skills/30-claude-code-patterns/closure-parity-specialist-discipline.md`.
 
 **Why:** Tool-inventory mismatch costs one full audit round; pre-launch verify is O(1), re-launch O(N) on row count.
 
 ## MUST: Worktree Orchestration
 
-Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/worktree-orchestration.md` (Rules 1–10 — each a full MUST): isolate compiling agents + any shared-source editor (concurrent readers read committed HEAD via `git show HEAD:<path>`); relative paths in prompts; commit per milestone + verify ≥1 commit; verify deliverables after exit; recover orphan writes onto `recovery/<branch>`; one version owner per sub-package; binding-scoped shard PRs. The skill carries each rule's evidence, prompt templates, DO/DO-NOT, BLOCKED corpus, and Wiring.
+Parallel/compiling agents MUST run isolated per `skills/30-claude-code-patterns/worktree-orchestration.md` (Rules 1–11, each a full MUST). Three fire every parallel session: isolate compiling agents AND shared-source editors (readers read committed HEAD); commit per milestone; and in a SHARED tree restore ONLY from a `cp` backup — `git checkout --`/`git restore` are BLOCKED (they restore from the INDEX, destroying unstaged work).
 
-**Why:** Each sub-rule converts a silent parallel-work loss (lock serialization, phantom reads, checkout drift, auto-cleanup loss, truncated writes, version clobber, shard conflicts) into clean isolation or a loud refusal.
+**Why:** Each sub-rule converts a silent parallel-work loss into clean isolation or a loud refusal.
 
 ## MUST NOT
 
@@ -109,6 +115,19 @@ Applies to the **§ Triad** clause ONLY (added 2026-07-18, `journal/0543`); ship
 - **Detection mechanism:** Phase 1 (manual) — cc-architect / reviewer inspect the transcript for a parallel-wave dispatch + convergence receipt. Phase 2 (deferred) — advisory Stop detector + fixtures `.claude/audit-fixtures/wave-loop/orchestration-hygiene/` (shared with `wave-loop.md` MUST-6/7) per `rules/cc-artifacts.md` Rule 9.
 - **Violation scope:** the § Triad clause ONLY; grandfathered sections exempt until `/codify`-touched.
 - **Origin:** `journal/0543` (co-owner-directed); see § Origin below.
+
+### Clause-scoped wiring — Correctness-Review-Clean Is Not Security-Clean (added 2026-07-22)
+
+Applies to the **§ Quality Gates → "Correctness-Review-Clean Is Not Security-Clean"** clause ONLY (added 2026-07-22, `/sync-from-build` Wave-1 placement, loom-sweep-waves-2026-07-22); ships canonical-8-field-compliant. Per `trust-posture.md` MUST-8 grandfather cutoff it lands AT/AFTER the MUST-8 SHA; the pre-existing grandfathered sections + the § Triad clause stay on their own wiring above (clause-scoped precedent: `security.md` § Enforcement-Surface Parity + `git.md` § CI-check/merge).
+
+- **Severity:** `halt-and-report` at `/implement` + `/redteam` + `/codify` gate-review (cc-architect / reviewer confirm any security-critical change was redteamed by BOTH a correctness reviewer AND an adversarial security-reviewer, both with genuine ran-signals, before convergence); `advisory` at the hook layer per `rules/hook-output-discipline.md` MUST-2 (whether a dispatched round included an adversarial security lens is a session-history judgment, no structural tool-call signal).
+- **Grace period:** 7 days from clause landing (2026-07-22 → 2026-07-29).
+- **Cumulative posture impact:** same-class violations (a security-critical change converged on a correctness-only round, or a CLEAN correctness verdict counted as the security round) route to `rules/trust-posture.md` MUST-4 cumulative math (3× same-rule / 5× total in 30d → drop 1 posture).
+- **Regression-within-grace:** a same-class violation within the 7-day grace window routes through the GENERIC `regression_within_grace` emergency trigger per `rules/trust-posture.md` MUST-4 (1× = drop 1 posture) — NO dedicated per-clause trigger key (a two-lens-dispatch property is review-layer + session-history judgment; it does not reuse the § Triad clause's key). Named deviation from the canonical key-per-clause shape, recorded here per `rules/trust-posture.md` Rule 8 — the same no-dedicated-key disposition the § Triad clause + `security.md` § Enforcement-Surface Parity took.
+- **Receipt requirement:** SessionStart soft-gate `[ack: agents]` IFF `posture.json::pending_verification` includes `agents` (shared rule_id with the § Triad wiring).
+- **Detection mechanism:** Phase 1 (manual, gate-review) — cc-architect / reviewer inspect any session redteaming a security-critical change (auth / crypto-signing / revocation / tenant-isolation / fail-closed-gate / trust-boundary) and confirm the round dispatched BOTH a correctness reviewer AND an adversarial security-reviewer prompted to refute, both returning a genuine ran-signal (§ Redteam Reviewer Dispatch). Phase 2 (deferred) — advisory Stop detector + audit fixtures at `.claude/audit-fixtures/correctness-not-security-clean/` per `rules/cc-artifacts.md` Rule 9.
+- **Violation scope:** the § "Correctness-Review-Clean Is Not Security-Clean" clause ONLY (clause-scoped); the § Triad clause + grandfathered sections stay on their own wiring.
+- **Origin:** kailash-py #1842-S3 (kailash 2.58.0 signed revocation ledger — correctness CLEAN, adversarial security caught a CRITICAL bypass). Landed at loom via `/sync-from-build` Wave-1 placement (loom-sweep-waves-2026-07-22).
 
 Origin: sessions 2026-04-19/20/27 (worktree drift, parallel-release PRs #552/#553, W6 closure-parity); slot-partitioned 2026-05-14 (#200); F20 extraction 2026-05-22 (journal/0143); prose trim 2026-06-11 (Gate-1 paired extraction); worktree-cluster extraction to skill Rules 1–10 + Examples 6–10 retired 2026-06-12 (#491, journal/0271); triad default-execution-mode clause + paired extraction to `parallel-dispatch-default.md` 2026-07-18 (co-owner-directed origination, `journal/0543`). Full evidence in guide.
 

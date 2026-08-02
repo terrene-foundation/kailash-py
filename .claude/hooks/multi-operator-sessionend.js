@@ -2,24 +2,26 @@
 /**
  * multi-operator-sessionend.js — F14 M5 B2 session-end hook.
  *
- * @settings-registration: coordination-substrate — registered per-clone in the
- *   gitignored .claude/settings.local.json AFTER `/enroll`, NEVER in the
- *   committed .claude/settings.json (asymmetric with its registered SessionStart
- *   sibling, which surfaces read-only banners; THIS half WRITES). Its
- *   `isCoordinationEnabled()` gate covers only `writeSessionNotesAtomic`, NOT the
- *   teardown as a whole: `runParent` gates on identity alone, so on a clone where
- *   the operator merely has `git config user.signingkey` set it spawns the
- *   DETACHED worker and `performTeardown` runs the GPG-heavy fold →
- *   `releaseOwnClaims` → `emitCheckpoint` path, appending release /
- *   compaction-checkpoint records to a coordination log an un-enrolled repo never
- *   reads. Intentionally absent from .claude/settings.json; the validate-emit
- *   `settings-hook-registration` check reads this marker (#771).
- *
  * Architecture ref: §4.3 hook table row "multi-operator-sessionend.js"
  *
  * Event: Stop (also wires SessionEnd).
  * Severity: NEVER blocks. {continue:true} on every path.
  * Budget: 5s wall-clock.
+ *
+ * @stdin: none — deliberate, per #857. This hook derives ALL state from
+ *   CLAUDE_PROJECT_DIR (see PROJECT_DIR below) and has NO payload-dependent
+ *   branch: the SessionEnd `reason` / Stop payload steers nothing in the
+ *   release → checkpoint → session-notes teardown. Declared rather than drained
+ *   so the hook-runtime-smoke fleet count stays honest (loom#1380); a drain here
+ *   would be motion without a consumer.
+ *
+ *   NUANCE worth keeping straight: #857's rationale (quoted verbatim in
+ *   runParent) indicts a BLOCKING `fs.readFileSync(0)`, which freezes the event
+ *   loop on an open-no-EOF stdin and defeats the setTimeout fallback. That is
+ *   the exact failure lib/read-stdin-bounded.js was built to remove, so #857 no
+ *   longer FORBIDS a bounded drain — it just leaves one pointless here. If a
+ *   future change needs the payload, use readStdinBounded and drop this marker;
+ *   do NOT reintroduce a synchronous read.
  *
  * Responsibilities:
  *   1. Release own active claims (append `release` records).
@@ -56,6 +58,8 @@ const fallback = setTimeout(() => {
 
 const fs = require("fs");
 const path = require("path");
+// loom#1349 — the ONE hardened append primitive; see lib/append-sink.js for the six defenses.
+const { appendSinkLine } = require("./lib/append-sink.js");
 
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
@@ -235,8 +239,13 @@ function appendRecord(repoDir, record) {
       "learning",
       "coordination-log.jsonl",
     );
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.appendFileSync(logPath, JSON.stringify(record) + "\n");
+    // loom#1349 — hardened append (symlinked ancestor / sink dir / sink file, hard link, and FIFO
+    // all refuse fail-closed; sink held at 0o600). Best-effort for the HALTING path (a refusal
+    // never throws into SessionEnd teardown), but NOT silent: reported on stderr per R1 F5, so an
+    // attacker planting a symlink/FIFO/hard-link at the sink cannot silently suppress every
+    // release + teardown row. stderr only: stdout is the hook's protocol channel.
+    const w = appendSinkLine({ repoDir, sinkPath: logPath, line: JSON.stringify(record) });
+    if (!w.ok) console.error(`[multi-operator-sessionend] sink append refused: ${w.error} — ${w.reason}`);
   } catch {
     // best-effort
   }
