@@ -105,6 +105,18 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # (``sk_live_`` / ``rk_test_``), so the underscore form was never matched
     # and the body is well under the 40-char contiguous-run threshold.
     re.compile(r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}", re.ASCII),
+    # HuggingFace user access tokens (``hf_`` + ~34 alnum) and Fireworks keys
+    # (``fw_`` + ~24 alnum). Both are first-class providers in
+    # ``llm/presets.py::_FROM_ENV_PROVIDERS`` (HUGGINGFACE_API_KEY /
+    # FIREWORKS_API_KEY), and neither was claimed by ANY rule above:
+    #   - the "_" is a word char, so ``\b`` cannot fire before the body, which
+    #     defeats the generic-hex rule even for an all-hex body (same mechanism
+    #     the ``ghp_`` comment above describes);
+    #   - both bodies are under the 40-char contiguous-run threshold.
+    # Verified empirically before landing: both shapes passed through
+    # scrub_credentials() unredacted.
+    re.compile(r"\bhf_[A-Za-z0-9]{30,}", re.ASCII),
+    re.compile(r"\bfw_[A-Za-z0-9]{20,}", re.ASCII),
     # Azure storage SAS token (the ``sig=`` query parameter). A SAS token IS a
     # bearer credential for the blob it signs. Previously present ONLY in
     # kaizen/llm/errors.py; landed here so the sanitize_provider_error surface
