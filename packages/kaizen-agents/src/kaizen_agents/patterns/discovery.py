@@ -359,10 +359,55 @@ class UserFilteredAgentDiscovery:
 
         Args:
             registry: The AgentRegistry to wrap
-            permission_checker: Optional permission checker (TrustOperations)
+            permission_checker: Optional permission checker (TrustOperations).
+                When omitted, permission filtering is OFF and every user is
+                granted `execute` on every agent — see the warning below.
         """
         self._registry = registry
         self._permission_checker = permission_checker
+
+        # `permission_checker` defaults to None, and with it None
+        # `_check_user_access` unconditionally returns
+        # `(True, AccessMetadata(permission_level="execute"))` for every user
+        # and every agent. That is a SILENT NO-OP default on a security
+        # control: the class is named `UserFilteredAgentDiscovery` and its
+        # `find_agents_for_user` signature takes `user_id` +
+        # `organization_id`, so the un-wired instance LOOKS filtered at every
+        # call site while filtering nothing.
+        #
+        # `rules/security.md` § "Secure-Default For A New Security Feature"
+        # requires such a default to fail CLOSED, or — where backward-compat
+        # forbids on-by-default — to emit a LOUD one-time WARN naming the OFF
+        # protection and its wiring. Fail-closed is NOT available here without
+        # a posture decision: `permission_checker` has always defaulted to
+        # None and this class's own docstring example constructs it that way,
+        # so denying by default would break every existing caller. The WARN is
+        # therefore the required remedy, not a softer substitute for one.
+        #
+        # Deliberately at __init__ (once per instance, one per distinct
+        # un-wired wiring) rather than per call — a per-request warning on a
+        # discovery hot path would be log spam and would be filtered out,
+        # which is how a loud signal becomes a silent one.
+        #
+        # This does NOT change the fail-open disposition of the EXCEPTION path
+        # in `_check_user_access`; that one is already loud (ERROR) and is
+        # deferred to its own security-reviewed change per the note there.
+        if permission_checker is None:
+            logger.warning(
+                "discovery.permission_filtering_disabled",
+                extra={
+                    "protection_off": (
+                        "user permission filtering — every user is granted "
+                        "'execute' on every agent returned by "
+                        "find_agents_for_user()"
+                    ),
+                    "wiring": (
+                        "pass permission_checker=<TrustOperations> to "
+                        "UserFilteredAgentDiscovery(registry, "
+                        "permission_checker=...)"
+                    ),
+                },
+            )
 
     async def find_agents_for_user(
         self,

@@ -1741,6 +1741,44 @@ class OrchestrationRuntime:
                         "degraded_agents": degraded_agents,
                     },
                 )
+            elif scored_capabilities == 0:
+                # NOT the #1981 degradation case — nothing DEGRADED, there was
+                # simply nothing to rank on: no candidate carried an
+                # `a2a_card`, or every card's `capabilities` list was empty,
+                # so the `for cap in capabilities` loop never executed and the
+                # judge was never consulted.
+                #
+                # `best_agent` is therefore still its initialiser,
+                # `active_agents[0]` — the caller configured SEMANTIC routing
+                # and silently received positional first-agent selection. That
+                # is the silent-fallback mode `rules/zero-tolerance.md` Rule 3
+                # blocks: the degraded path above is loud (raise / WARN) while
+                # this one, which produces an equally arbitrary choice, said
+                # nothing at all.
+                #
+                # It stays a WARN rather than a raise on purpose. Raising would
+                # be a behaviour break for a documented `-> str | None`
+                # surface, and unlike the all-degraded case this is not a
+                # transient judge failure — it is a registration-shape issue
+                # (agents registered without capability metadata) that the
+                # operator fixes by populating the cards. The WARN names that
+                # remedy; the ranking genuinely cannot be performed either way.
+                logger.warning(
+                    "route_task.no_capability_data",
+                    extra={
+                        "candidates": len(active_agents),
+                        "selected": best_agent,
+                        "reason": (
+                            "SEMANTIC routing requested but no candidate agent "
+                            "exposed capabilities to rank; fell back to the "
+                            "first active agent (positional, not semantic)"
+                        ),
+                        "remedy": (
+                            "populate a2a_card.capabilities on the registered "
+                            "agents, or select a non-SEMANTIC routing strategy"
+                        ),
+                    },
+                )
             return best_agent
         else:
             # Default: round-robin
