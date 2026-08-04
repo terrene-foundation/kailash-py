@@ -109,7 +109,18 @@ correctly OUT of this shard; none is fixed.
 4. **The tempered token's complexity ratio (1.0x) is MY measurement.** The
    reviewer argued the class is structurally unchanged and could NOT measure it
    (no Bash). If that linearity claim is ever cited as reviewed, cite it to me.
-5. **CROSS-SDK CONSIDERATION — co-owner decision, NOT self-authorizable.** The
+5. **REFUTED PROOF — cite as REFUTED if cited at all.** The security lane's
+   round-3 "structural proof" that `_URL_WITH_USERINFO_ONLY` needed no fence was
+   REFUTED at `be97099ce`, by its own author. The proof enumerated ONE crossing
+   shape (`","<key>":`, fenced by its colon) and generalised to "every
+   cross-JSON-value crossing". Array elements have NO key and therefore no
+   colon, so `{"a":["https://x","d@e.com"]}` crossed freely and returned
+   unbalanced, unparseable output. The fence WAS necessary and was added on the
+   correctness lane's F1. **If that proof is cited anywhere as
+   reviewer-verified, cite it as REFUTED with the array counterexample.** A
+   wrong proof is more durable than wrong prose — it reads as settled.
+   Instrument #2 in the list above is this one; the refutation is the author's.
+6. **CROSS-SDK CONSIDERATION — co-owner decision, NOT self-authorizable.** The
    F2/F7 class (a character-class exclusion in a credential scrubber that fences
    a structural boundary and silently stops claiming real credential shapes) is a
    BUG CLASS, not a bug, and nothing about it is Python-specific.
@@ -124,12 +135,18 @@ correctly OUT of this shard; none is fixed.
 counter is at ZERO. Two lanes each ran three rounds, each finding strictly less
 than the one before, and both are on a final narrow round at `be97099ce`.
 
-The credential-scrub module's convergence, when it lands, must be recorded with
-its EVIDENCE BASIS stated: either VERIFIED-AT-`be97099ce` (the reviewer re-read
-the final state) or reviewed-at-`6c84f27a5`-plus-my-attestation. The reviewer
-raised the distinction unprompted and it matters — a receipt resting on the
-author's report of what landed is exactly the claim-outruns-evidence pattern this
-session is about. The verified read has been requested.
+**SECURITY LANE: VERIFIED-AT-`be97099ce` — CLEAN.** The reviewer re-read the
+final state rather than resting on my attestation (it raised that distinction
+unprompted, and was right to). Verdict: residual lists TRUE and complete against
+stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
+three rules with a sound attribution guard. Only remaining defects were two prose
+nits, both fixed. Every attack it had was exhausted.
+
+**CORRECTNESS LANE: still open.** Its last round found three instrument-layer
+defects (frozen position axis; positional secret-slice satisfiable by a partial
+fix; markup pin confounded into a duplicate of its neighbour). All three fixed in
+`b8bc03eed`; a final round is requested and PENDING. The module is NOT converged
+until that returns.
 
 **Three reviewers produced findings whose RECOMMENDED FIXES were wrong** (both
 lanes retracted their own remedy on the record). Every finding was correct and

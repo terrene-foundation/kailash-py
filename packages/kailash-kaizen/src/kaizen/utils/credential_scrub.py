@@ -325,18 +325,19 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # So the tempered token below stops only at a quote that is followed by a JSON
 # STRUCTURAL delimiter — `,` `}` `]` `:` — i.e. a real field boundary. A quote
 # in the MIDDLE of a value (`us"er`) is ordinary userinfo and is consumed.
-# That fences the compact-JSON crossing (all four forms enumerated above)
+# That fences the compact-JSON crossing (all four forms enumerated below) while
+# keeping claimable every credential shape whose quote is not IMMEDIATELY
+# followed by a JSON delimiter. That qualifier is load-bearing — see the
+# under-redaction residual below.
+#
 # The delimiter set is EXHAUSTIVE, not illustrative: in well-formed JSON the only
 # non-whitespace characters that can follow a closing `"` are `,` (next member),
 # `}` (end object), `]` (end array) and `:` (it was a key) — giving the four
-# crossing forms `","` / `"},"` / `"],"` / `":"`. An earlier version of this note
-# named only the first two, which left `]` and `:` looking unjustified and would
-# invite a future reader to "simplify" them out, re-opening the array and
-# key-position crossings. Whitespace needs no delimiter: `[^\s]` fences it.
-#
-# while keeping claimable every credential shape whose quote is not IMMEDIATELY
-# followed by a JSON delimiter. That qualifier is load-bearing — see the
-# under-redaction residual below. An earlier revision of this line claimed
+# crossing forms `","` / `"},"` / `"],"` / `":"`. The fifth case is end-of-input,
+# which is not a character and has nothing to cross to. An earlier version of
+# this note named only the first two, which left `]` and `:` looking unjustified
+# and would invite a future reader to "simplify" them out, re-opening the array
+# and key-position crossings. Whitespace needs no delimiter: `[^\s]` fences it. An earlier revision of this line claimed
 # "every credential shape", which is the same unqualified-generalisation shape
 # corrected above, made one revision later in the same file.
 #
