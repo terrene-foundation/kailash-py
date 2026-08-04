@@ -1,6 +1,6 @@
 """Regression: tools/list must advertise a real inputSchema.
 
-#1998 — surfaced by the #1720 forest redteam (R1 correctness pass, via a
+#1999 — surfaced by the #1720 forest redteam (R1 correctness pass, via a
 CRITICAL claim that turned out to be a symptom of this).
 
 `MCPServer.tool()` stored NO input schema in `_tool_registry`, so
@@ -34,7 +34,7 @@ from kailash_mcp.utils import build_input_schema
 
 @pytest.fixture
 def server():
-    return MCPServer("regression-1998")
+    return MCPServer("regression-1999")
 
 
 @pytest.mark.regression
