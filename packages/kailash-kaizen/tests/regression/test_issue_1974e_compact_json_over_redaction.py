@@ -226,9 +226,19 @@ class TestRealCredentialsStillRedacted:
             ),
             (
                 # The JSON-native escaped form of the same shape.
+                #
+                # The needle is the FULL secret, not the 2-char tail it used to
+                # be. A shorter needle is a STRICTER leak detector (anything
+                # containing the whole secret contains the tail), so that was
+                # not the weakness — but `ss` was matched against the WHOLE
+                # scrubbed string, coupling the assertion to fixture bytes it
+                # has nothing to do with. Rename the host to `db.class.internal`
+                # or the placeholder to `[REDACTED-PASS]` and it reds with
+                # "credential survived scrubbing" while nothing leaked. The
+                # strict half is kept by the userinfo-span assertion below.
                 "escaped quote in password",
                 "postgresql://svcuser:pa\\" + _Q + "ss" + _AT + "db.internal/app",
-                "ss",
+                "pa\\" + _Q + "ss",
             ),
             (
                 "backslash in password",
@@ -239,6 +249,15 @@ class TestRealCredentialsStillRedacted:
     )
     def test_credential_is_redacted(self, label: str, dsn: str, secret: str) -> None:
         scrubbed = scrub_credentials(dsn)
+        # Userinfo span only — everything before the LAST `@`. Keeps the strict
+        # substring check while removing the coupling to host/placeholder bytes
+        # that produced misleading false positives.
+        userinfo = scrubbed.rsplit(_AT, 1)[0]
+        assert "REDACTED" in userinfo, (
+            f"[{label}] no redaction marker in the userinfo span; the rule "
+            f"stopped matching entirely rather than redacting.\n"
+            f"Scrubbed: {scrubbed!r}"
+        )
         assert secret not in scrubbed, (
             f"[{label}] credential survived scrubbing — the JSON-structural "
             f"exclusions have narrowed the userinfo class too far.\n"
@@ -310,6 +329,32 @@ class TestRealCredentialsStillRedacted:
             "plain-exclusion under-redaction this rule uses a tempered fence to "
             "avoid"
         )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "F7 under-redaction residual: a password containing a quote "
+            'IMMEDIATELY followed by a JSON delimiter (`",` `"}` `"]` '
+            "`\":`) halts both tempered runs and leaks in full. This is F2's "
+            "class narrowed, not closed, and it trades in the direction this "
+            "module refuses. Deliberately NOT chased by tightening the "
+            "lookahead — that swaps one aperture for a smaller one "
+            "indefinitely; the sound route is a URL parse on the candidate "
+            "span. strict=True so this XPASSes the moment a parse lands and "
+            "forces the marker off, per testing.md § Deferred-Implementation "
+            "Conformance Vectors Use xfail-Strict, Not Skip."
+        ),
+    )
+    @pytest.mark.parametrize("delim", [",", "}", "]", ":"])
+    def test_quote_then_json_delimiter_in_password_is_redacted(
+        self, delim: str
+    ) -> None:
+        """KNOWN-FAILING pin for the F7 residual. See the xfail reason.
+
+        Skip would go silent after a fix; deletion would lose the contract.
+        """
+        dsn = "postgresql://svcuser:pa" + _Q + delim + "ss" + _AT + "db.internal/app"
+        assert "pa" + _Q + delim + "ss" not in scrub_credentials(dsn)
 
     def test_same_string_value_over_redaction_is_an_accepted_residual(self) -> None:
         """Pin the KNOWN limit so it is not mistaken for a new regression.

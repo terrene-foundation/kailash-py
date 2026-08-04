@@ -245,7 +245,11 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # `,` is excluded for the same reason and additionally IS a legal sub-delim, so
 # dropping it would leak `user:pa,ss@host`.
 #
-# This module trades diagnosability for sensitivity and NEVER the reverse. Any
+# This module trades diagnosability for sensitivity, and where it CANNOT, the
+# residual is DOCUMENTED and bounded — never silent. (That wording was an
+# unqualified "NEVER the reverse" until a review showed two residuals trading in
+# the forbidden direction; an absolute that the code does not hold is worse than
+# a stated bound, because it stops anyone looking.) Any
 # future widening of this exclusion set MUST first show a compact-JSON case that
 # `"` alone does not fence, and MUST re-run the leak probes in
 # `test_issue_1974e_compact_json_over_redaction.py::TestRealCredentialsStillRedacted`.
@@ -272,6 +276,17 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # candidate span — not a wider character class.
 # THE FENCE IS THE JSON FIELD BOUNDARY, NOT THE QUOTE CHARACTER.
 #
+# It models JSON ONLY. A non-JSON body — an HTML/XML attribute boundary such as
+# `<a href="https://docs.example.com/p:q">ops@example.com</a>` — closes its
+# quote with `>`, which is not in the delimiter set, so the run crosses and
+# over-redacts, swallowing the `">` and malforming the tag. Realistic on this
+# surface: `body_snippet` carries whatever the provider returned, and gateway /
+# WAF / proxy 4xx-5xx responses are routinely HTML.
+#
+# ACCEPTED: over-redaction is the safe direction. Do NOT close it by adding `>`
+# to the delimiter set — that costs a password containing `">`, which is the
+# under-redaction residual below.
+#
 # An earlier revision excluded `"` outright from both halves. That LEAKED: a
 # quote anywhere in the userinfo killed the match for the WHOLE credential,
 # both halves —
@@ -285,7 +300,31 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # STRUCTURAL delimiter — `,` `}` `]` `:` — i.e. a real field boundary. A quote
 # in the MIDDLE of a value (`us"er`) is ordinary userinfo and is consumed.
 # That fences the compact-JSON crossing (which must traverse `"},"` or `","`)
-# while keeping every credential shape claimable.
+# while keeping claimable every credential shape whose quote is not IMMEDIATELY
+# followed by a JSON delimiter. That qualifier is load-bearing — see the
+# under-redaction residual below. An earlier revision of this line claimed
+# "every credential shape", which is the same unqualified-generalisation shape
+# corrected above, made one revision later in the same file.
+#
+# UNDER-REDACTION RESIDUAL (F2's class, narrowed — NOT closed).
+# A password containing `",` `"}` `"]` or `":` halts both runs and leaks IN
+# FULL:
+#     postgresql://svcuser:pa",ss@db.internal/app  ->  unchanged, pa",ss survives
+# and likewise for the other three pairs, in the overflow rule too. Nothing else
+# claims it (6 chars, no vendor prefix, not 32+ hex).
+#
+# The aperture is ~4/95 of the plain `"` exclusion's per quote occurrence, but
+# it is the SAME direction, and this residual is the forbidden one.
+#
+# DO NOT CHASE IT BY TIGHTENING THE LOOKAHEAD. Requiring the delimiter itself be
+# followed by `"` would claim `pa",ss` and still fence `","` — and then a
+# password containing `","` leaks, and `"}`/`"]` still leak. That trades one
+# aperture for a smaller one indefinitely. A tempered lookahead IS a wider
+# character class wearing a lookahead: same failure mode, rarer. The sound route
+# is the URL PARSE named in the over-redaction residual below; both residuals
+# close together or not at all. Pinned as an xfail-strict vector in
+# `test_issue_1974e_compact_json_over_redaction.py` so it self-clears on XPASS
+# the moment a parse lands.
 #
 # Complexity: MEASURED, not assumed. Self-normalising ratio on the documented
 # worst case (colon-dense, no `@`) at 1x vs 10x input: 1.0x, i.e. no
