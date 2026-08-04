@@ -255,15 +255,35 @@ class TestErrorPathFailsClosed:
         granted, meta = await _check(_Boom())
         assert granted is False
         assert meta is not None, "the denial path returned no access metadata"
-        assert isinstance(
-            meta, AccessMetadata
-        ), f"the denial path returned {type(meta).__name__}, not AccessMetadata"
+        assert isinstance(meta, AccessMetadata), (
+            f"the denial path returned {type(meta).__name__}, not AccessMetadata"
+        )
         assert meta.constraints is not None, (
             "denial metadata carried no constraints object; `.constraints` is "
             "dereferenced by consumers without a None check"
         )
-        # The shape consumers actually serialize.
-        assert meta.to_dict()["constraints"]["max_tokens_per_session"] is None
+        # The shape consumers actually serialize. This assertion USED to read
+        #     assert ...["max_tokens_per_session"] is None
+        # which PINNED the defect as correct: `null` is this type's encoding
+        # for UNLIMITED, and the denial's `permission_level` defaulted to
+        # "execute", so the payload read on its own was an execute-level grant
+        # with no caps at all — the most permissive value the type can hold.
+        # Hardening it would have RED-ed a test whose message said the denial
+        # metadata was fine. Full treatment in
+        # `test_discovery_falsy_checker_and_denial_shape.py`; this is the
+        # caller-safety half only.
+        data = meta.to_dict()
+        assert data["denied"] is True, (
+            f"the denial payload is not marked denied and so is not "
+            f"distinguishable from a grant by anything reading it without the "
+            f"boolean: {data!r}"
+        )
+        assert data["permission_level"] != "execute", (
+            f"the denial payload reports execute-level access: {data!r}"
+        )
+        assert data["constraints"]["max_tokens_per_session"] == 0, (
+            f"the denial payload reports UNLIMITED tokens (null): {data!r}"
+        )
 
     @pytest.mark.asyncio
     async def test_denial_excludes_the_agent_from_find_agents_for_user(self) -> None:
@@ -304,9 +324,8 @@ class TestErrorPathFailsClosed:
         )
         error_text = hits[0].__dict__["error"]
         assert "s3cr3t" not in error_text, (
-            f"the checker's exception text reached the log unscrubbed: "
-            f"{error_text!r}"
+            f"the checker's exception text reached the log unscrubbed: {error_text!r}"
         )
-        assert (
-            "[REDACTED]" in error_text
-        ), f"expected scrub_credentials output, got {error_text!r}"
+        assert "[REDACTED]" in error_text, (
+            f"expected scrub_credentials output, got {error_text!r}"
+        )

@@ -43,6 +43,16 @@ def _accepts_user_kwargs(checker: Any | None) -> bool:
 logger = logging.getLogger(__name__)
 
 
+#: `permission_level` on a DENIED `AccessMetadata`.
+#:
+#: Exported so consumers compare against a named constant rather than a magic
+#: string. The dataclass DEFAULT is ``"execute"``, so a bare ``AccessMetadata()``
+#: returned from a denial path reads as an execute-level grant to anything that
+#: inspects the payload without also carrying the boolean — see
+#: `AccessMetadata.deny`.
+DENIED_PERMISSION_LEVEL = "none"
+
+
 @dataclass
 class AccessConstraints:
     """Constraints on agent access for a user."""
@@ -67,6 +77,28 @@ class AccessConstraints:
             "time_window_end": self.time_window_end,
         }
 
+    @classmethod
+    def deny(cls) -> AccessConstraints:
+        """The ZERO-capability constraint set, for a denial payload.
+
+        Every field of a default `AccessConstraints()` is None, which
+        `to_dict()` serializes as `null` — and `null` is this type's encoding
+        for UNLIMITED, not for "none". A denial carrying default constraints
+        therefore serializes as uncapped invocations, tokens, spend, and tools:
+        strictly the most permissive value the type can hold.
+
+        Zero caps and an EMPTY `allowed_tools` say the opposite, in the same
+        vocabulary. `blocked_tools` and the time window stay None deliberately:
+        those are *additional* restrictions layered on a grant, and inventing
+        values for them would imply a grant exists to restrict.
+        """
+        return cls(
+            max_daily_invocations=0,
+            max_tokens_per_session=0,
+            max_cost_per_session_usd=0.0,
+            allowed_tools=[],
+        )
+
 
 @dataclass
 class AccessMetadata:
@@ -77,6 +109,11 @@ class AccessMetadata:
     granted_by: str | None = None  # User/role that granted access
     granted_at: str | None = None  # ISO timestamp
     expires_at: str | None = None  # ISO timestamp
+    # Explicit denial marker. Appended LAST so positional construction of the
+    # pre-existing fields is unchanged. Defaults False because the default
+    # instance is the GRANT shape — inverting the public default would silently
+    # re-key every caller that builds one directly.
+    denied: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -86,7 +123,35 @@ class AccessMetadata:
             "granted_by": self.granted_by,
             "granted_at": self.granted_at,
             "expires_at": self.expires_at,
+            "denied": self.denied,
         }
+
+    @classmethod
+    def deny(cls) -> AccessMetadata:
+        """The denial payload — explicitly denied on every axis it exposes.
+
+        ONE constructor for every denial branch in `_check_user_access`. Three
+        sites each hand-building `AccessMetadata()` is how one of them stays
+        permissive after a later edit, and it is how this payload came to be
+        indistinguishable from a maximally permissive grant in the first place:
+        the type's defaults are the GRANT defaults, so `AccessMetadata()` on a
+        denial path serialized as execute-level access with unlimited
+        constraints.
+
+        A consumer that reads only the boolean is unaffected. A consumer that
+        reads the payload — a direct caller of the public `_check_user_access`
+        2-tuple, an audit sink, a serializer — now sees `denied: true`,
+        `permission_level: "none"`, and zeroed caps instead of a grant.
+
+        Still well-formed and never None: `find_agents_for_user` unpacks the
+        pair unconditionally and callers may call `.to_dict()` on the result. A
+        fail-closed decision that crashes the caller is not fail-closed.
+        """
+        return cls(
+            permission_level=DENIED_PERMISSION_LEVEL,
+            constraints=AccessConstraints.deny(),
+            denied=True,
+        )
 
 
 @dataclass
@@ -537,8 +602,24 @@ class UserFilteredAgentDiscovery:
         Returns:
             Tuple of (has_access, access_metadata)
         """
-        # If permission checker is available, use it
-        if self._permission_checker:
+        # If permission checker is available, use it.
+        #
+        # `is not None`, matching `__init__`'s guard EXACTLY, and that identity
+        # test is load-bearing rather than stylistic. This was `if
+        # self._permission_checker:` — a TRUTHINESS test — while `__init__`
+        # guards its loud "filtering is disabled" WARN on `permission_checker
+        # is None`. Two guards over the same object disagreeing on one class of
+        # value: a checker that is falsy but NOT None.
+        #
+        # Such a checker is ordinary, not exotic — any object defining
+        # `__bool__` returning False or `__len__` returning 0: a policy-set /
+        # rule-collection wrapper that is momentarily empty, a health-gated
+        # checker reporting degraded. It skipped this entire block, fell
+        # through to the terminal grant below, and emitted NO warning, because
+        # the constructor only warns on `is None`. A checker was installed, and
+        # every user was granted `execute` on every agent, silently — the exact
+        # combination the WARN exists to make unreachable.
+        if self._permission_checker is not None:
             try:
                 # CALL SHAPE, and this was 100% broken for the DOCUMENTED
                 # checker type. The docstring names `TrustOperations`, whose
@@ -582,25 +663,37 @@ class UserFilteredAgentDiscovery:
                 # grant. `is not True` denies unless the checker affirmatively
                 # said yes.
                 #
-                # This is NOT the fail-open disposition below, which is
-                # deliberately unchanged: that one is about the checker
-                # ERRORING. This is about it ANSWERING in a shape we cannot
-                # read, where there is no availability trade-off to weigh —
+                # Distinct QUESTION from the exception path below, though both
+                # now deny: that one is about the checker ERRORING, this is
+                # about it ANSWERING in a shape we cannot read. (An earlier
+                # revision of this comment said the disposition below was
+                # "deliberately unchanged" fail-open — it was already flipped
+                # to fail-closed in the same commit that wrote the sentence.)
+                # There is no availability trade-off to weigh here either way:
                 # an unreadable answer is not an approval.
                 if getattr(result, "valid", None) is not True:
-                    return False, AccessMetadata()
+                    return False, AccessMetadata.deny()
 
                 # Extract constraints. `TrustOperations.VerificationResult`
                 # exposes `effective_constraints`, NOT `constraints`, so the
                 # old `hasattr(result, "constraints")` was False for the
                 # documented type and every granted user silently received
                 # UNLIMITED constraints. Both names are read.
+                #
+                # Read SEQUENTIALLY, not as a `getattr` default chain. A
+                # default argument fires only when the attribute is ABSENT, so
+                # `getattr(result, "constraints", getattr(result,
+                # "effective_constraints", None))` returned None for a result
+                # that DECLARES `constraints` (a None-defaulted dataclass
+                # field) while POPULATING `effective_constraints` — the shape
+                # any type carrying both names through a rename actually has.
+                # The None then failed the isinstance check and the granted
+                # user received UNLIMITED constraints: verbatim the failure
+                # this block exists to prevent.
                 constraints = AccessConstraints()
-                raw = getattr(
-                    result,
-                    "constraints",
-                    getattr(result, "effective_constraints", None),
-                )
+                raw = getattr(result, "constraints", None)
+                if not isinstance(raw, dict):
+                    raw = getattr(result, "effective_constraints", None)
                 if isinstance(raw, dict):
                     if "max_daily_invocations" in raw:
                         constraints.max_daily_invocations = raw["max_daily_invocations"]
@@ -651,15 +744,19 @@ class UserFilteredAgentDiscovery:
                 # Well-formed metadata, never None: `find_agents_for_user`
                 # unpacks this pair unconditionally, and a direct caller can
                 # still call `.to_dict()` on the result. Same denial shape as
-                # the malformed-result branch above, so the two denials are
-                # indistinguishable to consumers (the LOG is what tells them
-                # apart) and no caller needs a second denial code path.
-                return False, AccessMetadata()
+                # the malformed-result branch above — ONE constructor, so the
+                # two denials are indistinguishable to consumers (the LOG is
+                # what tells them apart) and no caller needs a second denial
+                # code path.
+                return False, AccessMetadata.deny()
 
         # Default: grant access with default constraints.
         #
         # Reachable ONLY when no permission_checker is wired — every path
-        # inside the `if self._permission_checker` block above now returns.
+        # inside the `if self._permission_checker is not None` block above
+        # returns. That is true because the guard is an IDENTITY test: while it
+        # was a truthiness test, a falsy-but-not-None checker reached here too,
+        # and this line granted it access without any warning having fired.
         # The un-wired default is deliberately NOT changed by the fail-closed
         # flip: it is a separate posture question (an unconfigured discovery
         # instance is a wiring gap, not an authorization outage) and it is
@@ -718,6 +815,7 @@ class UserFilteredAgentDiscovery:
 
 
 __all__ = [
+    "DENIED_PERMISSION_LEVEL",
     "AccessConstraints",
     "AccessMetadata",
     "AgentWithAccess",
