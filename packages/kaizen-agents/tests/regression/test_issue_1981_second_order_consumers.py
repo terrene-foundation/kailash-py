@@ -105,6 +105,27 @@ def _agent(agent_id: str, capabilities: list[str], *, card: object = None) -> Mo
             else {"agent_id": agent_id, "capabilities": capabilities}
         )
     )
+    # ``_build_workflow_from_agents`` derives each agent's LLMAgentNode config
+    # from ``agent.to_workflow()``. A bare ``Mock(spec=BaseAgent)`` auto-creates
+    # that method, so ``.nodes.values()`` returned a Mock and the runtime died
+    # with "'Mock' object is not iterable" BEFORE any assertion ran — meaning
+    # the index-shift invariant these tests exist for was unverified, not
+    # merely un-run.
+    #
+    # The stub mirrors the contract the runtime actually reads: exactly ONE
+    # spec typed "LLMAgentNode", carrying a ``config`` dict it copies before
+    # injecting the task's messages. Faithful to the shape, so the test
+    # exercises the real code path rather than routing around it.
+    agent.to_workflow = Mock(
+        return_value=SimpleNamespace(
+            nodes={
+                f"{agent_id}_llm": {
+                    "type": "LLMAgentNode",
+                    "config": {"provider": None, "model": None},
+                }
+            }
+        )
+    )
     return agent
 
 
