@@ -168,7 +168,30 @@ stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
 three rules with a sound attribution guard. Only remaining defects were two prose
 nits, both fixed. Every attack it had was exhausted.
 
-**CORRECTNESS LANE: STILL OPEN — and my own inline check does NOT close it.**
+**CORRECTNESS LANE: CLEAN ROUND 1 — VERIFIED-AT-`1ea5d331f`, conditional met.**
+Verdict CLEAN with one documented limitation, which is now documented (the doc
+commit is TEST-COMMENT-ONLY; the verified code state remains `1ea5d331f`).
+Independently re-verified all three properties: attribution 20/20; the guard
+DISCRIMINATES (it fails without the re-homing, which the old guard could not);
+grid still carries information (20-leaking vs 0-leaking).
+
+**THE DOCUMENTED LIMIT — ownership, not exclusivity, and it CANNOT be closed.**
+`_URL_WITH_AUTH_OVERFLOW` structurally SUBSUMES `_URL_WITH_AUTH` on these shapes,
+so a partial OVERFLOW-only fix flips 17 of 20 cells including all 8 AUTH cells.
+MEASURED: those XPASSes are SUBSTANTIVELY CORRECT — the secrets really are
+redacted; only the MECHANISM attribution is nominal. **No false closure exists.**
+Three candidate guards were tested and ALL THREE REFUTED (post-condition check
+re-introduces the F10 inversion; necessity check cannot separate the scenarios
+because the superset covers it; AUTH-exclusive shape is claimed by OVERFLOW
+anyway). A fourth guard would APPEAR to attribute while being unable to — the
+comment is a true statement where the guard would be a false one.
+
+**BOTH LANES ARE NOW CLEAN AT ROUND 1. Convergence requires TWO consecutive
+clean rounds** (`commands/redteam.md` § Convergence Criteria) — so this is 1 of
+2, NOT convergence. Do not read two clean lanes as two clean rounds; they are one
+round, cleanly reported by two lanes. A second round is owed before release.
+
+Prior status of this lane:
 After its F10 fix landed I ran the narrow follow-up inline (does the
 control-based guard hold for the right reason?) and found nothing: the guard
 calls the named rule directly with no `_CREDENTIAL_PATTERNS` involvement, is

@@ -454,6 +454,32 @@ class TestRealCredentialsStillRedacted:
         # shape class. One of these four delimiter values is load-bearing for
         # one of the three rules, and that interaction is invisible to any probe
         # that varies the same axis it is trying to control for.
+        # KNOWN LIMIT — ownership, not exclusivity, and it cannot be closed.
+        # `_URL_WITH_AUTH_OVERFLOW` structurally SUBSUMES `_URL_WITH_AUTH` on
+        # these shapes (it is unbounded, so it is a superset for short userinfo).
+        # A partial fix that de-fenced OVERFLOW alone therefore flips 17 of the
+        # 20 cells to XPASS — including all 8 AUTH cells — while AUTH is still
+        # fenced and still does not claim its own defective shape.
+        #
+        # MEASURED, and this is why it is documented rather than guarded: those
+        # XPASSes are SUBSTANTIVELY CORRECT. The secrets really are redacted in
+        # that scenario, because the superset rule closes the leak. What is
+        # nominal is the MECHANISM attribution on those cells, not the closure.
+        # No false closure exists — no cell reports closed while its secret
+        # leaks.
+        #
+        # Three candidate guards were tested against this and all three REFUTED:
+        #   (a) re-check the claim as a POST-condition -> fires spuriously under
+        #       the sound URL-parse fix, which leaves these regexes unchanged.
+        #       That is the F10 inversion returning.
+        #   (b) necessity check (disable the named rule, secret must leak again)
+        #       -> with AUTH disabled the secret stays redacted in BOTH the
+        #       partial-fix and the genuinely-fixed scenario, because OVERFLOW
+        #       covers it. Cannot separate the two.
+        #   (c) give AUTH an exclusive shape via `@`-inside-userinfo -> the
+        #       fence-free probe is claimed by OVERFLOW anyway.
+        # A fourth guard would appear to attribute while being unable to. This
+        # comment is a true statement where that guard would be a false one.
         probe = dsn_template.format(q="", d=delim).replace("@", _AT)
         assert rule.search(probe), (
             f"[{case}/{delim!r}] attribution lost: the named rule does not "
