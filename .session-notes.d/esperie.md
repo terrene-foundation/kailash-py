@@ -1,117 +1,102 @@
 ---
 owner: esperie
-last_reconciled_sha: c9ddf3143
+last_reconciled_sha: 66f86b0b5
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-03
+# Session Notes — 2026-08-04
 
 ## Where we are
 
-Workspace issue-1720-llm-consolidation, phase 05-codify, branch `fix/issue-1720-forest-drain`.
-Session E merged `origin/main` in, ran a second consolidated `/sweep`, opened the
-deferred-quality lane, and merged PR #1994.
+Workspace issue-1720-llm-consolidation, phase 05-codify, branch
+`fix/issue-1720-forest-drain` @ `66f86b0b5` — **pushed**, 0 behind / 24 ahead of
+`origin/main` @ `26a4509b4`.
 
-**The branch STILL cannot be pushed** — GitHub push protection rejects it (see Traps). The
-five-issue forest fixes remain written, tested, UNPUSHED, UNMERGED, UNRELEASED, and never
-redteamed. The product work is invisible to users AND has no second copy anywhere.
+Redteam Round 1 ran. **5 of 6 gating findings are fixed**; 1 BUG remains open.
+Release is blocked on a version-anchor decision, not on code.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-03-consolidated.md` —
-   current decision report. Supersedes `sweep-2026-08-03.md` (kept for the delta).
-2. **This file's Traps section** — the push-protection block is the gating fact; do not
-   re-derive it by attempting a push.
-3. `.wave-tracker.d/esperie.md` — launch ledger + "verified, do NOT re-derive" block.
-4. `git log origin/main..HEAD` — each commit body carries its own evidence.
+1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-04.md` —
+   current decision report. Supersedes the two 2026-08-03 sweeps.
+2. **This file's Traps section** — three traps below cost real time this session.
+3. `workspaces/issue-1720-llm-consolidation/04-validate/redteam-r1-launch-ledger.md`
+4. `git log origin/main..HEAD` — every commit body carries its own evidence.
 
 ## In-flight state
 
-- Branch: 16 ahead / 0 behind `origin/main`. **No remote ref exists** — push is BLOCKED.
-- Only `.session-notes.d/` + `.wave-tracker.d/` dirty. Nothing in `src/`.
-- Version anchors: ONLY nexus bumped (2.16.0). core / dataflow / kaizen / kaizen-agents / ml
-  unbumped.
-- A worktree for the now-merged #1994 branch is still registered; prune it.
+- Only `.wave-tracker.d/esperie.md` dirty (pre-existing, NOT mine — do not revert).
+- Version anchors: ONLY nexus bumped (2.16.0). core / dataflow / kaizen /
+  kaizen-agents / ml unbumped — **Decision A in the sweep report**.
+- Nothing running in the background.
 
 ## Executed this session
 
-- **Merged `origin/main`** into the branch (`c691861c7`) — clean, no conflicts.
-- **PR #1994 merged** (`26a4509b4`) — untracks `.claude/cross-repo-authz/` + adds the fence.
-  Head SHA was pinned and its checks read as a separate command before merging, per `git.md`.
-- **Created the `deferred-quality` label** + `.github/ISSUE_TEMPLATE/deferred-quality.md`
-  (commit `c9ddf3143`). Closes W16. All four Rule-1b conditions are required fields; the
-  header carries the BUG/INVEST-NOW classifier guard.
-- **Committed the consolidated sweep report** (`c9ddf3143`).
-- No cross-repo actions. Nothing filed on loom.
+- **Fixed 5 R1 gating findings**, each verified green-with-fix AND red-without:
+  `ad1bd9ee7` show_error stdout leak · `fe47995b6` hf_/fw_ scrubber shapes ·
+  `8c5e70821` MCP empty inputSchema (root cause) · `4ab9da4a2` dialect budget
+  WARN · `d9711b589` #1981 index-shift invariant.
+- **Merged PR #1994** (`26a4509b4`); **closed PR #1991** with pin rationale.
+- **Filed** #1995 (isort drift, deferred-quality), #1996 (unguarded FastMCP
+  import), #1997 (Mistral scrubber gap, pinned xfail-strict).
+- **Pushed** the branch; created + deleted a temporary `backup/*` ref.
+- Pruned two stray worktrees (#1994's, and R1's baseline checkout).
 
 ## Wave tracker
 
-→ `.wave-tracker.d/esperie.md` — none in flight, all tracks terminal. Read BEFORE launching
-anything (`rules/wave-loop.md` MUST-6). Session E added no waves.
+→ `.wave-tracker.d/esperie.md`. Read BEFORE launching anything
+(`wave-loop.md` MUST-6). R1's ledger is the workspace file above.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                        | Value-anchor (MUST-1 source)                                    | Status                            |
-| --- | ------------------------------------------- | --------------------------------------------------------------- | --------------------------------- |
-| W9  | sweep-completeness CI ratchet               | user: "/redteam to convergence"                                 | BLOCKED on human (CI cost)        |
-| W10 | S4 `__cause__`/`__context__` 23-site sweep  | same class as W1/W5; shared helper exists                       | queued                            |
-| W11 | version bumps + CHANGELOGs + PR + release   | `build-repo-release-discipline.md`: BUILD done = released       | queued — gated on W18 then W14    |
-| W12 | `discovery._check_user_access` fails OPEN   | authz posture; needs security-reviewer                          | queued                            |
-| W13 | `runtime._route_task` SEMANTIC branch dead  | picks agent[0] while appearing LLM-routed                       | queued                            |
-| W14 | `/redteam` to convergence on post-fix tree  | user, session C: "/redteam to convergence"                      | UNSTARTED — gated on W18          |
-| W15 | Sweep-5 blind spot + the 70 findings it hid | user: "/sweep according to our latest procedural directives"    | FIX-NOW; Tier-1 gated (see below) |
-| W16 | `deferred-quality` label + template absent  | `product-completion-first.md` MUST-2 defer lane has no surface  | **DONE** — `c9ddf3143`            |
-| W17 | `effortLevel: high` must reach loom Gate-1  | user: "the correct is high default across the entire ecosystem" | BLOCKED on loom ingest            |
-| W18 | Push protection blocks the forest branch    | user approved "push the branch"; it is the CRIT blocker         | **OPEN — needs human decision**   |
-
-**W15 gating note:** the fix must widen the precondition gate in `.claude/commands/sweep.md`,
-which is on the `self-referential-codify.md` Rule-2 allowlist → enforcement-bearing **Tier 1**
-→ mandates a multi-agent redteam-with-tests round before merge. Fixing only the
-non-allowlisted `tools/sweep-redteam.py` half still reports N/A through the command path.
+| ID  | Item                                       | Value-anchor                                     | Status                        |
+| --- | ------------------------------------------ | ------------------------------------------------ | ----------------------------- |
+| W9  | sweep-completeness CI ratchet              | user: "/redteam to convergence"                  | BLOCKED on human (CI cost)    |
+| W10 | S4 `__cause__` 23-site sweep               | same class as W1/W5                              | queued                        |
+| W11 | version bumps + CHANGELOGs + PR + release  | BUILD done = released                            | **BLOCKED on Decision A**     |
+| W12 | `discovery._check_user_access` fails OPEN  | authz posture                                    | queued                        |
+| W13 | `runtime._route_task` SEMANTIC branch dead | picks agent[0] while appearing LLM-routed        | queued                        |
+| W14 | `/redteam` to convergence                  | user: "/redteam to convergence"                  | **R1 DONE; R2 needed**        |
+| W15 | Sweep-5 blind spot + the 70 findings       | user: "/sweep per our procedural directives"     | Tier-1 gated; Decision C open |
+| W16 | deferred-quality label + template          | `product-completion-first.md` MUST-2             | **DONE** — `c9ddf3143`        |
+| W17 | `effortLevel: high` must reach loom Gate-1 | user: "high default across the entire ecosystem" | BLOCKED on loom ingest        |
+| W18 | Push protection blocked the branch         | user approved; was the CRIT                      | **DONE** — 5 URLs allowlisted |
+| W19 | compact-JSON over-redaction                | R1 security F4; still BUG, not reclassified      | **OPEN — only remaining BUG** |
+| W20 | MCP stack undeclared (neither pin)         | measured: fastmcp 3.x not co-installable         | **OPEN — Decision B**         |
 
 ## Traps
 
-- **PUSH PROTECTION BLOCKS THIS BRANCH (W18).** `git push` → `GH013 ... Push cannot contain
-secrets`. Five detections (Slack API Token ×2, Stripe API Key ×2, Stripe Live Restricted
-  Key ×1) in commits `c0c99b589` and `0066e4fcb`, at:
-  - `packages/kailash-kaizen/tests/regression/test_issue_1974_sanitizer_pattern_gaps.py:119,348,350`
-  - `packages/kailash-kaizen/tests/regression/test_issue_1974b_provider_error_scrubber_parity.py:65,80,81,215`
-  - `workspaces/issue-1720-llm-consolidation/04-validate/wave56-union.diff:6296,6525,6527`
-
-  **These are SYNTHETIC test vectors, not live credentials** — verified by reading the bytes:
-  sequential/repeated digit runs (`2345678901`, `1111111111`), alphabet runs
-  (`abcdefghijklmnopqrstuvwx`), reversed alphabet, alternating-case filler
-  (`AbCdEfGhIjKlMnOpQr`). They are the corpus the #1974 credential-scrubber tests redact
-  against; the tests cannot exist without them. **No rotation needed. Do not "fix" by
-  deleting the vectors — that guts the regression tests.**
-
-  Renaming the branch does NOT help: push protection scans the pushed COMMITS, so the
-  historical blobs trip it regardless of ref name. Confirmed — a `backup/*` ref (matching no
-  CI trigger pattern) was rejected identically.
-
-- ALWAYS `.venv/bin/python -m pytest`; bare python dies at conftest `ImportError: Node`.
-- `tools/sweep-redteam.py --all` scans `workspaces/*/specs/` → VACUOUS green here. Specs are
-  at root; pass `--json specs` explicitly (W15).
-- `.claude/settings.json` is a protected state path and the guard's Layer 2 is direction-blind
-  — _prose_ pairing a verb like "touch" with it in a Bash heredoc is BLOCKED. Use
-  Write/`--body-file`.
-- Failed `git checkout -b` can strand a cherry-pick sequencer: clear with `--quit`, not
-  `--abort`. Branch switches abort when `.session-notes.d/*` is dirty — stash by path. Three
-  unrelated pre-existing stashes live here; never `stash pop` blindly.
-- PR #1991 (dependabot mcp range) has red CI on all four Python versions; its 3 siblings are
-  green.
-- Pushing this branch fires real CI (`unified-ci`, `test-kailash-kaizen`, `test-kailash-ml`
-  all match `fix/*` + the touched paths), so `git.md`'s pre-first-push parity set is owed
-  before the first successful push.
+- **`fastmcp` is NOT co-installable.** Installing it pulls `starlette>=1.x`,
+  which breaks the pinned `fastapi` and takes every repo import down. I did
+  this, then `uv sync` stripped the dev extras AND the editable sub-packages.
+  Full restore is `uv sync --all-extras`. Verify after:
+  `starlette 0.50.0 / fastapi 0.128.0 / mcp 1.26.0 / fastmcp ABSENT` and that
+  `kailash`/`nexus`/`kaizen` resolve to repo paths.
+- **ALWAYS `.venv/bin/python -m pytest`.** Bare `python` dies at conftest with
+  `ImportError: cannot import name 'Node'`. A subagent hit exactly this, worked
+  around it with hand-forced `PYTHONPATH`, and produced a CRITICAL finding that
+  did not reproduce — it had assembled an env with `fastmcp` present. Verify
+  any agent's environment before acting on its results.
+- **Subagents idle without delivering.** All three R1 reviewers signalled idle
+  with no report. Two returned full reports when asked directly; the third
+  never did and its sweeps were re-run inline. An idle notification is NOT a
+  ran-signal — treat it as zero evidence and query or re-run.
+- `tools/sweep-redteam.py --all` scans `workspaces/*/specs/` → VACUOUS green.
+  Specs are at root; pass `--json specs` explicitly (W15).
+- Push protection: the #1974 regression vectors are synthetic but
+  credential-shaped. Five were allowlisted 2026-08-03. **New tests must assemble
+  vectors at runtime from fragments**, never as literals, or the push re-blocks.
+- `.claude/settings.json` is a protected state path; the guard's Layer 2 is
+  direction-blind. Use Write/`--body-file`, not a Bash heredoc.
+- Branch switches abort when `.session-notes.d/*` is dirty — stash by path.
+  **Five** unrelated pre-existing stashes live here; never `stash pop` blindly.
 
 ## Open questions for the human
 
-- **W18 (blocking everything):** how to clear push protection? Options are (a) allowlist the
-  5 detections via the unblock URLs in the push error — 5 clicks, records accepted-secrets in
-  the security tab; (b) restructure the vectors so no literal matches, which requires
-  rewriting the two commits' history since the scanner reads the pushed blobs; (c) enable
-  Secret Scanning and configure exclusions — the error notes the repo is eligible but does
-  not have it enabled. (a) is fastest, (b) is durable, (c) is the broadest change.
-- Decision A (sweep report §5): triage all 70 spec findings, sample ~10 first, or defer?
-  Recommended: sample 10. Awaiting ratification.
-- kaizen carries BREAKING changes at 2.45.0; convention here is MINOR-for-breaking. Confirm.
+- **Decision A (blocks release):** kaizen ships a documented BREAKING change
+  (`ReasoningDegradedError`) at 2.45.0 unbumped; kaizen-agents consumes it,
+  also unbumped. Is MINOR-for-breaking the convention? Recommended bumps in the
+  sweep report §5.
+- **Decision B:** pin the supported MCP stack? Neither `mcp` nor `fastmcp` is
+  pinned, so behaviour depends on what happens to be installed.
+- **Decision C:** the 70 spec-drift findings — recommend sampling 10 rows first.
