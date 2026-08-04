@@ -135,7 +135,13 @@ correctly OUT of this shard; none is fixed.
 counter is at ZERO. Two lanes each ran three rounds, each finding strictly less
 than the one before, and both are on a final narrow round at `be97099ce`.
 
-**SECURITY LANE: VERIFIED-AT-`be97099ce` — CLEAN.** The reviewer re-read the
+**SECURITY LANE: VERIFIED-AT-`be97099ce` — CLEAN, AND THE RECEIPT IS BOUNDED.**
+It covers `credential_scrub.py` + its 1974e suite **at `be97099ce` ONLY**. It does
+NOT extend to `50fe78c25` (the two prose fixes), which the reviewer has not read.
+Both were prose and there is no reason to expect anything else in that commit —
+but "no reason to expect" is not a read, and the receipt exists precisely so that
+difference is stated rather than assumed. The reviewer bounded this itself,
+unprompted, twice. The reviewer re-read the
 final state rather than resting on my attestation (it raised that distinction
 unprompted, and was right to). Verdict: residual lists TRUE and complete against
 stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
@@ -148,11 +154,29 @@ fix; markup pin confounded into a duplicate of its neighbour). All three fixed i
 `b8bc03eed`; a final round is requested and PENDING. The module is NOT converged
 until that returns.
 
-**Three reviewers produced findings whose RECOMMENDED FIXES were wrong** (both
-lanes retracted their own remedy on the record). Every finding was correct and
-load-bearing. Verifying the remedy independently of the finding is what caught
-all three — trusting any of them would have shipped a half-fix, re-imported a
-just-removed leak, or narrowed a pattern into a new one.
+**FOR THE CODIFY PASS — the sharpest generalisation this branch produced, and it
+is the reviewer's, not mine:**
+
+> A reviewer's FINDING and a reviewer's REMEDY carry different evidentiary
+> weight. The remedy is a HYPOTHESIS TO TEST, not an instruction to apply.
+
+Three remedies were retracted on this branch (two by the security lane, one by
+the correctness lane) plus one refuted PROOF. **Every single underlying finding
+was correct and load-bearing.** Trusting the findings was right; applying any of
+the remedies unexamined would have shipped a half-fix, re-imported a
+just-removed leak, or asserted in a code comment that a live crossing could not
+happen.
+
+Note what did NOT catch these: skepticism. What caught them was (a) a second lane
+finding the same gap from a different direction, and (b) testing each remedy
+before applying it. That is process, and process is what generalises — an
+instruction to "be appropriately skeptical" would have caught none of them.
+
+Two companion lines from the same branch:
+- Derive probes from what the pattern CLAIMS, not from what the patch CHANGED —
+  a diff-derived probe set is blind to whatever the diff did not touch.
+- Ask what a parametrized pin HOLDS CONSTANT, not what it varies — the uncovered
+  axis is exactly where the next instance hides (it hid there three times).
 
 ## Ratified decisions — EXECUTE after convergence, do not re-surface
 
