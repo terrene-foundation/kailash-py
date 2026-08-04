@@ -1,124 +1,170 @@
 # Wave tracker — esperie
 
-## Status: WAVE 7 IN FLIGHT (2026-07-26, session C)
+## Status: WAVE 8 IN FLIGHT (2026-08-04, session D)
 
-Branch `fix/issue-1720-forest-drain`. Forest work SECURED at commit `0066e4fcb`
-(73 files, all five issues) — the prior session's uncommitted-tree risk is CLOSED.
-`black --check` clean on all 77 changed .py files; pre-commit passed on the commit.
+Branch `fix/issue-1720-forest-drain`. Executing the RATIFIED ordering constraint from
+`.session-notes.d/esperie.md`: W19 fix → Round-2 redteam → version anchors + MCP pin →
+`/release`. Decision C runs independently and blocks nothing.
 
-## Launch ledger — Wave 7 (orchestration-launch-ledger.md MUST-1)
+Read this file BEFORE spawning anything (`rules/orchestration-launch-ledger.md` MUST-2;
+`rules/wave-loop.md` MUST-6). Match every completion notification against the table
+BEFORE reacting (MUST-3).
 
-Check this table BEFORE spawning anything. Match every completion notification
-against it BEFORE reacting (MUST-2 / MUST-3).
+### Launch ledger — Wave 8
 
-| track            | scope (files owned EXCLUSIVELY)                                      | specialist        | status                    |
-| ---------------- | -------------------------------------------------------------------- | ----------------- | ------------------------- |
-| w7-1981-contract | kaizen a2a.py error-contract, runtime.py:992, #1981 consumers        | kaizen-spec       | **DONE** — `2a54f134f`    |
-| w7-cred-audit    | S4 `__cause__` sites, fallback.py:91, sweep autouse-skip (READ-ONLY) | security-reviewer | **DONE** — report applied |
-| w7-nexus         | packages/kailash-nexus/** — S8 atomicity, `_tools`, MINOR bump       | nexus-spec        | **DONE** — `84f08d203`    |
-| w7-core-dialect  | src/kailash/db/dialect.py, connection_parser.py, staging_utilities   | infra-spec        | in-flight                 |
-| w7-2nd-scrubber  | kaizen/llm/errors.py (S1)                                            | kaizen-spec       | in-flight                 |
-| w7-nexus-del     | `Nexus.__del__` -> close() deadlock (patterns.md); nexus tests       | nexus-spec        | in-flight                 |
-| w7-ollama-deploy | `kaizen/llm/deployment_resolver.py` — keyless provider resolution    | kaizen-spec       | in-flight                 |
-| w7-task-handoff  | `kaizen_agents/patterns/runtime.py::_build_workflow_from_agents`     | kaizen-spec       | in-flight                 |
+| track             | scope (EXCLUSIVE file ownership)                 | mode          | status                                                                |
+| ----------------- | ------------------------------------------------ | ------------- | --------------------------------------------------------------------- |
+| w8-w19-scrub      | `kaizen/utils/credential_scrub.py` + tests       | inline (orch) | **DONE** — `4fdb37fa2` `9eb66d893` `73e86016d`                        |
+| w8-w12-authz      | `discovery._check_user_access` fail-open (recon) | read-only     | **DELIVERED after query** — part fixed `942bdef80`; rest PENDING USER |
+| w8-w13-route      | `runtime.py::_route_task` (recon)                | read-only     | **DELIVERED after query** — root cause fixed `b9a0a4ed6`              |
+| w8-specdrift      | Decision C — spec-drift adjudication (recon)     | read-only     | **DELIVERED after query** — measurement only, no code                 |
+| w8-r2-security    | R2 adversarial security lens over the branch     | read-only     | IDLE/NO REPORT → queried, OUTSTANDING                                 |
+| w8-r2-correctness | R2 correctness + closure-parity lens             | Bash+Read     | IDLE/NO REPORT → queried, OUTSTANDING                                 |
 
-### Landed this wave
+All three dispatched agents are READ-ONLY and read committed HEAD, so they cannot
+collide with the inline W19 edit (`rules/agents.md` § Worktree Orchestration). Session-C's
+finding stands: use the SHARED tree with exclusive per-track file ownership, NOT
+`isolation: "worktree"`.
 
-- `0066e4fcb` — the five-issue forest, secured from its uncommitted state (73 files)
-- `cd6b82950` — S2 (`FallbackResult.to_dict` raw leak) + S6 (sweep autouse-skipped in CI)
-- `84f08d203` — S8 nexus register() all-or-nothing + `_tools` removal + 2.16.0 MINOR
-- `2510092e0` — AF-1 SSE read-error path logs instead of `print`-ing to stderr
-- `2a54f134f` — S3 + S7 #1981 second-order breaks (a2a `run()`, runtime state invariant)
+**ALL FIVE agents went IDLE without delivering a report** — the documented failure
+mode (session B: 6×; session C standing note), now 5-for-5 this session. Resumed
+via message per protocol rather than re-dispatched: **3 of 3 queried recon agents
+delivered in full on the first query**, and each said the same thing — the work WAS
+complete and the report had been written as final assistant text without ever
+calling SendMessage. So the failure is DELIVERY, not execution. Query, never
+re-dispatch: re-dispatching would have thrown away three complete investigations.
+**An idle signal is ZERO evidence and was NOT scored as "no findings."**
 
-### WAVE-LEVEL PROCESS RISK — whole-file `cp` restore during teeth verification
+**The queried reports were worth far more than the inline re-derivation.** Both
+W12 and W13 were re-derived inline while waiting, and BOTH inline conclusions were
+WRONG — see § reconciliation below. Do not treat inline re-derivation as a
+substitute for the agent's report; treat it as a hedge against never getting one.
 
-Two tracks (and the orchestrator) used `cp /tmp/saved.py <file>` to restore after a teeth
-revert. With concurrent agents that is a clobber window: any edit landing in those ~2 minutes
-is silently lost, with no conflict and no signal. Nothing was lost this wave (verified: the
-scrubber's work is confined to `llm/errors.py`, `nodes/ai/error_sanitizer.py`,
-`utils/credential_scrub.py`; `a2a.py` carried exactly the 1981 track's 5 hunks). **Revert the
-specific hunk, never the whole file, whenever another agent is live.**
+One dispatch error worth not repeating: `w8-specdrift` was given the read-only
+`analyst` type but its task required running `tools/sweep-redteam.py`. It correctly
+refused and asked for the output (`rules/agents.md` § "Verify Specialist Tool
+Inventory Before Implementation Delegation" — check for `Bash` BEFORE dispatch).
 
-### Verified, do NOT re-derive
+### Wave 8 reconciliation — do NOT re-derive
 
-- **S4 is 23 sites, not the ledger's 8.** 9 explicit `raise … from e` + 14 BARE raises inside
-  `except` where Python sets `__context__` implicitly. The 14 are invisible to a `from e` grep —
-  that is why the original sweep missed them. `packages/kaizen-agents/` has ZERO sites.
-- **Nexus registration touches SEVEN stores**, not four (2 registry + 1 gateway + 4 MCP). The
-  ledger's "four" was the MCP subset.
-- **`_register_handler_workflow` never existed** anywhere in kailash-nexus — it was a phantom
-  method name in the CHANGELOG and a code comment. Real surface is `Nexus.register_handler`.
-- **`_tools` writes register nothing reachable**: it exists only on the FastMCP fallback shim,
-  which `MCPServer` assigns to `self._mcp`, never to itself; the JSON-RPC handler iterates
+**W13 — the backlog row was wrong, AND so was my inline correction of it.**
+The row said "SEMANTIC branch dead, picks agent[0]". I read the code, saw
+`_score_capability` called with `if score > best_score` driving selection, and
+concluded the row was false. WRONG. The loop is there; it never executes.
+`_route_task` read `getattr(a2a_card, "capabilities", [])` but `A2AAgentCard`
+declares `primary_capabilities` / `secondary_capabilities` /
+`emerging_capabilities` and NO `capabilities` — and for the dict shape `getattr`
+never sees dict KEYS. Empty for BOTH shapes ⇒ judge invoked ZERO times.
+**Reading the code did not settle it; COUNTING JUDGE INVOCATIONS did**
+(`_route_task -> 'a1'`, 0 calls vs `route_task -> 'a2'`, 2 calls, same fixtures,
+same process). Use that instrument on any "is this branch live?" question.
+ROOT CAUSE was two implementations of the same four strategies, each holding the
+bug the other fixed — the dead copy had the correct round-robin bounds guard, the
+live one had the correct capability lookup. Duplicate DELETED (`b9a0a4ed6`);
+`_route_task` is now a thin adapter. Fixed a LIVE production `IndexError` on any
+pool shrink in passing.
+
+**W12 — the row hid the worst half, and the in-code deferral premise is REFUTED.**
+THREE findings, not one:
+(a) checker ABSENT (`permission_checker=None`, the DEFAULT, and the shape the
+class's own docstring example uses) ⇒ grant with NO log at all. `security.md`
+§ Secure-Default; fixed with the prescribed loud one-time WARN (`942bdef80`).
+(b) checker RAISES ⇒ grant. Already loud at ERROR. **PENDING USER DECISION.**
+(c) **THE ONE NOBODY SAW:** `TrustOperations.verify()` — the checker type the
+docstring names — takes `(agent_id, action, resource=None, level=..., context=None)`.
+NO `user_id`, NO `organization_id`, NO `**kwargs`. The call site passes
+`user_id=`/`organization_id=` ⇒ `TypeError` on the FIRST agent ⇒ caught by (b) ⇒
+**every agent granted to every user, always.** Not a transient window — the steady
+state for the DOCUMENTED integration. Verified by `inspect.signature`, not by
+reading. This REFUTES the in-code note's premise that flipping (b) fail-closed
+would "deny every user during a transient outage": for TrustOperations users there
+is no working state to regress from. Every existing test supplies a bespoke
+duck-typed checker written to match the call site, which is why nothing caught it.
+**(b)+(c) are a live PENDING DECISION — see `.session-notes.d`.**
+
+**W19 — my own first fix was wrong and I caught it by attacking it.**
+`4fdb37fa2` excluded `"`, `{`, `}`, `\` reasoning all four are RFC-3986-illegal in
+userinfo so excluding them was free. Not free: `{`, `}`, `\` made
+`postgresql://u:pa{ss@host/db` and siblings stop matching and LEAK IN FULL. `"`
+ALONE fences every compact-JSON case. Narrowed in `9eb66d893`.
+**Reusable lesson: RFC-illegal ≠ cannot-occur.** Generated passwords carry those
+bytes and lenient drivers accept them, so a scrubber that only redacts well-formed
+URLs redacts the wrong set. The test is not "is this byte legal here?" but "does
+excluding it buy coverage I cannot get otherwise?"
+Accepted residual pinned in `73e86016d`: a URL with a `:` in its path plus a later
+`@` in the SAME JSON string value still over-redacts. Left deliberately — that IS
+the credential shape and no regex separates it without parsing. **Do NOT close it
+by widening the character class; that is the exact error above.**
+
+## Wave 7 — final disposition (CLOSED)
+
+| track            | scope                                                          | outcome                        |
+| ---------------- | -------------------------------------------------------------- | ------------------------------ |
+| w7-cred-audit    | S4 enumeration, fallback.py, sweep autouse-skip (READ-ONLY)    | DONE — report applied by hand  |
+| w7-nexus         | nexus S8 atomicity, `_tools`, 2.16.0 MINOR                     | DONE — `84f08d203`             |
+| w7-1981-contract | a2a `run()` contract, runtime state invariant, #1981 consumers | DONE — `2a54f134f`             |
+| w7-core-dialect  | NEW-1 + NEW-2 across core / dataflow / kailash-ml              | DONE — `d8b29d038` (recovered) |
+| w7-2nd-scrubber  | S1 shared `credential_scrub` module                            | DONE — `c0c99b589` (recovered) |
+| w7-nexus-del     | `Nexus.__del__` -> ResourceWarning                             | DONE — `eda71b7d3` (recovered) |
+| w7-ollama-deploy | keyless local provider resolution                              | DONE — `5dfa5f225` (recovered) |
+| w7-task-handoff  | `_build_workflow_from_agents` task handoff                     | DONE — `7816923f7` (recovered) |
+
+**"Recovered" = the shard died on a session limit mid-flight; its on-disk work was
+complete, and the orchestrator verified it by behavioral probe, formatted it, and
+committed it.** Five shards died in the same instant. Nothing was lost — because shards
+edit the SHARED tree, not `isolation: "worktree"`, which would have left 5 orphan
+checkouts. Keep using the shared tree with exclusive per-track file ownership.
+
+## Verified this session — do NOT re-derive
+
+- **S4 is 23 sites, not the ledger's 8.** 9 explicit `raise … from e` + 14 BARE raises
+  inside `except` where Python sets `__context__` implicitly. The 14 are invisible to a
+  `from e` grep. `packages/kaizen-agents/` has ZERO sites. **This is the only session-B
+  finding still open (forest `W10`).**
+- **httpx probe (settles which raises leak):** `TimeoutException` / `ConnectTimeout` /
+  `ReadTimeout` / `ConnectError` render `'timed out'` only — NOT leaks, no fix owed.
+  `HTTPStatusError` **from `raise_for_status()`** renders the full URL including userinfo
+  AND query token. All four `raise_for_status()` sites are already on the S4 list, so that
+  enumeration is complete and W10's `__cause__` is a real credential, not a hypothetical.
+- **Nexus registration touches SEVEN stores** (2 registry + 1 gateway + 4 MCP), not four.
+- **`_register_handler_workflow` never existed** — phantom name in the CHANGELOG and a code
+  comment. Real surface is `Nexus.register_handler`.
+- **`_tools` writes register nothing reachable** — it exists only on the FastMCP fallback
+  shim (assigned to `self._mcp`, never to `MCPServer` itself); handlers iterate
   `_tool_registry`.
+- **`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` challenge is RESOLVED.** The 128 constant
+  survives only as an explicit greppable marker; the real fix landed — `max_length` is now
+  keyword-only and REQUIRED (no inheritable default), and Postgres `upsert()` /
+  `quote_identifier()` now agree on a 100-char identifier.
 
-### AF-3 RESOLVED by orchestrator probe — do NOT re-open
+## One unresolved thread (NOT a blocker, but do not re-discover it)
 
-The credential audit flagged `kaizen/llm/client.py:863,1402,1603` (`raise Timeout() from exc`)
-as _possibly_ S4 sites and correctly refused to assert either way, since it needed httpx
-behavior not readable from this repo. Probed directly:
+`w7-core-dialect` re-fired after its work was already committed and died again (529
+Overloaded). Its last words: _"One test differs (20 vs 19). Let me identify exactly
+which:"_ — it was mid-investigation of a test-COUNT delta and never named the test. It
+made no further on-disk edits (verified: tree carried only the wrapup files afterwards).
 
-| exception                                             | `str()` renders the URL?                          |
-| ----------------------------------------------------- | ------------------------------------------------- |
-| `TimeoutException` / `ConnectTimeout` / `ReadTimeout` | **NO** — `'timed out'` only                       |
-| `ConnectError`                                        | **NO**                                            |
-| `HTTPStatusError` **from `raise_for_status()`**       | **YES** — full URL incl. userinfo AND query token |
-
-So the three `raise Timeout() from exc` sites are **NOT** message/traceback leaks and need no
-`from None` treatment. `e.request.url` still holds the credential as an ATTRIBUTE, but nothing
-in kaizen/kaizen-agents reads it (`http_client.py:235` takes `.host` only).
-
-**This makes S4 concrete rather than theoretical.** All four `raise_for_status()` call sites
-(`multi_modal.py:169,412`; `landing_ai_provider.py:240`; `ollama_vision_provider.py:216`) are
-ALREADY in the S4 list (A6, A7, B11-B14, B9/B10) — so the enumeration is complete for this
-class, and the `__cause__` those sites carry is a real credentialed URL, not a hypothetical one.
-
-### Open concern to challenge at report time
-
-`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH` (128, the LOOSEST budget)
-in `src/kailash/db/dialect.py`. Documented as a deliberate greppable marker rather than a silent
-fail-open, which is defensible — but it does NOT close NEW-1 for PostgreSQL deployments, where a
-100-char identifier still passes validation and is then truncated server-side at 63, aliasing two
-models onto one table. DataFlow's engine DOES know its dialect (`_fit_identifier_to_dialect`), so
-those call sites can pass the real budget. Do not accept "documented + greppable" as closure.
-
-Exclusive-ownership split is deliberate: no two tracks may edit the same file.
-`a2a.py` error-CONTRACT belongs to w7-1981-contract; `a2a.py` credential-sanitize
-belongs to NO track this wave (w7-cred-audit is read-only and reports only).
-Version anchors + CHANGELOGs belong to w7-nexus (nexus only) and the orchestrator.
-
-## Findings queue — session B redteam round 2, the "recorded, NOT fixed" table
-
-| id    | sev      | assigned to                                                                                                                 |
-| ----- | -------- | --------------------------------------------------------------------------------------------------------------------------- |
-| NEW-1 | CRITICAL | w7-core-dialect                                                                                                             |
-| NEW-2 | HIGH     | w7-core-dialect                                                                                                             |
-| S1    | HIGH     | w7-2nd-scrubber                                                                                                             |
-| S3    | HIGH     | w7-1981-contract                                                                                                            |
-| S4    | MED-HIGH | w7-cred-audit                                                                                                               |
-| S2    | MED      | w7-cred-audit                                                                                                               |
-| S6    | MED      | w7-cred-audit                                                                                                               |
-| S7    | MED      | w7-1981-contract                                                                                                            |
-| S8    | MED      | w7-nexus                                                                                                                    |
-| W9    | —        | UNASSIGNED — sweep-completeness CI ratchet (enumerator already exists at `04-validate/find-unsanitized-provider-errors.py`) |
-
-## Standing operational note (carried from session B — still live)
-
-Agents go idle WITHOUT delivering a final report — **6 occurrences in session B**. The
-working remedy is to RESUME via message rather than re-dispatch: it recovered 3 of 4,
-including the round-1 security report that found both HIGH credential leaks, and a
-round-1 lens that surfaced ~6 hours late carrying the session's only commit-blocker.
-Re-dispatch only after a resume ALSO returns empty. Never score a silent-idle as a clean
-round — that manufactures a convergence that never happened.
+Independently green regardless: 31 core + 67 dataflow targeted tests pass, all six
+packages import, and NEW-1 / NEW-2 were confirmed by behavioral probe. But the orchestrator
+never ran the FULL core-SDK suite itself — that shard's "4,792 passed" is its own
+unverified report. So when W11's full-suite run happens, a count that does not match a
+remembered baseline is most likely this same benign delta (tests were added this wave),
+not a regression. Confirm rather than assume.
 
 ## Concurrency
 
-Cold-start ~3 concurrent (`rules/worktree-isolation.md` Rule 4); Wave 7 opened at 3 and
-stepped to 5 with NO throttle signal observed. Back off only on the falsifiable signal
-(≥2 agents dying in a ~30–48s window carrying `not your usage limit`). Session B lost all
-6 shards of Wave 5 to a usage limit — work survived ONLY because shards edited the SHARED
-tree rather than `isolation: "worktree"`, which would have left 6 orphan checkouts to
-recover. Keep using the shared tree with exclusive file ownership.
+Cold-start ~3 concurrent Opus agents (`rules/worktree-isolation.md` Rule 4). This session
+ran 5 and all 5 died together on a **session limit** (not the server-side throttle — no
+`not your usage limit` string). That is a THIRD failure mode distinct from both the
+cold-start throttle and single-agent death: it is account-scoped and kills every in-flight
+agent simultaneously, so the recovery unit is the whole wave. Run heavy suites SERIALLY;
+concurrent suite runs alongside live agents produce `sqlite3 disk I/O error` and
+perf-threshold failures that are self-inflicted.
 
-Run heavy test suites SERIALLY: concurrent suite runs alongside live agents produced
-`sqlite3 disk I/O error` and perf-threshold failures that were self-inflicted, not real.
+## Standing operational note
+
+Agents go idle WITHOUT delivering a final report (6× in session B). Resume via message
+rather than re-dispatch — it recovered 3 of 4. Re-dispatch only after a resume ALSO returns
+empty. Never score a silent-idle as a clean round: that manufactures a convergence that
+never happened. Corollary from session C: a shard that dies mid-flight may still have
+COMPLETE work on disk — verify the tree before assuming the task needs re-running.
