@@ -168,7 +168,33 @@ stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
 three rules with a sound attribution guard. Only remaining defects were two prose
 nits, both fixed. Every attack it had was exhausted.
 
-**CORRECTNESS LANE: CLEAN ROUND 1 — VERIFIED-AT-`1ea5d331f`, conditional met.**
+**ROUND 2 (ROTATED LENS): NOT CLEAN — counter back to ZERO, and the rotation is
+why.** Pointing a DIFFERENT lens at the module found two things four rounds of
+instrument-probing structurally could not:
+  - the residual list was INCOMPLETE (three undocumented anchor-absence
+    siblings, all leaking: no-scheme, scheme-relative, `%40`-encoded `@`);
+  - the placeholder guard PREDATED the tempered fence, so it never rejected the
+    fence trigger it created — `":` was accepted and injected a live trigger
+    into scrubbed output.
+Both fixed/documented in `c8f1a711b`. Item 3 (the 24 passing tests) came back
+CLEAN — all 9 functions plus the grid red under at least one effective mutation.
+
+**THE LESSON, and it supersedes the earlier framing: "clean" was always scoped to
+the LENS, never to the module.** Six rounds of one lens produced six clean-ish
+verdicts on an axis that could not see either of these. Rotate the instrument
+between rounds (`completion-criterion.md` MUST-4) — not as ceremony, but because
+a non-rotated round re-samples the residue the previous lens already filtered.
+
+**TWO REVIEWERS DISAGREED on the anchor-absence family, and the disagreement was
+INFORMATIVE — recorded, not resolved by picking a side.** Security called
+scheme-less a SCOPE BOUNDARY (claiming every `x:y@z` would redact ordinary
+`key:value@timestamp` prose); correctness called the family an undocumented
+RESIDUAL. Both were right about different members: `%40` is INSIDE stated
+coverage and is pinned as a defect; scheme-less/scheme-relative are OUTSIDE it
+and are documented but NOT pinned. Pinning them would assert a defect where the
+module never made a claim.
+
+**Prior:** CLEAN ROUND 1 — VERIFIED-AT-`1ea5d331f`, conditional met.
 Verdict CLEAN with one documented limitation, which is now documented (the doc
 commit is TEST-COMMENT-ONLY; the verified code state remains `1ea5d331f`).
 Independently re-verified all three properties: attribution 20/20; the guard
@@ -186,8 +212,8 @@ because the superset covers it; AUTH-exclusive shape is claimed by OVERFLOW
 anyway). A fourth guard would APPEAR to attribute while being unable to — the
 comment is a true statement where the guard would be a false one.
 
-**BOTH LANES ARE NOW CLEAN AT ROUND 1. Convergence requires TWO consecutive
-clean rounds** (`commands/redteam.md` § Convergence Criteria) — so this is 1 of
+**SUPERSEDED — round 2 was NOT clean; counter is back to ZERO.** (Kept for the
+reasoning, which stands: convergence requires TWO consecutive clean rounds** (`commands/redteam.md` § Convergence Criteria) — so this is 1 of
 2, NOT convergence. Do not read two clean lanes as two clean rounds; they are one
 round, cleanly reported by two lanes. A second round is owed before release.
 
