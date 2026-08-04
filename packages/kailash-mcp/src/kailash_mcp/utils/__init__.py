@@ -29,6 +29,6 @@ __all__ = [
     "json_formatter",
     "markdown_formatter",
     "search_formatter",
-
     "build_input_schema",
-    "json_type_for",]
+    "json_type_for",
+]
