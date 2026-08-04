@@ -169,6 +169,30 @@ class TestRealCredentialsStillRedacted:
                 "postgresql://svcuser:" + ("x" * 400) + _AT + "db.internal/app",
                 "x" * 400,
             ),
+            # The three below are the OVER-NARROWING probes. The first cut of
+            # this fix excluded `"`, `{`, `}` AND `\` on the reasoning that all
+            # four are RFC-illegal in userinfo so excluding all four was free.
+            # It was not: these three passwords stopped matching and LEAKED IN
+            # FULL, while `"` alone already fenced every compact-JSON case. The
+            # exclusion set is now exactly `"`, and these pin it there.
+            #
+            # RFC-illegal is not the same as "cannot occur" — generated
+            # passwords carry these bytes and lenient drivers accept them.
+            (
+                "open brace in password",
+                "postgresql://svcuser:pa{ss" + _AT + "db.internal/app",
+                "pa{ss",
+            ),
+            (
+                "close brace in password",
+                "postgresql://svcuser:pa}ss" + _AT + "db.internal/app",
+                "pa}ss",
+            ),
+            (
+                "backslash in password",
+                "postgresql://svcuser:pa\\ss" + _AT + "db.internal/app",
+                "pa\\ss",
+            ),
         ],
     )
     def test_credential_is_redacted(self, label: str, dsn: str, secret: str) -> None:
