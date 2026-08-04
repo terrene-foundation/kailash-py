@@ -132,10 +132,21 @@ checkouts. Keep using the shared tree with exclusive per-track file ownership.
 - **`_tools` writes register nothing reachable** — it exists only on the FastMCP fallback
   shim (assigned to `self._mcp`, never to `MCPServer` itself); handlers iterate
   `_tool_registry`.
-- **`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` challenge is RESOLVED.** The 128 constant
-  survives only as an explicit greppable marker; the real fix landed — `max_length` is now
-  keyword-only and REQUIRED (no inheritable default), and Postgres `upsert()` /
-  `quote_identifier()` now agree on a 100-char identifier.
+- **`DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` challenge — the "RESOLVED" here was an
+  OVER-CLAIM; corrected 2026-08-04 (`0e2497b3b`).** What that entry describes DID land
+  (`max_length` keyword-only and required; Postgres `upsert()` / `quote_identifier()`
+  agreeing on a 100-char identifier), but a SECOND defect in the same constant survived
+  it and this row asserted the whole challenge closed.
+  The unknown budget is numerically EQUAL to SQLite's (both 128) and the WARN trigger was
+  a VALUE comparison, so a correctly-bound **SQLite** caller — the default store here —
+  was indistinguishable from an unbound one and warned on every identifier. The
+  no-false-positive test covered **Postgres only** (63, numerically distinct), so it
+  passed either way: a non-discriminating instrument cited as proof, the THIRD occurrence
+  of that shape on this branch (see F1 and the W19 probe-set gap above).
+  Now fixed with a real sentinel (`_UnknownBudget`, an `int` subclass) and the trigger
+  moved to `isinstance`; the test is parametrized over both dialects with SQLite as the
+  discriminating case. **Left visible rather than rewritten** — a row that silently
+  changed from RESOLVED to not-resolved would hide that the over-claim happened.
 
 ## One unresolved thread (NOT a blocker, but do not re-discover it)
 
