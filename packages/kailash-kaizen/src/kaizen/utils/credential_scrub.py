@@ -66,6 +66,7 @@ from typing import Final, List
 
 __all__ = [
     "scrub_credentials",
+    "scrub_local_error",
     "DEFAULT_PLACEHOLDER",
 ]
 
@@ -79,6 +80,59 @@ __all__ = [
 
 #: Replacement token used when the caller does not supply one.
 DEFAULT_PLACEHOLDER: Final[str] = "[REDACTED]"
+
+# ---------------------------------------------------------------------------
+# SHAPE-ONLY rules (gated by ``redact_opaque_tokens``)
+# ---------------------------------------------------------------------------
+# The two rules below are the ONLY entries in ``_CREDENTIAL_PATTERNS`` that
+# discriminate on SHAPE ALONE — a run of the right characters at the right
+# length, with no vendor prefix, no protocol literal, and no credential-
+# announcing context. Every other entry is anchored on a literal that only
+# appears where a credential does (``sk-``, ``AKIA``, ``ghp_``, ``Bearer ``,
+# ``sig=``, ``eyJ<hdr>.<payload>.<sig>``, …).
+#
+# That distinction is what the ``redact_opaque_tokens`` flag switches on. It is
+# NOT a quality ranking: on the provider-error surface these two rules are
+# load-bearing (a bare AWS secret carries no prefix), which is why they are ON
+# by default. They are separable because on a LOCAL-error surface the same
+# shapes are overwhelmingly git SHAs, MD5 digests, unhyphenated UUIDs and long
+# CamelCase identifiers — see
+# ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``.
+#
+# They are hoisted OUT of the list literal purely so they can be named. Their
+# positions inside ``_CREDENTIAL_PATTERNS`` are UNCHANGED, and that matters:
+# the list is applied in order and the order is load-bearing (``sk-<40 alnum>``
+# is claimed WHOLE by the ``sk-`` rule at index 0; if the 40-char run rule ran
+# first it would claim only the body, yielding ``sk-[REDACTED]``).
+
+# Generic hex tokens (32+ chars, common in Azure/other services).
+# #1960: case-INSENSITIVE ([a-fA-F0-9]) — the prior lowercase-only rule let
+# uppercase/mixed-case hex (e.g. "A1B2C3...") slip through unredacted.
+_GENERIC_HEX_TOKEN: Final[re.Pattern] = re.compile(r"\b[a-fA-F0-9]{32,}\b", re.ASCII)
+
+# AWS 40-char base64 secret access keys ([A-Za-z0-9/+]{40}) — #1960.
+#
+# FALSE-POSITIVE-vs-SENSITIVITY DECISION: we deliberately ACCEPT broad
+# over-redaction here rather than anchor to AWS-secret context. Rationale:
+#   (1) A sanitizer MUST err toward over-redacting secrets — under-redaction
+#       leaks a live credential (the strictly worse failure); over-redaction
+#       only blanks a token in an error string a human still gets the gist of.
+#   (2) A 40+ char contiguous run of [A-Za-z0-9/+] essentially never occurs
+#       in legitimate human-readable error prose (words are space-separated,
+#       ~<=20 chars). The only 40-char contiguous runs are tokens / secrets /
+#       hashes / signed-URL query tokens — all safe (indeed desirable) to
+#       redact. Negative-vector tests confirm normal error text is untouched.
+#   (3) Anchoring to an "aws"/"secret" keyword would MISS a secret that
+#       appears bare in a raw exception string — the common real case.
+# {40,} is greedy, so it spans the whole run (no partial mid-token match).
+#
+# Reason (2) is TRUE FOR ERROR PROSE and FALSE for identifiers: a full 40-hex
+# git SHA and a long CamelCase class name are both 40+ contiguous runs, and
+# both occur constantly in LOCAL orchestration errors. That is precisely the
+# surface split ``redact_opaque_tokens`` exists to express.
+_AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
+    r"[A-Za-z0-9/+]{40,}", re.ASCII
+)
 
 # ---------------------------------------------------------------------------
 # Vendor-prefixed and shape-anchored credential patterns
@@ -102,10 +156,9 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # consolidation lands it at BOTH surfaces per rules/security.md
     # § Enforcement-Surface Parity.
     re.compile(r"ASIA[0-9A-Z]{16}", re.ASCII),
-    # Generic hex tokens (32+ chars, common in Azure/other services).
-    # #1960: case-INSENSITIVE ([a-fA-F0-9]) — the prior lowercase-only rule let
-    # uppercase/mixed-case hex (e.g. "A1B2C3...") slip through unredacted.
-    re.compile(r"\b[a-fA-F0-9]{32,}\b", re.ASCII),
+    # SHAPE-ONLY — defined above, gated by ``redact_opaque_tokens``. Position
+    # in this list is unchanged; only the definition moved.
+    _GENERIC_HEX_TOKEN,
     # Slack tokens (#1974). The full `xox[baprse]-` family: bot / app / user /
     # refresh / session / token-rotation. Segment separators ("-") break the
     # 40-char contiguous-run rule below, so no other pattern claims these.
@@ -156,22 +209,9 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # base64 that has been URL-escaped (`%2F`, `%2B`, `%3D`). Single bounded
     # class after a literal anchor — linear, no adjacent-run ambiguity.
     re.compile(r"sig=[A-Za-z0-9%+/=_\-]{20,}", re.ASCII),
-    # AWS 40-char base64 secret access keys ([A-Za-z0-9/+]{40}) — #1960.
-    #
-    # FALSE-POSITIVE-vs-SENSITIVITY DECISION: we deliberately ACCEPT broad
-    # over-redaction here rather than anchor to AWS-secret context. Rationale:
-    #   (1) A sanitizer MUST err toward over-redacting secrets — under-redaction
-    #       leaks a live credential (the strictly worse failure); over-redaction
-    #       only blanks a token in an error string a human still gets the gist of.
-    #   (2) A 40+ char contiguous run of [A-Za-z0-9/+] essentially never occurs
-    #       in legitimate human-readable error prose (words are space-separated,
-    #       ~<=20 chars). The only 40-char contiguous runs are tokens / secrets /
-    #       hashes / signed-URL query tokens — all safe (indeed desirable) to
-    #       redact. Negative-vector tests confirm normal error text is untouched.
-    #   (3) Anchoring to an "aws"/"secret" keyword would MISS a secret that
-    #       appears bare in a raw exception string — the common real case.
-    # {40,} is greedy, so it spans the whole run (no partial mid-token match).
-    re.compile(r"[A-Za-z0-9/+]{40,}", re.ASCII),
+    # SHAPE-ONLY — defined above, gated by ``redact_opaque_tokens``. Position
+    # in this list is unchanged; only the definition moved.
+    _AWS_SECRET_CONTIGUOUS_RUN,
     # Bearer tokens in error messages.
     #
     # "=" is in the class because base64 bearer tokens carry "=" padding; the
@@ -181,6 +221,22 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # Partial key exposure (OpenAI style: "sk-tenA...B12C")
     re.compile(r"sk-[a-zA-Z0-9]{3,4}\.\.\.[a-zA-Z0-9]{3,4}", re.ASCII),
 ]
+
+#: The subset of ``_CREDENTIAL_PATTERNS`` that discriminates on SHAPE ALONE.
+#: Membership is by IDENTITY, not by pattern text — a rule cannot fall out of
+#: this set by having its regex edited.
+#:
+#: CONTRACT FOR ANY NEW RULE ADDED TO ``_CREDENTIAL_PATTERNS``: if the rule can
+#: match a string that carries NO credential — i.e. it is not anchored on a
+#: vendor prefix, a protocol literal, or a credential-announcing keyword — it
+#: MUST be added here too. Leaving it out silently widens the CONSERVATIVE
+#: mode, which is the one mode whose whole contract is "matches nothing but a
+#: real credential". The bipolar corpus in
+#: ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``
+#: is the tripwire: a shape-only rule left unclassified reds it.
+_OPAQUE_SHAPE_PATTERNS: Final[frozenset] = frozenset(
+    {_GENERIC_HEX_TOKEN, _AWS_SECRET_CONTIGUOUS_RUN}
+)
 
 # ---------------------------------------------------------------------------
 # URL-embedded credentials (user:pass@host). ORDER-DEPENDENT — see apply order
@@ -531,13 +587,35 @@ _URL_WITH_USERINFO_ONLY = re.compile(
     r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^\s@:/])+@', re.ASCII
 )
 
-# Azure OpenAI endpoint hostname (#1960). The <resource> subdomain is the
-# customer's Azure resource name — sensitive infra identity that reveals the
-# tenant. Redact the resource while keeping the ".openai.azure.com" suffix so
-# the message still reads as "an Azure OpenAI endpoint".
+# ---------------------------------------------------------------------------
+# INTERNAL-LOCATION rules (gated by ``redact_paths``)
+# ---------------------------------------------------------------------------
+# Neither of the two rules below redacts a CREDENTIAL. Both redact an
+# identifier of WHERE our infrastructure lives — a filesystem home directory
+# and an Azure resource hostname. Knowing the answer grants no access; it is
+# infra-identity disclosure, a materially weaker class than a live secret.
+#
+# They share one flag because they share one trade: on a provider-error
+# surface, which may be echoed to a third party, the location is noise worth
+# blanking. On a LOCAL-error surface the location is the entire diagnostic
+# payload — an ``OSError`` message is a path plus a reason, and an agent that
+# cannot read the path cannot retry.
+#
+# NAMING CAVEAT, recorded rather than papered over: the flag is called
+# ``redact_paths`` and one of the two members is a HOSTNAME, not a path. The
+# name is narrower than the group. It is kept because "path" is what a caller
+# reaches for, and the docstring + this block enumerate the group exactly, so
+# the name is imprecise but nothing here is hidden behind it.
 _AZURE_OPENAI_ENDPOINT = re.compile(
     r"https://[A-Za-z0-9][A-Za-z0-9-]*\.openai\.azure\.com", re.ASCII
 )
+"""Azure OpenAI endpoint hostname (#1960).
+
+The <resource> subdomain is the customer's Azure resource name — infra
+identity that reveals the tenant. Redact the resource while keeping the
+``.openai.azure.com`` suffix so the message still reads as "an Azure OpenAI
+endpoint".
+"""
 
 # Internal file paths that could reveal infrastructure
 _INTERNAL_PATH_PATTERNS: List[re.Pattern] = [
@@ -550,13 +628,51 @@ _INTERNAL_PATH_PATTERNS: List[re.Pattern] = [
 _PATH_PLACEHOLDER: Final[str] = "[PATH]/"
 
 
-def scrub_credentials(text: str, *, placeholder: str = DEFAULT_PLACEHOLDER) -> str:
+def scrub_credentials(
+    text: str,
+    *,
+    placeholder: str = DEFAULT_PLACEHOLDER,
+    redact_paths: bool = True,
+    redact_opaque_tokens: bool = True,
+) -> str:
     """Redact every known credential shape from ``text``.
 
     This is the ONLY credential-scrub implementation in Kaizen. Both
     ``kaizen.nodes.ai.error_sanitizer.sanitize_provider_error`` and
     ``kaizen.llm.errors.ProviderError`` route through it, so a pattern added
     here lands at BOTH surfaces simultaneously — which is the whole point.
+
+    AGGRESSION IS A CALLER CHOICE, AND THE DEFAULT IS UNCHANGED
+    -----------------------------------------------------------
+    Both flags default to ``True``, which is BYTE-FOR-BYTE the behaviour every
+    caller had before they existed. This is purely additive: an existing call
+    site that passes neither flag is indistinguishable from the pre-flag
+    function. That is deliberate — the aggressive rules are load-bearing on the
+    PROVIDER-ERROR surface this module was built for, where an attacker can
+    influence the string and a leaked live credential is strictly worse than a
+    blanked token.
+
+    The flags exist because that trade is surface-specific, not universal:
+
+    * ``redact_opaque_tokens`` — the two SHAPE-ONLY rules (32+ hex run, 40+
+      char ``[A-Za-z0-9/+]`` run). They claim real bare AWS secrets, and they
+      also claim full git SHAs, MD5 digests, unhyphenated UUID/trace ids and
+      long CamelCase identifiers.
+    * ``redact_paths`` — the INTERNAL-LOCATION rules (``$HOME`` filesystem
+      paths, and the Azure OpenAI resource hostname; see that block for the
+      naming caveat). They redact infra identity, never a credential.
+
+    Turning BOTH off leaves the rules that can match nothing but a real
+    credential: vendor-prefixed tokens (``sk-``, ``sk-ant-``, ``AIza``,
+    ``pplx-``, ``AKIA``, ``ASIA``, ``xox?-``, bare JWTs, ``gh?_``,
+    ``github_pat_``, ``[sr]k_live_``/``_test_``, ``hf_``, ``fw_``, ``sig=``,
+    ``Bearer <tok>``) and URL-userinfo / DSN credentials. That combination is a
+    verified no-op across the credential-free corpus in
+    ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``,
+    which is what makes it safe on surfaces where the redacted bytes would
+    otherwise be load-bearing — an agent-facing ``ToolResult`` carrying an
+    ``OSError`` path the model must read to retry, or a local orchestration
+    error keyed by git SHA / run id / trace id.
 
     Args:
         text: The raw string to scrub (a provider error message, a response
@@ -567,9 +683,15 @@ def scrub_credentials(text: str, *, placeholder: str = DEFAULT_PLACEHOLDER) -> s
             ``LlmClient`` wire surface). It MUST NOT contain ``@``, ``://``,
             or whitespace: the URL-rule ordering contract below depends on a
             substituted userinfo remaining un-rematchable.
+        redact_paths: When ``True`` (default) redact internal filesystem paths
+            and the Azure OpenAI resource hostname. Set ``False`` on surfaces
+            where the location is the diagnostic rather than the disclosure.
+        redact_opaque_tokens: When ``True`` (default) apply the two shape-only
+            rules. Set ``False`` on surfaces where a hash / SHA / trace id is
+            the reader's only correlation handle.
 
     Returns:
-        ``text`` with every recognised credential shape replaced.
+        ``text`` with every ENABLED credential shape replaced.
 
     Raises:
         ValueError: if ``placeholder`` contains ``@``, ``://``, or whitespace,
@@ -617,7 +739,15 @@ def scrub_credentials(text: str, *, placeholder: str = DEFAULT_PLACEHOLDER) -> s
     sanitized = text
 
     # Vendor-prefixed / shape-anchored credentials first.
+    #
+    # The gate SKIPS entries in place rather than iterating a filtered list
+    # built elsewhere, because the apply ORDER of this list is load-bearing and
+    # a second list is a second thing to keep in order. With
+    # ``redact_opaque_tokens=True`` the sequence of substitutions is identical
+    # to the pre-flag function, element for element.
     for pattern in _CREDENTIAL_PATTERNS:
+        if not redact_opaque_tokens and pattern in _OPAQUE_SHAPE_PATTERNS:
+            continue
         sanitized = pattern.sub(placeholder, sanitized)
 
     # URL-embedded credentials. The bounded rule runs FIRST because it
@@ -633,13 +763,64 @@ def scrub_credentials(text: str, *, placeholder: str = DEFAULT_PLACEHOLDER) -> s
     # userinfo that genuinely had no password half.
     sanitized = _URL_WITH_USERINFO_ONLY.sub(f"\\1{placeholder}@", sanitized)
 
-    # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
-    sanitized = _AZURE_OPENAI_ENDPOINT.sub(
-        f"https://{placeholder}.openai.azure.com", sanitized
-    )
+    # INTERNAL-LOCATION rules. Both are gated together by ``redact_paths``;
+    # with the flag on, the order and effect are identical to the pre-flag
+    # function.
+    if redact_paths:
+        # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
+        sanitized = _AZURE_OPENAI_ENDPOINT.sub(
+            f"https://{placeholder}.openai.azure.com", sanitized
+        )
 
-    # Replace internal file paths.
-    for pattern in _INTERNAL_PATH_PATTERNS:
-        sanitized = pattern.sub(_PATH_PLACEHOLDER, sanitized)
+        # Replace internal file paths.
+        for pattern in _INTERNAL_PATH_PATTERNS:
+            sanitized = pattern.sub(_PATH_PLACEHOLDER, sanitized)
 
     return sanitized
+
+
+def scrub_local_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) -> str:
+    """Scrub a LOCAL error value for a message a human or an agent will read.
+
+    THIS IS NOT A SECOND SCRUBBER. It owns no patterns, compiles no regexes and
+    makes no decisions: it is the named CONSERVATIVE preset over
+    :func:`scrub_credentials`, which remains the single implementation. It
+    exists for exactly two reasons, both structural:
+
+    1. **One place defines "conservative".** ~180 call sites in
+       ``kaizen-agents`` want this exact combination. Spelling the flags out at
+       each of them means a future rule that needs gating has ~180 sites to
+       reach, and will not reach them. Here it has one.
+    2. **The default stays safe.** A new rule added to
+       :data:`_CREDENTIAL_PATTERNS` is ON for provider surfaces by default,
+       which is the correct posture; this preset opts out only of the two
+       named groups, so a new rule is opted out only if it is deliberately
+       classified into one of them.
+
+    ``value`` is the error itself, not a pre-formatted string, because
+    ``str(exc)`` is precisely what an f-string ``{exc}`` interpolation
+    produces — so ``f"...{exc}"`` becomes ``f"...{scrub_local_error(exc)}"``
+    with no change of meaning beyond the scrub.
+
+    WHAT THIS DOES NOT REDACT, deliberately: filesystem paths, Azure resource
+    hostnames, git SHAs, MD5/SHA digests, unhyphenated UUIDs and trace ids.
+    Those are the diagnostic payload of a local error — an ``OSError`` message
+    IS a path plus a reason, and an agent handed ``[PATH]/...`` cannot retry.
+    Verified no-op over the credential-free corpus in
+    ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``.
+
+    Args:
+        value: The caught exception (or any object); rendered with ``str()``.
+        placeholder: Replacement token; same contract as
+            :func:`scrub_credentials`.
+
+    Returns:
+        ``str(value)`` with vendor-prefixed and URL-userinfo credentials
+        replaced, and nothing else touched.
+    """
+    return scrub_credentials(
+        str(value),
+        placeholder=placeholder,
+        redact_paths=False,
+        redact_opaque_tokens=False,
+    )
