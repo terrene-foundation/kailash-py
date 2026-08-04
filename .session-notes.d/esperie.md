@@ -9,7 +9,7 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace issue-1720-llm-consolidation, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `6c84f27a5` — **NOT pushed** (13 commits ahead of
+`fix/issue-1720-forest-drain` @ `0da793e14` — **NOT pushed** (19 commits ahead of
 the last push at `66f86b0b5`). Tree clean.
 
 **Release is still HELD.** Round 2 has NOT converged: every round so far found
@@ -50,13 +50,14 @@ CHANGED. And assert the mutation reached the code before reading the result.**
 ## In-flight state
 
 - Nothing running in the background. Tree clean.
-- **Two R2 lanes mid-round**, both asked for a final narrow round:
-  `w8-r2-security` (vs `6c84f27a5`), `w8-r2-correctness` (vs `116b4830a`).
-  Security said it expects the next round clean and would converge there.
+- **Two R2 lanes mid-round**, both asked for a FINAL narrow round vs `0da793e14`.
+  Security agreed with the convergence call but bounded its assent to the state
+  it reviewed (`6c84f27a5`) plus my attestation; a verified-at-HEAD read is
+  requested and PENDING. Correctness expects a strong clean-1 candidate.
 - Version anchors UNCHANGED (only nexus at 2.16.0). Decision A/B targets remain
   ratified and verified against ground truth — see below.
 
-## Executed this session (13 commits)
+## Executed this session (19 commits)
 
 W19 compact-JSON over-redaction fixed, then fixed AGAIN twice as review found
 the fix itself leaked (`4fdb37fa2` → `9eb66d893` → `91e9215b1` → `6c84f27a5`).
