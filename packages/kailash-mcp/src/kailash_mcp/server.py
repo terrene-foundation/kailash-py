@@ -69,7 +69,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 from kailash_mcp.advanced.features import (
@@ -78,11 +78,15 @@ from kailash_mcp.advanced.features import (
     ToolAnnotation,
 )
 from kailash_mcp.auth.providers import (
+    AuthenticationError as ProviderAuthenticationError,
+)
+from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
     PermissionManager,
     RateLimiter,
 )
+from kailash_mcp.auth.providers import RateLimitError as ProviderRateLimitError
 from kailash_mcp.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -481,17 +485,95 @@ def _annotations_to_mcp(annotations: Any) -> Optional[Dict[str, Any]]:
 
 
 # A Google-style structured docstring section header ("Args:", "Returns:", …).
-# Matched on its own line; everything from here on describes the PARAMETERS,
-# which is exactly the surface a permission-gated tool must not disclose.
+# Everything from here on describes the PARAMETERS, which is exactly the surface
+# a permission-gated tool must not disclose.
+#
+# The keyword must be the WHOLE line prefix up to the colon, but the colon does
+# NOT have to end the line: "Args: user_id (str) - the account to delete" is a
+# real (if non-conventional) one-line section, and requiring `$` let it through
+# with every parameter name intact. Anchoring the keyword at the line start is
+# what keeps ordinary prose safe — "deletion is irreversible: there is no
+# recycle bin" does not start with a section keyword.
 _DOCSTRING_SECTION_RE = re.compile(
     r"^[ \t]*(args|arguments|params|parameters|keyword args|keyword arguments|"
     r"other parameters|returns|return|yields|raises|attributes|examples?|"
-    r"notes?|warnings?|see also|references)[ \t]*:[ \t]*$",
+    r"notes?|warnings?|see also|references)[ \t]*:",
+    re.IGNORECASE,
+)
+
+# A reST/Sphinx (":param x:") or epytext ("@param x:") field. Sphinx's NATIVE
+# markup documents each parameter on its own line with NO section header at all,
+# so the section regex above never fires for it and every parameter name walked
+# straight into a gated tool's advertised description.
+_DOCSTRING_FIELD_RE = re.compile(
+    r"^[ \t]*[:@](param|parameter|arg|argument|key|keyword|type|raises?|"
+    r"except|exception|returns?|rtype|yields?|ivar|var|cvar)\b",
     re.IGNORECASE,
 )
 
 # A NumPy-style underline ("Parameters" followed by "----------").
 _DOCSTRING_UNDERLINE_RE = re.compile(r"^[ \t]*[-=]{3,}[ \t]*$")
+
+# Heuristic: does this text still look like it names parameters? Used ONLY to
+# WARN a tool author that the trim did not fire on their docstring style — never
+# to gate. A false positive costs one log line; a false negative costs the
+# author the signal that their gated tool is publishing its argument surface.
+_LOOKS_LIKE_PARAMETER_DOC_RE = re.compile(
+    r"(^|\s)[:@](param|arg|type|keyword)\b|(^|\n)[ \t]*(args|arguments|params|"
+    r"parameters)[ \t]*:",
+    re.IGNORECASE,
+)
+
+# Credential-bearing kwargs that ``_extract_credentials_from_context`` consumes.
+# They are transport-level authentication material, NOT tool arguments, and MUST
+# be stripped before the tool body is called: forwarding them both leaks the
+# caller's credential into arbitrary tool code and raises TypeError on every
+# tool whose signature does not happen to accept them.
+#
+# ONE constant, read by every call site. It was previously inlined at two places
+# in the async wrapper and at NEITHER of the sync wrapper's two, so the sync path
+# forwarded credentials to the tool body while the async path did not — the same
+# two-wrappers-diverge class as the auth bypass, one field over.
+_CREDENTIAL_KWARGS = frozenset(
+    {
+        "api_key",
+        "token",
+        "username",
+        "password",
+        "jwt",
+        "authorization",
+        "mcp_auth",
+    }
+)
+
+
+def _strip_credential_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Return ``kwargs`` without any transport-level credential entries."""
+    return {k: v for k, v in kwargs.items() if k not in _CREDENTIAL_KWARGS}
+
+
+# Auth denial can arrive from EITHER of two disjoint exception hierarchies:
+#
+#   * ``kailash_mcp.errors.AuthenticationError`` / ``AuthorizationError``
+#     (subclasses of MCPError) — raised by ``auth.oauth.ResourceServer``.
+#   * ``kailash_mcp.auth.providers.AuthenticationError`` (a bare Exception
+#     subclass, parent of that module's ``PermissionError`` and
+#     ``RateLimitError``) — raised by APIKeyAuth, BearerTokenAuth, JWTAuth,
+#     BasicAuth, PermissionManager and AuthManager, i.e. the common path.
+#
+# ``providers.AuthenticationError`` is NOT a subclass of the errors.py one
+# (verified: disjoint MROs), so the tool wrappers' ``except (AuthenticationError,
+# AuthorizationError)`` clause caught only the OAuth hierarchy. For every
+# ``providers.py`` provider the "Access denied" branch was DEAD: denials fell
+# through to the generic handler, which (a) never recorded the denial with the
+# error aggregator and (b) re-raised the provider's RAW message, so an anonymous
+# caller received "User lacks required permission: admin.purge" — disclosing the
+# permission namespace the gate exists to protect.
+_AUTH_DENIAL_ERRORS = (
+    AuthenticationError,
+    AuthorizationError,
+    ProviderAuthenticationError,
+)
 
 
 def _summary_before_sections(doc: str) -> str:
@@ -508,6 +590,10 @@ def _summary_before_sections(doc: str) -> str:
     lines = doc.splitlines()
     for index, line in enumerate(lines):
         if _DOCSTRING_SECTION_RE.match(line):
+            break
+        # reST/Sphinx ``:param x:`` and epytext ``@param x:`` open the parameter
+        # surface with NO section header, so they need their own break.
+        if _DOCSTRING_FIELD_RE.match(line):
             break
         # NumPy style: the CURRENT line is the underline, so the PREVIOUS line
         # was the section title and must be dropped along with it.
@@ -923,9 +1009,13 @@ class MCPServer:
                     "observability": enable_monitoring,
                 },
                 "auth": {
+                    # IDENTITY, not truthiness — and it MUST agree with the
+                    # enforcement guard below. See the comment there.
                     "enabled": auth_provider is not None,
                     "provider_type": (
-                        type(auth_provider).__name__ if auth_provider else None
+                        type(auth_provider).__name__
+                        if auth_provider is not None
+                        else None
                     ),
                 },
                 "rate_limiting": rate_limit_config or {},
@@ -935,8 +1025,18 @@ class MCPServer:
             }
         )
 
-        # Initialize authentication manager
-        if auth_provider:
+        # Initialize authentication manager.
+        #
+        # IDENTITY (``is not None``), never truthiness. ``AuthProvider`` is a
+        # public, user-subclassable ABC and nothing stops a provider from
+        # defining ``__len__`` or ``__bool__`` — an empty key-ring, a
+        # health-gated provider, a policy set mid-rotation. Under the previous
+        # ``if auth_provider:`` such a provider left ``auth_manager = None``
+        # while the config above reported ``auth.enabled = True``: reporting and
+        # enforcement disagreed, and ONE ``__len__`` value silently disabled
+        # authorization, rate limiting AND the ``tools/list`` schema suppression
+        # (all three guard on ``auth_manager``) on a server that said auth was on.
+        if auth_provider is not None:
             self.auth_manager = AuthManager(
                 provider=auth_provider,
                 permission_manager=PermissionManager(),
@@ -1532,23 +1632,50 @@ class MCPServer:
             # Get function name for registration
             tool_name = func.__name__
 
-            # Normalize permissions - support both singular and plural
-            normalized_permission = None
+            # Normalize permissions - support both singular and plural.
+            #
+            # Always a tuple: () means UNGATED, a non-empty tuple means EVERY
+            # listed permission is enforced on every call. Two fail-open modes
+            # lived here before:
+            #
+            #  * ``required_permissions=[]`` fell through every branch, leaving
+            #    ``normalized_permission = None`` — no invoke-time check AND a
+            #    fully published inputSchema — with no warning at all. An author
+            #    who writes ``[]`` is asking for a gate; silently producing a
+            #    completely ungated tool is the fail-OPEN reading, so it raises.
+            #  * ``len(...) > 1`` kept ONLY the first permission and dropped the
+            #    rest behind a ``logger.warning``, so a tool declaring two
+            #    permissions was enforced against one. All are enforced now.
+            normalized_permissions: Tuple[str, ...] = ()
             if required_permissions is not None and required_permission is not None:
                 raise ValueError(
                     "Cannot specify both required_permission and required_permissions"
                 )
             elif required_permissions is not None:
-                if len(required_permissions) == 1:
-                    normalized_permission = required_permissions[0]
-                elif len(required_permissions) > 1:
-                    # For now, take the first permission. Future enhancement could support multiple.
-                    normalized_permission = required_permissions[0]
-                    logger.warning(
-                        f"Tool {tool_name}: Multiple permissions specified, using first: {normalized_permission}"
+                if not required_permissions:
+                    raise ValueError(
+                        f"Tool {tool_name}: required_permissions must not be empty. "
+                        "An empty list produces a completely ungated tool (no "
+                        "invoke-time permission check and a fully published "
+                        "inputSchema), which is never what declaring the "
+                        "argument means. Omit required_permissions entirely for "
+                        "an intentionally public tool."
                     )
+                normalized_permissions = tuple(required_permissions)
             elif required_permission is not None:
-                normalized_permission = required_permission
+                if not required_permission:
+                    raise ValueError(
+                        f"Tool {tool_name}: required_permission must not be an "
+                        "empty string. It gated DISCOVERY (which tests "
+                        "``is not None``) but not INVOCATION (which tested "
+                        "truthiness), so the tool advertised no schema yet ran "
+                        "for anyone. Omit it entirely for a public tool."
+                    )
+                normalized_permissions = (required_permission,)
+
+            # The registry stores None-or-tuple; every consumer gates on
+            # ``is not None``, so an ungated tool must store None, not ().
+            normalized_permission = normalized_permissions or None
 
             # Create enhanced wrapper
             enhanced_func = self._create_enhanced_tool(
@@ -1613,10 +1740,38 @@ class MCPServer:
                 "last_called": None,
             }
 
+            # A GATED tool's description ships to anonymous callers, so it is
+            # trimmed at the first structured docstring section. The trim knows
+            # Google, NumPy, reST/Sphinx and epytext — but it cannot police
+            # free-form prose that happens to name parameters. WARN the author
+            # when the POST-trim text still looks like parameter documentation:
+            # that is the signal the trim did not fire on their style and the
+            # argument surface the inputSchema suppression closed is being
+            # re-opened through the description channel. Advisory only — never
+            # a gate (the description is author-controlled by design).
+            if normalized_permission is not None:
+                advertised = _summary_before_sections(
+                    self._tool_registry[tool_name]["description"] or ""
+                )
+                if _LOOKS_LIKE_PARAMETER_DOC_RE.search(advertised):
+                    logger.warning(
+                        "tool.gated_description.may_disclose_arguments",
+                        extra={
+                            "tool": tool_name,
+                            "hint": (
+                                "the advertised description of this "
+                                "permission-gated tool still looks like it "
+                                "names parameters after trimming; anonymous "
+                                "callers receive it verbatim, which defeats the "
+                                "withheld inputSchema"
+                            ),
+                        },
+                    )
+
             logger.debug(
                 f"Registered enhanced tool: {tool_name} "
                 f"(cached: {cache_key is not None}, "
-                f"auth: {required_permission is not None}, "
+                f"auth: {normalized_permission is not None}, "
                 f"rate_limited: {rate_limit is not None})"
             )
             return mcp_tool  # type: ignore[reportReturnType]
@@ -1630,14 +1785,28 @@ class MCPServer:
         cache_key: Optional[str],
         cache_ttl: Optional[int],
         response_format: Optional[str],
-        required_permission: Optional[str],
+        required_permission: Union[str, Sequence[str], None],
         rate_limit: Optional[Dict[str, Any]],
         enable_circuit_breaker: bool,
         timeout: Optional[float],
         retryable: bool,
         stream_response: bool,
     ) -> F:
-        """Create enhanced tool function with authentication, caching, metrics, error handling, and more."""
+        """Create enhanced tool function with authentication, caching, metrics, error handling, and more.
+
+        ``required_permission`` accepts a single permission string or a sequence
+        of them. ALL listed permissions are enforced on every call — see
+        ``AuthManager._authorize``.
+        """
+        # Normalise to a tuple ONCE, here, so both wrappers below close over the
+        # identical value and cannot drift in how they read it.
+        required_permissions: Tuple[str, ...]
+        if required_permission is None:
+            required_permissions = ()
+        elif isinstance(required_permission, str):
+            required_permissions = (required_permission,) if required_permission else ()
+        else:
+            required_permissions = tuple(required_permission)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
@@ -1646,22 +1815,30 @@ class MCPServer:
             start_time = time.time() if self.metrics.enabled else None
 
             try:
-                # Authentication check
-                if self.auth_manager and required_permission:
+                # Authentication check. IDENTITY on auth_manager — see __init__.
+                if self.auth_manager is not None and required_permissions:
                     # Extract credentials from kwargs or context
                     credentials = self._extract_credentials_from_context(kwargs)
                     try:
                         user_info = self.auth_manager.authenticate_and_authorize(
-                            credentials, required_permission
+                            credentials, required_permissions
                         )
                         # Add user info to session
                         self._active_sessions[session_id] = {
                             "user": user_info,
                             "tool": tool_name,
                             "start_time": start_time,
-                            "permission": required_permission,
+                            "permission": required_permissions,
                         }
-                    except (AuthenticationError, AuthorizationError) as e:
+                    except ProviderRateLimitError:
+                        # Rate limiting is NOT an authorization denial and must
+                        # keep its own type (and retry_after) for the caller.
+                        # providers.RateLimitError subclasses that module's
+                        # AuthenticationError, so it would otherwise be swallowed
+                        # by the denial clause below and reported as "Access
+                        # denied".
+                        raise
+                    except _AUTH_DENIAL_ERRORS as e:
                         if self.error_aggregator:
                             self.error_aggregator.record_error(e)
                         raise ToolError(
@@ -1670,7 +1847,7 @@ class MCPServer:
                         )
 
                 # Rate limiting check
-                if rate_limit and self.auth_manager:
+                if rate_limit and self.auth_manager is not None:
                     user_id = (
                         self._active_sessions.get(session_id, {})
                         .get("user", {})
@@ -1743,6 +1920,14 @@ class MCPServer:
                             result, response_format, stream_response
                         )
 
+                # Strip transport-level credentials before calling the tool.
+                # The async wrapper did this on BOTH its paths and the sync
+                # wrapper on NEITHER, so a credentialed call to a sync tool
+                # forwarded the caller's api_key/token into the tool body — and
+                # raised TypeError on every tool whose signature does not accept
+                # it, i.e. every ordinary tool.
+                clean_kwargs = _strip_credential_kwargs(kwargs)
+
                 # Execute function with timeout
                 if timeout:
                     import signal
@@ -1756,12 +1941,12 @@ class MCPServer:
                     signal.alarm(int(timeout))
 
                     try:
-                        result = func(*args, **kwargs)
+                        result = func(*args, **clean_kwargs)
                     finally:
                         signal.alarm(0)
                         signal.signal(signal.SIGALRM, old_handler)
                 else:
-                    result = func(*args, **kwargs)
+                    result = func(*args, **clean_kwargs)
 
                 # Cache result if enabled
                 if cache_key and self.cache.enabled:
@@ -1844,50 +2029,71 @@ class MCPServer:
             start_time = time.time() if self.metrics.enabled else None
 
             try:
-                # Authentication check
-                if self.auth_manager and required_permission:
+                # Authentication check. IDENTITY on auth_manager — see __init__.
+                #
+                # There is NO no-credential bypass here. This branch used to
+                # carry one:
+                #
+                #     if not credentials and not any(k.startswith("mcp_") ...):
+                #         user_info = None        # ... and then EXECUTED
+                #
+                # commented "allows direct calls for testing and development".
+                # Nothing scoped it to testing or development — it was the
+                # production async dispatch path, and its condition was chosen
+                # by the CALLER: send credentials and you are authenticated (and
+                # possibly denied); send none and the permission gate was skipped
+                # and the tool ran. Sending fewer credentials must never grant
+                # more access. The sync wrapper never had this branch, so the two
+                # wrappers enforced the same decorator argument differently.
+                #
+                # A tool invoked with no credentials now fails closed exactly as
+                # it does on the sync path. If a genuine no-auth affordance is
+                # ever needed it belongs behind an explicit constructor flag
+                # defaulting to False that WARNs at init naming the protection it
+                # disables (security.md § Secure-Default For A New Security
+                # Feature) — not behind an attacker-chosen input shape.
+                if self.auth_manager is not None and required_permissions:
                     # Extract credentials from kwargs or context
                     credentials = self._extract_credentials_from_context(kwargs)
-
-                    # Allow bypassing auth for direct calls when no credentials provided
-                    # This enables testing and development scenarios
-                    if not credentials and not any(
-                        k.startswith("mcp_") for k in kwargs.keys()
-                    ):
-                        logger.debug(
-                            f"Tool {tool_name}: No credentials provided, allowing direct call (development/testing)"
+                    try:
+                        # Async dispatch context (WebSocket): use the
+                        # async-aware path so an async auth_provider (e.g.
+                        # ResourceServer, whose authenticate() is a coroutine)
+                        # is actually awaited. The sync path would leave the
+                        # coroutine un-awaited and crash with an AttributeError
+                        # -> 500 instead of a clean fail-closed
+                        # AuthorizationError. Sync providers work unchanged
+                        # through this path.
+                        user_info = (
+                            await self.auth_manager.authenticate_and_authorize_async(
+                                credentials, required_permissions
+                            )
                         )
-                        user_info = None
-                    else:
-                        try:
-                            # Async dispatch context (WebSocket): use the
-                            # async-aware path so an async auth_provider (e.g.
-                            # ResourceServer, whose authenticate() is a
-                            # coroutine) is actually awaited. The sync path
-                            # would leave the coroutine un-awaited and crash
-                            # with an AttributeError -> 500 instead of a clean
-                            # fail-closed AuthorizationError. Sync providers
-                            # work unchanged through this path.
-                            user_info = await self.auth_manager.authenticate_and_authorize_async(
-                                credentials, required_permission
-                            )
-                            # Add user info to session
-                            self._active_sessions[session_id] = {
-                                "user": user_info,
-                                "tool": tool_name,
-                                "start_time": start_time,
-                                "permission": required_permission,
-                            }
-                        except (AuthenticationError, AuthorizationError) as e:
-                            if self.error_aggregator:
-                                self.error_aggregator.record_error(e)
-                            raise ToolError(
-                                f"Access denied for {tool_name}: {str(e)}",
-                                tool_name=tool_name,
-                            )
+                        # Add user info to session
+                        self._active_sessions[session_id] = {
+                            "user": user_info,
+                            "tool": tool_name,
+                            "start_time": start_time,
+                            "permission": required_permissions,
+                        }
+                    except ProviderRateLimitError:
+                        # Rate limiting is NOT an authorization denial and must
+                        # keep its own type (and retry_after) for the caller.
+                        # providers.RateLimitError subclasses that module's
+                        # AuthenticationError, so it would otherwise be swallowed
+                        # by the denial clause below and reported as "Access
+                        # denied".
+                        raise
+                    except _AUTH_DENIAL_ERRORS as e:
+                        if self.error_aggregator:
+                            self.error_aggregator.record_error(e)
+                        raise ToolError(
+                            f"Access denied for {tool_name}: {str(e)}",
+                            tool_name=tool_name,
+                        )
 
                 # Rate limiting check
-                if rate_limit and self.auth_manager:
+                if rate_limit and self.auth_manager is not None:
                     user_id = (
                         self._active_sessions.get(session_id, {})
                         .get("user", {})
@@ -1927,21 +2133,8 @@ class MCPServer:
 
                     # Define the compute function for cache-or-compute
                     async def compute_result():
-                        # Filter out auth credentials from kwargs before calling the function
-                        clean_kwargs = {
-                            k: v
-                            for k, v in kwargs.items()
-                            if k
-                            not in [
-                                "api_key",
-                                "token",
-                                "username",
-                                "password",
-                                "jwt",
-                                "authorization",
-                                "mcp_auth",
-                            ]
-                        }
+                        # Filter out auth credentials before calling the function
+                        clean_kwargs = _strip_credential_kwargs(kwargs)
 
                         # Execute function with timeout
                         if timeout:
@@ -1958,21 +2151,8 @@ class MCPServer:
                     logger.debug(f"Got result for {tool_name} (cached or computed)")
                 else:
                     # No caching - execute directly
-                    # Filter out auth credentials from kwargs before calling the function
-                    clean_kwargs = {
-                        k: v
-                        for k, v in kwargs.items()
-                        if k
-                        not in [
-                            "api_key",
-                            "token",
-                            "username",
-                            "password",
-                            "jwt",
-                            "authorization",
-                            "mcp_auth",
-                        ]
-                    }
+                    # Filter out auth credentials before calling the function
+                    clean_kwargs = _strip_credential_kwargs(kwargs)
 
                     # Execute function with timeout
                     if timeout:
@@ -2103,9 +2283,16 @@ class MCPServer:
             if field in kwargs:
                 credentials[field] = kwargs[field]
 
-        # Check for Authorization header pattern
-        if "authorization" in kwargs:
-            auth_header = kwargs["authorization"]
+        # Check for Authorization header pattern.
+        #
+        # The type check is load-bearing: ``.startswith`` ran OUTSIDE the try
+        # below, so a non-string ``authorization`` (int, list, dict, None from a
+        # JSON body) raised AttributeError out of credential EXTRACTION rather
+        # than yielding an empty credential set. That failed closed, but as an
+        # opaque crash instead of a clean deny. A non-string header carries no
+        # credentials, which is exactly what an empty dict expresses.
+        auth_header = kwargs.get("authorization")
+        if isinstance(auth_header, str):
             if auth_header.startswith("Bearer "):
                 credentials["token"] = auth_header[7:]
             elif auth_header.startswith("Basic "):

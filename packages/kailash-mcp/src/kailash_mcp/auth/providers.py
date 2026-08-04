@@ -41,7 +41,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Union
 
 try:
     import jwt
@@ -891,7 +891,9 @@ class AuthManager:
         self._audit_log: List[Dict[str, Any]] = []
 
     def authenticate_and_authorize(
-        self, credentials: Dict[str, Any], required_permission: Optional[str] = None
+        self,
+        credentials: Dict[str, Any],
+        required_permission: Union[str, Sequence[str], None] = None,
     ) -> Dict[str, Any]:
         """Authenticate credentials and check authorization (SYNC path).
 
@@ -929,7 +931,9 @@ class AuthManager:
         return self._authorize(result, required_permission)
 
     async def authenticate_and_authorize_async(
-        self, credentials: Dict[str, Any], required_permission: Optional[str] = None
+        self,
+        credentials: Dict[str, Any],
+        required_permission: Union[str, Sequence[str], None] = None,
     ) -> Dict[str, Any]:
         """Authenticate credentials and check authorization (ASYNC-aware path).
 
@@ -961,20 +965,35 @@ class AuthManager:
         return self._authorize(user_info, required_permission)
 
     def _authorize(
-        self, user_info: Dict[str, Any], required_permission: Optional[str]
+        self,
+        user_info: Dict[str, Any],
+        required_permission: Union[str, Sequence[str], None],
     ) -> Dict[str, Any]:
         """Post-authentication rate-limit + permission + audit gate.
 
         Shared by both the sync and async authenticate paths so the
         authorization semantics are identical regardless of dispatch context.
+
+        ``required_permission`` may be a single permission or a sequence of
+        them. When it is a sequence EVERY entry is checked — the caller must
+        hold ALL of them. The server's tool decorator previously kept only the
+        first of a multi-permission list, so a tool declaring two permissions
+        was enforced against one; the enforcement lives here now so both
+        dispatch paths inherit it identically.
         """
         # Check rate limits
         if self.rate_limiter:
             self.rate_limiter.check_rate_limit(user_info)
 
-        # Check permissions
+        # Check permissions — ALL of them, never just the first.
         if required_permission:
-            self.permission_manager.check_permission(user_info, required_permission)
+            if isinstance(required_permission, str):
+                permissions: Sequence[str] = (required_permission,)
+            else:
+                permissions = tuple(required_permission)
+            for permission in permissions:
+                # Raises PermissionError on the first one the user lacks.
+                self.permission_manager.check_permission(user_info, permission)
 
         # Audit log
         if self.enable_audit:
@@ -986,7 +1005,7 @@ class AuthManager:
         self,
         event_type: str,
         user_info: Dict[str, Any],
-        permission: Optional[str] = None,
+        permission: Union[str, Sequence[str], None] = None,
     ):
         """Log authentication event."""
         event = {
