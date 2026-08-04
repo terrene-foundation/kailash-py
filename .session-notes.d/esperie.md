@@ -24,9 +24,16 @@ real defects, so the clean-round counter is at ZERO. Two lanes are mid-round.
 
 ## THE FINDING OF THIS SESSION — read before writing any test
 
-**SIX separate instruments on this branch were cited as proof while being
-structurally unable to fail.** Four were mine — including one added to FIX an
-attribution problem, which introduced a worse one. This is the recurring defect,
+**SEVEN separate instruments on this branch were cited as proof while being
+structurally unable to fail.** Five were mine — including one added to FIX an
+attribution problem (which introduced a worse one), and its replacement, which
+was sound but blind to a class-defining parameter value.
+
+**The count is the finding.** Seven, across one module, found by two lanes over
+six rounds — each layer invisible to the instrument that cleared the layer above
+it: character class -> JSON separator -> rule -> position -> assertion
+reachability -> parameter/class interaction. My own inline check cleared the
+sixth and could not see the seventh, structurally. This is the recurring defect,
 not any individual bug:
 
 1. W19 leak probes — derived from "which characters did we just exclude?". `"`
@@ -204,6 +211,12 @@ Two companion lines from the same branch:
   a diff-derived probe set is blind to whatever the diff did not touch.
 - Ask what a parametrized pin HOLDS CONSTANT, not what it varies — the uncovered
   axis is exactly where the next instance hides (it hid there three times).
+- **And ask whether the parametrized VALUES are inert w.r.t. the case's shape
+  class.** A guard that varies the same axis it is controlling for cannot see a
+  value that is class-DEFINING. One of four delimiters (`:`) was load-bearing for
+  one of three rules — it moves a bare token into the user:pass class — so the
+  cell was mis-attributed and would have XPASSed on another rule's evidence. The
+  probe that catches it removes the FENCE TRIGGER while KEEPING the delimiter.
 - **Then ask which of its assertions can ever be REACHED.** The last frozen axis
   was not a parameter at all — it was ORDER OF ASSERTION. Every cell held "guard
   precedes leak check" constant, so varying delimiter, rule and position could
