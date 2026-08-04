@@ -3,7 +3,22 @@
 
 """Single source of truth for credential scrubbing across Kaizen.
 
-Every credential-scrub site in Kaizen MUST route through this module. Two
+Every PROVIDER-ERROR credential-scrub site in Kaizen MUST route through this
+module.
+
+SCOPED DELIBERATELY, because the unqualified form was FALSE. A third
+credential-pattern list exists at
+``kaizen/core/autonomy/hooks/security/redaction.py``
+(``SensitiveDataRedactor.PATTERNS``), it is REACHABLE — exported from
+``hooks/security/__init__.py`` and used by ``hooks/builtin/logging_hook.py``,
+i.e. it sits on a LOGGING path — and it has drifted from this module on 9 of 10
+measured vendor shapes, catching only the ``sk-`` form. AKIA, ASIA, ghp_, hf_,
+fw_, xoxb-, sk_live_, sig= and URL-embedded DSNs all pass it unredacted.
+
+That is the same failure this module was created to fix, one surface over, and
+the unqualified sentence made it invisible by asserting it could not exist.
+Routing that list through here is a real change on a hook path and belongs in
+its own shard; scoping the claim is what stops the prose lying in the meantime. Two
 independent scrubbers previously guarded two independent surfaces:
 
 * ``kaizen.nodes.ai.error_sanitizer.sanitize_provider_error`` — the
@@ -27,13 +42,20 @@ drift between them is guaranteed, not hypothetical.
 
 REGEX SAFETY CONTRACT (read before touching ANY pattern below)
 --------------------------------------------------------------
-The three URL rules are ORDER-DEPENDENT and their quantifiers are BOUNDED
-for DoS reasons that are documented inline at each rule. This module is
+The three URL rules are ORDER-DEPENDENT and each is LINEAR for DoS reasons
+documented inline at that rule — but by two DIFFERENT mechanisms, and the
+distinction matters if you add a rule. ``_URL_WITH_AUTH`` is BOUNDED
+(``{0,256}`` on both runs). ``_URL_WITH_AUTH_OVERFLOW`` and
+``_URL_WITH_USERINFO_ONLY`` are UNBOUNDED (``*`` / ``+``) and get their
+linearity from a DETERMINISTIC SPLIT POINT instead — the overflow rule's first
+run excludes ``:``, so the split cannot float. An earlier version of this
+paragraph said all quantifiers were bounded, which two of the three contradict;
+the inline comments were right and the summary was not. This module is
 reachable from an error path an attacker can influence (a provider echoing
 back submitted input), so a quadratic pattern here is a remote CPU-burn
 vector, not a micro-optimisation concern. Any new pattern MUST bound its
-quantifiers and MUST land with a self-normalising linearity test whose input
-does NOT contain ``://`` — an input that matches the scheme immediately is
+quantifiers OR establish a deterministic split point, and MUST land with a
+self-normalising linearity test whose input does NOT contain ``://`` — an input that matches the scheme immediately is
 structurally blind to scheme-prefix backtracking.
 """
 
@@ -46,6 +68,14 @@ __all__ = [
     "scrub_credentials",
     "DEFAULT_PLACEHOLDER",
 ]
+
+# NOTE: ``__all__`` is the SUPPORTED surface, but three underscore-prefixed
+# patterns — ``_URL_WITH_AUTH``, ``_URL_WITH_AUTH_OVERFLOW`` and
+# ``_URL_WITH_USERINFO_ONLY`` — are imported CROSS-MODULE by
+# ``nodes/ai/error_sanitizer.py``. They are de-facto public API wearing private
+# names, so a rename here is a silent break there rather than the local edit the
+# underscore implies. Recorded rather than renamed: promoting them would widen
+# the supported surface, which is a decision, not a cleanup.
 
 #: Replacement token used when the caller does not supply one.
 DEFAULT_PLACEHOLDER: Final[str] = "[REDACTED]"
