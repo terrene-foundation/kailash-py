@@ -27,28 +27,54 @@ import logging
 import os
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from mcp.server import FastMCP
-
-from kailash.trust.plane.models import DecisionRecord, _parse_decision_type
+from kailash.mcp_compat import get_fastmcp_class
 from kailash.trust.plane.exceptions import ConstraintViolationError
+from kailash.trust.plane.models import DecisionRecord, _parse_decision_type
 from kailash.trust.plane.project import TrustProject
 
+if TYPE_CHECKING:  # pragma: no cover - analyzer-only, never imported at runtime
+    from mcp.server import FastMCP
+
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "TRUST_DIR",
+    "get_server",
+    "main",
+    "mcp",
+    "trust_check",
+    "trust_envelope",
+    "trust_record",
+    "trust_status",
+    "trust_verify",
+]
 
 # Resolve trust directory from environment or default
 TRUST_DIR = Path(os.environ.get("TRUSTPLANE_DIR", "./trust-plane"))
 
-mcp = FastMCP(
-    "TrustPlane",
-    instructions=(
-        "TrustPlane provides trust gating for AI operations. "
-        "Before performing actions that modify files, create content, "
-        "or make decisions, call trust_check to verify the action is "
-        "allowed by the constraint envelope. Record significant "
-        "decisions with trust_record for audit trail."
-    ),
+SERVER_NAME = "TrustPlane"
+SERVER_INSTRUCTIONS = (
+    "TrustPlane provides trust gating for AI operations. "
+    "Before performing actions that modify files, create content, "
+    "or make decisions, call trust_check to verify the action is "
+    "allowed by the constraint envelope. Record significant "
+    "decisions with trust_record for audit trail."
 )
+
+# The lazily-constructed FastMCP server. Constructing it requires the OPTIONAL
+# third-party ``mcp`` package, so it MUST NOT happen at import time — see
+# ``get_server()`` and the module ``__getattr__`` below.
+_server: Any | None = None
+_server_lock = threading.Lock()
+
+# Annotation-only declaration (no assignment, so no runtime binding is created
+# and the module ``__getattr__`` still fires). It tells static analysers that
+# ``mcp_server.mcp`` is a real, typed attribute despite being resolved lazily —
+# the pattern `rules/orphan-detection.md` Rule 6b mandates for lazily-exported
+# symbols listed in ``__all__``.
+mcp: "FastMCP"
 
 # Cache the loaded project to avoid re-loading on every call.
 # Protected by _project_lock to prevent concurrent initialization races.
@@ -131,15 +157,14 @@ async def _get_project() -> TrustProject:
         return _project
 
 
-@mcp.tool(
-    name="trust_check",
-    description=(
-        "Check whether a proposed action is allowed by the constraint "
-        "envelope. Returns a verdict: AUTO_APPROVED, FLAGGED, HELD, "
-        "or BLOCKED. Call this BEFORE performing actions that modify "
-        "files, create content, or make decisions."
-    ),
+TRUST_CHECK_DESCRIPTION = (
+    "Check whether a proposed action is allowed by the constraint "
+    "envelope. Returns a verdict: AUTO_APPROVED, FLAGGED, HELD, "
+    "or BLOCKED. Call this BEFORE performing actions that modify "
+    "files, create content, or make decisions."
 )
+
+
 async def trust_check(
     action: str,
     resource: str = "",
@@ -168,14 +193,13 @@ async def trust_check(
     }
 
 
-@mcp.tool(
-    name="trust_record",
-    description=(
-        "Record a decision with full reasoning trace and EATP audit "
-        "anchor. Use this after making a significant decision to "
-        "create an auditable record."
-    ),
+TRUST_RECORD_DESCRIPTION = (
+    "Record a decision with full reasoning trace and EATP audit "
+    "anchor. Use this after making a significant decision to "
+    "create an auditable record."
 )
+
+
 async def trust_record(
     decision: str,
     rationale: str,
@@ -222,13 +246,12 @@ async def trust_record(
         }
 
 
-@mcp.tool(
-    name="trust_envelope",
-    description=(
-        "Read the current constraint envelope — what actions are "
-        "blocked, what paths are restricted, financial limits, etc."
-    ),
+TRUST_ENVELOPE_DESCRIPTION = (
+    "Read the current constraint envelope — what actions are "
+    "blocked, what paths are restricted, financial limits, etc."
 )
+
+
 async def trust_envelope() -> dict:
     """Read: what are my constraints?"""
     project = await _get_project()
@@ -238,13 +261,12 @@ async def trust_envelope() -> dict:
     return {"envelope": envelope.to_dict()}
 
 
-@mcp.tool(
-    name="trust_status",
-    description=(
-        "Query current trust status: posture, active session, "
-        "decision count, constraint summary."
-    ),
+TRUST_STATUS_DESCRIPTION = (
+    "Query current trust status: posture, active session, "
+    "decision count, constraint summary."
 )
+
+
 async def trust_status() -> dict:
     """Query: current session, posture, stats."""
     project = await _get_project()
@@ -266,17 +288,93 @@ async def trust_status() -> dict:
     return status
 
 
-@mcp.tool(
-    name="trust_verify",
-    description=(
-        "Verify the integrity of the trust chain. Returns a report "
-        "showing whether the chain is valid and any integrity issues."
-    ),
+TRUST_VERIFY_DESCRIPTION = (
+    "Verify the integrity of the trust chain. Returns a report "
+    "showing whether the chain is valid and any integrity issues."
 )
+
+
 async def trust_verify() -> dict:
     """Verify: is the trust chain intact?"""
     project = await _get_project()
     return await project.verify()
+
+
+# The complete tool registry: (function, tool name, description). This is the
+# single source of truth for what the server exposes — ``_build_server()``
+# registers exactly these and nothing else, so the registration set is
+# enumerable and assertable without constructing a server.
+TOOL_SPECS: tuple[tuple[Any, str, str], ...] = (
+    (trust_check, "trust_check", TRUST_CHECK_DESCRIPTION),
+    (trust_record, "trust_record", TRUST_RECORD_DESCRIPTION),
+    (trust_envelope, "trust_envelope", TRUST_ENVELOPE_DESCRIPTION),
+    (trust_status, "trust_status", TRUST_STATUS_DESCRIPTION),
+    (trust_verify, "trust_verify", TRUST_VERIFY_DESCRIPTION),
+)
+
+
+def _build_server() -> Any:
+    """Construct the FastMCP server and register every tool in ``TOOL_SPECS``.
+
+    Raises:
+        ImportError: If the optional ``mcp`` package is not installed. The
+            message is the shared, actionable one from ``kailash.mcp_compat``.
+    """
+    fastmcp_class = get_fastmcp_class()
+    server = fastmcp_class(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)
+
+    for func, name, description in TOOL_SPECS:
+        server.tool(name=name, description=description)(func)
+
+    return server
+
+
+def get_server() -> Any:
+    """Return the process-wide TrustPlane FastMCP server, building it on first use.
+
+    The server is built lazily rather than at import time so that importing this
+    module — which the ``trustplane-mcp`` console script and the test suite both
+    do — does not require the optional ``mcp`` package. Thread-safe via
+    double-checked locking, matching ``_get_project()``.
+
+    Returns:
+        The configured FastMCP server instance, never ``None``.
+
+    Raises:
+        ImportError: If the optional ``mcp`` package is not installed.
+    """
+    global _server
+
+    # Fast path: already built — no lock needed.
+    cached = _server
+    if cached is not None:
+        return cached
+
+    with _server_lock:
+        # Double-check after acquiring the lock: another thread may have
+        # completed the build while we were waiting.
+        if _server is None:
+            _server = _build_server()
+        return _server
+
+
+def _reset_server() -> None:
+    """Drop the cached server so the next ``get_server()`` rebuilds (for testing)."""
+    global _server
+    with _server_lock:
+        _server = None
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve the module-level ``mcp`` server lazily (PEP 562).
+
+    Preserves the historical ``from kailash.trust.plane.mcp_server import mcp``
+    surface while moving the actual ``FastMCP(...)`` construction — and therefore
+    the hard dependency on the optional ``mcp`` package — out of import time.
+    """
+    if name == "mcp":
+        return get_server()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def main():
@@ -294,7 +392,7 @@ def main():
     global TRUST_DIR
     TRUST_DIR = Path(args.trust_dir)
 
-    mcp.run()
+    get_server().run()
 
 
 if __name__ == "__main__":
