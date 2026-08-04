@@ -140,9 +140,9 @@ LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 
 # Content-block types permitted inside a sampling message (MCP 2025-11-25).
-# ``text`` / ``image`` / ``audio`` are the base SamplingMessage ContentBlock
-# types; ``tool_use`` / ``tool_result`` are the tool-enabled-sampling
-# additions. This is a SERVER-SIDE allowlist (rules/ui-backend-defense.md) —
+# ``text`` / ``image`` / ``audio`` are the base SamplingMessage
+# ContentBlock kinds; ``tool_use`` / ``tool_result`` are the
+# tool-enabled-sampling additions. A SERVER-SIDE allowlist (rules/ui-backend-defense.md) —
 # the client-supplied content ``type`` is validated against it, never trusted.
 SAMPLING_CONTENT_TYPES = frozenset(
     {"text", "image", "audio", "tool_use", "tool_result"}
@@ -2852,18 +2852,40 @@ class MCPServer:
     async def _handle_list_tools(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle tools/list request."""
+        """Handle tools/list request.
+
+        Permission-gated tools are advertised by NAME but WITHOUT their schemas.
+        This handler receives no ``client_id`` and no credentials — the caller is
+        unauthenticated at this point on every transport (the WebSocket server
+        transport never consults its ``auth_provider``, and ``initialize``
+        authenticates nothing), and the permission model is per-CALL
+        (``_extract_credentials_from_context`` reads the tool's own kwargs). So
+        NO caller can be authorized here, and the argument/result surface of a
+        gated tool must not be serialised to one. Name + description remain so a
+        legitimately credentialed client can still discover the tool exists.
+
+        The suppression applies ONLY when an ``auth_provider`` is configured.
+        Without one, ``required_permission`` is never enforced on the invoke path
+        either (``if self.auth_manager and required_permission``), so there is no
+        boundary to protect and withholding schemas would cost discovery for no
+        security gain.
+        """
         tools = []
+        auth_enabled = self.auth_manager is not None
         for name, info in self._tool_registry.items():
             if not info.get("disabled", False):
+                # Fail closed: a permission boundary exists AND this caller
+                # cannot be authorized against it.
+                gated = auth_enabled and info.get("required_permission") is not None
                 tool_desc: Dict[str, Any] = {
                     "name": name,
                     "description": info.get("description", ""),
-                    "inputSchema": info.get("input_schema", {}),
+                    "inputSchema": {} if gated else info.get("input_schema", {}),
                 }
                 # Advertise outputSchema when the tool declared one so clients
-                # can validate structuredContent (spec 2025-11-25).
-                output_schema = info.get("output_schema")
+                # can validate structuredContent (spec 2025-11-25). Withheld for
+                # gated tools — the result shape is the same disclosure class.
+                output_schema = None if gated else info.get("output_schema")
                 if output_schema:
                     tool_desc["outputSchema"] = output_schema
                 # Tool annotations (readOnlyHint / destructiveHint / …) are
@@ -4651,15 +4673,26 @@ class MCPServer:
 
                     # Handle different request types
                     if request.get("method") == "tools/list":
-                        # Return list of tools
+                        # Return list of tools. Permission-gated tools are named
+                        # but their argument surface is withheld — same contract
+                        # as _handle_list_tools; see its docstring.
                         tools = []
+                        auth_enabled = self.auth_manager is not None
                         for name, info in self._tool_registry.items():
                             if not info.get("disabled", False):
+                                gated = (
+                                    auth_enabled
+                                    and info.get("required_permission") is not None
+                                )
                                 tools.append(
                                     {
                                         "name": name,
                                         "description": info.get("description", ""),
-                                        "inputSchema": info.get("input_schema", {}),
+                                        "inputSchema": (
+                                            {}
+                                            if gated
+                                            else info.get("input_schema", {})
+                                        ),
                                     }
                                 )
 
