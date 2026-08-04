@@ -480,6 +480,56 @@ def _annotations_to_mcp(annotations: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+# A Google-style structured docstring section header ("Args:", "Returns:", …).
+# Matched on its own line; everything from here on describes the PARAMETERS,
+# which is exactly the surface a permission-gated tool must not disclose.
+_DOCSTRING_SECTION_RE = re.compile(
+    r"^[ \t]*(args|arguments|params|parameters|keyword args|keyword arguments|"
+    r"other parameters|returns|return|yields|raises|attributes|examples?|"
+    r"notes?|warnings?|see also|references)[ \t]*:[ \t]*$",
+    re.IGNORECASE,
+)
+
+# A NumPy-style underline ("Parameters" followed by "----------").
+_DOCSTRING_UNDERLINE_RE = re.compile(r"^[ \t]*[-=]{3,}[ \t]*$")
+
+
+def _summary_before_sections(doc: str) -> str:
+    """Return the leading prose of ``doc``, stopping at the first section header.
+
+    Google (``Args:``) and NumPy (``Parameters`` + ``----------``) docstrings
+    both document each PARAMETER by name. For a permission-gated tool that text
+    is the same disclosure class as ``inputSchema``: withholding the schema
+    while shipping ``"Args: user_id (str): the account to delete"`` withholds
+    nothing. This trims to the summary so the conventional docstring style does
+    not silently re-open the argument surface through the description channel.
+    """
+    kept: List[str] = []
+    lines = doc.splitlines()
+    for index, line in enumerate(lines):
+        if _DOCSTRING_SECTION_RE.match(line):
+            break
+        # NumPy style: the CURRENT line is the underline, so the PREVIOUS line
+        # was the section title and must be dropped along with it.
+        if index and _DOCSTRING_UNDERLINE_RE.match(line) and lines[index - 1].strip():
+            kept.pop()
+            break
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def _derive_tool_description(func: Callable[..., Any]) -> str:
+    """Derive a tool's ``description`` from its docstring.
+
+    Mirrors how ``input_schema`` is derived from the ORIGINAL function rather
+    than the enhanced wrapper — the wrapper carries ``functools.wraps`` metadata
+    but the original is the authoritative source. Returns ``""`` when the tool
+    is undocumented, which is what every consumer already defaulted to.
+    """
+    doc = inspect.getdoc(func)
+    return doc.strip() if doc else ""
+
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -1405,6 +1455,7 @@ class MCPServer:
         stream_response: bool = False,
         output_schema: Optional[Dict[str, Any]] = None,
         input_schema: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
         annotations: Optional[Any] = None,
     ):
         """
@@ -1434,6 +1485,26 @@ class MCPServer:
                 no input schema was stored at all and ``tools/list`` advertised
                 ``{}`` for EVERY tool, so clients had no protocol-level way to
                 discover any tool's arguments.
+            description: Optional human-readable description advertised on every
+                discovery surface. When omitted it is DERIVED from the decorated
+                function's docstring. Before this existed, ``description`` was
+                never stored at ALL, so every consumer's
+                ``info.get("description", "")`` resolved to ``""`` and no tool
+                was discoverable by description — the same wrong-by-default
+                shape ``input_schema`` had, one field over.
+
+                SECURITY — a tool's description is author-controlled free text
+                that ships to callers who present NO credentials, including for
+                a ``required_permission`` tool (name + description are
+                deliberately retained so a legitimately credentialed client can
+                still discover the tool exists). Do NOT put parameter names,
+                argument formats, internal endpoints, or any other detail in a
+                gated tool's description that you would not publish anonymously:
+                the ``inputSchema`` withheld by ``_public_tool_view`` is worth
+                nothing if the description restates it. Structured docstring
+                sections (``Args:``, NumPy ``Parameters``) are trimmed from a
+                GATED tool's advertised description for exactly this reason, but
+                that trim cannot police free-form prose.
             annotations: Optional :class:`ToolAnnotation` (or MCP-hint dict)
                 advertised in ``tools/list``. ADVISORY ONLY — never gates access.
 
@@ -1526,6 +1597,14 @@ class MCPServer:
                     input_schema
                     if input_schema is not None
                     else build_input_schema(func)
+                ),
+                # Same derivation contract as input_schema, from the ORIGINAL
+                # func. This key was never written before, so every consumer's
+                # `.get("description", "")` fell through to "" for EVERY tool.
+                "description": (
+                    description
+                    if description is not None
+                    else _derive_tool_description(func)
                 ),
                 "structured_tool": structured_tool,
                 "annotations": annotations,
@@ -2038,8 +2117,17 @@ class MCPServer:
                         username, password = decoded.split(":", 1)
                         credentials["username"] = username
                         credentials["password"] = password
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 - fails closed below
+                    # A malformed Basic header yields NO credentials, so the
+                    # permission check downstream denies (fail-closed) — but it
+                    # denied SILENTLY, which is indistinguishable from "no
+                    # header was sent" when an operator is debugging a 403.
+                    # Log the failure WITHOUT the header (it carries the
+                    # credential) — see security.md § "No secrets in logs".
+                    logger.debug(
+                        "auth.basic_header.parse_failed",
+                        extra={"error_type": type(exc).__name__},
+                    )
 
         return credentials
 
@@ -2849,55 +2937,100 @@ class MCPServer:
             "id": request_id,
         }
 
+    def _public_tool_view(
+        self, name: str, info: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Single owner of what a tool discloses to an unauthenticated caller.
+
+        Returns ``None`` when the tool must not be advertised AT ALL (it is
+        disabled), otherwise the ONLY dict any discovery surface may serialise.
+
+        EVERY surface that enumerates ``_tool_registry`` for a caller MUST route
+        through here: ``tools/list`` (``_handle_list_tools``), the stdio
+        ``tools/list`` branch (``run_stdio``), and tool-reference completion
+        (``_handle_completion_complete``). They previously each hand-wrote the
+        projection, so a fix applied to one left the others disclosing the full
+        argument surface — ``completion/complete`` with an empty
+        ``argument.value`` substring-matched EVERY tool and returned each one's
+        ``inputSchema``, making the ``tools/list`` suppression decorative. Add a
+        new discovery surface by CALLING this, never by copying it.
+
+        Two independent suppressions:
+
+        * ``disabled`` -> ``None``. A disabled tool is not invocable
+          (``_execute_tool`` and ``_handle_call_tool`` both refuse it), so
+          advertising it leaks the deployment's tool inventory for no gain.
+        * ``gated`` -> no argument surface. The caller here is unauthenticated
+          on every transport (``WebSocketServerTransport.handle_client`` never
+          consults its ``auth_provider``, ``initialize`` authenticates nothing,
+          and these handlers receive neither ``client_id`` nor credentials), and
+          the permission model is per-CALL
+          (``_extract_credentials_from_context`` reads the tool's own kwargs).
+          So NO caller can be authorized at discovery time and the argument /
+          result surface must not be serialised to one. Name + description
+          remain so a legitimately credentialed client can still discover that
+          the tool exists.
+
+        Gating applies ONLY when an ``auth_provider`` is configured. Without
+        one, ``required_permission`` is never enforced on the invoke path either
+        (``if self.auth_manager and required_permission``), so there is no
+        boundary to protect and withholding would cost discovery for no security
+        gain.
+        """
+        if info.get("disabled", False):
+            return None
+
+        # Fail closed: a permission boundary exists AND this caller cannot be
+        # authorized against it.
+        gated = (
+            self.auth_manager is not None
+            and info.get("required_permission") is not None
+        )
+
+        description = info.get("description", "")
+        if gated and description:
+            # A gated tool's description is author-controlled free text that
+            # ships to anonymous callers by design. Conventional Google/NumPy
+            # docstrings document every parameter BY NAME, which is the same
+            # disclosure class as the withheld inputSchema — trim to the
+            # summary so the docstring style cannot re-open it.
+            description = _summary_before_sections(description)
+
+        view: Dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "inputSchema": {} if gated else info.get("input_schema", {}),
+        }
+        # Advertise outputSchema when the tool declared one so clients can
+        # validate structuredContent (spec 2025-11-25). Withheld for gated
+        # tools — the result shape is the same disclosure class.
+        output_schema = None if gated else info.get("output_schema")
+        if output_schema:
+            view["outputSchema"] = output_schema
+        # Tool annotations (readOnlyHint / destructiveHint / …) are ADVISORY
+        # metadata for client UX. INVARIANT: they MUST NEVER gate authorization
+        # — access control is enforced solely by the auth/permission manager
+        # (see _create_enhanced_tool), never by these client-supplied-trust
+        # hints. Do not read them in any dispatch/authorization path.
+        mcp_annotations = _annotations_to_mcp(info.get("annotations"))
+        if mcp_annotations:
+            view["annotations"] = mcp_annotations
+        return view
+
     async def _handle_list_tools(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
         """Handle tools/list request.
 
-        Permission-gated tools are advertised by NAME but WITHOUT their schemas.
-        This handler receives no ``client_id`` and no credentials — the caller is
-        unauthenticated at this point on every transport (the WebSocket server
-        transport never consults its ``auth_provider``, and ``initialize``
-        authenticates nothing), and the permission model is per-CALL
-        (``_extract_credentials_from_context`` reads the tool's own kwargs). So
-        NO caller can be authorized here, and the argument/result surface of a
-        gated tool must not be serialised to one. Name + description remain so a
-        legitimately credentialed client can still discover the tool exists.
-
-        The suppression applies ONLY when an ``auth_provider`` is configured.
-        Without one, ``required_permission`` is never enforced on the invoke path
-        either (``if self.auth_manager and required_permission``), so there is no
-        boundary to protect and withholding schemas would cost discovery for no
-        security gain.
+        Disabled tools are withheld entirely and permission-gated tools are
+        advertised by NAME but WITHOUT their schemas. Both decisions belong to
+        ``_public_tool_view`` — see it for the full rationale.
         """
         tools = []
-        auth_enabled = self.auth_manager is not None
         for name, info in self._tool_registry.items():
-            if not info.get("disabled", False):
-                # Fail closed: a permission boundary exists AND this caller
-                # cannot be authorized against it.
-                gated = auth_enabled and info.get("required_permission") is not None
-                tool_desc: Dict[str, Any] = {
-                    "name": name,
-                    "description": info.get("description", ""),
-                    "inputSchema": {} if gated else info.get("input_schema", {}),
-                }
-                # Advertise outputSchema when the tool declared one so clients
-                # can validate structuredContent (spec 2025-11-25). Withheld for
-                # gated tools — the result shape is the same disclosure class.
-                output_schema = None if gated else info.get("output_schema")
-                if output_schema:
-                    tool_desc["outputSchema"] = output_schema
-                # Tool annotations (readOnlyHint / destructiveHint / …) are
-                # ADVISORY metadata for client UX. INVARIANT: they MUST NEVER
-                # gate authorization — access control is enforced solely by the
-                # auth/permission manager (see _create_enhanced_tool), never by
-                # these client-supplied-trust hints. Do not read them in any
-                # dispatch/authorization path.
-                mcp_annotations = _annotations_to_mcp(info.get("annotations"))
-                if mcp_annotations:
-                    tool_desc["annotations"] = mcp_annotations
-                tools.append(tool_desc)
+            view = self._public_tool_view(name, info)
+            if view is not None:
+                tools.append(view)
 
         page, next_cursor, error = self._paginate(
             tools, params.get("cursor"), request_id
@@ -4222,32 +4355,22 @@ class MCPServer:
                         )
 
             elif ref_type == "tool":
-                # Search through registered tools
+                # Search through registered tools.
+                #
+                # This surface is reachable with NO credentials exactly as
+                # tools/list is (`_dispatch_ws_method` routes completion/complete
+                # with only `(params, request_id)`), and an EMPTY
+                # `argument.value` substring-matches EVERY tool — so it must
+                # apply the SAME disclosure policy. It previously hand-wrote its
+                # own projection with neither the `disabled` filter nor the
+                # `required_permission` gate, which made the tools/list
+                # suppression bypassable by one JSON-RPC method. Route through
+                # the single owner instead of re-deriving the projection here.
                 for name, tool_info in self._tool_registry.items():
                     if partial_value in name:
-                        collected.append(
-                            (
-                                name,
-                                {
-                                    "name": name,
-                                    "description": tool_info.get("description", ""),
-                                    # READ the snake_case key the registry
-                                    # actually WRITES. This site read
-                                    # `inputSchema` (camelCase) — a key nothing
-                                    # in this module ever stores — so the
-                                    # `.get` default fired every time and
-                                    # completion for tool references advertised
-                                    # an empty schema for EVERY tool, which is
-                                    # the exact defect #1998 fixed at the other
-                                    # two emission sites (2862, 4649). Same
-                                    # registry, same wrong-by-default outcome;
-                                    # missed because the sweep matched on the
-                                    # emitted camelCase name rather than on the
-                                    # stored one.
-                                    "inputSchema": tool_info.get("input_schema", {}),
-                                },
-                            )
-                        )
+                        view = self._public_tool_view(name, tool_info)
+                        if view is not None:
+                            collected.append((name, view))
 
             # Relevance-rank: exact match first, then prefix, then substring
             # (stable within a rank). Ranking precedes the cap so the top-100
@@ -4673,28 +4796,13 @@ class MCPServer:
 
                     # Handle different request types
                     if request.get("method") == "tools/list":
-                        # Return list of tools. Permission-gated tools are named
-                        # but their argument surface is withheld — same contract
-                        # as _handle_list_tools; see its docstring.
+                        # Same disclosure policy as every other discovery
+                        # surface — see ``_public_tool_view``.
                         tools = []
-                        auth_enabled = self.auth_manager is not None
                         for name, info in self._tool_registry.items():
-                            if not info.get("disabled", False):
-                                gated = (
-                                    auth_enabled
-                                    and info.get("required_permission") is not None
-                                )
-                                tools.append(
-                                    {
-                                        "name": name,
-                                        "description": info.get("description", ""),
-                                        "inputSchema": (
-                                            {}
-                                            if gated
-                                            else info.get("input_schema", {})
-                                        ),
-                                    }
-                                )
+                            view = self._public_tool_view(name, info)
+                            if view is not None:
+                                tools.append(view)
 
                         response = {"id": request.get("id"), "result": {"tools": tools}}
 
@@ -4705,13 +4813,19 @@ class MCPServer:
                         arguments = params.get("arguments", {})
 
                         if tool_name in self._tool_registry:
-                            handler = self._tool_registry[tool_name]["handler"]
                             try:
-                                # Execute tool
-                                if asyncio.iscoroutinefunction(handler):
-                                    result = await handler(**arguments)
-                                else:
-                                    result = handler(**arguments)
+                                # Route through the shared executor. This branch
+                                # used to read `["handler"]` — a key the tool
+                                # decorator never writes (it writes "function" /
+                                # "original_function"), so every
+                                # decorator-registered tool raised KeyError
+                                # here. `_execute_tool` resolves either shape AND
+                                # enforces the `disabled` check this branch also
+                                # lacked, which would otherwise have let stdio
+                                # invoke a tool `disable_tool()` had turned off.
+                                result = self._execute_tool(tool_name, arguments)
+                                if inspect.isawaitable(result):
+                                    result = await result
 
                                 response = {
                                     "id": request.get("id"),
