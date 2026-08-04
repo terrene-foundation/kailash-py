@@ -417,50 +417,51 @@ class TestRealCredentialsStillRedacted:
         """
         dsn = dsn_template.format(q=_Q, d=delim).replace("@", _AT)
         secret = secret_template.format(q=_Q, d=delim)
+        # WHICH RULE OWNS THIS CELL — and it is not always the one in the label.
+        #
+        # `:` is not merely a delimiter for `_URL_WITH_USERINFO_ONLY`: that
+        # rule's entire identity is "userinfo with NO colon" (`[^\s@:/]`), so
+        # injecting `":` converts the string OUT of the bare-token class and
+        # INTO the user:pass class, where the OVERFLOW rule owns it. The shape
+        # still leaks, so the cell keeps its coverage — only its attribution
+        # changes. Dropping it would lose a real leaking shape.
+        owner = case.split("/")[0]
+        if owner == "USERINFO_ONLY" and delim == ":":
+            owner = "OVERFLOW"
         rule = {
             "AUTH": _URL_WITH_AUTH,
             "OVERFLOW": _URL_WITH_AUTH_OVERFLOW,
             "USERINFO_ONLY": _URL_WITH_USERINFO_ONLY,
-        }[case.split("/")[0]]
+        }[owner]
 
-        # ATTRIBUTION ON THE PAIR-FREE CONTROL, NOT ON THE DEFECTIVE SHAPE.
+        # ATTRIBUTION PROBE: remove the QUOTE (the fence trigger), KEEP the
+        # delimiter (which may be class-defining, as above). The named rule must
+        # claim that shape.
         #
-        # The previous guard asserted `rule.search(dsn)` — on the shape WITH the
-        # fenced pair. That is the negation of the defect: these shapes leak
-        # BECAUSE the fence stops the named rule claiming them. So the guard
-        # failed first in all 20 cells and the leak assertion below was never
-        # reached even once. Measured: 20/20 stopped at the guard, 0/20 reached
-        # line `assert secret not in ...`, and because the guard reads a
-        # COMPILED REGEX rather than scrub output, the grid behaved identically
-        # against a no-op scrubber and a perfect one. Twenty cells carrying zero
-        # information about redaction.
+        # This replaces a guard that substituted `x` for the delimiter. That one
+        # was sound as far as it went and reached the leak assertion in all 20
+        # cells — but substituting the delimiter removes the very character that
+        # can change the shape's class, so it structurally could not see the
+        # mis-attribution above. It passed cleanly on a shape the defective cell
+        # no longer belonged to.
         #
-        # Worse, the signal was INVERTED at fix time. The sound fix named in
-        # credential_scrub.py is a URL PARSE on the candidate span, which leaves
-        # these regexes unchanged — so the guard would have stayed False, the
-        # pins would have stayed XFAIL forever, strict would never have fired,
-        # and the residual would have read permanently OPEN after being closed.
-        # Only the UNSOUND fix (widening the delimiter set, which that module
-        # explicitly warns against) would have made the guard pass. The pin
-        # spoke for the fix we rejected and was silent for the one we recommend.
+        # Keeping the delimiter and dropping only the quote preserves class
+        # membership while removing the fence, which is what makes this probe
+        # able to fail. It stays true after either fix, so it cannot go inert.
         #
-        # The control carries the attribution instead: same shape, quote NOT
-        # followed by a delimiter. The named rule DOES claim it, which is what
-        # establishes the rule owns this shape class — and that stays true after
-        # either fix, so the guard cannot go inert again.
-        control = dsn_template.format(q=_Q, d="x").replace("@", _AT)
-        assert rule.search(control), (
-            f"[{case}] attribution lost: {rule.pattern[:40]}... no longer claims "
-            f"even the pair-free control, so this pin can no longer show the "
-            f"named rule owns this shape class"
+        # THE GENERAL RULE, which is what actually bit here: a parametrized axis
+        # is only safe when its values are INERT with respect to the case's
+        # shape class. One of these four delimiter values is load-bearing for
+        # one of the three rules, and that interaction is invisible to any probe
+        # that varies the same axis it is trying to control for.
+        probe = dsn_template.format(q="", d=delim).replace("@", _AT)
+        assert rule.search(probe), (
+            f"[{case}/{delim!r}] attribution lost: the named rule does not "
+            f"claim this shape even with the fence removed, so an XPASS here "
+            f"would be evidence from some OTHER rule — the unattributable "
+            f"closure this guard exists to prevent"
         )
 
-        # NOT asserting exclusivity, deliberately. On the two short AUTH
-        # controls BOTH _URL_WITH_AUTH and _URL_WITH_AUTH_OVERFLOW claim the
-        # shape — the overflow rule is unbounded and is a structural superset
-        # for short userinfo. Asserting `not OVERFLOW.search(control)` there
-        # would be asserting something FALSE. So the guard proves shape-class
-        # OWNERSHIP, not rule exclusivity, and says so rather than overstating.
         assert secret not in scrub_credentials(dsn)
 
     def test_markup_attribute_boundary_over_redacts_accepted(self) -> None:
