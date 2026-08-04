@@ -234,6 +234,72 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # prior class stopped before it and left the padding dangling. The class is
     # disjoint from the preceding ``\s`` run, so the pattern stays linear.
     re.compile(r"Bearer\s+[a-zA-Z0-9._\-=]+", re.ASCII),
+    # HTTP Basic auth. The sibling of the ``Bearer`` rule directly above, and
+    # its absence was a plain omission rather than a decision: a
+    # ``Authorization: Basic dXNlcjpwYXNzd29yZA==`` header echoed into an error
+    # message passed through BOTH presets IN FULL, and base64 of
+    # ``user:password`` is a reversible credential, not a digest.
+    #
+    # Case-insensitive on the literal only (``(?i:...)``), matching the
+    # ``signature|sig`` rule's convention — ``basic`` / ``BASIC`` appear in
+    # real header dumps. The value class admits the base64 alphabet plus "="
+    # padding, same as ``Bearer``.
+    #
+    # Credential-ANNOUNCING, so it stays OUT of ``_OPAQUE_SHAPE_PATTERNS`` and
+    # is therefore ON under the conservative preset too.
+    #
+    # THE LOOKAHEAD IS LOAD-BEARING, not defensive tidiness. Without it this
+    # rule redacted the ORDINARY ENGLISH PHRASE "Basic authentication is not
+    # configured" — ``authentication`` is 14 characters of the base64 alphabet,
+    # so a bare ``[a-zA-Z0-9+/]{8,}`` claimed it and the message became
+    # "[REDACTED] is not configured". Caught by this rule's own
+    # no-false-positive corpus before landing.
+    #
+    # A real base64 credential essentially always carries a DIGIT or "+"/"/"/"="
+    # padding; a lowercase English word never does. Requiring one such character
+    # separates them without needing an ``Authorization:`` context anchor (which
+    # would miss the bare ``(Basic <tok>)`` form). The lookahead is BOUNDED
+    # ({0,128}) so it cannot become a backtracking vector — see the module
+    # docstring's REGEX SAFETY CONTRACT.
+    re.compile(
+        r"(?i:Basic)\s+(?=[A-Za-z0-9+/=]{0,128}[0-9+/=])[A-Za-z0-9+/]{8,}={0,2}",
+        re.ASCII,
+    ),
+    # Credential-ANNOUNCING ``key=value`` assignments.
+    #
+    # Every key here NAMES its value as a secret, so a match cannot be a false
+    # positive in the way a bare shape can: the string literally says
+    # ``password=``. That is the same argument the ``(?i:signature|sig)=``
+    # widening above already won, applied to the rest of the family — and like
+    # that rule these belong OUTSIDE ``_OPAQUE_SHAPE_PATTERNS``, i.e. ON under
+    # BOTH presets, at zero false-positive cost.
+    #
+    # The gap this closes: NOTHING previously claimed ``password=hunter2...``.
+    # It has no vendor prefix (so no literal rule), the "=" and typical length
+    # defeat the 40-char contiguous-run rule, and a non-hex body defeats the
+    # generic-hex rule — and both of those are OFF under the conservative
+    # preset anyway. So it passed through in full on every surface.
+    #
+    # Separators: ``=`` and ``:`` (``password: hunter2`` in a YAML/JSON dump or
+    # a repr), with optional surrounding space and optional quoting. The value
+    # class deliberately EXCLUDES whitespace so the match stops at the token
+    # and does not swallow the rest of the message.
+    #
+    # A 6-char floor keeps ``password=`` with an obviously-empty or sentinel
+    # value (``password=`` / ``pwd=1``) from being reported as a redaction,
+    # while staying well under any real credential length.
+    # The optional quote AFTER the key name (``["']?`` before the separator) is
+    # what makes a Python/JSON dict repr match: ``'password': 'hunter2...'``
+    # puts a closing quote between the key and the ":", and without it the rule
+    # missed exactly the shape a logged dict produces.
+    re.compile(
+        r"[\"']?(?i:passwd|password|pwd|secret|api[-_]?key|apikey|"
+        r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
+        r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
+        r"session[-_]?key|encryption[-_]?key)[\"']?"
+        r"\s*[=:]\s*[\"']?[^\s\"',;&]{6,}",
+        re.ASCII,
+    ),
     # Partial key exposure (OpenAI style: "sk-tenA...B12C")
     re.compile(r"sk-[a-zA-Z0-9]{3,4}\.\.\.[a-zA-Z0-9]{3,4}", re.ASCII),
 ]
@@ -939,14 +1005,83 @@ def scrub_remote_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER)
     genuine provider-RESPONSE-body surfaces
     (``sanitize_provider_error``, ``ProviderError.body_snippet``) already do.
 
-    CHOOSING BETWEEN THE TWO PRESETS: ask where the exception can be RAISED,
-    never where it is CAUGHT. If the ``try`` block calls an injected provider,
-    an HTTP client, a subprocess, an MCP session, a database driver, or any
-    callable supplied by the caller whose implementation is unknown, it is
-    REMOTE. Only genuinely in-process failures — file I/O, parsing, imports,
-    attribute errors, local registry lookups — are LOCAL. When in doubt, use
-    this one: over-redacting a hash costs a correlation handle, under-redacting
-    leaks a live credential.
+    CHOOSING BETWEEN THE TWO PRESETS — TWO TESTS, BOTH MUST PASS FOR LOCAL.
+
+    **Test 1 — where can it be RAISED?** Never where it is CAUGHT. If the
+    ``try`` block calls an injected provider, an HTTP client, a subprocess, an
+    MCP session, a database driver, or any callable supplied by the caller
+    whose implementation is unknown, it is REMOTE.
+
+    **Test 2 — does the exception carry a REMOTE-DERIVED OPERAND?** Test 1
+    alone is NOT sufficient, and treating it as sufficient is how a family of
+    LOCAL misclassifications was shipped. Many in-process builtins EMBED THEIR
+    ARGUMENT in the message they raise::
+
+        float("<x>")   -> ValueError: could not convert string to float: '<x>'
+        int("<x>")     -> ValueError: invalid literal for int() with base 10: '<x>'
+        re.compile(p)  -> re.error: ... at position N   (echoes the pattern)
+        json.loads(s)  -> JSONDecodeError                (position only — SAFE)
+
+    So ``float(llm_response["score"])`` raises IN-PROCESS — passing Test 1 —
+    while the message it raises is MODEL OUTPUT. That is REMOTE, and the shape
+    that actually leaks is the prefix-less one: a bare AWS secret or a bare
+    32+ hex Azure ``api-key`` passes straight through the conservative preset,
+    which is precisely the pair of rules this preset switches off. A
+    vendor-prefixed key (``sk-``, ``AKIA``) would have been caught either way,
+    so testing the classification with one of THOSE cannot distinguish a
+    correct verdict from an incorrect one.
+
+    LOCAL therefore requires BOTH: the exception is raised in-process AND it
+    carries no remote-derived operand. Genuinely LOCAL: file I/O whose path is
+    program-controlled, imports, attribute errors, local registry lookups,
+    ``json.loads`` (position-only message).
+
+    VERIFY THE ECHO EMPIRICALLY — DO NOT REASON ABOUT IT, AND PROBE EVERY
+    BRANCH, NOT ONE. Which builtins embed their operand is not obvious, and
+    guessing produces BOTH error directions::
+
+        json.loads(x)   -> "Expecting value: line 1 column 1 (char 0)"   NO echo
+        float(x)/int(x) -> "could not convert string to float: '<x>'"    ECHOES
+        open(x)         -> "[Errno 2] No such file or directory: '<x>'"  ECHOES
+        re.compile(x)   -> BRANCH-DEPENDENT — see below
+
+    ``re.compile`` IS THE TRAP, AND AN EARLIER REVISION OF THIS PARAGRAPH FELL
+    INTO IT. It asserted that ``str()`` of a ``re.error`` is "purely
+    positional" and classified the builtin NO-echo. That is true of the
+    POSITIONAL branches and FALSE of the GROUP-NAME branches, which
+    interpolate the offending name verbatim (Python 3.13)::
+
+        re.compile("<x>(")      -> "missing ), unterminated subpattern
+                                    at position N"                      NO echo
+        re.compile("(?P=<x>)")  -> "unknown group name '<x>' at position 4"
+                                                                        ECHOES
+        re.compile("(?P<<x>>y)")-> "bad character in group name '<x>'
+                                    at position 4"                      ECHOES
+
+    The wrong verdict was reached by sampling two positional branches and
+    generalizing — the precise error this paragraph exists to prevent,
+    committed inside it. It shipped a real leak: ``delegate/tools/grep_tool``
+    compiles a model-supplied ``pattern`` and was left LOCAL on the strength
+    of that claim, so a prefix-less credential inside a group name reached the
+    tool result in full. A probe per BRANCH settles it; a probe of one branch,
+    or an assumption, does not. The pinned probes are
+    ``TestReCompileEchoesItsOperandOnGroupNameBranches`` in
+    ``kaizen-agents/tests/regression/test_issue_1720_remote_value_scrub.py``.
+
+    NAMED CARVE-OUT — FILESYSTEM-PATH OPERANDS STAY LOCAL. A file tool whose
+    path argument came from a model (``file_read``, ``file_write``,
+    ``file_edit``) raises an ``OSError`` that DOES echo the path, which by the
+    two tests above reads as REMOTE. It stays LOCAL deliberately, because
+    switching it would not redact the path anyway — ``redact_paths=False`` on
+    BOTH presets — and the only added rules are the two SHAPE-ONLY ones, which
+    would blank legitimate content-addressed path segments (a git object path
+    carries a 38-character hex run that ``_GENERIC_HEX_TOKEN`` matches exactly).
+    The result: a tool error the agent cannot act on, for no credential gain.
+    A path is the diagnostic payload of a file error, and this preset exists to
+    preserve it. Recorded here so the next audit does not re-litigate it.
+
+    When in doubt, use this one: over-redacting a hash costs a correlation
+    handle, under-redacting leaks a live credential.
 
     Args:
         value: The caught exception (or any object); rendered with ``str()``.

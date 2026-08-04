@@ -54,7 +54,7 @@ from typing import Any
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
@@ -169,8 +169,16 @@ class HandoffAgent(BaseAgent):
             try:
                 complexity_score = float(complexity_score)
             except ValueError as e:
+                # REMOTE, despite `float()` raising in-process. `complexity_score`
+                # is `result.get(...)` off an LLM response, and `float(x)`
+                # EMBEDS x in its own message ("could not convert string to
+                # float: '<x>'") — so the exception text is model output, and
+                # the raw value is interpolated a second time right beside it.
+                # Under the conservative preset a prefix-less credential (bare
+                # AWS secret, bare 32+ hex Azure api-key) survives BOTH copies.
                 logger.debug(
-                    f"Could not parse complexity_score '{complexity_score}': {scrub_local_error(e)}"
+                    f"Could not parse complexity_score "
+                    f"'{scrub_remote_error(complexity_score)}': {scrub_remote_error(e)}"
                 )
                 complexity_score = 0.5
         complexity_score = max(0.0, min(1.0, complexity_score))
@@ -181,8 +189,11 @@ class HandoffAgent(BaseAgent):
             try:
                 requires_tier = int(requires_tier)
             except ValueError as e:
+                # REMOTE — `int(x)` embeds x the same way `float(x)` does, and
+                # `requires_tier` is LLM output. See the sibling above.
                 logger.debug(
-                    f"Could not parse requires_tier '{requires_tier}': {scrub_local_error(e)}"
+                    f"Could not parse requires_tier "
+                    f"'{scrub_remote_error(requires_tier)}': {scrub_remote_error(e)}"
                 )
                 requires_tier = self.tier_level
 
@@ -265,8 +276,11 @@ class HandoffAgent(BaseAgent):
             try:
                 confidence = float(confidence)
             except ValueError as e:
+                # REMOTE — `confidence` is LLM output and `float()` embeds it.
+                # See the sibling in `evaluate_task`.
                 logger.debug(
-                    f"Could not parse confidence '{confidence}': {scrub_local_error(e)}"
+                    f"Could not parse confidence "
+                    f"'{scrub_remote_error(confidence)}': {scrub_remote_error(e)}"
                 )
                 confidence = 0.8
         confidence = max(0.0, min(1.0, confidence))

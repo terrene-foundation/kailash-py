@@ -23,7 +23,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 
 def _resolve_model() -> str:
@@ -259,12 +259,22 @@ class LLMClient:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {scrub_local_error(exc)}. Content: {content[:500]}"
+                # `content` IS the raw provider response body — the entire
+                # credential risk in this f-string. The `JSONDecodeError`
+                # beside it carries only a position and no credential, so
+                # scrubbing the exception alone protected the half that was
+                # never at risk. Both go through the REMOTE preset. See the
+                # sibling sites in `orchestration/adapters.py`.
+                f"LLM response is not valid JSON: {scrub_remote_error(exc)}. "
+                f"Content: {scrub_remote_error(content[:500])}"
             ) from exc
 
         if not isinstance(parsed, dict):
             raise ValueError(
-                f"Expected a JSON object, got {type(parsed).__name__}: {content[:500]}"
+                # Sibling of the branch above; had NO scrub call at all, so it
+                # was invisible to any sweep keyed on `scrub_*` call sites.
+                f"Expected a JSON object, got {type(parsed).__name__}: "
+                f"{scrub_remote_error(content[:500])}"
             )
 
         return parsed
