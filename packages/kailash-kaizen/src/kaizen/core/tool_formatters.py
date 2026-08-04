@@ -52,6 +52,49 @@ so we use OpenAI function calling format as the standard intermediate format.
 
 from typing import Any, Dict, List
 
+#: The minimal VALID JSON Schema for a tool that takes no arguments.
+#:
+#: ``{}`` is NOT this. An empty dict is a schema that constrains nothing, and
+#: Anthropic's ``InputSchemaTyped`` declares ``type: Required[Literal["object"]]``
+#: — so ``input_schema: {}`` is rejected outright rather than read as
+#: "no parameters".
+_EMPTY_OBJECT_SCHEMA: Dict[str, Any] = {"type": "object", "properties": {}}
+
+
+def normalize_tool_input_schema(schema: Any) -> Dict[str, Any]:
+    """Return a schema that is always a VALID JSON Schema object.
+
+    WHY A HELPER RATHER THAN A DEFAULT ARGUMENT. Every call site here reads the
+    schema as ``tool.get("inputSchema", {})``, and a ``.get(key, default)``
+    guard fires only when the key is ABSENT. It does nothing when the key is
+    PRESENT-but-EMPTY — which is exactly what a permission-GATED MCP tool now
+    advertises: ``inputSchema: {}``. The empty dict then flowed through
+    untouched into ``input_schema`` / ``parameters``.
+
+    Two distinct failures came out of that, and the second survives even where
+    the first does not:
+
+    1. Anthropic REJECTS ``input_schema: {}`` — ``type`` is a required literal.
+    2. Even where an empty schema is accepted, the model loses ALL parameter
+       knowledge for that tool and can only guess at arguments.
+
+    Gating is reachable through the documented pattern
+    ``required_permission=f"tools.{tool_name}"``, which gates EVERY tool — so
+    this is the ordinary configuration, not an edge case.
+
+    A schema carrying properties but no ``type`` is also completed here: JSON
+    Schema treats a missing ``type`` as unconstrained, while every provider
+    tool API means ``object`` in this position.
+    """
+    if not isinstance(schema, dict) or not schema:
+        return dict(_EMPTY_OBJECT_SCHEMA)
+    if "type" not in schema:
+        completed = dict(schema)
+        completed["type"] = "object"
+        completed.setdefault("properties", {})
+        return completed
+    return schema
+
 
 def convert_mcp_to_openai_tools(
     mcp_tools: List[Dict[str, Any]],
@@ -94,7 +137,10 @@ def convert_mcp_to_openai_tools(
         # Extract MCP tool fields
         name = tool.get("name", "unknown_tool")
         description = tool.get("description", "")
-        input_schema = tool.get("inputSchema", {})
+        # Normalized, NOT `.get(..., {})` alone: a permission-gated tool
+        # advertises `inputSchema: {}`, which is PRESENT-but-empty and so slips
+        # past the default. See `normalize_tool_input_schema`.
+        input_schema = normalize_tool_input_schema(tool.get("inputSchema"))
 
         # Convert to OpenAI function calling format
         openai_tool = {
@@ -151,7 +197,10 @@ def convert_mcp_to_anthropic_tools(
         # Extract MCP tool fields
         name = tool.get("name", "unknown_tool")
         description = tool.get("description", "")
-        input_schema = tool.get("inputSchema", {})
+        # Normalized: Anthropic's `InputSchemaTyped` declares
+        # `type: Required[Literal["object"]]`, so the `{}` a permission-gated
+        # tool advertises is REJECTED, not read as "no parameters".
+        input_schema = normalize_tool_input_schema(tool.get("inputSchema"))
 
         # Convert to Anthropic tool use format
         anthropic_tool = {

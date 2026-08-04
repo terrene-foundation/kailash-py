@@ -24,6 +24,8 @@ MCP Tool Schema:
 import logging
 from typing import Any
 
+from kaizen.core.tool_formatters import normalize_tool_input_schema
+
 from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     ToolMapper,
@@ -186,8 +188,16 @@ class MCPToolMapper(ToolMapper):
         Returns:
             Tool in Kaizen/OpenAI format
         """
-        # Extract inputSchema
-        input_schema = mcp_tool.get("inputSchema", {})
+        # Extract inputSchema, NORMALIZED.
+        #
+        # `.get("inputSchema", {})` alone fires only on an ABSENT key; a
+        # permission-GATED MCP tool advertises the key PRESENT-but-EMPTY
+        # (`inputSchema: {}`), which sails past the default and lands as
+        # `parameters: {}` — a schema that constrains nothing, from which the
+        # model learns no argument names at all. Routed through the ONE shared
+        # normalizer in `kaizen.core.tool_formatters` so this converter and the
+        # OpenAI/Anthropic ones cannot drift on what "empty schema" means.
+        input_schema = normalize_tool_input_schema(mcp_tool.get("inputSchema"))
 
         # Convert to OpenAI function format
         return {
