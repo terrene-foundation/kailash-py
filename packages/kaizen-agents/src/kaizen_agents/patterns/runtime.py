@@ -685,6 +685,41 @@ class OrchestrationRuntime:
 
         # Fallback to round-robin if no match found
         if best_agent is None:
+            if scored_capabilities == 0 and not degraded_agents:
+                # NOT the #1981 degradation case — nothing degraded, there was
+                # nothing to rank on: no candidate carried an `a2a_card`, or
+                # every card's capability list was empty, so the judge was
+                # never consulted at all.
+                #
+                # The two neighbouring outcomes are both loud — an
+                # all-degraded round raises, a partially-degraded one WARNs —
+                # while this one returned a round-robin pick indistinguishable
+                # from a ranked result. The caller asked for SEMANTIC routing
+                # and received positional selection with no signal, which is
+                # the silent-fallback mode `rules/zero-tolerance.md` Rule 3
+                # blocks.
+                #
+                # WARN rather than raise: unlike a judge failure this is a
+                # registration-shape issue the operator fixes by populating the
+                # cards, and raising would break a documented
+                # `BaseAgent | None` surface. The ranking genuinely cannot be
+                # performed either way — the defect was the silence, not the
+                # fallback.
+                logger.warning(
+                    "route_semantic.no_capability_data",
+                    extra={
+                        "candidates": len(agents),
+                        "reason": (
+                            "SEMANTIC routing requested but no candidate agent "
+                            "exposed capabilities to rank; falling back to "
+                            "round-robin (positional, not semantic)"
+                        ),
+                        "remedy": (
+                            "populate primary_capabilities on the agents' A2A "
+                            "cards, or select a non-SEMANTIC routing strategy"
+                        ),
+                    },
+                )
             return await self._route_round_robin(agents)
 
         return best_agent
@@ -853,8 +888,25 @@ class OrchestrationRuntime:
 
     async def _route_round_robin(self, agents: list[tuple]) -> BaseAgent:
         """Route using round-robin distribution."""
-        agent_id, metadata = agents[self._round_robin_index]
-        self._round_robin_index = (self._round_robin_index + 1) % len(agents)
+        # Normalise on READ, not only on write. `_round_robin_index` is
+        # RUNTIME-scoped and persists across calls, while `agents` is a
+        # PER-CALL candidate list whose length varies — a deregistration, or
+        # the health monitor marking an agent UNHEALTHY, shrinks the pool
+        # below an index a previous larger-pool call already stored.
+        #
+        # Writing `(index + 1) % len(agents)` only bounds the index against
+        # the length seen on THIS call; the very next call with a shorter list
+        # indexes out of range and raises IndexError, aborting the whole
+        # routing call rather than degrading. Reproduced with no forced state:
+        # 3 agents, two ordinary ROUND_ROBIN routes (index -> 2), deregister
+        # one, third route -> IndexError.
+        #
+        # This guard already existed in `_route_task`'s now-deleted private
+        # round-robin copy and was missing here, in the live path — the
+        # duplicate-implementation drift that clause is about.
+        index = self._round_robin_index % len(agents)
+        agent_id, metadata = agents[index]
+        self._round_robin_index = (index + 1) % len(agents)
         return metadata.agent
 
     # ========================================================================
@@ -1626,165 +1678,89 @@ class OrchestrationRuntime:
 
     async def _route_task(self, task: str, available_agents: list[str]) -> str | None:
         """
-        Internal routing helper for tests.
+        Route a task within an explicit candidate subset, returning the agent ID.
+
+        ID-returning adapter over the SAME strategy helpers the public
+        `route_task` uses, so each strategy has exactly ONE implementation.
+
+        This method previously carried its own inline copy of all four
+        strategies, and that duplication is what let the SEMANTIC copy drift
+        onto a card attribute that does not exist. It read
+        `getattr(a2a_card, "capabilities", [])`, but `A2AAgentCard` declares
+        `primary_capabilities` / `secondary_capabilities` /
+        `emerging_capabilities` and no `capabilities` at all — and for the dict
+        card shape `getattr` never sees dict KEYS either. So the list was `[]`
+        for BOTH shapes, the scoring loop never executed, the judge was invoked
+        ZERO times, and every SEMANTIC route returned `available_agents[0]`:
+        deterministic, unreasoned, and completely silent.
+
+        That mattered beyond this method, because `_route_task` has no
+        production caller — its only consumer is the #1981 regression suite. A
+        vacuous oracle meant #1981's second-order assertions were passing
+        against a fixture shape (`SimpleNamespace(capabilities=[...])`) that no
+        production path can emit, so the guard on a closed CRITICAL was not
+        actually guarding.
+
+        Delegating removes the second implementation rather than patching the
+        accessor in it: patching would fix this instance and leave the
+        divergence that produced it.
 
         Args:
             task: Task description
-            available_agents: List of available agent IDs
+            available_agents: List of candidate agent IDs
 
         Returns:
-            Selected agent ID or None
+            Selected agent ID, or None when no candidate is ACTIVE.
 
         Raises:
             ReasoningDegradedError: SEMANTIC strategy only — every candidate
-                capability degraded (#1981), so no ranking exists. Sibling
-                contract of `_route_semantic`; see its Raises section.
+                capability degraded (#1981), so no ranking exists. Raised by
+                `_route_semantic`, which now owns this contract outright.
         """
         if not available_agents:
             return None
 
-        # Filter to only active agents from available list
-        active_agents = [
-            agent_id
+        candidates = [
+            (agent_id, self.agents[agent_id])
             for agent_id in available_agents
             if agent_id in self.agents
             and self.agents[agent_id].status == AgentStatus.ACTIVE
         ]
 
-        if not active_agents:
+        if not candidates:
             return None
 
-        # Use appropriate routing based on strategy
         strategy = self.config.default_routing_strategy
         if isinstance(strategy, str):
             strategy = RoutingStrategy(strategy)
 
-        if strategy == RoutingStrategy.ROUND_ROBIN:
-            # Round-robin: cycle through available agents
-            selected = active_agents[self._round_robin_index % len(active_agents)]
-            self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
-            return selected
-        elif strategy == RoutingStrategy.RANDOM:
-            # Random: pick a random agent
-            import random
-
-            return random.choice(active_agents)
+        # Same dispatch as `route_task`, including the `enable_semantic_routing`
+        # gate. That gate is NEW here: the inline copy ignored it, so disabling
+        # semantic routing left this path still attempting it. Aligning is the
+        # point of the delegation — a config flag that binds one routing entry
+        # point and not the other is the same divergence in miniature.
+        if strategy == RoutingStrategy.SEMANTIC and self.config.enable_semantic_routing:
+            selected = await self._route_semantic(task, candidates)
         elif strategy == RoutingStrategy.LEAST_LOADED:
-            # Least loaded: pick agent with fewest active tasks
-            return min(active_agents, key=lambda aid: self.agents[aid].active_tasks)
-        elif strategy == RoutingStrategy.SEMANTIC:
-            # Semantic routing: LLM-first scoring (no keyword overlap).
-            #
-            # Degraded judgments (#1981) follow `_route_semantic` exactly:
-            # `_score_capability` re-raises the typed signal, a degraded
-            # capability is SKIPPED (its fit is UNKNOWN, not zero, so it can
-            # never out-rank or tie a real score), and only an entirely
-            # unscoreable round raises. Pre-fix the FIRST degraded capability
-            # escaped this loop uncaught and aborted the whole helper — a
-            # documented `-> str | None` surface raising on one bad judgment
-            # while its `_route_semantic` sibling shrugged the same failure
-            # off.
-            best_score = -1.0
-            best_agent = active_agents[0]  # fallback
-            scored_capabilities = 0
-            degraded_agents: list[str] = []
-            degraded_model = "unknown"
-            reasoning_tuples = [(aid, self.agents[aid]) for aid in active_agents]
-            reasoning_config = self._resolve_reasoning_config(reasoning_tuples)
-            for agent_id in active_agents:
-                metadata = self.agents[agent_id]
-                if not metadata.a2a_card:
-                    continue
-
-                # Check capabilities
-                capabilities = getattr(metadata.a2a_card, "capabilities", [])
-                if isinstance(capabilities, dict):
-                    capabilities = capabilities.get("capabilities", [])
-                agent_scored = 0
-                agent_degraded = 0
-                for cap in capabilities:
-                    try:
-                        score = await self._score_capability(
-                            cap, task, reasoning_config, agent_id=agent_id
-                        )
-                    except ReasoningDegradedError as exc:
-                        agent_degraded += 1
-                        degraded_model = exc.model
-                        continue
-
-                    agent_scored += 1
-                    scored_capabilities += 1
-                    if score > best_score:
-                        best_score = score
-                        best_agent = agent_id
-
-                if agent_degraded and agent_scored == 0:
-                    degraded_agents.append(agent_id)
-
-            if degraded_agents:
-                if scored_capabilities == 0:
-                    raise ReasoningDegradedError(
-                        "runtime.route_task_semantic",
-                        model=degraded_model,
-                        correlation_id=f"route_task_{uuid.uuid4().hex[:8]}",
-                        error=(
-                            f"the capability judge degraded for all "
-                            f"{len(degraded_agents)} candidate agent(s): "
-                            f"{', '.join(degraded_agents)}"
-                        ),
-                    )
-                logger.warning(
-                    "route_task.degraded",
-                    extra={
-                        "candidates": len(active_agents),
-                        "scored_capabilities": scored_capabilities,
-                        "degraded_agents": degraded_agents,
-                    },
-                )
-            elif scored_capabilities == 0:
-                # NOT the #1981 degradation case — nothing DEGRADED, there was
-                # simply nothing to rank on: no candidate carried an
-                # `a2a_card`, or every card's `capabilities` list was empty,
-                # so the `for cap in capabilities` loop never executed and the
-                # judge was never consulted.
-                #
-                # `best_agent` is therefore still its initialiser,
-                # `active_agents[0]` — the caller configured SEMANTIC routing
-                # and silently received positional first-agent selection. That
-                # is the silent-fallback mode `rules/zero-tolerance.md` Rule 3
-                # blocks: the degraded path above is loud (raise / WARN) while
-                # this one, which produces an equally arbitrary choice, said
-                # nothing at all.
-                #
-                # It stays a WARN rather than a raise on purpose. Raising would
-                # be a behaviour break for a documented `-> str | None`
-                # surface, and unlike the all-degraded case this is not a
-                # transient judge failure — it is a registration-shape issue
-                # (agents registered without capability metadata) that the
-                # operator fixes by populating the cards. The WARN names that
-                # remedy; the ranking genuinely cannot be performed either way.
-                logger.warning(
-                    "route_task.no_capability_data",
-                    extra={
-                        "candidates": len(active_agents),
-                        "selected": best_agent,
-                        "reason": (
-                            "SEMANTIC routing requested but no candidate agent "
-                            "exposed capabilities to rank; fell back to the "
-                            "first active agent (positional, not semantic)"
-                        ),
-                        "remedy": (
-                            "populate a2a_card.capabilities on the registered "
-                            "agents, or select a non-SEMANTIC routing strategy"
-                        ),
-                    },
-                )
-            return best_agent
+            selected = await self._route_least_loaded(candidates)
+        elif strategy == RoutingStrategy.RANDOM:
+            selected = await self._route_random(candidates)
         else:
-            # Default: round-robin
-            selected = active_agents[self._round_robin_index % len(active_agents)]
-            self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
-            return selected
+            selected = await self._route_round_robin(candidates)
+
+        if selected is None:
+            # `_route_semantic` returns None on a genuine no-match (everything
+            # scored, nothing scored above zero). Preserve the documented
+            # `str | None` contract rather than inventing a positional pick.
+            return None
+
+        # Helpers return the agent OBJECT; this surface is ID-returning.
+        # Match on identity, not equality: agents are user-supplied objects
+        # and `==` may be overridden or expensive.
+        for agent_id, metadata in candidates:
+            if metadata.agent is selected:
+                return agent_id
+        return None
 
     async def _execute_agent_task(
         self, agent, inputs: dict[str, Any]

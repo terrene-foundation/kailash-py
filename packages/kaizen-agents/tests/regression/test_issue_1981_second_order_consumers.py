@@ -56,6 +56,7 @@ import pytest
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.nodes.ai.a2a import A2AAgentCard, Capability, CapabilityLevel
 from kaizen.signatures import InputField, OutputField, Signature
 
 pytestmark = pytest.mark.regression
@@ -307,10 +308,45 @@ class TestExecuteMultiAgentWorkflowStateInvariant:
 # ===========================================================================
 
 
-def _object_card(*capabilities: str) -> SimpleNamespace:
-    """``_route_task`` reads ``a2a_card.capabilities`` (attribute access), so
-    the card must be object-shaped for the SEMANTIC branch to score at all."""
-    return SimpleNamespace(capabilities=list(capabilities))
+def _object_card(*capabilities: str) -> A2AAgentCard:
+    """A card in the shape PRODUCTION actually emits.
+
+    This helper previously returned ``SimpleNamespace(capabilities=[...])``,
+    with a docstring explaining that ``_route_task`` reads
+    ``a2a_card.capabilities`` so the card "must be object-shaped ... to score
+    at all". Both halves of that were an accommodation to a defect, not a
+    description of production.
+
+    ``A2AAgentCard`` declares ``primary_capabilities`` /
+    ``secondary_capabilities`` / ``emerging_capabilities`` and NO
+    ``capabilities`` field, and ``to_a2a_card()`` is its only producer — so no
+    production path can emit a card carrying ``.capabilities``. The fixture had
+    been shaped to the one attribute name the code under test happened to read,
+    which is why these assertions passed while the branch scored nothing for
+    every real card: the judge was invoked zero times and the positional
+    fallback was returned.
+
+    Using the real type is what makes this suite a guard rather than a
+    tautology — see `instrument-discipline.md` MUST-2: a green test reports on
+    the behaviour it NAMES only if it would red in that behaviour's absence.
+    """
+    return A2AAgentCard(
+        agent_id="card",
+        agent_name="card",
+        agent_type="test",
+        version="1.0.0",
+        primary_capabilities=[
+            Capability(
+                name=c,
+                domain="test",
+                level=CapabilityLevel.ADVANCED,
+                description=c,
+                keywords=[],
+                examples=[],
+            )
+            for c in capabilities
+        ],
+    )
 
 
 class TestRouteTaskSemanticDegraded:
@@ -324,15 +360,20 @@ class TestRouteTaskSemanticDegraded:
         )
         runtime.config.default_routing_strategy = "semantic"
 
-        def side_effect(*, text_a, text_b, config=None, correlation_id=None):
-            if text_b == "Code generation":
+        # Patch `Capability.matches_requirement`, NOT `llm_text_similarity`.
+        # `_score_capability` dispatches on TYPE: real `Capability` dataclass
+        # instances are scored through `matches_requirement`, and only PLAIN
+        # STRING capabilities go through `llm_text_similarity`. The old fixture
+        # held bare strings, so patching the string judge was sufficient — and
+        # that is a second way these assertions were not exercising production,
+        # which emits `Capability` objects and therefore the other judge
+        # entirely.
+        def _matches(self, requirement, **_kw):
+            if self.name == "Code generation":
                 raise _degraded()
             return 0.9
 
-        with patch(
-            "kaizen_agents.patterns.runtime.llm_text_similarity",
-            side_effect=side_effect,
-        ):
+        with patch.object(Capability, "matches_requirement", _matches):
             selected = await runtime._route_task("analyse the data", ["a1", "a2"])
 
         assert selected == "a2", (
@@ -351,16 +392,20 @@ class TestRouteTaskSemanticDegraded:
         )
         runtime.config.default_routing_strategy = "semantic"
 
+        def _all_degraded(self, requirement, **_kw):
+            raise _degraded()
+
         with (
-            patch(
-                "kaizen_agents.patterns.runtime.llm_text_similarity",
-                side_effect=lambda **kw: (_ for _ in ()).throw(_degraded()),
-            ),
+            patch.object(Capability, "matches_requirement", _all_degraded),
             pytest.raises(ReasoningDegradedError) as exc,
         ):
             await runtime._route_task("anything", ["a1", "a2"])
 
-        assert exc.value.helper == "runtime.route_task_semantic"
+        # `runtime.route_semantic`, not `runtime.route_task_semantic`. The two
+        # labels existed only because two implementations existed; `_route_task`
+        # now delegates to `_route_semantic`, which owns this contract outright.
+        # A distinct label here would be the duplication reasserting itself.
+        assert exc.value.helper == "runtime.route_semantic"
         assert "a1" in exc.value.error and "a2" in exc.value.error
 
     @pytest.mark.asyncio
@@ -370,9 +415,8 @@ class TestRouteTaskSemanticDegraded:
         runtime = await _runtime(_agent("a1", [], card=_object_card("Code")))
         runtime.config.default_routing_strategy = "semantic"
 
-        with patch(
-            "kaizen_agents.patterns.runtime.llm_text_similarity",
-            return_value=0.0,
+        with patch.object(
+            Capability, "matches_requirement", lambda self, requirement, **_kw: 0.0
         ):
             selected = await runtime._route_task("unrelated", ["a1"])
 
