@@ -1,6 +1,6 @@
 ---
 owner: esperie
-last_reconciled_sha: 6c84f27a5
+last_reconciled_sha: be97099ce
 migrated_from: .session-notes
 ---
 
@@ -83,6 +83,58 @@ identity-reverse-map collapsing round-robin (F6).
 2. **47 unscrubbed `str(exc)` sites across 23 files** in kaizen-agents. The one
    fixed (F3) was chosen because its exception comes from a caller-supplied,
    likely DB-backed checker. Recommendation: own shard, not this branch.
+
+## CARRY-FORWARD from redteam — OPEN, none closed, none release-blocking
+
+Recorded verbatim in the reviewers' framing so the distinctions survive. Each is
+correctly OUT of this shard; none is fixed.
+
+1. **F4 — ESCAPED SCHEME: DOCUMENTED, NOT FIXED.** All three URL rules anchor on
+   a literal `://`, so a JSON encoder escaping forward slashes (PHP
+   `json_encode`, by default) emits `:\/\/` and a real credential leaks IN
+   FULL. Verified live. The in-file documentation stops it being SILENT; it does
+   not stop it being LIVE. Fix is named in-file so it is not re-derived: a scheme
+   group admitting escaped slashes. **Needs its own row.**
+2. **F5 — `tools/list` permission filtering: reachability UNVERIFIED IN BOTH
+   DIRECTIONS.** The loop filters on `disabled` only, never `required_permission`,
+   so this branch widened what a permission-gated tool discloses from
+   name+description to its full argument surface. NOT confirmed exploitable and
+   NOT confirmed safe — the reviewer never read the transport layer. **Whoever
+   picks this up starts at the TRANSPORT read, not the registry.**
+3. **F3 — verified BY ME, explicitly NOT reviewer-confirmed.** The three
+   `str(exc)` sinks in `discovery.py` are scrubbed and I verified it behaviourally;
+   the security lane declared at the time that it did not re-verify. Do not
+   record it as a review verdict.
+4. **The tempered token's complexity ratio (1.0x) is MY measurement.** The
+   reviewer argued the class is structurally unchanged and could NOT measure it
+   (no Bash). If that linearity claim is ever cited as reviewed, cite it to me.
+5. **CROSS-SDK CONSIDERATION — co-owner decision, NOT self-authorizable.** The
+   F2/F7 class (a character-class exclusion in a credential scrubber that fences
+   a structural boundary and silently stops claiming real credential shapes) is a
+   BUG CLASS, not a bug, and nothing about it is Python-specific.
+   `cross-sdk-inspection.md` Rule 1 would normally trigger an inspection of the
+   sibling SDK; `repo-scope-discipline.md` makes any sibling-repo read or filing a
+   USER-AUTHORIZED action. Neither the agent nor a reviewer can self-authorize it.
+   **Surfaced to the co-owner; no action taken.**
+
+## Convergence status — READ BEFORE CLAIMING DONE
+
+**NOT CONVERGED.** Every round so far found real defects, so the clean-round
+counter is at ZERO. Two lanes each ran three rounds, each finding strictly less
+than the one before, and both are on a final narrow round at `be97099ce`.
+
+The credential-scrub module's convergence, when it lands, must be recorded with
+its EVIDENCE BASIS stated: either VERIFIED-AT-`be97099ce` (the reviewer re-read
+the final state) or reviewed-at-`6c84f27a5`-plus-my-attestation. The reviewer
+raised the distinction unprompted and it matters — a receipt resting on the
+author's report of what landed is exactly the claim-outruns-evidence pattern this
+session is about. The verified read has been requested.
+
+**Three reviewers produced findings whose RECOMMENDED FIXES were wrong** (both
+lanes retracted their own remedy on the record). Every finding was correct and
+load-bearing. Verifying the remedy independently of the finding is what caught
+all three — trusting any of them would have shipped a half-fix, re-imported a
+just-removed leak, or narrowed a pattern into a new one.
 
 ## Ratified decisions — EXECUTE after convergence, do not re-surface
 
