@@ -27,7 +27,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.api.config import AgentConfig
 from kaizen_agents.api.result import AgentResult, ToolCallRecord
 from kaizen_agents.api.shortcuts import (
@@ -171,7 +171,7 @@ class Agent:
             resolved_mode = resolve_execution_mode(execution_mode)
         except ValueError as e:
             raise ConfigurationError(
-                scrub_local_error(e),
+                scrub_remote_error(e),
                 field="execution_mode",
                 value=execution_mode,
                 suggestions=[
@@ -187,7 +187,7 @@ class Agent:
             )
         except ValueError as e:
             raise ConfigurationError(
-                scrub_local_error(e),
+                scrub_remote_error(e),
                 field="tool_access",
                 value=tool_access,
                 suggestions=[
@@ -415,7 +415,7 @@ class Agent:
             return AgentResult.timeout(session_id=self._session_id)
         except Exception as e:
             return AgentResult.from_error(
-                error_message=scrub_local_error(e),
+                error_message=scrub_remote_error(e),
                 error_type=type(e).__name__,
                 session_id=self._session_id,
             )
@@ -678,7 +678,7 @@ class Agent:
             )
         except Exception as e:
             return AgentResult.from_error(
-                error_message=scrub_local_error(e),
+                error_message=scrub_remote_error(e),
                 error_type=type(e).__name__,
                 session_id=self._session_id,
             )
@@ -761,7 +761,7 @@ class Agent:
             )
         except Exception as e:
             return AgentResult.from_error(
-                error_message=scrub_local_error(e),
+                error_message=scrub_remote_error(e),
                 error_type=type(e).__name__,
                 session_id=self._session_id,
             )

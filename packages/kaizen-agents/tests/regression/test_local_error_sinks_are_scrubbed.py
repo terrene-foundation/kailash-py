@@ -22,6 +22,28 @@ only the rules anchored on a literal that cannot occur outside a credential
 credentials. That combination is a measured no-op across the credential-free
 corpus, which is what makes this sweep safe where the aggressive one was not.
 
+THEN THE SPLIT ITSELF TURNED OUT TO BE ONE DESTINATION SHORT
+------------------------------------------------------------
+Routing ALL ~180 sinks onto the conservative preset fixed the diagnostic
+problem and introduced a CREDENTIAL one. Turning ``redact_opaque_tokens`` off
+disables the only two rules that discriminate on shape alone, and those are the
+only rules that can claim a credential carrying NO vendor prefix:
+
+* a bare **AWS secret access key** (``wJalrXUtnFEMI/K7…``), and
+* a bare **32+ char hex secret** — the **Azure OpenAI ``api-key`` shape**.
+
+No literal-anchored rule matches either. So on any sink whose exception can be
+raised at an HTTP / SDK / subprocess / provider boundary — and many swept sinks
+are exactly that, e.g. ``runtime_adapters/kaizen_local.py`` rendering an
+exception from a caller-injected ``_llm_provider`` — the sweep replaced a path
+disclosure with a live-credential disclosure.
+
+``scrub_remote_error`` is the second destination: opaque tokens ON, paths still
+OFF. Every sink was re-triaged by where its exception can be RAISED (not where
+it is caught), fail-closed — 162 remote, 18 local. ``TestThePresetSplitIsReal``
+pins that the two presets genuinely differ, so the routing cannot quietly
+become decorative.
+
 WHAT THIS FILE PINS
 -------------------
 Four tiers, and the first two are what make the last two generalise:
@@ -56,13 +78,35 @@ from pathlib import Path
 
 import pytest
 
-from kaizen.utils.credential_scrub import scrub_local_error as CANONICAL
+from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
 
 pytestmark = pytest.mark.regression
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 PKG = SRC / "kaizen_agents"
-HELPER = "scrub_local_error"
+
+#: BOTH conservative presets, because the sweep now has two destinations.
+#:
+#: This was a single ``HELPER = "scrub_local_error"``, and that single name is
+#: what made the original sweep unsafe: it routed EVERY sink — including ones
+#: whose exception is raised at an HTTP / provider / subprocess boundary — onto
+#: the preset that switches the two SHAPE-ONLY rules OFF. Those two rules are
+#: the ONLY ones that claim a credential carrying no vendor prefix (a bare AWS
+#: secret access key, a bare 32+ hex run — the Azure OpenAI ``api-key`` shape),
+#: so on a remote sink the sweep closed a path disclosure and opened a
+#: credential one.
+#:
+#: ``scrub_remote_error`` is the sibling preset for those sinks: opaque tokens
+#: ON, paths still OFF. Both are counted as covered here; which one a given
+#: module must use is a property of where its exception can be RAISED, and is
+#: pinned per-preset by ``TestThePresetSplitIsReal`` below.
+HELPERS = ("scrub_local_error", "scrub_remote_error")
+
+#: name -> the canonical function object, for the no-drift check.
+CANONICAL_BY_NAME = {
+    "scrub_local_error": scrub_local_error,
+    "scrub_remote_error": scrub_remote_error,
+}
 
 #: The AGGRESSIVE entry point. ``patterns/discovery.py`` was routed through it
 #: by an earlier, separate change and is deliberately left that way. Tier 1
@@ -113,7 +157,7 @@ class _SinkScan(ast.NodeVisitor):
         func = node.func
         if (
             isinstance(func, ast.Name)
-            and func.id == HELPER
+            and func.id in HELPERS
             and len(node.args) == 1
             and self._is_our_name(node.args[0])
         ):
@@ -225,38 +269,109 @@ CREDENTIAL = "sk-abcdefghijklmnopqrstuvwxyz0123456789"
 LOADBEARING_PATH = "/Users/alice/repos/app/config.yaml"
 
 
+def _bound_presets(path: Path) -> list[str]:
+    """The preset names this module actually imports."""
+    mod = importlib.import_module(_module_name(path))
+    return [name for name in HELPERS if getattr(mod, name, None) is not None]
+
+
 class TestEverySweptModule:
     @pytest.mark.parametrize("path", SWEPT, ids=SWEPT_IDS)
     def test_module_binds_the_canonical_preset(self, path: Path) -> None:
         mod = importlib.import_module(_module_name(path))
-        bound = getattr(mod, HELPER, None)
-        assert bound is CANONICAL, (
-            f"{path.relative_to(PKG)} does not bind the canonical "
-            f"kaizen.utils.credential_scrub.{HELPER}. A per-module copy is the "
-            "drift this module exists to prevent."
+        names = _bound_presets(path)
+        assert names, (
+            f"{path.relative_to(PKG)} carries a scrubbed sink but binds neither "
+            f"of {HELPERS}"
         )
+        for name in names:
+            assert getattr(mod, name) is CANONICAL_BY_NAME[name], (
+                f"{path.relative_to(PKG)} does not bind the canonical "
+                f"kaizen.utils.credential_scrub.{name}. A per-module copy is "
+                "the drift this module exists to prevent."
+            )
 
     @pytest.mark.parametrize("path", SWEPT, ids=SWEPT_IDS)
     def test_credential_scrubbed_and_path_survives(self, path: Path) -> None:
-        """Both directions, through the symbol this module actually calls."""
+        """Both directions, through every symbol this module actually calls.
+
+        The path assertion holds for BOTH presets by construction: they differ
+        only on ``redact_opaque_tokens``, and both leave ``redact_paths`` off,
+        because an agent reading a failure to decide its retry needs the
+        location under either classification.
+        """
         mod = importlib.import_module(_module_name(path))
-        scrub = getattr(mod, HELPER)
 
-        exc = OSError(
-            f"[Errno 13] Permission denied: '{LOADBEARING_PATH}' "
-            f"(token {CREDENTIAL})"
-        )
-        rendered = scrub(exc)
+        for name in _bound_presets(path):
+            scrub = getattr(mod, name)
+            exc = OSError(
+                f"[Errno 13] Permission denied: '{LOADBEARING_PATH}' "
+                f"(token {CREDENTIAL})"
+            )
+            rendered = scrub(exc)
 
-        assert (
-            CREDENTIAL not in rendered
-        ), f"{path.relative_to(PKG)} would leak a credential into its error text"
-        assert "[REDACTED]" in rendered
-        assert LOADBEARING_PATH in rendered, (
-            f"{path.relative_to(PKG)} would mangle the path an agent needs in "
-            "order to retry — the exact failure the aggressive sweep was halted "
-            "over."
+            assert CREDENTIAL not in rendered, (
+                f"{path.relative_to(PKG)} would leak a credential into its "
+                f"error text via {name}"
+            )
+            assert "[REDACTED]" in rendered
+            assert LOADBEARING_PATH in rendered, (
+                f"{path.relative_to(PKG)} would mangle, via {name}, the path an "
+                "agent needs in order to retry — the exact failure the "
+                "aggressive sweep was halted over."
+            )
+
+
+class TestThePresetSplitIsReal:
+    """The split must be a real difference, not two names for one behaviour.
+
+    Without this the whole re-triage is unfalsifiable: every module could bind
+    ``scrub_remote_error`` while it behaved identically to the conservative
+    preset, and every assertion above would still pass.
+    """
+
+    #: Prefix-less credential shapes. NO literal-anchored rule matches either,
+    #: so ONLY the shape-only rules can claim them — which is exactly what
+    #: ``scrub_local_error`` switches off.
+    AWS_SECRET = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    AZURE_HEX_KEY = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+
+    @pytest.mark.parametrize("secret", [AWS_SECRET, AZURE_HEX_KEY])
+    def test_remote_preset_claims_prefixless_credentials(self, secret: str) -> None:
+        rendered = scrub_remote_error(Exception(f"auth failed: {secret}"))
+        assert secret not in rendered, (
+            "scrub_remote_error let a prefix-less credential through; it is the "
+            "preset for sinks whose exception crosses a provider boundary, and "
+            "a bare AWS secret / bare hex Azure api-key is precisely what "
+            "arrives there"
         )
+
+    @pytest.mark.parametrize("secret", [AWS_SECRET, AZURE_HEX_KEY])
+    def test_local_preset_deliberately_does_not(self, secret: str) -> None:
+        """Pins the WHY of the split, and the residual it accepts.
+
+        This is not an endorsement — it is the measured reason a remote sink
+        MUST NOT use the conservative preset. If this ever starts redacting,
+        the two presets have converged and the re-triage is moot.
+        """
+        rendered = scrub_local_error(Exception(f"auth failed: {secret}"))
+        assert secret in rendered
+
+    def test_both_presets_preserve_the_diagnostic_path(self) -> None:
+        """CONTROL. The split is on the credential axis, not the path axis."""
+        for scrub in (scrub_local_error, scrub_remote_error):
+            rendered = scrub(OSError(f"[Errno 2] No such file: '{LOADBEARING_PATH}'"))
+            assert LOADBEARING_PATH in rendered
+
+    def test_signature_query_value_claimed_by_both(self) -> None:
+        """``sig=`` was case-SENSITIVE and never matched ``Signature=``.
+
+        Literal-anchored, so it must hold under the CONSERVATIVE preset too —
+        which is where it matters most, the shape rules being off there.
+        """
+        sig = "X-Amz-Signature=abcdef0123456789abcdef0123456789abcdef01"
+        for scrub in (scrub_local_error, scrub_remote_error):
+            assert "abcdef0123456789" not in scrub(Exception(f"denied {sig}"))
 
 
 # ---------------------------------------------------------------------------

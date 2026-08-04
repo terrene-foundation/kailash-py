@@ -120,8 +120,17 @@ _AGENTS_SRC: Path = _REPO_ROOT / "packages" / "kaizen-agents" / "src" / "kaizen_
 #: Directory names that are never production source.
 _SKIP_DIR_PARTS = frozenset({"__pycache__", "tests", "test"})
 
-#: The two functions whose aggression this suite pins.
-_GUARDED_CALLEES = frozenset({"scrub_credentials", "scrub_local_error"})
+#: The functions whose aggression this suite pins.
+#:
+#: ``scrub_remote_error`` joined when the ~180-site sweep was re-triaged: it is
+#: the second named preset (opaque tokens ON, paths OFF) for sinks whose
+#: exception can be raised at a provider / HTTP / subprocess boundary, where the
+#: conservative preset's disabled shape-only rules are the ONLY rules that claim
+#: a prefix-less credential. It is guarded here for the same reason its sibling
+#: is: so that a future call site cannot quietly pass a gated kwarg through it.
+_GUARDED_CALLEES = frozenset(
+    {"scrub_credentials", "scrub_local_error", "scrub_remote_error"}
+)
 
 #: The keyword-only gates whose ``True`` default IS the security posture.
 _GATED_KWARGS = frozenset({"redact_paths", "redact_opaque_tokens"})
@@ -135,6 +144,17 @@ _GATED_KWARGS = frozenset({"redact_paths", "redact_opaque_tokens"})
 # kwarg OUTSIDE its entry is still reported, so widening an existing exemption
 # is as visible as adding a new one.
 _ALLOWLIST: dict[Tuple[str, str], frozenset] = {
+    # TWO wrapper presets share this key, because the allowlist is keyed by
+    # (file, callee) and both delegate to ``scrub_credentials`` from this file:
+    #
+    #   * ``scrub_local_error``  — weakens BOTH gates (see below).
+    #   * ``scrub_remote_error`` — weakens ONLY ``redact_paths``; it keeps
+    #     ``redact_opaque_tokens`` at its aggressive default precisely because
+    #     the two shape-only rules are the only ones that claim a prefix-less
+    #     credential (a bare AWS secret, a bare 32+ hex Azure ``api-key``), and
+    #     those DO arrive on a sink fed by a provider boundary. Its weakened set
+    #     is a strict subset of this entry, so it is covered without widening.
+    #
     # ``scrub_local_error`` IS the named CONSERVATIVE preset over
     # ``scrub_credentials``. Turning both gates off is not a weakening of the
     # posture, it is the entire content of the function: on a LOCAL-error
@@ -398,13 +418,14 @@ def test_definition_site_is_not_mistaken_for_a_call_site() -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.Call) and _callee_name(node) in _GUARDED_CALLEES
     ]
-    assert calls == [(lineno, "scrub_credentials") for lineno, _ in calls], (
-        f"unexpected guarded call shapes in the defining module: {calls}"
-    )
-    assert len(calls) == 1, (
-        "the defining module should contain exactly ONE guarded call — the "
-        "`scrub_local_error` wrapper delegating to `scrub_credentials`. "
-        f"Found {len(calls)}: {calls}. If a second call landed, it needs its "
+    assert calls == [
+        (lineno, "scrub_credentials") for lineno, _ in calls
+    ], f"unexpected guarded call shapes in the defining module: {calls}"
+    assert len(calls) == 2, (
+        "the defining module should contain exactly TWO guarded calls — the "
+        "`scrub_local_error` and `scrub_remote_error` wrappers, each "
+        "delegating to `scrub_credentials`. "
+        f"Found {len(calls)}: {calls}. If a third call landed, it needs its "
         "own allowlist entry or it is a real weakening."
     )
 

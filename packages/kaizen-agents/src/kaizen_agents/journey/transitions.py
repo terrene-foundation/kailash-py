@@ -56,7 +56,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
     from kaizen_agents.journey.intent import IntentDetector
@@ -261,7 +261,7 @@ class ConditionTrigger(BaseTrigger):
             # This prevents condition errors from crashing the journey
             # Log the error for debugging purposes
             logger.warning(
-                f"ConditionTrigger evaluation failed for '{self.description}': {scrub_local_error(e)}",
+                f"ConditionTrigger evaluation failed for '{self.description}': {scrub_remote_error(e)}",
                 exc_info=True,
             )
             return False

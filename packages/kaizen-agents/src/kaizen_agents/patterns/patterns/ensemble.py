@@ -45,7 +45,7 @@ from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.llm.reasoning import ReasoningDegradedError
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -254,7 +254,7 @@ class EnsemblePipeline(Pipeline):
 
                     perspectives.append(
                         {
-                            "error": scrub_local_error(e),
+                            "error": scrub_remote_error(e),
                             "agent_id": (
                                 agent.agent_id
                                 if hasattr(agent, "agent_id")
@@ -310,7 +310,7 @@ class EnsemblePipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": scrub_local_error(e),
+                    "error": scrub_remote_error(e),
                     "status": "synthesis_failed",
                     "traceback": traceback.format_exc(),
                     "perspectives": perspectives,  # Include original perspectives

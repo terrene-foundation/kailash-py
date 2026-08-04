@@ -119,8 +119,24 @@ class SensitiveDataRedactor:
 
         # Local list owns the non-credential classes (PII, payment data, and
         # the two field-shaped forms). See PATTERNS for the scope split.
+        #
+        # CALLABLE, not the marker string, for the reason documented at
+        # `scrub_credentials`: `re.sub`'s string replacement is a TEMPLATE that
+        # expands `\1` / `\g<0>` / `\g<name>`. `redaction_marker` is
+        # OPERATOR-SETTABLE (see `__init__` and `RedactionConfig`), so passing
+        # it as the template let a marker of `\g<0>` replace every matched SSN,
+        # card number and PII field WITH ITSELF — this loop returning its input
+        # while reporting a redaction. A callable's return value is used
+        # literally, so the marker can no longer be read as syntax.
+        #
+        # The shared `scrub_credentials` call above rejects such a marker
+        # outright, so in practice it raises before reaching here — but this
+        # loop must not depend on the ordering of a call it does not own.
+        def _literal_marker(_match: re.Match) -> str:
+            return self.redaction_marker
+
         for pattern_name, pattern in self.PATTERNS.items():
-            text = pattern.sub(self.redaction_marker, text)
+            text = pattern.sub(_literal_marker, text)
 
         return text
 

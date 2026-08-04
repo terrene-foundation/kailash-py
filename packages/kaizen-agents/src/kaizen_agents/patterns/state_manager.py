@@ -58,7 +58,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
     # Bind the optional-dependency symbols for static analysis only; the
@@ -227,7 +227,7 @@ class OrchestrationStateManager:
             )
         except Exception as e:
             raise DatabaseConnectionError(
-                f"Failed to initialize DataFlow: {scrub_local_error(e)}"
+                f"Failed to initialize DataFlow: {scrub_remote_error(e)}"
             ) from e
 
         # Eager connection validation - verify database is reachable
@@ -461,14 +461,14 @@ class OrchestrationStateManager:
         except ImportError as e:
             # Missing database driver - let it fail later with better error
             logger.warning(
-                f"Database driver not installed, skipping validation: {scrub_local_error(e)}"
+                f"Database driver not installed, skipping validation: {scrub_remote_error(e)}"
             )
         except Exception as e:
             logger.error(
-                f"Database connection validation failed: {scrub_local_error(e)}"
+                f"Database connection validation failed: {scrub_remote_error(e)}"
             )
             raise DatabaseConnectionError(
-                f"Failed to connect to database: {scrub_local_error(e)}"
+                f"Failed to connect to database: {scrub_remote_error(e)}"
             ) from e
 
     async def save_workflow_state(
@@ -576,9 +576,9 @@ class OrchestrationStateManager:
             return actual_id
 
         except Exception as e:
-            logger.error(f"Failed to save workflow state: {scrub_local_error(e)}")
+            logger.error(f"Failed to save workflow state: {scrub_remote_error(e)}")
             raise DatabaseConnectionError(
-                f"Failed to save workflow state for {workflow_id}: {scrub_local_error(e)}"
+                f"Failed to save workflow state for {workflow_id}: {scrub_remote_error(e)}"
             ) from e
 
     async def load_workflow_state(
@@ -715,14 +715,14 @@ class OrchestrationStateManager:
             raise
         except Exception as e:
             # Check if this is a DataFlow record-not-found error
-            error_msg = scrub_local_error(e)
+            error_msg = scrub_remote_error(e)
             if "not found" in error_msg.lower() and workflow_id in error_msg:
                 logger.warning(f"Workflow state not found: {workflow_id}")
                 raise WorkflowNotFoundError(f"Workflow not found: {workflow_id}") from e
 
-            logger.error(f"Failed to load workflow state: {scrub_local_error(e)}")
+            logger.error(f"Failed to load workflow state: {scrub_remote_error(e)}")
             raise DatabaseConnectionError(
-                f"Failed to load workflow state for {workflow_id}: {scrub_local_error(e)}"
+                f"Failed to load workflow state for {workflow_id}: {scrub_remote_error(e)}"
             ) from e
 
     async def save_checkpoint(
@@ -819,9 +819,9 @@ class OrchestrationStateManager:
             return checkpoint_id
 
         except Exception as e:
-            logger.error(f"Failed to save checkpoint: {scrub_local_error(e)}")
+            logger.error(f"Failed to save checkpoint: {scrub_remote_error(e)}")
             raise DatabaseConnectionError(
-                f"Failed to save checkpoint for {workflow_id}: {scrub_local_error(e)}"
+                f"Failed to save checkpoint for {workflow_id}: {scrub_remote_error(e)}"
             ) from e
 
     async def load_checkpoint(self, checkpoint_id: str) -> dict[str, Any]:
@@ -890,7 +890,7 @@ class OrchestrationStateManager:
                     checkpoint_data = json.loads(decompressed.decode("utf-8"))
                 except (ValueError, gzip.BadGzipFile, json.JSONDecodeError) as e:
                     logger.error(
-                        f"Failed to decompress checkpoint data: {scrub_local_error(e)}"
+                        f"Failed to decompress checkpoint data: {scrub_remote_error(e)}"
                     )
                     checkpoint_data = {}
             else:
@@ -904,16 +904,16 @@ class OrchestrationStateManager:
             raise
         except Exception as e:
             # Check if this is a DataFlow record-not-found error
-            error_msg = scrub_local_error(e)
+            error_msg = scrub_remote_error(e)
             if "not found" in error_msg.lower() and checkpoint_id in error_msg:
                 logger.warning(f"Checkpoint not found: {checkpoint_id}")
                 raise CheckpointNotFoundError(
                     f"Checkpoint not found: {checkpoint_id}"
                 ) from e
 
-            logger.error(f"Failed to load checkpoint: {scrub_local_error(e)}")
+            logger.error(f"Failed to load checkpoint: {scrub_remote_error(e)}")
             raise DatabaseConnectionError(
-                f"Failed to load checkpoint {checkpoint_id}: {scrub_local_error(e)}"
+                f"Failed to load checkpoint {checkpoint_id}: {scrub_remote_error(e)}"
             ) from e
 
     async def list_active_workflows(self) -> list[dict[str, Any]]:
@@ -990,9 +990,9 @@ class OrchestrationStateManager:
             return workflows
 
         except Exception as e:
-            logger.error(f"Failed to list active workflows: {scrub_local_error(e)}")
+            logger.error(f"Failed to list active workflows: {scrub_remote_error(e)}")
             raise DatabaseConnectionError(
-                f"Failed to list active workflows: {scrub_local_error(e)}"
+                f"Failed to list active workflows: {scrub_remote_error(e)}"
             ) from e
 
     async def _get_next_checkpoint_number(self, workflow_id: str) -> int:

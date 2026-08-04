@@ -26,7 +26,7 @@ from typing import Any
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
 
 logger = logging.getLogger(__name__)
@@ -280,13 +280,13 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"OpenAI execution failed: {scrub_local_error(e)}")
+            logger.exception(f"OpenAI execution failed: {scrub_remote_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,
                 runtime_name="openai_codex",
                 session_id=context.session_id,
-                error_message=scrub_local_error(e),
+                error_message=scrub_remote_error(e),
                 error_type=type(e).__name__,
             )
 
@@ -518,7 +518,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             await self._client.models.list()
             return True
         except Exception as e:
-            logger.warning(f"OpenAI health check failed: {scrub_local_error(e)}")
+            logger.warning(f"OpenAI health check failed: {scrub_remote_error(e)}")
             return False
 
     async def cleanup(self) -> None:
@@ -529,7 +529,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
                     await self._client.files.delete(file_id)
                 except Exception as e:
                     logger.warning(
-                        f"Failed to delete file {file_id}: {scrub_local_error(e)}"
+                        f"Failed to delete file {file_id}: {scrub_remote_error(e)}"
                     )
 
             self._uploaded_files.clear()

@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -292,7 +292,7 @@ class DebateWorkflow:
 
             # Return error result
             return {
-                "final_decision": f"Debate failed: {scrub_local_error(e)}",
+                "final_decision": f"Debate failed: {scrub_remote_error(e)}",
                 "debate_rounds": [],
                 "consensus_level": 0.0,
                 "coordination_status": "failed",
@@ -300,7 +300,7 @@ class DebateWorkflow:
                 "participants": len(self.agents),
                 "rounds_completed": 0,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }
 
     async def execute_async(
@@ -381,7 +381,7 @@ class DebateWorkflow:
 
             # Return error result
             return {
-                "final_decision": f"Debate failed: {scrub_local_error(e)}",
+                "final_decision": f"Debate failed: {scrub_remote_error(e)}",
                 "debate_rounds": [],
                 "consensus_level": 0.0,
                 "coordination_status": "failed",
@@ -389,7 +389,7 @@ class DebateWorkflow:
                 "participants": len(self.agents),
                 "rounds_completed": 0,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }
 
     def _structure_debate_rounds(

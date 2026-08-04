@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,7 @@ class ConsensusWorkflow:
             # Return error result
             return {
                 "consensus_achieved": False,
-                "final_consensus": f"Consensus failed: {scrub_local_error(e)}",
+                "final_consensus": f"Consensus failed: {scrub_remote_error(e)}",
                 "consensus_score": 0.0,
                 "iterations_completed": 0,
                 "agent_positions": {},
@@ -292,7 +292,7 @@ class ConsensusWorkflow:
                 "participants": len(self.agents),
                 "threshold": self.consensus_threshold,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }
 
     async def execute_async(
@@ -382,7 +382,7 @@ class ConsensusWorkflow:
             # Return error result
             return {
                 "consensus_achieved": False,
-                "final_consensus": f"Consensus failed: {scrub_local_error(e)}",
+                "final_consensus": f"Consensus failed: {scrub_remote_error(e)}",
                 "consensus_score": 0.0,
                 "iterations_completed": 0,
                 "agent_positions": {},
@@ -390,7 +390,7 @@ class ConsensusWorkflow:
                 "participants": len(self.agents),
                 "threshold": self.consensus_threshold,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }
 
     def _calculate_consensus_score(self, consensus_results: dict[str, Any]) -> float:

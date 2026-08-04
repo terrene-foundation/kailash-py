@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from kailash.workflow.builder import WorkflowBuilder
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -344,15 +344,15 @@ class SupervisorWorkerWorkflow:
                 "supervisor_coordination": {
                     "task_assignments": {},
                     "progress_monitoring": "failed",
-                    "supervision_summary": f"Supervision failed: {scrub_local_error(e)}",
+                    "supervision_summary": f"Supervision failed: {scrub_remote_error(e)}",
                 },
                 "worker_results": {},
-                "final_synthesis": f"Coordination failed: {scrub_local_error(e)}",
+                "final_synthesis": f"Coordination failed: {scrub_remote_error(e)}",
                 "task": self.task,
                 "coordination_pattern": self.coordination_pattern,
                 "participants": len(self.workers) + 1,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }
 
     async def execute_async(
@@ -451,13 +451,13 @@ class SupervisorWorkerWorkflow:
                 "supervisor_coordination": {
                     "task_assignments": {},
                     "progress_monitoring": "failed",
-                    "supervision_summary": f"Supervision failed: {scrub_local_error(e)}",
+                    "supervision_summary": f"Supervision failed: {scrub_remote_error(e)}",
                 },
                 "worker_results": {},
-                "final_synthesis": f"Coordination failed: {scrub_local_error(e)}",
+                "final_synthesis": f"Coordination failed: {scrub_remote_error(e)}",
                 "task": self.task,
                 "coordination_pattern": self.coordination_pattern,
                 "participants": len(self.workers) + 1,
                 "execution_time_ms": execution_time,
-                "error": scrub_local_error(e),
+                "error": scrub_remote_error(e),
             }

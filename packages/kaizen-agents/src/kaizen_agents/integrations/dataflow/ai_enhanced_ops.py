@@ -18,7 +18,7 @@ import logging
 from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 from .base import DataFlowAwareAgent
 
@@ -147,7 +147,7 @@ class NLToSQLAgent(DataFlowAwareAgent):
                 schemas[table] = self.db_connection.get_table_schema(table)
             except Exception as e:
                 logger.warning(
-                    f"Could not get schema for {table}: {scrub_local_error(e)}"
+                    f"Could not get schema for {table}: {scrub_remote_error(e)}"
                 )
 
         # Generate query using LLM
@@ -189,7 +189,7 @@ class NLToSQLAgent(DataFlowAwareAgent):
                 limit=100,  # Default limit
             )
         except Exception as e:
-            logger.error(f"Query execution failed: {scrub_local_error(e)}")
+            logger.error(f"Query execution failed: {scrub_remote_error(e)}")
             query_results = []
 
         return {
@@ -295,7 +295,7 @@ class DataTransformAgent(DataFlowAwareAgent):
             insert_result = self.bulk_insert(target_table, transformed_data)
             inserted_count = len(insert_result)
         except Exception as e:
-            logger.error(f"Bulk insert failed: {scrub_local_error(e)}")
+            logger.error(f"Bulk insert failed: {scrub_remote_error(e)}")
             inserted_count = 0
 
         return {
@@ -539,7 +539,7 @@ class SemanticSearchAgent(DataFlowAwareAgent):
                 schemas[table] = self.db_connection.get_table_schema(table)
             except Exception as e:
                 logger.warning(
-                    f"Could not get schema for {table}: {scrub_local_error(e)}"
+                    f"Could not get schema for {table}: {scrub_remote_error(e)}"
                 )
 
         # Run LLM analysis
@@ -580,7 +580,7 @@ class SemanticSearchAgent(DataFlowAwareAgent):
                 )
                 results[table] = table_results
             except Exception as e:
-                logger.error(f"Search failed for {table}: {scrub_local_error(e)}")
+                logger.error(f"Search failed for {table}: {scrub_remote_error(e)}")
                 results[table] = []
 
         return {

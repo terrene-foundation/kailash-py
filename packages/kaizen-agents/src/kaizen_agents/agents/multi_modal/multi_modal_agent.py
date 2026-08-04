@@ -29,7 +29,7 @@ from kaizen.providers.multi_modal_adapter import (
     get_multi_modal_adapter,
 )
 from kaizen.signatures.multi_modal import AudioField, ImageField, MultiModalSignature
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 
 @dataclass
@@ -154,7 +154,7 @@ class MultiModalAgent(BaseAgent):
                 )
             except ValueError as e:
                 raise ValueError(
-                    f"No multi-modal adapter available: {scrub_local_error(e)}"
+                    f"No multi-modal adapter available: {scrub_remote_error(e)}"
                 ) from e
         else:
             self.adapter = adapter

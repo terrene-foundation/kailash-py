@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -271,10 +271,10 @@ class ToolMapper(ABC):
                         f"Failed to parse tool at index {i}",
                         source_format="kaizen",
                         target_format=cls.FORMAT_NAME,
-                        reason=scrub_local_error(e),
+                        reason=scrub_remote_error(e),
                     ) from e
                 logger.warning(
-                    f"Skipping unparseable tool at index {i}: {scrub_local_error(e)}"
+                    f"Skipping unparseable tool at index {i}: {scrub_remote_error(e)}"
                 )
 
         return tools

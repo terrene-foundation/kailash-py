@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.journey.errors import StateError
 
 if TYPE_CHECKING:
@@ -389,8 +389,8 @@ class DataFlowStateBackend(StateBackend):
                 await self.db.express.create(self.model_name, serialized)
 
         except Exception as e:
-            logger.error(f"DataFlow save failed: {scrub_local_error(e)}")
-            raise StateError("save", session_id, scrub_local_error(e)) from e
+            logger.error(f"DataFlow save failed: {scrub_remote_error(e)}")
+            raise StateError("save", session_id, scrub_remote_error(e)) from e
 
     async def load(self, session_id: str) -> dict[str, Any] | None:
         """
@@ -428,8 +428,8 @@ class DataFlowStateBackend(StateBackend):
             }
 
         except Exception as e:
-            logger.error(f"DataFlow load failed: {scrub_local_error(e)}")
-            raise StateError("load", session_id, scrub_local_error(e)) from e
+            logger.error(f"DataFlow load failed: {scrub_remote_error(e)}")
+            raise StateError("load", session_id, scrub_remote_error(e)) from e
 
     async def delete(self, session_id: str) -> None:
         """
@@ -444,8 +444,8 @@ class DataFlowStateBackend(StateBackend):
         try:
             await self.db.express.delete(self.model_name, session_id)
         except Exception as e:
-            logger.error(f"DataFlow delete failed: {scrub_local_error(e)}")
-            raise StateError("delete", session_id, scrub_local_error(e)) from e
+            logger.error(f"DataFlow delete failed: {scrub_remote_error(e)}")
+            raise StateError("delete", session_id, scrub_remote_error(e)) from e
 
     async def list_sessions(self) -> list[str]:
         """
@@ -467,8 +467,8 @@ class DataFlowStateBackend(StateBackend):
             return [r.get("id") for r in records if r.get("id")]
 
         except Exception as e:
-            logger.error(f"DataFlow list failed: {scrub_local_error(e)}")
-            raise StateError("list", reason=scrub_local_error(e)) from e
+            logger.error(f"DataFlow list failed: {scrub_remote_error(e)}")
+            raise StateError("list", reason=scrub_remote_error(e)) from e
 
 
 # ============================================================================

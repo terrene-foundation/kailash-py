@@ -67,6 +67,7 @@ from typing import Final, List
 __all__ = [
     "scrub_credentials",
     "scrub_local_error",
+    "scrub_remote_error",
     "DEFAULT_PLACEHOLDER",
 ]
 
@@ -208,7 +209,22 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # The class admits the percent-encoding alphabet because a SAS `sig` is
     # base64 that has been URL-escaped (`%2F`, `%2B`, `%3D`). Single bounded
     # class after a literal anchor — linear, no adjacent-run ambiguity.
-    re.compile(r"sig=[A-Za-z0-9%+/=_\-]{20,}", re.ASCII),
+    #
+    # THE LITERAL IS CASE-INSENSITIVE AND ALSO SPELLS OUT ``signature``. It was
+    # ``sig=`` alone, case-SENSITIVELY, which matches neither the AWS SigV4
+    # query parameter ``X-Amz-Signature=`` nor any ``Signature=`` / ``SIG=``
+    # spelling. That gap is worst under the CONSERVATIVE preset
+    # (``scrub_local_error``), where the shape-only rules that would otherwise
+    # have incidentally claimed a long signature value are switched OFF — so
+    # this literal-anchored rule was the only thing standing between a
+    # signed-URL credential and the log, and it did not fire.
+    #
+    # ``(?i:...)`` scopes the case-insensitivity to the LITERAL only; the value
+    # class already admits both cases, so nothing else changes. Deliberately NOT
+    # ``\b``-anchored: adding one would NARROW the pre-existing rule (it would
+    # stop matching a ``…mysig=`` suffix that matches today), and this is a
+    # widening. ``signature`` is listed FIRST so the longer literal is preferred.
+    re.compile(r"(?i:signature|sig)=[A-Za-z0-9%+/=_\-]{20,}", re.ASCII),
     # SHAPE-ONLY — defined above, gated by ``redact_opaque_tokens``. Position
     # in this list is unchanged; only the definition moved.
     _AWS_SECRET_CONTIGUOUS_RUN,
@@ -724,19 +740,54 @@ def scrub_credentials(
         or "://" in placeholder
         or any(c.isspace() for c in placeholder)
         or _fence_trigger
+        or "\\" in placeholder
     ):
         # Fail loudly rather than silently producing a mis-scrubbed string:
         # a placeholder carrying `@`/`://`/whitespace, or a quote followed by a
         # JSON delimiter, re-enters the URL rules' match space and the ordering
         # contract below stops holding.
+        #
+        # BACKSLASH is a DIFFERENT hazard and is rejected as DEFENCE IN DEPTH,
+        # not as the fix. Every substitution below now passes a CALLABLE, and
+        # a callable's return value is used LITERALLY — `re.sub` performs no
+        # template expansion on it — so a backslash-bearing placeholder is
+        # already inert. The guard stays because it makes the property
+        # decidable from the placeholder alone, and because it fails at the
+        # boundary rather than relying on every future substitution site
+        # remembering to pass a callable.
         raise ValueError(
-            "placeholder must not contain '@', '://', whitespace, or a quote "
+            "placeholder must not contain '@', '://', whitespace, a quote "
             "immediately followed by one of ',}]:' (the tempered fence's "
-            f"trigger) (got {placeholder!r}); it would break the URL-rule "
+            "trigger), or a backslash "
+            f"(got {placeholder!r}); it would break the URL-rule "
             "ordering contract in scrub_credentials()"
         )
 
     sanitized = text
+
+    # EVERY substitution below passes a CALLABLE, never a replacement-template
+    # STRING, and that is a correctness requirement rather than a style.
+    #
+    # ``re.sub``'s string replacement is a TEMPLATE: it expands ``\1``,
+    # ``\g<0>`` and ``\g<name>`` inside it. ``placeholder`` is CALLER-SUPPLIED
+    # and was being interpolated straight into that template, so a placeholder
+    # of ``\g<0>`` replaced every matched credential WITH ITSELF — a scrubber
+    # that returns its own input, reporting success. The guard above rejected
+    # ``@``, ``://``, whitespace and the fence trigger, none of which is a
+    # backslash, so the value sailed through.
+    #
+    # Not hypothetical: ``core/autonomy/hooks/security/redaction.py`` passes an
+    # operator-settable ``RedactionConfig.redaction_marker`` here, documented
+    # with a ``redaction_marker="***"`` example — i.e. reachable from public
+    # config.
+    #
+    # A callable's return value is used LITERALLY (no expansion), so the
+    # placeholder can no longer be interpreted as syntax at all. The two
+    # backreference-bearing replacements below rebuild ``\1`` from
+    # ``match.group(1)`` instead, keeping the scheme prefix exactly as the
+    # template did.
+    def _literal(_match: re.Match) -> str:
+        return placeholder
 
     # Vendor-prefixed / shape-anchored credentials first.
     #
@@ -748,20 +799,28 @@ def scrub_credentials(
     for pattern in _CREDENTIAL_PATTERNS:
         if not redact_opaque_tokens and pattern in _OPAQUE_SHAPE_PATTERNS:
             continue
-        sanitized = pattern.sub(placeholder, sanitized)
+        sanitized = pattern.sub(_literal, sanitized)
 
     # URL-embedded credentials. The bounded rule runs FIRST because it
     # is the one that handles a literal `@` inside the userinfo; the overflow
     # companion then claims any userinfo too long for that rule's DoS bound.
-    userpass_replacement = f"\\1{placeholder}:{placeholder}@"
-    sanitized = _URL_WITH_AUTH.sub(userpass_replacement, sanitized)
-    sanitized = _URL_WITH_AUTH_OVERFLOW.sub(userpass_replacement, sanitized)
+    def _userpass_replacement(match: re.Match) -> str:
+        # group(1) is the scheme (`postgresql://`), preserved verbatim — the
+        # literal equivalent of the old `\1` template, without the expansion.
+        return f"{match.group(1)}{placeholder}:{placeholder}@"
+
+    sanitized = _URL_WITH_AUTH.sub(_userpass_replacement, sanitized)
+    sanitized = _URL_WITH_AUTH_OVERFLOW.sub(_userpass_replacement, sanitized)
+
     # Runs LAST: the two user:pass rules above have already rewritten their
     # matches to `scheme://<placeholder>:<placeholder>@`, which contains a `:`
     # and so is not re-matched by this no-colon rule. Ordering therefore keeps
     # the user/pass shape visible where one existed, and only collapses
     # userinfo that genuinely had no password half.
-    sanitized = _URL_WITH_USERINFO_ONLY.sub(f"\\1{placeholder}@", sanitized)
+    def _userinfo_only_replacement(match: re.Match) -> str:
+        return f"{match.group(1)}{placeholder}@"
+
+    sanitized = _URL_WITH_USERINFO_ONLY.sub(_userinfo_only_replacement, sanitized)
 
     # INTERNAL-LOCATION rules. Both are gated together by ``redact_paths``;
     # with the flag on, the order and effect are identical to the pre-flag
@@ -769,7 +828,7 @@ def scrub_credentials(
     if redact_paths:
         # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
         sanitized = _AZURE_OPENAI_ENDPOINT.sub(
-            f"https://{placeholder}.openai.azure.com", sanitized
+            lambda _m: f"https://{placeholder}.openai.azure.com", sanitized
         )
 
         # Replace internal file paths.
@@ -802,10 +861,30 @@ def scrub_local_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) 
     produces — so ``f"...{exc}"`` becomes ``f"...{scrub_local_error(exc)}"``
     with no change of meaning beyond the scrub.
 
-    WHAT THIS DOES NOT REDACT, deliberately: filesystem paths, Azure resource
-    hostnames, git SHAs, MD5/SHA digests, unhyphenated UUIDs and trace ids.
-    Those are the diagnostic payload of a local error — an ``OSError`` message
-    IS a path plus a reason, and an agent handed ``[PATH]/...`` cannot retry.
+    WHAT THIS DOES NOT REDACT — AND THE FIRST TWO ENTRIES ARE CREDENTIALS
+    ---------------------------------------------------------------------
+    Switching ``redact_opaque_tokens`` off disables the only two rules that can
+    claim a credential carrying NO vendor prefix. This list previously named
+    only benign classes, which is what made the ~180-site sweep onto this
+    preset read as safe. It is not safe on a REMOTE surface, and the omission
+    was the disclosure defect:
+
+    * **A bare AWS secret access key** (``wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY``)
+      — no vendor prefix; claimed ONLY by ``_AWS_SECRET_CONTIGUOUS_RUN``.
+    * **A bare 32+ character hex secret** — **Azure OpenAI ``api-key`` values
+      are exactly this shape** (see ``_GENERIC_HEX_TOKEN``); claimed ONLY by
+      that rule.
+    * Filesystem paths, Azure resource hostnames, git SHAs, MD5/SHA digests,
+      unhyphenated UUIDs and trace ids — these ARE benign, and they are the
+      diagnostic payload of a local error: an ``OSError`` message IS a path
+      plus a reason, and an agent handed ``[PATH]/...`` cannot retry.
+
+    USE :func:`scrub_remote_error` INSTEAD whenever the exception being
+    rendered can originate at an HTTP / SDK / subprocess / provider boundary.
+    "It is caught in local orchestration code" is NOT the test — the test is
+    where the exception can be RAISED. A caller-injected provider object is a
+    remote boundary even though the ``except`` clause is local.
+
     Verified no-op over the credential-free corpus in
     ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``.
 
@@ -823,4 +902,65 @@ def scrub_local_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) 
         placeholder=placeholder,
         redact_paths=False,
         redact_opaque_tokens=False,
+    )
+
+
+def scrub_remote_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) -> str:
+    """Scrub an error that can ORIGINATE AT A REMOTE BOUNDARY.
+
+    The sibling of :func:`scrub_local_error`, and the reason that one had to
+    stop being the universal answer. Also not a second scrubber: it owns no
+    patterns and is a named preset over :func:`scrub_credentials`.
+
+    THE SPLIT EXISTS BECAUSE ONE PRESET CANNOT SERVE BOTH SURFACES.
+    ``scrub_local_error`` turns OFF the two SHAPE-ONLY rules, and on a LOCAL
+    error that is right: there, a 32-hex run is a git SHA or an MD5 digest and
+    a 40-char run is a CamelCase identifier — blanking them destroys the
+    diagnostic while protecting nothing.
+
+    On a REMOTE error the SAME shapes are the credential. A bare AWS secret
+    access key carries no vendor prefix, and an Azure OpenAI ``api-key`` value
+    is a bare 32+ hex run; NO literal-anchored rule matches either, so with the
+    shape rules off they pass through into the log IN FULL. Sweeping a
+    provider-error sink onto the conservative preset therefore CLOSED a
+    filesystem-path disclosure and OPENED a live-credential one.
+
+    So: ``redact_opaque_tokens`` is ON here (the credential axis), while
+    ``redact_paths`` stays OFF (the diagnostic axis) — an agent retrying a
+    failed call still needs the path and the endpoint, and neither is a
+    credential.
+
+    ACCEPTED RESIDUAL, named rather than left implicit: with ``redact_paths``
+    off, the Azure OpenAI RESOURCE HOSTNAME (``https://<resource>.openai.azure.com``)
+    is NOT redacted here. That is tenant-identifying infra metadata, not a
+    credential, and it is load-bearing for diagnosing which deployment failed.
+    A surface that must also blank it should call :func:`scrub_credentials`
+    directly with both flags at their ``True`` defaults — which is what the
+    genuine provider-RESPONSE-body surfaces
+    (``sanitize_provider_error``, ``ProviderError.body_snippet``) already do.
+
+    CHOOSING BETWEEN THE TWO PRESETS: ask where the exception can be RAISED,
+    never where it is CAUGHT. If the ``try`` block calls an injected provider,
+    an HTTP client, a subprocess, an MCP session, a database driver, or any
+    callable supplied by the caller whose implementation is unknown, it is
+    REMOTE. Only genuinely in-process failures — file I/O, parsing, imports,
+    attribute errors, local registry lookups — are LOCAL. When in doubt, use
+    this one: over-redacting a hash costs a correlation handle, under-redacting
+    leaks a live credential.
+
+    Args:
+        value: The caught exception (or any object); rendered with ``str()``.
+        placeholder: Replacement token; same contract as
+            :func:`scrub_credentials`.
+
+    Returns:
+        ``str(value)`` with every credential shape replaced — including the
+        prefix-less AWS-secret and bare-hex shapes — and internal paths and the
+        Azure resource hostname left intact.
+    """
+    return scrub_credentials(
+        str(value),
+        placeholder=placeholder,
+        redact_paths=False,
+        redact_opaque_tokens=True,
     )

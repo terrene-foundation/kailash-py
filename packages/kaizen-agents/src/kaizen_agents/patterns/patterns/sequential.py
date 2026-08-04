@@ -47,7 +47,7 @@ from typing import Any
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
@@ -317,7 +317,7 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
                 final_status = "failed"
                 # Continue to next stage with error message
                 current_input = (
-                    f"Error in stage {stage.stage_name}: {scrub_local_error(e)}"
+                    f"Error in stage {stage.stage_name}: {scrub_remote_error(e)}"
                 )
 
         # Return final result

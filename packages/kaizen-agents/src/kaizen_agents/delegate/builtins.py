@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.commands import CommandRegistry
 
 if TYPE_CHECKING:
@@ -451,7 +451,7 @@ def _approve_handler(args: str, **context: Any) -> str:
         supervisor.resolve_hold(node_id, approved=True)
         return f"Approved: {node_id}"
     except ValueError as exc:
-        return scrub_local_error(exc)
+        return scrub_remote_error(exc)
 
 
 def _reject_handler(args: str, **context: Any) -> str:
@@ -468,7 +468,7 @@ def _reject_handler(args: str, **context: Any) -> str:
         supervisor.resolve_hold(node_id, approved=False)
         return f"Rejected: {node_id}"
     except ValueError as exc:
-        return scrub_local_error(exc)
+        return scrub_remote_error(exc)
 
 
 # ---------------------------------------------------------------------------

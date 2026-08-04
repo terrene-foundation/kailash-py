@@ -38,7 +38,7 @@ from collections.abc import Callable
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns.pipeline import Pipeline
 
 
@@ -140,7 +140,7 @@ class ParallelPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": scrub_local_error(e),
+                    "error": scrub_remote_error(e),
                     "agent_id": (
                         agent.agent_id if hasattr(agent, "agent_id") else "unknown"
                     ),
@@ -195,7 +195,7 @@ class ParallelPipeline(Pipeline):
                         # Graceful: return error
                         results.append(
                             {
-                                "error": scrub_local_error(e),
+                                "error": scrub_remote_error(e),
                                 "status": "failed",
                             }
                         )
