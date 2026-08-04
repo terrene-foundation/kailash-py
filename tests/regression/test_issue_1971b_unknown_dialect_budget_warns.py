@@ -28,6 +28,7 @@ import pytest
 from kailash.db.dialect import (
     DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
     POSTGRES_MAX_IDENTIFIER_LENGTH,
+    SQLITE_MAX_IDENTIFIER_LENGTH,
     _UNKNOWN_BUDGET_WARNED_SITES,
     _validate_identifier,
 )
@@ -95,16 +96,38 @@ def test_distinct_sites_each_warn(caplog):
 
 
 @pytest.mark.regression
-def test_a_bound_dialect_budget_is_silent(caplog):
+@pytest.mark.parametrize(
+    "label,budget",
+    [
+        ("postgres", POSTGRES_MAX_IDENTIFIER_LENGTH),
+        # SQLITE IS THE DISCRIMINATING CASE and was missing. The unknown budget
+        # is numerically EQUAL to SQLite's (both 128), and the trigger used to
+        # be a value comparison — so a correctly-bound SQLite caller was
+        # indistinguishable from an unbound one and warned on every identifier.
+        # Postgres (63) could never expose that: it differs numerically, so it
+        # passed either way. The test was cited as the no-false-positive half
+        # while being unable to detect the false positive that existed.
+        #
+        # SQLite is this ecosystem's default store, so the spurious warning
+        # fired on the most common configuration.
+        ("sqlite", SQLITE_MAX_IDENTIFIER_LENGTH),
+    ],
+)
+def test_a_bound_dialect_budget_is_silent(caplog, label, budget):
     """No-false-positive half.
 
     A caller that correctly bound its dialect must not be nagged — otherwise
-    the warning stops distinguishing wired from unwired sites.
+    the warning stops distinguishing wired from unwired sites, and operators
+    learn to filter the channel that carries the real signal.
     """
     with caplog.at_level(logging.WARNING, logger="kailash.db.dialect"):
-        _validate_identifier("users", max_length=POSTGRES_MAX_IDENTIFIER_LENGTH)
+        _validate_identifier("users", max_length=budget)
 
-    assert _MARKER not in caplog.text
+    assert _MARKER not in caplog.text, (
+        f"a caller correctly bound to {label} was warned as if it had bound "
+        f"nothing; the trigger is comparing budget VALUES again rather than "
+        f"testing for the _UnknownBudget sentinel"
+    )
 
 
 @pytest.mark.regression

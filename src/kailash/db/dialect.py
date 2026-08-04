@@ -49,6 +49,7 @@ POSTGRES_MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
 MYSQL_MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
 SQLITE_MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
 
+
 #: Budget for call sites that have **no dialect bound** at validation time.
 #:
 #: This is the LOOSEST supported budget (SQLite's 128) and it is deliberately
@@ -62,7 +63,30 @@ SQLITE_MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
 #:
 #: Code that HAS a dialect MUST pass that dialect's own budget instead —
 #: ``QueryDialect._validate_identifier`` does this automatically.
-DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
+class _UnknownBudget(int):
+    """Sentinel budget: numerically SQLite's, but IDENTITY-distinguishable.
+
+    The unknown-dialect budget deliberately EQUALS SQLite's (128) — that is the
+    loosest real budget and the intended fail-open value. But the warn trigger
+    used to be a VALUE comparison (`max_length == DIALECT_UNKNOWN_...`), and
+    since the two are the same number a caller that had CORRECTLY bound itself
+    to SQLite was indistinguishable from one that had bound nothing at all, and
+    warned spuriously on every identifier.
+
+    SQLite is this ecosystem's default store, so that false positive fired on
+    the most common configuration — and a warning that fires when nothing is
+    wrong is the fastest way to train operators to filter the channel, which
+    then hides the real unbound case it exists to surface.
+
+    Subclassing `int` keeps every numeric use working unchanged (`len(name) >
+    max_length`, `%d` formatting, comparisons); only the TRIGGER switches from
+    equality to an isinstance check, which is what makes it discriminate.
+    """
+
+    __slots__ = ()
+
+
+DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH = _UnknownBudget(SQLITE_MAX_IDENTIFIER_LENGTH)
 
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
@@ -212,7 +236,10 @@ def _validate_identifier(name: str, *, max_length: int) -> None:
         NOT ``TypeError`` — because the fingerprint helper is
         safe on unhashable values.
     """
-    if max_length == DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH:
+    # isinstance, NOT equality: the unknown budget is numerically identical to
+    # SQLite's, so `==` cannot tell an unbound caller from a correctly-bound
+    # SQLite one. See _UnknownBudget.
+    if isinstance(max_length, _UnknownBudget):
         _warn_unknown_identifier_budget_once()
     if not isinstance(name, str):
         raise IdentifierError(
