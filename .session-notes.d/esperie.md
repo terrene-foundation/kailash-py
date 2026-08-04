@@ -9,7 +9,7 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace issue-1720-llm-consolidation, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `0da793e14` — **NOT pushed** (19 commits ahead of
+`fix/issue-1720-forest-drain` @ `2b57bb2a8` — **NOT pushed** (34 commits ahead of
 the last push at `66f86b0b5`). Tree clean.
 
 **Release is still HELD.** Round 2 has NOT converged: every round so far found
@@ -17,6 +17,9 @@ real defects, so the clean-round counter is at ZERO. Two lanes are mid-round.
 
 ## Read first
 
+0. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-04b.md`
+   — the CURRENT decision report.** Supersedes `sweep-2026-08-04.md`. Carries the
+   completion receipts, the PCF triage, and the four decision points.
 1. `.wave-tracker.d/esperie.md` § "Wave 8 reconciliation" — what NOT to re-derive.
 2. This file's **Traps** + **Pending decisions**.
 3. `git log --format='%h %s%n%b' 26a4509b4..HEAD` — every commit body carries its
@@ -77,7 +80,7 @@ CHANGED. And assert the mutation reached the code before reading the result.**
 - Version anchors UNCHANGED (only nexus at 2.16.0). Decision A/B targets remain
   ratified and verified against ground truth — see below.
 
-## Executed this session (19 commits)
+## Executed this session (36 commits)
 
 W19 compact-JSON over-redaction fixed, then fixed AGAIN twice as review found
 the fix itself leaked (`4fdb37fa2` → `9eb66d893` → `91e9215b1` → `6c84f27a5`).
@@ -90,7 +93,29 @@ documented + pinned (`73e86016d`, `6c84f27a5`). Tracker corrections
 me), the `"` exclusion leaking quote-bearing credentials (F2), and the
 identity-reverse-map collapsing round-robin (F6).
 
-## PENDING DECISIONS — co-owner input needed, both surfaced, neither actioned
+## RATIFIED 2026-08-04 — EXECUTE NEXT SESSION, DO NOT RE-ASK
+
+Co-owner replied "approved" to the decision list. Recorded with concrete scope so
+the next session executes rather than re-surfaces; re-asking a settled decision is
+the `value-prioritization.md` MUST-3 failure this section exists to prevent.
+
+1. **Fail-open POSTURE FLIP on `_check_user_access`** — APPROVED. Flip the
+   `except Exception` path to DENY. **When you do: delete
+   `test_error_path_still_fails_open` and say so in the commit** — that test
+   asserts the CURRENT behaviour precisely so the flip cannot arrive silently.
+   Note the trade it accepts: a transient checker outage will now deny every
+   user. That is the approved trade, not an oversight.
+2. **47-site `str(exc)` sweep** — APPROVED. 23 files in kaizen-agents. Route
+   through `scrub_credentials`; it is a no-op on non-credential text, so a blanket
+   sweep is safe. Its own shard.
+3. **PUSH the branch** — APPROVED. 34 commits local.
+4. **CROSS-SDK inspection — NOT COVERED by this approval.**
+   `repo-scope-discipline.md` needs the target repo AND the exact action named,
+   with a confirm; a general "approved" satisfies neither condition 2 nor 3.
+   **Run `/cross-repo-authorize <owner/repo> "<action>"` for the specific ask.**
+   Do NOT treat this bullet as the authorization.
+
+## Prior pending list (items 1 and 3 now EXECUTED — see below)
 
 1. **`discovery._check_user_access` — the BUG HALF IS FIXED (`ca8aaad74`); only
    the POSTURE FLIP remains yours.**
