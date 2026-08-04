@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.utils.credential_scrub import scrub_credentials
 
 from .registry import AgentRegistry
 from .runtime import AgentMetadata, AgentStatus
@@ -306,7 +307,10 @@ class AgentSkillMetadata:
             # Rule 3, `rules/observability.md` MUST Rule 3).
             logger.warning(
                 "discovery.input_schema_extraction_failed",
-                extra={"error": str(exc), "signature": type(signature).__name__},
+                extra={
+                    "error": scrub_credentials(str(exc)),
+                    "signature": type(signature).__name__,
+                },
             )
             return None
 
@@ -329,7 +333,10 @@ class AgentSkillMetadata:
             # fallback is never taken silently.
             logger.warning(
                 "discovery.output_types_extraction_failed",
-                extra={"error": str(exc), "signature": type(signature).__name__},
+                extra={
+                    "error": scrub_credentials(str(exc)),
+                    "signature": type(signature).__name__,
+                },
             )
             return ["text"]
 
@@ -547,7 +554,15 @@ class UserFilteredAgentDiscovery:
                         "user_id": user_id,
                         "organization_id": organization_id,
                         "agent_id": agent_metadata.agent_id,
-                        "error": str(exc),
+                        # SCRUBBED: `exc` comes from a CALLER-SUPPLIED
+                        # permission_checker. If that checker is backed by a
+                        # database or a remote service, its exception text is
+                        # exactly the DSN/URL-bearing driver output this
+                        # branch (#1970/#1974) exists to scrub — written RAW
+                        # to ERROR would be the inverse of the sibling fix at
+                        # `rich_output.py` (`observability.md` Rule 6.3:
+                        # masking one surface and not another is BLOCKED).
+                        "error": scrub_credentials(str(exc)),
                     },
                 )
 

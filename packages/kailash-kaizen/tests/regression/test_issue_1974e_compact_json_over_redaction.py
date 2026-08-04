@@ -25,18 +25,32 @@ nit:
      snippet no longer parses as JSON. Any consumer that `json.loads` it gets a
      decode error rather than a degraded-but-readable body.
 
-THE FIX excludes the JSON structural characters `"`, `{`, `}` and the JSON
-escape `\\` from the userinfo classes of BOTH rules. That is sound rather than
-arbitrary: RFC 3986 §3.2.1 gives
-    userinfo = *( unreserved / pct-encoded / sub-delims / ":" )
-and none of those four appear in any of those productions, so none can occur
-unencoded in a well-formed userinfo. Excluding them stops the match at the JSON
-field boundary while preserving the documented `@`-inside-userinfo coverage.
+THE FIX fences the JSON FIELD BOUNDARY, not a set of characters. Both runs use
+a tempered token that halts only at a quote FOLLOWED BY a JSON structural
+delimiter (`,` `}` `]` `:`). A quote in the middle of a value is ordinary
+userinfo and is consumed.
 
-`,` is deliberately NOT excluded despite being a JSON structural character: it
-IS a legal sub-delim, so excluding it would stop `user:pa,ss@host` matching and
-leak a real password — an UNDER-redaction, the direction this module refuses to
-trade for. `test_comma_password_still_redacted` is the teeth on that decision.
+It took three attempts to get there, and the two rejected ones are recorded
+because each is a trap a future editor will re-enter:
+
+  1. Exclude `"`, `{`, `}`, `\\` outright — "all four are RFC-3986-illegal in
+     userinfo, so excluding them is free". NOT free: `pa{ss`, `pa}ss` and
+     `pa\\ss` passwords stopped matching and LEAKED IN FULL. RFC-illegal is not
+     the same as cannot-occur; generated passwords carry those bytes and lenient
+     drivers accept them.
+  2. Exclude `"` alone. Also leaked: a quote ANYWHERE in the userinfo killed the
+     match for the WHOLE credential — a quote in the USERNAME leaked the
+     PASSWORD, because the halted run could no longer reach the `:` or the `@`.
+
+`,` is never excluded: it IS a legal sub-delim, so excluding it would leak
+`user:pa,ss@host`.
+
+THE METHODOLOGICAL LESSON, which is why the quote vectors below exist: attempt
+1's leak was caught by probing the characters that had just been excluded.
+Attempt 2's was not — because `"` was excluded in BOTH the rejected and the
+accepted revision, so it never appeared as a DELTA. A character that SURVIVES a
+narrowing is structurally invisible to a probe set derived from the diff. Probe
+what the pattern CLAIMS, not what the patch CHANGED.
 
 WHY BOTH PATTERNS. Fixing only `_URL_WITH_AUTH` left the defect fully intact:
 the overflow companion's second run still crossed the JSON string boundary,
@@ -65,6 +79,7 @@ from kaizen.utils.credential_scrub import (
 
 # Assembled at runtime — see module docstring.
 _AT = chr(64)
+_Q = chr(34)
 
 
 def _provider_4xx_body() -> str:
@@ -188,6 +203,32 @@ class TestRealCredentialsStillRedacted:
                 "close brace in password",
                 "postgresql://svcuser:pa}ss" + _AT + "db.internal/app",
                 "pa}ss",
+            ),
+            # QUOTE VECTORS — the gap a differential probe cannot see.
+            # The `{`/`}`/`\\` probes above were derived from "which chars did
+            # we just exclude?". `"` was excluded in BOTH the rejected 4-char
+            # revision AND the accepted 1-char one, so it never appeared as a
+            # delta and no probe covered it — while it leaked exactly like the
+            # other three. A character that SURVIVES a narrowing is structurally
+            # invisible to a probe set built from the diff.
+            #
+            # Both halves matter: a quote in the USERNAME leaked the PASSWORD,
+            # because the halted run could no longer reach the `:` or the `@`.
+            (
+                "quote in username",
+                "postgresql://us" + _Q + "er:s3cr3t" + _AT + "db.internal/app",
+                "s3cr3t",
+            ),
+            (
+                "quote in password",
+                "postgresql://svcuser:pa" + _Q + "ss" + _AT + "db.internal/app",
+                "pa" + _Q + "ss",
+            ),
+            (
+                # The JSON-native escaped form of the same shape.
+                "escaped quote in password",
+                "postgresql://svcuser:pa\\" + _Q + "ss" + _AT + "db.internal/app",
+                "ss",
             ),
             (
                 "backslash in password",

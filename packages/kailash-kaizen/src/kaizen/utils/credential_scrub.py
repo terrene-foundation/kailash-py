@@ -225,9 +225,14 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # RFC-illegal in userinfo, so excluding all four was "free". It was not free, and
 # the extra three bought NOTHING:
 #
-#   * MEASURED: `"` alone already fences every compact-JSON case, because JSON
-#     string values are quoted — the run stops at the closing quote of the value
-#     holding the URL, before any `{`/`}`/`\` is ever reached.
+#   * MEASURED: the quote fences the compact-JSON case where the URL and the
+#     terminating `@` sit in DIFFERENT string values — the observed shape of a
+#     provider error body. The run stops at the field boundary of the value
+#     holding the URL, before any `{`/`}`/`\` is reached.
+#     NOT "every compact-JSON case": when both sit inside ONE value no boundary
+#     intervenes and the match crosses freely (see the residual below). The
+#     earlier wording here asserted the general claim from the one body in the
+#     suite — an inference in the grammar of a measurement.
 #   * MEASURED: excluding `{`, `}`, `\` made `postgresql://u:pa{ss@host/db`,
 #     `…pa}ss@…` and `…pa\ss@…` stop matching — the passwords LEAKED IN FULL.
 #
@@ -265,8 +270,34 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # free" reasoning and silently leaked every password containing those bytes. If
 # this residual ever needs closing, the sound route is a URL PARSE on the
 # candidate span — not a wider character class.
+# THE FENCE IS THE JSON FIELD BOUNDARY, NOT THE QUOTE CHARACTER.
+#
+# An earlier revision excluded `"` outright from both halves. That LEAKED: a
+# quote anywhere in the userinfo killed the match for the WHOLE credential,
+# both halves —
+#     postgresql://us"er:s3cr3t@db.internal/db   ->  unchanged, s3cr3t survives
+#     postgresql://u:pa"ss@host/db               ->  unchanged, pa"ss survives
+# — because the run halted at the quote and could no longer reach the `:` or
+# the `@`. Nothing else claimed them either (too short for the vendor-prefix
+# and 40-char-run rules).
+#
+# So the tempered token below stops only at a quote that is followed by a JSON
+# STRUCTURAL delimiter — `,` `}` `]` `:` — i.e. a real field boundary. A quote
+# in the MIDDLE of a value (`us"er`) is ordinary userinfo and is consumed.
+# That fences the compact-JSON crossing (which must traverse `"},"` or `","`)
+# while keeping every credential shape claimable.
+#
+# Complexity: MEASURED, not assumed. Self-normalising ratio on the documented
+# worst case (colon-dense, no `@`) at 1x vs 10x input: 1.0x, i.e. no
+# complexity-class regression versus the plain class (1.1x). Absolute cost is
+# ~5x higher in microseconds, on an error path. The `{0,256}` DoS bound above
+# is unchanged and still does the load-bearing work.
 _URL_WITH_AUTH = re.compile(
-    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s"]{0,256}:[^\s"]{0,256}@',
+    r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)"
+    r'(?:(?!"[,}\]:])[^\s]){0,256}'
+    r":"
+    r'(?:(?!"[,}\]:])[^\s]){0,256}'
+    r"@",
     re.ASCII,
 )
 
@@ -304,7 +335,12 @@ _URL_WITH_AUTH = re.compile(
 # and not its companion left the defect fully intact, so both MUST carry the
 # exclusion; a future edit that relaxes either one re-opens the whole class.
 _URL_WITH_AUTH_OVERFLOW = re.compile(
-    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s@:"]*:[^\s@"]*@', re.ASCII
+    r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)"
+    r'(?:(?!"[,}\]:])[^\s@:])*'
+    r":"
+    r'(?:(?!"[,}\]:])[^\s@])*'
+    r"@",
+    re.ASCII,
 )
 
 # Userinfo with NO password half — `scheme://<token>@host`.
@@ -337,6 +373,26 @@ _URL_WITH_AUTH_OVERFLOW = re.compile(
 #      length.
 # If a real leak of this shape is ever observed, the correct fix is a
 # LENGTH-ANCHORED companion (`[^\s@]{N,}@`), not widening this class.
+# `"` is deliberately NOT excluded here, and the asymmetry with the two rules
+# above is INTENTIONAL — do not "fix" it.
+#
+# The `:` exclusion already fences every cross-JSON-value crossing by
+# construction: to travel from a URL in one value to an `@` in a LATER value the
+# run must cross `","<key>":`, and a JSON key/value boundary ALWAYS contains a
+# `:`. So the run halts before it can reach the later `@` with or without a
+# quote rule. Verified: `{"a":"https://x","b":"c@d.com"}` -> no match.
+#
+# What a `"` exclusion would NOT fix: the within-one-value case
+# (`{"d":"https://docs.example.com,mail=ops@x.com"}`), where no quote sits
+# between the URL and the `@` at all.
+#
+# What it WOULD cost: the leak already made once on the two rules above — a bare
+# PAT or basic-auth username CONTAINING a quote would stop matching and pass
+# through in full.
+#
+# Zero coverage gained, one under-redaction opened. Recorded here because the
+# next reader sees two rules excluding `"` and one not, and "fixing" the
+# asymmetry silently re-opens the hole.
 _URL_WITH_USERINFO_ONLY = re.compile(
     r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s@:/]+@", re.ASCII
 )
