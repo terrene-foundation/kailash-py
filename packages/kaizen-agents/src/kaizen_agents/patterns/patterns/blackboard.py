@@ -47,6 +47,7 @@ from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -270,7 +271,7 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "agent_id": (
                         specialist.agent_id
                         if hasattr(specialist, "agent_id")
@@ -316,7 +317,7 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "status": "controller_failed",
                     "traceback": traceback.format_exc(),
                     "is_complete": True,  # Stop iterating to avoid infinite loop

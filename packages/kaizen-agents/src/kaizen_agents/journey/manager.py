@@ -69,6 +69,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.journey.context import ContextAccumulator
 from kaizen_agents.journey.errors import (
     MaxPathwayDepthError,
@@ -476,7 +477,7 @@ class PathwayManager:
 
         except Exception as e:
             handler_name = getattr(handler, "__name__", repr(handler))
-            error_msg = f"Hook error ({handler_name}): {str(e)}"
+            error_msg = f"Hook error ({handler_name}): {scrub_local_error(e)}"
             logger.exception(error_msg)
             return JourneyHookResult(
                 success=False,
@@ -1017,7 +1018,7 @@ class PathwayManager:
                     last_error = e
                     logger.warning(
                         f"Pathway execution attempt {attempt + 1}/{max_retries} "
-                        f"failed: {e}"
+                        f"failed: {scrub_local_error(e)}"
                     )
                     if attempt < max_retries - 1:
                         # Exponential backoff: 0.1s, 0.2s, 0.4s, ...
@@ -1036,13 +1037,15 @@ class PathwayManager:
             try:
                 return await pathway.execute(context)
             except Exception as e:
-                logger.exception(f"Pathway execution error (graceful recovery): {e}")
+                logger.exception(
+                    f"Pathway execution error (graceful recovery): {scrub_local_error(e)}"
+                )
                 return PathwayResult(
                     outputs={},
                     accumulated={},
                     next_pathway=None,
                     is_complete=False,
-                    error=f"Pathway execution error: {str(e)}",
+                    error=f"Pathway execution error: {scrub_local_error(e)}",
                 )
 
     def _get_current_pathway(self) -> Optional["Pathway"]:

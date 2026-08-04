@@ -57,6 +57,7 @@ from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.patterns.runtime import AgentMetadata, AgentStatus
 
 logger = logging.getLogger(__name__)
@@ -516,7 +517,7 @@ class AgentRegistry:
                             extra={
                                 "agent_id": agent_id,
                                 "capability": capability,
-                                "error": str(exc),
+                                "error": scrub_local_error(exc),
                             },
                         )
                         score = 0.0
@@ -709,7 +710,7 @@ class AgentRegistry:
                                 "listener": getattr(
                                     listener, "__qualname__", repr(listener)
                                 ),
-                                "error": str(exc),
+                                "error": scrub_local_error(exc),
                             },
                         )
 

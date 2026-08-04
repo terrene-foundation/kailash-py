@@ -28,6 +28,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.composer import PlanComposer, PlanValidator
 from kaizen_agents.orchestration.planner.decomposer import TaskDecomposer
@@ -351,7 +352,7 @@ class PlanMonitor:
                 try:
                     output = await execute_node(node.agent_spec, resolved_inputs)
                 except Exception as exc:
-                    output = {"error": str(exc)}
+                    output = {"error": scrub_local_error(exc)}
 
                 # Extract cost tracking (NaN/Inf/negative → fail-closed)
                 node_cost = output.get("cost", 0.0)
@@ -722,7 +723,7 @@ class PlanMonitor:
             logger.warning(
                 "Recovery failed for node %s: %s",
                 node_id,
-                str(exc),
+                scrub_local_error(exc),
             )
             return False
 

@@ -88,6 +88,7 @@ from kaizen.core.autonomy.hooks import HookManager
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
 from kaizen.memory.shared_memory import SharedMemoryPool
+from kaizen.utils.credential_scrub import scrub_local_error
 
 logger = logging.getLogger(__name__)
 
@@ -804,7 +805,7 @@ class OrchestrationRuntime:
                     extra={
                         "correlation_id": correlation_id,
                         "agent_id": agent_id,
-                        "error": str(exc),
+                        "error": scrub_local_error(exc),
                     },
                 )
                 return 0.0
@@ -867,7 +868,7 @@ class OrchestrationRuntime:
                     extra={
                         "correlation_id": correlation_id,
                         "agent_id": agent_id,
-                        "error": str(exc),
+                        "error": scrub_local_error(exc),
                     },
                 )
                 return 0.0
@@ -877,7 +878,7 @@ class OrchestrationRuntime:
                 extra={
                     "correlation_id": correlation_id,
                     "agent_id": agent_id,
-                    "error": str(exc),
+                    "error": scrub_local_error(exc),
                 },
             )
             return 0.0
@@ -1004,7 +1005,7 @@ class OrchestrationRuntime:
                 "run_id": None,
                 "status": "failed",
                 "execution_time": execution_time,
-                "error": str(e),
+                "error": scrub_local_error(e),
             }
 
     # ========================================================================
@@ -1116,7 +1117,7 @@ class OrchestrationRuntime:
                         "task": task,
                         "status": "failed",
                         "degraded": True,
-                        "error": str(exc),
+                        "error": scrub_local_error(exc),
                         "degraded_helper": exc.helper,
                         "degraded_model": exc.model,
                         "correlation_id": exc.correlation_id,
@@ -1198,7 +1199,7 @@ class OrchestrationRuntime:
                             "task": task,
                             "agent_id": agent.agent_id,
                             "status": "failed",
-                            "error": str(e),
+                            "error": scrub_local_error(e),
                         }
                     )
 
@@ -1326,7 +1327,7 @@ class OrchestrationRuntime:
                     return {
                         "task": task,
                         "status": "failed",
-                        "error": str(e),
+                        "error": scrub_local_error(e),
                         "agent_id": (
                             agent_metadata.agent_id if agent_metadata else "unknown"
                         ),
@@ -1632,7 +1633,7 @@ class OrchestrationRuntime:
                                     "status": "failed",
                                     "timestamp": datetime.now().isoformat(),
                                     "duration_seconds": duration,
-                                    "error": str(e),
+                                    "error": scrub_local_error(e),
                                     "attempts": attempt + 1,
                                 }
                             )

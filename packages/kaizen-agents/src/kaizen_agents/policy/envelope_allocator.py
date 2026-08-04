@@ -26,6 +26,7 @@ from typing import Any
 from kaizen.l3.envelope.errors import SplitError
 from kaizen.l3.envelope.splitter import EnvelopeSplitter
 from kaizen.l3.envelope.types import AllocationRequest as SdkAllocationRequest
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.types import ConstraintEnvelope
 
 logger = logging.getLogger(__name__)
@@ -425,7 +426,7 @@ class EnvelopeAllocator:
             )
         except SplitError as exc:
             raise AllocationError(
-                f"SDK EnvelopeSplitter rejected the allocation: {exc}"
+                f"SDK EnvelopeSplitter rejected the allocation: {scrub_local_error(exc)}"
             ) from exc
 
         # Convert SDK results back to local ConstraintEnvelope objects

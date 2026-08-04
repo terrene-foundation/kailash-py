@@ -19,6 +19,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -257,7 +259,7 @@ class OpenAIStructuredAdapter:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {exc}.  Content: {content[:500]}"
+                f"LLM response is not valid JSON: {scrub_local_error(exc)}.  Content: {content[:500]}"
             ) from exc
 
         if not isinstance(parsed, dict):
@@ -458,7 +460,7 @@ class AnthropicStructuredAdapter:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {exc}.  Content: {content[:500]}"
+                f"LLM response is not valid JSON: {scrub_local_error(exc)}.  Content: {content[:500]}"
             ) from exc
 
         if not isinstance(parsed, dict):

@@ -62,6 +62,7 @@ from typing import Any
 from kaizen.core.token_counter import TokenCounter, get_token_counter
 from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 logger = logging.getLogger(__name__)
@@ -360,9 +361,11 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
                     inputs["observation"] = cycle_result["observation"]
 
             except Exception as e:
-                logger.error(f"Error in cycle {self.cycle_count}: {e}")
+                logger.error(
+                    f"Error in cycle {self.cycle_count}: {scrub_local_error(e)}"
+                )
                 final_result = {
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "status": "failed",
                     "cycle": self.cycle_count,
                 }
@@ -606,5 +609,5 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
             return content
 
         except Exception as e:
-            logger.error(f"Error loading CLAUDE.md: {e}")
+            logger.error(f"Error loading CLAUDE.md: {scrub_local_error(e)}")
             return ""

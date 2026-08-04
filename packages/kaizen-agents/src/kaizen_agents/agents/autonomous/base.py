@@ -52,6 +52,7 @@ from kaizen.core.autonomy.state.types import AgentState
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen.utils.credential_scrub import scrub_local_error
 
 logger = logging.getLogger(__name__)
 
@@ -476,9 +477,11 @@ class BaseAutonomousAgent(BaseAgent):
                         cycle_result = self.strategy.execute(self, inputs)
                         final_result = cycle_result
                     except Exception as e:
-                        logger.warning(f"Error during graceful shutdown cycle: {e}")
+                        logger.warning(
+                            f"Error during graceful shutdown cycle: {scrub_local_error(e)}"
+                        )
                         final_result = {
-                            "error": str(e),
+                            "error": scrub_local_error(e),
                             "status": "interrupted",
                             "cycle": self.cycle_count,
                         }
@@ -541,9 +544,11 @@ class BaseAutonomousAgent(BaseAgent):
                     inputs["observation"] = cycle_result["observation"]
 
             except Exception as e:
-                logger.error(f"Error in cycle {self.cycle_count}: {e}")
+                logger.error(
+                    f"Error in cycle {self.cycle_count}: {scrub_local_error(e)}"
+                )
                 final_result = {
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "status": "failed",
                     "cycle": self.cycle_count,
                 }
@@ -796,7 +801,7 @@ class BaseAutonomousAgent(BaseAgent):
             )
             logger.debug(f"Checkpoint saved: {checkpoint_file}")
         except Exception as e:
-            logger.warning(f"Failed to save checkpoint: {e}")
+            logger.warning(f"Failed to save checkpoint: {scrub_local_error(e)}")
 
     def _load_checkpoint(self, cycle_num: int) -> dict[str, Any] | None:
         """
@@ -827,7 +832,7 @@ class BaseAutonomousAgent(BaseAgent):
                 if lines:
                     return json.loads(lines[-1])
         except Exception as e:
-            logger.warning(f"Failed to load checkpoint: {e}")
+            logger.warning(f"Failed to load checkpoint: {scrub_local_error(e)}")
 
         return None
 
@@ -1214,7 +1219,7 @@ class BaseAutonomousAgent(BaseAgent):
                 await self._http_client.close()
                 logger.debug("HTTP client closed")
             except Exception as e:
-                logger.warning(f"Error closing HTTP client: {e}")
+                logger.warning(f"Error closing HTTP client: {scrub_local_error(e)}")
 
         # Close MCP connections if exists
         if hasattr(self, "_mcp_clients"):
@@ -1223,7 +1228,9 @@ class BaseAutonomousAgent(BaseAgent):
                     await client.close()
                     logger.debug(f"MCP client '{client_name}' closed")
                 except Exception as e:
-                    logger.warning(f"Error closing MCP client '{client_name}': {e}")
+                    logger.warning(
+                        f"Error closing MCP client '{client_name}': {scrub_local_error(e)}"
+                    )
 
         # Release any other resources
         # (Add more cleanup as needed)
@@ -1308,7 +1315,10 @@ class BaseAutonomousAgent(BaseAgent):
                 logger.info(f"Emergency checkpoint saved: {checkpoint_id}")
 
             except Exception as e:
-                logger.error(f"Failed to save emergency checkpoint: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to save emergency checkpoint: {scrub_local_error(e)}",
+                    exc_info=True,
+                )
 
         # Create interrupt status
         status = InterruptStatus(

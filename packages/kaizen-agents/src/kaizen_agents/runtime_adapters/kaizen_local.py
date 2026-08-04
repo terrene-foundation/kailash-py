@@ -45,6 +45,7 @@ from kaizen.runtime.capabilities import KAIZEN_LOCAL_CAPABILITIES, RuntimeCapabi
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 from kaizen.runtime.specialist_loader import SpecialistLoader
 from kaizen.runtime.specialist_registry import SkillRegistry, SpecialistRegistry
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     AutonomousPhase,
@@ -505,8 +506,8 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return self.normalize_result(self._current_state)
 
         except Exception as e:
-            logger.exception(f"Execution error: {e}")
-            self._current_state.fail(error=str(e))
+            logger.exception(f"Execution error: {scrub_local_error(e)}")
+            self._current_state.fail(error=scrub_local_error(e))
 
             # Fire execution_error hook
             await self._fire_hook(
@@ -514,7 +515,7 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
                 {
                     "task": context.task,
                     "session_id": self._current_state.session_id,
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                 },
             )
 
@@ -876,7 +877,9 @@ You can execute tools automatically. Use good judgment about safety.
                         if tool_call:
                             state.add_tool_call(tool_call)
                     except Exception as e:
-                        logger.warning(f"Failed to parse tool call: {e}")
+                        logger.warning(
+                            f"Failed to parse tool call: {scrub_local_error(e)}"
+                        )
 
             if self._on_progress:
                 self._on_progress(
@@ -888,8 +891,8 @@ You can execute tools automatically. Use good judgment about safety.
                 )
 
         except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            state.fail(error=f"LLM call failed: {e}")
+            logger.error(f"LLM call failed: {scrub_local_error(e)}")
+            state.fail(error=f"LLM call failed: {scrub_local_error(e)}")
 
     def _parse_tool_call(self, tc: dict[str, Any]) -> dict[str, Any] | None:
         """Parse a tool call from LLM response.
@@ -1011,12 +1014,12 @@ You can execute tools automatically. Use good judgment about safety.
                     )
 
             except Exception as e:
-                logger.error(f"Tool {tool_name} failed: {e}")
+                logger.error(f"Tool {tool_name} failed: {scrub_local_error(e)}")
                 state.add_tool_result(
                     {
                         "tool_call_id": tool_id,
                         "tool_name": tool_name,
-                        "output": f"Error: {e}",
+                        "output": f"Error: {scrub_local_error(e)}",
                         "success": False,
                     }
                 )
@@ -1027,7 +1030,7 @@ You can execute tools automatically. Use good judgment about safety.
                     {
                         "tool_name": tool_name,
                         "tool_id": tool_id,
-                        "error": str(e),
+                        "error": scrub_local_error(e),
                         "session_id": state.session_id,
                     },
                 )
@@ -1420,7 +1423,7 @@ You can execute tools automatically. Use good judgment about safety.
                 data=data,
             )
         except Exception as e:
-            logger.warning(f"Hook {event_type} failed: {e}")
+            logger.warning(f"Hook {event_type} failed: {scrub_local_error(e)}")
 
     async def _maybe_checkpoint(self, state: ExecutionState) -> None:
         """Create checkpoint if needed based on frequency.
@@ -1471,7 +1474,7 @@ You can execute tools automatically. Use good judgment about safety.
             return checkpoint_id
 
         except Exception as e:
-            logger.error(f"Failed to create checkpoint: {e}")
+            logger.error(f"Failed to create checkpoint: {scrub_local_error(e)}")
             return None
 
     # -------------------------------------------------------------------------
@@ -1536,7 +1539,7 @@ etc."""
                 state.update_budget(tokens=tokens, cost=0.0)
 
         except Exception as e:
-            logger.warning(f"Failed to create plan: {e}")
+            logger.warning(f"Failed to create plan: {scrub_local_error(e)}")
             # Fallback to single step
             state.plan = [state.task]
             state.plan_index = 0

@@ -32,6 +32,7 @@ from typing import Any
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
 
 logger = logging.getLogger(__name__)
@@ -246,13 +247,13 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"Claude Code execution failed: {e}")
+            logger.exception(f"Claude Code execution failed: {scrub_local_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,
                 runtime_name="claude_code",
                 session_id=context.session_id,
-                error_message=str(e),
+                error_message=scrub_local_error(e),
                 error_type=type(e).__name__,
             )
 
@@ -425,7 +426,7 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to interrupt: {e}")
+            logger.error(f"Failed to interrupt: {scrub_local_error(e)}")
             return False
 
     def map_tools(

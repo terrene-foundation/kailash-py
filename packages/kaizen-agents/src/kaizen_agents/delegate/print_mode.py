@@ -12,6 +12,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 
@@ -102,7 +103,7 @@ class PrintRunner:
             logger.error("PrintRunner failed: %s", exc, exc_info=True)
             return PrintResult(
                 is_error=True,
-                error_message=str(exc),
+                error_message=scrub_local_error(exc),
             )
 
         tools_used = self._extract_tools_used()

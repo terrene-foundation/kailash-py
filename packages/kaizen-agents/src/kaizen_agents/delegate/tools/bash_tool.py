@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 # Default timeout in seconds
@@ -77,7 +78,9 @@ class BashTool(Tool):
                 f"Command timed out after {timeout} seconds: {command}"
             )
         except OSError as exc:
-            return ToolResult.failure(f"Error executing command: {exc}")
+            return ToolResult.failure(
+                f"Error executing command: {scrub_local_error(exc)}"
+            )
 
         output_parts: list[str] = []
         if proc.stdout:

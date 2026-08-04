@@ -27,6 +27,7 @@ from typing import Any
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
 
 logger = logging.getLogger(__name__)
@@ -308,13 +309,13 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"Gemini execution failed: {e}")
+            logger.exception(f"Gemini execution failed: {scrub_local_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,
                 runtime_name="gemini_cli",
                 session_id=context.session_id,
-                error_message=str(e),
+                error_message=scrub_local_error(e),
                 error_type=type(e).__name__,
             )
 
@@ -548,7 +549,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             )
             return response is not None
         except Exception as e:
-            logger.warning(f"Gemini health check failed: {e}")
+            logger.warning(f"Gemini health check failed: {scrub_local_error(e)}")
             return False
 
     def __repr__(self) -> str:

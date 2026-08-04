@@ -28,6 +28,7 @@ from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
+from kaizen.utils.credential_scrub import scrub_local_error
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,10 @@ async def _score_capability_async(
         except Exception as exc:
             logger.warning(
                 "pattern.capability_score.similarity_failed",
-                extra={"correlation_id": correlation_id, "error": str(exc)},
+                extra={
+                    "correlation_id": correlation_id,
+                    "error": scrub_local_error(exc),
+                },
             )
             return 0.0
 
@@ -157,13 +161,16 @@ async def _score_capability_async(
         except Exception as exc:
             logger.warning(
                 "pattern.capability_score.legacy_match_failed",
-                extra={"correlation_id": correlation_id, "error": str(exc)},
+                extra={
+                    "correlation_id": correlation_id,
+                    "error": scrub_local_error(exc),
+                },
             )
             return 0.0
     except Exception as exc:
         logger.warning(
             "pattern.capability_score.match_failed",
-            extra={"correlation_id": correlation_id, "error": str(exc)},
+            extra={"correlation_id": correlation_id, "error": scrub_local_error(exc)},
         )
         return 0.0
 

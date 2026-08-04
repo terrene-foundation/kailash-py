@@ -23,6 +23,8 @@ import signal
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 logger = logging.getLogger(__name__)
 
 # Timeout for individual JSON-RPC requests (seconds)
@@ -131,7 +133,7 @@ class McpClient:
             ) from exc
         except OSError as exc:
             raise RuntimeError(
-                f"MCP server {self._config.name!r}: failed to start: {exc}"
+                f"MCP server {self._config.name!r}: failed to start: {scrub_local_error(exc)}"
             ) from exc
 
         # Start background reader for stdout
@@ -172,7 +174,7 @@ class McpClient:
         except Exception as exc:
             await self.stop()
             raise RuntimeError(
-                f"MCP server {self._config.name!r}: initialize failed: {exc}"
+                f"MCP server {self._config.name!r}: initialize failed: {scrub_local_error(exc)}"
             ) from exc
 
     async def stop(self) -> None:

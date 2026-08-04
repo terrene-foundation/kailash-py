@@ -60,6 +60,7 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.audit.trail import AuditTrail
 from kaizen_agents.governance.accountability import AccountabilityTracker
 from kaizen_agents.governance.budget import BudgetTracker
@@ -466,7 +467,7 @@ class GovernedSupervisor:
                     hold_reason = (
                         str(getattr(held.verdict, "reason", held))
                         if hasattr(held, "verdict")
-                        else str(held)
+                        else scrub_local_error(held)
                     )
                     hold_record = HoldRecord(
                         node_id=node_id,
@@ -506,20 +507,20 @@ class GovernedSupervisor:
 
                 except Exception as exc:
                     node.state = PlanNodeState.FAILED
-                    node.error = str(exc)
+                    node.error = scrub_local_error(exc)
 
                     events.append(
                         PlanEvent(
                             event_type=PlanEventType.NODE_FAILED,
                             node_id=node_id,
-                            error=str(exc),
+                            error=scrub_local_error(exc),
                         )
                     )
 
                     self._audit.record_action(
                         agent_id="root",
                         action=f"node_failed:{node_id}",
-                        details={"error": str(exc), "node_id": node_id},
+                        details={"error": scrub_local_error(exc), "node_id": node_id},
                     )
 
                     # R1-06: Non-optional node failure halts plan
@@ -638,7 +639,7 @@ class GovernedSupervisor:
                     hold_reason = (
                         str(getattr(held.verdict, "reason", held))
                         if hasattr(held, "verdict")
-                        else str(held)
+                        else scrub_local_error(held)
                     )
                     hold_record = HoldRecord(
                         node_id=node_id,
@@ -678,12 +679,12 @@ class GovernedSupervisor:
 
                 except Exception as exc:
                     node.state = PlanNodeState.FAILED
-                    node.error = str(exc)
+                    node.error = scrub_local_error(exc)
                     events.append(
                         PlanEvent(
                             event_type=PlanEventType.NODE_FAILED,
                             node_id=node_id,
-                            error=str(exc),
+                            error=scrub_local_error(exc),
                         )
                     )
 

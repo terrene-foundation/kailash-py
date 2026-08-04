@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.utils.credential_scrub import scrub_local_error
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def register_agent(
             )
         except Exception as e:
             logger.warning(
-                f"⚠️ Core SDK registration failed for '{name}': {e}. "
+                f"⚠️ Core SDK registration failed for '{name}': {scrub_local_error(e)}. "
                 f"Agent API registration still successful."
             )
     else:

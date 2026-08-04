@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 
@@ -79,7 +80,7 @@ class GrepTool(Tool):
         try:
             regex = re.compile(pattern_str, flags)
         except re.error as exc:
-            return ToolResult.failure(f"Invalid regex: {exc}")
+            return ToolResult.failure(f"Invalid regex: {scrub_local_error(exc)}")
 
         base = Path(search_path) if search_path else Path.cwd()
 

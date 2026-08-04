@@ -35,6 +35,7 @@ from typing import Any, NotRequired, TypedDict
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -358,10 +359,10 @@ class PEVAgent(BaseAgent):
                 "details": result,
             }
         except Exception as e:
-            logger.error(f"Error executing plan: {str(e)}")
+            logger.error(f"Error executing plan: {scrub_local_error(e)}")
             return {
                 "status": "failed",
-                "error": str(e),
+                "error": scrub_local_error(e),
                 "output": "",
             }
 
@@ -524,12 +525,15 @@ class PEVAgent(BaseAgent):
                 try:
                     plan = self._create_initial_plan(task=task.strip())
                 except Exception as e:
-                    logger.error(f"Error creating initial plan: {str(e)}")
+                    logger.error(f"Error creating initial plan: {scrub_local_error(e)}")
                     return {
                         "error": "PLAN_CREATION_FAILED",
                         "plan": {},
                         "execution_result": {},
-                        "verification": {"passed": False, "issues": [str(e)]},
+                        "verification": {
+                            "passed": False,
+                            "issues": [scrub_local_error(e)],
+                        },
                         "refinements": [],
                         "final_result": "",
                     }
@@ -538,18 +542,24 @@ class PEVAgent(BaseAgent):
             try:
                 execution_result = self._execute_plan(plan=plan, task=task.strip())
             except Exception as e:
-                logger.error(f"Error executing plan: {str(e)}")
+                logger.error(f"Error executing plan: {scrub_local_error(e)}")
                 if not self.pev_config.enable_error_recovery:
                     return {
                         "error": "EXECUTION_FAILED",
                         "plan": plan,
-                        "execution_result": {"status": "failed", "error": str(e)},
-                        "verification": {"passed": False, "issues": [str(e)]},
+                        "execution_result": {
+                            "status": "failed",
+                            "error": scrub_local_error(e),
+                        },
+                        "verification": {
+                            "passed": False,
+                            "issues": [scrub_local_error(e)],
+                        },
                         "refinements": refinements,
                         "final_result": "",
                     }
                 # Continue with error recovery
-                execution_result = {"status": "failed", "error": str(e)}
+                execution_result = {"status": "failed", "error": scrub_local_error(e)}
 
             # Phase 3: Verify
             verification = self._verify_result(

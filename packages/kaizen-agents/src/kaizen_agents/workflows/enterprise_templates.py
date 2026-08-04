@@ -20,7 +20,7 @@ from typing import Any
 import kailash.nodes.enterprise  # noqa: F401  -- side-effect: node registration
 import kailash.nodes.security  # noqa: F401  -- side-effect: node registration
 from kailash.workflow.builder import WorkflowBuilder
-
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents._model_env import resolve_default_model
 
 
@@ -388,7 +388,7 @@ result = {
                     "action": "workflow_execution_failed",
                     "template_type": self.template_type,
                     "workflow_id": self.workflow_id,
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "execution_time_ms": execution_time,
                     "timestamp": execution_end,
                     "success": False,
@@ -400,7 +400,7 @@ result = {
                 "workflow_id": self.workflow_id,
                 "template_type": self.template_type,
                 "execution_status": "failed",
-                "error": str(e),
+                "error": scrub_local_error(e),
                 "execution_time_ms": execution_time,
                 "audit_trail": self._audit_trail.copy(),
                 "compliance_status": "error",
@@ -514,7 +514,7 @@ result = {
                     "action": "workflow_execution_failed",
                     "template_type": self.template_type,
                     "workflow_id": self.workflow_id,
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "execution_time_ms": execution_time,
                     "timestamp": execution_end,
                     "success": False,
@@ -526,7 +526,7 @@ result = {
                 "workflow_id": self.workflow_id,
                 "template_type": self.template_type,
                 "execution_status": "failed",
-                "error": str(e),
+                "error": scrub_local_error(e),
                 "execution_time_ms": execution_time,
                 "audit_trail": self._audit_trail.copy(),
                 "compliance_status": "error",

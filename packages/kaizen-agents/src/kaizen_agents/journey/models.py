@@ -43,6 +43,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 if TYPE_CHECKING:
     from dataflow import DataFlow
 
@@ -561,7 +563,7 @@ class EnhancedDataFlowStateBackend:
             except ValueError as e:
                 # Log malformed timestamp - may indicate data corruption
                 logger.warning(
-                    f"Invalid expires_at timestamp '{expires_at}' for cache {cache_id}: {e}"
+                    f"Invalid expires_at timestamp '{expires_at}' for cache {cache_id}: {scrub_local_error(e)}"
                 )
 
         return {

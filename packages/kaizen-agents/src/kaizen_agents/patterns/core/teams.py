@@ -16,6 +16,8 @@ import time
 import warnings
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,8 +170,8 @@ class AgentTeam:
 
         except Exception as e:
             coordination_result["status"] = "error"
-            coordination_result["error"] = str(e)
-            logger.error(f"Team coordination failed: {e}")
+            coordination_result["error"] = scrub_local_error(e)
+            logger.error(f"Team coordination failed: {scrub_local_error(e)}")
 
         execution_time = time.time() - start_time
         coordination_result["execution_time"] = execution_time

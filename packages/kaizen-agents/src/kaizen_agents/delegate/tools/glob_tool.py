@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 
@@ -48,7 +49,7 @@ class GlobTool(Tool):
         try:
             matches = list(base.glob(pattern))
         except ValueError as exc:
-            return ToolResult.failure(f"Invalid glob pattern: {exc}")
+            return ToolResult.failure(f"Invalid glob pattern: {scrub_local_error(exc)}")
 
         # Filter to files only (exclude directories)
         files = [p for p in matches if p.is_file()]

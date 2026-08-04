@@ -60,6 +60,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 if TYPE_CHECKING:
     from nexus import Nexus
 
@@ -529,9 +531,9 @@ class JourneyNexusAdapter:
                 }
 
             except Exception as e:
-                logger.exception(f"Journey processing error: {e}")
+                logger.exception(f"Journey processing error: {scrub_local_error(e)}")
                 result = {
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                     "session_id": session_id,
                 }
 

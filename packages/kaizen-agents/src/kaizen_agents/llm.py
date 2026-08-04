@@ -23,6 +23,8 @@ from typing import Any
 
 from openai import OpenAI
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 
 def _resolve_model() -> str:
     """Resolve the model name from environment variables.
@@ -257,7 +259,7 @@ class LLMClient:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {exc}. Content: {content[:500]}"
+                f"LLM response is not valid JSON: {scrub_local_error(exc)}. Content: {content[:500]}"
             ) from exc
 
         if not isinstance(parsed, dict):
