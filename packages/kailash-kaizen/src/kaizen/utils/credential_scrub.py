@@ -270,6 +270,28 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 #      Closing it means changing the ANCHOR to a scheme group admitting escaped
 #      slashes, not widening any character class here.
 #
+#   1b. THE REST OF THE ANCHOR-ABSENCE FAMILY. Entry 1 covers a scheme that is
+#      present but ESCAPED. All three rules require BOTH a literal `scheme://`
+#      AND a literal `@`, so the same root produces three more leaks:
+#          u:s3cr3tpw@db.internal/app          (no scheme at all)
+#          //u:s3cr3tpw@h/d                    (scheme-relative)
+#          postgresql://u:s3cr3tpw%40h/d       (`@` percent-encoded)
+#      All three verified leaking in full.
+#
+#      SCOPE STATUS DIFFERS ACROSS THEM, and two reviewers disagreed about
+#      exactly this, which is why it is spelled out rather than asserted:
+#        - `%40` is INSIDE stated coverage. The shape IS `scheme://user:pass`;
+#          only the separator is encoded. This one is a genuine residual.
+#        - scheme-less and scheme-relative are OUTSIDE stated coverage. The
+#          module claims `scheme://user:pass@host`, and claiming every
+#          `x:y@z` would be wildly over-broad — it would redact ordinary
+#          `key:value@timestamp` prose.
+#      Listed together anyway because they share ONE root (an absent or
+#      unrecognised anchor) and because the ASYMMETRY was the actual defect:
+#      entry 1 documented one member of this family while three siblings sat
+#      undocumented. A list that covers one member of a family and not the rest
+#      is the failure the list exists to prevent.
+#
 #   2. WHITESPACE IN USERINFO. `[^\s]` makes whitespace the hard terminator, so
 #      `postgresql://u:pa ss@host/db` leaks `pa ss`. Structural and deliberate:
 #      admitting whitespace would let a run consume whole log lines (see the DoS
@@ -524,18 +546,42 @@ def scrub_credentials(text: str, *, placeholder: str = DEFAULT_PLACEHOLDER) -> s
             which would break the URL-rule ordering contract and could cause a
             substituted value to be re-matched or a match to be missed.
     """
+    # A quote IMMEDIATELY followed by a JSON structural delimiter is the
+    # tempered fence's trigger, so a placeholder containing one injects a live
+    # trigger into the scrubbed text — a third way to re-enter the URL rules'
+    # match space, alongside `@` and `://`.
+    #
+    # This clause POST-DATES the original guard and was missed when the fence
+    # landed: the guard's own rationale is that a substituted userinfo must
+    # remain un-rematchable, and the fence changed what "re-matchable" means
+    # without the guard being revisited. Demonstrated accepted before the fix —
+    # placeholder `":` produced `postgresql://"::":@db.internal/app`.
+    #
+    # No exploit was found (both in-repo callers pass fixed strings, and a
+    # quote-bearing placeholder still redacted both credentials in a
+    # two-credential probe). Fixed rather than documented because here a guard
+    # CAN attribute: the property is decidable from the placeholder alone. That
+    # is the opposite of the ownership-vs-exclusivity limit in the test suite,
+    # which is documented precisely because no guard can decide it.
+    _fence_trigger = any(
+        placeholder[i] == '"' and placeholder[i + 1] in ",}]:"
+        for i in range(len(placeholder) - 1)
+    )
     if (
         "@" in placeholder
         or "://" in placeholder
         or any(c.isspace() for c in placeholder)
+        or _fence_trigger
     ):
         # Fail loudly rather than silently producing a mis-scrubbed string:
-        # a placeholder carrying `@`/`://`/whitespace re-enters the URL rules'
-        # match space and the ordering contract below stops holding.
+        # a placeholder carrying `@`/`://`/whitespace, or a quote followed by a
+        # JSON delimiter, re-enters the URL rules' match space and the ordering
+        # contract below stops holding.
         raise ValueError(
-            "placeholder must not contain '@', '://', or whitespace "
-            f"(got {placeholder!r}); it would break the URL-rule ordering "
-            "contract in scrub_credentials()"
+            "placeholder must not contain '@', '://', whitespace, or a quote "
+            "immediately followed by one of ',}]:' (the tempered fence's "
+            f"trigger) (got {placeholder!r}); it would break the URL-rule "
+            "ordering contract in scrub_credentials()"
         )
 
     sanitized = text

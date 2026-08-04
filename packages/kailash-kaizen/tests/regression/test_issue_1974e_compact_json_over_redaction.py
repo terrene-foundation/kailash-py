@@ -490,6 +490,60 @@ class TestRealCredentialsStillRedacted:
 
         assert secret not in scrub_credentials(dsn)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Anchor-absence residual, INSIDE stated coverage: the shape IS "
+            "`scheme://user:pass` and only the `@` separator is "
+            "percent-encoded, so all three rules miss it and the credential "
+            "leaks in full. Same root as the documented escaped-scheme entry "
+            "(a required literal anchor is absent or unrecognised). Fixing it "
+            "means teaching the ANCHOR about `%40`, not widening any character "
+            "class. strict=True so this XPASSes and forces the marker off when "
+            "that lands."
+        ),
+    )
+    def test_percent_encoded_at_separator_is_redacted(self) -> None:
+        """The one anchor-absence sibling that is a genuine residual.
+
+        Its scheme-less and scheme-relative siblings are NOT pinned, and that
+        asymmetry is deliberate: they sit OUTSIDE the module's stated coverage
+        (`scheme://user:pass@host`), and claiming every `x:y@z` would redact
+        ordinary `key:value@timestamp` prose. Two reviewers disagreed about
+        exactly this — one called the family a scope boundary, the other an
+        undocumented residual. Both were right about different members, so the
+        list documents all four and only this one is pinned as a defect.
+        """
+        secret = "s3cr3tpw"
+        dsn = "postgresql://u:" + secret + "%40db.internal/app"
+        assert secret not in scrub_credentials(dsn)
+
+    def test_placeholder_guard_rejects_the_fence_trigger(self) -> None:
+        """The guard must reject a placeholder that re-enters the match space.
+
+        The tempered fence created a THIRD way to re-enter it — a quote
+        immediately followed by a JSON delimiter — alongside `@` and `://`. The
+        guard predates the fence and did not cover it; `":` was accepted and
+        produced `postgresql://"::":@db.internal/app`, injecting a live trigger
+        into scrubbed output.
+
+        Fixed rather than documented because here a guard CAN attribute: the
+        property is decidable from the placeholder alone. That is the opposite
+        of the ownership-vs-exclusivity limit above, which is documented
+        precisely because no guard can decide it.
+        """
+        dsn = "postgresql://u:pw" + _AT + "db.internal/app"
+
+        for bad in (_Q + ":", "A" + _Q + ","):
+            with pytest.raises(ValueError, match="placeholder must not contain"):
+                scrub_credentials(dsn, placeholder=bad)
+
+        # DISCRIMINATION: a quote NOT followed by a delimiter is not a trigger
+        # and must still be accepted. A guard that rejected every quote would
+        # be over-broad, which is the same failure as an over-broad exclusion.
+        for ok in ("X" + _Q + "Y", "[REDACTED]"):
+            scrub_credentials(dsn, placeholder=ok)
+
     def test_markup_attribute_boundary_over_redacts_accepted(self) -> None:
         """L1 — pin the HTML/XML residual, which was documented but not tested.
 
