@@ -2431,7 +2431,7 @@ provides-extras = ["dl", "dl-gpu", "rl", "rl-offline", "rl-envpool", "rl-distrib
 
 [[package]]
 name = "kailash-nexus"
-version = "2.15.0"
+version = "2.16.0"
 source = { editable = "packages/kailash-nexus" }
 dependencies = [
     { name = "aiofiles" },

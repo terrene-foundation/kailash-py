@@ -105,6 +105,7 @@ from kailash_mcp.utils import (
     CacheManager,
     ConfigManager,
     MetricsCollector,
+    build_input_schema,
     format_response,
 )
 
@@ -1403,6 +1404,7 @@ class MCPServer:
         retryable: bool = True,
         stream_response: bool = False,
         output_schema: Optional[Dict[str, Any]] = None,
+        input_schema: Optional[Dict[str, Any]] = None,
         annotations: Optional[Any] = None,
     ):
         """
@@ -1422,6 +1424,16 @@ class MCPServer:
             output_schema: Optional JSON Schema. When set, ``tools/list`` advertises
                 it as ``outputSchema`` and ``tools/call`` validates the result,
                 emitting ``structuredContent`` alongside a text fallback.
+            input_schema: Optional JSON Schema advertised as ``inputSchema`` in
+                ``tools/list``. When omitted it is DERIVED from the decorated
+                function's signature
+                (:func:`kailash_mcp.utils.input_schema.build_input_schema`).
+                Pass it explicitly only when the signature cannot express the
+                contract — e.g. a generic ``**kwargs`` dispatcher whose real
+                parameters are known from another source. Before this existed,
+                no input schema was stored at all and ``tools/list`` advertised
+                ``{}`` for EVERY tool, so clients had no protocol-level way to
+                discover any tool's arguments.
             annotations: Optional :class:`ToolAnnotation` (or MCP-hint dict)
                 advertised in ``tools/list``. ADVISORY ONLY — never gates access.
 
@@ -1507,6 +1519,14 @@ class MCPServer:
                 "retryable": retryable,
                 "stream_response": stream_response,
                 "output_schema": output_schema,
+                # Derived from the ORIGINAL func, not the enhanced wrapper —
+                # the wrapper's signature is (*args, **kwargs), which would
+                # describe every tool as taking arbitrary arguments.
+                "input_schema": (
+                    input_schema
+                    if input_schema is not None
+                    else build_input_schema(func)
+                ),
                 "structured_tool": structured_tool,
                 "annotations": annotations,
                 "call_count": 0,
