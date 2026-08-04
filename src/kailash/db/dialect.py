@@ -12,6 +12,7 @@ This module has **zero** external dependencies — it generates SQL strings only
 from __future__ import annotations
 
 import logging
+import sys
 import re
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -101,6 +102,60 @@ def _identifier_fingerprint(name: object) -> str:
         return "____"
 
 
+#: Call sites that have already been warned about the unknown-dialect budget,
+#: keyed by ``(filename, lineno)`` so each site warns exactly once per process.
+_UNKNOWN_BUDGET_WARNED_SITES: set = set()
+
+
+def _warn_unknown_identifier_budget_once() -> None:
+    """Emit a one-time WARN naming the call site using the unknown budget.
+
+    ``DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH`` is the LOOSEST budget (SQLite's
+    128) and is deliberately NOT safe — a site passing it accepts an identifier
+    PostgreSQL truncates server-side at 63, silently ALIASING two models onto
+    one physical table (#1971).
+
+    Before this, that hazard was documented ONLY in a source comment, which is
+    invisible at runtime. Per ``rules/security.md`` § "Secure-Default For A New
+    Security Feature", a control whose default makes it inert MUST fail closed
+    OR emit a loud one-time WARN naming the unprotected surface and its wiring.
+    Failing closed is not available here — the unbound budget is load-bearing
+    for genuinely dialect-less callers — so the WARN is the required half.
+
+    Once per SITE, not once per call: a migration validating 400 identifiers
+    from one loop must not emit 400 lines, but two different unbound call sites
+    are two different findings and both need to be visible.
+    """
+    try:
+        # Walk out of this module to attribute the warning to the real caller
+        # rather than to the internal validator that forwarded the budget.
+        frame = sys._getframe(1)
+        this_file = __file__
+        while frame is not None and frame.f_code.co_filename == this_file:
+            frame = frame.f_back
+        site = (frame.f_code.co_filename, frame.f_lineno) if frame else ("<unknown>", 0)
+    except Exception:  # pragma: no cover - frame introspection is best-effort
+        site = ("<unknown>", 0)
+
+    if site in _UNKNOWN_BUDGET_WARNED_SITES:
+        return
+    _UNKNOWN_BUDGET_WARNED_SITES.add(site)
+
+    logger.warning(
+        "identifier.unknown_dialect_budget: %s:%s validated an identifier "
+        "against DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH (%d, SQLite's — the "
+        "LOOSEST). If this path can reach PostgreSQL, an identifier of "
+        "64-%d chars passes validation here and is TRUNCATED server-side at "
+        "63, which can alias two models onto one table (#1971). Bind the "
+        "target dialect and pass its budget "
+        "(dialect._MAX_IDENTIFIER_LENGTH) instead.",
+        site[0],
+        site[1],
+        DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+        DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    )
+
+
 def _validate_identifier(name: str, *, max_length: int) -> None:
     """Validate a SQL identifier (table or column name).
 
@@ -157,6 +212,8 @@ def _validate_identifier(name: str, *, max_length: int) -> None:
         NOT ``TypeError`` — because the fingerprint helper is
         safe on unhashable values.
     """
+    if max_length == DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH:
+        _warn_unknown_identifier_budget_once()
     if not isinstance(name, str):
         raise IdentifierError(
             f"Invalid SQL identifier "
