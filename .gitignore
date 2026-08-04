@@ -230,6 +230,26 @@ dist/
 # disclosure class #260/#252). The committed *.example.md schema sibling stays tracked.
 .claude/rules/*.operator.local.md
 
+# Cross-repo authorization receipts (loom#1556 class). Written by
+# /cross-repo-authorize into WHATEVER repo the authorizing session ran in — so
+# they are target-owned operator state, never loom-distributed content. Each
+# carries a `requester:` display_id, the bounded action, and a timestamp; the
+# FILENAMES additionally carry the `<owner>/<repo>` slug of the target, which in
+# this PUBLIC repo means publishing the names of private siblings.
+#
+# The ceremony's own claim that committing is disclosure-safe rests on three
+# distribution fences that hold only AT LOOM — none of them governs a receipt
+# written into this repo, whose distribution channel is this repo's own git
+# history. That is the defect loom#1556 fixes at the source.
+#
+# Hand-written above the managed block deliberately: loom's `target_owned:
+# publish: local_only` fence will land here via /sync, and this entry is the
+# interim cover so a `git add -A` cannot re-commit them in the meantime. Same
+# shape kailash-coc-rs wrote for itself. The files STAY ON DISK — the
+# enforcement hook greps the working tree within an mtime window, not git, so
+# untracking costs nothing on authorization enforcement.
+.claude/cross-repo-authz/
+
 # >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
 !.claude/bin/lib/
 !.claude/hooks/lib/
