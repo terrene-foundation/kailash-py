@@ -263,10 +263,11 @@ class TestRealCredentialsStillRedacted:
             f"exclusions have narrowed the userinfo class too far.\n"
             f"Scrubbed: {scrubbed!r}"
         )
-        assert "REDACTED" in scrubbed, (
-            f"[{label}] no redaction marker present; the rule stopped matching "
-            f"entirely rather than redacting.\nScrubbed: {scrubbed!r}"
-        )
+        # NOTE: no separate `"REDACTED" in scrubbed` check — `userinfo` is a
+        # PREFIX of `scrubbed`, so the assertion above strictly implies it. It
+        # was retained briefly and read as a second independent check when it
+        # was not; a redundant assertion that looks load-bearing is its own
+        # small trap.
 
     @pytest.mark.parametrize(
         "label,body",
@@ -354,6 +355,18 @@ class TestRealCredentialsStillRedacted:
         Skip would go silent after a fix; deletion would lose the contract.
         """
         dsn = "postgresql://svcuser:pa" + _Q + delim + "ss" + _AT + "db.internal/app"
+        # Attribution guard. Asserting only "the secret is gone" lets this
+        # XPASS for the WRONG reason: if some future _CREDENTIAL_PATTERNS rule
+        # broadened enough to claim `pa",ss` incidentally, strict-mode would red
+        # the suite and whoever investigated would remove the marker believing a
+        # URL parse had landed — while these rules still leak. Requiring the URL
+        # rule ITSELF to claim the shape means the pin clears only for the
+        # reason it was written for.
+        assert _URL_WITH_AUTH.search(dsn), (
+            "XPASS would be unattributable: _URL_WITH_AUTH still does not claim "
+            "this shape, so any redaction came from another rule and the "
+            "residual this pins is NOT closed"
+        )
         assert "pa" + _Q + delim + "ss" not in scrub_credentials(dsn)
 
     def test_same_string_value_over_redaction_is_an_accepted_residual(self) -> None:

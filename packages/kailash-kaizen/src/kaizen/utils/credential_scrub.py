@@ -246,10 +246,36 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # dropping it would leak `user:pa,ss@host`.
 #
 # This module trades diagnosability for sensitivity, and where it CANNOT, the
-# residual is DOCUMENTED and bounded — never silent. (That wording was an
-# unqualified "NEVER the reverse" until a review showed two residuals trading in
-# the forbidden direction; an absolute that the code does not hold is worse than
-# a stated bound, because it stops anyone looking.) Any
+# residual is DOCUMENTED and bounded — never silent.
+#
+# That sentence has now been wrong TWICE, in the same direction, and the second
+# time was in the correction of the first. It began as an unqualified "NEVER the
+# reverse"; a review found residuals trading the other way, so it was softened to
+# the above — and a further review falsified THAT, because "this module ... never
+# silent" is module-wide while two under-redaction residuals were documented
+# NOWHERE in the file. Both are listed below, which is what finally makes the
+# claim true rather than merely narrower.
+#
+# PRE-EXISTING UNDER-REDACTION RESIDUALS — NOT introduced by the exclusion set,
+# and not fixable inside it. Listed because a residual known to a reviewer but
+# invisible to the next reader is exactly what the sentence above exists to
+# prevent:
+#
+#   1. ESCAPED SCHEME. All three URL rules anchor on a LITERAL `://`. A JSON
+#      encoder that escapes forward slashes — PHP `json_encode` does by default
+#      — emits `:\/\/`, so the scheme group never matches and nothing claims
+#      the credential:
+#          {"error":"cannot reach postgresql:\/\/svcuser:s3cr3t@db.internal"}
+#            -> unchanged, s3cr3t survives IN FULL
+#      Closing it means changing the ANCHOR to a scheme group admitting escaped
+#      slashes, not widening any character class here.
+#
+#   2. WHITESPACE IN USERINFO. `[^\s]` makes whitespace the hard terminator, so
+#      `postgresql://u:pa ss@host/db` leaks `pa ss`. Structural and deliberate:
+#      admitting whitespace would let a run consume whole log lines (see the DoS
+#      note above). Accepted, not merely unnoticed.
+#
+# Any
 # future widening of this exclusion set MUST first show a compact-JSON case that
 # `"` alone does not fence, and MUST re-run the leak probes in
 # `test_issue_1974e_compact_json_over_redaction.py::TestRealCredentialsStillRedacted`.
@@ -299,7 +325,15 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # So the tempered token below stops only at a quote that is followed by a JSON
 # STRUCTURAL delimiter — `,` `}` `]` `:` — i.e. a real field boundary. A quote
 # in the MIDDLE of a value (`us"er`) is ordinary userinfo and is consumed.
-# That fences the compact-JSON crossing (which must traverse `"},"` or `","`)
+# That fences the compact-JSON crossing (all four forms enumerated above)
+# The delimiter set is EXHAUSTIVE, not illustrative: in well-formed JSON the only
+# non-whitespace characters that can follow a closing `"` are `,` (next member),
+# `}` (end object), `]` (end array) and `:` (it was a key) — giving the four
+# crossing forms `","` / `"},"` / `"],"` / `":"`. An earlier version of this note
+# named only the first two, which left `]` and `:` looking unjustified and would
+# invite a future reader to "simplify" them out, re-opening the array and
+# key-position crossings. Whitespace needs no delimiter: `[^\s]` fences it.
+#
 # while keeping claimable every credential shape whose quote is not IMMEDIATELY
 # followed by a JSON delimiter. That qualifier is load-bearing — see the
 # under-redaction residual below. An earlier revision of this line claimed
