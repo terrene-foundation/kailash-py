@@ -24,8 +24,8 @@ real defects, so the clean-round counter is at ZERO. Two lanes are mid-round.
 
 ## THE FINDING OF THIS SESSION — read before writing any test
 
-**SEVEN separate instruments on this branch were cited as proof while being
-structurally unable to fail.** Five were mine — including one added to FIX an
+**NINE separate instruments on this branch were cited as proof while being
+structurally unable to fail.** Six were mine — including one added to FIX an
 attribution problem (which introduced a worse one), and its replacement, which
 was sound but blind to a class-defining parameter value.
 
@@ -101,7 +101,21 @@ identity-reverse-map collapsing round-robin (F6).
    fail-closed together (either alone is worse). Not actioned because it changes
    behaviour for custom-checker consumers on a public API. Fix design + 7 tests in
    the w8-w12-authz report.
-2. **47 unscrubbed `str(exc)` sites across 23 files** in kaizen-agents. The one
+3. **A THIRD credential scrubber, on a LOGGING path, 9/10 drift.**
+   `SensitiveDataRedactor.PATTERNS` in
+   `kaizen/core/autonomy/hooks/security/redaction.py`, reachable via
+   `hooks/security/__init__.py` -> `hooks/builtin/logging_hook.py`. It catches
+   `sk-` and NOTHING else: AKIA, ASIA, ghp_, hf_, fw_, xoxb-, sk_live_, sig=
+   and URL-embedded DSNs all pass unredacted. Measured twice — once by the
+   reviewer, once by me after discarding my own vacuous probe.
+   **This is the same failure `credential_scrub.py` was created to fix, one
+   surface over, on the surface where credentials actually leak.**
+   Done: the docstring claim is SCOPED so the prose no longer denies it exists.
+   NOT done: routing that list through the shared module. That is a real change
+   on a hook path and needs its own shard.
+   Recommendation: fix it, and ahead of the 47-site sweep — this is a live
+   under-redaction on a logging path, the sweep is defence-in-depth.
+4. **47 unscrubbed `str(exc)` sites across 23 files** in kaizen-agents. The one
    fixed (F3) was chosen because its exception comes from a caller-supplied,
    likely DB-backed checker. Recommendation: own shard, not this branch.
 
@@ -149,7 +163,32 @@ correctly OUT of this shard; none is fixed.
    USER-AUTHORIZED action. Neither the agent nor a reviewer can self-authorize it.
    **Surfaced to the co-owner; no action taken.**
 
-## Convergence status — READ BEFORE CLAIMING DONE
+## REDTEAM OUTCOME: ABNORMAL TERMINATION, **NOT CONVERGENCE**
+
+Recorded per `completion-criterion.md` MUST-4: the round cap is a CIRCUIT
+BREAKER, and hitting it is abnormal termination to be reported as such — never
+"done". **The loop was STOPPED at the cap. Two consecutive clean rounds were
+NEVER achieved; the counter stands at ZERO.**
+
+Do not read the volume of work as convergence. Do not let a later session read
+it that way either.
+
+**Why stopping was right rather than premature.** Severity fell monotonically
+across seven rounds: live credential leaks -> instrument defects -> incomplete
+documentation -> prose overstatement about ADJACENT code. Nothing in the last
+three rounds changed what the module leaks. The final round crossed the boundary
+from "defects in the work" to "pre-existing debt in other modules that the
+work's prose happens to make a claim about" — which is precisely the runaway the
+cap exists to catch. The reviewer independently endorsed stopping and said it
+would decline a round 4 if asked.
+
+**Rotation was what produced every late finding.** Six rounds of one lens went
+clean-ish on an axis that could not see the incomplete residual list, the stale
+placeholder guard, or the third scrubber. "Clean" is always scoped to the LENS.
+
+**OPEN RESIDUAL ESCALATED TO CO-OWNER — see PENDING DECISIONS item 3.**
+
+## Prior convergence bookkeeping (superseded by the above)
 
 **NOT CONVERGED.** Every round so far found real defects, so the clean-round
 counter is at ZERO. Two lanes each ran three rounds, each finding strictly less
