@@ -67,7 +67,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 from urllib.parse import urlparse
@@ -550,6 +550,58 @@ _CREDENTIAL_KWARGS = frozenset(
 def _strip_credential_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Return ``kwargs`` without any transport-level credential entries."""
     return {k: v for k, v in kwargs.items() if k not in _CREDENTIAL_KWARGS}
+
+
+# Keys accepted in a tool's ``rate_limit=`` config. They are forwarded as
+# keyword arguments to ``RateLimiter.check_rate_limit``, so this set and that
+# signature are ONE contract — an entry here without a parameter there is a
+# TypeError on every call to the tool.
+_RATE_LIMIT_KEYS = frozenset({"requests_per_minute"})
+
+
+def _warn_on_credential_kwarg_collision(func: Any, tool_name: str) -> None:
+    """WARN when a tool's own parameter is named like a transport credential.
+
+    ``_strip_credential_kwargs`` filters by exact name, unconditionally — it
+    cannot tell a caller's transport credential from a tool's genuine business
+    argument. A tool declaring ``api_key: str = ""`` therefore runs with
+    ``api_key=""`` on every call: no error, wrong result. (Declared WITHOUT a
+    default it is a loud ``TypeError``, which needs no warning.)
+
+    The collision is knowable HERE, where the original function is in hand, so
+    it is surfaced at registration — turning a silent wrong answer into a
+    startup signal. Advisory only: the strip is a security invariant and is
+    never relaxed for a colliding signature.
+    """
+    try:
+        parameters = inspect.signature(func).parameters
+    except (TypeError, ValueError):  # builtins / C callables carry no signature
+        return
+
+    collisions = [
+        name
+        for name, parameter in parameters.items()
+        if name in _CREDENTIAL_KWARGS
+        and parameter.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    ]
+    if not collisions:
+        return
+
+    logger.warning(
+        "tool.parameter.collides_with_credential_kwarg",
+        extra={
+            "tool": tool_name,
+            "parameters": collisions,
+            "hint": (
+                f"tool {tool_name!r} declares parameter(s) {collisions!r} whose "
+                "name(s) match transport-level credential kwargs; every call "
+                "has them stripped before the tool body runs, so a parameter "
+                "with a default silently receives that default and one without "
+                "raises TypeError. Rename the parameter(s)."
+            ),
+        },
+    )
 
 
 # Auth denial can arrive from EITHER of two disjoint exception hierarchies:
@@ -1677,6 +1729,27 @@ class MCPServer:
             # ``is not None``, so an ungated tool must store None, not ().
             normalized_permission = normalized_permissions or None
 
+            # Validate the per-tool rate-limit config HERE, at decoration.
+            # Unrecognised keys previously reached
+            # ``RateLimiter.check_rate_limit`` as stray keyword arguments and
+            # raised TypeError on EVERY call, surfacing as a generic
+            # "Tool execution failed" — a config typo became a permanently
+            # broken tool with a misleading error. Fail at registration instead.
+            if rate_limit:
+                unknown_keys = sorted(set(rate_limit) - _RATE_LIMIT_KEYS)
+                if unknown_keys:
+                    raise ValueError(
+                        f"Tool {tool_name}: unknown rate_limit key(s) "
+                        f"{unknown_keys}. Accepted key(s): "
+                        f"{sorted(_RATE_LIMIT_KEYS)}."
+                    )
+
+            # A tool parameter named like a transport credential is stripped
+            # from every call before the body runs. Surface it here, where the
+            # ORIGINAL function is in hand, rather than letting the argument
+            # silently resolve to its default at runtime.
+            _warn_on_credential_kwarg_collision(func, tool_name)
+
             # Create enhanced wrapper
             enhanced_func = self._create_enhanced_tool(
                 func,
@@ -1830,14 +1903,38 @@ class MCPServer:
                             "start_time": start_time,
                             "permission": required_permissions,
                         }
-                    except ProviderRateLimitError:
+                    except ProviderRateLimitError as e:
                         # Rate limiting is NOT an authorization denial and must
                         # keep its own type (and retry_after) for the caller.
                         # providers.RateLimitError subclasses that module's
                         # AuthenticationError, so it would otherwise be swallowed
                         # by the denial clause below and reported as "Access
                         # denied".
-                        raise
+                        #
+                        # A bare ``raise`` did NOT deliver that. providers.
+                        # RateLimitError subclasses Exception, NOT MCPError, so
+                        # it fell into this wrapper's own outer
+                        # ``except Exception`` and was rewrapped as
+                        # ToolError(TOOL_EXECUTION_FAILED) — the caller saw a
+                        # generic execution failure and retry_after was
+                        # reachable only through ``.cause``. Translating to the
+                        # errors.py RateLimitError (an MCPError) makes the outer
+                        # handler pass it through untouched, carrying
+                        # RATE_LIMITED and retry_after to the caller.
+                        #
+                        # The provider's own message is
+                        # f"Rate limit exceeded for user {user_id}", and
+                        # APIKeyAuth derives user_id from a FINGERPRINT OF THE
+                        # CALLER'S API KEY — so it is deliberately not
+                        # forwarded. The caller-visible message names the
+                        # throttled TOOL, which is the part the caller can act
+                        # on.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
                     except _AUTH_DENIAL_ERRORS as e:
                         if self.error_aggregator:
                             self.error_aggregator.record_error(e)
@@ -1846,23 +1943,46 @@ class MCPServer:
                             tool_name=tool_name,
                         )
 
-                # Rate limiting check
-                if rate_limit and self.auth_manager is not None:
-                    user_id = (
-                        self._active_sessions.get(session_id, {})
-                        .get("user", {})
-                        .get("id", "anonymous")
+                # Per-tool rate limiting (the decorator's ``rate_limit=`` arg).
+                #
+                # This block was broken three ways and made every tool
+                # declaring the documented rate_limit= argument unusable:
+                #
+                #   * it passed a user-id STRING plus a second positional plus
+                #     arbitrary keywords to check_rate_limit(user_info), which
+                #     takes one dict -> TypeError on EVERY call, reported to the
+                #     caller as a generic "Tool execution failed";
+                #   * it read the identity as ``["user"]["id"]`` while auth
+                #     providers return ``user_id``, so the identity was always
+                #     "anonymous" even when authenticated;
+                #   * the ``except RateLimitError`` named the errors.py class,
+                #     which this path cannot raise (RateLimiter raises the
+                #     providers one), so the handler was dead — the same
+                #     wrong-hierarchy defect as the auth clause above.
+                if (
+                    rate_limit
+                    and self.auth_manager is not None
+                    and self.auth_manager.rate_limiter is not None
+                ):
+                    user_info = (
+                        self._active_sessions.get(session_id, {}).get("user") or {}
                     )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id,
-                            tool_name,
-                            **rate_limit,  # type: ignore[reportCallIssue]
+                        self.auth_manager.rate_limiter.check_rate_limit(
+                            user_info,
+                            tool_name=tool_name,
+                            **rate_limit,
                         )
-                    except RateLimitError as e:
-                        if self.error_aggregator:
-                            self.error_aggregator.record_error(e)
-                        raise
+                    except ProviderRateLimitError as e:
+                        # Same translation as the authentication path: keep the
+                        # RATE_LIMITED code and retry_after, drop the provider's
+                        # user-id-bearing message.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
 
                 # Circuit breaker check
                 if enable_circuit_breaker and self.circuit_breaker:
@@ -1878,13 +1998,33 @@ class MCPServer:
                             self.error_aggregator.record_error(error)
                         raise error
 
+                # Strip transport-level credentials ONCE, here — BEFORE the
+                # cache block, because the cache key is derived from these
+                # kwargs too. See the module comment on _CREDENTIAL_KWARGS.
+                clean_kwargs = _strip_credential_kwargs(kwargs)
+
                 # Try cache first if enabled
                 cache = None
                 cache_lookup_key = None
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
+                    # Key on the STRIPPED kwargs. CacheManager._create_cache_key
+                    # interpolates its kwargs verbatim, the resulting key is
+                    # DEBUG-logged by UnifiedCache.get_or_compute AND used as a
+                    # Redis key name (redis_prefix + name + key) — so keying on
+                    # the raw set wrote the caller's api_key/password/token/jwt
+                    # into log lines, into `KEYS mcp:*`, into MONITOR, into the
+                    # slowlog and into RDB/AOF on disk (security.md § "No
+                    # secrets in logs").
+                    #
+                    # Safe by construction: authorization is decided ABOVE this
+                    # block, and the tool body is called with clean_kwargs — so
+                    # the stripped set is exactly the set the result can depend
+                    # on. It also repairs a latent correctness defect: keyed on
+                    # the raw set the key varied per credential, so a
+                    # shared-result tool never hit cache across callers.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, kwargs
+                        tool_name, args, clean_kwargs
                     )
 
                     # For sync functions with Redis, we need to handle async operations
@@ -1920,13 +2060,10 @@ class MCPServer:
                             result, response_format, stream_response
                         )
 
-                # Strip transport-level credentials before calling the tool.
-                # The async wrapper did this on BOTH its paths and the sync
-                # wrapper on NEITHER, so a credentialed call to a sync tool
-                # forwarded the caller's api_key/token into the tool body — and
-                # raised TypeError on every tool whose signature does not accept
-                # it, i.e. every ordinary tool.
-                clean_kwargs = _strip_credential_kwargs(kwargs)
+                # clean_kwargs was computed above the cache block: the tool body
+                # must never receive transport-level credentials (it would leak
+                # the caller's api_key/token into arbitrary tool code and raise
+                # TypeError on every tool whose signature does not accept it).
 
                 # Execute function with timeout
                 if timeout:
@@ -2076,14 +2213,38 @@ class MCPServer:
                             "start_time": start_time,
                             "permission": required_permissions,
                         }
-                    except ProviderRateLimitError:
+                    except ProviderRateLimitError as e:
                         # Rate limiting is NOT an authorization denial and must
                         # keep its own type (and retry_after) for the caller.
                         # providers.RateLimitError subclasses that module's
                         # AuthenticationError, so it would otherwise be swallowed
                         # by the denial clause below and reported as "Access
                         # denied".
-                        raise
+                        #
+                        # A bare ``raise`` did NOT deliver that. providers.
+                        # RateLimitError subclasses Exception, NOT MCPError, so
+                        # it fell into this wrapper's own outer
+                        # ``except Exception`` and was rewrapped as
+                        # ToolError(TOOL_EXECUTION_FAILED) — the caller saw a
+                        # generic execution failure and retry_after was
+                        # reachable only through ``.cause``. Translating to the
+                        # errors.py RateLimitError (an MCPError) makes the outer
+                        # handler pass it through untouched, carrying
+                        # RATE_LIMITED and retry_after to the caller.
+                        #
+                        # The provider's own message is
+                        # f"Rate limit exceeded for user {user_id}", and
+                        # APIKeyAuth derives user_id from a FINGERPRINT OF THE
+                        # CALLER'S API KEY — so it is deliberately not
+                        # forwarded. The caller-visible message names the
+                        # throttled TOOL, which is the part the caller can act
+                        # on.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
                     except _AUTH_DENIAL_ERRORS as e:
                         if self.error_aggregator:
                             self.error_aggregator.record_error(e)
@@ -2092,23 +2253,46 @@ class MCPServer:
                             tool_name=tool_name,
                         )
 
-                # Rate limiting check
-                if rate_limit and self.auth_manager is not None:
-                    user_id = (
-                        self._active_sessions.get(session_id, {})
-                        .get("user", {})
-                        .get("id", "anonymous")
+                # Per-tool rate limiting (the decorator's ``rate_limit=`` arg).
+                #
+                # This block was broken three ways and made every tool
+                # declaring the documented rate_limit= argument unusable:
+                #
+                #   * it passed a user-id STRING plus a second positional plus
+                #     arbitrary keywords to check_rate_limit(user_info), which
+                #     takes one dict -> TypeError on EVERY call, reported to the
+                #     caller as a generic "Tool execution failed";
+                #   * it read the identity as ``["user"]["id"]`` while auth
+                #     providers return ``user_id``, so the identity was always
+                #     "anonymous" even when authenticated;
+                #   * the ``except RateLimitError`` named the errors.py class,
+                #     which this path cannot raise (RateLimiter raises the
+                #     providers one), so the handler was dead — the same
+                #     wrong-hierarchy defect as the auth clause above.
+                if (
+                    rate_limit
+                    and self.auth_manager is not None
+                    and self.auth_manager.rate_limiter is not None
+                ):
+                    user_info = (
+                        self._active_sessions.get(session_id, {}).get("user") or {}
                     )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id,
-                            tool_name,
-                            **rate_limit,  # type: ignore[reportCallIssue]
+                        self.auth_manager.rate_limiter.check_rate_limit(
+                            user_info,
+                            tool_name=tool_name,
+                            **rate_limit,
                         )
-                    except RateLimitError as e:
-                        if self.error_aggregator:
-                            self.error_aggregator.record_error(e)
-                        raise
+                    except ProviderRateLimitError as e:
+                        # Same translation as the authentication path: keep the
+                        # RATE_LIMITED code and retry_after, drop the provider's
+                        # user-id-bearing message.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
 
                 # Circuit breaker check
                 if enable_circuit_breaker and self.circuit_breaker:
@@ -2124,18 +2308,24 @@ class MCPServer:
                             self.error_aggregator.record_error(error)
                         raise error
 
+                # Strip transport-level credentials ONCE, here — BEFORE the
+                # cache block, because the cache key is derived from these
+                # kwargs too. See the module comment on _CREDENTIAL_KWARGS.
+                clean_kwargs = _strip_credential_kwargs(kwargs)
+
                 # Execute with caching and stampede prevention if enabled
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
+                    # Key on the STRIPPED kwargs — same contract as the sync
+                    # wrapper; see the comment there for why the raw set leaked
+                    # the caller's credential into log lines and Redis key
+                    # names, and why the stripped set is the correct key.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, kwargs
+                        tool_name, args, clean_kwargs
                     )
 
                     # Define the compute function for cache-or-compute
                     async def compute_result():
-                        # Filter out auth credentials before calling the function
-                        clean_kwargs = _strip_credential_kwargs(kwargs)
-
                         # Execute function with timeout
                         if timeout:
                             return await asyncio.wait_for(
@@ -2151,8 +2341,6 @@ class MCPServer:
                     logger.debug(f"Got result for {tool_name} (cached or computed)")
                 else:
                     # No caching - execute directly
-                    # Filter out auth credentials before calling the function
-                    clean_kwargs = _strip_credential_kwargs(kwargs)
 
                     # Execute function with timeout
                     if timeout:
@@ -2273,9 +2461,21 @@ class MCPServer:
         # Look for common credential patterns in kwargs
         credentials = {}
 
-        # Check for MCP-style authentication headers
-        if "mcp_auth" in kwargs:
-            credentials.update(kwargs["mcp_auth"])
+        # Check for MCP-style authentication headers.
+        #
+        # The type check is load-bearing for the same reason as the
+        # ``authorization`` one below, which this field previously lacked.
+        # ``dict.update`` raises ValueError/TypeError for a str/int/list/None,
+        # and BOTH wrappers call this helper OUTSIDE their inner ``try:`` — so a
+        # non-Mapping ``mcp_auth`` (a shape any client can put in ``arguments``)
+        # escaped credential EXTRACTION and surfaced as
+        # ToolError("Tool execution failed: …"). It failed closed, but it let a
+        # client choose whether an auth failure was reported as an internal
+        # error. A non-Mapping value carries no credentials, which is exactly
+        # what contributing nothing to the credential set expresses.
+        raw_mcp_auth = kwargs.get("mcp_auth")
+        if isinstance(raw_mcp_auth, Mapping):
+            credentials.update(raw_mcp_auth)
 
         # Check for common auth patterns
         auth_fields = ["api_key", "token", "username", "password", "jwt"]
@@ -2696,7 +2896,15 @@ class MCPServer:
                 )
                 asyncio.run(self._run_websocket())
             else:
-                # Default to FastMCP (STDIO) server
+                # Default to FastMCP (STDIO) server.
+                #
+                # #1998 — this serves FastMCP's OWN registry, which was never
+                # taught ``_public_tool_view``: a permission-gated tool
+                # advertises its full inputSchema and Args: docstring block, and
+                # a ``disable_tool()``'d tool is listed AND executable.
+                # ``run_async()`` -> ``run_stdio()`` is gated; this path is not.
+                # Invocation authorization holds on both (the enhanced wrapper
+                # is what FastMCP registered).
                 logger.info("Starting FastMCP server in STDIO mode...")
                 self._mcp.run()  # type: ignore[reportOptionalMemberAccess]
 
@@ -3141,6 +3349,18 @@ class MCPServer:
         ``argument.value`` substring-matched EVERY tool and returned each one's
         ``inputSchema``, making the ``tools/list`` suppression decorative. Add a
         new discovery surface by CALLING this, never by copying it.
+
+        SCOPE — this contract is TRANSPORT-SCOPED, see #1998. Tools are also
+        registered with FastMCP (``self._mcp.tool()(enhanced_func)``), and
+        FastMCP builds its OWN tool list from the wrapped function, never
+        consulting this projection or the ``disabled`` flag. So the sync
+        ``run()`` with ``transport="stdio"`` (the DEFAULT), which serves
+        ``self._mcp.run()``, advertises a gated tool's full ``inputSchema`` and
+        its complete ``Args:`` docstring block, and both lists and executes a
+        ``disable_tool()``'d tool. ``run_async()`` -> ``run_stdio()`` IS gated.
+        Invocation authorization is unaffected on either path (the enhanced
+        wrapper is what FastMCP holds). Closing the gap means routing FastMCP's
+        own enumeration through here — tracked in #1998.
 
         Two independent suppressions:
 
@@ -4960,7 +5180,16 @@ class MCPServer:
         return None
 
     async def run_stdio(self):
-        """Run the server using stdio transport for testing."""
+        """Run the server using stdio transport.
+
+        NOTE — this is NOT the loop the sync ``run()`` serves. ``run()`` with
+        ``transport="stdio"`` (the DEFAULT) calls ``self._mcp.run()``, i.e.
+        FastMCP's own server over FastMCP's own registry, which never consults
+        ``_public_tool_view`` or the ``disabled`` flag. This loop is reached
+        from ``run_async()``. The two stdio paths therefore have DIFFERENT
+        disclosure behaviour for the same registry — see #1998, which tracks
+        routing FastMCP's enumeration through the same gate.
+        """
         if self._mcp is None:
             self._init_mcp()
 

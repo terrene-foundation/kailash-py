@@ -196,7 +196,7 @@ async def test_gated_tool_still_discoverable_by_name(emit):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("emit", EMITTERS)
 async def test_ungated_tool_with_parameters_keeps_full_schema(emit):
-    """The #1998 schema fix must survive for tools with no permission gate.
+    """The #1999 schema fix must survive for tools with no permission gate.
 
     Asserted against a tool that HAS parameters. The previous version of this
     test pinned a ZERO-parameter tool and checked only

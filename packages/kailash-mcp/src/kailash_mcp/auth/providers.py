@@ -812,27 +812,58 @@ class RateLimiter:
         self.burst_limit = burst_limit
         self.per_user_limits = per_user_limits or {}
 
-        # Token buckets per user
-        self._buckets: Dict[str, Dict[str, Any]] = defaultdict(
+        # Token buckets, keyed by user_id for the caller's global budget and by
+        # a ``(user_id, tool_name)`` tuple for a per-tool budget.
+        self._buckets: Dict[Any, Dict[str, Any]] = defaultdict(
             lambda: {"tokens": self.burst_limit, "last_refill": time.time()}
         )
 
-    def check_rate_limit(self, user_info: Dict[str, Any]) -> bool:
+    def check_rate_limit(
+        self,
+        user_info: Dict[str, Any],
+        tool_name: Optional[str] = None,
+        *,
+        requests_per_minute: Optional[int] = None,
+    ) -> bool:
         """Check if user is within rate limits.
 
         Args:
-            user_info: User information from authentication
+            user_info: User information from authentication.
+            tool_name: When given, the budget is tracked in a bucket private to
+                ``(user, tool)`` instead of the caller's shared bucket. This is
+                what the ``@server.tool(rate_limit=...)`` decorator argument
+                needs: a per-tool budget must not be spent by, or spend, the
+                caller's global budget.
+            requests_per_minute: Per-tool limit override. Falls back to this
+                user's configured limit, then the default.
 
         Returns:
             True if request is allowed
 
         Raises:
             RateLimitError: If rate limit exceeded
+
+        The two optional parameters exist because the server's tool wrappers
+        already called this method with them (as ``check_rate_limit(user_id,
+        tool_name, **rate_limit)``) while the signature accepted only
+        ``user_info`` — so EVERY call to a tool declaring the documented
+        ``rate_limit={"requests_per_minute": N}`` died with a TypeError that
+        surfaced to the caller as "Tool execution failed". Per-tool rate
+        limiting had no implementation at all. Both parameters are optional, so
+        the single-argument form used by ``AuthManager._authorize`` is
+        unchanged.
         """
         user_id = user_info.get("user_id", "anonymous")
-        limit = self.per_user_limits.get(user_id, self.default_limit)
+        if requests_per_minute is not None:
+            limit = requests_per_minute
+        else:
+            limit = self.per_user_limits.get(user_id, self.default_limit)
 
-        bucket = self._buckets[user_id]
+        # Tuple key, never a string join: a user_id containing the delimiter
+        # would otherwise collide two distinct (user, tool) budgets.
+        bucket_key: Any = user_id if tool_name is None else (user_id, tool_name)
+
+        bucket = self._buckets[bucket_key]
         now = time.time()
 
         # Refill tokens
@@ -846,7 +877,7 @@ class RateLimiter:
             bucket["tokens"] -= 1
             return True
         else:
-            retry_after = int(60.0 / limit)  # seconds until next token
+            retry_after = int(60.0 / limit) if limit else 60
             raise RateLimitError(
                 f"Rate limit exceeded for user {user_id}", retry_after=retry_after
             )
