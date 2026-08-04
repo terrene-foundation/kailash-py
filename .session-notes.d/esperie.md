@@ -161,7 +161,21 @@ stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
 three rules with a sound attribution guard. Only remaining defects were two prose
 nits, both fixed. Every attack it had was exhausted.
 
-**CORRECTNESS LANE: still open.** Its last round found three instrument-layer
+**CORRECTNESS LANE: STILL OPEN — and my own inline check does NOT close it.**
+After its F10 fix landed I ran the narrow follow-up inline (does the
+control-based guard hold for the right reason?) and found nothing: the guard
+calls the named rule directly with no `_CREDENTIAL_PATTERNS` involvement, is
+stable under both fix directions, and is delimiter-insensitive by design.
+
+**That is NOT clean round 1 and must not be recorded as one.** It is the author
+checking his own instrument with the instrument that has now missed this class
+SIX times — four of them mine. The correctness lane caught it at the parameter
+layer, the confound layer AND the reachability layer; my inline pass caught it at
+none. A self-attested convergence verdict is exactly what
+`verify-resource-existence.md` MUST-4 blocks, and on this branch of all branches
+it would be the punchline. Convergence needs an external receipt.
+
+Prior status: Its last round found three instrument-layer
 defects (frozen position axis; positional secret-slice satisfiable by a partial
 fix; markup pin confounded into a duplicate of its neighbour). All three fixed in
 `b8bc03eed`; a final round is requested and PENDING. The module is NOT converged
