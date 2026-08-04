@@ -244,6 +244,27 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 # future widening of this exclusion set MUST first show a compact-JSON case that
 # `"` alone does not fence, and MUST re-run the leak probes in
 # `test_issue_1974e_compact_json_over_redaction.py::TestRealCredentialsStillRedacted`.
+#
+# ACCEPTED RESIDUAL — do NOT "fix" this by excluding more characters.
+# `"` fences the compact-JSON case where the URL and the later `@` sit in
+# DIFFERENT JSON values, which is the shape provider error bodies actually take
+# (a docs link in one field, a contact address in another). It does NOT fence
+# them inside the SAME string value:
+#
+#     {"m":"https://a.example.com/p:q/me@y.com"}
+#       -> {"m":"https://[REDACTED]:[REDACTED]@y.com"}
+#
+# That needs a `:` in the URL path AND a later `@` in the same value. It is left
+# over-redacting DELIBERATELY: `scheme://<x>:<y>@<host>` is exactly the
+# credential shape, and no regex can separate that byte sequence from a real DSN
+# without parsing the URL. Over-redaction is the safe side of this module's
+# stated trade, so the residual is accepted rather than closed.
+#
+# Closing it by excluding more characters is the specific error already made
+# once here: `{`, `}` and `\` were excluded on the same "RFC-illegal so it is
+# free" reasoning and silently leaked every password containing those bytes. If
+# this residual ever needs closing, the sound route is a URL PARSE on the
+# candidate span — not a wider character class.
 _URL_WITH_AUTH = re.compile(
     r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s"]{0,256}:[^\s"]{0,256}@',
     re.ASCII,

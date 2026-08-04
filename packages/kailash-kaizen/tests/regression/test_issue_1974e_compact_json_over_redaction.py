@@ -59,6 +59,7 @@ import pytest
 from kaizen.utils.credential_scrub import (
     _URL_WITH_AUTH,
     _URL_WITH_AUTH_OVERFLOW,
+    _URL_WITH_USERINFO_ONLY,
     scrub_credentials,
 )
 
@@ -205,6 +206,63 @@ class TestRealCredentialsStillRedacted:
         assert "REDACTED" in scrubbed, (
             f"[{label}] no redaction marker present; the rule stopped matching "
             f"entirely rather than redacting.\nScrubbed: {scrubbed!r}"
+        )
+
+    def test_third_sibling_pattern_does_not_over_match_compact_json(self) -> None:
+        """Enforcement-surface parity for `_URL_WITH_USERINFO_ONLY`.
+
+        Two of the three sibling patterns gained the `"` exclusion. The third
+        did NOT, and that asymmetry is the classic place an incomplete fix
+        hides — so it is PROVEN safe here, not assumed.
+
+        It is structurally fenced already: its userinfo class excludes `/` and
+        `:`, so on `{"d":"https://docs.example.com","c":"me@me.com"}` the run
+        stops at the first `/` of the path and never reaches the `@`.
+
+        It DOES match `{"m":"https://token@y.com"}` — and that is correct, not a
+        miss. `scheme://<token>@host` is the PAT-in-userinfo shape this rule
+        exists to catch, and being inside a JSON value does not make it less of
+        a credential. Only the token is replaced; the JSON survives.
+        """
+        for body in (
+            '{"d":"https://docs.example.com","c":"me' + _AT + 'me.com"}',
+            '{"m":"https://a.example.com/x/me' + _AT + 'y.com"}',
+        ):
+            assert not _URL_WITH_USERINFO_ONLY.search(body), (
+                f"_URL_WITH_USERINFO_ONLY over-matched credential-free compact "
+                f'JSON; it needs the `"` exclusion after all.\nBody: {body!r}'
+            )
+
+        # Positive control: the shape it MUST still claim.
+        pat_url = "https://" + "ghp0abcdef1234567890" + _AT + "github.example.com/o/r"
+        assert _URL_WITH_USERINFO_ONLY.search(
+            pat_url
+        ), "the bare-token-in-userinfo rule stopped matching its own shape"
+
+    def test_same_string_value_over_redaction_is_an_accepted_residual(self) -> None:
+        """Pin the KNOWN limit so it is not mistaken for a new regression.
+
+        `"` fences the case provider bodies actually produce (URL in one JSON
+        field, `@` in another). It does not fence a URL with a `:` in its path
+        followed by an `@` in the SAME string value — that still over-redacts.
+
+        Left deliberately: `scheme://<x>:<y>@<host>` IS the credential shape,
+        and no regex separates it from a real DSN without parsing. Over-redaction
+        is the safe side of this module's trade.
+
+        This test exists to stop the next reader "fixing" it by widening the
+        exclusion set — the exact error already made once here, which leaked
+        every password containing `{`, `}` or `\\`.
+        """
+        body = '{"m":"https://a.example.com/p:q/me' + _AT + 'y.com"}'
+        scrubbed = scrub_credentials(body)
+        assert scrubbed != body, (
+            "The same-string-value case stopped over-redacting. If that was "
+            "achieved by EXCLUDING MORE CHARACTERS, revert it and re-run "
+            "TestRealCredentialsStillRedacted — that is how the brace and "
+            "backslash password leaks were introduced. If it was achieved by "
+            "PARSING the candidate URL, that is the sound fix: delete this "
+            "test and say so in the commit."
         )
 
     def test_credential_inside_compact_json_is_still_redacted(self) -> None:
