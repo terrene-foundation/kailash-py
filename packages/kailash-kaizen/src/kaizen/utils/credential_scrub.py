@@ -203,8 +203,34 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 #
 # Group 1 (the scheme) is preserved by the replacement, so no replacement-side
 # change is needed for the broadened scheme.
+#
+# Both halves also exclude the JSON STRUCTURAL characters `"`, `{`, `}` and the
+# JSON escape `\`. Whitespace was previously the ONLY terminator, and a provider
+# 4xx body is compact JSON with NO whitespace — so the whole body is one token
+# and the greedy halves ran from the first `scheme://` to the LAST `@` anywhere
+# in it. A body carrying a docs link and a contact address collapsed the error
+# message, the docs link AND the JSON delimiters into
+# `https://[REDACTED]:[REDACTED]@example.com"}` — destroying diagnosability on
+# the exact surface `body_snippet` exists to provide, AND leaving the snippet
+# STRUCTURALLY UNPARSEABLE (the swallowed `}` unbalances the braces), so a
+# consumer that json-loads it now fails outright.
+#
+# These four are safe to exclude because RFC 3986 §3.2.1 defines
+#   userinfo = *( unreserved / pct-encoded / sub-delims / ":" )
+# and `"`, `{`, `}`, `\` appear in NONE of those productions — they are not
+# unreserved (`ALPHA / DIGIT / -._~`), not sub-delims (`!$&'()*+,;=`), and not
+# `:` — so they can never occur unencoded in a well-formed userinfo. Excluding
+# them narrows the match to the JSON field boundary while keeping the
+# `@`-inside-userinfo coverage documented above.
+#
+# `,` is deliberately NOT excluded even though it is a JSON structural char: it
+# IS a legal sub-delim, so a real `user:pa,ss@host` password would stop matching
+# and leak — an UNDER-redaction, the failure direction this module refuses to
+# trade for. `"` alone already fences every compact-JSON case, because JSON
+# string values are quoted, so no coverage is lost by keeping `,`.
 _URL_WITH_AUTH = re.compile(
-    r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s]{0,256}:[^\s]{0,256}@", re.ASCII
+    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s"{}\\]{0,256}:[^\s"{}\\]{0,256}@',
+    re.ASCII,
 )
 
 # Overflow companion to `_URL_WITH_AUTH` — catches a userinfo LONGER than the
@@ -227,8 +253,20 @@ _URL_WITH_AUTH = re.compile(
 #
 # The `:` is REQUIRED so this stays credential-shaped: without it an ordinary
 # `https://example.com/@handle` (a very common profile URL) would be redacted.
+#
+# Both runs ALSO exclude `"`, `{`, `}` and `\` for the same reason, and on the
+# same RFC 3986 §3.2.1 grounds, as the bounded rule above — see its comment for
+# the full derivation and for why `,` is deliberately NOT excluded.
+#
+# This companion is the one that ACTUALLY fired on the compact-JSON body: the
+# bounded rule alone was fixed first and went clean, yet the over-redaction
+# persisted, because this rule's SECOND run (`[^\s@]*`) still crossed the JSON
+# string boundary — it walked `…/docs/auth"},"contact"`, took the `:` after
+# `"contact"`, then reached the `@` of the contact address. Fixing one pattern
+# and not its companion left the defect fully intact, so both MUST carry the
+# exclusion; a future edit that relaxes either one re-opens the whole class.
 _URL_WITH_AUTH_OVERFLOW = re.compile(
-    r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s@:]*:[^\s@]*@", re.ASCII
+    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s@:"{}\\]*:[^\s@"{}\\]*@', re.ASCII
 )
 
 # Userinfo with NO password half — `scheme://<token>@host`.
