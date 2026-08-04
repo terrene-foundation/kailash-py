@@ -5,12 +5,37 @@ Provides user-filtered agent discovery and skill metadata for UI integration.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen.utils.credential_scrub import scrub_credentials
+
+
+def _accepts_user_kwargs(checker: Any | None) -> bool:
+    """Does ``checker.verify`` take ``user_id``/``organization_id`` directly?
+
+    Returns True for the duck-typed shape consumers actually wired (and that
+    every existing test uses), False for the ``context=``-taking shape
+    ``TrustOperations`` declares. Defaults to True when the signature cannot be
+    read, because that is the historical call shape — an unreadable signature
+    should not silently switch a working integration onto the other form.
+    """
+    if checker is None:
+        return True
+    verify = getattr(checker, "verify", None)
+    if verify is None:
+        return True
+    try:
+        params = inspect.signature(verify).parameters
+    except (TypeError, ValueError):  # builtins / C-implemented callables
+        return True
+    if any(p.kind is p.VAR_KEYWORD for p in params.values()):
+        return True
+    return "user_id" in params
+
 
 from .registry import AgentRegistry
 from .runtime import AgentMetadata, AgentStatus
@@ -373,6 +398,12 @@ class UserFilteredAgentDiscovery:
         self._registry = registry
         self._permission_checker = permission_checker
 
+        # Introspected ONCE here, not per agent per call: does this checker
+        # accept the duck-typed `user_id`/`organization_id` kwargs, or does it
+        # take the `context=` mapping that `TrustOperations` declares? See
+        # `_check_user_access` for why both shapes must be supported.
+        self._checker_takes_user_kwargs = _accepts_user_kwargs(permission_checker)
+
         # `permission_checker` defaults to None, and with it None
         # `_check_user_access` unconditionally returns
         # `(True, AccessMetadata(permission_level="execute"))` for every user
@@ -508,26 +539,72 @@ class UserFilteredAgentDiscovery:
         # If permission checker is available, use it
         if self._permission_checker:
             try:
-                result = await self._permission_checker.verify(
-                    agent_id=agent_metadata.agent_id,
-                    action="execute",
-                    user_id=user_id,
-                    organization_id=organization_id,
-                )
-                if hasattr(result, "valid") and not result.valid:
+                # CALL SHAPE, and this was 100% broken for the DOCUMENTED
+                # checker type. The docstring names `TrustOperations`, whose
+                # real signature is
+                #     verify(agent_id, action, resource=None, level=...,
+                #            context=None)
+                # — NO `user_id`, NO `organization_id`, NO `**kwargs`. Passing
+                # them raised TypeError on the FIRST agent of every call, which
+                # the `except` below caught and turned into a grant. So wiring
+                # the documented checker meant EVERY agent was returned to
+                # EVERY user, always — not a transient window, the steady
+                # state. Verified by `inspect.signature`, not by reading.
+                #
+                # Nothing caught it because every existing test supplies a
+                # bespoke duck-typed checker written to match this call site.
+                #
+                # Both shapes are supported rather than one being broken: the
+                # duck-typed kwargs form (what consumers actually wired, and
+                # what the tests use) and the `context=` form TrustOperations
+                # declares. Introspected ONCE at __init__, not per agent.
+                if self._checker_takes_user_kwargs:
+                    result = await self._permission_checker.verify(
+                        agent_id=agent_metadata.agent_id,
+                        action="execute",
+                        user_id=user_id,
+                        organization_id=organization_id,
+                    )
+                else:
+                    result = await self._permission_checker.verify(
+                        agent_id=agent_metadata.agent_id,
+                        action="execute",
+                        context={
+                            "user_id": user_id,
+                            "organization_id": organization_id,
+                        },
+                    )
+
+                # FAIL CLOSED on a malformed result. `hasattr(result, "valid")`
+                # granted access to any object lacking `.valid` — a dict, None,
+                # a renamed field — reading the ABSENCE of a deny signal as a
+                # grant. `is not True` denies unless the checker affirmatively
+                # said yes.
+                #
+                # This is NOT the fail-open disposition below, which is
+                # deliberately unchanged: that one is about the checker
+                # ERRORING. This is about it ANSWERING in a shape we cannot
+                # read, where there is no availability trade-off to weigh —
+                # an unreadable answer is not an approval.
+                if getattr(result, "valid", None) is not True:
                     return False, AccessMetadata()
 
-                # Extract constraints from verification result
+                # Extract constraints. `TrustOperations.VerificationResult`
+                # exposes `effective_constraints`, NOT `constraints`, so the
+                # old `hasattr(result, "constraints")` was False for the
+                # documented type and every granted user silently received
+                # UNLIMITED constraints. Both names are read.
                 constraints = AccessConstraints()
-                if hasattr(result, "constraints"):
-                    if "max_daily_invocations" in result.constraints:
-                        constraints.max_daily_invocations = result.constraints[
-                            "max_daily_invocations"
-                        ]
-                    if "max_tokens" in result.constraints:
-                        constraints.max_tokens_per_session = result.constraints[
-                            "max_tokens"
-                        ]
+                raw = getattr(
+                    result,
+                    "constraints",
+                    getattr(result, "effective_constraints", None),
+                )
+                if isinstance(raw, dict):
+                    if "max_daily_invocations" in raw:
+                        constraints.max_daily_invocations = raw["max_daily_invocations"]
+                    if "max_tokens" in raw:
+                        constraints.max_tokens_per_session = raw["max_tokens"]
 
                 return True, AccessMetadata(
                     permission_level="execute",
