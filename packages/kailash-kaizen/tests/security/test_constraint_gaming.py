@@ -166,23 +166,31 @@ class TestTypeConfusionPrevention:
         Attackers may try to pass "infinity" or "999999999999999" as strings
         to bypass numeric parsing or cause overflow.
 
-        Expected: String values that Python's float() accepts are parsed.
-        Non-numeric strings should raise ValueError.
+        Expected: finite numeric strings parse; non-numeric strings raise
+        ValueError; NON-FINITE strings ("infinity", "inf", "nan") are REJECTED
+        at the parser.
 
-        Note: "infinity" parses to float('inf') - this is technically valid
-        but represents unlimited budget. System should limit constraint values
-        at the policy level, not the parser level.
+        Note: this test previously asserted that "infinity" parsed to float('inf')
+        and deferred the restriction to "the policy level". That is exactly the
+        NaN/Inf constraint-bypass class: NaN defeats every numeric comparison
+        (NaN <= limit is always False) and Inf means an unbounded budget. The
+        parser was hardened to fail closed (9a1595a4b, "R4 findings — isfinite on
+        EATP cost limits"; mandated by trust-plane-security.md Rule 3 and
+        MUST-NOT-5). The assertion is inverted here to pin the hardened behaviour
+        rather than the bypass.
         """
         # Valid numeric string should parse
         constraint = cost_dimension.parse("100.5")
         assert constraint.parsed == 100.5
 
-        # "infinity" parses to inf (Python float behavior)
-        # This is a known behavior - policy should restrict at higher level
-        constraint = cost_dimension.parse("infinity")
-        import math
-
-        assert math.isinf(constraint.parsed)
+        # Non-finite strings MUST be rejected at the parser (fail-closed).
+        for non_finite in ("infinity", "inf", "-inf", "nan"):
+            with pytest.raises(ValueError) as exc_info:
+                cost_dimension.parse(non_finite)
+            assert "must be finite" in str(exc_info.value), (
+                f"{non_finite!r} must be rejected as non-finite, "
+                f"got: {exc_info.value}"
+            )
 
         # Non-numeric string should raise ValueError
         with pytest.raises(ValueError) as exc_info:
@@ -990,7 +998,10 @@ class TestApprovalRequiredBlocking:
         Expected: Operations requiring approval should be blocked until approved.
         This tests the ApprovalStatus enum behavior.
         """
-        from kailash.trust.governance import ApprovalStatus
+        # ApprovalStatus is Kaizen-owned (kaizen/trust/governance/approval_manager.py),
+        # NOT a kailash.trust re-export — commit 45c4ab2f8 rewrote this import even
+        # though its own message lists governance/approval_manager as PRESERVED.
+        from kaizen.trust.governance import ApprovalStatus
 
         # Pending status should block
         assert ApprovalStatus.PENDING.value == "pending"
@@ -1018,7 +1029,9 @@ class TestApprovalRequiredBlocking:
         Expected: Rejected requests cannot be converted to approved.
         This is enforced in ApprovalManager.approve_request.
         """
-        from kailash.trust.governance import ApprovalRequest, ApprovalStatus
+        # Kaizen-owned symbols; see the sibling test above for why the import
+        # path is kaizen.trust.governance and not kailash.trust.governance.
+        from kaizen.trust.governance import ApprovalRequest, ApprovalStatus
 
         # Create a rejected request
         request = ApprovalRequest(
