@@ -92,7 +92,25 @@ identity-reverse-map collapsing round-robin (F6).
 
 ## PENDING DECISIONS — co-owner input needed, both surfaced, neither actioned
 
-1. **`discovery._check_user_access` fail-open.** `TrustOperations.verify()` — the
+1. **`discovery._check_user_access` — the BUG HALF IS FIXED (`ca8aaad74`); only
+   the POSTURE FLIP remains yours.**
+   FIXED, no posture trade involved: the documented `TrustOperations` call shape
+   (it raised TypeError on every call and the handler turned that into a grant —
+   so the documented integration granted EVERYTHING, always); the malformed-result
+   grant (`hasattr(result,"valid")` read absence-of-deny as approval); and the
+   constraints extraction (wrong attribute name, so granted users silently got
+   UNLIMITED constraints). Both checker shapes now supported via one-time
+   introspection, so duck-typed consumers are unaffected.
+   **STILL YOURS:** the `except Exception` path still FAILS OPEN. Genuine
+   availability-vs-safety trade on a public API — fail-closed means a transient
+   checker outage denies every user. NOW PINNED by
+   `test_error_path_still_fails_open`, which asserts current behaviour and tells
+   whoever flips it to delete the test and record the decision. The pin exists so
+   the flip cannot arrive as a side effect of unrelated work.
+   NOTE the earlier deferral rationale is REFUTED for the documented type but NOT
+   for duck-typed consumers — they have a working integration today, which is
+   precisely why this stayed a decision rather than becoming obvious.
+2. **(superseded — see item 1)** `TrustOperations.verify()` — the
    checker type the docstring NAMES — takes no `user_id`/`organization_id`/
    `**kwargs` (verified by `inspect.signature`). The call site passes both ⇒
    `TypeError` on the first agent ⇒ caught ⇒ **every agent granted to every user,
@@ -101,7 +119,12 @@ identity-reverse-map collapsing round-robin (F6).
    fail-closed together (either alone is worse). Not actioned because it changes
    behaviour for custom-checker consumers on a public API. Fix design + 7 tests in
    the w8-w12-authz report.
-3. **A THIRD credential scrubber, on a LOGGING path, 9/10 drift.**
+3. **DONE (`358637785`) — the third credential scrubber is routed through the
+   shared module; drift 9/10 -> 0/10, with a bidirectional parity suite so it
+   cannot drift back silently. Fix was ADDITIVE: the shared module owns vendor
+   credentials + DSNs, the local list keeps PII/payment classes it knows nothing
+   about. Replacing wholesale would have closed a credential gap by opening a
+   PII one.** Original finding, kept for context:
    `SensitiveDataRedactor.PATTERNS` in
    `kaizen/core/autonomy/hooks/security/redaction.py`, reachable via
    `hooks/security/__init__.py` -> `hooks/builtin/logging_hook.py`. It catches
