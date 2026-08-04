@@ -129,6 +129,58 @@ class TestSemanticActuallyConsultsTheJudge:
         )
 
 
+class TestAliasedAgentInstancesDoNotCollapseRouting:
+    """Two ids sharing ONE agent instance must still round-robin.
+
+    Regression on the delegation itself. The first version of the adapter
+    recovered the id by reverse-mapping the returned agent OBJECT
+    (`metadata.agent is selected`). That is ambiguous the moment two
+    registered ids point at the same instance — the scan returns the FIRST
+    match every time, so routing silently collapsed:
+
+        aliased  -> ['a1', 'a1', 'a1', 'a1']
+        expected -> ['a1', 'a2', 'a1', 'a2']   (the deleted implementation)
+
+    Fixed by carrying the id: the helpers return the (agent_id, metadata)
+    candidate tuple, so no reverse lookup happens at all. Ambiguity removed
+    rather than tie-broken.
+    """
+
+    @pytest.mark.asyncio
+    async def test_round_robin_distributes_across_aliased_ids(self):
+        from kaizen_agents.patterns.runtime import (
+            AgentStatus,
+            OrchestrationRuntime,
+            RoutingStrategy,
+        )
+
+        runtime = OrchestrationRuntime.__new__(OrchestrationRuntime)
+        runtime._round_robin_index = 0
+
+        shared = object()  # ONE instance behind TWO registered ids
+
+        class _M:
+            def __init__(self, agent):
+                self.agent = agent
+                self.status = AgentStatus.ACTIVE
+                self.active_tasks = 0
+
+        runtime.agents = {"a1": _M(shared), "a2": _M(shared)}
+
+        class _Cfg:
+            default_routing_strategy = RoutingStrategy.ROUND_ROBIN
+            enable_semantic_routing = True
+
+        runtime.config = _Cfg()
+
+        got = [await runtime._route_task("t", ["a1", "a2"]) for _ in range(4)]
+        assert got == ["a1", "a2", "a1", "a2"], (
+            f"round-robin collapsed to {got!r} — the adapter is reverse-mapping "
+            f"the agent object to an id again, which cannot disambiguate two "
+            f"ids sharing one instance"
+        )
+
+
 class TestNoCapabilityDataIsLoud:
     """The positional fallback under SEMANTIC must announce itself.
 
@@ -318,5 +370,9 @@ class TestRoundRobinSurvivesPoolShrink:
         assert runtime._round_robin_index == 2
 
         # Previously: IndexError: list index out of range.
-        result = await runtime._route_round_robin(agents[:2])
-        assert result in ("A0", "A1")
+        # The helper returns the (agent_id, metadata) CANDIDATE TUPLE, not the
+        # agent object — that is what lets `_route_task` recover the id without
+        # an ambiguous reverse lookup.
+        agent_id, metadata = await runtime._route_round_robin(agents[:2])
+        assert agent_id in ("a0", "a1")
+        assert metadata.agent in ("A0", "A1")

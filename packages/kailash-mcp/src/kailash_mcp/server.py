@@ -4209,7 +4209,20 @@ class MCPServer:
                                 {
                                     "name": name,
                                     "description": tool_info.get("description", ""),
-                                    "inputSchema": tool_info.get("inputSchema", {}),
+                                    # READ the snake_case key the registry
+                                    # actually WRITES. This site read
+                                    # `inputSchema` (camelCase) — a key nothing
+                                    # in this module ever stores — so the
+                                    # `.get` default fired every time and
+                                    # completion for tool references advertised
+                                    # an empty schema for EVERY tool, which is
+                                    # the exact defect #1998 fixed at the other
+                                    # two emission sites (2862, 4649). Same
+                                    # registry, same wrong-by-default outcome;
+                                    # missed because the sweep matched on the
+                                    # emitted camelCase name rather than on the
+                                    # stored one.
+                                    "inputSchema": tool_info.get("input_schema", {}),
                                 },
                             )
                         )

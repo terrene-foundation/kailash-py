@@ -249,36 +249,67 @@ class TestRealCredentialsStillRedacted:
             f"entirely rather than redacting.\nScrubbed: {scrubbed!r}"
         )
 
-    def test_third_sibling_pattern_does_not_over_match_compact_json(self) -> None:
-        """Enforcement-surface parity for `_URL_WITH_USERINFO_ONLY`.
+    @pytest.mark.parametrize(
+        "label,body",
+        [
+            # KEYED transition — fenced by the `:` of `"c":`, even before the
+            # tempered fence existed. These two were the ONLY vectors the
+            # previous version of this test used, which is why it passed
+            # regardless of the gap.
+            ("keyed transition", '{"d":"https://docs.example.com","c":"me@me.com"}'),
+            ("pathful url", '{"m":"https://a.example.com/x/me@y.com"}'),
+            # ARRAY transitions — no key, therefore NO colon to fence on, and a
+            # bare authority has no path either. Both were WIDE OPEN.
+            (
+                "sibling array element",
+                '{"eps":["https://example.com","ops@example.com"]}',
+            ),
+            (
+                "nested array element",
+                '{"a":["https://example.com",["ops@example.com"]]}',
+            ),
+            ("object separator", '{"a":"https://example.com"},{"b":"ops@x.com"}'),
+        ],
+    )
+    def test_userinfo_only_rule_does_not_cross_json_boundaries(
+        self, label: str, body: str
+    ) -> None:
+        """`_URL_WITH_USERINFO_ONLY` must not cross a JSON field boundary.
 
-        Two of the three sibling patterns gained the `"` exclusion. The third
-        did NOT, and that asymmetry is the classic place an incomplete fix
-        hides — so it is PROVEN safe here, not assumed.
+        THIS TEST REPLACES ONE THAT COULD NOT FAIL. The previous version used
+        only the first two vectors below, both fenced by the `:` in a
+        `"<key>":` transition — so it passed whether or not the rule had a gap,
+        and it was cited as proof that the rule "needs no change"
+        (`instrument-discipline.md` MUST-1: name the falsifying result).
 
-        It is structurally fenced already: its userinfo class excludes `/` and
-        `:`, so on `{"d":"https://docs.example.com","c":"me@me.com"}` the run
-        stops at the first `/` of the path and never reaches the `@`.
-
-        It DOES match `{"m":"https://token@y.com"}` — and that is correct, not a
-        miss. `scheme://<token>@host` is the PAT-in-userinfo shape this rule
-        exists to catch, and being inside a JSON value does not make it less of
-        a credential. Only the token is replaced; the JSON survives.
+        The array vectors are the ones that discriminate: an array transition
+        carries no key, hence no colon, and a bare authority carries no path.
+        Against the un-fenced rule the last three FAIL — including
+        `nested array element`, which produced UNPARSEABLE output.
         """
-        for body in (
-            '{"d":"https://docs.example.com","c":"me' + _AT + 'me.com"}',
-            '{"m":"https://a.example.com/x/me' + _AT + 'y.com"}',
-        ):
-            assert not _URL_WITH_USERINFO_ONLY.search(body), (
-                f"_URL_WITH_USERINFO_ONLY over-matched credential-free compact "
-                f'JSON; it needs the `"` exclusion after all.\nBody: {body!r}'
-            )
+        assert not _URL_WITH_USERINFO_ONLY.search(body.replace("@", _AT)), (
+            f"[{label}] the bare-token rule crossed a JSON field boundary; it "
+            f"will redact across values and can unbalance the structure."
+        )
 
-        # Positive control: the shape it MUST still claim.
-        pat_url = "https://" + "ghp0abcdef1234567890" + _AT + "github.example.com/o/r"
+    def test_userinfo_only_rule_still_claims_its_own_shape(self) -> None:
+        """Positive controls, so the fence cannot pass by matching nothing.
+
+        The second control is why this rule uses the tempered fence rather than
+        a plain `"` exclusion: a plain exclusion fences the crossings but drops
+        a bare token CONTAINING a quote — the under-redaction already made and
+        reverted twice on the sibling rules.
+        """
+        pat = "https://" + "ghp0abcdef1234567890" + _AT + "github.example.com/o/r"
         assert _URL_WITH_USERINFO_ONLY.search(
-            pat_url
+            pat
         ), "the bare-token-in-userinfo rule stopped matching its own shape"
+        quoted = "https://tok" + _Q + "en1234567890" + _AT + "github.example.com/o/r"
+        assert _URL_WITH_USERINFO_ONLY.search(quoted), (
+            "a bare token containing a quote is no longer claimed — that is the "
+            "plain-exclusion under-redaction this rule uses a tempered fence to "
+            "avoid"
+        )
 
     def test_same_string_value_over_redaction_is_an_accepted_residual(self) -> None:
         """Pin the KNOWN limit so it is not mistaken for a new regression.

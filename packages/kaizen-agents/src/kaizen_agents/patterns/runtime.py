@@ -579,15 +579,23 @@ class OrchestrationRuntime:
 
         # Route based on strategy
         if strategy == RoutingStrategy.SEMANTIC and self.config.enable_semantic_routing:
-            return await self._route_semantic(task, healthy_agents)
+            chosen = await self._route_semantic(task, healthy_agents)
         elif strategy == RoutingStrategy.LEAST_LOADED:
-            return await self._route_least_loaded(healthy_agents)
+            chosen = await self._route_least_loaded(healthy_agents)
         elif strategy == RoutingStrategy.RANDOM:
-            return await self._route_random(healthy_agents)
+            chosen = await self._route_random(healthy_agents)
         else:  # ROUND_ROBIN
-            return await self._route_round_robin(healthy_agents)
+            chosen = await self._route_round_robin(healthy_agents)
 
-    async def _route_semantic(self, task: str, agents: list[tuple]) -> BaseAgent | None:
+        # The strategy helpers return the (agent_id, metadata) CANDIDATE TUPLE
+        # rather than the agent object. That is what lets `_route_task` recover
+        # the ID without a reverse lookup: mapping an agent OBJECT back to an ID
+        # is ambiguous when two ids share one instance, and doing so collapsed
+        # round-robin to a single agent. This surface's own contract is
+        # unchanged — it still returns the agent.
+        return chosen[1].agent if chosen is not None else None
+
+    async def _route_semantic(self, task: str, agents: list[tuple]) -> tuple | None:
         """Route using A2A capability matching (best-fit selection).
 
         Capability scoring is delegated to the LLM via
@@ -656,7 +664,7 @@ class OrchestrationRuntime:
                 agent_scored += 1
                 scored_capabilities += 1
                 if score > best_score:
-                    best_agent = metadata.agent
+                    best_agent = (agent_id, metadata)
                     best_score = score
 
             if agent_degraded and agent_scored == 0:
@@ -874,19 +882,17 @@ class OrchestrationRuntime:
             )
             return 0.0
 
-    async def _route_least_loaded(self, agents: list[tuple]) -> BaseAgent:
-        """Route to agent with fewest active tasks."""
-        agent_id, metadata = min(agents, key=lambda x: x[1].active_tasks)
-        return metadata.agent
+    async def _route_least_loaded(self, agents: list[tuple]) -> tuple | None:
+        """Route to agent with fewest active tasks. Returns the CANDIDATE TUPLE."""
+        return min(agents, key=lambda x: x[1].active_tasks)
 
-    async def _route_random(self, agents: list[tuple]) -> BaseAgent:
+    async def _route_random(self, agents: list[tuple]) -> tuple:
         """Route to random agent."""
         import random
 
-        agent_id, metadata = random.choice(agents)
-        return metadata.agent
+        return random.choice(agents)
 
-    async def _route_round_robin(self, agents: list[tuple]) -> BaseAgent:
+    async def _route_round_robin(self, agents: list[tuple]) -> tuple:
         """Route using round-robin distribution."""
         # Normalise on READ, not only on write. `_round_robin_index` is
         # RUNTIME-scoped and persists across calls, while `agents` is a
@@ -905,9 +911,8 @@ class OrchestrationRuntime:
         # round-robin copy and was missing here, in the live path — the
         # duplicate-implementation drift that clause is about.
         index = self._round_robin_index % len(agents)
-        agent_id, metadata = agents[index]
         self._round_robin_index = (index + 1) % len(agents)
-        return metadata.agent
+        return agents[index]
 
     # ========================================================================
     # Workflow Execution (AsyncLocalRuntime Integration)
@@ -1754,13 +1759,15 @@ class OrchestrationRuntime:
             # `str | None` contract rather than inventing a positional pick.
             return None
 
-        # Helpers return the agent OBJECT; this surface is ID-returning.
-        # Match on identity, not equality: agents are user-supplied objects
-        # and `==` may be overridden or expensive.
-        for agent_id, metadata in candidates:
-            if metadata.agent is selected:
-                return agent_id
-        return None
+        # The helpers hand back the (agent_id, metadata) tuple, so the ID is
+        # carried directly. An earlier revision reverse-mapped the returned
+        # agent OBJECT to an id by identity (`metadata.agent is selected`);
+        # that is ambiguous when two ids share ONE agent instance, and it
+        # silently collapsed round-robin to the first matching id
+        # (['a1','a1','a1','a1'] where the deleted implementation gave
+        # ['a1','a2','a1','a2']). Carrying the id removes the ambiguity
+        # instead of tie-breaking it.
+        return selected[0]
 
     async def _execute_agent_task(
         self, agent, inputs: dict[str, Any]

@@ -373,28 +373,36 @@ _URL_WITH_AUTH_OVERFLOW = re.compile(
 #      length.
 # If a real leak of this shape is ever observed, the correct fix is a
 # LENGTH-ANCHORED companion (`[^\s@]{N,}@`), not widening this class.
-# `"` is deliberately NOT excluded here, and the asymmetry with the two rules
-# above is INTENTIONAL — do not "fix" it.
+# Carries the SAME tempered JSON-field-boundary fence as the two rules above.
 #
-# The `:` exclusion already fences every cross-JSON-value crossing by
-# construction: to travel from a URL in one value to an `@` in a LATER value the
-# run must cross `","<key>":`, and a JSON key/value boundary ALWAYS contains a
-# `:`. So the run halts before it can reach the later `@` with or without a
-# quote rule. Verified: `{"a":"https://x","b":"c@d.com"}` -> no match.
+# An earlier revision left this rule alone and claimed it was "proven" not to
+# need one. That claim was WRONG, and the test pinning it could not have caught
+# the error: both of its vectors were fenced by the `:` in a `"<key>":`
+# transition, so it passed whether or not a gap existed
+# (`instrument-discipline.md` MUST-1). Its stated mechanism was also wrong —
+# it said the run stops at "the first `/` of the path" for a vector that has
+# no path at all.
 #
-# What a `"` exclusion would NOT fix: the within-one-value case
-# (`{"d":"https://docs.example.com,mail=ops@x.com"}`), where no quote sits
-# between the URL and the `@` at all.
+# Derived rather than probed: the class `[^\s@:/]` excludes only `:` and `/`,
+# so it admits `"`, `,`, `[`, `]`, `{`, `}`. A KEYED transition (`","<key>":`)
+# is fenced by its `:`, and a URL with a path is fenced by the `/` — which is
+# why the two vectors passed. But an ARRAY transition has no key and no colon,
+# and a bare authority has no path, so both crossings were WIDE OPEN:
+#     {"eps":["https://example.com","ops@example.com"]}
+#       -> {"eps":["https://[REDACTED]@example.com"]}      (element silently lost)
+#     {"a":["https://example.com",["ops@example.com"]]}
+#       -> {"a":["https://[REDACTED]@example.com"]]}       (UNPARSEABLE)
+# The second is exactly the structural-validity loss this module treats as the
+# BUG-not-cosmetic half of the W19 finding.
 #
-# What it WOULD cost: the leak already made once on the two rules above — a bare
-# PAT or basic-auth username CONTAINING a quote would stop matching and pass
-# through in full.
-#
-# Zero coverage gained, one under-redaction opened. Recorded here because the
-# next reader sees two rules excluding `"` and one not, and "fixing" the
-# asymmetry silently re-opens the hole.
+# The tempered fence is used here rather than a plain `"` exclusion because a
+# plain exclusion would leak a bare token CONTAINING a quote — the same
+# under-redaction already made and reverted twice on the rules above. Measured:
+# tempered fences both array crossings AND still claims
+# `https://tok"en...@host`; the plain exclusion fences the crossings but drops
+# that token entirely.
 _URL_WITH_USERINFO_ONLY = re.compile(
-    r"([A-Za-z][A-Za-z0-9+.-]{0,31}://)[^\s@:/]+@", re.ASCII
+    r'([A-Za-z][A-Za-z0-9+.-]{0,31}://)(?:(?!"[,}\]:])[^\s@:/])+@', re.ASCII
 )
 
 # Azure OpenAI endpoint hostname (#1960). The <resource> subdomain is the
