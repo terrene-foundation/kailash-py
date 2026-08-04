@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import inspect
 import logging
+import math
+from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from datetime import time as _time
 from typing import Any
 
 from kaizen.llm.reasoning import ReasoningDegradedError
@@ -55,7 +59,33 @@ DENIED_PERMISSION_LEVEL = "none"
 
 @dataclass
 class AccessConstraints:
-    """Constraints on agent access for a user."""
+    """Constraints on agent access for a user.
+
+    TWO ENCODING HAZARDS, both load-bearing for consumers:
+
+    1. ``None`` MEANS UNLIMITED, NOT "NONE". Every field defaults to None and
+       `to_dict()` serializes None as `null`, so a bare `AccessConstraints()`
+       is the MOST PERMISSIVE value this type can hold — uncapped invocations,
+       tokens, spend, and tools. Any code path that cannot determine the real
+       caps MUST NOT hand back a default instance; see `deny()`.
+
+    2. A ZEROED CAP IS FALSY. `deny()` encodes denial as `0` / `0.0` / `[]`,
+       all of which are falsy in Python. A consumer writing::
+
+           if constraints.max_daily_invocations:      # WRONG
+               enforce(constraints.max_daily_invocations)
+
+       reads a DENIAL (`0`) exactly as it reads an ABSENT cap (`None`) — as
+       "no limit set" — and enforces nothing. The two states are opposites.
+       Consumers MUST discriminate on `is None`::
+
+           if constraints.max_daily_invocations is not None:   # RIGHT
+               enforce(constraints.max_daily_invocations)
+
+       The same hazard applies to `max_tokens_per_session` (0),
+       `max_cost_per_session_usd` (0.0) and `allowed_tools` (`[]`) — an empty
+       allow-list means "no tool is permitted", never "no restriction".
+    """
 
     max_daily_invocations: int | None = None
     max_tokens_per_session: int | None = None
@@ -88,15 +118,34 @@ class AccessConstraints:
         strictly the most permissive value the type can hold.
 
         Zero caps and an EMPTY `allowed_tools` say the opposite, in the same
-        vocabulary. `blocked_tools` and the time window stay None deliberately:
-        those are *additional* restrictions layered on a grant, and inventing
-        values for them would imply a grant exists to restrict.
+        vocabulary.
+
+        EVERY field is now set, including `blocked_tools` and the time window.
+        An earlier revision left those three as None with the rationale that
+        they are "*additional* restrictions layered on a grant, and inventing
+        values for them would imply a grant exists to restrict". That reasoning
+        described the AUTHOR's intent and not the TYPE's encoding: None on this
+        type does not mean "not applicable", it means UNLIMITED (see the class
+        docstring). A consumer that enforces a blocklist read `blocked_tools:
+        null` as "nothing is blocked", and a consumer that enforces a schedule
+        read `time_window_*: null` as "permitted at any hour" — so the denial
+        payload was still maximally permissive on exactly the two axes those
+        consumers enforce. Three fields short of a denial is not a denial.
+
+        `blocked_tools=["*"]` blocks every tool, and a ZERO-WIDTH window
+        (start == end == midnight) permits no instant, each stated in the
+        vocabulary its own consumer already reads. Note the falsy-zero hazard
+        documented on the class: these values are only correctly enforced by a
+        consumer that discriminates on `is None`.
         """
         return cls(
             max_daily_invocations=0,
             max_tokens_per_session=0,
             max_cost_per_session_usd=0.0,
             allowed_tools=[],
+            blocked_tools=["*"],
+            time_window_start="00:00:00",
+            time_window_end="00:00:00",
         )
 
 
@@ -152,6 +201,202 @@ class AccessMetadata:
             constraints=AccessConstraints.deny(),
             denied=True,
         )
+
+
+#: Accepted keys in a MAPPING-shaped constraint payload → `AccessConstraints`
+#: field name. ALL SEVEN fields are reachable. `max_tokens` is the historical
+#: alias for `max_tokens_per_session`: it is the only key the pre-normalizer
+#: code read besides `max_daily_invocations`, so consumer-wired duck-typed
+#: checkers emit it and dropping it would break them.
+_CONSTRAINT_KEY_ALIASES: dict[str, str] = {
+    "max_daily_invocations": "max_daily_invocations",
+    "max_tokens": "max_tokens_per_session",
+    "max_tokens_per_session": "max_tokens_per_session",
+    "max_cost_per_session_usd": "max_cost_per_session_usd",
+    "allowed_tools": "allowed_tools",
+    "blocked_tools": "blocked_tools",
+    "time_window_start": "time_window_start",
+    "time_window_end": "time_window_end",
+}
+
+
+def _coerce_int_cap(value: Any) -> tuple[Any, bool]:
+    """An invocation/token cap. `bool` is EXCLUDED though it is an `int`
+    subclass — `max_tokens: True` is a mis-typed payload, not a cap of 1."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None, False
+    return value, True
+
+
+def _coerce_float_cap(value: Any) -> tuple[Any, bool]:
+    """A spend cap. NaN/Inf are REJECTED: `NaN` silently passes every `>`
+    comparison a budget check makes (`trust-plane-security.md` MUST-NOT-5), so
+    accepting one here would reinstate the unlimited grant in numeric form."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, False
+    if not math.isfinite(value) or value < 0:
+        return None, False
+    return float(value), True
+
+
+def _coerce_tool_list(value: Any) -> tuple[Any, bool]:
+    """An allow/block list. Must be a real sequence of strings; a bare `str`
+    is rejected because iterating one yields CHARACTERS, silently producing a
+    per-character tool list."""
+    if isinstance(value, (str, bytes, bytearray)) or not isinstance(
+        value, (Sequence, AbstractSet)
+    ):
+        return None, False
+    items = list(value)
+    if not all(isinstance(item, str) for item in items):
+        return None, False
+    return items, True
+
+
+def _coerce_time(value: Any) -> tuple[Any, bool]:
+    """An ISO time bound. Parsed, not merely type-checked: an unparseable
+    bound is read by a scheduling consumer as no bound at all."""
+    if not isinstance(value, str):
+        return None, False
+    try:
+        _time.fromisoformat(value)
+    except ValueError:
+        return None, False
+    return value, True
+
+
+_CONSTRAINT_COERCERS = {
+    "max_daily_invocations": _coerce_int_cap,
+    "max_tokens_per_session": _coerce_int_cap,
+    "max_cost_per_session_usd": _coerce_float_cap,
+    "allowed_tools": _coerce_tool_list,
+    "blocked_tools": _coerce_tool_list,
+    "time_window_start": _coerce_time,
+    "time_window_end": _coerce_time,
+}
+
+
+def _constraint_payload_present(raw: Any) -> bool:
+    """Is there a constraint payload to read at all?
+
+    ABSENT (None, or any EMPTY collection) is distinct from UNREADABLE. An
+    absent payload means the checker imposed no constraints — which is exactly
+    what `VerificationResult.effective_constraints` defaults to
+    (`field(default_factory=list)`), so the overwhelmingly common valid
+    verification carries an EMPTY list. Treating that as unreadable would deny
+    every user of the documented checker.
+    """
+    if raw is None:
+        return False
+    if isinstance(raw, (str, bytes, bytearray)):
+        return len(raw) > 0
+    if isinstance(raw, (Mapping, Sequence, AbstractSet)):
+        return len(raw) > 0
+    return True
+
+
+def normalize_access_constraints(
+    raw: Any,
+) -> tuple[AccessConstraints | None, str | None]:
+    """Turn a checker's constraint payload into `AccessConstraints`.
+
+    Returns `(constraints, None)` on success, or `(None, reason)` when the
+    payload is PRESENT but cannot be represented — in which case the caller
+    MUST fail closed. It never returns a default `AccessConstraints()` for a
+    payload it could not read, because on this type a default instance is
+    UNLIMITED (see the class docstring) — i.e. the most permissive possible
+    answer to a question we just failed to answer.
+
+    THREE SHAPES, and the third is why this function exists:
+
+    * **MAPPING** — `{"max_tokens": 42}`. Real cap semantics; all SEVEN fields
+      are mapped. `Mapping`, not `dict`: a checker returning a `MappingProxy`,
+      a `ChainMap`, or any `collections.abc.Mapping` implementation was
+      previously rejected by an `isinstance(raw, dict)` test and its caps
+      silently dropped.
+
+    * **ABSENT / EMPTY** — no constraints imposed; an unrestricted grant.
+
+    * **NON-EMPTY SEQUENCE OF LABELS** — `["read_only", "audit_required"]`.
+      This is what the DOCUMENTED checker actually emits, and it is
+      UNREPRESENTABLE here, so it fails closed.
+
+      Establishing that grammar was the whole point, so it is recorded rather
+      than assumed: `kailash.trust.chain.VerificationResult` declares
+      `effective_constraints: List[str]` (chain.py:854), populated by
+      `TrustOperations.verify` from `chain.get_effective_constraints(...)`
+      (operations/__init__.py:1244), which set-unions `cap.constraints` with
+      `delegation.constraint_subset` and returns `List[str]`
+      (chain.py:1028-1043). `DelegationRecord.constraint_subset` is documented
+      as "constraint LABELS ... read by NO allow/deny gate" (chain.py:350-352),
+      and the in-SDK consumer at `runtime/trust/verifier.py:398` folds them as
+      `{c: True for c in ...}` — each label is a BOOLEAN FLAG. Observed values
+      are `"read_only"`, `"audit_required"`.
+
+      So the labels carry NO cap semantics: there is no number, no field name,
+      and no `key=value` form to parse. Inventing one (splitting on `=`,
+      pattern-matching `max_tokens_42`) would be fabricating a grammar the
+      producing type does not emit, and every label that failed the invented
+      parse would fall back to unlimited. A label set is a restriction the
+      checker DID impose and this type CANNOT express — the only honest
+      dispositions are deny, or grant caps we cannot justify. It denies.
+
+    Anything else present — a bare string, an int, an arbitrary object, a
+    mapping carrying an unrecognized key or an unusable value type — is
+    likewise unrepresentable and denies. An unrecognized key is deliberately
+    NOT ignored: a checker sending `{"max_requests_per_hour": 5}` capped an
+    axis, and silently dropping it grants unlimited on exactly that axis,
+    which is the defect class this function closes.
+    """
+    if not _constraint_payload_present(raw):
+        return AccessConstraints(), None
+
+    if isinstance(raw, Mapping):
+        constraints = AccessConstraints()
+        assigned: dict[str, Any] = {}
+        for key, value in raw.items():
+            if not isinstance(key, str):
+                return None, f"constraint key {key!r} is not a string"
+            field_name = _CONSTRAINT_KEY_ALIASES.get(key)
+            if field_name is None:
+                return None, (
+                    f"unrecognized constraint key {key!r} (recognized: "
+                    f"{', '.join(sorted(_CONSTRAINT_KEY_ALIASES))})"
+                )
+            if value is None:
+                continue
+            coerced, ok = _CONSTRAINT_COERCERS[field_name](value)
+            if not ok:
+                return None, (
+                    f"constraint {key!r} carries an unusable value "
+                    f"({type(value).__name__})"
+                )
+            # Alias collision. `max_tokens` and `max_tokens_per_session` land
+            # on the SAME field, so a payload carrying both with DIFFERENT
+            # values has two answers and dict order picks one; that silent
+            # coin-flip between two caps is itself a fail-closed case.
+            if field_name in assigned and assigned[field_name] != coerced:
+                return None, (
+                    f"conflicting values for {field_name!r} "
+                    f"({assigned[field_name]!r} vs {coerced!r})"
+                )
+            assigned[field_name] = coerced
+            setattr(constraints, field_name, coerced)
+        return constraints, None
+
+    if isinstance(raw, (Sequence, AbstractSet)) and not isinstance(
+        raw, (str, bytes, bytearray)
+    ):
+        labels = ", ".join(sorted(repr(item) for item in raw))
+        return None, (
+            "constraint labels carry no cap semantics and cannot be enforced "
+            f"as AccessConstraints: [{labels}]"
+        )
+
+    return None, (
+        f"constraint payload of type {type(raw).__name__} cannot be read as "
+        "constraints"
+    )
 
 
 @dataclass
@@ -687,18 +932,56 @@ class UserFilteredAgentDiscovery:
                 # that DECLARES `constraints` (a None-defaulted dataclass
                 # field) while POPULATING `effective_constraints` — the shape
                 # any type carrying both names through a rename actually has.
-                # The None then failed the isinstance check and the granted
-                # user received UNLIMITED constraints: verbatim the failure
-                # this block exists to prevent.
-                constraints = AccessConstraints()
+                #
+                # PRESENCE, not `isinstance(..., dict)`, is what selects
+                # between the two names, and that is the fix rather than a
+                # tidy-up. The dict test was still 100% WRONG for the
+                # DOCUMENTED type one step further on: the sentence three
+                # lines above says `effective_constraints` is what
+                # `TrustOperations` populates, and that field is declared
+                # `List[str]` (chain.py:854) — never a dict. So `isinstance(
+                # raw, dict)` was False, the block fell through, and the
+                # granted user received `AccessConstraints()`, every field
+                # None, which this type encodes as UNLIMITED. Verbatim the
+                # failure the paragraph above claims to have closed, still
+                # live, one type-check over.
+                #
+                # It survived a regression suite written for it because every
+                # new fixture supplied a DICT (`effective_constraints={
+                # "max_tokens": 42}`) — a shape the documented type cannot
+                # emit. The suite was shaped to the code, so it could only ever
+                # confirm it. `normalize_access_constraints` is now pinned
+                # against a REAL `kailash.trust.chain.VerificationResult`.
                 raw = getattr(result, "constraints", None)
-                if not isinstance(raw, dict):
+                if not _constraint_payload_present(raw):
                     raw = getattr(result, "effective_constraints", None)
-                if isinstance(raw, dict):
-                    if "max_daily_invocations" in raw:
-                        constraints.max_daily_invocations = raw["max_daily_invocations"]
-                    if "max_tokens" in raw:
-                        constraints.max_tokens_per_session = raw["max_tokens"]
+
+                # FAIL CLOSED on a payload we cannot represent. The checker
+                # affirmatively said `valid=True` AND affirmatively imposed
+                # constraints; if we cannot express them, the choice is between
+                # denying and granting UNLIMITED on axes the checker capped.
+                # A denial is a recoverable availability event — the same trade
+                # the exception branch below makes, for the same reason.
+                constraints, unrepresentable = normalize_access_constraints(raw)
+                if unrepresentable is not None:
+                    logger.error(
+                        "discovery.constraints_unrepresentable_failed_closed",
+                        extra={
+                            "user_id": user_id,
+                            "organization_id": organization_id,
+                            "agent_id": agent_metadata.agent_id,
+                            # The reason names the offending key/label/type, so
+                            # this line is the only signal distinguishing "the
+                            # checker denied" from "the checker allowed but
+                            # spoke a constraint vocabulary we cannot enforce".
+                            # It is a LOCAL diagnostic about our own payload
+                            # shape, but the labels/keys originate in a
+                            # CALLER-SUPPLIED checker, so it is scrubbed on the
+                            # same grounds as the exception branch below.
+                            "reason": scrub_credentials(unrepresentable),
+                        },
+                    )
+                    return False, AccessMetadata.deny()
 
                 return True, AccessMetadata(
                     permission_level="execute",

@@ -404,18 +404,32 @@ class TestUserFilteredAgentDiscovery:
         await registry.register_agent(MockAgent(name="AllowedAgent"), "allowed-1")
         await registry.register_agent(MockAgent(name="DeniedAgent"), "denied-1")
 
-        # Mock permission checker that denies "denied-1"
+        # Mock permission checker that denies "denied-1".
+        #
+        # The RESULT is a plain object, deliberately NOT a `MagicMock`. A
+        # MagicMock auto-creates EVERY attribute on access, so
+        # `getattr(result, "effective_constraints")` returns a fresh Mock rather
+        # than raising — i.e. the result claims to carry a constraint payload
+        # that cannot be read as caps. `_check_user_access` correctly fails
+        # CLOSED on that, so the MagicMock version of this fixture denied the
+        # ALLOWED agent and this test failed for a reason no production object
+        # can reproduce: no real checker result auto-vivifies attributes.
+        #
+        # A fixture whose shape no production path emits cannot report on
+        # production behaviour, so the shape is pinned here instead.
         permission_checker = AsyncMock()
+
+        class _Result:
+            def __init__(self, valid, **fields):
+                self.valid = valid
+                for key, val in fields.items():
+                    setattr(self, key, val)
 
         async def check_permission(agent_id, action, user_id, organization_id):
             if agent_id == "denied-1":
-                result = MagicMock()
-                result.valid = False
-                return result
-            result = MagicMock()
-            result.valid = True
-            result.constraints = {}
-            return result
+                return _Result(valid=False)
+            # No constraints imposed -> an unrestricted grant.
+            return _Result(valid=True, constraints={})
 
         permission_checker.verify = check_permission
 
