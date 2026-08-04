@@ -13,6 +13,9 @@ from typing import Any
 from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen.utils.credential_scrub import scrub_credentials
 
+from .registry import AgentRegistry
+from .runtime import AgentMetadata, AgentStatus
+
 
 def _accepts_user_kwargs(checker: Any | None) -> bool:
     """Does ``checker.verify`` take ``user_id``/``organization_id`` directly?
@@ -36,9 +39,6 @@ def _accepts_user_kwargs(checker: Any | None) -> bool:
         return True
     return "user_id" in params
 
-
-from .registry import AgentRegistry
-from .runtime import AgentMetadata, AgentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -427,9 +427,10 @@ class UserFilteredAgentDiscovery:
         # discovery hot path would be log spam and would be filtered out,
         # which is how a loud signal becomes a silent one.
         #
-        # This does NOT change the fail-open disposition of the EXCEPTION path
-        # in `_check_user_access`; that one is already loud (ERROR) and is
-        # deferred to its own security-reviewed change per the note there.
+        # Distinct from the EXCEPTION path in `_check_user_access`, which now
+        # fails CLOSED (a checker that raised has not approved anything). The
+        # two are different questions: an un-wired instance never asked, a
+        # raising checker was asked and could not answer.
         if permission_checker is None:
             logger.warning(
                 "discovery.permission_filtering_disabled",
@@ -611,22 +612,27 @@ class UserFilteredAgentDiscovery:
                     constraints=constraints,
                 )
             except Exception as exc:
-                # Fall through to default behaviour (grant with default
-                # constraints). This is a FAIL-OPEN disposition and is now
-                # LOUD instead of silent: the checker erroring is materially
-                # different from the checker returning `valid=False`, and the
-                # previous bare `pass` made the two indistinguishable in
-                # production (`rules/zero-tolerance.md` Rule 3).
+                # FAIL CLOSED. A checker that raised has not approved
+                # anything; an unanswered authorization question is not a yes.
                 #
-                # NOTE: the fail-open disposition itself is deliberately left
-                # unchanged here — flipping an authorization default to
-                # fail-closed changes the security posture of a public API
-                # (a transient checker outage would deny every user) and is
-                # a decision for its own change with security review, not a
-                # side-effect of an error-contract fix. The ERROR-level log
-                # is what makes it detectable in the meantime.
+                # This branch previously fell through to the grant below
+                # (fail-OPEN). The flip is deliberate and ratified, and it
+                # accepts a real trade rather than overlooking one: a
+                # transient checker outage now DENIES every user instead of
+                # granting every user. That is the approved disposition — a
+                # denial is a recoverable availability event, a wrong grant is
+                # an unrecoverable disclosure. The prior fail-open was not a
+                # neutral default: combined with the call-shape defect it
+                # meant the DOCUMENTED checker type returned every agent to
+                # every user as the steady state.
+                #
+                # The denial stays LOUD (ERROR, with the exception detail),
+                # and the severity now matters more, not less: under
+                # fail-closed a checker outage is a total discovery outage, so
+                # this log line is the only signal distinguishing "nobody has
+                # access" from "the checker is down".
                 logger.error(
-                    "discovery.permission_check_failed_open",
+                    "discovery.permission_check_failed_closed",
                     extra={
                         "user_id": user_id,
                         "organization_id": organization_id,
@@ -642,8 +648,22 @@ class UserFilteredAgentDiscovery:
                         "error": scrub_credentials(str(exc)),
                     },
                 )
+                # Well-formed metadata, never None: `find_agents_for_user`
+                # unpacks this pair unconditionally, and a direct caller can
+                # still call `.to_dict()` on the result. Same denial shape as
+                # the malformed-result branch above, so the two denials are
+                # indistinguishable to consumers (the LOG is what tells them
+                # apart) and no caller needs a second denial code path.
+                return False, AccessMetadata()
 
-        # Default: grant access with default constraints
+        # Default: grant access with default constraints.
+        #
+        # Reachable ONLY when no permission_checker is wired — every path
+        # inside the `if self._permission_checker` block above now returns.
+        # The un-wired default is deliberately NOT changed by the fail-closed
+        # flip: it is a separate posture question (an unconfigured discovery
+        # instance is a wiring gap, not an authorization outage) and it is
+        # already announced by the constructor's WARNING.
         return True, AccessMetadata(
             permission_level="execute",
             constraints=AccessConstraints(),

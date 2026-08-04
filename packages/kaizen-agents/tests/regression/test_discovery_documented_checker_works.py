@@ -38,20 +38,38 @@ THREE DEFECTS FIXED, all of them unambiguous bugs with no posture trade:
    and every granted user silently received UNLIMITED constraints. Both names
    are read.
 
-WHAT IS DELIBERATELY NOT CHANGED, and is asserted below so it cannot drift
-silently: the `except Exception` path still FAILS OPEN. That one is a genuine
-availability-versus-safety trade on a public API — fail-closed means a transient
-checker outage denies every user — and it is a decision for its owner, not a
-side effect of fixing a call signature. `test_error_path_still_fails_open` pins
-the current behaviour so that when the flip does happen it is a deliberate,
-reviewed change with a failing test to acknowledge.
+FOURTH CHANGE, a RATIFIED POSTURE FLIP rather than a bug fix: the
+`except Exception` path now FAILS CLOSED. It used to grant.
+
+That path is a genuine availability-versus-safety trade on a public API, so it
+was deliberately excluded from the three fixes above and pinned by a test —
+`test_error_path_still_fails_open` — precisely so the flip could not arrive
+silently as a side effect of unrelated work. The flip has now been made
+deliberately, and that test is DELETED (see the commit that made the flip).
+`TestErrorPathFailsClosed` below is its inverse: it asserts the denial, and it
+is the tripwire against a silent flip BACK.
+
+The accepted trade, stated so no future reader mistakes it for an oversight: a
+transient checker outage now denies EVERY user instead of granting every user.
+A denial is a recoverable availability event; a wrong grant is not recoverable.
+The denial is loud (ERROR) so an outage is distinguishable from a legitimate
+"nobody has access", and the exception text is routed through the shared
+`scrub_credentials` helper because a caller-supplied checker may embed a DSN.
+
+NOT changed by the flip: the UN-WIRED default (no `permission_checker` at all)
+still grants. That is a separate question — an un-wired instance never asked;
+a raising checker was asked and could not answer — and it is pinned by
+`test_unwired_instance_still_grants_access` in
+`test_silent_authz_and_routing_fallbacks.py`.
 """
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
-from kaizen_agents.patterns.discovery import UserFilteredAgentDiscovery
+from kaizen_agents.patterns.discovery import AccessMetadata, UserFilteredAgentDiscovery
 from kaizen_agents.patterns.registry import AgentRegistry
 
 pytestmark = pytest.mark.regression
@@ -184,30 +202,111 @@ class TestMalformedResultFailsClosed:
         assert granted is False
 
 
-class TestErrorPathIsDeliberatelyUnchanged:
-    @pytest.mark.asyncio
-    async def test_error_path_still_fails_open(self) -> None:
-        """PINS A DECISION, NOT A DEFECT.
+class _Boom:
+    """A checker that is down. Its exception text embeds a DSN on purpose."""
 
-        The `except Exception` path still GRANTS. That is a real
-        availability-versus-safety trade on a public API — fail-closed means a
-        transient checker outage denies every user — and it belongs to whoever
-        owns that trade, not to a commit fixing a call signature.
-
-        If this test starts failing, the flip has happened. That is fine, and
-        may well be right: delete this test and say so in the commit. What must
-        NOT happen is the flip arriving silently as a side effect of unrelated
-        work, which is exactly what this pins against.
-        """
-
-        class _Boom:
-            async def verify(self, **kwargs):
-                raise RuntimeError("checker unavailable")
-
-        granted, _ = await _check(_Boom())
-        assert granted is True, (
-            "the checker-error path now DENIES. If that was deliberate and "
-            "reviewed, delete this test and record the decision. If it was a "
-            "side effect, revert it — flipping an authorization default is not "
-            "a refactor."
+    async def verify(self, **kwargs):
+        raise RuntimeError(
+            "checker unavailable: postgresql://admin:s3cr3t@db.internal:5432/prod"
         )
+
+
+class _StubRegistry:
+    """Only `list_agents` is reached by `find_agents_for_user`."""
+
+    async def list_agents(self, status_filter=None):
+        return [_Meta()]
+
+
+class TestErrorPathFailsClosed:
+    """The RATIFIED posture flip: a checker that raised has not approved.
+
+    This class replaces `test_error_path_still_fails_open`, which pinned the
+    opposite behaviour so the flip could not happen silently. It was deleted in
+    the commit that made the flip. These tests are the tripwire in the other
+    direction — a silent flip BACK to fail-open now fails here.
+    """
+
+    @pytest.mark.asyncio
+    async def test_error_path_denies(self) -> None:
+        """THE TEETH. Pre-flip this GRANTED.
+
+        A transient checker outage denying every user is the ACCEPTED trade,
+        not an oversight: a denial is recoverable, a wrong grant is not.
+        """
+        granted, _ = await _check(_Boom())
+        assert granted is False, (
+            "the checker-error path GRANTED access. A checker that raised has "
+            "not approved anything — an unanswered authorization question is "
+            "not a yes. If this reverted deliberately it needs its own "
+            "reviewed decision; flipping an authorization default back to "
+            "fail-open is not a refactor."
+        )
+
+    @pytest.mark.asyncio
+    async def test_denial_returns_caller_safe_metadata(self) -> None:
+        """A denial must return well-formed metadata, never None.
+
+        `find_agents_for_user` unpacks the pair unconditionally and callers may
+        serialize the metadata, so a `None` (or a bare tuple) on the denial
+        path would turn an authorization outage into an AttributeError inside
+        the caller — a fail-closed decision that crashes is not fail-closed.
+        """
+        granted, meta = await _check(_Boom())
+        assert granted is False
+        assert meta is not None, "the denial path returned no access metadata"
+        assert isinstance(
+            meta, AccessMetadata
+        ), f"the denial path returned {type(meta).__name__}, not AccessMetadata"
+        assert meta.constraints is not None, (
+            "denial metadata carried no constraints object; `.constraints` is "
+            "dereferenced by consumers without a None check"
+        )
+        # The shape consumers actually serialize.
+        assert meta.to_dict()["constraints"]["max_tokens_per_session"] is None
+
+    @pytest.mark.asyncio
+    async def test_denial_excludes_the_agent_from_find_agents_for_user(self) -> None:
+        """The real caller path: outage → empty result, not an exception.
+
+        `_check_user_access` is private; this pins the behaviour a consumer
+        actually observes.
+        """
+        d = UserFilteredAgentDiscovery(_StubRegistry(), permission_checker=_Boom())
+        found = await d.find_agents_for_user("user-1", "org-1")
+        assert found == [], (
+            "an agent was returned while the permission checker was down; the "
+            "fail-closed denial did not reach the caller"
+        )
+
+    @pytest.mark.asyncio
+    async def test_denial_is_loud_and_the_exception_text_is_scrubbed(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Under fail-closed an outage is a TOTAL discovery outage.
+
+        The ERROR line is the only thing distinguishing "the checker is down"
+        from "this user legitimately has access to nothing", so it must be
+        emitted at ERROR with the exception detail — and that detail must be
+        scrubbed, because a caller-supplied checker may embed a DSN.
+        """
+        with caplog.at_level(logging.ERROR):
+            await _check(_Boom())
+
+        hits = [
+            r
+            for r in caplog.records
+            if r.message == "discovery.permission_check_failed_closed"
+        ]
+        assert len(hits) == 1, (
+            "the fail-closed denial was not logged at ERROR; a silent denial "
+            "is indistinguishable from an empty agent list"
+        )
+        error_text = hits[0].__dict__["error"]
+        assert "s3cr3t" not in error_text, (
+            f"the checker's exception text reached the log unscrubbed: "
+            f"{error_text!r}"
+        )
+        assert (
+            "[REDACTED]" in error_text
+        ), f"expected scrub_credentials output, got {error_text!r}"
