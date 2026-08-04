@@ -24,8 +24,9 @@ real defects, so the clean-round counter is at ZERO. Two lanes are mid-round.
 
 ## THE FINDING OF THIS SESSION — read before writing any test
 
-**Five separate instruments on this branch were cited as proof while being
-structurally unable to fail.** Three were mine. This is the recurring defect,
+**SIX separate instruments on this branch were cited as proof while being
+structurally unable to fail.** Four were mine — including one added to FIX an
+attribution problem, which introduced a worse one. This is the recurring defect,
 not any individual bug:
 
 1. W19 leak probes — derived from "which characters did we just exclude?". `"`
@@ -43,6 +44,18 @@ not any individual bug:
    shape. Shaped to the defect.
 5. A mutation test that was INERT (string-replace failed on escaping) and stayed
    green — the exact state that reads as "the tests are vacuous".
+6. **The 20-cell xfail grid, made INERT by its own attribution guard.** The guard
+   `assert rule.search(dsn)` ran BEFORE the leak check, on the shape WITH the
+   defect — asserting exactly what the defect makes false. 20/20 stopped at the
+   guard, 0/20 ever reached the leak assertion, and since the guard reads a
+   COMPILED REGEX the grid behaved identically against a no-op scrubber and a
+   perfect one. **Added by me in response to a finding ABOUT attribution.**
+   Worse, it was INVERTED at fix time: the sound fix (URL parse) leaves the
+   regexes unchanged, so the pins would have stayed XFAIL forever and the
+   residual would have read permanently OPEN after being closed — while the
+   UNSOUND fix would have made them pass. Fixed by attributing on the PAIR-FREE
+   CONTROL, which stays true after either fix. Verified: 20/20 now reach, and
+   the grid reads 20-leaking vs 0-leaking across a no-op/perfect scrubber.
 
 **Rule that came out of it: probe what the pattern CLAIMS, not what the patch
 CHANGED. And assert the mutation reached the code before reading the result.**
@@ -177,6 +190,16 @@ Two companion lines from the same branch:
   a diff-derived probe set is blind to whatever the diff did not touch.
 - Ask what a parametrized pin HOLDS CONSTANT, not what it varies — the uncovered
   axis is exactly where the next instance hides (it hid there three times).
+- **Then ask which of its assertions can ever be REACHED.** The last frozen axis
+  was not a parameter at all — it was ORDER OF ASSERTION. Every cell held "guard
+  precedes leak check" constant, so varying delimiter, rule and position could
+  never expose it, and widening the grid 4 -> 12 -> 20 only multiplied cells that
+  all stopped at the same line. A guard encoding the defect's ABSENCE as a
+  precondition converts the whole grid into a no-op, and no amount of widening
+  reveals it.
+- **Guard on the CONTROL, never on the defective shape.** An attribution guard
+  must assert something that stays true after the fix; asserting the defect's
+  negation makes the pin unreachable now and mis-signalling later.
 
 ## Ratified decisions — EXECUTE after convergence, do not re-surface
 
