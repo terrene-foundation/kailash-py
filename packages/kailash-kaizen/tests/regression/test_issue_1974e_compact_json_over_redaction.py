@@ -337,8 +337,8 @@ class TestRealCredentialsStillRedacted:
             "F7 under-redaction residual: a userinfo containing a quote "
             'IMMEDIATELY followed by a JSON delimiter (`",` `"}` `"]` `":`) '
             "halts the tempered runs and leaks in full. Live on ALL THREE URL "
-            "rules, not just the bounded one. This is F2's class narrowed, not "
-            "closed, and it trades in the direction this module refuses. "
+            "rules and in BOTH userinfo positions. This is F2's class narrowed, "
+            "not closed, and it trades in the direction this module refuses. "
             "Deliberately NOT chased by tightening the lookahead — that swaps "
             "one aperture for a smaller one indefinitely; the sound route is a "
             "URL parse on the candidate span. strict=True so these XPASS the "
@@ -349,76 +349,92 @@ class TestRealCredentialsStillRedacted:
     )
     @pytest.mark.parametrize("delim", [",", "}", "]", ":"])
     @pytest.mark.parametrize(
-        "rule_label,dsn_template",
+        "case,dsn_template,secret_template",
         [
-            # BOUNDED rule — a short password.
-            ("_URL_WITH_AUTH", "postgresql://svcuser:pa{q}{d}ss@db.internal/app"),
-            # OVERFLOW rule — userinfo longer than the 256-char bound.
-            #
-            # HYPHENATED deliberately. An earlier version of this pin used
-            # `"x" * 300`, which reads CLEAN — but only INCIDENTALLY: a 300-char
-            # unbroken alphanumeric run is claimed by the 40-char
-            # contiguous-run rule in _CREDENTIAL_PATTERNS, not by any URL rule.
-            # Hyphens break that run (`-` is outside `[A-Za-z0-9/+]`), so the
-            # URL rule is genuinely the only thing that could claim it. Verified:
-            # the same hyphenated secret WITHOUT the fenced pair IS redacted, so
-            # the leak is attributable to the delimiter and not to the hyphen.
+            # --- BOUNDED rule, both positions -------------------------------
             (
-                "_URL_WITH_AUTH_OVERFLOW",
-                "postgresql://svcuser:" + ("a-" * 150) + "{q}{d}ss@db.internal/app",
+                "AUTH/password",
+                "postgresql://svcuser:pa{q}{d}ss@db.internal/app",
+                "pa{q}{d}ss",
             ),
-            # USERINFO-ONLY rule — a bare token, no `:` separator.
             (
-                "_URL_WITH_USERINFO_ONLY",
+                # The NASTIER half: a quote in the USERNAME halts the run before
+                # it can reach the `:`, so the PASSWORD leaks — a secret the
+                # username-holder may not even control, from the half more
+                # likely to carry a human-typed address. The module comment
+                # already records this asymmetry for the plain-`"` generation;
+                # the tempered generation reproduces it in narrowed form.
+                "AUTH/username",
+                "postgresql://us{q}{d}er:s3cr3t@db.internal/app",
+                "s3cr3t",
+            ),
+            # --- OVERFLOW rule, both positions ------------------------------
+            #
+            # HYPHENATED deliberately. An earlier version used `"x" * 300`,
+            # which reads CLEAN — but only INCIDENTALLY: an unbroken 300-char
+            # alphanumeric run is claimed by the 40-char contiguous-run rule in
+            # _CREDENTIAL_PATTERNS, not by any URL rule. Hyphens break that run
+            # (`-` is outside `[A-Za-z0-9/+]`), so the URL rule is genuinely the
+            # only thing that could claim it.
+            (
+                "OVERFLOW/password",
+                "postgresql://svcuser:" + ("a-" * 150) + "{q}{d}ss@db.internal/app",
+                ("a-" * 150) + "{q}{d}ss",
+            ),
+            (
+                "OVERFLOW/username",
+                "postgresql://" + ("a-" * 150) + "{q}{d}u:s3cr3t@db.internal/app",
+                "s3cr3t",
+            ),
+            # --- USERINFO-ONLY rule: a bare token, no `:` separator ----------
+            (
+                "USERINFO_ONLY/token",
                 "https://" + ("a-" * 150) + "{q}{d}tok@github.example.com/o/r",
+                ("a-" * 150) + "{q}{d}tok",
             ),
         ],
     )
     def test_quote_then_json_delimiter_in_userinfo_is_redacted(
-        self, rule_label: str, dsn_template: str, delim: str
+        self, case: str, dsn_template: str, secret_template: str, delim: str
     ) -> None:
-        """KNOWN-FAILING pin for the F7 residual, across ALL THREE URL rules.
+        """KNOWN-FAILING pin for the F7 residual: 3 rules x 2 positions.
 
-        SCOPE IS THE POINT. An earlier version parametrized only the four
-        delimiters against ONE shape — a short password, i.e. the bounded rule
-        alone — while the residual is live on all three. Because these are
-        `strict=True`, that would have mis-signalled: a URL parse fixing the
-        bounded rule flips those pins to XPASS, strict forces the markers off,
-        and the class reads CLOSED while the overflow and bare-token rules still
-        leak with no test covering them.
+        WHAT THIS PIN HOLDS CONSTANT IS THE POINT, and it took three passes to
+        get right. v1 varied only the delimiter — one shape, one rule. v2 added
+        the rule axis but held POSITION constant, always putting the pair in the
+        password; the username position leaks too, and leaks the *other* half.
+        Each time the uncovered axis was exactly where the next instance hid.
 
-        A pin that signals more than it measures is the same defect as a test
-        that cannot fail — one layer up. Both were found on this branch.
+        That matters because these are `strict=True`: a partial fix flips the
+        covered pins to XPASS, strict forces the markers off, and the class
+        reads CLOSED while the uncovered axis still leaks with nothing on it.
+
+        The SECRET is passed explicitly rather than sliced out of the DSN. A
+        positional slice yields the whole userinfo (`svcuser:pa",ss`), and
+        `secret not in output` is then satisfiable by a fix that redacts only
+        the username while the password still leaks — green pin, live leak, at
+        exactly the moment the pin is supposed to speak.
         """
         dsn = dsn_template.format(q=_Q, d=delim).replace("@", _AT)
-        secret_start = dsn.index("//") + 2
-        secret = dsn[secret_start : dsn.rindex(_AT)]
+        secret = secret_template.format(q=_Q, d=delim)
 
-        # Attribution guard. Asserting only "the secret is gone" lets this XPASS
-        # for the WRONG reason: if some future _CREDENTIAL_PATTERNS rule
-        # broadened enough to claim the shape incidentally, strict-mode would
-        # red the suite and whoever investigated would remove the marker
-        # believing a URL parse had landed — while these rules still leak.
-        # Requiring THE NAMED RULE to claim the shape means each pin clears only
-        # for the reason it was written for.
+        # Attribution guard: the NAMED rule must claim the shape, so a pin can
+        # only clear for the reason it was written for — not because some other
+        # rule broadened enough to catch it incidentally.
         rule = {
-            "_URL_WITH_AUTH": _URL_WITH_AUTH,
-            "_URL_WITH_AUTH_OVERFLOW": _URL_WITH_AUTH_OVERFLOW,
-            "_URL_WITH_USERINFO_ONLY": _URL_WITH_USERINFO_ONLY,
-        }[rule_label]
+            "AUTH": _URL_WITH_AUTH,
+            "OVERFLOW": _URL_WITH_AUTH_OVERFLOW,
+            "USERINFO_ONLY": _URL_WITH_USERINFO_ONLY,
+        }[case.split("/")[0]]
         assert rule.search(dsn), (
-            f"XPASS would be unattributable: {rule_label} still does not claim "
-            f"this shape, so any redaction came from another rule and the "
-            f"residual this pins is NOT closed"
+            f"[{case}] XPASS would be unattributable: the named rule still does "
+            f"not claim this shape, so any redaction came from elsewhere and "
+            f"the residual this pins is NOT closed"
         )
         assert secret not in scrub_credentials(dsn)
 
     def test_markup_attribute_boundary_over_redacts_accepted(self) -> None:
         """L1 — pin the HTML/XML residual, which was documented but not tested.
-
-        The asymmetry mattered: the under-redaction residual got strict xfails
-        while this one lived in prose only, so a future fence edit could have
-        changed the behaviour silently with nothing reddening.
 
         The fence models JSON. A markup attribute closes its quote with `>`,
         which is not in the delimiter set, so the run crosses and swallows the
@@ -426,11 +442,33 @@ class TestRealCredentialsStillRedacted:
         direction, and adding `>` would cost a password containing `">`, which
         is the under-redaction residual pinned above.
 
-        Asserted as CURRENT BEHAVIOUR, not as an xfail: unlike the `",` case
-        this is not a defect awaiting a fix, so a strict xfail would wrongly
-        imply someone should close it.
+        THE BODY HAS NO COLON IN THE PATH, deliberately. An earlier version used
+        `.../p:q">`, which made this test a DUPLICATE of the same-string-value
+        residual below it: the colon let `_URL_WITH_AUTH` claim the body via
+        THAT residual, so both assertions held even with the markup crossing
+        removed entirely — it would have stayed green if the crossing were fixed
+        tomorrow. Without the colon, `_URL_WITH_AUTH` does NOT claim it and
+        `_URL_WITH_USERINFO_ONLY` does, which isolates the boundary crossing as
+        the only thing under test.
+
+        Asserted as CURRENT BEHAVIOUR, not xfail: unlike the `",` case this is
+        not a defect awaiting a fix, so a strict xfail would wrongly imply
+        someone should close it.
         """
-        body = '<a href="https://docs.example.com/p:q">ops' + _AT + "example.com</a>"
+        body = '<a href="https://docs.example.com">ops' + _AT + "example.com</a>"
+
+        # Attribution guard, same purpose as the pins above: if the claim ever
+        # migrates to another rule this fails rather than silently re-becoming a
+        # duplicate of its neighbour.
+        assert _URL_WITH_USERINFO_ONLY.search(body), (
+            "the bare-token rule no longer claims this body, so the test is no "
+            "longer isolating the markup boundary crossing"
+        )
+        assert not _URL_WITH_AUTH.search(body), (
+            "_URL_WITH_AUTH now claims this body — the test has re-acquired the "
+            "same-string-value confound it was rewritten to remove"
+        )
+
         scrubbed = scrub_credentials(body)
         assert scrubbed != body, (
             "the markup boundary is no longer over-redacted. If that was "
