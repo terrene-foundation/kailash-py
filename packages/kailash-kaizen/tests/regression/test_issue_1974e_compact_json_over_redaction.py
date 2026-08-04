@@ -417,20 +417,50 @@ class TestRealCredentialsStillRedacted:
         """
         dsn = dsn_template.format(q=_Q, d=delim).replace("@", _AT)
         secret = secret_template.format(q=_Q, d=delim)
-
-        # Attribution guard: the NAMED rule must claim the shape, so a pin can
-        # only clear for the reason it was written for — not because some other
-        # rule broadened enough to catch it incidentally.
         rule = {
             "AUTH": _URL_WITH_AUTH,
             "OVERFLOW": _URL_WITH_AUTH_OVERFLOW,
             "USERINFO_ONLY": _URL_WITH_USERINFO_ONLY,
         }[case.split("/")[0]]
-        assert rule.search(dsn), (
-            f"[{case}] XPASS would be unattributable: the named rule still does "
-            f"not claim this shape, so any redaction came from elsewhere and "
-            f"the residual this pins is NOT closed"
+
+        # ATTRIBUTION ON THE PAIR-FREE CONTROL, NOT ON THE DEFECTIVE SHAPE.
+        #
+        # The previous guard asserted `rule.search(dsn)` — on the shape WITH the
+        # fenced pair. That is the negation of the defect: these shapes leak
+        # BECAUSE the fence stops the named rule claiming them. So the guard
+        # failed first in all 20 cells and the leak assertion below was never
+        # reached even once. Measured: 20/20 stopped at the guard, 0/20 reached
+        # line `assert secret not in ...`, and because the guard reads a
+        # COMPILED REGEX rather than scrub output, the grid behaved identically
+        # against a no-op scrubber and a perfect one. Twenty cells carrying zero
+        # information about redaction.
+        #
+        # Worse, the signal was INVERTED at fix time. The sound fix named in
+        # credential_scrub.py is a URL PARSE on the candidate span, which leaves
+        # these regexes unchanged — so the guard would have stayed False, the
+        # pins would have stayed XFAIL forever, strict would never have fired,
+        # and the residual would have read permanently OPEN after being closed.
+        # Only the UNSOUND fix (widening the delimiter set, which that module
+        # explicitly warns against) would have made the guard pass. The pin
+        # spoke for the fix we rejected and was silent for the one we recommend.
+        #
+        # The control carries the attribution instead: same shape, quote NOT
+        # followed by a delimiter. The named rule DOES claim it, which is what
+        # establishes the rule owns this shape class — and that stays true after
+        # either fix, so the guard cannot go inert again.
+        control = dsn_template.format(q=_Q, d="x").replace("@", _AT)
+        assert rule.search(control), (
+            f"[{case}] attribution lost: {rule.pattern[:40]}... no longer claims "
+            f"even the pair-free control, so this pin can no longer show the "
+            f"named rule owns this shape class"
         )
+
+        # NOT asserting exclusivity, deliberately. On the two short AUTH
+        # controls BOTH _URL_WITH_AUTH and _URL_WITH_AUTH_OVERFLOW claim the
+        # shape — the overflow rule is unbounded and is a structural superset
+        # for short userinfo. Asserting `not OVERFLOW.search(control)` there
+        # would be asserting something FALSE. So the guard proves shape-class
+        # OWNERSHIP, not rule exclusivity, and says so rather than overstating.
         assert secret not in scrub_credentials(dsn)
 
     def test_markup_attribute_boundary_over_redacts_accepted(self) -> None:
@@ -464,10 +494,12 @@ class TestRealCredentialsStillRedacted:
             "the bare-token rule no longer claims this body, so the test is no "
             "longer isolating the markup boundary crossing"
         )
-        assert not _URL_WITH_AUTH.search(body), (
-            "_URL_WITH_AUTH now claims this body — the test has re-acquired the "
-            "same-string-value confound it was rewritten to remove"
-        )
+        for confound in (_URL_WITH_AUTH, _URL_WITH_AUTH_OVERFLOW):
+            assert not confound.search(body), (
+                f"{confound.pattern[:40]}... now claims this body — the test has "
+                f"re-acquired the same-string-value confound it was rewritten to "
+                f"remove, and is no longer isolating the markup crossing"
+            )
 
         scrubbed = scrub_credentials(body)
         assert scrubbed != body, (
