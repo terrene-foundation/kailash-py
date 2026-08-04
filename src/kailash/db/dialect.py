@@ -81,6 +81,16 @@ class _UnknownBudget(int):
     Subclassing `int` keeps every numeric use working unchanged (`len(name) >
     max_length`, `%d` formatting, comparisons); only the TRIGGER switches from
     equality to an isinstance check, which is what makes it discriminate.
+
+    KNOWN LIMIT, unreachable in-repo but stated so it is not rediscovered as a
+    surprise: the subclass does NOT survive arithmetic or serialization.
+    `int(u)`, `u + 0`, `abs(u)` and a JSON round-trip all yield a plain `int`,
+    and a caller passing a literal `128` is silent for the same reason. Every
+    one of the 11 in-repo call sites passes this constant SYMBOLICALLY and does
+    no arithmetic on it, so the signal holds today — but an external caller, or
+    a budget deserialized from config, would lose it. If that becomes reachable
+    the fix is a distinct non-int sentinel (or an explicit `dialect_bound: bool`
+    argument), not a wider comparison.
     """
 
     __slots__ = ()
