@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import time as _time
-from typing import Any
+from typing import Any, Final
 
 from kaizen.llm.reasoning import ReasoningDegradedError
 from kaizen.utils.credential_scrub import scrub_credentials
@@ -163,6 +163,30 @@ class AccessMetadata:
     # instance is the GRANT shape — inverting the public default would silently
     # re-key every caller that builds one directly.
     denied: bool = False
+    #: ADVISORY constraint LABELS the checker imposed, carried through verbatim.
+    #:
+    #: This is the `effective_constraints` label list that
+    #: `kailash.trust.chain.VerificationResult` actually emits (`List[str]`,
+    #: chain.py:854) — values like `"read_only"`, `"audit_required"`. They have
+    #: NO cap semantics, so they are NOT expressible as `AccessConstraints`, and
+    #: this field exists so the payload is not silently LOSSY about them.
+    #:
+    #: ADVISORY IS THE SDK'S OWN CLASSIFICATION, NOT OURS. The producing field,
+    #: `DelegationRecord.constraint_subset`, is documented as read by NO
+    #: allow/deny gate and DELIBERATELY EXCLUDED from the enforced envelope
+    #: (`_derive_enforced_envelope`, advisory per #1896). The tightening is
+    #: still ENFORCED, just not here: the same labels are bound into SIGNED
+    #: derived capabilities at delegation time (`_build_signed_derived_caps`)
+    #: and `verify()` re-derives the enforced constraint set from those signed
+    #: sources, so a store-writer editing only the raw field cannot strip it.
+    #:
+    #: Consumers MAY surface these to a user or an auditor. Consumers MUST NOT
+    #: treat an empty list as "no restrictions in force" — the real enforcement
+    #: lives in the signed derived capabilities, not in this list.
+    #:
+    #: Appended LAST, after `denied`, so positional construction of every
+    #: pre-existing field is unchanged.
+    advisory_constraints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -173,6 +197,7 @@ class AccessMetadata:
             "granted_at": self.granted_at,
             "expires_at": self.expires_at,
             "denied": self.denied,
+            "advisory_constraints": list(self.advisory_constraints),
         }
 
     @classmethod
@@ -295,17 +320,59 @@ def _constraint_payload_present(raw: Any) -> bool:
     return True
 
 
+#: Label sets already announced by `normalize_access_constraints`.
+#:
+#: The advisory-label WARN is once-per-distinct-label-set, not once-per-call:
+#: `_check_user_access` runs per user PER AGENT inside `find_agents_for_user`,
+#: so a per-call warning would emit O(users x agents) identical lines on a
+#: discovery hot path — and a log line that floods is a log line that gets
+#: filtered, which is how a loud signal becomes a silent one.
+#:
+#: Keyed by the SORTED label tuple rather than a bare flag so a NEW label
+#: combination still announces itself instead of being masked by the first one
+#: ever seen. BOUNDED: a checker emitting unbounded distinct label sets would
+#: otherwise grow this set without limit (the same unbounded-collection hazard
+#: `trust-plane-security.md` MUST-4 names). At the cap we stop recording, which
+#: degrades to "warn every time" for new sets rather than to silence — the
+#: safe direction.
+_ADVISORY_LABELS_WARNED: set[tuple[str, ...]] = set()
+_ADVISORY_LABELS_WARNED_CAP: Final[int] = 256
+
+
+def _warn_advisory_constraints_once(labels: list[str]) -> None:
+    """Announce an advisory label set the FIRST time it is observed."""
+    key = tuple(sorted(labels))
+    if key in _ADVISORY_LABELS_WARNED:
+        return
+    if len(_ADVISORY_LABELS_WARNED) < _ADVISORY_LABELS_WARNED_CAP:
+        _ADVISORY_LABELS_WARNED.add(key)
+    logger.warning(
+        "discovery.advisory_constraints_not_enforced_here",
+        extra={
+            # Labels originate in a CALLER-SUPPLIED checker, so they are
+            # scrubbed on the same grounds as every other caller-derived value
+            # written to a log in this module.
+            "labels": [scrub_credentials(label) for label in sorted(labels)],
+            "advisory": (
+                "constraint labels are reporting-only and are NOT enforced as "
+                "AccessConstraints; the SDK enforces the same labels via "
+                "SIGNED derived capabilities re-derived by verify()"
+            ),
+        },
+    )
+
+
 def normalize_access_constraints(
     raw: Any,
-) -> tuple[AccessConstraints | None, str | None]:
+) -> tuple[AccessConstraints | None, list[str], str | None]:
     """Turn a checker's constraint payload into `AccessConstraints`.
 
-    Returns `(constraints, None)` on success, or `(None, reason)` when the
-    payload is PRESENT but cannot be represented — in which case the caller
-    MUST fail closed. It never returns a default `AccessConstraints()` for a
-    payload it could not read, because on this type a default instance is
-    UNLIMITED (see the class docstring) — i.e. the most permissive possible
-    answer to a question we just failed to answer.
+    Returns `(constraints, advisory_labels, None)` on success, or
+    `(None, [], reason)` when the payload is PRESENT but cannot be
+    represented — in which case the caller MUST fail closed. It never returns a
+    default `AccessConstraints()` for a payload it could not READ, because on
+    this type a default instance is UNLIMITED (see the class docstring) — i.e.
+    the most permissive possible answer to a question we just failed to answer.
 
     THREE SHAPES, and the third is why this function exists:
 
@@ -318,84 +385,144 @@ def normalize_access_constraints(
     * **ABSENT / EMPTY** — no constraints imposed; an unrestricted grant.
 
     * **NON-EMPTY SEQUENCE OF LABELS** — `["read_only", "audit_required"]`.
-      This is what the DOCUMENTED checker actually emits, and it is
-      UNREPRESENTABLE here, so it fails closed.
+      This is what the DOCUMENTED checker actually emits. It GRANTS, with
+      default (uncapped) `AccessConstraints` and the labels carried forward in
+      `advisory_labels`.
 
-      Establishing that grammar was the whole point, so it is recorded rather
-      than assumed: `kailash.trust.chain.VerificationResult` declares
-      `effective_constraints: List[str]` (chain.py:854), populated by
-      `TrustOperations.verify` from `chain.get_effective_constraints(...)`
-      (operations/__init__.py:1244), which set-unions `cap.constraints` with
-      `delegation.constraint_subset` and returns `List[str]`
-      (chain.py:1028-1043). `DelegationRecord.constraint_subset` is documented
-      as "constraint LABELS ... read by NO allow/deny gate" (chain.py:350-352),
-      and the in-SDK consumer at `runtime/trust/verifier.py:398` folds them as
-      `{c: True for c in ...}` — each label is a BOOLEAN FLAG. Observed values
-      are `"read_only"`, `"audit_required"`.
+      IT DENIED, AND THAT WAS AN OVER-CORRECTION THIS DOCSTRING ONCE ARGUED
+      FOR. The prior revision reasoned: the labels are a restriction the
+      checker DID impose and this type CANNOT express, so the only honest
+      dispositions are deny or grant caps we cannot justify — and it chose
+      deny. The first half is still true. The conclusion was wrong, because it
+      treated "we cannot express this" as "this is unenforced", and for THIS
+      field the SDK says otherwise.
 
-      So the labels carry NO cap semantics: there is no number, no field name,
-      and no `key=value` form to parse. Inventing one (splitting on `=`,
-      pattern-matching `max_tokens_42`) would be fabricating a grammar the
-      producing type does not emit, and every label that failed the invented
-      parse would fall back to unlimited. A label set is a restriction the
-      checker DID impose and this type CANNOT express — the only honest
-      dispositions are deny, or grant caps we cannot justify. It denies.
+      `DelegationRecord.constraint_subset` — the field these labels come from
+      — is documented at `src/kailash/trust/chain.py:350-363` as reporting-only
+      in its RAW form: surfaced in `VerificationResult.effective_constraints`,
+      read by NO allow/deny gate, and DELIBERATELY EXCLUDED from the enforced
+      envelope (`_derive_enforced_envelope`, advisory per #1896). The same
+      paragraph states the tightening is NOT a no-op: the labels are bound into
+      SIGNED derived capabilities at delegation time
+      (`_build_signed_derived_caps`) and `verify()` RE-DERIVES the enforced
+      constraint set from those signed sources, so a store-writer editing only
+      the raw field cannot strip it.
+
+      So the control is ALREADY correctly enforced, one layer down, by
+      signature. Denying here adds NO safety and removes availability: because
+      `find_agents_for_user` filters on `has_access`, an agent established with
+      the SDK's own documented `constraints=["read_only"]` vanished from every
+      user's list with NO error — indistinguishable from an outage. The only
+      operator lever was `permission_checker=None`, which this module itself
+      calls a "SILENT NO-OP default on a security control": the remedy offered
+      to a denied operator was to switch the control OFF.
+
+      The labels are still not silently dropped. They ride out in
+      `advisory_labels` -> `AccessMetadata.advisory_constraints` -> `to_dict()`,
+      so a consumer SEES what was imposed, and a once-per-distinct-set WARN
+      names them.
+
+      STILL NO INVENTED GRAMMAR. The labels carry no number, no field name and
+      no `key=value` form; splitting on `=` or pattern-matching `max_tokens_42`
+      would fabricate a grammar the producing type does not emit, and every
+      label failing the invented parse would fall back to UNLIMITED. Nothing
+      here parses a label — they are copied verbatim.
 
     Anything else present — a bare string, an int, an arbitrary object, a
     mapping carrying an unrecognized key or an unusable value type — is
-    likewise unrepresentable and denies. An unrecognized key is deliberately
+    genuinely UNREADABLE and still denies. An unrecognized key is deliberately
     NOT ignored: a checker sending `{"max_requests_per_hour": 5}` capped an
     axis, and silently dropping it grants unlimited on exactly that axis,
-    which is the defect class this function closes.
+    which is the defect class this function closes. Only the advisory
+    LABEL-LIST case flips to grant; the seven-field validation is untouched.
     """
     if not _constraint_payload_present(raw):
-        return AccessConstraints(), None
+        return AccessConstraints(), [], None
 
     if isinstance(raw, Mapping):
         constraints = AccessConstraints()
         assigned: dict[str, Any] = {}
         for key, value in raw.items():
             if not isinstance(key, str):
-                return None, f"constraint key {key!r} is not a string"
+                return None, [], f"constraint key {key!r} is not a string"
             field_name = _CONSTRAINT_KEY_ALIASES.get(key)
             if field_name is None:
-                return None, (
-                    f"unrecognized constraint key {key!r} (recognized: "
-                    f"{', '.join(sorted(_CONSTRAINT_KEY_ALIASES))})"
+                return (
+                    None,
+                    [],
+                    (
+                        f"unrecognized constraint key {key!r} (recognized: "
+                        f"{', '.join(sorted(_CONSTRAINT_KEY_ALIASES))})"
+                    ),
                 )
             if value is None:
                 continue
             coerced, ok = _CONSTRAINT_COERCERS[field_name](value)
             if not ok:
-                return None, (
-                    f"constraint {key!r} carries an unusable value "
-                    f"({type(value).__name__})"
+                return (
+                    None,
+                    [],
+                    (
+                        f"constraint {key!r} carries an unusable value "
+                        f"({type(value).__name__})"
+                    ),
                 )
             # Alias collision. `max_tokens` and `max_tokens_per_session` land
             # on the SAME field, so a payload carrying both with DIFFERENT
             # values has two answers and dict order picks one; that silent
             # coin-flip between two caps is itself a fail-closed case.
             if field_name in assigned and assigned[field_name] != coerced:
-                return None, (
-                    f"conflicting values for {field_name!r} "
-                    f"({assigned[field_name]!r} vs {coerced!r})"
+                return (
+                    None,
+                    [],
+                    (
+                        f"conflicting values for {field_name!r} "
+                        f"({assigned[field_name]!r} vs {coerced!r})"
+                    ),
                 )
             assigned[field_name] = coerced
             setattr(constraints, field_name, coerced)
-        return constraints, None
+        return constraints, [], None
 
     if isinstance(raw, (Sequence, AbstractSet)) and not isinstance(
         raw, (str, bytes, bytearray)
     ):
-        labels = ", ".join(sorted(repr(item) for item in raw))
-        return None, (
-            "constraint labels carry no cap semantics and cannot be enforced "
-            f"as AccessConstraints: [{labels}]"
-        )
+        # EVERY element must be a real label. A non-`str` element means this is
+        # not the documented label-list shape at all, and we are back to a
+        # payload we cannot read — which still denies. Checked BEFORE the grant
+        # so a `[{"max_tokens": 42}]` or `[None]` cannot ride the advisory path
+        # into an uncapped grant.
+        if not all(isinstance(item, str) for item in raw):
+            offenders = ", ".join(
+                sorted(
+                    {type(item).__name__ for item in raw if not isinstance(item, str)}
+                )
+            )
+            return (
+                None,
+                [],
+                (
+                    "constraint label list carries non-string elements "
+                    f"({offenders}) and cannot be read as labels"
+                ),
+            )
+        labels = [str(item) for item in raw]
+        _warn_advisory_constraints_once(labels)
+        # GRANT with DEFAULT constraints. `AccessConstraints()` is the UNLIMITED
+        # value of this type (class docstring), and that is the correct answer
+        # here rather than an accident: the checker imposed no numeric cap on
+        # any of the seven axes this type models. It imposed advisory labels,
+        # which are returned separately and enforced by the SDK's signed
+        # derived capabilities.
+        return AccessConstraints(), labels, None
 
-    return None, (
-        f"constraint payload of type {type(raw).__name__} cannot be read as "
-        "constraints"
+    return (
+        None,
+        [],
+        (
+            f"constraint payload of type {type(raw).__name__} cannot be read as "
+            "constraints"
+        ),
     )
 
 
@@ -962,7 +1089,9 @@ class UserFilteredAgentDiscovery:
                 # denying and granting UNLIMITED on axes the checker capped.
                 # A denial is a recoverable availability event — the same trade
                 # the exception branch below makes, for the same reason.
-                constraints, unrepresentable = normalize_access_constraints(raw)
+                constraints, advisory_labels, unrepresentable = (
+                    normalize_access_constraints(raw)
+                )
                 if unrepresentable is not None:
                     logger.error(
                         "discovery.constraints_unrepresentable_failed_closed",
@@ -986,6 +1115,7 @@ class UserFilteredAgentDiscovery:
                 return True, AccessMetadata(
                     permission_level="execute",
                     constraints=constraints,
+                    advisory_constraints=advisory_labels,
                 )
             except Exception as exc:
                 # FAIL CLOSED. A checker that raised has not approved

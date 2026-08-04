@@ -139,11 +139,35 @@ class TestRealVerificationResultGroundTruth:
         )
 
 
-class TestDocumentedCheckerConstraintsAreNotSilentlyUnlimited:
-    """THE TEETH. Pre-fix every one of these GRANTED with unlimited caps."""
+class TestDocumentedCheckerAdvisoryLabelsGrantAndAreCarried:
+    """The documented checker's OWN label list must not remove availability.
+
+    THIS CLASS PREVIOUSLY ASSERTED THE OPPOSITE, AND THAT ASSERTION PINNED AN
+    OVER-CORRECTION. It required `granted is False` for a
+    `VerificationResult(valid=True, effective_constraints=[...])` — the exact
+    shape `TrustOperations.verify` emits for the SDK's own documented
+    `CapabilityRequest(constraints=["read_only"])`. Because
+    `find_agents_for_user` filters on `has_access`, that agent then vanished
+    from every user's list with NO error, indistinguishable from an outage,
+    and the only operator lever was `permission_checker=None` — i.e. switching
+    the security control off.
+
+    The deny was argued from "the checker imposed a restriction we cannot
+    express", which is true, and "therefore the restriction is unenforced",
+    which is FALSE for this field. `src/kailash/trust/chain.py:350-363` states
+    `constraint_subset` is reporting-only in its RAW form AND that the same
+    labels are bound into SIGNED derived capabilities that `verify()`
+    re-derives the enforced constraint set from — so the tightening IS
+    enforced, one layer down, by signature. Denying here added no safety and
+    removed availability.
+
+    The teeth that remain: the labels must be CARRIED, not silently dropped.
+    """
 
     @pytest.mark.asyncio
-    async def test_label_constraints_deny_rather_than_grant_unlimited(self) -> None:
+    async def test_label_constraints_grant_rather_than_vanish_the_agent(
+        self,
+    ) -> None:
         checker = _RealTrustOperationsShaped(
             VerificationResult(
                 valid=True, effective_constraints=["read_only", "audit_required"]
@@ -151,23 +175,97 @@ class TestDocumentedCheckerConstraintsAreNotSilentlyUnlimited:
         )
         granted, access = await _check(checker)
 
-        assert granted is False, (
-            "the documented checker imposed constraints ('read_only', "
-            "'audit_required') and the user was GRANTED access carrying "
-            "AccessConstraints() — every field None, which this type encodes "
-            "as UNLIMITED. The checker capped; we granted uncapped."
+        assert granted is True, (
+            "the SDK's OWN documented checker returned valid=True with its "
+            "OWN documented label list, and discovery denied — the agent "
+            "disappears from every user's list with no error. The labels are "
+            "advisory by SDK design (chain.py:350-363) and the real tightening "
+            "is enforced via signed derived capabilities."
         )
-        assert access.denied is True
-        assert access.permission_level == DENIED_PERMISSION_LEVEL
+        assert access.denied is False
+        assert access.permission_level == "execute"
 
     @pytest.mark.asyncio
-    async def test_denial_payload_carries_no_unlimited_axis(self) -> None:
-        """A denial must be a denial on EVERY axis the type exposes."""
+    async def test_labels_are_carried_forward_not_silently_dropped(self) -> None:
+        """Granting must not make the payload LOSSY about what was imposed."""
         checker = _RealTrustOperationsShaped(
-            VerificationResult(valid=True, effective_constraints=["read_only"])
+            VerificationResult(
+                valid=True, effective_constraints=["read_only", "audit_required"]
+            )
         )
         _, access = await _check(checker)
 
+        assert sorted(access.advisory_constraints) == [
+            "audit_required",
+            "read_only",
+        ], (
+            "the checker imposed labels and the grant does not carry them; a "
+            "consumer or auditor cannot see what was imposed"
+        )
+        assert sorted(access.to_dict()["advisory_constraints"]) == [
+            "audit_required",
+            "read_only",
+        ], "advisory_constraints must survive serialization, not just the object"
+
+    @pytest.mark.asyncio
+    async def test_advisory_labels_are_announced_once_not_per_call(
+        self, caplog
+    ) -> None:
+        """A grant on an unenforceable-here control must not be silent.
+
+        Once per DISTINCT label set, not per call: `_check_user_access` runs
+        per user PER AGENT, so a per-call WARN floods a discovery hot path.
+        """
+        import kaizen_agents.patterns.discovery as _disc
+
+        _disc._ADVISORY_LABELS_WARNED.clear()
+        checker = _RealTrustOperationsShaped(
+            VerificationResult(valid=True, effective_constraints=["read_only"])
+        )
+        with caplog.at_level("WARNING"):
+            await _check(checker)
+            await _check(checker)
+            await _check(checker)
+
+        warns = [
+            r
+            for r in caplog.records
+            if r.message == "discovery.advisory_constraints_not_enforced_here"
+        ]
+        assert len(warns) == 1, (
+            f"expected exactly ONE advisory WARN across three calls, got "
+            f"{len(warns)} — a per-call warning on a discovery hot path is "
+            "log spam, and spam gets filtered, which makes the loud signal silent"
+        )
+        assert warns[0].labels == ["read_only"]
+
+    @pytest.mark.asyncio
+    async def test_a_new_label_set_still_announces_itself(self) -> None:
+        """CONTROL for the once-only guard: it must not mask a NEW label set."""
+        import kaizen_agents.patterns.discovery as _disc
+
+        _disc._ADVISORY_LABELS_WARNED.clear()
+        seen = []
+        for labels in (["read_only"], ["audit_required"], ["read_only"]):
+            _disc._ADVISORY_LABELS_WARNED_before = len(_disc._ADVISORY_LABELS_WARNED)
+            _, _, _ = normalize_access_constraints(labels)
+            seen.append(len(_disc._ADVISORY_LABELS_WARNED))
+        assert seen == [1, 2, 2], (
+            "a NEW label combination must announce itself; only a REPEAT is "
+            f"suppressed. Recorded-set sizes were {seen}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_denial_payload_still_carries_no_unlimited_axis(self) -> None:
+        """A genuine DENIAL must still be a denial on EVERY axis.
+
+        The denial path is now reached by a payload that is genuinely
+        UNREADABLE (an unrecognized key), not by an advisory label list.
+        """
+        checker = _DuckTyped(valid=True, constraints={"max_requests_per_hour": 5})
+        granted, access = await _check(checker)
+
+        assert granted is False
         unlimited = [
             name
             for name, value in access.constraints.to_dict().items()
@@ -178,6 +276,7 @@ class TestDocumentedCheckerConstraintsAreNotSilentlyUnlimited:
             "null and this type reads null as 'no cap', so a consumer "
             "enforcing those axes reads the denial as unrestricted"
         )
+        assert access.permission_level == DENIED_PERMISSION_LEVEL
 
     @pytest.mark.asyncio
     async def test_unconstrained_verification_still_grants(self) -> None:
@@ -277,8 +376,12 @@ class TestUnreadablePayloadsFailClosed:
             ),
             pytest.param("unlimited", id="bare-string-payload"),
             pytest.param(42, id="scalar-payload"),
-            pytest.param(["read_only"], id="label-sequence"),
-            pytest.param({"audit_required"}, id="label-set"),
+            # NOTE: a list/set of STRING labels is deliberately NOT here — it
+            # GRANTS (advisory, see TestDocumentedCheckerAdvisoryLabels...).
+            # A label list carrying NON-string elements is still unreadable:
+            pytest.param([{"max_tokens": 42}], id="label-list-of-dicts"),
+            pytest.param([None], id="label-list-of-none"),
+            pytest.param(["read_only", 42], id="label-list-mixed-types"),
         ],
     )
     async def test_unreadable_payload_denies(self, payload) -> None:
@@ -309,21 +412,48 @@ class TestNormalizerUnit:
 
     def test_absent_payload_is_unrestricted_not_unreadable(self) -> None:
         for absent in (None, {}, [], set(), ""):
-            constraints, reason = normalize_access_constraints(absent)
+            constraints, advisory, reason = normalize_access_constraints(absent)
             assert reason is None, f"{absent!r} read as unreadable, not absent"
             assert constraints == AccessConstraints()
+            assert advisory == []
 
-    def test_label_sequence_reason_names_the_labels(self) -> None:
-        _, reason = normalize_access_constraints(["read_only", "audit_required"])
-        assert reason is not None
-        assert "read_only" in reason and "audit_required" in reason, (
-            "the reason must name the offending labels or the ERROR line "
-            "cannot be triaged"
+    def test_label_sequence_returns_the_labels_and_no_reason(self) -> None:
+        """INVERTED. This previously asserted the labels produced a DENY reason.
+
+        That assertion pinned the over-correction: it locked in a denial for
+        the one payload shape the documented checker actually emits. The labels
+        must now come back as ADVISORY, with default (uncapped) constraints and
+        no failure reason.
+        """
+        constraints, advisory, reason = normalize_access_constraints(
+            ["read_only", "audit_required"]
+        )
+        assert reason is None, (
+            "the SDK's own documented label list was reported unreadable; "
+            "this is the shape TrustOperations.verify emits routinely"
+        )
+        assert constraints == AccessConstraints()
+        assert sorted(advisory) == ["audit_required", "read_only"], (
+            "labels must be returned verbatim — they are the only record of "
+            "what the checker imposed"
+        )
+
+    def test_labels_are_copied_verbatim_with_no_invented_grammar(self) -> None:
+        """No label is PARSED into a cap. Inventing a grammar stays BLOCKED."""
+        constraints, advisory, reason = normalize_access_constraints(
+            ["max_tokens=42", "max_tokens_99", "read_only"]
+        )
+        assert reason is None
+        assert sorted(advisory) == ["max_tokens=42", "max_tokens_99", "read_only"]
+        assert constraints.max_tokens_per_session is None, (
+            "a label that LOOKS like a cap was parsed into one; the producing "
+            "type emits no key=value grammar and inventing one means every "
+            "label that fails the invented parse falls back to UNLIMITED"
         )
 
     def test_none_valued_key_is_skipped_not_rejected(self) -> None:
         """An explicit null cap means 'no limit on this axis', not garbage."""
-        constraints, reason = normalize_access_constraints(
+        constraints, _advisory, reason = normalize_access_constraints(
             {"max_tokens": None, "max_daily_invocations": 3}
         )
         assert reason is None
@@ -332,7 +462,7 @@ class TestNormalizerUnit:
 
     def test_matching_alias_values_do_not_conflict(self) -> None:
         """CONTROL. Only DIFFERING values are ambiguous."""
-        constraints, reason = normalize_access_constraints(
+        constraints, _advisory, reason = normalize_access_constraints(
             {"max_tokens": 5, "max_tokens_per_session": 5}
         )
         assert reason is None
@@ -340,11 +470,17 @@ class TestNormalizerUnit:
 
     def test_int_cost_is_accepted_as_float(self) -> None:
         """CONTROL. `max_cost_per_session_usd: 2` is a legitimate spend cap."""
-        constraints, reason = normalize_access_constraints(
+        constraints, _advisory, reason = normalize_access_constraints(
             {"max_cost_per_session_usd": 2}
         )
         assert reason is None
         assert constraints.max_cost_per_session_usd == 2.0
+
+    def test_mapping_payload_carries_no_advisory_labels(self) -> None:
+        """CONTROL. A cap mapping is not a label list; advisory stays empty."""
+        _constraints, advisory, reason = normalize_access_constraints({"max_tokens": 5})
+        assert reason is None
+        assert advisory == []
 
 
 class TestDenyIsDeniedOnEveryAxis:
