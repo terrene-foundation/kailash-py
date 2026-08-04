@@ -12,8 +12,9 @@ Workspace issue-1720-llm-consolidation, phase 05-codify, branch
 `fix/issue-1720-forest-drain` @ `66f86b0b5` — **pushed**, 0 behind / 24 ahead of
 `origin/main` @ `26a4509b4`.
 
-Redteam Round 1 ran. **5 of 6 gating findings are fixed**; 1 BUG remains open.
-Release is blocked on a version-anchor decision, not on code.
+Redteam Round 1 ran. **5 of 6 gating findings are fixed**; 1 BUG remains open
+(W19). All three open decisions are now RATIFIED — see the section at the end.
+Release is gated on W19 + a Round-2 convergence, no longer on a decision.
 
 ## Read first
 
@@ -27,7 +28,8 @@ Release is blocked on a version-anchor decision, not on code.
 
 - Only `.wave-tracker.d/esperie.md` dirty (pre-existing, NOT mine — do not revert).
 - Version anchors: ONLY nexus bumped (2.16.0). core / dataflow / kaizen /
-  kaizen-agents / ml unbumped — **Decision A in the sweep report**.
+  kaizen-agents / ml unbumped — target values are RATIFIED (Decision A below);
+  do NOT cut them before W19 is fixed and Round 2 converges.
 - Nothing running in the background.
 
 ## Executed this session
@@ -53,16 +55,16 @@ Release is blocked on a version-anchor decision, not on code.
 | --- | ------------------------------------------ | ------------------------------------------------ | ----------------------------- |
 | W9  | sweep-completeness CI ratchet              | user: "/redteam to convergence"                  | BLOCKED on human (CI cost)    |
 | W10 | S4 `__cause__` 23-site sweep               | same class as W1/W5                              | queued                        |
-| W11 | version bumps + CHANGELOGs + PR + release  | BUILD done = released                            | **BLOCKED on Decision A**     |
+| W11 | version bumps + CHANGELOGs + PR + release  | BUILD done = released                            | **RATIFIED — after W19 + R2**  |
 | W12 | `discovery._check_user_access` fails OPEN  | authz posture                                    | queued                        |
 | W13 | `runtime._route_task` SEMANTIC branch dead | picks agent[0] while appearing LLM-routed        | queued                        |
 | W14 | `/redteam` to convergence                  | user: "/redteam to convergence"                  | **R1 DONE; R2 needed**        |
-| W15 | Sweep-5 blind spot + the 70 findings       | user: "/sweep per our procedural directives"     | Tier-1 gated; Decision C open |
+| W15 | Sweep-5 blind spot + the 70 findings       | user: "/sweep per our procedural directives"     | Tier-1 gated; C RATIFIED (A2)  |
 | W16 | deferred-quality label + template          | `product-completion-first.md` MUST-2             | **DONE** — `c9ddf3143`        |
 | W17 | `effortLevel: high` must reach loom Gate-1 | user: "high default across the entire ecosystem" | BLOCKED on loom ingest        |
 | W18 | Push protection blocked the branch         | user approved; was the CRIT                      | **DONE** — 5 URLs allowlisted |
 | W19 | compact-JSON over-redaction                | R1 security F4; still BUG, not reclassified      | **OPEN — only remaining BUG** |
-| W20 | MCP stack undeclared (neither pin)         | measured: fastmcp 3.x not co-installable         | **OPEN — Decision B**         |
+| W20 | MCP stack undeclared (neither pin)         | measured: fastmcp 3.x not co-installable         | **RATIFIED — land with W11**   |
 
 ## Traps
 
@@ -91,12 +93,33 @@ Release is blocked on a version-anchor decision, not on code.
 - Branch switches abort when `.session-notes.d/*` is dirty — stash by path.
   **Five** unrelated pre-existing stashes live here; never `stash pop` blindly.
 
-## Open questions for the human
+## Ratified decisions — EXECUTE, do not re-surface
 
-- **Decision A (blocks release):** kaizen ships a documented BREAKING change
-  (`ReasoningDegradedError`) at 2.45.0 unbumped; kaizen-agents consumes it,
-  also unbumped. Is MINOR-for-breaking the convention? Recommended bumps in the
-  sweep report §5.
-- **Decision B:** pin the supported MCP stack? Neither `mcp` nor `fastmcp` is
-  pinned, so behaviour depends on what happens to be installed.
-- **Decision C:** the 70 spec-drift findings — recommend sampling 10 rows first.
+All three were approved by the co-owner on 2026-08-04. The next session
+executes them; re-asking is the `value-prioritization.md` MUST-3 failure this
+section exists to prevent.
+
+- **Decision A — version anchors. RATIFIED.** MINOR-for-breaking is the
+  convention. Apply: kaizen `2.45.0 → 2.46.0`, kaizen-agents `0.12.0 → 0.13.0`,
+  dataflow `2.19.1 → 2.20.0`, core `2.62.0 → 2.63.0`, ml `2.2.2 → 2.2.3`.
+  Nexus is already at 2.16.0. Each bump lands with its CHANGELOG section;
+  kaizen's already declares the BREAKING entry, so only the anchor is missing.
+- **Decision B — pin the supported MCP stack. RATIFIED.** `kailash-nexus`
+  pins neither `mcp` nor `fastmcp` today. Measured: `fastmcp` 3.x is NOT
+  co-installable (needs `starlette>=1.x`, breaks the pinned `fastapi`). Land
+  the pin in the same PR as the version bumps.
+- **Decision C — spec drift. RATIFIED as A2.** Adjudicate ~10 rows across the
+  top 3 specs (`ml-tracking` 10, `ml-feature-store` 9, `ml-engines-v2` 7) to
+  establish the true-positive rate, THEN size the real work. Do not triage all
+  70 blind.
+
+**ORDERING CONSTRAINT — do not skip.** The version bumps are ratified but MUST
+NOT be cut first. W19 (compact-JSON over-redaction) is an OPEN BUG in
+`kaizen/utils/credential_scrub.py`; stamping kaizen 2.46.0 while it stands
+version-releases a package with a known defect. Correct order:
+
+1. Fix W19 (one regex; fix shape identified in the sweep report §3).
+2. Redteam Round 2 to 2 consecutive clean rounds on BUG + INVEST-NOW.
+3. Then Decision A version anchors + CHANGELOGs + Decision B pin, one PR.
+4. Then `/release`.
+5. Decision C runs independently — it blocks nothing above.
