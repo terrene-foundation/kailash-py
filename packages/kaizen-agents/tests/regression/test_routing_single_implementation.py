@@ -204,6 +204,25 @@ class TestBothEntryPointsAgree:
     This is the assertion the original defect lacked. Any future second
     implementation of a strategy fails HERE, at the point of divergence,
     instead of silently returning a different answer from the other door.
+
+    SCOPE — the parity claim is bounded to ACTIVE candidates, deliberately.
+    The two entry points do NOT share a candidate filter, and that difference
+    is PRE-EXISTING and preserved on purpose:
+
+      * `route_task` selects over ALL registered agents and, finding no ACTIVE
+        ones, FALLS BACK to DEGRADED agents.
+      * `_route_task` selects within an EXPLICIT `available_agents` subset the
+        caller passed, and has never had that fallback — no ACTIVE candidate in
+        the given subset returns None.
+
+    Those are different contracts, not drift: one asks "route this anywhere",
+    the other "route this among these". Collapsing them would silently widen
+    `_route_task`'s candidate set beyond what its caller named — a worse defect
+    than the one this suite exists for.
+
+    So the fixtures below register only ACTIVE agents. If a future change makes
+    the filters agree, extend this suite rather than assuming the parity claim
+    already covered DEGRADED; it does not, and never asserted that it did.
     """
 
     @pytest.mark.asyncio
