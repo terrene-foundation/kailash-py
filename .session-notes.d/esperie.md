@@ -1,411 +1,191 @@
 ---
 owner: esperie
-last_reconciled_sha: be97099ce
+last_reconciled_sha: eee4fa59b
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-04 (session D)
+# Session Notes — 2026-08-05 (session E)
 
 ## Where we are
 
 Workspace issue-1720-llm-consolidation, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `2b57bb2a8` — **NOT pushed** (34 commits ahead of
-the last push at `66f86b0b5`). Tree clean.
+`fix/issue-1720-forest-drain` @ `eee4fa59b` — **25 commits ahead of the session-D
+close (`03795208d`), NOT pushed.** Tree clean. No worktrees.
 
-**Release is still HELD.** Round 2 has NOT converged: every round so far found
-real defects, so the clean-round counter is at ZERO. Two lanes are mid-round.
+**Release is still HELD, and session D's recommendation to release is REFUTED.**
 
 ## Read first
 
-0. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-04b.md`
-   — the CURRENT decision report.** Supersedes `sweep-2026-08-04.md`. Carries the
-   completion receipts, the PCF triage, and the four decision points.
-1. `.wave-tracker.d/esperie.md` § "Wave 8 reconciliation" — what NOT to re-derive.
-2. This file's **Traps** + **Pending decisions**.
-3. `git log --format='%h %s%n%b' 26a4509b4..HEAD` — every commit body carries its
-   own evidence and the reasoning for what was NOT done.
+1. This file's **THE FINDING OF THIS SESSION** — it changes how you should read
+   any "converged" claim on this branch.
+2. **Open items** + **Traps** below.
+3. `git log --format='%h %s%n%b' 03795208d..HEAD` — every commit body carries its
+   own evidence and states what was NOT done.
+4. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-04b.md` —
+   session D's decision report. **Its §1 completion table and §6 recommendation
+   are now WRONG** (see below); its §3/§4 triage still stands.
 
-## THE FINDING OF THIS SESSION — read before writing any test
+## THE FINDING OF THIS SESSION
 
-**NINE separate instruments on this branch were cited as proof while being
-structurally unable to fail.** Six were mine — including one added to FIX an
-attribution problem (which introduced a worse one), and its replacement, which
-was sound but blind to a class-defining parameter value.
+**Session D recommended releasing on "abnormal-termination evidence" — severity
+fell monotonically, nothing in the last three rounds changed what the module
+leaks. Five more rotated-lens rounds found FIVE CRITICAL/HIGH defects, including
+an unconditional auth bypass.** That recommendation would have shipped them.
 
-**The count is the finding.** Seven, across one module, found by two lanes over
-six rounds — each layer invisible to the instrument that cleared the layer above
-it: character class -> JSON separator -> rule -> position -> assertion
-reachability -> parameter/class interaction. My own inline check cleared the
-sixth and could not see the seventh, structurally. This is the recurring defect,
-not any individual bug:
+The reasoning that justified it ("findings are getting smaller") was not wrong
+about the trend — it was wrong that the trend was evidence. Each round found
+serious defects _on an axis the previous round's lens could not see_.
 
-1. W19 leak probes — derived from "which characters did we just exclude?". `"`
-   was excluded in BOTH the rejected and accepted revision, so it never appeared
-   as a DELTA and no probe covered it, while it leaked exactly like the others.
-   **A character that SURVIVES a narrowing is invisible to a diff-derived probe.**
-2. The `_URL_WITH_USERINFO_ONLY` "proof" — both vectors were fenced by an
-   unrelated mechanism (the `:` of a `"<key>":`), so it passed whether or not the
-   gap existed. The gap was real; one vector produced UNPARSEABLE output.
-3. The dialect no-false-positive test — covered Postgres (63) only. The bug was
-   in SQLite (128), numerically identical to the unknown budget. Could never
-   have caught it.
-4. The #1981 Site-2 fixture — `SimpleNamespace(capabilities=[...])`, a shape no
-   production path can emit, with a docstring explaining why it had to be that
-   shape. Shaped to the defect.
-5. A mutation test that was INERT (string-replace failed on escaping) and stayed
-   green — the exact state that reads as "the tests are vacuous".
-6. **The 20-cell xfail grid, made INERT by its own attribution guard.** The guard
-   `assert rule.search(dsn)` ran BEFORE the leak check, on the shape WITH the
-   defect — asserting exactly what the defect makes false. 20/20 stopped at the
-   guard, 0/20 ever reached the leak assertion, and since the guard reads a
-   COMPILED REGEX the grid behaved identically against a no-op scrubber and a
-   perfect one. **Added by me in response to a finding ABOUT attribution.**
-   Worse, it was INVERTED at fix time: the sound fix (URL parse) leaves the
-   regexes unchanged, so the pins would have stayed XFAIL forever and the
-   residual would have read permanently OPEN after being closed — while the
-   UNSOUND fix would have made them pass. Fixed by attributing on the PAIR-FREE
-   CONTROL, which stays true after either fix. Verified: 20/20 now reach, and
-   the grid reads 20-leaking vs 0-leaking across a no-op/perfect scrubber.
+**Three of the five were regressions introduced BY fixes**, including one of
+mine. That is the durable lesson: on this branch a fix is not a reduction in
+risk until an independent lens has looked at the fix itself.
 
-**Rule that came out of it: probe what the pattern CLAIMS, not what the patch
-CHANGED. And assert the mutation reached the code before reading the result.**
+| Round | Lens                                                  | Found                                                                                                                                                                                                                                                                                                                                                                  |
+| ----- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1    | adversarial security + correctness/instrument         | **CRITICAL** — `completion/complete` was a THIRD tool-schema emitter; anonymous callers got permission-gated tools' full `inputSchema`, and it leaked `disabled` tools too                                                                                                                                                                                             |
+| R2    | same-class sibling sweep + consumer/API + adversarial | **CRITICAL** — unconditional auth bypass in the async tool wrapper (send no credentials → tool EXECUTES). **CRITICAL** — falsy-but-not-None `auth_provider` silently disabled authz + rate limiting + the new schema gate while reporting auth ENABLED. **CRITICAL** — release-blocking floor: 51 modules module-scope-importing a symbol absent at the declared floor |
+| R3    | runtime/end-to-end + adversarial                      | **HIGH** — credentials written verbatim into Redis key names + debug logs. **HIGH (mine)** — deny-on-advisory-labels erased agents from discovery entirely                                                                                                                                                                                                             |
+| R4    | whole-branch behavioural differential + adversarial   | **HIGH** — the R3 cache fix traded the credential leak for CROSS-PRINCIPAL result sharing, and pinned the sharing as an invariant test                                                                                                                                                                                                                                 |
+| R5    | narrow verification of the R4 fix                     | fix-introduced red in an out-of-package test; **F4 confirmed by me** (below)                                                                                                                                                                                                                                                                                           |
 
-## In-flight state
+**My own regression, recorded so it is not repeated.** In wave 3 I instructed an
+agent to "fail closed on an unparseable constraint payload." That was right in
+general and wrong for that field: `chain.py:350-363` documents
+`effective_constraints` as _"reporting-only — read by NO allow/deny gate ...
+advisory per #1896"_ and states _"the tightening IS enforced"_ elsewhere via
+signed derived capabilities. Denying on it added no safety and removed
+availability — agents carrying any constraint label vanished silently from every
+user's discovery list, and the only operator lever was disabling the checker.
+**Read the field's own contract before hardening on it.** Fixed in `b8d60577e`.
 
-- Nothing running in the background. Tree clean.
-- **Two R2 lanes mid-round**, both asked for a FINAL narrow round vs `0da793e14`.
-  Security agreed with the convergence call but bounded its assent to the state
-  it reviewed (`6c84f27a5`) plus my attestation; a verified-at-HEAD read is
-  requested and PENDING. Correctness expects a strong clean-1 candidate.
-- Version anchors UNCHANGED (only nexus at 2.16.0). Decision A/B targets remain
-  ratified and verified against ground truth — see below.
+## Executed this session (25 commits)
 
-## Executed this session (36 commits)
+Security fixes: the third schema emitter + `_public_tool_view` extraction
+(`19c8cfb33`), the async auth bypass deletion + falsy-`auth_provider` identity
+guards (`14d9d8b31`), credentials-in-cache-keys (`71eb63790`), cross-principal
+cache sharing + key hashing (`ee6d5b8bb`), discovery fail-closed + falsy-checker
 
-W19 compact-JSON over-redaction fixed, then fixed AGAIN twice as review found
-the fix itself leaked (`4fdb37fa2` → `9eb66d893` → `91e9215b1` → `6c84f27a5`).
-W12b silent authz default + W13 root cause (`942bdef80`, `b9a0a4ed6`,
-`0fce89856`). R2 findings F1/F3/F4/F6 (`0fce89856`, `0e2497b3b`). Residuals
-documented + pinned (`73e86016d`, `6c84f27a5`). Tracker corrections
-(`7c2c4a4f5`, `116b4830a`).
+- denial-shape (`393f33e27`, `784f92462`), the advisory-label revert
+  (`b8d60577e`), the scrub local/remote split (`b2d3acce5`), the release-blocking
+  floor + gated-schema normalization (`269038fd9`), trust-plane lazy FastMCP for
+  #1996 (`45ccac417`), and the `key=value` prose regression (`eee4fa59b`).
 
-**Three defects I introduced and review caught:** the `{}\` exclusion (caught by
-me), the `"` exclusion leaking quote-bearing credentials (F2), and the
-identity-reverse-map collapsing round-robin (F6).
+Test-only: six security tests that pinned pre-#1912 fixtures rather than the
+guards (`9791892fa`), two that pinned the bypass (`2f7d56807`), the cache-key
+shape (`d8ecef1f8`).
 
-## RATIFIED 2026-08-04 — EXECUTE NEXT SESSION, DO NOT RE-ASK
+**`packages/kailash-kaizen/tests/{security,trust}` went 9 failed → 0.** All were
+stale tests asserting behaviour production deliberately blocks; **zero product
+changes** were needed — greening them by loosening would have re-opened the
+#1912 capability-transplant vector and the `_get_key` privatization.
 
-Co-owner replied "approved" to the decision list. Recorded with concrete scope so
-the next session executes rather than re-surfaces; re-asking a settled decision is
-the `value-prioritization.md` MUST-3 failure this section exists to prevent.
+## Verified green (measured this session, not asserted)
 
-1. **Fail-open POSTURE FLIP on `_check_user_access`** — APPROVED. Flip the
-   `except Exception` path to DENY. **When you do: delete
-   `test_error_path_still_fails_open` and say so in the commit** — that test
-   asserts the CURRENT behaviour precisely so the flip cannot arrive silently.
-   Note the trade it accepts: a transient checker outage will now deny every
-   user. That is the approved trade, not an oversight.
-2. **47-site `str(exc)` sweep** — APPROVED. 23 files in kaizen-agents. Route
-   through `scrub_credentials`; it is a no-op on non-credential text, so a blanket
-   sweep is safe. Its own shard.
-3. **PUSH the branch** — APPROVED. 34 commits local.
-4. **CROSS-SDK inspection — NOT COVERED by this approval.**
-   `repo-scope-discipline.md` needs the target repo AND the exact action named,
-   with a confirm; a general "approved" satisfies neither condition 2 nor 3.
-   **Run `/cross-repo-authorize <owner/repo> "<action>"` for the specific ask.**
-   Do NOT treat this bullet as the authorization.
+- `packages/kailash-mcp/tests/` — 584 passed
+- `packages/kailash-kaizen/tests/{security,trust}` — 127 passed, 0 failed
+- `packages/kailash-kaizen/tests/regression/` — 1356 passed
+- `packages/kaizen-agents/tests/` — 13 failed / 3809 passed; the 13 are live-LLM
+  flakes, **discriminated** against a git-extracted `03795208d` tree (identical
+  node IDs), not assumed
 
-## Prior pending list (items 1 and 3 now EXECUTED — see below)
+## Open items — NONE fixed, NONE release-blocking-verified
 
-1. **`discovery._check_user_access` — the BUG HALF IS FIXED (`ca8aaad74`); only
-   the POSTURE FLIP remains yours.**
-   FIXED, no posture trade involved: the documented `TrustOperations` call shape
-   (it raised TypeError on every call and the handler turned that into a grant —
-   so the documented integration granted EVERYTHING, always); the malformed-result
-   grant (`hasattr(result,"valid")` read absence-of-deny as approval); and the
-   constraints extraction (wrong attribute name, so granted users silently got
-   UNLIMITED constraints). Both checker shapes now supported via one-time
-   introspection, so duck-typed consumers are unaffected.
-   **STILL YOURS:** the `except Exception` path still FAILS OPEN. Genuine
-   availability-vs-safety trade on a public API — fail-closed means a transient
-   checker outage denies every user. NOW PINNED by
-   `test_error_path_still_fails_open`, which asserts current behaviour and tells
-   whoever flips it to delete the test and record the decision. The pin exists so
-   the flip cannot arrive as a side effect of unrelated work.
-   NOTE the earlier deferral rationale is REFUTED for the documented type but NOT
-   for duck-typed consumers — they have a working integration today, which is
-   precisely why this stayed a decision rather than becoming obvious.
-2. **(superseded — see item 1)** `TrustOperations.verify()` — the
-   checker type the docstring NAMES — takes no `user_id`/`organization_id`/
-   `**kwargs` (verified by `inspect.signature`). The call site passes both ⇒
-   `TypeError` on the first agent ⇒ caught ⇒ **every agent granted to every user,
-   always.** Not transient; the steady state for the documented integration. This
-   REFUTES the in-code deferral note's premise. Recommendation: fix call-shape AND
-   fail-closed together (either alone is worse). Not actioned because it changes
-   behaviour for custom-checker consumers on a public API. Fix design + 7 tests in
-   the w8-w12-authz report.
-3. **DONE (`358637785`) — the third credential scrubber is routed through the
-   shared module; drift 9/10 -> 0/10, with a bidirectional parity suite so it
-   cannot drift back silently. Fix was ADDITIVE: the shared module owns vendor
-   credentials + DSNs, the local list keeps PII/payment classes it knows nothing
-   about. Replacing wholesale would have closed a credential gap by opening a
-   PII one.** Original finding, kept for context:
-   `SensitiveDataRedactor.PATTERNS` in
-   `kaizen/core/autonomy/hooks/security/redaction.py`, reachable via
-   `hooks/security/__init__.py` -> `hooks/builtin/logging_hook.py`. It catches
-   `sk-` and NOTHING else: AKIA, ASIA, ghp_, hf_, fw_, xoxb-, sk_live_, sig=
-   and URL-embedded DSNs all pass unredacted. Measured twice — once by the
-   reviewer, once by me after discarding my own vacuous probe.
-   **This is the same failure `credential_scrub.py` was created to fix, one
-   surface over, on the surface where credentials actually leak.**
-   Done: the docstring claim is SCOPED so the prose no longer denies it exists.
-   NOT done: routing that list through the shared module. That is a real change
-   on a hook path and needs its own shard.
-   Recommendation: fix it, and ahead of the 47-site sweep — this is a live
-   under-redaction on a logging path, the sweep is defence-in-depth.
-4. **47 unscrubbed `str(exc)` sites across 23 files** in kaizen-agents. The one
-   fixed (F3) was chosen because its exception comes from a caller-supplied,
-   likely DB-backed checker. Recommendation: own shard, not this branch.
+1. **F3 (MEDIUM, unadjudicated)** — on a non-empty advisory label list,
+   `discovery.py` grants `permission_level="execute"` with a bare
+   `AccessConstraints()` (the type's own docstring: "the MOST PERMISSIVE value
+   this type can hold") while the checker said e.g. `read_only`. The
+   "enforced elsewhere" justification is about the trust-chain verification
+   path, which `find_agents_for_user`'s return value does not traverse. Two
+   lanes flagged it; nobody has ruled on whether `"execute"` is defensible.
+2. **F5/F6/F7 (LOW, unadjudicated)** — advisory-warn is once-per-process
+   per-label-set with no `user_id` in the record; a `Mapping` whose `__len__`>0
+   but `items()` empty falls through to an UNLIMITED grant; the operand-echo
+   doctrine enumerates only `float`/`int`/`re.compile`/`Path` (unprobed:
+   `Decimal`, `strptime`, `ipaddress`, `b64decode`, `KeyError`).
+3. **3 nexus failures — CONSISTENT, not flaky, and UNOWNED.** Every request
+   returns 500 on `POST /workflows/process/`. Discriminated: identical with the
+   MCP changes fully reverted. Different bug class, outside the packages worked
+   this session. **Needs an owner.**
+4. **#1998** — production stdio (`run()` → FastMCP) bypasses EVERY gate: a gated
+   tool returns its full schema + `Args:` block, a `disable_tool()`'d tool
+   EXECUTES with `isError=false`. `run_stdio` — where all the stdio hardening
+   landed — has **ZERO production callers**. Pre-existing, architectural,
+   deliberately not attempted.
+5. **#2000** — eager `torch`/`sklearn` import in `src/kailash/security.py:536,595`
+   costs 11.4s on first node execution.
+6. **#1996 is FIXED** (`45ccac417`). Session D recorded its premise as FALSE
+   after checking `nexus/transports/mcp.py` — **the wrong file**. The issue names
+   `src/kailash/trust/plane/mcp_server.py:31`, which was genuinely unguarded.
 
-## CARRY-FORWARD from redteam — OPEN, none closed, none release-blocking
+## Convergence position — state it honestly
 
-Recorded verbatim in the reviewers' framing so the distinctions survive. Each is
-correctly OUT of this shard; none is fixed.
+**Rounds 1–5 were ALL un-clean. The clean-round counter is at ZERO.**
+`commands/redteam.md` requires TWO CONSECUTIVE clean rounds. Round 5's scope A
+(the cache fix) verified correct on all five execution checks after `d8ecef1f8`,
+but its scope B was never reached, so no round has completed clean end-to-end.
 
-1. **F4 — ESCAPED SCHEME: DOCUMENTED, NOT FIXED.** All three URL rules anchor on
-   a literal `://`, so a JSON encoder escaping forward slashes (PHP
-   `json_encode`, by default) emits `:\/\/` and a real credential leaks IN
-   FULL. Verified live. The in-file documentation stops it being SILENT; it does
-   not stop it being LIVE. Fix is named in-file so it is not re-derived: a scheme
-   group admitting escaped slashes. **Needs its own row.**
-2. **F5 — `tools/list` permission filtering: reachability UNVERIFIED IN BOTH
-   DIRECTIONS.** The loop filters on `disabled` only, never `required_permission`,
-   so this branch widened what a permission-gated tool discloses from
-   name+description to its full argument surface. NOT confirmed exploitable and
-   NOT confirmed safe — the reviewer never read the transport layer. **Whoever
-   picks this up starts at the TRANSPORT read, not the registry.**
-3. **F3 — verified BY ME, explicitly NOT reviewer-confirmed.** The three
-   `str(exc)` sinks in `discovery.py` are scrubbed and I verified it behaviourally;
-   the security lane declared at the time that it did not re-verify. Do not
-   record it as a review verdict.
-4. **The tempered token's complexity ratio (1.0x) is MY measurement.** The
-   reviewer argued the class is structurally unchanged and could NOT measure it
-   (no Bash). If that linearity claim is ever cited as reviewed, cite it to me.
-5. **REFUTED PROOF — cite as REFUTED if cited at all.** The security lane's
-   round-3 "structural proof" that `_URL_WITH_USERINFO_ONLY` needed no fence was
-   REFUTED at `be97099ce`, by its own author. The proof enumerated ONE crossing
-   shape (`","<key>":`, fenced by its colon) and generalised to "every
-   cross-JSON-value crossing". Array elements have NO key and therefore no
-   colon, so `{"a":["https://x","d@e.com"]}` crossed freely and returned
-   unbalanced, unparseable output. The fence WAS necessary and was added on the
-   correctness lane's F1. **If that proof is cited anywhere as
-   reviewer-verified, cite it as REFUTED with the array counterexample.** A
-   wrong proof is more durable than wrong prose — it reads as settled.
-   Instrument #2 in the list above is this one; the refutation is the author's.
-6. **CROSS-SDK CONSIDERATION — co-owner decision, NOT self-authorizable.** The
-   F2/F7 class (a character-class exclusion in a credential scrubber that fences
-   a structural boundary and silently stops claiming real credential shapes) is a
-   BUG CLASS, not a bug, and nothing about it is Python-specific.
-   `cross-sdk-inspection.md` Rule 1 would normally trigger an inspection of the
-   sibling SDK; `repo-scope-discipline.md` makes any sibling-repo read or filing a
-   USER-AUTHORIZED action. Neither the agent nor a reviewer can self-authorize it.
-   **Surfaced to the co-owner; no action taken.**
+Do not read 25 commits of real fixes as convergence. Do not let a later session
+read it that way either. `completion-criterion.md` MUST-4: a cap-stop is
+abnormal termination, never "done".
 
-## REDTEAM OUTCOME: ABNORMAL TERMINATION, **NOT CONVERGENCE**
+## NOT DONE — and gated on the above, not on code
 
-Recorded per `completion-criterion.md` MUST-4: the round cap is a CIRCUIT
-BREAKER, and hitting it is abnormal termination to be reported as such — never
-"done". **The loop was STOPPED at the cap. Two consecutive clean rounds were
-NEVER achieved; the counter stands at ZERO.**
-
-Do not read the volume of work as convergence. Do not let a later session read
-it that way either.
-
-**Why stopping was right rather than premature.** Severity fell monotonically
-across seven rounds: live credential leaks -> instrument defects -> incomplete
-documentation -> prose overstatement about ADJACENT code. Nothing in the last
-three rounds changed what the module leaks. The final round crossed the boundary
-from "defects in the work" to "pre-existing debt in other modules that the
-work's prose happens to make a claim about" — which is precisely the runaway the
-cap exists to catch. The reviewer independently endorsed stopping and said it
-would decline a round 4 if asked.
-
-**Rotation was what produced every late finding.** Six rounds of one lens went
-clean-ish on an axis that could not see the incomplete residual list, the stale
-placeholder guard, or the third scrubber. "Clean" is always scoped to the LENS.
-
-**OPEN RESIDUAL ESCALATED TO CO-OWNER — see PENDING DECISIONS item 3.**
-
-## Prior convergence bookkeeping (superseded by the above)
-
-**NOT CONVERGED.** Every round so far found real defects, so the clean-round
-counter is at ZERO. Two lanes each ran three rounds, each finding strictly less
-than the one before, and both are on a final narrow round at `be97099ce`.
-
-**SECURITY LANE: VERIFIED-AT-`be97099ce` — CLEAN, AND THE RECEIPT IS BOUNDED.**
-It covers `credential_scrub.py` + its 1974e suite **at `be97099ce` ONLY**. It does
-NOT extend to `50fe78c25` (the two prose fixes), which the reviewer has not read.
-Both were prose and there is no reason to expect anything else in that commit —
-but "no reason to expect" is not a read, and the receipt exists precisely so that
-difference is stated rather than assumed. The reviewer bounded this itself,
-unprompted, twice. The reviewer re-read the
-final state rather than resting on my attestation (it raised that distinction
-unprompted, and was right to). Verdict: residual lists TRUE and complete against
-stated coverage; exhaustiveness claim TRUE; re-scoped pin complete across all
-three rules with a sound attribution guard. Only remaining defects were two prose
-nits, both fixed. Every attack it had was exhausted.
-
-**ROUND 2 (ROTATED LENS): NOT CLEAN — counter back to ZERO, and the rotation is
-why.** Pointing a DIFFERENT lens at the module found two things four rounds of
-instrument-probing structurally could not:
-  - the residual list was INCOMPLETE (three undocumented anchor-absence
-    siblings, all leaking: no-scheme, scheme-relative, `%40`-encoded `@`);
-  - the placeholder guard PREDATED the tempered fence, so it never rejected the
-    fence trigger it created — `":` was accepted and injected a live trigger
-    into scrubbed output.
-Both fixed/documented in `c8f1a711b`. Item 3 (the 24 passing tests) came back
-CLEAN — all 9 functions plus the grid red under at least one effective mutation.
-
-**THE LESSON, and it supersedes the earlier framing: "clean" was always scoped to
-the LENS, never to the module.** Six rounds of one lens produced six clean-ish
-verdicts on an axis that could not see either of these. Rotate the instrument
-between rounds (`completion-criterion.md` MUST-4) — not as ceremony, but because
-a non-rotated round re-samples the residue the previous lens already filtered.
-
-**TWO REVIEWERS DISAGREED on the anchor-absence family, and the disagreement was
-INFORMATIVE — recorded, not resolved by picking a side.** Security called
-scheme-less a SCOPE BOUNDARY (claiming every `x:y@z` would redact ordinary
-`key:value@timestamp` prose); correctness called the family an undocumented
-RESIDUAL. Both were right about different members: `%40` is INSIDE stated
-coverage and is pinned as a defect; scheme-less/scheme-relative are OUTSIDE it
-and are documented but NOT pinned. Pinning them would assert a defect where the
-module never made a claim.
-
-**Prior:** CLEAN ROUND 1 — VERIFIED-AT-`1ea5d331f`, conditional met.
-Verdict CLEAN with one documented limitation, which is now documented (the doc
-commit is TEST-COMMENT-ONLY; the verified code state remains `1ea5d331f`).
-Independently re-verified all three properties: attribution 20/20; the guard
-DISCRIMINATES (it fails without the re-homing, which the old guard could not);
-grid still carries information (20-leaking vs 0-leaking).
-
-**THE DOCUMENTED LIMIT — ownership, not exclusivity, and it CANNOT be closed.**
-`_URL_WITH_AUTH_OVERFLOW` structurally SUBSUMES `_URL_WITH_AUTH` on these shapes,
-so a partial OVERFLOW-only fix flips 17 of 20 cells including all 8 AUTH cells.
-MEASURED: those XPASSes are SUBSTANTIVELY CORRECT — the secrets really are
-redacted; only the MECHANISM attribution is nominal. **No false closure exists.**
-Three candidate guards were tested and ALL THREE REFUTED (post-condition check
-re-introduces the F10 inversion; necessity check cannot separate the scenarios
-because the superset covers it; AUTH-exclusive shape is claimed by OVERFLOW
-anyway). A fourth guard would APPEAR to attribute while being unable to — the
-comment is a true statement where the guard would be a false one.
-
-**SUPERSEDED — round 2 was NOT clean; counter is back to ZERO.** (Kept for the
-reasoning, which stands: convergence requires TWO consecutive clean rounds** (`commands/redteam.md` § Convergence Criteria) — so this is 1 of
-2, NOT convergence. Do not read two clean lanes as two clean rounds; they are one
-round, cleanly reported by two lanes. A second round is owed before release.
-
-Prior status of this lane:
-After its F10 fix landed I ran the narrow follow-up inline (does the
-control-based guard hold for the right reason?) and found nothing: the guard
-calls the named rule directly with no `_CREDENTIAL_PATTERNS` involvement, is
-stable under both fix directions, and is delimiter-insensitive by design.
-
-**That is NOT clean round 1 and must not be recorded as one.** It is the author
-checking his own instrument with the instrument that has now missed this class
-SIX times — four of them mine. The correctness lane caught it at the parameter
-layer, the confound layer AND the reachability layer; my inline pass caught it at
-none. A self-attested convergence verdict is exactly what
-`verify-resource-existence.md` MUST-4 blocks, and on this branch of all branches
-it would be the punchline. Convergence needs an external receipt.
-
-Prior status: Its last round found three instrument-layer
-defects (frozen position axis; positional secret-slice satisfiable by a partial
-fix; markup pin confounded into a duplicate of its neighbour). All three fixed in
-`b8bc03eed`; a final round is requested and PENDING. The module is NOT converged
-until that returns.
-
-**FOR THE CODIFY PASS — the sharpest generalisation this branch produced, and it
-is the reviewer's, not mine:**
-
-> A reviewer's FINDING and a reviewer's REMEDY carry different evidentiary
-> weight. The remedy is a HYPOTHESIS TO TEST, not an instruction to apply.
-
-Three remedies were retracted on this branch (two by the security lane, one by
-the correctness lane) plus one refuted PROOF. **Every single underlying finding
-was correct and load-bearing.** Trusting the findings was right; applying any of
-the remedies unexamined would have shipped a half-fix, re-imported a
-just-removed leak, or asserted in a code comment that a live crossing could not
-happen.
-
-Note what did NOT catch these: skepticism. What caught them was (a) a second lane
-finding the same gap from a different direction, and (b) testing each remedy
-before applying it. That is process, and process is what generalises — an
-instruction to "be appropriately skeptical" would have caught none of them.
-
-Two companion lines from the same branch:
-- Derive probes from what the pattern CLAIMS, not from what the patch CHANGED —
-  a diff-derived probe set is blind to whatever the diff did not touch.
-- Ask what a parametrized pin HOLDS CONSTANT, not what it varies — the uncovered
-  axis is exactly where the next instance hides (it hid there three times).
-- **And ask whether the parametrized VALUES are inert w.r.t. the case's shape
-  class.** A guard that varies the same axis it is controlling for cannot see a
-  value that is class-DEFINING. One of four delimiters (`:`) was load-bearing for
-  one of three rules — it moves a bare token into the user:pass class — so the
-  cell was mis-attributed and would have XPASSed on another rule's evidence. The
-  probe that catches it removes the FENCE TRIGGER while KEEPING the delimiter.
-- **Then ask which of its assertions can ever be REACHED.** The last frozen axis
-  was not a parameter at all — it was ORDER OF ASSERTION. Every cell held "guard
-  precedes leak check" constant, so varying delimiter, rule and position could
-  never expose it, and widening the grid 4 -> 12 -> 20 only multiplied cells that
-  all stopped at the same line. A guard encoding the defect's ABSENCE as a
-  precondition converts the whole grid into a no-op, and no amount of widening
-  reveals it.
-- **Guard on the CONTROL, never on the defective shape.** An attribution guard
-  must assert something that stays true after the fix; asserting the defect's
-  negation makes the pin unreachable now and mis-signalling later.
-
-## Ratified decisions — EXECUTE after convergence, do not re-surface
-
-Ordering constraint UNCHANGED and still binding: W19 ✅ → **Round 2 convergence
-(NOT met)** → version anchors + MCP pin → `/release`.
-
-- **Decision A** — verified against ground truth this session: kaizen 2.45.0,
-  kaizen-agents 0.12.0, dataflow 2.19.1, core 2.62.0, ml 2.2.2, nexus already
-  2.16.0. Targets: 2.46.0 / 0.13.0 / 2.20.0 / 2.63.0 / 2.2.3.
-  **TRAP: `kailash-ml` keeps its version in `_version.py`, NOT `__init__.py`.**
-  The obvious bump pattern ships a split version state (zero-tolerance Rule 5).
-- **Decision B** — verified: nexus's only `mcp` mention in pyproject is a
-  KEYWORD, not a dependency. It imports `fastmcp` at `transports/mcp.py:79` —
-  but that import IS already guarded (try/except → INFO → return), so **#1996's
-  "unguarded import" premise needs revisiting rather than implementing as
-  written.**
-- **Decision C** — measured: **~7 genuine findings of 70**, range 5-20. NOT the
-  20-25 first estimated; that sample came entirely from the Class-B-richest spec.
-  Class B runs ~40% true, Class A ~8% — never pool the strata. Sizing 2-3 cycles.
-  **BLOCKER FIRST:** `specs/spec-drift-gate.md` + `tests/spec_drift_gate/` may
-  already implement a more mature gate that subsumes `tools/sweep-redteam.py`.
-  Resolve before investing.
+- **Version anchors** (kaizen 2.46.0, kaizen-agents 0.13.0, dataflow 2.20.0,
+  core 2.63.0, ml 2.2.3; nexus already 2.16.0). **TRAP: `kailash-ml` keeps its
+  version in `_version.py`, NOT `__init__.py`** — the obvious bump ships a split
+  version state (zero-tolerance Rule 5).
+- **CHANGELOGs.** NOTHING from this session is in any CHANGELOG yet. A consumer
+  lane drafted the required per-package entries with semver bumps — recover them
+  from the R2 consumer-lane report if you can; otherwise re-derive. Several are
+  **BREAKING** (discovery fail-closed; the falsy-checker enforcement flip, which
+  presents to operators as a sudden access-denial wave; the renamed log event
+  `discovery.permission_check_failed_open` → `..._failed_closed`, which any
+  alerting keys on).
+- **PUSH** — 25 commits local. Session D ratified the push; it has not happened
+  since.
+- **`/release`.**
 
 ## Traps
 
-- **ALL SIX agents went idle without delivering.** Four had COMPLETE work written
-  as final text, never sent. **Query, never re-dispatch** — re-dispatching would
-  have discarded four full investigations. An idle signal is ZERO evidence.
-- **Inline re-derivation while waiting reached the WRONG conclusion on both W12
-  and W13.** It is a hedge against never getting a report, not a substitute.
-- **Check `Bash` in the agent's tool inventory BEFORE dispatch.** `analyst` and
-  `security-reviewer` are read-only; both correctly refused work needing a shell.
-  The security lane's hand-traces were still excellent — it disclosed the
-  limitation and supplied falsifying commands. Run them.
-- Run heavy suites SERIALLY. Two concurrent suites produce self-inflicted
-  sqlite/perf failures (session-C finding, re-confirmed).
-- `packages/kailash-kaizen` and `packages/kaizen-agents` **cannot be collected in
-  one pytest invocation** — conftest module-name collision. Run separately.
-- **Pre-existing failures, measured with the branch-point control, NOT inherited:**
-  9 in kaizen-agents integration (4 Ollama-loopback, 5 missing `OPENAI_API_KEY`)
-  and 18 in `tests/unit/db` + `tests/regression`. Identical at `26a4509b4`.
-  Do NOT bucket them all as "Ollama" — one sits on the exact surface `b9a0a4ed6`
-  refactored, so mislabelling would hide a code-caused failure.
-- `.venv/bin/python -m pytest` always. Bare `python` dies at conftest.
-- Do NOT install `fastmcp` — breaks the pinned fastapi/starlette.
+- **`cd` PERSISTS between Bash calls in this harness.** An early `cd
+packages/.../src` silently invalidated three later path checks in this session
+  — they reported "file does not exist" for files that do exist. **Always use
+  absolute paths**; re-`cd` to the repo root if unsure.
+- **An idle/empty agent return is ZERO evidence, and you must QUERY not
+  re-dispatch.** A round-5 agent returned only "I'll start by reading the
+  code" after 27 tool calls; `SendMessage` to its agentId recovered the FULL
+  report. Re-dispatching would have discarded it. (Session D hit this with six
+  agents; it recurred here.)
+- **Sub-agents spawning sub-agents lose work.** One lane's three inventory
+  sub-agents were killed by an unrelated cleanup and never reported; the parent
+  redid the work directly. **Tell agents not to spawn sub-agents.**
+- **A syntactically-broken mutation is INERT, not a passing test.** My first
+  attempt to red-test the scrub fix commented out a trailing comma → SyntaxError
+  → suite never ran. That reads identically to "the test is vacuous". Always
+  `ast.parse` the mutated file before reading the result.
+- Disk hit **100%** mid-session (1.8Ti volume). One `Edit` failed `ENOSPC`.
+  Clear `__pycache__` between long runs.
+- Two agents hit account/session budget limits mid-run and were cut off. Work in
+  the tree survived; work in agent context did not.
+- `.venv/bin/python -m pytest` ALWAYS. `packages/kailash-kaizen` and
+  `packages/kaizen-agents` **cannot** be collected in one invocation.
+- `integration/nodes/test_iterative_llm_agent_real_services.py` HANGS.
+  `tests/integration/mcp_server/` needs Redis on 6380. Use `--timeout=120` on
+  nexus runs — one hung past 45 min without it.
+- **Do NOT use a broad `pkill -f pytest`** — it killed another agent's suite.
 - New credential-shaped test vectors MUST be assembled at runtime from fragments.
+
+## Pending decisions for the co-owner
+
+1. **Release gate.** Convergence is not met and five rounds say the trend is not
+   evidence. Recommend: two clean rounds before `/release`, starting with F3.
+   Con, stated honestly: that is more cycles on a branch already 25 commits deep,
+   and the remaining items are MEDIUM/LOW, not the CRITICALs that justified
+   rounds 1–4.
+2. **The 3 nexus 500s** need an owner — outside every package touched here.
+3. **Cross-SDK inspection is STILL NOT AUTHORIZED.** The credential-scrubber and
+   identity-vs-truthiness classes are not Python-specific.
+   `repo-scope-discipline.md` needs the target repo AND exact action named with a
+   confirm. Run `/cross-repo-authorize <owner/repo> "<action>"`. A general
+   "approved" does not satisfy conditions 2 and 3 — this was true at session D
+   and is still true.
