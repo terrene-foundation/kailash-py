@@ -7,6 +7,7 @@ for isolated component testing.
 
 import asyncio
 import json
+import re
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -664,24 +665,46 @@ class TestCacheManager:
         assert call_count == 2  # Only two unique calls
 
     def test_create_cache_key(self):
-        """Test cache key creation from function name and arguments."""
+        """Cache keys are ``<func_name>:<sha256>`` and discriminate their inputs.
+
+        This test previously pinned the four literal plaintext keys
+        (``"func::"``, ``"func:(1, 2, 3):"``, ...). That shape was retired
+        because the composed key was interpolated verbatim into DEBUG log lines
+        and used as a Redis key NAME, so any credential-shaped argument that the
+        7-name strip list does not cover landed in ``KEYS``/``MONITOR``/the
+        slowlog/RDB. The key is now hashed.
+
+        Asserting the digest literals would re-pin a value with no meaning and
+        would break again on the next composition change. The load-bearing
+        properties are asserted instead: readable prefix (invalidation and
+        debugging still work), opacity (no argument survives into the key), and
+        DISCRIMINATION -- distinct inputs must not collide, which is the
+        property a hash could actually get wrong.
+        """
         manager = CacheManager()
 
-        # Test with no arguments
-        key1 = manager._create_cache_key("func", (), {})
-        assert key1 == "func::"
+        cases = {
+            "no args": manager._create_cache_key("func", (), {}),
+            "positional": manager._create_cache_key("func", (1, 2, 3), {}),
+            "keyword": manager._create_cache_key("func", (), {"a": 1, "b": 2}),
+            "both": manager._create_cache_key("func", (1, 2), {"a": 1}),
+        }
 
-        # Test with positional arguments
-        key2 = manager._create_cache_key("func", (1, 2, 3), {})
-        assert key2 == "func:(1, 2, 3):"
+        for label, key in cases.items():
+            prefix, _, digest = key.partition(":")
+            assert prefix == "func", f"{label}: lost the readable prefix: {key!r}"
+            assert re.fullmatch(
+                r"[0-9a-f]{64}", digest
+            ), f"{label}: expected a sha256 digest, got {digest!r}"
+            # Opacity: no argument value may survive into the key.
+            for leaked in ("(1, 2", "'a'", "[('a'"):
+                assert leaked not in key, f"{label}: argument leaked into key: {key!r}"
 
-        # Test with keyword arguments
-        key3 = manager._create_cache_key("func", (), {"a": 1, "b": 2})
-        assert key3 == "func::[('a', 1), ('b', 2)]"
+        # Discrimination: four distinct inputs -> four distinct keys.
+        assert len(set(cases.values())) == len(cases), f"key collision: {cases}"
 
-        # Test with both
-        key4 = manager._create_cache_key("func", (1, 2), {"a": 1})
-        assert key4 == "func:(1, 2):[('a', 1)]"
+        # Determinism: the same input must reproduce the same key.
+        assert manager._create_cache_key("func", (1, 2), {"a": 1}) == cases["both"]
 
     def test_make_redis_key(self):
         """Test Redis key creation."""
