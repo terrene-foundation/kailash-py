@@ -21,9 +21,11 @@ close (`03795208d`), NOT pushed.** Tree clean. No worktrees.
 2. **Open items** + **Traps** below.
 3. `git log --format='%h %s%n%b' 03795208d..HEAD` — every commit body carries its
    own evidence and states what was NOT done.
-4. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-04b.md` —
-   session D's decision report. **Its §1 completion table and §6 recommendation
-   are now WRONG** (see below); its §3/§4 triage still stands.
+4. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-05.md`
+   — the CURRENT decision report.** Supersedes `sweep-2026-08-04b.md`, whose §1
+   completion table and §6 release recommendation are REFUTED (see below) though
+   its §3/§4 triage largely carries forward. Carries the PCF triage, the six
+   decision points, and the Sweep-N gate owed on #1995.
 
 ## THE FINDING OF THIS SESSION
 
@@ -183,9 +185,15 @@ packages/.../src` silently invalidated three later path checks in this session
    and the remaining items are MEDIUM/LOW, not the CRITICALs that justified
    rounds 1–4.
 2. **The 3 nexus 500s** need an owner — outside every package touched here.
-3. **Cross-SDK inspection is STILL NOT AUTHORIZED.** The credential-scrubber and
-   identity-vs-truthiness classes are not Python-specific.
-   `repo-scope-discipline.md` needs the target repo AND exact action named with a
-   confirm. Run `/cross-repo-authorize <owner/repo> "<action>"`. A general
-   "approved" does not satisfy conditions 2 and 3 — this was true at session D
-   and is still true.
+3. **Cross-SDK: prior grants EXIST but are action-scoped; this session's two
+   classes need a NEW one.** Correcting an over-broad statement I made mid-session
+   ("still not authorized", which implied none had ever been granted): this
+   workspace holds FIVE `cross-repo-authorization-1720-*.md` receipts against the
+   Rust SDK BUILD repo, and two drafts marked FILED. But
+   `repo-scope-discipline.md` condition 5 scopes a grant to the NAMED action, and
+   none covers this session's classes — the credential-scrubber under-redaction
+   family, and the identity-vs-truthiness authz-gate family. Both recur across
+   bindings; `cross-sdk-inspection.md` Rule 1 binds. Run `/cross-repo-authorize`
+   for each specifically. **Do not put the private sibling's org slug in any
+   public-published artifact** (`cross-sdk-inspection.md` Rule 6) — refer to it by
+   role; the slug lives in the gitignored resolver + the receipts.
