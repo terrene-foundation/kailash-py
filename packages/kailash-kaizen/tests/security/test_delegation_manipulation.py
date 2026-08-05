@@ -49,7 +49,11 @@ from kailash.trust.exceptions import (
     DelegationError,
     TrustChainNotFoundError,
 )
-from kailash.trust.operations import TrustKeyManager, TrustOperations
+from kailash.trust.operations import (
+    CapabilityRequest,
+    TrustKeyManager,
+    TrustOperations,
+)
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
@@ -124,71 +128,52 @@ class TestCannotDelegateUnownedCapability:
         """Create TrustOperations with test fixtures."""
         return TrustOperations(authority_registry, key_manager, trust_store)
 
-    def _create_signed_genesis(
-        self, private_key: str, agent_id: str, authority_id: str
-    ) -> GenesisRecord:
-        """Helper to create a properly signed genesis record."""
-        genesis = GenesisRecord(
-            id=f"gen-{uuid4()}",
-            agent_id=agent_id,
-            authority_id=authority_id,
-            authority_type=AuthorityType.ORGANIZATION,
-            created_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
-            signature="",
-        )
-        payload = serialize_for_signing(genesis.to_signing_payload())
-        genesis.signature = sign(payload, private_key)
-        return genesis
-
-    def _create_signed_capability(
+    async def _establish_chain(
         self,
-        private_key: str,
-        capability_name: str,
-        attester_id: str,
-        constraints: Optional[List[str]] = None,
-    ) -> CapabilityAttestation:
-        """Helper to create a properly signed capability attestation."""
-        capability = CapabilityAttestation(
-            id=f"cap-{uuid4()}",
-            capability=capability_name,
-            capability_type=CapabilityType.ACCESS,
-            constraints=constraints or [],
-            attester_id=attester_id,
-            attested_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
-            signature="",
+        trust_ops: TrustOperations,
+        trust_store,
+        agent_id: str,
+        capabilities: List[str],
+        expires_at: Optional[datetime] = None,
+    ) -> TrustLineageChain:
+        """Establish a REAL, fully-signed trust chain via the production path.
+
+        Uses ``TrustOperations.establish`` — the same code path a production
+        caller uses — rather than hand-assembling a chain. That matters after
+        #1912 (commit ``46dee444a``): a chain is only mintable-from when its
+        capabilities are v1 SUBJECT-BOUND (the holder's ``genesis.agent_id`` is
+        inside the signed pre-image, closing the cross-chain capability
+        TRANSPLANT vector) AND the chain carries a Wave-2 chain-state signature
+        over the capability SET (closing set-deletion / constraint suppression).
+        Both are enforced fail-closed at every mint surface
+        (``_verify_source_chain_before_mint``). A hand-rolled fixture that signs
+        the legacy un-bound pre-image is rejected — correctly — so this helper
+        signs through the real key manager instead of reproducing the pre-image.
+        """
+        await trust_store.initialize()
+        await trust_ops.initialize()
+        return await trust_ops.establish(
+            agent_id=agent_id,
+            authority_id="org-test",
+            capabilities=[
+                CapabilityRequest(
+                    capability=name,
+                    capability_type=CapabilityType.ACCESS,
+                )
+                for name in capabilities
+            ],
+            expires_at=expires_at or (datetime.now(timezone.utc) + timedelta(days=30)),
         )
-        payload = serialize_for_signing(capability.to_signing_payload())
-        capability.signature = sign(payload, private_key)
-        return capability
 
     @pytest.mark.asyncio
-    async def test_cannot_delegate_unowned_capability(
-        self, trust_ops, trust_store, keypair
-    ):
+    async def test_cannot_delegate_unowned_capability(self, trust_ops, trust_store):
         """
         Agent-A has 'analyze_data' capability.
         Agent-A tries to delegate 'admin_access' which it does NOT have.
         Delegation MUST be rejected.
         """
-        private_key, public_key = keypair
-
         # Step 1: Create Agent-A with ONLY 'analyze_data' capability
-        genesis_a = self._create_signed_genesis(private_key, "agent-A", "org-test")
-        cap_analyze = self._create_signed_capability(
-            private_key, "analyze_data", "org-test"
-        )
-
-        chain_a = TrustLineageChain(
-            genesis=genesis_a,
-            capabilities=[cap_analyze],  # ONLY analyze_data
-            delegations=[],
-        )
-
-        await trust_store.initialize()
-        await trust_store.store_chain(chain_a)
-        await trust_ops.initialize()
+        await self._establish_chain(trust_ops, trust_store, "agent-A", ["analyze_data"])
 
         # Step 2: Agent-A tries to delegate 'admin_access' (NOT owned)
         with pytest.raises(CapabilityNotFoundError) as exc_info:
@@ -208,31 +193,17 @@ class TestCannotDelegateUnownedCapability:
 
     @pytest.mark.asyncio
     async def test_cannot_delegate_multiple_unowned_capabilities(
-        self, trust_ops, trust_store, keypair
+        self, trust_ops, trust_store
     ):
         """
         Agent-A has ['analyze_data', 'read_logs'].
         Agent-A tries to delegate ['analyze_data', 'delete_all', 'admin'].
         Delegation MUST fail because 'delete_all' and 'admin' are not owned.
         """
-        private_key, public_key = keypair
-
         # Step 1: Create Agent-A with limited capabilities
-        genesis_a = self._create_signed_genesis(private_key, "agent-A", "org-test")
-        cap_analyze = self._create_signed_capability(
-            private_key, "analyze_data", "org-test"
+        await self._establish_chain(
+            trust_ops, trust_store, "agent-A", ["analyze_data", "read_logs"]
         )
-        cap_logs = self._create_signed_capability(private_key, "read_logs", "org-test")
-
-        chain_a = TrustLineageChain(
-            genesis=genesis_a,
-            capabilities=[cap_analyze, cap_logs],
-            delegations=[],
-        )
-
-        await trust_store.initialize()
-        await trust_store.store_chain(chain_a)
-        await trust_ops.initialize()
 
         # Step 2: Try to delegate mix of owned and unowned capabilities
         with pytest.raises(CapabilityNotFoundError) as exc_info:
@@ -458,74 +429,52 @@ class TestCannotExtendExpirationBeyondParent:
         """Create TrustOperations with test fixtures."""
         return TrustOperations(authority_registry, key_manager, trust_store)
 
-    def _create_signed_genesis(
+    async def _establish_chain(
         self,
-        private_key: str,
+        trust_ops: TrustOperations,
+        trust_store,
         agent_id: str,
-        authority_id: str,
+        capabilities: List[str],
         expires_at: Optional[datetime] = None,
-    ) -> GenesisRecord:
-        """Helper to create a signed genesis with specific expiration."""
-        genesis = GenesisRecord(
-            id=f"gen-{uuid4()}",
-            agent_id=agent_id,
-            authority_id=authority_id,
-            authority_type=AuthorityType.ORGANIZATION,
-            created_at=datetime.now(timezone.utc),
-            expires_at=expires_at,
-            signature="",
-        )
-        payload = serialize_for_signing(genesis.to_signing_payload())
-        genesis.signature = sign(payload, private_key)
-        return genesis
+    ) -> TrustLineageChain:
+        """Establish a REAL, fully-signed trust chain via the production path.
 
-    def _create_signed_capability(
-        self, private_key: str, capability_name: str, attester_id: str
-    ) -> CapabilityAttestation:
-        """Helper to create a signed capability."""
-        capability = CapabilityAttestation(
-            id=f"cap-{uuid4()}",
-            capability=capability_name,
-            capability_type=CapabilityType.ACCESS,
-            constraints=[],
-            attester_id=attester_id,
-            attested_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
-            signature="",
+        See ``TestCannotDelegateUnownedCapability._establish_chain`` — post-#1912
+        a mintable-from chain needs v1 subject-bound capability signatures plus a
+        Wave-2 chain-state signature, so the fixture signs through the real
+        ``TrustOperations.establish`` path rather than reproducing the pre-image.
+        """
+        await trust_store.initialize()
+        await trust_ops.initialize()
+        return await trust_ops.establish(
+            agent_id=agent_id,
+            authority_id="org-test",
+            capabilities=[
+                CapabilityRequest(
+                    capability=name,
+                    capability_type=CapabilityType.ACCESS,
+                )
+                for name in capabilities
+            ],
+            expires_at=expires_at,
         )
-        payload = serialize_for_signing(capability.to_signing_payload())
-        capability.signature = sign(payload, private_key)
-        return capability
 
     @pytest.mark.asyncio
-    async def test_delegation_expiry_capped_to_parent(
-        self, trust_ops, trust_store, keypair
-    ):
+    async def test_delegation_expiry_capped_to_parent(self, trust_ops, trust_store):
         """
         Parent trust expires in 7 days.
         Child requests delegation expiring in 30 days.
         Delegation expiry MUST be capped to 7 days (parent's expiry).
         """
-        private_key, public_key = keypair
-
         # Step 1: Create parent with 7-day expiry
         parent_expires = datetime.now(timezone.utc) + timedelta(days=7)
-        genesis_a = self._create_signed_genesis(
-            private_key, "agent-A", "org-test", expires_at=parent_expires
+        await self._establish_chain(
+            trust_ops,
+            trust_store,
+            "agent-A",
+            ["analyze_data"],
+            expires_at=parent_expires,
         )
-        cap_analyze = self._create_signed_capability(
-            private_key, "analyze_data", "org-test"
-        )
-
-        chain_a = TrustLineageChain(
-            genesis=genesis_a,
-            capabilities=[cap_analyze],
-            delegations=[],
-        )
-
-        await trust_store.initialize()
-        await trust_store.store_chain(chain_a)
-        await trust_ops.initialize()
 
         # Step 2: Request delegation with 30-day expiry
         requested_expiry = datetime.now(timezone.utc) + timedelta(days=30)
@@ -548,32 +497,21 @@ class TestCannotExtendExpirationBeyondParent:
 
     @pytest.mark.asyncio
     async def test_delegation_without_explicit_expiry_uses_parent(
-        self, trust_ops, trust_store, keypair
+        self, trust_ops, trust_store
     ):
         """
         Parent trust expires in 7 days.
         Child requests delegation without specifying expiry.
         Delegation MUST inherit parent's expiry.
         """
-        private_key, public_key = keypair
-
         parent_expires = datetime.now(timezone.utc) + timedelta(days=7)
-        genesis_a = self._create_signed_genesis(
-            private_key, "agent-A", "org-test", expires_at=parent_expires
+        await self._establish_chain(
+            trust_ops,
+            trust_store,
+            "agent-A",
+            ["analyze_data"],
+            expires_at=parent_expires,
         )
-        cap_analyze = self._create_signed_capability(
-            private_key, "analyze_data", "org-test"
-        )
-
-        chain_a = TrustLineageChain(
-            genesis=genesis_a,
-            capabilities=[cap_analyze],
-            delegations=[],
-        )
-
-        await trust_store.initialize()
-        await trust_store.store_chain(chain_a)
-        await trust_ops.initialize()
 
         # No expires_at specified
         delegation = await trust_ops.delegate(

@@ -31,6 +31,7 @@ from io import StringIO
 
 import pytest
 from kailash.trust.key_manager import (
+    BOTO3_AVAILABLE,
     AWSKMSKeyManager,
     InMemoryKeyManager,
     KeyManagerError,
@@ -254,10 +255,18 @@ class TestPrivateKeyCleanup:
         key_manager._public_keys.clear()
         key_manager._metadata.clear()
 
-        # Keys no longer accessible
+        # Keys no longer accessible. Probed via the PUBLIC has_key() surface —
+        # the public get_key() accessor was deliberately privatized to _get_key
+        # (commit cb6e4fba0, "harden key_manager") precisely so no caller can
+        # pull raw private key material out of the manager; has_key() is its
+        # documented safe replacement ("Safe alternative to get_key() that does
+        # not expose key material"). Asserting through a restored public
+        # get_key() would re-open the extraction surface THIS FILE tests against.
         assert len(key_manager._keys) == 0
-        assert key_manager.get_key("agent-001") is None
-        assert key_manager.get_key("agent-002") is None
+        assert key_manager.has_key("agent-001") is False
+        assert key_manager.has_key("agent-002") is False
+        assert key_manager.get_public_key("agent-001") is None
+        assert key_manager.get_public_key("agent-002") is None
 
     def test_private_key_variable_can_be_cleared(self, trust_crypto):
         """
@@ -305,16 +314,30 @@ class TestSecureStorageEncryption:
         # This is intentional for dev/test but NOT for production
         # Production should use AWSKMSKeyManager or similar
 
+    @pytest.mark.skipif(
+        not BOTO3_AVAILABLE,
+        reason="boto3 not installed; AWSKMSKeyManager cannot be constructed",
+    )
     def test_aws_kms_stub_does_not_store_local_keys(self):
         """
-        AWSKMSKeyManager (stub) does not store keys locally.
+        AWSKMSKeyManager does not store keys locally.
 
-        When implemented, KMS keys are stored in AWS, not locally.
+        KMS keys live in AWS, not in local process memory.
+
+        The region is passed EXPLICITLY via the constructor's documented
+        region_name parameter. Constructing without it makes botocore resolve
+        the region from ambient config and then from the EC2 instance-metadata
+        endpoint, which fails with NoRegionError on any machine that has no AWS
+        region configured. Client construction is offline and credential-free
+        (botocore resolves credentials lazily at request time), so this test
+        exercises the real constructor with no AWS account, network, or
+        credentials — no skip needed.
         """
-        kms_manager = AWSKMSKeyManager()
+        kms_manager = AWSKMSKeyManager(region_name="us-east-1")
 
         # No local key storage
         assert len(kms_manager._key_arns) == 0
+        assert len(kms_manager._public_keys) == 0
 
     @pytest.mark.asyncio
     async def test_inmemory_key_format_is_base64(self, key_manager):
