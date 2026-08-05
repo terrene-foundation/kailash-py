@@ -135,6 +135,55 @@ _AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
     r"[A-Za-z0-9/+]{40,}", re.ASCII
 )
 
+#: Key names that ANNOUNCE their value as a secret. Shared by the two
+#: ``key=value`` rules below so the vocabulary cannot drift between them.
+_CREDENTIAL_KEY_NAMES: Final[str] = (
+    r"[\"']?(?i:passwd|password|pwd|secret|api[-_]?key|apikey|"
+    r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
+    r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
+    r"session[-_]?key|encryption[-_]?key)[\"']?\s*[=:]\s*[\"']?"
+)
+
+#: ``password=<secret-shaped value>`` — safe under BOTH presets, because the
+#: key announces a secret AND the value looks like one. "Looks like one" is
+#: EITHER of two discriminators, and it takes both to separate secrets from
+#: prose without losing either:
+#:
+#:   1. contains a digit or token punctuation (``-_./+=``) — ``hunter2longenough``,
+#:      ``aB3-xY9_qq77``, ``dXNlcjpwYXNzd29yZA==``; or
+#:   2. is at least 16 characters — catches a PURE-ALPHABETIC key such as
+#:      ``api_key=abcdefghijklmnopqrst`` (a real issued-key shape), which
+#:      discriminator 1 alone misses.
+#:
+#: Length is what separates a pure-alpha secret from a pure-alpha word: real
+#: issued keys run 20+ chars, while the prose that appears after one of these
+#: key names is short (``unavailable`` 11, ``expected`` 8, ``Optional[str]`` 13).
+#:
+#: The lookahead is what earns this rule a place OUTSIDE
+#: ``_OPAQUE_SHAPE_PATTERNS``. Without it (the original single-rule form) the
+#: value class ``[^\s"',;&]{6,}`` constrained nothing and matched prose, so
+#: ``secret: unavailable`` and ``api_key: Optional[str]`` were blanked ENTIRELY
+#: and ``invalid value for 'api_key': expected string`` lost its type
+#: information — a diagnosability regression at ~180 conservative-preset sinks
+#: whose text an AGENT reads to decide its retry, which is the precise cost
+#: ``redact_opaque_tokens=False`` exists to avoid.
+_CREDENTIAL_KEYVALUE_TOKEN: Final[re.Pattern] = re.compile(
+    _CREDENTIAL_KEY_NAMES
+    + r"(?=[^\s\"',;&]*[0-9\-_./+=]|[^\s\"',;&]{16,})[^\s\"',;&]{6,}",
+    re.ASCII,
+)
+
+#: ``password=<any 6+ run>`` — the ORIGINAL unconstrained form, retained so a
+#: pure-alphabetic secret (``password=hunterpassword``) is still caught. It CAN
+#: match credential-free prose, so per this module's own contract (see
+#: ``_OPAQUE_SHAPE_PATTERNS`` below) it is classified shape-only and is
+#: therefore AGGRESSIVE-PRESET ONLY — on the provider-error surface, where
+#: over-redaction is the documented and correct trade.
+_CREDENTIAL_KEYVALUE_PROSE: Final[re.Pattern] = re.compile(
+    _CREDENTIAL_KEY_NAMES + r"[^\s\"',;&]{6,}",
+    re.ASCII,
+)
+
 # ---------------------------------------------------------------------------
 # Vendor-prefixed and shape-anchored credential patterns
 # ---------------------------------------------------------------------------
@@ -292,14 +341,14 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # what makes a Python/JSON dict repr match: ``'password': 'hunter2...'``
     # puts a closing quote between the key and the ":", and without it the rule
     # missed exactly the shape a logged dict produces.
-    re.compile(
-        r"[\"']?(?i:passwd|password|pwd|secret|api[-_]?key|apikey|"
-        r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
-        r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
-        r"session[-_]?key|encryption[-_]?key)[\"']?"
-        r"\s*[=:]\s*[\"']?[^\s\"',;&]{6,}",
-        re.ASCII,
-    ),
+    # SPLIT INTO TWO by aggression, per the ``_OPAQUE_SHAPE_PATTERNS`` contract
+    # below. The token-shaped half runs under both presets; the prose-matching
+    # half is aggressive-only. Definitions + rationale at the constants.
+    #
+    # Order matters only in that both may match the same span; the token rule is
+    # listed first so the tighter match is applied before the looser one.
+    _CREDENTIAL_KEYVALUE_TOKEN,
+    _CREDENTIAL_KEYVALUE_PROSE,
     # Partial key exposure (OpenAI style: "sk-tenA...B12C")
     re.compile(r"sk-[a-zA-Z0-9]{3,4}\.\.\.[a-zA-Z0-9]{3,4}", re.ASCII),
 ]
@@ -317,7 +366,7 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 #: ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``
 #: is the tripwire: a shape-only rule left unclassified reds it.
 _OPAQUE_SHAPE_PATTERNS: Final[frozenset] = frozenset(
-    {_GENERIC_HEX_TOKEN, _AWS_SECRET_CONTIGUOUS_RUN}
+    {_GENERIC_HEX_TOKEN, _AWS_SECRET_CONTIGUOUS_RUN, _CREDENTIAL_KEYVALUE_PROSE}
 )
 
 # ---------------------------------------------------------------------------
