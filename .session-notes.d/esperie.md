@@ -1,6 +1,6 @@
 ---
 owner: esperie
-last_reconciled_sha: eee4fa59b
+last_reconciled_sha: 3120a6ede
 migrated_from: .session-notes
 ---
 
@@ -9,8 +9,9 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace issue-1720-llm-consolidation, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `eee4fa59b` — **25 commits ahead of the session-D
-close (`03795208d`), NOT pushed.** Tree clean. No worktrees.
+`fix/issue-1720-forest-drain` @ `3120a6ede` — **27 commits ahead of the session-D
+close (`03795208d`), NOT pushed** (87 ahead of `origin/main`). Tree clean. No
+stray worktrees.
 
 **Release is still HELD, and session D's recommendation to release is REFUTED.**
 
