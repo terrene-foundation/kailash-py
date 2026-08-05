@@ -7,6 +7,7 @@ Based on patterns from production MCP server implementations.
 
 import asyncio
 import functools
+import hashlib
 import json
 import logging
 import threading
@@ -484,11 +485,40 @@ class CacheManager:
         return f"{prefix}{key}"
 
     def _create_cache_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
-        """Create a cache key from function name and arguments."""
-        # Convert args and kwargs to string representation
+        """Create a cache key from function name and arguments.
+
+        The arguments are folded into a DIGEST rather than interpolated
+        verbatim, because this string is not private: it is DEBUG-logged by
+        ``UnifiedCache.get_or_compute`` and by the ``cached`` decorator, and it
+        becomes a REDIS KEY NAME via ``UnifiedCache._make_key``. A verbatim key
+        therefore reaches log lines, ``KEYS mcp:*``, ``MONITOR``, the slowlog,
+        and RDB/AOF on disk.
+
+        The MCP server strips a fixed set of transport-credential kwargs before
+        reaching here, but that set is a fixed list of names and cannot be
+        complete: a tool taking ``github_token``, or a deployment spelling its
+        header ``x_api_key`` / ``auth_token`` / ``apikey``, still arrives with a
+        secret in a business argument. Lengthening the name list cannot fix
+        that — business arguments are exactly what the key must keep
+        distinguishing. Hashing closes the log surface, the Redis key-name
+        surface, and the unbounded-key-length surface at once, for every
+        argument, without weakening that discrimination.
+
+        ``func_name`` is kept as a readable prefix so a key remains
+        attributable to its tool when debugging or scanning Redis. Callers that
+        need per-principal partitioning pass an already-digested principal tag
+        as part of ``func_name`` (see ``MCPServer._cache_key_scope``), so no
+        raw identifier reaches the prefix either.
+        """
+        # Pre-image composition is unchanged from the verbatim form, so the same
+        # inputs that used to collide still collide and no call that used to be
+        # distinguished stops being distinguished.
         args_str = str(args) if args else ""
         kwargs_str = str(sorted(kwargs.items())) if kwargs else ""
-        return f"{func_name}:{args_str}:{kwargs_str}"
+        digest = hashlib.sha256(
+            f"{func_name}:{args_str}:{kwargs_str}".encode("utf-8")
+        ).hexdigest()
+        return f"{func_name}:{digest}"
 
     def clear_all(self) -> None:
         """Clear all caches."""

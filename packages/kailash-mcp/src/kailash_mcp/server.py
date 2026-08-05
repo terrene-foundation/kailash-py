@@ -59,6 +59,7 @@ import base64
 import contextvars
 import functools
 import gzip
+import hashlib
 import inspect
 import json
 import logging
@@ -550,6 +551,49 @@ _CREDENTIAL_KWARGS = frozenset(
 def _strip_credential_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Return ``kwargs`` without any transport-level credential entries."""
     return {k: v for k, v in kwargs.items() if k not in _CREDENTIAL_KWARGS}
+
+
+def _principal_cache_tag(user_id: Optional[str], client_id: Optional[str]) -> str:
+    """Return a stable, NON-SECRET digest of the principal making a request.
+
+    Cache keys are partitioned by PRINCIPAL, not by arguments alone, because a
+    tool body has a per-caller channel that does NOT travel through kwargs.
+    ``_CURRENT_TOOL_CLIENT`` is bound to the invoking ``client_id`` by
+    ``_handle_call_tool`` for the body's duration, and ``ElicitationSystem`` is
+    constructed with ``client_id_provider=lambda: _CURRENT_TOOL_CLIENT.get()``
+    — so a tool that elicits from its caller returns a per-CLIENT result. Keyed
+    on arguments alone, the FIRST caller's elicited answer is served from cache
+    to every later caller, and no elicitation is raised for them at all. That
+    bypasses the client-scoping FINDING 3 exists to establish, one layer above
+    where FINDING 3 enforces it.
+
+    This corrects the reasoning ``71eb63790`` recorded at the cache block —
+    "the stripped set is exactly the set the result can depend on". The result
+    can also depend on the invoking client, which is not in kwargs at all.
+
+    BOTH per-caller dimensions are folded in, because neither subsumes the
+    other: elicitation is scoped to the CLIENT, so keying on ``user_id`` alone
+    would still leak one shared service account's elicited answers between
+    genuinely different agents; and an authenticated identity is the stronger
+    principal wherever a transport multiplexes clients.
+
+    The tag is a DIGEST, never the raw identifier. This string reaches the same
+    DEBUG log lines and Redis key names that made the round-3 credential leak a
+    disclosure, and a ``user_id`` is itself sensitive — ``APIKeyAuth`` derives
+    it as ``f"api_key_{fingerprint_secret(api_key)}"``.
+    """
+    if not user_id and not client_id:
+        # No distinguishable principal (single-client stdio, unauthenticated
+        # direct dispatch): every caller IS the same principal, so they share
+        # one entry, exactly as before this change.
+        return "anon"
+    # Length-prefixed so the two fields cannot be re-partitioned: ("ab", "c")
+    # and ("a", "bc") produce different pre-images even though a plain
+    # concatenation would collide them onto one tag.
+    user_id = user_id or ""
+    client_id = client_id or ""
+    material = f"{len(user_id)}:{user_id}:{len(client_id)}:{client_id}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
 # Keys accepted in a tool's ``rate_limit=`` config. They are forwarded as
@@ -1609,6 +1653,11 @@ class MCPServer:
         input_schema: Optional[Dict[str, Any]] = None,
         description: Optional[str] = None,
         annotations: Optional[Any] = None,
+        # Appended, never inserted: this signature is public and a decorator
+        # argument may be passed positionally, so inserting a parameter beside
+        # the other cache_* options would silently re-bind every positional
+        # argument after it.
+        cache_shared_across_callers: bool = False,
     ):
         """
         Enhanced tool decorator with authentication, caching, metrics, and error handling.
@@ -1616,6 +1665,18 @@ class MCPServer:
         Args:
             cache_key: Optional cache key for caching results
             cache_ttl: Optional TTL override for this tool
+            cache_shared_across_callers: Let ONE cache entry serve EVERY caller.
+                Defaults to False, so cached results are partitioned by
+                principal (authenticated user + invoking client) and one
+                caller's result can never be served to another.
+
+                Set True ONLY for a tool whose result is genuinely independent
+                of who asked — a public rate table, a shared reference lookup.
+                It is NOT safe for a tool that elicits from its caller, reads
+                ``_CURRENT_TOOL_CLIENT``, or otherwise returns anything
+                caller-specific: those results would be served across
+                principals, which is the leak the per-principal default exists
+                to close. Has no effect unless ``cache_key`` is set.
             format_response: Optional response format ("json", "markdown", "table", etc.)
             required_permission: Single required permission for tool access
             required_permissions: List of required permissions (alternative to required_permission)
@@ -1763,6 +1824,7 @@ class MCPServer:
                 timeout,
                 retryable,
                 stream_response,
+                cache_per_principal=not cache_shared_across_callers,
             )
 
             # Register with FastMCP
@@ -1851,6 +1913,25 @@ class MCPServer:
 
         return decorator
 
+    def _cache_key_scope(
+        self, session_id: str, tool_name: str, per_principal: bool
+    ) -> str:
+        """Return the cache-key namespace for THIS call: tool, plus principal.
+
+        Both per-caller dimensions are read here rather than in the wrappers so
+        the sync and async paths cannot drift in how they derive the principal.
+
+        The authenticated identity is read from the session record rather than
+        from a local, because ``user_info`` is bound only inside the
+        authentication branch and is simply absent on an ungated tool.
+        """
+        if not per_principal:
+            # Explicit opt-in to cross-caller sharing (see ``tool()``).
+            return tool_name
+        user = self._active_sessions.get(session_id, {}).get("user") or {}
+        tag = _principal_cache_tag(user.get("user_id"), _CURRENT_TOOL_CLIENT.get())
+        return f"{tool_name}@{tag}"
+
     def _create_enhanced_tool(
         self,
         func: F,
@@ -1864,6 +1945,7 @@ class MCPServer:
         timeout: Optional[float],
         retryable: bool,
         stream_response: bool,
+        cache_per_principal: bool = True,
     ) -> F:
         """Create enhanced tool function with authentication, caching, metrics, error handling, and more.
 
@@ -2017,14 +2099,21 @@ class MCPServer:
                     # slowlog and into RDB/AOF on disk (security.md § "No
                     # secrets in logs").
                     #
-                    # Safe by construction: authorization is decided ABOVE this
-                    # block, and the tool body is called with clean_kwargs — so
-                    # the stripped set is exactly the set the result can depend
-                    # on. It also repairs a latent correctness defect: keyed on
-                    # the raw set the key varied per credential, so a
-                    # shared-result tool never hit cache across callers.
+                    # The kwargs are NOT the whole input, though. The tool body
+                    # can read the invoking client through _CURRENT_TOOL_CLIENT
+                    # (that is exactly what the elicitation system's
+                    # client_id_provider does), so its result can depend on the
+                    # PRINCIPAL as well as on the arguments. Keyed on arguments
+                    # alone, one caller's elicited answer was served from cache
+                    # to the next caller — with no elicitation raised for them
+                    # at all. Fold a non-secret principal digest into the key so
+                    # a cached result can never cross principals.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, clean_kwargs
+                        self._cache_key_scope(
+                            session_id, tool_name, cache_per_principal
+                        ),
+                        args,
+                        clean_kwargs,
                     )
 
                     # For sync functions with Redis, we need to handle async operations
@@ -2316,12 +2405,17 @@ class MCPServer:
                 # Execute with caching and stampede prevention if enabled
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
-                    # Key on the STRIPPED kwargs — same contract as the sync
-                    # wrapper; see the comment there for why the raw set leaked
-                    # the caller's credential into log lines and Redis key
-                    # names, and why the stripped set is the correct key.
+                    # Key on the STRIPPED kwargs AND the principal — same
+                    # contract as the sync wrapper; see the comment there for
+                    # why the raw set leaked the caller's credential into log
+                    # lines and Redis key names, and why the arguments alone are
+                    # not the whole input a cached result depends on.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, clean_kwargs
+                        self._cache_key_scope(
+                            session_id, tool_name, cache_per_principal
+                        ),
+                        args,
+                        clean_kwargs,
                     )
 
                     # Define the compute function for cache-or-compute

@@ -34,16 +34,38 @@ anyway — so the stripped set is exactly the set the result actually depends on
 It also fixes a latent correctness defect: keyed on the raw set, the key varied
 per credential, so a shared-result tool never hit cache across callers.
 
+ROUND 4 — the name list was never the whole leak, and never could be
+--------------------------------------------------------------------
+Stripping ``_CREDENTIAL_KWARGS`` fixed the leak only for the SEVEN names in
+that frozenset. The key was still interpolated VERBATIM, so a tool taking
+``github_token=...``, or a deployment spelling its header ``x_api_key`` /
+``auth_token`` / ``apikey``, still wrote the secret into every surface listed
+above. Lengthening the name list cannot close this: the CONTROL below requires
+business arguments to keep distinguishing calls, so they must stay in the key's
+INPUT — and any of them may carry a secret.
+
+``CacheManager._create_cache_key`` now folds the arguments into a SHA-256
+DIGEST behind a readable ``func_name`` prefix. That closes the log surface, the
+Redis key-name surface, and the unbounded-key-length surface at once, for every
+argument rather than for seven names.
+
+The credential STRIP is retained regardless: the tool body must never receive a
+caller's credential, which is a separate contract from what the key contains.
+
 WHY THE ASSERTIONS ARE ON THE KEY STRING
 ----------------------------------------
 "the call returned the right answer" is consistent with both "the key omits the
 credential" and "the key contains it" — only the key STRING distinguishes them.
 The instrument records every key handed to the cache BACKEND (``get`` / ``set``
 / ``aget`` / ``aset`` / ``get_or_compute``), which is the string that reaches
-the log line and the Redis key name. Each test carries a CONTROL asserting the
-BUSINESS argument IS still in the key, so a fix that stopped keying on the
-arguments altogether (which would collide every distinct call onto one entry)
-cannot make this suite pass.
+the log line and the Redis key name.
+
+Each test carries a CONTROL proving the key still DISCRIMINATES on the business
+argument, so a fix that stopped keying on the arguments altogether (which would
+collide every distinct call onto one entry) cannot make this suite pass. That
+control is asserted by discrimination — a different report id must produce a
+different key — and NOT by searching the key for the argument's plaintext,
+which is exactly what must no longer be there.
 
 DEFECT 2 — ``ProviderRateLimitError`` did not survive the wrapper
 ------------------------------------------------------------------
@@ -70,6 +92,7 @@ fails.
 import ast
 import asyncio
 import inspect
+import logging
 import textwrap
 
 import pytest
@@ -264,14 +287,25 @@ async def test_credential_kwarg_never_reaches_a_cache_key(tool_name, cred_name):
             {"report_id": "q3-summary", cred_name: CREDENTIAL_SENTINELS[cred_name]},
         )
     )
+    q3_keys = list(keys)
+    keys.clear()
 
-    assert keys, (
+    # A second call differing ONLY in the business argument, for the control.
+    await _maybe_await(
+        server._execute_tool(
+            tool_name,
+            {"report_id": "q4-summary", cred_name: CREDENTIAL_SENTINELS[cred_name]},
+        )
+    )
+    q4_keys = list(keys)
+
+    assert q3_keys and q4_keys, (
         "the cache backend was never reached, so this test observed nothing "
         "about the key; the instrument, not the code, is at fault"
     )
 
     for secret in _secret_strings(CREDENTIAL_SENTINELS[cred_name]):
-        for key in keys:
+        for key in q3_keys + q4_keys:
             assert secret not in key, (
                 f"the {cred_name!r} credential was written verbatim into a "
                 f"cache key: {key!r}. That key is logged "
@@ -281,21 +315,43 @@ async def test_credential_kwarg_never_reaches_a_cache_key(tool_name, cred_name):
 
     # CONTROL: the key must still discriminate on the BUSINESS argument. A fix
     # that stopped keying on arguments would pass the assertion above while
-    # collapsing every distinct call onto one cache entry.
-    assert any("q3-summary" in key for key in keys), (
-        "no recorded cache key mentions the business argument, so the key no "
-        f"longer distinguishes callers' requests: {keys!r}"
+    # collapsing every distinct call onto one cache entry and serving the wrong
+    # report to everyone. Asserted by DISCRIMINATION rather than by looking for
+    # "q3-summary" inside the key: the key is a digest now, so the plaintext
+    # argument is deliberately absent and its absence is not a defect.
+    assert not (set(q3_keys) & set(q4_keys)), (
+        "two DIFFERENT reports produced the SAME cache key, so the key no "
+        f"longer distinguishes callers' requests: {q3_keys!r} vs {q4_keys!r}"
     )
 
 
 @pytest.mark.regression
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name", ["report_sync", "report_async"])
-async def test_same_business_args_share_a_cache_key_across_credentials(tool_name):
-    """CONTROL/correctness: two callers, same arguments -> ONE cache key.
+async def test_an_unauthenticated_credential_string_is_not_a_principal(tool_name):
+    """Two calls differing ONLY by an unused credential string -> ONE key.
 
-    Keyed on the raw kwargs the key varied per credential, so a shared-result
-    tool never hit cache across callers.
+    THIS TEST WAS PREVIOUSLY NAMED
+    ``test_same_business_args_share_a_cache_key_across_credentials`` AND ITS
+    DOCSTRING STATED CROSS-CALLER SHARING AS THE DESIRED PROPERTY: "two callers,
+    same arguments -> ONE cache key". Read literally, that licenses serving one
+    caller's cached result to another caller, which is a cross-principal leak —
+    and the cache DID have one, because a tool body can read the invoking client
+    through ``_CURRENT_TOOL_CLIENT`` and return a per-client result. See
+    ``test_cross_principal_cache_isolation.py``.
+
+    The assertion itself survives, because in THIS scenario the two calls are
+    not two principals at all. ``_cached_server`` registers UNGATED tools on a
+    server with no ``auth_provider``, and nothing binds ``_CURRENT_TOOL_CLIENT``
+    here — so the ``api_key`` value is an unauthenticated string the server
+    never resolves to an identity, both calls carry the SAME (absent) principal,
+    and sharing one entry is correct.
+
+    What was wrong was the framing, not the expectation: the sharing is licensed
+    by principal EQUALITY, never by "same arguments". The per-principal
+    partitioning that the old name papered over is asserted directly in
+    ``test_cross_principal_cache_isolation.py``, and the fact that the strippable
+    credential does not itself partition the cache is what this test now pins.
     """
     server = _cached_server()
     keys = _recording_cache(server)
@@ -314,10 +370,64 @@ async def test_same_business_args_share_a_cache_key_across_credentials(tool_name
         )
     )
 
-    assert set(first) == set(keys), (
-        "two callers requesting the SAME report produced DIFFERENT cache keys, "
-        f"so the cache is partitioned by credential: {first!r} vs {keys!r}"
+    assert first, (
+        "the cache backend was never reached, so this test observed nothing "
+        "about the key; the instrument, not the code, is at fault"
     )
+    assert set(first) == set(keys), (
+        "two calls from the SAME (absent) principal requesting the SAME report "
+        "produced DIFFERENT cache keys, so the cache is still partitioned by a "
+        f"credential the server never authenticated: {first!r} vs {keys!r}"
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_a_secret_outside_the_name_list_never_reaches_a_log_line(caplog):
+    """The emitted DEBUG line carries no secret — including one the strip misses.
+
+    The strip only knows the seven names in ``_CREDENTIAL_KWARGS``. A tool
+    taking ``github_token``, or a deployment spelling its header ``x_api_key``,
+    hands the wrapper a secret in an ordinary BUSINESS argument, which must stay
+    in the key's input for the key to keep discriminating calls. So this surface
+    is unreachable by any name list, and the assertion is made on the string the
+    logger actually emitted rather than on the key alone.
+    """
+    secret = "ghp-SENTINEL-outside-the-name-list-8be1"
+    server = MCPServer("cache-key-log", enable_cache=True, enable_metrics=False)
+
+    @server.tool(cache_key="repos", cache_ttl=60)
+    async def fetch_repo(repo: str, github_token: str) -> str:
+        """Fetch a repository."""
+        return f"repo:{repo}"
+
+    # CONTROL: the argument name really is outside the strip list, so this test
+    # exercises the surface the name list structurally cannot reach. If someone
+    # adds "github_token" to _CREDENTIAL_KWARGS, this test must be re-pointed at
+    # another unlisted name rather than passing for the wrong reason.
+    assert "github_token" not in _CREDENTIAL_KWARGS
+
+    with caplog.at_level(logging.DEBUG, logger="kailash_mcp.utils.cache"):
+        await _maybe_await(
+            server._execute_tool(
+                "fetch_repo", {"repo": "acme/api", "github_token": secret}
+            )
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+
+    # CONTROL: the cache DEBUG line was actually emitted. Without this, a run
+    # that logged nothing at all would satisfy the assertion below vacuously.
+    assert any("get_or_compute" in message for message in messages), (
+        "no cache DEBUG line was captured, so this test observed nothing about "
+        f"the log surface; the instrument, not the code, is at fault: {messages!r}"
+    )
+    for message in messages:
+        assert secret not in message, (
+            "a secret carried in an ordinary business argument was written into "
+            f"a log line: {message!r}. That line reaches the log aggregator, and "
+            "the same string is used as a Redis key name."
+        )
 
 
 # ---------------------------------------------------------------------------
