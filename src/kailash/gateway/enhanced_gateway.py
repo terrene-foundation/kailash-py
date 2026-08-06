@@ -266,8 +266,19 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
         self, workflow: Workflow, inputs: Dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute workflow with resources."""
+        # Bind BOTH shapes. `execute_workflow` gives the caller ONE arguments
+        # slot (`WorkflowRequest.inputs`), so under the structural rule in
+        # `kailash/workflow/input_envelope.py` this binds -- the opt-out
+        # exists only where the caller can choose between an `inputs` and a
+        # `parameters` slot. Passing `inputs` raw left a workflow reading
+        # `parameters.get(...)` raising NameError on this gateway while the
+        # same workflow ran on every channel.
+        from kailash.workflow.input_envelope import bind_parameter_envelope
+
         # Use async runtime for execution
-        result = await self._runtime.execute_workflow_async(workflow, inputs, context)
+        result = await self._runtime.execute_workflow_async(
+            workflow, bind_parameter_envelope(inputs), context
+        )
         return result
 
     async def _cleanup_request(self, request_id: str, delay: int = 3600):

@@ -33,9 +33,69 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Trees that can execute a registered workflow on a caller's behalf.
+#
+# THE INCLUSION CRITERION, stated so this list stops being an unexplained
+# hand-write: a tree is scanned when it contains CALLER-FACING ENTRY POINTS --
+# sites that forward a CALLER-SUPPLIED mapping to a workflow the CALLER named.
+# That is the population the envelope contract governs, because it is the only
+# one where two entry points can disagree about the same registered workflow.
+#
+# WHY NOT "just scan src/ and packages/*/src". Measured, not assumed: that
+# denominator is 644 execution sites, and ~180 of them in src/kailash alone
+# report RAW. Almost none are entry points. `RUNTIME_EXEC_METHODS` contains
+# `execute`, which also matches `cursor.execute(sql, params)`, so
+# src/kailash/nodes contributes 110 SQL calls and src/kailash/infrastructure
+# 49 more. Scanning everything would demand ~174 wrong "fixes" or a ~174-entry
+# allowlist, and an allowlist that size is indistinguishable from no guard.
+# Scoping is doing real work here; the defect was that it was never WRITTEN
+# DOWN, which let src/kailash/servers stay invisible while a public route
+# shipped the original bug.
+#
+# EVERY CANDIDATE TREE, with the verdict and the measured count:
+#
+#   SCANNED
+#     packages/kailash-nexus/src/nexus  MCP + WebSocket transports, HTTP route.
+#     src/kailash/channels              API / CLI / MCP channels (4 sites).
+#     src/kailash/servers               1 site: the /enterprise/... execute
+#                                       route. ADDED after it was found raw.
+#     src/kailash/gateway               1 site: EnhancedDurableAPIGateway.
+#     src/kailash/middleware/core       AgentUI.execute + 4 internal sites
+#                                       (allowlisted below).
+#
+#   NOT SCANNED -- no caller-facing entry point in the tree
+#     src/kailash/nodes           110 sites, all `cursor.execute(sql, params)`.
+#     src/kailash/infrastructure   49 sites, SQLite/queue stores. Same.
+#     src/kailash/middleware/gateway  9 sites, SQLite event stores. Same.
+#     src/kailash/runtime          10 sites -- the runtime's OWN internals.
+#                                  A runtime is what an entry point CALLS; it
+#                                  is not itself one, and binding here would
+#                                  double-bind every caller above.
+#     src/kailash/middleware/communication  2 sites that look like matches but
+#                                  are `self.agent_ui.execute(...)` -- FACADE
+#                                  calls routed into middleware/core, matched
+#                                  only because the method is named `execute`.
+#                                  Binding them would double-bind agent_ui.
+#     src/kailash/api              3 sites. Genuinely caller-facing, but they
+#                                  bind UPSTREAM in
+#                                  `WorkflowRequest.get_inputs`, so the call
+#                                  site is raw BY DESIGN and an AST check at
+#                                  the call site reports the wrong answer.
+#                                  Behaviour is covered instead by
+#                                  test_issue_workflow_parameters_envelope_parity.
+#     src/kailash/cli, src/kailash/testing  developer tooling; the caller is
+#                                  the developer, who supplies the workflow.
+#     packages/{dataflow,kaizen,kaizen-agents,ml,...}  internal library code
+#                                  building its OWN workflow with its OWN
+#                                  params. The caller names neither.
+#
+# Adding a tree is cheap; REMOVING one MUST be argued here, because a tree
+# dropped silently is exactly how src/kailash/servers stayed invisible.
 SCANNED_TREES = (
     REPO_ROOT / "packages/kailash-nexus/src/nexus",
     REPO_ROOT / "src/kailash/channels",
+    REPO_ROOT / "src/kailash/servers",
+    REPO_ROOT / "src/kailash/gateway",
+    REPO_ROOT / "src/kailash/middleware/core",
 )
 
 # Runtime methods that take workflow-level inputs.
@@ -48,23 +108,72 @@ INPUT_KWARGS = frozenset({"parameters", "inputs"})
 # Each entry is an audited decision, not an oversight. Keyed by
 # "<path relative to repo root>::<enclosing function>".
 #
-# EMPTY, and that is the correct state: every discovered entry point binds.
-# The last entry was nexus/core.py::_execute_workflow, removed when that site
-# started binding. Its two recorded justifications were BOTH refuted and must
-# not be reinstated for any site: (1) "not a channel" -- _execute_workflow
+# Every reason MUST begin with one of these markers, so the CATEGORY of an
+# exemption is machine-checkable rather than buried in prose. There are
+# exactly two legitimate ways to be exempt, and they fail differently:
+#
+#   CHOICE:   the entry point offers the caller BOTH an `inputs` and a
+#             `parameters` slot, so picking one carries meaning. Checked
+#             structurally by test_audited_sites_are_exempt_under_the_structural_rule.
+#   INTERNAL: the site is not caller-facing at all -- the caller supplies
+#             neither the workflow nor the mapping. NOT decidable from the
+#             AST, so it is a human verdict, and it stays policed by
+#             test_audited_sites_are_actually_raw (it must still BE raw) and
+#             test_audited_opt_out_sites_still_exist (it must still exist).
+#
+# The INTERNAL category was added when src/kailash/middleware/core entered
+# SCANNED_TREES. Before that the only candidate was an entry point, so the
+# allowlist criterion modelled only CHOICE — and would have rejected a
+# correctly-raw internal site as a violation.
+#
+# The last CHOICE-class entry was nexus/core.py::_execute_workflow, removed
+# when that site started binding. Its two recorded justifications were BOTH
+# refuted and must not be reinstated for any site: (1) "not a channel" -- it
 # raises HTTPException 400/404/500 and runs validate_workflow_name (path
-# traversal) and validate_workflow_inputs (request size); core.py's own
-# comment calls it "the execute route"; (2) "not route-registered" -- true at
-# the time, but it protected nothing, because skills/03-nexus/
-# nexus-api-patterns.md teaches custom endpoints to call
+# traversal) and validate_workflow_inputs (request size); (2) "not
+# route-registered" -- true at the time, but it protected nothing, because
+# skills/03-nexus/nexus-api-patterns.md teaches custom endpoints to call
 # `await app._execute_workflow(name, body)` directly, which makes the CALLER's
 # route an entry point that would not bind.
-#
-# Adding an entry here is expensive on purpose. It must survive BOTH gates
-# below: the site must actually be raw (test_audited_sites_are_actually_raw)
-# AND its enclosing function must offer the caller a real choice of slots
-# (test_audited_sites_are_exempt_under_the_structural_rule).
-AUDITED_RAW_INPUT_SITES: dict[str, str] = {}
+#   NODE-SCOPED: the site's `inputs` is keyed by NODE ID, not by caller
+#             argument name, so there is no caller-level mapping to envelope.
+#             Also a human verdict, policed by the same two gates as INTERNAL.
+_EXEMPTION_MARKERS = ("CHOICE:", "INTERNAL:", "NODE-SCOPED:")
+
+_INTERNAL_MIDDLEWARE_REASON = (
+    "INTERNAL: not caller-facing. This method builds its OWN inputs dict from "
+    "its own arguments and runs one of MiddlewareWorkflows' OWN registered "
+    "workflows (self.workflows[...]); the caller supplies neither the mapping "
+    "nor the workflow name, so there is no caller mapping to envelope and no "
+    "second entry point that could disagree about it. Binding here would add "
+    "a `parameters` key to an internal workflow's inputs for no reader."
+)
+
+AUDITED_RAW_INPUT_SITES: dict[str, str] = {
+    f"src/kailash/middleware/core/workflows.py::{fn}": _INTERNAL_MIDDLEWARE_REASON
+    for fn in (
+        "create_session",
+        "monitor_execution",
+        "cleanup_sessions",
+        "handle_error",
+    )
+}
+
+AUDITED_RAW_INPUT_SITES[
+    "src/kailash/middleware/core/agent_ui.py::_execute_with_sdk_runtime"
+] = (
+    "NODE-SCOPED: AgentUI's `inputs` is keyed by NODE ID -- the traced value "
+    "is {'input_receiver': {'credentials': ..., 'config': ...}} -- not by "
+    "caller argument name, so there is no caller-level mapping to envelope. "
+    "This one LOOKS like a caller-facing single-slot entry point and WOULD "
+    "bind under the structural rule, which is exactly why the exemption is "
+    "recorded here instead of left implicit. Binding was tried and MEASURED, "
+    "not reasoned about: it made the runtime inject a workflow-level "
+    "`parameters` key alongside the node-scoped ones and PythonCodeNode "
+    "failed with `RecursionError: maximum recursion depth exceeded`, turning "
+    "test_agent_ui_middleware_input_passing from pass to fail. Re-binding "
+    "here re-breaks that test."
+)
 
 
 def _enclosing_function(tree: ast.Module, target: ast.Call) -> str:
@@ -373,14 +482,40 @@ def test_audited_sites_are_exempt_under_the_structural_rule():
     """
     not_exempt = sorted(
         f"{key} (input slots: {_slots_for(key)})"
-        for key in AUDITED_RAW_INPUT_SITES
-        if not _offers_input_choice(key)
+        for key, reason in AUDITED_RAW_INPUT_SITES.items()
+        if reason.startswith("CHOICE:") and not _offers_input_choice(key)
     )
     assert not not_exempt, (
-        "allowlisted sites the structural rule does NOT exempt -- each offers "
-        "a single caller-arguments slot, so the rule says it must bind:\n"
+        "CHOICE-class allowlist entries the structural rule does NOT exempt -- "
+        "each offers a single caller-arguments slot, so the rule says it must "
+        "bind:\n"
         + "\n".join(f"  {row}" for row in not_exempt)
-        + "\nEither bind the site and delete its entry, or amend the rule."
+        + "\nEither bind the site and delete its entry, or -- if the site is "
+        "not caller-facing at all -- reclassify it INTERNAL: and say why."
+    )
+
+
+@pytest.mark.regression
+def test_every_audited_reason_declares_its_category():
+    """An exemption MUST say WHICH kind of exemption it is.
+
+    Without this, an entry can dodge both category checks by describing itself
+    in prose that matches neither -- the reason reads as justification while
+    no gate actually applies to it. The marker is what routes each entry to
+    the check that can falsify it.
+
+    Falsifying result: an entry whose reason starts with neither marker REDS
+    here, naming the entry and the leading words of its reason.
+    """
+    unmarked = sorted(
+        f"{key} -> {reason.split(chr(10))[0][:60]!r}"
+        for key, reason in AUDITED_RAW_INPUT_SITES.items()
+        if not reason.startswith(_EXEMPTION_MARKERS)
+    )
+    assert not unmarked, (
+        "allowlist entries whose reason declares no category -- prefix each "
+        f"with one of {list(_EXEMPTION_MARKERS)}:\n"
+        + "\n".join(f"  {row}" for row in unmarked)
     )
 
 
