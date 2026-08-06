@@ -59,6 +59,43 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## FINDING — the anti-stale-exemption guard cannot detect the thing it guards against
+
+`test_audited_sites_are_exempt_under_the_structural_rule` ships a strict-xfail whose reason
+string promises: _"this FAILS the moment the site binds, forcing the allowlist entry out
+instead of leaving a stale exemption that masks a future raw site."_
+
+**It does not.** Falsified by observation, not argument. F-NEXUS bound the site —
+`core.py::_execute_workflow` (line 4192) now calls
+`execute_workflow_async(workflow, bind_parameter_envelope(inputs))` — and:
+
+    $ .venv/bin/python -m pytest tests/regression/test_workflow_input_envelope_entry_points.py -q
+    21 passed, 1 xfailed
+
+The site binds AND the guard is silent.
+
+**Why:** the assertion is `[k for k in AUDITED_RAW_INPUT_SITES if not _offers_input_choice(k)]`.
+`_offers_input_choice` counts SIGNATURE slots and never inspects the function BODY, so it is
+structurally incapable of noticing a body that started binding. It fires on a signature change
+or an allowlist edit — neither of which is "the site binds". The docstring says as much
+("were every allowlisted site to offer a CHOICE this would pass") — a signature condition.
+
+**How the verification passed anyway:** the author simulated the binding by PATCHING THE
+PREDICATE, which simulates the site becoming EXEMPT, not the body binding. A true result was
+obtained for a DIFFERENT proposition and attributed to the claim.
+
+This is the session's recurring failure mode — internally consistent, externally wrong —
+occurring inside a guard built specifically to prevent it. The guard's INTENT was right; it is
+one condition off. A guard that genuinely fires would run `_binds_envelope` over the
+allowlisted site's BODY and assert it does NOT bind ("you are exempt, so you had better still
+be raw").
+
+**Ordering hazard, recorded because getting it wrong opens the hole:** the allowlist entry
+must be deleted ONLY AFTER F-NEXUS's bind is COMMITTED (it is currently uncommitted). Entry
+first + bind lost = an unbound site with no allowlist row and no guard row, i.e. silently raw
+— strictly worse than the state the guard was added to fix. Coordinated by hand precisely
+because the mechanical forcing function does not work.
+
 ## STANDING RULE — commit with a PATHSPEC; `git add` publishes to a SHARED index
 
 `git add` in this checkout writes to an index **every agent shares**. A sibling's next bare
