@@ -82,6 +82,62 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## THE DURABLE RULE OF THIS SESSION — "N sites swept" is a claim about the PATTERN, not the code
+
+Offered by `F-MCP` after its THIRD self-caught instrument failure, and it generalises past this
+branch:
+
+> For any "I swept all N sites" claim, **N is a property of the PATTERN, not of the code.** The
+> claim is only as complete as the pattern is, and the honest form STATES THE PATTERN so the
+> next reader can see what it could not match.
+
+Its case: the log sweep grep was
+`logger\.(error|warning|exception)\(f?"[^"]*\{(e|exc|error|...)[^}]*\}` — which matches only
+F-STRING-INTERPOLATED messages and **structurally cannot see** `extra={"error": str(exc)}`. It
+found 14, fixed 14, and reported "all 14 logger sites that interpolated exception text were
+scrubbed." **Literally true, materially misleading** — a one-form instrument's output presented
+as coverage of the class. Task #19 is therefore a MISS in that sweep, not a new finding: the
+eleventh site of a class it swept ten of.
+
+**All three of `F-MCP`'s instrument failures are one defect:** the outputSchema probe used
+un-annotated returns; the correlation-id test read the LogRecord attribute rather than a
+rendered line; the log sweep matched one of two syntactic forms. Each returned an identical
+result whether or not the gap existed. It caught the first two itself; the third only surfaced
+because a reviewer filed the CONSEQUENCE as a separate finding — which, as it noted, is the
+weakest of the three, because the sweep shipped and something else had to find it.
+
+**Every enumeration claim in this session's records should be read against that rule**,
+including the ones I wrote.
+
+## THE PROBE WINDOW WAS REACHABLE — and my accepted refutation was too narrow
+
+`b9ba80d74`. The answer is option (2): the sentinel window was reachable WHILE SERVING, not
+registration-only. Measured, not reasoned: a server registering one UNGATED tool performs ZERO
+container resolutions during registration; the first resolution happens inside a runtime
+`disable_tool()` (`disable_tool → _withhold_tool_from_fastmcp → _require_fastmcp_tool_container`),
+and `disable_tool`/`enable_tool` are public methods callable at any point in a server's life. The
+clean "unreachable by construction" answer was NOT available; keeping the sentinel would have
+required a lock around write→read→delete.
+
+**And a correction to MY conclusion, which I should have caught.** I recorded that identity-only
+was insufficient and therefore my preferred non-mutating option was "off the table on the
+merits." Half right. Identity-only IS insufficient — but the shipped fix is neither identity-only
+nor the sentinel. It is TWO reads: the public read yields the container, AND it is the stored
+instance attribute (`vars(owner)["_tools"] is container`). The second catches the identity-stable
+cached copy that defeats a naive identity check.
+
+So the non-mutating option WAS achievable; it needed **a second QUESTION, not a second read of
+the same one**. My instinct was right and I accepted a refutation that answered a narrower
+version of my own question. Worth recording as its own failure mode: _a sound-sounding "that
+cannot work on the merits" deserves the same scrutiny as a sound-sounding finding._ I have been
+correcting the reverse error all session and made this one in the other direction.
+
+## `.git/index.lock` — WAIT, NEVER DELETE
+
+A lane hit `.git/index.lock` held by a sibling mid-commit and WAITED (~1s) rather than removing
+it. Correct. Deleting that file while a sibling is writing corrupts the index. Standing
+instruction for every lane in a shared checkout.
+
 ## #17 CLOSED — `568036906` + `2d2563d81`. The fix was to WRITE THE CRITERION, not widen the list
 
 `#1720` is now closed on the public route: `enterprise_workflow_server.py:368` binds, and the
