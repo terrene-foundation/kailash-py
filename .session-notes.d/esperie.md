@@ -1,200 +1,189 @@
 ---
 owner: esperie
-last_reconciled_sha: 3120a6ede
+last_reconciled_sha: 3a642d188
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-05 (session E)
+# Session Notes — 2026-08-05/06 (session F)
 
-## Where we are
+Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
+`fix/issue-1720-forest-drain` @ `3a642d188` — **96 commits ahead of `main`, 28 UNPUSHED,
+and a LARGE UNCOMMITTED WORKING TREE (~45 files) that is the whole of session F.**
 
-Workspace issue-1720-llm-consolidation, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `3120a6ede` — **27 commits ahead of the session-D
-close (`03795208d`), NOT pushed** (87 ahead of `origin/main`). Tree clean. No
-stray worktrees.
-
-**Release is still HELD, and session D's recommendation to release is REFUTED.**
+**NOTHING FROM SESSION F IS COMMITTED.** Read that first. The work below exists only in the
+working tree.
 
 ## Read first
 
-1. This file's **THE FINDING OF THIS SESSION** — it changes how you should read
-   any "converged" claim on this branch.
-2. **Open items** + **Traps** below.
-3. `git log --format='%h %s%n%b' 03795208d..HEAD` — every commit body carries its
-   own evidence and states what was NOT done.
-4. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-05.md`
-   — the CURRENT decision report.** Supersedes `sweep-2026-08-04b.md`, whose §1
-   completion table and §6 release recommendation are REFUTED (see below) though
-   its §3/§4 triage largely carries forward. Carries the PCF triage, the six
-   decision points, and the Sweep-N gate owed on #1995.
-
-## THE FINDING OF THIS SESSION
-
-**Session D recommended releasing on "abnormal-termination evidence" — severity
-fell monotonically, nothing in the last three rounds changed what the module
-leaks. Five more rotated-lens rounds found FIVE CRITICAL/HIGH defects, including
-an unconditional auth bypass.** That recommendation would have shipped them.
-
-The reasoning that justified it ("findings are getting smaller") was not wrong
-about the trend — it was wrong that the trend was evidence. Each round found
-serious defects _on an axis the previous round's lens could not see_.
-
-**Three of the five were regressions introduced BY fixes**, including one of
-mine. That is the durable lesson: on this branch a fix is not a reduction in
-risk until an independent lens has looked at the fix itself.
-
-| Round | Lens                                                  | Found                                                                                                                                                                                                                                                                                                                                                                  |
-| ----- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1    | adversarial security + correctness/instrument         | **CRITICAL** — `completion/complete` was a THIRD tool-schema emitter; anonymous callers got permission-gated tools' full `inputSchema`, and it leaked `disabled` tools too                                                                                                                                                                                             |
-| R2    | same-class sibling sweep + consumer/API + adversarial | **CRITICAL** — unconditional auth bypass in the async tool wrapper (send no credentials → tool EXECUTES). **CRITICAL** — falsy-but-not-None `auth_provider` silently disabled authz + rate limiting + the new schema gate while reporting auth ENABLED. **CRITICAL** — release-blocking floor: 51 modules module-scope-importing a symbol absent at the declared floor |
-| R3    | runtime/end-to-end + adversarial                      | **HIGH** — credentials written verbatim into Redis key names + debug logs. **HIGH (mine)** — deny-on-advisory-labels erased agents from discovery entirely                                                                                                                                                                                                             |
-| R4    | whole-branch behavioural differential + adversarial   | **HIGH** — the R3 cache fix traded the credential leak for CROSS-PRINCIPAL result sharing, and pinned the sharing as an invariant test                                                                                                                                                                                                                                 |
-| R5    | narrow verification of the R4 fix                     | fix-introduced red in an out-of-package test; **F4 confirmed by me** (below)                                                                                                                                                                                                                                                                                           |
-
-**My own regression, recorded so it is not repeated.** In wave 3 I instructed an
-agent to "fail closed on an unparseable constraint payload." That was right in
-general and wrong for that field: `chain.py:350-363` documents
-`effective_constraints` as _"reporting-only — read by NO allow/deny gate ...
-advisory per #1896"_ and states _"the tightening IS enforced"_ elsewhere via
-signed derived capabilities. Denying on it added no safety and removed
-availability — agents carrying any constraint label vanished silently from every
-user's discovery list, and the only operator lever was disabling the checker.
-**Read the field's own contract before hardening on it.** Fixed in `b8d60577e`.
-
-## Executed this session (25 commits)
-
-Security fixes: the third schema emitter + `_public_tool_view` extraction
-(`19c8cfb33`), the async auth bypass deletion + falsy-`auth_provider` identity
-guards (`14d9d8b31`), credentials-in-cache-keys (`71eb63790`), cross-principal
-cache sharing + key hashing (`ee6d5b8bb`), discovery fail-closed + falsy-checker
-
-- denial-shape (`393f33e27`, `784f92462`), the advisory-label revert
-  (`b8d60577e`), the scrub local/remote split (`b2d3acce5`), the release-blocking
-  floor + gated-schema normalization (`269038fd9`), trust-plane lazy FastMCP for
-  #1996 (`45ccac417`), and the `key=value` prose regression (`eee4fa59b`).
-
-Test-only: six security tests that pinned pre-#1912 fixtures rather than the
-guards (`9791892fa`), two that pinned the bypass (`2f7d56807`), the cache-key
-shape (`d8ecef1f8`).
-
-**`packages/kailash-kaizen/tests/{security,trust}` went 9 failed → 0.** All were
-stale tests asserting behaviour production deliberately blocks; **zero product
-changes** were needed — greening them by loosening would have re-opened the
-#1912 capability-transplant vector and the `_get_key` privatization.
-
-## Verified green (measured this session, not asserted)
-
-- `packages/kailash-mcp/tests/` — 584 passed
-- `packages/kailash-kaizen/tests/{security,trust}` — 127 passed, 0 failed
-- `packages/kailash-kaizen/tests/regression/` — 1356 passed
-- `packages/kaizen-agents/tests/` — 13 failed / 3809 passed; the 13 are live-LLM
-  flakes, **discriminated** against a git-extracted `03795208d` tree (identical
-  node IDs), not assumed
-
-## Open items — NONE fixed, NONE release-blocking-verified
-
-1. **F3 (MEDIUM, unadjudicated)** — on a non-empty advisory label list,
-   `discovery.py` grants `permission_level="execute"` with a bare
-   `AccessConstraints()` (the type's own docstring: "the MOST PERMISSIVE value
-   this type can hold") while the checker said e.g. `read_only`. The
-   "enforced elsewhere" justification is about the trust-chain verification
-   path, which `find_agents_for_user`'s return value does not traverse. Two
-   lanes flagged it; nobody has ruled on whether `"execute"` is defensible.
-2. **F5/F6/F7 (LOW, unadjudicated)** — advisory-warn is once-per-process
-   per-label-set with no `user_id` in the record; a `Mapping` whose `__len__`>0
-   but `items()` empty falls through to an UNLIMITED grant; the operand-echo
-   doctrine enumerates only `float`/`int`/`re.compile`/`Path` (unprobed:
-   `Decimal`, `strptime`, `ipaddress`, `b64decode`, `KeyError`).
-3. **3 nexus failures — CONSISTENT, not flaky, and UNOWNED.** Every request
-   returns 500 on `POST /workflows/process/`. Discriminated: identical with the
-   MCP changes fully reverted. Different bug class, outside the packages worked
-   this session. **Needs an owner.**
-4. **#1998** — production stdio (`run()` → FastMCP) bypasses EVERY gate: a gated
-   tool returns its full schema + `Args:` block, a `disable_tool()`'d tool
-   EXECUTES with `isError=false`. `run_stdio` — where all the stdio hardening
-   landed — has **ZERO production callers**. Pre-existing, architectural,
-   deliberately not attempted.
-5. **#2000** — eager `torch`/`sklearn` import in `src/kailash/security.py:536,595`
-   costs 11.4s on first node execution.
-6. **#1996 is FIXED** (`45ccac417`). Session D recorded its premise as FALSE
-   after checking `nexus/transports/mcp.py` — **the wrong file**. The issue names
-   `src/kailash/trust/plane/mcp_server.py:31`, which was genuinely unguarded.
+0. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-06.md` — the CURRENT
+   decision report.** PCF-triaged queue, 6 decision points, the ordered next-steps list.
+   Supersedes `sweep-2026-08-05.md`. **Start here**; it tells you what to do, in order.
+1. `workspaces/issue-1720-llm-consolidation/04-validate/launch-ledger-sessionF.md` — the
+   AUTHORITATIVE record. Every claim below has its evidence there.
+2. `workspaces/issue-1720-llm-consolidation/04-validate/release-order-sessionF.md` — the
+   publish sequence is LOAD-BEARING and CI-unenforced.
+3. The three round-1 reviewer findings files in the session scratchpad (`R1-CONSUMER-findings.md`,
+   `R1-INTEG-findings.md`) — **scratchpad is EPHEMERAL; the ledger carries the summaries.**
 
 ## Convergence position — state it honestly
 
-**Rounds 1–5 were ALL un-clean. The clean-round counter is at ZERO.**
-`commands/redteam.md` requires TWO CONSECUTIVE clean rounds. Round 5's scope A
-(the cache fix) verified correct on all five execution checks after `d8ecef1f8`,
-but its scope B was never reached, so no round has completed clean end-to-end.
+**ZERO clean rounds.** Round 1 ran (3 fresh reviewers, rotated lenses, all returned genuine
+ran-signals) and found **2 HIGH + 2 release-blocking + 6 MEDIUM/LOW**. Round-1 fixes are
+landing. Convergence needs a round AFTER those land, then a second clean one.
 
-Do not read 25 commits of real fixes as convergence. Do not let a later session
-read it that way either. `completion-criterion.md` MUST-4: a cap-stop is
-abnormal termination, never "done".
+Do not read a large verified diff as convergence. `completion-criterion.md` MUST-4: a cap-stop
+is abnormal termination, never "done".
 
-## NOT DONE — and gated on the above, not on code
+## What is DONE and independently verified (orchestrator-run, not lane-reported)
 
-- **Version anchors** (kaizen 2.46.0, kaizen-agents 0.13.0, dataflow 2.20.0,
-  core 2.63.0, ml 2.2.3; nexus already 2.16.0). **TRAP: `kailash-ml` keeps its
-  version in `_version.py`, NOT `__init__.py`** — the obvious bump ships a split
-  version state (zero-tolerance Rule 5).
-- **CHANGELOGs.** NOTHING from this session is in any CHANGELOG yet. A consumer
-  lane drafted the required per-package entries with semver bumps — recover them
-  from the R2 consumer-lane report if you can; otherwise re-derive. Several are
-  **BREAKING** (discovery fail-closed; the falsy-checker enforcement flip, which
-  presents to operators as a sudden access-denial wave; the renamed log event
-  `discovery.permission_check_failed_open` → `..._failed_closed`, which any
-  alerting keys on).
-- **PUSH** — 25 commits local. Session D ratified the push; it has not happened
-  since.
-- **`/release`.**
+- **7 packages versioned atomically** — 0 split-state (re-derived with `tomllib`+regex).
+  core 2.63.0 / kaizen 2.46.0 / kaizen-agents 0.13.0 / dataflow 2.20.0 / nexus 2.16.0 /
+  ml 2.2.3 / **mcp 0.5.0 (was MISSING from the prior session's release list entirely)**.
+- **Core multi-channel parity fix** — `workflow_api.py::get_inputs`. Parity suite 7 passed.
+- **`rate_limit_config={"default_rate_limit": None}`** was an unconditional 500 on every
+  request while the docstring documented it as "unlimited". Fixed; 12 tests pass.
+- **Rate-limit WARN predicate/runtime mismatch (HIGH-1)** — fixed; wrapper now resolves by TYPE.
+- **Rate-limiter IP-dimension unbounded (MEDIUM-1)** — fixed, two-pass eviction.
+- **discovery len/items guards (MED)** — both branches MATERIALIZE ONCE. Red established by
+  orchestrator: **11 failed pre-fix, 640 pass post-fix.**
+- **advisory-memo saturation (MED)** — now rate-limits rather than floods.
+- **9 stale mcp permission tests PORTED** — `tests/unit/mcp_server/` 645 passed (was 9 failed).
+  **TWO of the nine were asserting the VULNERABILITY** (`assert required_permission ==
+"admin.execute"` + a warning that the second permission was dropped). Greening by changing the
+  product would have re-opened ">1 permissions dropped to first".
+- **`specs/mcp-server.md` documented the auth bypass as INTENDED — in TWO places** (`:141` and
+  `:694`, the second framed as a feature). Both fixed. `specs/mcp-auth.md` had the same
+  single-string permission type. **A spec that contradicts the code is an instruction to a future
+  session to re-open the bug.**
+- nexus 2370 passed / 0 failed; kaizen-agents regression 640 passed.
 
-## Traps
+## HIGH-2 — LANDED AND VERIFIED (this section was written before it closed)
 
-- **`cd` PERSISTS between Bash calls in this harness.** An early `cd
-packages/.../src` silently invalidated three later path checks in this session
-  — they reported "file does not exist" for files that do exist. **Always use
-  absolute paths**; re-`cd` to the repo root if unsure.
-- **An idle/empty agent return is ZERO evidence, and you must QUERY not
-  re-dispatch.** A round-5 agent returned only "I'll start by reading the
-  code" after 27 tool calls; `SendMessage` to its agentId recovered the FULL
-  report. Re-dispatching would have discarded it. (Session D hit this with six
-  agents; it recurred here.)
-- **Sub-agents spawning sub-agents lose work.** One lane's three inventory
-  sub-agents were killed by an unrelated cleanup and never reported; the parent
-  redid the work directly. **Tell agents not to spawn sub-agents.**
-- **A syntactically-broken mutation is INERT, not a passing test.** My first
-  attempt to red-test the scrub fix commented out a trailing comma → SyntaxError
-  → suite never ran. That reads identically to "the test is vacuous". Always
-  `ast.parse` the mutated file before reading the result.
-- Disk hit **100%** mid-session (1.8Ti volume). One `Edit` failed `ENOSPC`.
-  Clear `__pycache__` between long runs.
-- Two agents hit account/session budget limits mid-run and were cut off. Work in
-  the tree survived; work in agent context did not.
-- `.venv/bin/python -m pytest` ALWAYS. `packages/kailash-kaizen` and
-  `packages/kaizen-agents` **cannot** be collected in one invocation.
-- `integration/nodes/test_iterative_llm_agent_real_services.py` HANGS.
-  `tests/integration/mcp_server/` needs Redis on 6380. Use `--timeout=120` on
-  nexus runs — one hung past 45 min without it.
-- **Do NOT use a broad `pkill -f pytest`** — it killed another agent's suite.
-- New credential-shaped test vectors MUST be assembled at runtime from fragments.
+**Fixed via ONE shared binder: `src/kailash/workflow/input_envelope.py::bind_parameter_envelope`**,
+imported by all six sites + `workflow_api.py` (six copies of the same expression was the drift
+shape). Orchestrator-verified: binder present, 7 importers, **16 passed** across the three
+envelope suites; lane reported 133 passed across guard+behaviour+parity+channel units and nexus
+2370/0.
 
-## Pending decisions for the co-owner
+**The derived denominator found a SEVENTH site on its first run** —
+`src/kailash/channels/mcp_channel.py::_handle_execute_workflow`, a second execution path in the
+same file as the one that was listed, sharing the same registry. **A hand-listed fix would have
+shipped with it still raw.** The real defect was never "six sites are unbound" — it was that the
+denominator was ASSERTED rather than DERIVED.
 
-1. **Release gate.** Convergence is not met and five rounds say the trend is not
-   evidence. Recommend: two clean rounds before `/release`, starting with F3.
-   Con, stated honestly: that is more cycles on a branch already 25 commits deep,
-   and the remaining items are MEDIUM/LOW, not the CRITICALs that justified
-   rounds 1–4.
-2. **The 3 nexus 500s** need an owner — outside every package touched here.
-3. **Cross-SDK: prior grants EXIST but are action-scoped; this session's two
-   classes need a NEW one.** Correcting an over-broad statement I made mid-session
-   ("still not authorized", which implied none had ever been granted): this
-   workspace holds FIVE `cross-repo-authorization-1720-*.md` receipts against the
-   Rust SDK BUILD repo, and two drafts marked FILED. But
-   `repo-scope-discipline.md` condition 5 scopes a grant to the NAMED action, and
-   none covers this session's classes — the credential-scrubber under-redaction
-   family, and the identity-vs-truthiness authz-gate family. Both recur across
-   bindings; `cross-sdk-inspection.md` Rule 1 binds. Run `/cross-repo-authorize`
-   for each specifically. **Do not put the private sibling's org slug in any
-   public-published artifact** (`cross-sdk-inspection.md` Rule 6) — refer to it by
-   role; the slug lives in the gitignored resolver + the receipts.
+`tests/regression/test_workflow_input_envelope_entry_points.py` derives the set by AST and carries
+**two self-checks**: it fails if the scan finds ZERO sites (drifted matcher ⇒ every assertion
+vacuous ⇒ reports clean forever), and it fails if the allowlist names a site that no longer exists
+(a stale exemption is exactly where a new raw site hides). A new entry point fails this test until
+its author binds or audits it.
+
+**ONE site deliberately NOT bound, allowlisted with its reason in-code:**
+`nexus/core.py::_execute_workflow`. Its parameter is literally named `inputs` — the DOCUMENTED
+opt-out `WorkflowRequest` distinguishes from `parameters` and that the parity fix preserved. It is
+a private `_`-prefixed helper with no wire protocol. Binding it would leave the SDK with NO
+programmatic escape hatch. Discriminator applied throughout: **channel entry point → bind;
+programmatic `inputs=` passthrough → argue.** (`api_channel` IS bound despite its wire key also
+being `"inputs"` — it is a channel with no other route to the envelope.) To overrule: delete the
+allowlist entry; the guard will then require the binding.
+
+Also swept per Rule 4c: 3 stale assertions in `tests/unit/channels/test_cli_channel_execution.py`
+pinning the OLD raw binding, updated with the reason inline; full-corpus check found no others.
+
+## OUTSTANDING — nothing in flight; the items below are ROUTED, not started
+
+**HIGH-2: the parity fix reaches 3 of 9 entry points.** `transports/mcp.py:168` and
+`transports/websocket.py:706` bind RAW, are PUBLIC (`nexus/__init__.py:68,71`), and serve the
+SAME registry — so one `nexus.register()` yields a workflow that succeeds on `core.py`'s MCP
+tool and **500s on `MCPTransport`'s**. Plus `core.py:4024` and three `src/kailash/channels/*`.
+Lane C was building a shared `kailash.workflow.input_envelope` helper. **VERIFY WHETHER IT LANDED.**
+
+**And the half that matters more:** the parity test's denominator is THREE channels while its
+docstring says "every channel" — it certified parity while six channels were broken. The fix is
+a DERIVED denominator so a new un-updated entry point fails the test.
+
+## Other open items (routed, not fixed)
+
+- `bash_tool.py:65,77-79` interpolate the model-supplied `command` unscrubbed while the sibling
+  OSError branch was routed through `scrub_remote_error` by the same sweep.
+- **20 failures in `tests/regression/` that CI NEVER RUNS.** `unified-ci.yml:140-143` runs
+  `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` — NOT `tests/regression/`. The
+  never-delete regression directory has no CI coverage. Proven pre-existing (29 failed in BOTH
+  arms with lane A's files reverted).
+- 31 residual mypy/pyright findings in nexus, pre-existing, bounded follow-up.
+- `specs/mcp-server.md:5` version, and the extras-floor raise (REQUIRED post-publish, pre-core-tag).
+
+## DECISION OWED FROM THE CO-OWNER
+
+**Private org slug is in 21 tracked files of a PUBLIC repo** — TWO spellings, and the count
+below is the corrected one. The orchestrator first grepped only `esperie-enterprise` and reported
+17; lane B's class-sweep found a SHORTER variant `esperie/kailash-rs`, which adds 4 more files
+(3 older SWEEP reports + 1). **The orchestrator made the exact mistake it had just corrected lane
+B for: grepping ONE TOKEN instead of the CLASS.** Current spread: `deploy/deployments` 5,
+`tests/regression` 4, dataflow tests 4, root SWEEP reports 6, test-vectors/integration 2.
+specs/ is now CLEAN for both variants (5 files fixed).
+
+Original framing, unchanged in substance:
+**the private org slug is in a PUBLIC repo**
+(`terrene-foundation/kailash-py`), on `main` since ~2026-06-16 and in git HISTORY. specs FIXED;
+root sweep reports, deploy notes, and cross-SDK test vectors NOT. My recommendation: **do not
+fix it as part of this release** — history retains it so file edits are partial mitigation, it is
+unrelated to this branch, and whether an org NAME is sensitive is the co-owner's call. Recorded,
+not silently absorbed.
+
+## THE DURABLE LESSON — every real finding was a non-discriminating instrument
+
+Each of these was internally consistent and externally wrong. **This is the single most
+transferable thing from session F:**
+
+- a test reporting SKIPPED while all 100 requests 500'd
+- a pre-tag safety script that exited clean because `declare -A` needs bash 4 and macOS ships 3.2
+- the orchestrator grepping a document for `declare -A` and matching the PROSE ABOUT the bug
+- a parity test whose denominator was a third of its claim
+- a security review whose 1-minute silence nearly read as "clean" (it had found a HIGH)
+- lane C's own: _"I tested that the WARN fires when it should and stays silent when it should —
+  never that the silence was TRUE."_
+
+**Write tests that assert the RELATIONSHIP between two mechanisms**, not each in isolation.
+`test_predicate_and_runtime_agree_no_warn_implies_enforcement` is the model.
+
+## ORCHESTRATOR ERRORS — four, each caught by a lane refusing to take my word
+
+Recorded because the pattern matters more than the individual errors: **the orchestrator was the
+least reliable source of factual claims in this session.**
+
+1. "Nothing from this branch is in ANY changelog (verified)" — I never ran the check; three were.
+2. `kailash-mcp` omitted from the release set — by me AND by the prior session's notes.
+3. `discovery.permission_check_failed_open` called a BREAKING rename — it never existed on `main`
+   (introduced AND renamed inside this unreleased branch). **The same wrong framing is still in
+   `sweep-2026-08-05.md:210` — correct it if you touch that file.**
+4. `kailash-kaizen/pyproject.toml:38` cites `[Unreleased]` — it does not; zero hits.
+
+Corollary: **a snapshot of a shared tree with a live editor is not a state.** Two of my three
+in-flight defect flags were transient (a stashed file mid-RED, an import added seconds earlier).
+One was real. Ask the lane; do not infer from a diff.
+
+## Traps (carried forward + new)
+
+- **QUERY, never re-dispatch, on an idle/empty agent return.** Two reports this session arrived
+  only on the SECOND send. `W1-A-authz` NEVER reported once — all its work was verified by the
+  orchestrator from the tree. Re-dispatching would have destroyed it.
+- **Have agents write findings to a FILE as they go**, not only to the message channel.
+- **Restore from a `cp` backup, NEVER `git checkout --`** in a shared tree (restores from the
+  INDEX; destroys sibling lanes' unstaged work). Used successfully 3× this session.
+- The root `tests/` tree and `packages/kailash-nexus/tests/` **cannot be collected in one pytest
+  invocation** — duplicate `test_config.py`/`test_middleware.py` basenames abort collection with
+  4 errors. NOT stale `__pycache__`. Run trees separately.
+- `packages/kailash-kaizen` and `packages/kaizen-agents` cannot be collected together either.
+- `.venv/bin/python -m pytest` ALWAYS; `--timeout=120`; clear `__pycache__` before kaizen runs.
+- Do NOT run a broad `pkill -f pytest` — it killed another agent's suite.
+- `cd` PERSISTS between Bash calls. Use absolute paths.
+
+## Publish sequence — operator-manual, CI-UNENFORCED
+
+**mcp 0.5.0 → kaizen 2.46.0 → kaizen-agents 0.13.0 → dataflow/nexus/ml → kailash 2.63.0 last.**
+kaizen 2.46.0 floors `kailash-mcp>=0.5.0`, which is NOT yet on PyPI — tagging out of order fails
+to resolve. `publish-pypi.yml` is tag-triggered with `needs:` scoped inside ONE package's job
+graph and zero cross-package ordering. The pre-tag verification script is in the release-order
+note and **currently FAILS correctly** (2 floors unsatisfiable — that is the right answer today).
+
+**Do NOT tag `mcp-v0.5.0` until the spec fixes are committed.**
