@@ -82,6 +82,60 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## FINAL ACCOUNTING (VERIFIED BY ME, NOT RELAYED) — the valid set is FOUR, and the void two are SEPARATE
+
+Third and last correction to this item. The first two were relayed; **this one I verified**,
+which is why it stops here.
+
+    $ scratchpad/mutate2.py
+      write_text count: 2      setattr count: 0
+      M1-quadratic-docstring-form  M2-star-not-plus
+      M3-ambiguous-atom            M4-alternative-never-fires
+
+All FOUR were applied by SOURCE REWRITE + re-import, zero name-rebinds. So:
+
+- **VALID: four mutations, all `F3-AGENTS`'**, each with reach shown by behaviour change while
+  applied (M1 reds the entry assertion, M2 reds 5 tests, M3 reds 2, M4 reds the residual pins).
+- **VOID: two SEPARATE probes**, `R3-COMPOSE`' name-rebinds, no longer cited anywhere.
+
+The ambiguous-atom mutation has TWO provenances — void by name-rebind, valid by source rewrite —
+and assigning it wholly to the void column is what made the middle correction wrong.
+
+**The evolution of this one claim, because the shape is the lesson:**
+
+| #   | Claim                                                                  | Status      |
+| --- | ---------------------------------------------------------------------- | ----------- |
+| 1   | "the measurement was void" (reviewer's STOP)                           | over-broad  |
+| 2   | "half void — two valid, two void" (its self-correction; I recorded it) | still wrong |
+| 3   | "four valid, plus two separate void" (verified above)                  | correct     |
+
+**I propagated #1 AND #2 into durable records without verifying either.** Twice. In entries
+whose subject was instruments that could not discriminate. The reviewer caught its own #1
+unprompted and the file's owner caught #2; I caught neither, and both times I was the one
+writing it down permanently.
+
+**Committed fix `cb271b88a` is correct and lands the safe disposition:** the docstrings cite NO
+ratio. The surviving mention of `7.5-8.3` explains WHY the number was dropped rather than
+offering it as evidence — the right shape, since a reader who never sees the number cannot
+re-introduce it.
+
+**#21's substance, confirmed at the source rather than accepted:** `task15c`/`task15d` contain
+0 `setattr` and 0 `write_text` and build their patterns in-probe, so reason (b)'s k=5..25 curve
+never depended on reaching the module. Reason (c) is pinned by a test that reds under
+`{16,}` → `{160,}`. The honest limit stays in the docstring: (b)+(c) explain why the mutations
+TRIED did not discriminate; they do not prove none could. The ratio therefore earns its place as
+a FORWARD tripwire, not as a demonstrated detector.
+
+**Disclosure worth keeping, from the file's owner:** it twice wrote verification scripts ending
+in an unconditional `echo "(no rows = none found)"` — a receipt that prints identically whether
+the grep found nothing or everything. It read the actual rows both times, so its conclusions
+hold, but the ARTIFACT it would have pasted as evidence could not discriminate. Producing a
+non-discriminating receipt while hunting non-discriminating instruments is the recursive case,
+and it self-reported it.
+
+**CHANGELOG checked:** zero rows for any of these figures across the root and all
+`packages/*/CHANGELOG.md`. None propagated beyond the test file.
+
 ## CORRECTION TO THE ENTRY BELOW — IT IS HALF VOID, AND MY RECORD OF IT WAS OVER-BROAD
 
 **Correcting my own commit `<the instrument-failure-8 entry>` before it hardens.** I wrote that
