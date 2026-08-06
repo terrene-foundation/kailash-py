@@ -145,14 +145,17 @@ set -euo pipefail
 FLOOR_FILES=(
   "packages/kailash-kaizen/pyproject.toml"
   "packages/kaizen-agents/pyproject.toml"
+  "pyproject.toml"
 )
 FLOOR_PKGS=(
   "kailash-mcp"
   "kailash-kaizen"
+  "kailash-mcp"
 )
 FLOOR_VERSIONS=(
   "0.5.0"
   "2.46.0"
+  "0.5.0"
 )
 
 check_floor() {
