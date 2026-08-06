@@ -294,6 +294,14 @@ class APIChannel(Channel):
                 # as the HTTP route, so a workflow reading `parameters.get(...)`
                 # must resolve here too. Passing `inputs` raw bound only bare
                 # top-level names and raised NameError for the convention.
+                #
+                # `inputs` here is NOT the opt-OUT form WorkflowRequest draws
+                # against `parameters`. Per the structural rule in
+                # `kailash/workflow/input_envelope.py`: WorkflowRequest offers
+                # the caller TWO slots so it can honour a choice; this handler
+                # offers ONE, so that slot is the arguments slot and binds.
+                # Reading the shared field NAME as the discriminator would
+                # leave this channel with no envelope path at all.
                 results, run_id = self.workflow_server.runtime.execute(
                     workflow, parameters=bind_parameter_envelope(inputs)
                 )

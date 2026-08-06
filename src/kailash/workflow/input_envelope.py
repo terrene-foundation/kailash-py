@@ -18,6 +18,41 @@ This module is the single place that decision is made. Every entry point calls
 :func:`bind_parameter_envelope`, so there is one contract to reason about
 instead of one per channel, and a future change lands everywhere at once.
 
+WHICH ENTRY POINTS BIND
+-----------------------
+
+The rule is STRUCTURAL, not name-based::
+
+    An entry point that offers the caller a CHOICE between a raw slot and an
+    arguments slot honors that choice.
+
+    An entry point with a SINGLE caller-arguments slot binds the envelope --
+    whatever that slot happens to be named.
+
+Keying the rule on the field NAME instead ("a field called ``inputs`` means
+opt out") is wrong, because the name is reused for two different roles:
+
+* :class:`~kailash.api.workflow_api.WorkflowRequest` exposes BOTH ``inputs``
+  and ``parameters``. The caller picks, so ``inputs`` there genuinely means
+  "I am supplying the exact runtime mapping; do not touch it."
+* ``APIChannel.handle_request`` and ``MCPChannel._handle_execute_workflow``
+  expose ONLY ``inputs``. It is their sole caller-arguments slot -- the same
+  role ``parameters`` fills over HTTP, not the same role HTTP's ``inputs``
+  fills. Reading it as an opt-out would leave those channels with no envelope
+  path at all, and every ``parameters.get(...)`` workflow permanently broken
+  there with no way for the caller to ask for the binding.
+
+So the two surfaces are consistent under the structural rule even though they
+share a field name, and the EQUIVALENT calls agree: an HTTP body of
+``{"parameters": P}`` and a channel call of ``inputs=P`` produce the same
+``parameters`` view for the same registered workflow. That equivalence is
+pinned by ``tests/regression/test_issue_workflow_parameters_envelope_parity.py``
+so it cannot drift back into an accident.
+
+The opt-out is deliberately narrow: it exists only where the caller was given
+a second slot to express it, plus the audited programmatic helper recorded in
+``tests/regression/test_workflow_input_envelope_entry_points.py``.
+
 Kept free of any ``kailash`` imports on purpose: it is imported from the Core
 SDK channels AND from the separately-installed ``kailash-nexus`` transports, so
 it must not drag the workflow graph (or anything else) into those import paths.

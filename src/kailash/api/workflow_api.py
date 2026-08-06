@@ -99,6 +99,19 @@ class WorkflowRequest(BaseModel):
 
         ``inputs`` is the explicit low-level form and is returned untouched --
         it is how a caller opts out of envelope binding entirely.
+
+        That opt-out is available HERE because this model offers the caller
+        BOTH slots, so choosing one carries meaning. It does NOT generalise by
+        field NAME: ``APIChannel.handle_request`` and
+        ``MCPChannel._handle_execute_workflow`` expose a single
+        caller-arguments slot that is also spelled ``inputs``, and they BIND
+        it -- that slot fills the role ``parameters`` fills here, not the role
+        ``inputs`` fills here. The rule is structural and is stated once in
+        ``kailash/workflow/input_envelope.py``: a choice is honoured, a single
+        arguments slot binds. The EQUIVALENT calls therefore agree -- a body
+        of ``{"parameters": P}`` here and ``inputs=P`` on those channels give
+        the same ``parameters`` view for the same registered workflow, which
+        ``test_issue_workflow_parameters_envelope_parity.py`` pins directly.
         """
         from kailash.workflow.input_envelope import bind_parameter_envelope
 

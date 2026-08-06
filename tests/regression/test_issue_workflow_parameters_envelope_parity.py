@@ -273,6 +273,11 @@ def test_inputs_form_is_not_envelope_wrapped(parity_server):
 
     ``inputs`` is how a caller opts OUT of envelope binding; wrapping it too
     would silently change every existing low-level caller.
+
+    The opt-out is available HERE because ``WorkflowRequest`` offers BOTH
+    ``inputs`` and ``parameters``, so picking one carries meaning. It does NOT
+    generalise by field name -- see
+    ``test_single_slot_channels_do_not_read_inputs_as_opt_out`` below.
     """
     _, api_port = parity_server
     response = requests.post(
@@ -283,3 +288,133 @@ def test_inputs_form_is_not_envelope_wrapped(parity_server):
     assert response.status_code == 200, response.text
     result = response.json()["outputs"]["echo"]["result"]
     assert result == {"via_envelope": 7, "via_toplevel": 7}, result
+
+
+# ---------------------------------------------------------------------------
+# The cross-surface rule itself
+#
+# The tests above each drive ONE surface. These assert the PROPERTY that makes
+# the surfaces a set rather than a list: equivalent calls agree, and the one
+# place they deliberately differ is pinned so it cannot become an accident.
+# ---------------------------------------------------------------------------
+
+
+def _parameters_view_via_channels(params: dict) -> list:
+    """Run the parity workflow on every single-slot channel's ``inputs``.
+
+    Returns one ``parameters`` view per channel, so the caller can assert them
+    against the HTTP surface AND against each other.
+    """
+    import asyncio
+
+    from kailash.channels.mcp_channel import MCPChannel
+    from kailash.runtime.async_local import AsyncLocalRuntime
+
+    probe = WorkflowBuilder()
+    probe.add_node(
+        "PythonCodeNode",
+        "probe",
+        {"code": "result = {'view': dict(parameters)}"},
+    )
+
+    async def _run():
+        views = []
+        # MCPChannel.execute_workflow -- single `inputs` slot.
+        channel = MCPChannel.__new__(MCPChannel)
+        channel.runtime = AsyncLocalRuntime()
+        channel._workflow_registry = {"probe": probe.build()}
+        response = await channel._handle_execute_workflow(
+            {"workflow_name": "probe", "inputs": params}
+        )
+        assert response.get("success"), response
+        views.append(response["results"]["probe"]["result"]["view"])
+        return views
+
+    return asyncio.run(_run())
+
+
+@pytest.mark.regression
+def test_equivalent_calls_agree_across_http_and_single_slot_channels(parity_server):
+    """THE rule: the same INTENT gives the same ``parameters`` view everywhere.
+
+    ``WorkflowRequest`` exposes two slots, so its arguments slot is
+    ``parameters``. The channels expose one, so theirs is ``inputs``. Those
+    are the EQUIVALENT calls, and they MUST agree -- that equivalence is what
+    'multi-channel parity' means for a workflow reading ``parameters.get()``.
+
+    Falsifying result: if either surface stopped binding, or one double-bound,
+    the two views differ and this fails. Comparing the surfaces against each
+    other (not against a literal) is what makes a one-sided future change fail
+    here rather than in production.
+    """
+    _, api_port = parity_server
+    params = {"a": 1}
+
+    probe_workflow = WorkflowBuilder()
+    probe_workflow.add_node(
+        "PythonCodeNode", "probe", {"code": "result = {'view': dict(parameters)}"}
+    )
+    app, _ = parity_server
+    app.register("parity_probe", probe_workflow.build())
+
+    response = requests.post(
+        f"http://localhost:{api_port}/workflows/parity_probe",
+        json={"parameters": params},
+        timeout=30,
+    )
+    assert response.status_code == 200, response.text
+    via_http = response.json()["outputs"]["probe"]["result"]["view"]
+
+    for via_channel in _parameters_view_via_channels(params):
+        assert via_channel == via_http, (
+            "equivalent calls disagree -- HTTP `{'parameters': P}` and the "
+            f"channel `inputs=P` must give one view: HTTP={via_http!r} "
+            f"channel={via_channel!r}"
+        )
+    assert via_http.get("a") == 1, via_http
+
+
+@pytest.mark.regression
+def test_single_slot_channels_do_not_read_inputs_as_opt_out(parity_server):
+    """The opt-out is structural, and its boundary is PINNED.
+
+    A field named ``inputs`` is an opt-out only where the caller was given a
+    second slot to express the choice. On a single-slot channel the same name
+    is the arguments slot and BINDS -- so a body that looks identical produces
+    deliberately different views on the two surfaces.
+
+    This asymmetry is a consequence of the rule, not an oversight, and it is
+    asserted here so a future change to it fails loudly instead of silently
+    re-deciding which surfaces envelope. Falsifying result: were the channels
+    to treat ``inputs`` as an opt-out, the channel view would equal the HTTP
+    view here -- and every ``parameters.get(...)`` workflow would be broken on
+    those channels, which is the defect this whole file regresses against.
+    """
+    _, api_port = parity_server
+    body = {"parameters": {"a": 1}}
+
+    probe_workflow = WorkflowBuilder()
+    probe_workflow.add_node(
+        "PythonCodeNode", "probe", {"code": "result = {'view': dict(parameters)}"}
+    )
+    app, _ = parity_server
+    app.register("parity_probe_optout", probe_workflow.build())
+
+    # HTTP `inputs` -- the caller CHOSE raw, so the mapping is untouched.
+    response = requests.post(
+        f"http://localhost:{api_port}/workflows/parity_probe_optout",
+        json={"inputs": body},
+        timeout=30,
+    )
+    assert response.status_code == 200, response.text
+    via_http_optout = response.json()["outputs"]["probe"]["result"]["view"]
+    assert via_http_optout == {"a": 1}, via_http_optout
+
+    # Channel `inputs` -- the sole arguments slot, so it BINDS.
+    (via_channel,) = _parameters_view_via_channels(body)
+    assert via_channel == {"parameters": {"a": 1}}, via_channel
+    assert via_channel != via_http_optout, (
+        "the opt-out must NOT generalise by field name: a single-slot channel "
+        "that stopped binding leaves `parameters.get(...)` workflows broken "
+        "with no way for the caller to opt IN"
+    )

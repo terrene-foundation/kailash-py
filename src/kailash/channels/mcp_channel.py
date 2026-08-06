@@ -617,6 +617,14 @@ class MCPChannel(Channel):
 
             # Same binding as _handle_tools_call above and every other channel:
             # one registration, one input contract.
+            #
+            # `inputs` here is NOT the opt-OUT form WorkflowRequest draws
+            # against `parameters`. Per the structural rule in
+            # `kailash/workflow/input_envelope.py`: the opt-out exists only
+            # where the caller was given a SECOND slot to express it.
+            # `execute_workflow` exposes one arguments slot, so it binds --
+            # otherwise a `parameters.get(...)` workflow would be broken here
+            # with no way for the caller to ask for the binding.
             results, run_id = await self.runtime.execute_async(
                 workflow, parameters=bind_parameter_envelope(inputs)
             )

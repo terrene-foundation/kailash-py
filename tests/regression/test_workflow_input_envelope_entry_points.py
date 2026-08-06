@@ -49,13 +49,20 @@ INPUT_KWARGS = frozenset({"parameters", "inputs"})
 # "<path relative to repo root>::<enclosing function>".
 AUDITED_RAW_INPUT_SITES: dict[str, str] = {
     "packages/kailash-nexus/src/nexus/core.py::_execute_workflow": (
-        "Private programmatic helper, not a channel. Its parameter is literally "
-        "named `inputs`, which is the documented opt-OUT form -- the same "
-        "distinction WorkflowRequest draws between `inputs` (raw, caller "
-        "controls the exact mapping) and `parameters` (envelope-bound). A "
-        "custom endpoint that wants envelope semantics passes "
-        "{'parameters': body} explicitly. Binding here would leave the SDK "
-        "with no programmatic escape hatch at all."
+        "NOT route-registered: no router binding anywhere in nexus/src calls "
+        "it, so no caller reaches it over a channel and it cannot break "
+        "multi-channel parity. (It is NOT merely 'not a channel' -- it raises "
+        "HTTPException 400/404/500 and runs validate_workflow_name and "
+        "validate_workflow_inputs, and core.py's own comment calls it 'the "
+        "execute route'. Only the absent registration carries this "
+        "disposition; if a router ever binds it, this entry MUST be removed "
+        "and the site must bind.) It is reachable programmatically, and its "
+        "parameter is literally named `inputs` -- the opt-OUT form "
+        "WorkflowRequest draws against `parameters`. A programmatic caller "
+        "that wants envelope semantics calls "
+        "bind_parameter_envelope(body) and passes the result; passing "
+        "{'parameters': body} by hand is the WRAPPED-ONLY shape that broke "
+        "bare top-level names before the fix."
     ),
 }
 
@@ -72,21 +79,40 @@ def _enclosing_function(tree: ast.AST, target: ast.AST) -> str:
 
 
 def _binds_envelope(call: ast.Call) -> bool:
-    """True when the inputs argument constructs a ``parameters`` envelope.
+    """True when the inputs argument binds BOTH shapes of the envelope.
 
-    Recognises the canonical shapes:
-        {**x, "parameters": x}      (dict literal with a "parameters" key)
-        {"parameters": x}
-        a helper whose name says it builds the envelope
+    The original defect had TWO halves, and this predicate must reject BOTH:
+
+    * raw passthrough (``x``)          -- ``parameters.get(...)`` -> NameError
+    * wrapped-ONLY (``{"parameters": x}``) -- bare top-level names ->
+      ``NameError: name 'id' is not defined``, which is what the pre-fix MCP
+      transport shipped.
+
+    So a dict literal counts ONLY when it carries the envelope key AND a
+    ``**`` splat. In ``ast.Dict.keys`` a ``**`` unpacking is recorded as a
+    ``None`` key, so both halves are visible structurally::
+
+        {**x, "parameters": x}   -> keys == [None, Constant("parameters")]  OK
+        {"parameters": x}        -> keys == [Constant("parameters")]        REJECT
+
+    A call to a helper whose name says it builds the envelope also counts --
+    :func:`kailash.workflow.input_envelope.bind_parameter_envelope` owns the
+    both-shapes contract, and its own behaviour is pinned by
+    ``test_channel_parameters_envelope_behaviour.py``.
     """
     candidates = [a for a in call.args[1:2]]
     candidates += [kw.value for kw in call.keywords if kw.arg in INPUT_KWARGS]
 
     for value in candidates:
         if isinstance(value, ast.Dict):
-            for key in value.keys:
-                if isinstance(key, ast.Constant) and key.value == "parameters":
-                    return True
+            has_envelope_key = any(
+                isinstance(key, ast.Constant) and key.value == "parameters"
+                for key in value.keys
+            )
+            # `**splat` is recorded as a None key by the parser.
+            has_splat = any(key is None for key in value.keys)
+            if has_envelope_key and has_splat:
+                return True
         if isinstance(value, ast.Call):
             func = value.func
             name = getattr(func, "attr", None) or getattr(func, "id", "")
@@ -160,6 +186,59 @@ def test_every_workflow_entry_point_binds_the_parameters_envelope():
         + "\nEither bind the envelope, or add the site to "
         "AUDITED_RAW_INPUT_SITES with the reason it is deliberately raw."
     )
+
+
+def _first_exec_call(source: str) -> ast.Call:
+    """Parse a one-line execution call out of ``source``."""
+    module = ast.parse(source)
+    for node in ast.walk(module):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) in (
+            RUNTIME_EXEC_METHODS
+        ):
+            return node
+    raise AssertionError(f"no runtime execution call in: {source!r}")
+
+
+# Both polarities of the predicate the whole scan rests on. A guard that
+# cannot tell the pre-fix shape from the post-fix one reports "parity holds"
+# over a broken tree, which is the exact failure this file exists to prevent.
+BINDING_SHAPES = {
+    "splat-then-envelope": 'rt.execute_workflow_async(wf, {**p, "parameters": p})',
+    "envelope-then-splat": 'rt.execute_workflow_async(wf, {"parameters": p, **p})',
+    "shared-binder-positional": "rt.execute_workflow_async(wf, bind_parameter_envelope(p))",
+    "shared-binder-kwarg": "rt.execute(wf, parameters=bind_parameter_envelope(p))",
+}
+
+NON_BINDING_SHAPES = {
+    # The pre-fix nexus/transports/mcp.py shape. Binds `parameters` but NOT
+    # the bare top-level names -> `NameError: name 'id' is not defined`.
+    "wrapped-only-positional": 'rt.execute_workflow_async(wf, {"parameters": p})',
+    "wrapped-only-kwarg": 'rt.execute(wf, parameters={"parameters": p})',
+    # The other pre-fix half: raw passthrough -> `parameters` unbound.
+    "raw-passthrough-positional": "rt.execute_workflow_async(wf, p)",
+    "raw-passthrough-kwarg": "rt.execute(wf, parameters=p)",
+    "raw-splat-no-envelope": "rt.execute_workflow_async(wf, {**p})",
+}
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("source", BINDING_SHAPES.values(), ids=BINDING_SHAPES)
+def test_binds_envelope_accepts_both_shapes_bindings(source):
+    """Every shape that binds BOTH shapes MUST be recognised."""
+    assert _binds_envelope(_first_exec_call(source)) is True, source
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("source", NON_BINDING_SHAPES.values(), ids=NON_BINDING_SHAPES)
+def test_binds_envelope_rejects_pre_fix_shapes(source):
+    """Neither half of the original defect may pass as 'binds the envelope'.
+
+    Falsifying result: with the predicate's earlier form -- ANY dict literal
+    carrying a "parameters" key counts -- the two ``wrapped-only`` cases
+    returned True, so reverting ``transports/mcp.py`` to
+    ``{"parameters": kwargs}`` left the whole scan green.
+    """
+    assert _binds_envelope(_first_exec_call(source)) is False, source
 
 
 @pytest.mark.regression
