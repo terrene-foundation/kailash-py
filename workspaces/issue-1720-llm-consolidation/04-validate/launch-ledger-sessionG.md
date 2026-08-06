@@ -59,6 +59,48 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## ROUND-3 RESULT — NOT CLEAN. 3 HIGH + 4 MEDIUM + 2 LOW (one LOW refuted)
+
+| #                 | Finding                                                                                              | Disposition                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| R3-COMPOSE-HIGH-1 | **The AST guard's denominator omits a whole tree; #1720 STILL SHIPS RAW on a public route**          | routed → `F-ENVELOPE`                                                                                       |
+| R3-HIGH-1         | MCP withhold non-idempotent; `enable_tool` restores a stale UNGATED entry → **authorization bypass** | landed, being verified                                                                                      |
+| R3-COMPOSE-HIGH-2 | MCP correlation id not greppable in any real log; ~13 sites UNDIAGNOSABLE                            | routed → `F3-MCP`                                                                                           |
+| R3-MED-2/3        | projection applies 2 of 3 fields; container liveness unprovable (silent non-enforcement)             | `F3-MCP`                                                                                                    |
+| R3-MED-4          | identity fail-closed missed `find_agents_for_user` — **5th repeat of the parity class**              | `F3-AGENTS`                                                                                                 |
+| R3-MED-5 / LOW-6  | comma rule over-redacts; its linearity probe never enters the branch it tests                        | `F3-AGENTS`                                                                                                 |
+| R3-LOW-7          | union `Request` false-negative                                                                       | **REFUTED** — FastAPI rejects the annotation at registration; fix reverted, refutation pinned (`7d6d1edf3`) |
+
+**COMPOSE-HIGH-1 is the most important finding of the session.** The AST guard exists BECAUSE a
+hand-listed denominator misses sites — that is its own docstring's lesson, and it proved the
+point by finding a seventh site on its first run. But `SCANNED_TREES` is itself HAND-WRITTEN
+(nexus + `src/kailash/channels` only), so `src/kailash/servers/enterprise_workflow_server.py:352-355`
+— a top-level public export serving `POST /enterprise/workflows/{id}/execute_async` — still
+passes `resolved_inputs` RAW. Measured: `WorkflowExecutionError: name 'parameters' is not defined`.
+
+The guard reported "every discovered entry point binds" with an EMPTY allowlist. Both true —
+of a denominator that omitted the tree containing the bug. **Third time on this branch an
+instrument built to prevent a class has exhibited that class.**
+
+## ORCHESTRATOR ERROR 4 — I spawned a DUPLICATE lane onto a track already in flight
+
+`F3-MCP` reported a concurrent editor in its exclusive scope. It was `F-MCP`, the round-2 MCP
+lane: idle-but-alive, woken by my status query, which then found tasks #10/#11 in the SHARED
+TASK LIST and correctly began them. I had already spawned `F3-MCP` for the same findings.
+
+`orchestration-launch-ledger.md` MUST-2 exists exactly for this. **The gap in my check: the
+ledger tracked LANES I spawned, not TASK-LIST CLAIMS.** An idle agent picking up a shared task
+is a launch the ledger never recorded, so the dedup check could not see it. A ledger that maps
+only spawns is incomplete wherever a shared work queue exists.
+
+Resolved to ONE owner (`F3-MCP`, which held the full brief and had an orphaned half-landed
+change); `F-MCP` told to stop editing and report. **No work discarded** — the landed HIGH-1 and
+MED-2 code stays and is being independently re-verified against `F3-MCP`'s own live
+reproduction (an uncredentialed call returning `V1-EXECUTED`) rather than taken on trust.
+
+Credit where due: `F3-MCP` detected the conflict, refused to revert or overwrite a sibling's
+work, and asked before proceeding. That is the correct response and it is why nothing was lost.
+
 ## ORCHESTRATOR ERROR 3 — I over-claimed in a commit body; the review I commissioned caught it
 
 `44297d31e`'s body describes a three-file atomic commit (bind + allowlist deletion +
