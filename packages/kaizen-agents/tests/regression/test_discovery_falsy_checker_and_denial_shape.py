@@ -172,9 +172,9 @@ class TestFalsyCheckerIsStillEnforced:
             "caller was granted it anyway — a silent, unannounced fail-open "
             "with a checker installed"
         )
-        assert meta.denied is True, (
-            "the falsy-checker denial did not carry the explicit denial marker"
-        )
+        assert (
+            meta.denied is True
+        ), "the falsy-checker denial did not carry the explicit denial marker"
 
     @pytest.mark.parametrize("factory", [_FalsyByLen, _FalsyByBool])
     @pytest.mark.asyncio
@@ -261,17 +261,17 @@ def _assert_not_readable_as_a_grant(meta: AccessMetadata, origin: str) -> None:
         f"consumer reading the payload without the boolean cannot tell it "
         f"apart from a grant"
     )
-    assert data["denied"] is True, (
-        f"the {origin} denial serialized without an explicit denial marker: {data!r}"
-    )
+    assert (
+        data["denied"] is True
+    ), f"the {origin} denial serialized without an explicit denial marker: {data!r}"
     assert meta.permission_level == DENIED_PERMISSION_LEVEL, (
         f"the {origin} denial reported permission_level="
         f"{meta.permission_level!r} — the dataclass default is 'execute', so "
         f"a bare AccessMetadata() denial serializes as an EXECUTE grant"
     )
-    assert data["permission_level"] != "execute", (
-        f"the {origin} denial serialized as execute-level access: {data!r}"
-    )
+    assert (
+        data["permission_level"] != "execute"
+    ), f"the {origin} denial serialized as execute-level access: {data!r}"
 
     constraints = data["constraints"]
     assert constraints["max_tokens_per_session"] == 0, (
@@ -280,12 +280,12 @@ def _assert_not_readable_as_a_grant(meta: AccessMetadata, origin: str) -> None:
         f"UNLIMITED, so the denial payload was strictly the most permissive "
         f"value the type can hold"
     )
-    assert constraints["max_daily_invocations"] == 0, (
-        f"the {origin} denial serialized unlimited daily invocations: {constraints!r}"
-    )
-    assert constraints["max_cost_per_session_usd"] == 0, (
-        f"the {origin} denial serialized unlimited spend: {constraints!r}"
-    )
+    assert (
+        constraints["max_daily_invocations"] == 0
+    ), f"the {origin} denial serialized unlimited daily invocations: {constraints!r}"
+    assert (
+        constraints["max_cost_per_session_usd"] == 0
+    ), f"the {origin} denial serialized unlimited spend: {constraints!r}"
     assert constraints["allowed_tools"] == [], (
         f"the {origin} denial serialized allowed_tools="
         f"{constraints['allowed_tools']!r}; null means UNCONSTRAINED, i.e. "

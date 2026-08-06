@@ -8,6 +8,7 @@ from __future__ import annotations
 import inspect
 import logging
 import math
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
@@ -320,35 +321,81 @@ def _constraint_payload_present(raw: Any) -> bool:
     return True
 
 
-#: Label sets already announced by `normalize_access_constraints`.
+#: (user, label-set) pairs already announced by `normalize_access_constraints`.
 #:
-#: The advisory-label WARN is once-per-distinct-label-set, not once-per-call:
+#: The advisory-label WARN is de-duplicated, not once-per-call:
 #: `_check_user_access` runs per user PER AGENT inside `find_agents_for_user`,
 #: so a per-call warning would emit O(users x agents) identical lines on a
 #: discovery hot path — and a log line that floods is a log line that gets
 #: filtered, which is how a loud signal becomes a silent one.
 #:
-#: Keyed by the SORTED label tuple rather than a bare flag so a NEW label
-#: combination still announces itself instead of being masked by the first one
-#: ever seen. BOUNDED: a checker emitting unbounded distinct label sets would
-#: otherwise grow this set without limit (the same unbounded-collection hazard
-#: `trust-plane-security.md` MUST-4 names). At the cap we stop recording, which
-#: degrades to "warn every time" for new sets rather than to silence — the
-#: safe direction.
-_ADVISORY_LABELS_WARNED: set[tuple[str, ...]] = set()
+#: KEYED ON `(user_id, sorted labels)`, AND THE USER HALF IS THE FIX, NOT AN
+#: EMBELLISHMENT. Keyed on the label tuple ALONE, the warning announced the
+#: FIRST user to hit a label set and was silent for every DISTINCT user after
+#: — and the record carried no `user_id` either, so the one line that did fire
+#: named a set of labels without naming anyone they applied to. An operator
+#: reading it could not tell whether one user or ten thousand were affected,
+#: which is the question the line exists to answer.
+#:
+#: The de-duplication that motivated the memo is preserved exactly: the
+#: O(agents) factor is the flood (ONE user's single `find_agents_for_user` call
+#: re-checks every registered agent), and that factor is still collapsed to one
+#: line. Only the O(users) factor — which is a genuinely new fact each time,
+#: because it is a different subject — is now allowed through.
+#:
+#: The label half stays SORTED so a NEW label combination still announces
+#: itself instead of being masked by the first one ever seen.
+#:
+#: BOUNDED BY EVICTION, NOT BY REFUSING TO RECORD — and that distinction is
+#: the whole reason this is an `OrderedDict` and not a `set`. The earlier form
+#: stopped ADDING at the cap and warned unconditionally afterwards. Adding the
+#: user dimension moved key cardinality from |label sets| (single digits in
+#: practice) to |users| x |label sets|, so any deployment with more than
+#: `_ADVISORY_LABELS_WARNED_CAP` distinct pairs SATURATES the memo permanently
+#: — and past that point every un-memoized user warns on EVERY call. Since
+#: `_check_user_access` runs per user PER AGENT, one `find_agents_for_user`
+#: sweep then emits one WARN per registered agent, each also running
+#: `scrub_credentials()` per label. That is verbatim the flood the memo exists
+#: to prevent: `len(...) < CAP` gated the RECORDING and never the EMITTING.
+#:
+#: Evicting the least-recently-seen pair instead keeps the bound (memory is
+#: still hard-capped) while preserving the de-duplication that motivated the
+#: memo: a key is ALWAYS recorded, so the O(agents) factor inside a single
+#: sweep still collapses to one line no matter how saturated the memo is. The
+#: residual is recency-scoped rather than unbounded — a pair seen again after
+#: `_ADVISORY_LABELS_WARNED_CAP` OTHER pairs have intervened announces a
+#: second time. That is a rate limit, not a flood, and it degrades toward
+#: MORE signal rather than less, which is the safe direction.
+_ADVISORY_LABELS_WARNED: OrderedDict[tuple[str | None, tuple[str, ...]], None] = (
+    OrderedDict()
+)
 _ADVISORY_LABELS_WARNED_CAP: Final[int] = 256
 
 
-def _warn_advisory_constraints_once(labels: list[str]) -> None:
-    """Announce an advisory label set the FIRST time it is observed."""
-    key = tuple(sorted(labels))
+def _warn_advisory_constraints_once(labels: list[str], user_id: str | None) -> None:
+    """Announce an advisory label set the FIRST time THIS USER is seen with it."""
+    key = (user_id, tuple(sorted(labels)))
     if key in _ADVISORY_LABELS_WARNED:
+        # Refresh recency: a pair still in active use must not be evicted by
+        # unrelated traffic and then re-announce itself.
+        _ADVISORY_LABELS_WARNED.move_to_end(key)
         return
-    if len(_ADVISORY_LABELS_WARNED) < _ADVISORY_LABELS_WARNED_CAP:
-        _ADVISORY_LABELS_WARNED.add(key)
+    _ADVISORY_LABELS_WARNED[key] = None
+    while len(_ADVISORY_LABELS_WARNED) > _ADVISORY_LABELS_WARNED_CAP:
+        _ADVISORY_LABELS_WARNED.popitem(last=False)
     logger.warning(
         "discovery.advisory_constraints_not_enforced_here",
         extra={
+            # The SUBJECT the labels were imposed on. Raw, matching the two
+            # sibling ERROR lines in `_check_user_access`
+            # (`constraints_unrepresentable_failed_closed`,
+            # `permission_check_failed_closed`) which both write `user_id`
+            # unscrubbed: a per-surface disagreement about whether this field
+            # is sensitive is exactly the split-masking `observability.md`
+            # Rule 6.3 blocks. `None` when the caller did not supply one —
+            # `normalize_access_constraints` is public and reachable without a
+            # user, and the memo key holds `None` as its own distinct subject.
+            "user_id": user_id,
             # Labels originate in a CALLER-SUPPLIED checker, so they are
             # scrubbed on the same grounds as every other caller-derived value
             # written to a log in this module.
@@ -364,8 +411,18 @@ def _warn_advisory_constraints_once(labels: list[str]) -> None:
 
 def normalize_access_constraints(
     raw: Any,
+    *,
+    user_id: str | None = None,
 ) -> tuple[AccessConstraints | None, list[str], str | None]:
     """Turn a checker's constraint payload into `AccessConstraints`.
+
+    `user_id` is the SUBJECT the payload was produced for. It is used for
+    exactly one thing and is not otherwise consulted: it is half the key of the
+    advisory-label WARN memo, so the warning announces once PER USER per label
+    set rather than once per label set globally (which announced the first
+    affected user and went silent for every distinct user after). Keyword-only
+    and defaulted so the pre-existing single-argument call shape still works;
+    omitted, the memo treats "no user" as its own distinct subject.
 
     Returns `(constraints, advisory_labels, None)` on success, or
     `(None, [], reason)` when the payload is PRESENT but cannot be
@@ -442,7 +499,45 @@ def normalize_access_constraints(
     if isinstance(raw, Mapping):
         constraints = AccessConstraints()
         assigned: dict[str, Any] = {}
-        for key, value in raw.items():
+        # MATERIALIZE ONCE. Every decision below reads THIS snapshot, never
+        # `raw` again — which is what makes the check sound rather than merely
+        # plausible.
+        #
+        # An earlier revision compared `len(raw)` against a count taken while
+        # iterating. That was a SECOND, INDEPENDENT `__len__` call (the first
+        # is in `_constraint_payload_present`), and comparing read #2 against
+        # an iteration says nothing about read #1 — which is the read that
+        # decided we are in this branch at all. A `Mapping` whose `__len__` is
+        # not idempotent (returns 1, then 0) walked straight through it:
+        # presence saw 1 and entered, the guard compared 0 against 0, agreed
+        # with itself, and fell out of the bottom returning the untouched
+        # `AccessConstraints()` — UNLIMITED (class docstring). The guard
+        # written to stop exactly that outcome was defeated by the same CLASS
+        # of object, lying on a different axis.
+        #
+        # One `list(raw.items())` removes the axis entirely: after this line
+        # there is no live object left to disagree with, so no re-derivation is
+        # possible by construction rather than by comparison.
+        #
+        # An EMPTY snapshot is then UNREADABLE, not empty: presence already
+        # asserted this payload holds pairs (a genuinely empty one returns the
+        # unrestricted grant at the top of the function and never reaches
+        # here), so yielding none contradicts that assertion and there is no
+        # honest answer to "what did the checker cap?". Costs a well-behaved
+        # mapping NOTHING — `dict`, `MappingProxy`, `ChainMap` all materialize
+        # exactly what they reported.
+        pairs = list(raw.items())
+        if not pairs:
+            return (
+                None,
+                [],
+                (
+                    "constraint mapping reported a non-empty payload but "
+                    "yielded no entries; its len() and items() disagree and "
+                    "the payload cannot be read"
+                ),
+            )
+        for key, value in pairs:
             if not isinstance(key, str):
                 return None, [], f"constraint key {key!r} is not a string"
             field_name = _CONSTRAINT_KEY_ALIASES.get(key)
@@ -492,10 +587,35 @@ def normalize_access_constraints(
         # payload we cannot read — which still denies. Checked BEFORE the grant
         # so a `[{"max_tokens": 42}]` or `[None]` cannot ride the advisory path
         # into an uncapped grant.
-        if not all(isinstance(item, str) for item in raw):
+        # MATERIALIZE ONCE, for the reason spelled out in the mapping branch,
+        # and this branch needed it MORE: the pre-existing code walked `raw`
+        # THREE separate times — `all(...)`, the `offenders` comprehension, and
+        # the label comprehension. A one-shot `__iter__` (an iterator, a
+        # generator-backed view, a cursor) is exhausted by the first walk, so
+        # the element check ran over the real elements and the labels were
+        # built from an EMPTY second walk. `all(...)` over nothing is
+        # vacuously True, so the payload passed validation and granted with
+        # `labels == []`: UNLIMITED, and with no disclosure either, because
+        # the label list it would have disclosed is the empty one.
+        #
+        # Counting `len(raw)` against the walk did not close it, for the same
+        # reason it did not close the mapping branch — a container lying on
+        # `__len__` as well answers `0 == 0` and agrees with itself.
+        items = list(raw)
+        if not items:
+            return (
+                None,
+                [],
+                (
+                    "constraint label list reported a non-empty payload but "
+                    "yielded no elements; its len() and iteration disagree "
+                    "and the payload cannot be read"
+                ),
+            )
+        if not all(isinstance(item, str) for item in items):
             offenders = ", ".join(
                 sorted(
-                    {type(item).__name__ for item in raw if not isinstance(item, str)}
+                    {type(item).__name__ for item in items if not isinstance(item, str)}
                 )
             )
             return (
@@ -506,8 +626,8 @@ def normalize_access_constraints(
                     f"({offenders}) and cannot be read as labels"
                 ),
             )
-        labels = [str(item) for item in raw]
-        _warn_advisory_constraints_once(labels)
+        labels = [str(item) for item in items]
+        _warn_advisory_constraints_once(labels, user_id)
         # GRANT with DEFAULT constraints. `AccessConstraints()` is the UNLIMITED
         # value of this type (class docstring), and that is the correct answer
         # here rather than an accident: the checker imposed no numeric cap on
@@ -1090,9 +1210,30 @@ class UserFilteredAgentDiscovery:
                 # A denial is a recoverable availability event — the same trade
                 # the exception branch below makes, for the same reason.
                 constraints, advisory_labels, unrepresentable = (
-                    normalize_access_constraints(raw)
+                    normalize_access_constraints(raw, user_id=user_id)
                 )
-                if unrepresentable is not None:
+                # `constraints is None` IS PART OF THE GUARD, not a type-checker
+                # appeasement. `normalize_access_constraints` documents its
+                # failure shape as `(None, [], reason)`, so today the two
+                # conditions coincide and this second test never fires on its
+                # own. It is here because of what happens if they EVER come
+                # apart: a future edit returning `(None, labels, None)` — a
+                # helper that forgets to set a reason, a branch added below the
+                # return — would hand `None` to `AccessMetadata(constraints=)`,
+                # whose consumers then read `.max_daily_invocations` off None
+                # (an AttributeError turning an authorization decision into a
+                # crash) or, worse, treat the absent object as "no caps" — which
+                # on this type is UNLIMITED, the exact failure the whole
+                # function exists to prevent, re-entering through the ONE hole
+                # the reason-string guard does not cover.
+                #
+                # Testing the value we are about to USE, rather than a sibling
+                # field that currently correlates with it, is what makes that
+                # unreachable rather than merely unlikely. It also lets the
+                # declared `AccessConstraints` (non-optional) parameter type
+                # stay honest instead of being widened to accept None, which
+                # would push the same question onto every consumer.
+                if unrepresentable is not None or constraints is None:
                     logger.error(
                         "discovery.constraints_unrepresentable_failed_closed",
                         extra={
@@ -1107,11 +1248,61 @@ class UserFilteredAgentDiscovery:
                             # shape, but the labels/keys originate in a
                             # CALLER-SUPPLIED checker, so it is scrubbed on the
                             # same grounds as the exception branch below.
-                            "reason": scrub_credentials(unrepresentable),
+                            #
+                            # The fallback is NOT decoration: it is the message
+                            # for the `constraints is None` half of the guard,
+                            # which by construction has no reason string. A
+                            # denial whose log line said only `None` would be
+                            # indistinguishable from a checker denial — and this
+                            # branch means the normalizer broke its own
+                            # documented contract, which is the single most
+                            # important thing this line could say.
+                            "reason": scrub_credentials(
+                                unrepresentable
+                                if unrepresentable is not None
+                                else (
+                                    "normalize_access_constraints returned no "
+                                    "constraints and no reason; treating as "
+                                    "unreadable"
+                                )
+                            ),
                         },
                     )
                     return False, AccessMetadata.deny()
 
+                # `permission_level="execute"` RESTATES THE CHECKER'S VERDICT;
+                # it does not widen it. Adjudicated, because the grant looks
+                # like an over-grant when `advisory_labels` carries something
+                # like `"read_only"` and this line still says "execute".
+                #
+                # The checker was asked ONE question — `verify(agent_id,
+                # action="execute", ...)` forty lines above — and its answer
+                # surface is `VerificationResult.valid: bool`
+                # (`src/kailash/trust/chain.py:841-856`). That type declares NO
+                # permission-level field, so there is no narrower verdict being
+                # under-reported here: `valid=True` for `action="execute"` IS
+                # the verdict, and this echoes the action it approved.
+                #
+                # The labels are NOT that verdict. They arrive in
+                # `effective_constraints`, whose producing field
+                # (`DelegationRecord.constraint_subset`) is documented at
+                # `chain.py:350-363` as read by NO allow/deny gate and
+                # DELIBERATELY EXCLUDED from the enforced envelope. Reading
+                # `"read_only"` as a demotion of the verdict would be this
+                # module deciding an allow/deny question the SDK states this
+                # field does not answer — and would require parsing the label,
+                # which `normalize_access_constraints` refuses to do for the
+                # documented reason that the producing type emits no grammar to
+                # parse.
+                #
+                # So this payload is the label-free valid grant PLUS a
+                # disclosure: identical `permission_level`, identical
+                # `constraints`, with `advisory_constraints` naming what the
+                # checker imposed. Strictly more information, never wider —
+                # which is the property
+                # `tests/regression/test_issue_1720_discovery_grant_fidelity.py`
+                # pins, so a future edit that lets the label path out-grant the
+                # label-free path fails loudly.
                 return True, AccessMetadata(
                     permission_level="execute",
                     constraints=constraints,

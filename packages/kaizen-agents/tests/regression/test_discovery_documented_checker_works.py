@@ -255,9 +255,9 @@ class TestErrorPathFailsClosed:
         granted, meta = await _check(_Boom())
         assert granted is False
         assert meta is not None, "the denial path returned no access metadata"
-        assert isinstance(meta, AccessMetadata), (
-            f"the denial path returned {type(meta).__name__}, not AccessMetadata"
-        )
+        assert isinstance(
+            meta, AccessMetadata
+        ), f"the denial path returned {type(meta).__name__}, not AccessMetadata"
         assert meta.constraints is not None, (
             "denial metadata carried no constraints object; `.constraints` is "
             "dereferenced by consumers without a None check"
@@ -278,12 +278,12 @@ class TestErrorPathFailsClosed:
             f"distinguishable from a grant by anything reading it without the "
             f"boolean: {data!r}"
         )
-        assert data["permission_level"] != "execute", (
-            f"the denial payload reports execute-level access: {data!r}"
-        )
-        assert data["constraints"]["max_tokens_per_session"] == 0, (
-            f"the denial payload reports UNLIMITED tokens (null): {data!r}"
-        )
+        assert (
+            data["permission_level"] != "execute"
+        ), f"the denial payload reports execute-level access: {data!r}"
+        assert (
+            data["constraints"]["max_tokens_per_session"] == 0
+        ), f"the denial payload reports UNLIMITED tokens (null): {data!r}"
 
     @pytest.mark.asyncio
     async def test_denial_excludes_the_agent_from_find_agents_for_user(self) -> None:
@@ -323,9 +323,9 @@ class TestErrorPathFailsClosed:
             "is indistinguishable from an empty agent list"
         )
         error_text = hits[0].__dict__["error"]
-        assert "s3cr3t" not in error_text, (
-            f"the checker's exception text reached the log unscrubbed: {error_text!r}"
-        )
-        assert "[REDACTED]" in error_text, (
-            f"expected scrub_credentials output, got {error_text!r}"
-        )
+        assert (
+            "s3cr3t" not in error_text
+        ), f"the checker's exception text reached the log unscrubbed: {error_text!r}"
+        assert (
+            "[REDACTED]" in error_text
+        ), f"expected scrub_credentials output, got {error_text!r}"

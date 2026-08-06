@@ -42,8 +42,18 @@ read by NO allow/deny gate" (chain.py:350-352), and the in-SDK consumer folds
 them as `{c: True for c in ...}` (runtime/trust/verifier.py:398) — each label is
 a BOOLEAN FLAG, not a cap. There is therefore no grammar to parse into
 `AccessConstraints`, and inventing one would mean every label that failed the
-invented parse fell back to unlimited. The disposition is to FAIL CLOSED on
-their presence, which is what these tests pin.
+invented parse fell back to unlimited.
+
+THE DISPOSITION IS NOT "FAIL CLOSED ON THEIR PRESENCE" — this paragraph said so
+while the tests below already said otherwise, and the tests are right. Denying
+on a label list was tried and REVERTED: the same `chain.py:350-363` paragraph
+that calls the raw field advisory also states the tightening IS enforced, by
+SIGNED derived capabilities that `verify()` re-derives — so denying here added
+no safety and removed every constraint-labelled agent from every user's
+discovery list. The disposition is GRANT, with the labels carried verbatim into
+`AccessMetadata.advisory_constraints` so nothing is silently dropped. The grant
+is pinned as never-wider-than-the-label-free-grant in
+`test_issue_1720_discovery_grant_fidelity.py`.
 """
 
 from __future__ import annotations
@@ -247,7 +257,6 @@ class TestDocumentedCheckerAdvisoryLabelsGrantAndAreCarried:
         _disc._ADVISORY_LABELS_WARNED.clear()
         seen = []
         for labels in (["read_only"], ["audit_required"], ["read_only"]):
-            _disc._ADVISORY_LABELS_WARNED_before = len(_disc._ADVISORY_LABELS_WARNED)
             _, _, _ = normalize_access_constraints(labels)
             seen.append(len(_disc._ADVISORY_LABELS_WARNED))
         assert seen == [1, 2, 2], (
