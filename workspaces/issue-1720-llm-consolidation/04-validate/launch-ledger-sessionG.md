@@ -82,6 +82,56 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## A FALSE ALL-CLEAR REACHED THE CHANGELOG — self-reported, and the sharpest instance yet
+
+`F-MCP` reported TWO non-discriminating instruments **in its own work**, unprompted. This is
+the harder direction to find them and both are `instrument-discipline.md` MUST-1:
+
+1. **The `outputSchema` probe used UN-ANNOTATED return types.** FastMCP derives an output
+   schema from the RETURN ANNOTATION, so the probe was structurally incapable of observing the
+   gap it was run to check. It returned the same answer whether or not the defect existed —
+   and the resulting all-clear was written into the shipped `kailash-mcp` CHANGELOG as a
+   "Known gaps" entry stating the default transport advertises no `outputSchema`. **That claim
+   is FALSE for return-annotation-derived schemas**, and gated tools were shipping their result
+   shape (`tenant_secret_id`, `internal_ref`, a `dict[str,int]`) to uncredentialed callers.
+   Correction routed to `F-MCP` (a separate path from `server.py`, so no collision).
+2. **The correlation-id test read `record.correlation_id` off the LogRecord**, which is
+   identical whether or not any formatter renders it — so it passed in both worlds.
+
+The first is the most consequential instrument failure of the session: it did not merely fail
+to catch a bug, it produced a DOCUMENTED, PUBLISHED claim that the bug was absent. A green test
+misleads the next session; a false CHANGELOG entry misleads every consumer.
+
+**R3-HIGH-1 severity CONFIRMED WORSE than its title.** Reproduced on the wire: after
+register-v1 → `disable_tool` → re-register-v2-GATED → `enable_tool`, an UNCREDENTIALED
+`tools/call` returned `V1-BODY-EXECUTED` and the advertised schema was v1's. Authorization
+bypass, not disclosure — and introduced BY the #1998 parking mechanism, i.e. a fix for a
+disclosure bug created an auth bypass.
+
+## COORDINATION DECISION — one writer on `server.py`
+
+Two lanes held uncommitted work in `packages/kailash-mcp/src/kailash_mcp/server.py`. `F-MCP`
+finished #10/#11, then HELD its commit rather than sweep `F3-MCP`'s in-progress hunks — the
+correct call, and it stopped the incident recorded below from recurring.
+
+Resolution: `F3-MCP` commits `server.py` WHOLESALE, attributing both lanes' hunks in the body.
+`F-MCP` commits only its own test file + the CHANGELOG correction (separate paths). HIGH-2
+(correlation id) routed to `F3-MCP` despite being `F-MCP`'s code and `F-MCP` volunteering —
+declined purely on one-writer grounds, with its reproduction handed over verbatim. Merits
+favoured `F-MCP`; collision cost outweighed them.
+
+## OPEN CONCERN — a hardening probe may disclose on the surface it hardens
+
+`F3-MCP`'s container-liveness probe WRITES a sentinel (`__kailash_fastmcp_liveness_probe__`)
+into the LIVE tool container. Neither lane could establish whether a concurrent `tools/list`
+observes it between write and delete. If it can, we introduced a disclosure on the exact
+surface this workstream exists to harden.
+
+Required before commit: prefer IDENTITY COMPARISON against the object FastMCP dispatches from
+(mutates nothing, so the window cannot exist), or PROVE the window unobservable by driving a
+concurrent `tools/list` against a probe in flight. "Probably too fast to observe" is not a
+proof; a race that cannot be demonstrated closed is not closed.
+
 ## ORCHESTRATOR ERROR 4 — I spawned a DUPLICATE lane onto a track already in flight
 
 `F3-MCP` reported a concurrent editor in its exclusive scope. It was `F-MCP`, the round-2 MCP
