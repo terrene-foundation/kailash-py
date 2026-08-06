@@ -4,16 +4,46 @@ last_reconciled_sha: 3a642d188
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-05/06 (session F)
+# Session Notes — 2026-08-05/06 (sessions F and G)
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain` @ `3a642d188` — **96 commits ahead of `main`, 28 UNPUSHED,
-and a LARGE UNCOMMITTED WORKING TREE (~45 files) that is the whole of session F.**
+`fix/issue-1720-forest-drain`.
 
-**NOTHING FROM SESSION F IS COMMITTED.** Read that first. The work below exists only in the
-working tree.
+## SESSION G SUPERSEDES THE HEADLINE BELOW — session F's tree IS COMMITTED
 
-## Read first
+The line that used to open this file — "NOTHING FROM SESSION F IS COMMITTED" — is now
+**FALSE**, and it is corrected here rather than deleted so a resumed session does not act on
+a remembered version of it. Session G committed all 63 files in 13 reviewable slices
+(`23ff5cbf2`..`5cf1fd8bc`, plus the session-G commits after). Working tree clean; a backup of
+the pre-commit state is at `scratchpad/sessionF-backup/` (tarball + patch).
+
+**Everything in the session-F sections below that says "uncommitted" is stale in that one
+respect only.** The technical content stands; the storage claim does not.
+
+**READ `04-validate/launch-ledger-sessionG.md` FIRST** — it is the current authoritative
+record: round-2 findings, the four fix lanes and their exclusive file ownership, and two
+recorded orchestrator errors (a tool-inventory mismatch, and relaying a review recommendation
+that would have reinstated issue #1720).
+
+### Session-G state in one screen
+
+- **Round 2 ran and was NOT clean** — 3 reviewers, rotated lenses, all with genuine
+  ran-signals: **7 HIGH + 6 MEDIUM**. Convergence counter is **ZERO**. Release stays gated.
+- Four fix lanes in flight (nexus rate-limit / envelope / kaizen-agents disclosure / MCP
+  stdio gate). Disjoint file ownership — see the ledger before touching any of those files.
+- **PUSH IS BLOCKED** by GitHub secret scanning on two SYNTHETIC Stripe fixtures in unpushed
+  commit `943278479`. Co-owner chose allowlist-via-URL over a history rewrite (a rewrite
+  would invalidate `45ccac417`, cited publicly in the #1996 closure). Fixed forward in
+  `5cf1fd8bc` so it cannot recur. **The commits have NO off-machine copy until this clears.**
+- #1996 CLOSED (cites `45ccac417`). #2001 (bash_tool raw `command` echo) and #2002 (root
+  `tests/regression/` — 1,564 of 1,566 tests have no CI) FILED.
+- 18 stale provider-registry regression failures fixed (`d2f310cc6`); the guard is now
+  INVERTED to pin the removal.
+- **OPEN, needs the co-owner:** every BREAKING change here ships in a MINOR bump while the
+  CHANGELOGs claim semver adherence. Pre-existing project-wide pattern, not introduced here.
+  Recommendation on record: ship as-is, treat versioning policy as its own decision.
+
+## Read first (session F — technical content still current)
 
 0. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-06.md` — the CURRENT
    decision report.** PCF-triaged queue, 6 decision points, the ordered next-steps list.
