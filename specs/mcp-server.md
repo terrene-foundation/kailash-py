@@ -2,7 +2,7 @@
 
 Parent domain: MCP (Model Context Protocol). Companion files: `mcp-client.md`, `mcp-auth.md`.
 
-Package: `kailash-mcp` v0.2.3
+Package: `kailash-mcp` v0.5.0
 Install: `pip install kailash-mcp` (base) | `pip install kailash-mcp[full]` (all features)
 License: Apache-2.0 | Terrene Foundation
 
@@ -133,13 +133,15 @@ MCPServer(
 **Contract:**
 
 - Cannot specify both `required_permission` and `required_permissions` (raises `ValueError`).
+- `required_permission=""` (empty string) or `required_permissions=[]` (empty list) both raise `ValueError` at registration -- an empty permission spec would otherwise produce a completely ungated tool (no invoke-time check and a fully published `inputSchema`), which is never what declaring the argument means. Omit the argument entirely for an intentionally public tool.
+- Whichever form is used, permissions are normalized ONCE at decoration time into a single internal tuple (`Tuple[str, ...]`), stored in the tool registry under `required_permission`. A single string becomes a 1-tuple; a list becomes a tuple of the same length. **ALL entries in the tuple are enforced on every call** -- `AuthManager._authorize` iterates the full sequence and requires every listed permission, not just the first.
 - The decorator wraps both sync and async functions. Async detection uses `asyncio.iscoroutinefunction`.
 - Each tool call gets a unique session ID for tracking.
 
 **Execution pipeline (in order):**
 
-1. **Authentication** -- If `auth_manager` is set and `required_permission` is specified, credentials are extracted from kwargs (fields: `api_key`, `token`, `username`, `password`, `jwt`, `authorization`, `mcp_auth`). Auth failure raises `ToolError`. For async tools, if no credentials are provided and no `mcp_*` kwargs exist, the call is allowed (development/testing mode).
-2. **Rate limiting** -- If `rate_limit` is set and `auth_manager` exists, `check_rate_limit` is called for the authenticated user. Failure raises `RateLimitError`.
+1. **Authentication** -- If `auth_manager` is set AND the tool's permission tuple is non-empty, credentials are extracted from kwargs (fields: `api_key`, `token`, `username`, `password`, `jwt`, `authorization`, `mcp_auth`). Authentication and authorization are checked identically on both sync and async dispatch paths. Sending NO credentials is evaluated exactly like sending insufficient credentials -- both fail closed and raise `ToolError` ("Access denied for `{tool_name}`: ..."). There is no no-credential bypass on either path; sending fewer credentials never grants more access.
+2. **Rate limiting** -- If `rate_limit` is set and `auth_manager` exists, `check_rate_limit` is called for the authenticated user. Failure raises `RateLimitError` (a distinct type from an authorization denial, so callers can tell "throttled, retry after N seconds" from "the tool crashed").
 3. **Circuit breaker** -- If `enable_circuit_breaker=True` and a circuit breaker is configured, checks circuit state. Open circuit raises `MCPError` with code `CIRCUIT_BREAKER_OPEN`.
 4. **Cache lookup** -- If `cache_key` is set and caching is enabled, checks the cache. On hit, returns immediately. Supports both memory and Redis backends. For async tools, uses `cache.get_or_compute()` with stampede prevention.
 5. **Execution** -- Calls the wrapped function. For sync tools, `signal.SIGALRM` timeout is used. For async tools, `asyncio.wait_for` is used. Auth credential fields are stripped from kwargs before calling the function.
@@ -147,6 +149,22 @@ MCPServer(
 7. **Metrics** -- Tracks latency, success/failure counts.
 8. **Circuit breaker update** -- Records success or failure.
 9. **Response formatting** -- Applies format if `format_response` is set. Optionally chunks large responses for streaming.
+
+### 2.2.1 Tool Discovery -- Permission-Gated Schema Suppression
+
+`_public_tool_view(name, info)` is the SOLE owner of what a tool discloses to an unauthenticated caller; every tool-discovery surface routes through it rather than hand-writing its own projection:
+
+- **`tools/list`** over both stdio (the `run_stdio()` loop reached from `run_async()`) and WebSocket (`_handle_list_tools`, dispatched by `_handle_websocket_message`).
+- **`completion/complete`**'s tool-reference branch (`_handle_completion_complete`).
+
+**Disclosure rules, applied identically by all of the above:**
+
+- A `disable_tool()`-disabled tool is withheld entirely -- absent from the list, not merely unusable.
+- A permission-gated tool (`auth_manager` is set AND the tool declares `required_permission`) is still advertised by **name and description**, but its `inputSchema` and `outputSchema` are withheld (`{}` / omitted) rather than the real schema. A gated tool's description is trimmed at the first structured docstring section (Google/NumPy/reST-Sphinx/epytext) so free-form parameter documentation cannot re-open the withheld schema through the description channel.
+- **Invocation authorization is unaffected by discovery.** No transport authenticates the caller at `tools/list` / `completion/complete` time (`WebSocketServerTransport.handle_client` never consults `auth_provider`; `initialize` authenticates nothing) -- discovering that a gated tool exists, or its name, does not let a caller invoke it without valid credentials, which are still checked per-call per §2.2's execution pipeline.
+- Without an `auth_manager` configured, no tool is treated as gated (the invoke path never enforces `required_permission` either in that case), so schemas are never withheld.
+
+**Known remaining gap (tracked as #1998, not closed by this contract):** the synchronous `MCPServer.run()` entry point with the default `transport="stdio"` dispatches directly to `self._mcp.run()` -- FastMCP's OWN tool registry, built from the wrapped function and never taught `_public_tool_view`. A server run via plain `run()` (as opposed to `run_async()` / `run_stdio()`, both of which route through this package's dispatch) still discloses a gated tool's full schema and still lists and permits execution of a `disable_tool()`'d tool through that specific entry point. Invocation authorization is unaffected there too -- this is a disclosure-only gap on one entry point.
 
 ### 2.3 Resource Registration
 
@@ -616,7 +634,7 @@ This wiring is the production call site required by `rules/orphan-detection.md` 
 
 #### Error Semantics
 
-Error codes emitted to MCP clients MUST match kailash-rs byte-for-byte (MCP 2025-06-18 / JSON-RPC 2.0). See cross-SDK parity notes below.
+Error codes emitted to MCP clients MUST match the Rust SDK byte-for-byte (MCP 2025-06-18 / JSON-RPC 2.0). See cross-SDK parity notes below.
 
 | Condition                                        | Raised exception  | Error code (wire value)                        |
 | ------------------------------------------------ | ----------------- | ---------------------------------------------- |
@@ -626,11 +644,11 @@ Error codes emitted to MCP clients MUST match kailash-rs byte-for-byte (MCP 2025
 | Client declined / cancelled                      | `MCPError`        | `MCP_REQUEST_CANCELLED` (`-32800`)             |
 | Transport rebound mid-request (future)           | `MCPError`        | `MCP_TRANSPORT_REBOUND` (`-32002`)             |
 
-##### Cross-SDK Parity (kailash-rs)
+##### Cross-SDK Parity (the Rust SDK)
 
-The four MCP wire codes used by `elicitation/create` MUST match kailash-rs byte-for-byte. Clients written against one SDK's codes MUST handle errors the same way when the server runs the other SDK.
+The four MCP wire codes used by `elicitation/create` MUST match the Rust SDK byte-for-byte. Clients written against one SDK's codes MUST handle errors the same way when the server runs the other SDK.
 
-| Variant            | Wire code | kailash-py constant                                                     | kailash-rs constant  |
+| Variant            | Wire code | kailash-py constant                                                     | Rust SDK constant    |
 | ------------------ | --------- | ----------------------------------------------------------------------- | -------------------- |
 | RequestCancelled   | `-32800`  | `MCPErrorCode.MCP_REQUEST_CANCELLED`                                    | `RequestCancelled`   |
 | SchemaValidation   | `-32602`  | `MCPErrorCode.INVALID_PARAMS` / `MCP_SCHEMA_VALIDATION` (alias)         | `SchemaValidation`   |
@@ -639,7 +657,7 @@ The four MCP wire codes used by `elicitation/create` MUST match kailash-rs byte-
 
 Pin-value regression: `packages/kailash-mcp/tests/unit/test_elicitation_error_codes_parity.py`. A source-level grep asserts ElicitationSystem uses the `MCP_*` constants, not the legacy positive-code application variants (`REQUEST_CANCELLED = 1007`, `REQUEST_TIMEOUT = 1006`) which were invalid JSON-RPC wire values before issue #572.
 
-Related: kailash-rs#471, kailash-py#572.
+Related: parity vector #471 (the Rust SDK), kailash-py#572.
 
 #### Security
 
@@ -673,7 +691,7 @@ Related: kailash-rs#471, kailash-py#572.
 - **FastMCP fallback:** If neither `fastmcp` nor `mcp.server.FastMCP` is importable, the server creates a minimal fallback that registers tools/resources/prompts but raises `NotImplementedError` on `run()`.
 - **Sync tool timeouts:** Use `signal.SIGALRM` which is Unix-only and not available on Windows.
 - **Auth credential stripping:** The enhanced tool wrapper strips auth-related kwargs (`api_key`, `token`, `username`, `password`, `jwt`, `authorization`, `mcp_auth`) before calling the wrapped function.
-- **Async auth bypass:** In async tools, if no credentials are provided and no `mcp_*` kwargs exist, authentication is bypassed with a DEBUG log. This enables development/testing scenarios.
+- **No no-credential bypass:** Neither the sync nor the async tool wrapper has a no-credential bypass. A permission-gated tool invoked with zero credentials fails closed identically to one invoked with insufficient credentials (see §2.2 pipeline step 1) -- there is no development/testing affordance that skips the authorization check based on the shape of the caller's input.
 - **Circuit breaker state is per-server instance**, not per-tool. All tools share the same circuit breaker.
 - **WebSocket compression:** Optional gzip compression with configurable threshold (default 1024 bytes) and level (default 6).
 
