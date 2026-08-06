@@ -724,7 +724,27 @@ class WorkflowOrchestrator:
 
             if reg.type == "embedded" and reg.workflow is not None:
                 # Execute embedded workflow in-process
-                wf_results, _run_id = runtime.execute(reg.workflow, parameters=result)
+                # Bind BOTH shapes. On the FIRST hop `result` IS the caller's
+                # `initial_input`, so this is a caller-facing entry point with
+                # one arguments slot and the structural rule in
+                # `kailash/workflow/input_envelope.py` says it binds -- passing
+                # it raw left a workflow reading `parameters.get(...)` raising
+                # NameError here while running on every channel.
+                #
+                # Later hops carry the PREVIOUS workflow's flattened node
+                # outputs rather than caller data, and they bind too, on
+                # purpose: one workflow in a chain must not see a different
+                # input contract depending on its position. The envelope does
+                # not accumulate across hops -- `result` is rebuilt from
+                # `wf_results` each iteration, so the key is re-derived, never
+                # nested.
+                from kailash.workflow.input_envelope import (
+                    bind_parameter_envelope,
+                )
+
+                wf_results, _run_id = runtime.execute(
+                    reg.workflow, parameters=bind_parameter_envelope(result)
+                )
                 # Flatten results: use all node outputs as next input
                 result = {}
                 for _node_id, node_output in wf_results.items():

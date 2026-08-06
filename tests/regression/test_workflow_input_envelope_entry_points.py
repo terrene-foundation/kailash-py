@@ -61,6 +61,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #     src/kailash/gateway               1 site: EnhancedDurableAPIGateway.
 #     src/kailash/middleware/core       AgentUI.execute + 4 internal sites
 #                                       (allowlisted below).
+#     src/kailash/api                   3 sites: gateway.py::execute_chain
+#                                       (BOUND -- caller-facing) and 2
+#                                       workflow_api.py sites that bind
+#                                       UPSTREAM (allowlisted below).
 #
 #   NOT SCANNED -- no caller-facing entry point in the tree
 #     src/kailash/nodes           110 sites, all `cursor.execute(sql, params)`.
@@ -75,13 +79,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #                                  calls routed into middleware/core, matched
 #                                  only because the method is named `execute`.
 #                                  Binding them would double-bind agent_ui.
-#     src/kailash/api              3 sites. Genuinely caller-facing, but they
-#                                  bind UPSTREAM in
-#                                  `WorkflowRequest.get_inputs`, so the call
-#                                  site is raw BY DESIGN and an AST check at
-#                                  the call site reports the wrong answer.
-#                                  Behaviour is covered instead by
-#                                  test_issue_workflow_parameters_envelope_parity.
+#     (src/kailash/api is SCANNED -- see above. An earlier revision of this
+#      list excluded it on the grounds that all 3 of its sites "bind upstream
+#      in WorkflowRequest.get_inputs". That was true of the two
+#      workflow_api.py sites and FALSE of gateway.py::execute_chain, which
+#      never touches WorkflowRequest -- a one-line over-generalisation in the
+#      very list whose purpose is to stop hand-written scoping from hiding a
+#      site. It hid a raw caller-facing entry point until a reviewer re-scanned
+#      by RECEIVER name instead of by method name.)
 #     src/kailash/cli, src/kailash/testing  developer tooling; the caller is
 #                                  the developer, who supplies the workflow.
 #     packages/{dataflow,kaizen,kaizen-agents,ml,...}  internal library code
@@ -96,6 +101,7 @@ SCANNED_TREES = (
     REPO_ROOT / "src/kailash/servers",
     REPO_ROOT / "src/kailash/gateway",
     REPO_ROOT / "src/kailash/middleware/core",
+    REPO_ROOT / "src/kailash/api",
 )
 
 # Runtime methods that take workflow-level inputs.
@@ -138,7 +144,11 @@ INPUT_KWARGS = frozenset({"parameters", "inputs"})
 #   NODE-SCOPED: the site's `inputs` is keyed by NODE ID, not by caller
 #             argument name, so there is no caller-level mapping to envelope.
 #             Also a human verdict, policed by the same two gates as INTERNAL.
-_EXEMPTION_MARKERS = ("CHOICE:", "INTERNAL:", "NODE-SCOPED:")
+#   UPSTREAM: the site DOES forward a caller mapping, but the binding already
+#             happened one layer up, so the call site is raw BY DESIGN and an
+#             AST check reading only the call site reports the wrong answer.
+#             Re-binding here would double-envelope.
+_EXEMPTION_MARKERS = ("CHOICE:", "INTERNAL:", "NODE-SCOPED:", "UPSTREAM:")
 
 _INTERNAL_MIDDLEWARE_REASON = (
     "INTERNAL: not caller-facing. This method builds its OWN inputs dict from "
@@ -158,6 +168,19 @@ AUDITED_RAW_INPUT_SITES: dict[str, str] = {
         "handle_error",
     )
 }
+
+for _fn in ("_execute_sync", "_execute_stream"):
+    AUDITED_RAW_INPUT_SITES[f"src/kailash/api/workflow_api.py::{_fn}"] = (
+        "UPSTREAM: this forwards `inputs=request.get_inputs()`, and "
+        "`WorkflowRequest.get_inputs` has ALREADY called "
+        "bind_parameter_envelope for the `parameters` form (and returns the "
+        "caller's `inputs` untouched for the deliberate opt-out form, which "
+        "is the one place a caller is offered BOTH slots). The call site is "
+        "therefore raw by design; binding again here would double-envelope "
+        "every request. Behaviour is covered by "
+        "test_issue_workflow_parameters_envelope_parity, which drives the "
+        "real HTTP route rather than reading this call's shape."
+    )
 
 AUDITED_RAW_INPUT_SITES[
     "src/kailash/middleware/core/agent_ui.py::_execute_with_sdk_runtime"
