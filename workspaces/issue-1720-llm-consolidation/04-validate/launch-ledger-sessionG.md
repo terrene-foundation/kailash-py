@@ -59,6 +59,32 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## ROUND 3 — launched 2026-08-06, lenses ROTATED per `completion-criterion.md` MUST-4
+
+All four fix lanes landed. Round-2 findings (7 HIGH + 6 MEDIUM) are all fixed and committed;
+the surface changed materially, so the counter is genuinely ZERO, not carried.
+
+| Lane         | Lens (NEW — not used in rounds 1–2)                                       | Status    |
+| ------------ | ------------------------------------------------------------------------- | --------- |
+| `R3-COMPOSE` | Cross-lane COMPOSITION — the union of four lanes' fixes, not the shards   | in-flight |
+| `R3-SEC`     | The FIXES themselves as attack surface (read-only; reports via task list) | in-flight |
+
+Rotation rationale: rounds 1–2 reviewed shards in ISOLATION (security / correctness /
+release). Four lanes then landed fixes touching overlapping concerns and **nobody reviewed
+their UNION** — `agents.md` § Holistic Post-Multi-Wave Redteam says cross-shard invariant
+breaks are invisible to each per-shard review by construction. Both lenses carry a prior that
+this branch's CORRECTIONS are the likeliest defect source: seven defects so far were
+introduced by fixes that looked right.
+
+`R3-SEC` is dispatched READ-ONLY with NO file-write instruction — the round-2 tool-inventory
+error, corrected.
+
+**Baseline verified before dispatch** (orchestrator-run, not lane-reported): root
+`tests/unit/` **4798 passed / 4 skipped**; root `tests/regression/` **1566 passed / 2 skipped
+/ 22 deselected** (the 24 failures present earlier are resolved — 18 fixed by the
+provider-registry inversion, 6 correctly deselected as infra-requiring); `kailash-mcp`
+regression **515 passed**; `tests/unit/mcp_server/` **645 passed**.
+
 ## FINDING — the anti-stale-exemption guard cannot detect the thing it guards against
 
 `test_audited_sites_are_exempt_under_the_structural_rule` ships a strict-xfail whose reason
