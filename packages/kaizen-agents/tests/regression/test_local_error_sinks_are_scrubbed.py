@@ -127,7 +127,7 @@ EXPECTED_SITES = 180
 class _SinkScan(ast.NodeVisitor):
     """Find string-context uses of one handler's bound exception name.
 
-    ``wrapped`` are the uses already routed through :data:`HELPER`; ``bare``
+    ``wrapped`` are the uses already routed through one of :data:`HELPERS`; ``bare``
     are the ones that would put the raw exception text into a message.
     """
 
@@ -243,7 +243,7 @@ class TestNoBareExceptionTextSinkRemains:
         bare, _ = _enumerate(path)
         assert bare == [], (
             f"{path.relative_to(PKG)} puts a caught exception into a string at "
-            f"line(s) {bare} without {HELPER}(). A local error message can carry "
+            f"line(s) {bare} without one of {HELPERS}. A local error message can carry "
             "a credential from a DSN, a config value or a provider payload; every "
             "such sink routes through the conservative scrub."
         )

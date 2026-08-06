@@ -33,11 +33,18 @@ switches off. Every case below therefore uses a prefix-less shape.
 
 from __future__ import annotations
 
+import base64
+import datetime
+import ipaddress
 import json
 
 import pytest
 
-from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
+from kaizen.utils.credential_scrub import (
+    scrub_credentials,
+    scrub_local_error,
+    scrub_remote_error,
+)
 
 #: AWS's own published example secret key — a documentation constant, not a
 #: live credential. Prefix-less by construction: nothing but the 40-char
@@ -312,6 +319,191 @@ class TestReCompileEchoesItsOperandOnGroupNameBranches:
         with pytest.raises(_re.error) as excinfo:
             _re.compile(f"{AWS_SECRET_SHAPE}(")
         assert AWS_SECRET_SHAPE not in str(excinfo.value)
+
+
+@pytest.mark.regression
+class TestCommaInsideAValueIsNotATerminator:
+    """A password containing a comma leaked in full through BOTH presets.
+
+    The value class excluded `,`, so `password=ab,cdefghij` matched only `ab`
+    — two characters, below the `{6,}` floor — and therefore matched NEITHER
+    the conservative token rule NOR the aggressive prose rule. The length
+    floor was measuring a truncated prefix instead of the value.
+    """
+
+    LEAKY = [
+        pytest.param('"password": "ab,cdefghij"', id="quoted-json"),
+        pytest.param("password=ab,cdefghij", id="bare-kv"),
+        pytest.param("api_key=zz,yyxxwwvvuu", id="api-key"),
+    ]
+
+    @pytest.mark.parametrize("payload", LEAKY)
+    def test_conservative_preset_claims_a_comma_bearing_value(
+        self, payload: str
+    ) -> None:
+        secret = payload.split(",")[1].rstrip('"')
+        assert secret not in scrub_local_error(Exception(payload)), (
+            "a comma inside the value truncated the match below the length "
+            "floor, so neither preset claimed it"
+        )
+
+    @pytest.mark.parametrize("payload", LEAKY)
+    def test_aggressive_preset_claims_it_too(self, payload: str) -> None:
+        secret = payload.split(",")[1].rstrip('"')
+        assert secret not in scrub_credentials(payload)
+
+    @pytest.mark.parametrize(
+        "prose",
+        [
+            "secret: unavailable, retrying",
+            "api_key: Optional[str]",
+            "invalid value for 'api_key': expected string",
+        ],
+    )
+    def test_prose_stays_diagnosable(self, prose: str) -> None:
+        """CONTROL, and the reason a TRAILING comma is not a discriminator.
+
+        Counting a trailing comma would blank every `secret: <word>,` in
+        prose — the ~180-sink diagnosability regression the token rule's
+        lookahead exists to avoid. Only an INTERNAL comma discriminates.
+        """
+        assert scrub_local_error(Exception(prose)) == prose
+
+    def test_a_trailing_comma_is_not_swallowed_into_the_redaction(self) -> None:
+        """The sentence's punctuation is not part of the value."""
+        assert scrub_local_error(Exception("password=hunter2, ok")).endswith(", ok")
+
+
+@pytest.mark.regression
+class TestProbedOperandEchoVerdicts:
+    """The doctrine's enumeration, PROBED — one class per family, per branch.
+
+    The enumeration in `scrub_remote_error` listed four entries, so an author
+    meeting a fifth type had to guess; the `re.compile` entry above is the
+    record of what guessing produces. These probes run the real builtin and
+    read the real message, so each returns the OTHER answer if CPython changes
+    — at which point the classification is re-derived rather than inherited.
+
+    The two NO-echo verdicts carry the weight. `Decimal` and `b64decode` both
+    take a string the caller is trying to parse, which is the `float`/`int`
+    shape exactly, and both feel like they must quote it back. Neither does —
+    so a doctrine that says "parsers echo" would have mis-classified both.
+    """
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_decimal_does_not_echo_its_operand(self, secret: str) -> None:
+        import decimal
+
+        with pytest.raises(decimal.InvalidOperation) as excinfo:
+            decimal.Decimal(secret)
+        assert secret not in str(excinfo.value), (
+            "Decimal now echoes its operand; sites parsing remote numerics "
+            "with it must be re-classified REMOTE"
+        )
+
+    def test_decimal_non_string_branch_names_the_type_only(self) -> None:
+        """Second branch. One branch is a sample, not a verdict."""
+        import decimal
+
+        with pytest.raises(TypeError) as excinfo:
+            decimal.Decimal(AWS_SECRET_SHAPE.encode())
+        assert AWS_SECRET_SHAPE not in str(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_b64decode_does_not_echo_its_operand(self, secret: str) -> None:
+        import binascii
+
+        with pytest.raises(binascii.Error) as excinfo:
+            base64.b64decode("!" + secret, validate=True)
+        assert secret not in str(excinfo.value), (
+            "b64decode now echoes its operand; every site interpolating its "
+            "error into a message must be re-classified REMOTE"
+        )
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_b64decode_padding_branch_also_does_not_echo(self, secret: str) -> None:
+        """Second branch — a different complaint, same verdict."""
+        import binascii
+
+        with pytest.raises(binascii.Error) as excinfo:
+            base64.b64decode(secret + "a")
+        assert secret not in str(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_strptime_echoes_the_data_operand(self, secret: str) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            datetime.datetime.strptime(secret, "%Y")
+        assert secret in str(excinfo.value)
+        assert secret in scrub_local_error(excinfo.value), (
+            "premise check: the conservative preset must LEAK it, or a LOCAL "
+            "classification here would have been harmless"
+        )
+        assert secret not in scrub_remote_error(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    @pytest.mark.parametrize(
+        "fmt_prefix,branch",
+        [("%Q ", "bad-directive"), ("% ", "stray-percent")],
+    )
+    def test_strptime_echoes_the_format_operand_too(
+        self, secret: str, fmt_prefix: str, branch: str
+    ) -> None:
+        """BOTH arguments are operands. A remote FORMAT fails Test 2 alone.
+
+        Two branches, because one branch is a sample: an unknown directive and
+        a stray `%` raise DIFFERENT messages, and both quote the format
+        verbatim.
+
+        The prefixes end in a SPACE deliberately. Glued directly to the
+        directive (`%Qa1b2...`), the hex shape stops being a standalone token
+        and `_GENERIC_HEX_TOKEN`'s `\\b` anchor no longer matches it — so the
+        scrub assertion below would fail for a reason that has nothing to do
+        with the echo verdict under test. A real leaked operand sits at a word
+        boundary; this construction keeps the probe measuring one thing.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            datetime.datetime.strptime("2020", f"{fmt_prefix}{secret}")
+        assert secret in str(
+            excinfo.value
+        ), f"the {branch} branch no longer echoes the format operand"
+        assert secret not in scrub_remote_error(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_fromisoformat_echoes_its_operand(self, secret: str) -> None:
+        """The strptime family's far more common sibling in this codebase."""
+        with pytest.raises(ValueError) as excinfo:
+            datetime.datetime.fromisoformat(secret)
+        assert secret in str(excinfo.value)
+        assert secret not in scrub_remote_error(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_ip_address_echoes_its_operand(self, secret: str) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            ipaddress.ip_address(secret)
+        assert secret in str(excinfo.value)
+        assert secret in scrub_local_error(excinfo.value)
+        assert secret not in scrub_remote_error(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_ip_network_branch_echoes_too(self, secret: str) -> None:
+        """Second entry point, same family — probed, not generalized."""
+        with pytest.raises(ValueError) as excinfo:
+            ipaddress.ip_network(secret)
+        assert secret in str(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_key_error_str_is_the_repr_of_the_missing_key(self, secret: str) -> None:
+        """The sharpest echoer: no message of its own to inspect.
+
+        `f"missing field: {exc}"` prints the key verbatim with nothing in the
+        source that looks like interpolation of the operand.
+        """
+        with pytest.raises(KeyError) as excinfo:
+            {}[secret]
+        assert secret in str(excinfo.value)
+        assert secret in f"{excinfo.value}"
+        assert secret in scrub_local_error(excinfo.value)
+        assert secret not in scrub_remote_error(excinfo.value)
 
 
 @pytest.mark.regression

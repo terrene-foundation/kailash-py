@@ -167,9 +167,51 @@ _CREDENTIAL_KEY_NAMES: Final[str] = (
 #: information — a diagnosability regression at ~180 conservative-preset sinks
 #: whose text an AGENT reads to decide its retry, which is the precise cost
 #: ``redact_opaque_tokens=False`` exists to avoid.
+#: A COMMA IS A VALUE CHARACTER, NOT ALWAYS A TERMINATOR — and treating it as
+#: only a terminator was a hole in BOTH presets, not just this one.
+#:
+#: The value class used to exclude ``,``, so ``password=ab,cdefghij`` matched
+#: only ``ab``. Two characters fails the ``{6,}`` floor, so the token rule
+#: below did not match AND the prose rule did not match: a password containing
+#: a comma leaked IN FULL through the conservative preset AND through the
+#: aggressive one. The length floor was measuring a truncated prefix rather
+#: than the value.
+#:
+#: The fix is an ADDITIONAL alternative, not a widened character class, and
+#: that shape is forced by ReDoS rather than chosen for tidiness. Letting ``,``
+#: into the existing run and requiring the run not to END with one
+#: (``[^\s"';&]{5,}[^\s"';&,]``) is the obvious form and is QUADRATIC: on a
+#: comma-dense input the greedy ``{5,}`` swallows the commas and then
+#: backtracks one position at a time looking for a non-comma tail, at every
+#: start offset. This module's own linearity regressions caught it. A scrubber
+#: runs on every error path, so a complexity regression here is worse than the
+#: leak it closes.
+#:
+#: ``_COMMA_BEARING_RUN`` is DETERMINISTIC instead: ``,`` is excluded from the
+#: run atom, so each character belongs to exactly one class and there is no
+#: ambiguity for the engine to explore. The trailing ``+`` on the group (not
+#: ``*``) means this alternative matches ONLY runs with an internal comma —
+#: which is also precisely the new capability, so it cannot change the verdict
+#: on any input the pre-existing rule already handled.
+#:
+#: A trailing comma is still not part of the value: ``secret: unavailable,
+#: retrying`` cannot match this alternative (no comma with run characters
+#: after it), so prose stays diagnosable — the ~180-sink regression the
+#: lookahead exists to avoid.
+_COMMA_BEARING_RUN: Final[str] = r"[^\s\"';&,]+(?:,+[^\s\"';&,]+)+"
+
+#: Six run characters, counted with a FIXED repetition rather than a greedy
+#: star, so the floor costs O(1) per start offset.
+_MIN_VALUE_FLOOR: Final[str] = r"(?=[^\s\"';&]{6})"
+
 _CREDENTIAL_KEYVALUE_TOKEN: Final[re.Pattern] = re.compile(
     _CREDENTIAL_KEY_NAMES
-    + r"(?=[^\s\"',;&]*[0-9\-_./+=]|[^\s\"',;&]{16,})[^\s\"',;&]{6,}",
+    + r"(?:"
+    + r"(?=[^\s\"',;&]*[0-9\-_./+=]|[^\s\"',;&]{16,})[^\s\"',;&]{6,}"
+    + r"|"
+    + _MIN_VALUE_FLOOR
+    + _COMMA_BEARING_RUN
+    + r")",
     re.ASCII,
 )
 
@@ -180,7 +222,13 @@ _CREDENTIAL_KEYVALUE_TOKEN: Final[re.Pattern] = re.compile(
 #: therefore AGGRESSIVE-PRESET ONLY — on the provider-error surface, where
 #: over-redaction is the documented and correct trade.
 _CREDENTIAL_KEYVALUE_PROSE: Final[re.Pattern] = re.compile(
-    _CREDENTIAL_KEY_NAMES + r"[^\s\"',;&]{6,}",
+    _CREDENTIAL_KEY_NAMES
+    + r"(?:"
+    + r"[^\s\"',;&]{6,}"
+    + r"|"
+    + _MIN_VALUE_FLOOR
+    + _COMMA_BEARING_RUN
+    + r")",
     re.ASCII,
 )
 
@@ -1116,6 +1164,57 @@ def scrub_remote_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER)
     or an assumption, does not. The pinned probes are
     ``TestReCompileEchoesItsOperandOnGroupNameBranches`` in
     ``kaizen-agents/tests/regression/test_issue_1720_remote_value_scrub.py``.
+
+    FIVE MORE FAMILIES, PROBED PER BRANCH ON CPython 3.13 RATHER THAN REASONED
+    ABOUT. The four entries above were the whole enumeration, so every author
+    meeting a type not on the list had to guess — and the ``re.compile`` entry
+    is the record of what guessing produces. These are the empirical verdicts;
+    the probes are ``TestProbedOperandEchoVerdicts`` in the same file, and they
+    read the REAL message, so a CPython change returns the other answer instead
+    of leaving a stale verdict standing::
+
+        Decimal(x)                 -> InvalidOperation: "[<class
+                                      'decimal.ConversionSyntax'>]"       NO echo
+        base64.b64decode(x)        -> binascii.Error: "Incorrect padding"  NO echo
+        datetime.strptime(x, f)    -> "time data '<x>' does not match
+                                      format '<f>'"                       ECHOES
+        datetime.fromisoformat(x)  -> "Invalid isoformat string: '<x>'"    ECHOES
+        ipaddress.ip_address(x)    -> "'<x>' does not appear to be an
+                                      IPv4 or IPv6 address"               ECHOES
+        KeyError                   -> str(KeyError(k)) IS repr(k)         ECHOES
+
+    THE TWO NO-ECHO VERDICTS ARE THE ONES THAT WOULD HAVE BEEN GUESSED WRONG.
+    ``Decimal`` and ``b64decode`` both take a string the caller is trying to
+    parse — the ``float``/``int`` shape exactly — and both feel like they must
+    quote it back. Neither does: ``decimal`` reports the CONDITION CLASS
+    (``ConversionSyntax``, ``DivisionByZero``) and never the operand, and
+    ``binascii`` reports a padding/character-class complaint with counts only.
+    Probed across branches, not sampled: ``Decimal`` of a ``bytes`` names the
+    source TYPE only, and its ``quantize``/division branches are condition
+    classes too; ``b64decode`` was probed strict and lax, with bad padding,
+    illegal characters, leading padding, and non-UTF-8 bytes. (Its ``altchars``
+    branch raises ``AssertionError`` echoing the ALTCHARS argument — which is
+    program-controlled, not the remote operand.)
+
+    ``KeyError`` IS THE SHARPEST OF THE THREE ECHOERS, because it has no
+    message of its own to inspect: ``str()`` of it is the ``repr`` of the
+    missing key, so ``f"missing field: {exc}"`` prints the key verbatim with
+    nothing that looks like interpolation. A key taken from model output or a
+    remote payload is a remote-derived operand by exactly the Test-2 rule.
+
+    ``strptime`` ECHOES ON BOTH OPERANDS — the data on a mismatch, the tail of
+    the data on ``unconverted data remains``, and the FORMAT string on a bad
+    directive. A site that takes the format from remote input fails Test 2 on
+    that argument alone.
+
+    The sweep that produced these verdicts also checked this repo's call sites
+    for the same types: every ``ipaddress`` parse (``llm/http_client``,
+    ``llm/url_safety``, ``tools/builtin/api``, ``mcp/builtin_server/tools/api``)
+    SWALLOWS its exception (``except (ValueError, TypeError): ... None``) and
+    reports a constructed reason code instead, and every ``b64decode`` site
+    interpolates an exception that does not echo. So the enumeration above is a
+    doctrine gap closed BEFORE it shipped a leak, not after — which is the
+    difference between this entry and the ``re.compile`` one.
 
     NAMED CARVE-OUT — FILESYSTEM-PATH OPERANDS STAY LOCAL. A file tool whose
     path argument came from a model (``file_read``, ``file_write``,
