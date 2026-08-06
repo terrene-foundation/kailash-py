@@ -82,6 +82,63 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## MCP SURFACE CLOSED — `b1ac06e5b`. The hardening probe HAD disclosed; confirmed, not argued
+
+The open sentinel question is answered and the answer was the bad one. Instrumenting a read
+inside the probe window returned:
+
+    ['__kailash_fastmcp_liveness_probe__', 'gated']
+
+The sentinel WAS visible to anything enumerating tools in that window — a disclosure on the
+exact surface this workstream exists to gate, introduced by the probe built to harden it.
+
+**The lane could not demonstrate a real `tools/list` landing in the window, and removed the
+sentinel BECAUSE it could not.** That is the correct disposition of an unprovable race and the
+opposite of the reasoning this branch has repeatedly had to correct: an unproven-safe window
+was treated as unsafe rather than as probably-fine.
+
+**The replacement is stronger than either option I offered.** Both proofs are now READS: the
+public read yields the container AND it is the stored instance attribute
+(`vars(owner)["_tools"] is container`, `server.py:1751-1774`). A property handing back one
+CACHED snapshot is identity-stable, so it passes a naive identity check — and FAILS the
+stored-attribute proof. So the shape I proposed as the safe alternative (plain identity) would
+itself have been insufficient; the lane found the version that actually discriminates.
+
+The test asserts the PROPERTY, not the absence of residue: the container is wrapped in a
+mutation-recording dict and resolving must record NONE, so a write that is tidied up afterwards
+does not satisfy it. Restoring the old implementation reds exactly that test.
+
+**HIGH-2 (correlation id) fixed and independently reproduced** rather than inherited:
+`Completion failed (correlation id: 422346545dd0)` against a rendered log of
+`ERROR kailash_mcp.server completion.error`. Now `"%s correlation_id=%s error_type=%s"`
+(`server.py:2290`). Sweep: one `uuid4().hex[:12]` producer, both id-bearing envelopes take
+their id from `_log_and_correlate` — single fix covers every path.
+
+**HIGH-2a, demonstrated non-discriminating rather than asserted:** against the PRE-FIX logging
+call, the rendered assertion REDS and the attribute assertion still PASSES. That is the ideal
+form of this proof — both instruments run against the same broken code, and only one can see it.
+
+**Suites:** `tests/unit/mcp_server` 645 passed (baseline held); `packages/kailash-mcp/tests`
+641 passed, 1 skipped. Orchestrator-verified, not lane-reported.
+
+### Two corrections to MY framing, from the lane
+
+1. **Timing.** `8f8577c36` already carried `server.py` wholesale with both lanes attributed and
+   already stated HEAD was red — BEFORE my instruction arrived. The lane reached the right
+   disposition independently; my message did not cause it, and the ledger should not imply it.
+2. **My "3 of 4" concern used the wrong instrument.** `_FASTMCP_OUTPUT_SCHEMA_ATTRS` enumerates
+   SPELLINGS of one field on the registration object, not the set of fields the view decides.
+   That set is enumerated and test-enforced separately: the view emits exactly `name` /
+   `description` / `inputSchema` / `outputSchema` / `annotations` — three projected and checked
+   against a real registration, two with recorded reasons (`name` is the container key; FastMCP
+   derives `annotations` for NO tool, so projecting them would ADD disclosure to gated tools
+   only). The other axis (`title` / `icons` / `_meta`) is pinned inert. **3 of 3, with the
+   remainder accounted for — not 3 of 4.** I applied a real rule to the wrong object.
+
+**Residual (unchanged, correctly disposed):** the independent `fastmcp` package is not installed
+here, so liveness is verified against `mcp.server.FastMCP` + the local shim only. An unprovable
+container RAISES rather than under-enforcing.
+
 ## HEAD WAS RED — a test landed without its implementation
 
 `8d6ea624c` committed `packages/kailash-mcp/CHANGELOG.md` + a 378-line
