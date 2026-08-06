@@ -157,9 +157,30 @@ class RateLimitPlugin(NexusPlugin):
         return f"Adds rate limiting ({self.requests_per_minute} req/min)"
 
     def apply(self, nexus_instance: Any) -> None:
-        """Apply rate limiting."""
-        logger.info(f"Applying rate limit plugin: {self.requests_per_minute} req/min")
-        nexus_instance._rate_limit = self.requests_per_minute
+        """Apply rate limiting.
+
+        COERCED, because this is the FOURTH surface that writes
+        ``_rate_limit`` and it was the last one still writing raw. The other
+        three -- the constructor, the config default, and the ``endpoint()``
+        kwarg -- all route through ``_coerce_rate_limit``; writing raw here
+        would reopen exactly what they reject, since
+        ``sse.py::_rate_limit_exceeded`` treats any value failing ``> 0`` as
+        "no limit configured". So ``RateLimitPlugin(requests_per_minute=-5)``
+        silently disabled the limiter, and ``True`` -- an ``int`` subclass --
+        registered as ONE request per minute.
+
+        Coerced at the WRITE rather than in ``__init__`` deliberately: the
+        attribute is public and mutable, so validating only at construction
+        leaves ``plugin.requests_per_minute = -5`` as an unguarded path to the
+        same assignment.
+        """
+        from nexus.core import _coerce_rate_limit
+
+        limit = _coerce_rate_limit(
+            self.requests_per_minute, "RateLimitPlugin(requests_per_minute=...)"
+        )
+        logger.info(f"Applying rate limit plugin: {limit} req/min")
+        nexus_instance._rate_limit = limit
 
 
 class PluginRegistry:

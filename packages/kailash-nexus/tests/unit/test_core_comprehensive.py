@@ -622,10 +622,17 @@ class TestNexusConstructorOptions:
         app = Nexus(rate_limit=1000000)
         assert app._rate_limit == 1000000
 
-        # Zero rate limit - _rate_limit is always set (stores value for endpoint decorator)
+        # Zero rate limit - NORMALISED to None. 0 means unlimited, and the
+        # constructor now routes through `_coerce_rate_limit` like the decorator
+        # and the config default, so every surface stores the same shape.
         app = Nexus(rate_limit=0)
-        assert app._rate_limit == 0
+        assert app._rate_limit is None
 
-        # Negative rate limit - accepted by constructor (no validation)
-        app = Nexus(rate_limit=-1)
-        assert app._rate_limit == -1
+        # Negative rate limit - REJECTED. This previously asserted the value was
+        # "accepted by constructor (no validation)", which pinned a fail-OPEN:
+        # `sse.py::_rate_limit_exceeded` treats anything failing `> 0` as "no
+        # limit configured", so a typo'd minus sign silently removed rate
+        # limiting rather than tightening it. The test encoded that as intended
+        # behaviour and would have blocked the fix.
+        with pytest.raises(ValueError, match="must not be negative"):
+            Nexus(rate_limit=-1)

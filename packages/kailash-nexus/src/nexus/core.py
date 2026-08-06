@@ -672,7 +672,20 @@ class Nexus:
         self.mcp = NexusConfig()
 
         # Apply enterprise options (store rate_limit for endpoint decorator)
-        self._rate_limit = rate_limit
+        #
+        # COERCED, like the other two surfaces. This one was a bare assignment,
+        # so `Nexus(rate_limit=...)` accepted values the decorator and the config
+        # default both reject -- and the consumers read it raw:
+        # `sse.py::_rate_limit_exceeded` treats anything failing `> 0` as "no
+        # limit configured", so a typo'd minus sign silently disabled the SSE
+        # limiter, and `True` is an int subclass so it registered as ONE request
+        # per minute. Measured before the fix, through the transport:
+        #     rate_limit=-5   -> [200,200,200,200,200,200]  fail-OPEN
+        #     rate_limit=True -> [200,429,429,429,429,429]  1/min
+        #     rate_limit=2    -> [200,200,429,...]          control, limiter wired
+        # Those are verbatim the two failures `_coerce_rate_limit`'s own
+        # docstring says it exists to reject; it simply never ran here.
+        self._rate_limit = _coerce_rate_limit(rate_limit, "Nexus(rate_limit=...)")
         if enable_auth:
             self._auth_enabled = True
         if enable_monitoring:
