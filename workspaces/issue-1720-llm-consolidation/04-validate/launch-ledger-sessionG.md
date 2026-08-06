@@ -59,6 +59,38 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## ORCHESTRATOR ERROR 3 — I over-claimed in a commit body; the review I commissioned caught it
+
+`44297d31e`'s body describes a three-file atomic commit (bind + allowlist deletion +
+regression test) and argues at length for why splitting them would be unsafe. **It touches
+exactly ONE file** — the guard. Corrected by `ebfcf8255` as a FOLLOW-UP, not an amend
+(`git.md` § Discipline).
+
+**Mechanism — an instrument reading stale state, again.** I verified the tree (three files
+dirty), wrote the message from that verification, then committed with a pathspec. In that
+window F-NEXUS committed the bind itself as `54ee18840`. My pathspec then found changes for
+only the guard file, so a message written for three files landed on a one-file commit. The
+verification was true when made and false when used.
+
+**Second error in the same body, and it is the more instructive one.** I claimed splitting
+the bind from the allowlist deletion would leave the site "silently raw". F-ENVELOPE refuted
+that by running the empty allowlist against the pre-bind `core.py`:
+`binds_envelope=False -> RED`. `test_every_workflow_entry_point_binds_the_parameters_envelope`
+would have caught it and NAMED the site. The ordering was still worth getting right — but the
+failure mode was LOUD, not silent, and I asserted the scarier version without checking.
+
+**Fix for the next session, since the mechanism will recur with parallel lanes:** compose the
+commit message from the STAGED DIFF (`git diff --cached --stat`) immediately before
+committing, not from a tree inspection made earlier. In a shared checkout the gap between
+"what I saw" and "what I am committing" is a live race, and the commit body is a durable
+artifact — `verify-claims-before-write.md` MUST-2 treats exactly this carry-forward as
+presumed false.
+
+**This is the third orchestrator error this session, and the second caught by a lane.** The
+review that caught it was one I commissioned specifically because my own commits were the only
+changes on this branch nobody had reviewed. That is the control working as designed, not an
+accident.
+
 ## ROUND 3 — launched 2026-08-06, lenses ROTATED per `completion-criterion.md` MUST-4
 
 All four fix lanes landed. Round-2 findings (7 HIGH + 6 MEDIUM) are all fixed and committed;
