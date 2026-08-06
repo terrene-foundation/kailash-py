@@ -82,6 +82,52 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## ORCHESTRATOR ERROR 7 — I VIOLATED `symbol-anchored-citations.md` MUST-3, REPEATEDLY
+
+Not a new lesson. An EXISTING rule, binding since its grace expired 2026-07-07, that I did not
+apply. Verified by reading the rule text, not cited from memory —
+`.claude/rules/symbol-anchored-citations.md:76-78`:
+
+> When a citation from a spec/plan/todo is injected into a delegation prompt, the orchestrator
+> MUST pass the grep-stable SYMBOL and instruct the agent to RE-RESOLVE it against the current
+> file before building — NOT pass a line the agent is told to trust. The plan's line numbers are
+> presumed drifted by build time.
+
+Its preamble (`:16`) names this session's failure verbatim: a bare line number is _"invalidated
+by ANY insertion above it — most often by the CITING SESSION'S OWN later edits shifting the
+lines."_
+
+**I did this in nearly every delegation prompt** — `discovery.py:1440-1491`,
+`server.py:1777`, `core.py:2420-2449`, `:5776`, `:2289-2294`, and more. I got it right exactly
+ONCE (#19), and only because the reporter had pinned its own anchors against an md5 and told me
+to re-locate by symbol. Round-3 findings then carried those bare anchors into durable task
+descriptions and this ledger, which is MUST-1 as well as MUST-3.
+
+**THE COST WAS NOT WHAT I WOULD HAVE PREDICTED, and that is the transferable part.** No lane
+followed a stale pointer — every one re-resolved correctly. The damage landed on the VERIFIER:
+a reviewer checking at HEAD after fixes landed read the line drift as a defect IN THE REPORT,
+filed two wrong corrections, and generalised from them before another lane caught it and it
+withdrew both.
+
+> **A bare line anchor does not merely mislead the implementer. It manufactures PHANTOM FINDINGS
+> in whoever verifies afterwards** — and in a convergence loop, that is the expensive direction,
+> because phantom findings consume rounds and erode trust in real ones.
+
+**Corrective, applied to round 4 rather than deferred:** findings cite `<file>::<symbol>` as
+primary with lines as marked, disposable hints; delegation prompts carry the symbol plus an
+explicit re-resolve instruction; and a verifier re-derives the symbol and MUST NOT treat line
+drift as evidence of anything.
+
+**Posture: RECORDED, NOT SELF-ASSESSED.** The rule's wiring routes cumulative impact through
+`trust-posture.md` MUST-4 (3x same-rule / 5x total in 30d), adjudicated at gate-review by
+reviewer / cc-architect. This session's count is well past 3. I am NOT making that call and NOT
+touching `posture.json` — `multi-operator-coordination.md` blocks direct state edits and a
+self-assessed posture is worth nothing. It is recorded here so the `/codify` sweep adjudicates
+it as a finding rather than DISCOVERS it, which R3-COMPOSE correctly judged the worse outcome.
+
+Surfaced by `F3-AGENTS`, verified against the rule text by `R3-COMPOSE`, escalated rather than
+settled between them — the right call, since the violating party was me.
+
 ## ORCHESTRATOR ERROR 6 — MUTATION TESTING IN A SHARED CHECKOUT POISONS SIBLING SUITES
 
 Second concurrency-induced instrument failure, same root cause as #7 below, different mechanism
