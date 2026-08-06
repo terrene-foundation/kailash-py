@@ -82,6 +82,42 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## #17 CLOSED — `568036906` + `2d2563d81`. The fix was to WRITE THE CRITERION, not widen the list
+
+`#1720` is now closed on the public route: `enterprise_workflow_server.py:368` binds, and the
+guard's tree list carries an explicit INCLUSION CRITERION plus **every candidate tree with its
+verdict and measured site count**. 24 passed.
+
+**My suggestion to derive the list by scanning everything was REFUTED, with measurement.** The
+lane measured that denominator: **644 execution sites, ~180 of them RAW in `src/kailash`
+alone** — because `RUNTIME_EXEC_METHODS` contains `execute`, which also matches
+`cursor.execute(sql, params)`. `src/kailash/nodes` alone contributes 110 SQL calls,
+`infrastructure` 49, `middleware/gateway` 9. Scanning everything would demand ~174 wrong
+"fixes" or a ~174-entry allowlist — and, in its words, _"an allowlist that size is
+indistinguishable from no guard."_
+
+So the correct fix was neither "widen by one tree" (my first instruction) nor "derive
+everything" (my second suggestion). **Scoping was doing real work; the defect was that the
+criterion was never WRITTEN DOWN**, which let `src/kailash/servers` stay invisible while a
+public route shipped the original bug. The list now states: _a tree is scanned when it contains
+CALLER-FACING ENTRY POINTS — sites forwarding a CALLER-SUPPLIED mapping to a workflow the
+CALLER named._ Every tree is then enumerated against that criterion, scanned or not, with
+counts. A future reader audits the CRITERION, not the list.
+
+**That is my FOURTH refuted suggestion this session** (F2 shape, #13 shape, "silently raw"
+severity, and now derive-the-list). Every one was refuted by measurement or reproduction, never
+by argument. The standing correction holds and is now four-for-four: **name the invariant, let
+the lane choose the shape.**
+
+`2d2563d81` additionally found and BOUND `api/gateway.py::execute_chain` — the one site the
+composition review flagged as "worth real triage" out of its 14. Its own commit title records
+the cause honestly: _"hidden by my own tree-list over-generalisation."_
+
+**#20 (2x durable-storage amplification) FILED as #2003** rather than absorbed. The lane went
+idle without claiming it; it is LOW-MEDIUM, non-gating, and the branch is already 143 commits.
+The issue carries the paired measurements AND both disconfirmed hypotheses (not a size-cap
+halving; not a checkpoint-key problem) so neither is re-opened.
+
 ## MCP SURFACE CLOSED — `b1ac06e5b`. The hardening probe HAD disclosed; confirmed, not argued
 
 The open sentinel question is answered and the answer was the bad one. Instrumenting a read
