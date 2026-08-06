@@ -82,6 +82,57 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## ROUTING DECISION — #23 goes to `/codify` Step 7a, NOT this branch. And the substance is real.
+
+Both lanes recommended it and I agree: `.claude/rules/**` is a COC-artifact concern, this repo
+is `coc-build` per `issue-triage-routing.md`, so it routes cross-SDK-first through `/codify`
+Step 7a. Same disposition the cross-CLI skill drift took, for the same reason — folding artifact
+edits into a 154-commit release branch is scope creep. Task #23 holds a proposal-ready writeup.
+
+**The substance, because it is a genuine gap found empirically rather than reasoned:**
+`symbol-anchored-citations.md` argues a bare line anchor causes NAVIGATION failure — the reader
+follows it and lands in the wrong place. **That is not what happened here.** Both fix lanes
+received bare anchors through the delegation hop and re-resolved correctly, in seconds, because
+an implementer KNOWS the file is moving under them.
+
+The entire cost landed on the VERIFIER reading HEAD after the fix, who could not distinguish
+_"the fix moved this"_ from _"the report was sloppy"_ — and filed two wrong corrections into
+durable task descriptions, generalised wrongly from them, and consumed another lane's time
+refuting all three.
+
+> Navigation failure costs a lookup. **False-positive generation costs the reviewer's
+> credibility budget**, which is the scarcer resource in a convergence loop.
+
+And the structural gap: the rule's three MUSTs bind the citing AUTHOR (1, 2) and the
+ORCHESTRATOR (3). **Nobody binds the reader-after-the-fact** — which is exactly where this cost
+landed.
+
+## CORRECTION TO MY OWN GUIDANCE — the safe property is the PROCESS, not "in-process"
+
+I told the audit lane to patch "IN-PROCESS." Imprecise. Verified refinement: **the safe property
+is the DEDICATED, SHORT-LIVED PROCESS.** A long-lived in-process patch is still visible to
+everything else in that interpreter for as long as it lives; what bounds the blast radius is
+that the process EXITS, not that the edit avoided disk. Relayed.
+
+## A REVIEWER'S SELF-ASSESSMENT, RECORDED BECAUSE IT CHANGES HOW TO WEIGHT ITS FINDINGS
+
+`R3-COMPOSE`, unprompted, on its own conduct:
+
+> I made the same attribution error three times — reading "this file changed while I read it" as
+> "F3-AGENTS changed it" — and it survived two corrections because **I fixed each instance and
+> not the reflex.** The falsifying result was one command away each time and I did not run it. I
+> was applying to every other lane's claims a discipline I did not apply to my own.
+
+That is the fix-the-instance-not-the-class failure this session kept finding in CODE, occurring
+at the level of a reviewer's own METHOD. Two corrections landed and the reflex survived both,
+because each was treated as an incident.
+
+Its own calibration, which is the useful part: **its two HIGHs are backed by REPRODUCTIONS
+rather than reasoning, and those are the ones it stands behind.** Both were independently
+verified here (the guard-denominator finding and the correlation-id finding), and both held.
+The withdrawn corrections were the reasoning-backed ones. A reviewer that tells you which of its
+own findings to trust is more useful than one that defends all of them equally.
+
 ## ORCHESTRATOR ERROR 8 — MY WORKTREE DEVIATION WAS WRONG, AND EVERY SUITE RESULT IS SUSPECT
 
 **This supersedes the "File ownership is disjoint by construction" justification recorded
