@@ -218,8 +218,8 @@ class TestCommaBearingRunOverRedactsDeliberately:
 
         Nothing in `_COMMA_BEARING_RUN` itself expresses that cap. An edit to
         alternative 1's lookahead would remove it while leaving the comma rule
-        untouched, and the timing test would not notice (measured: four
-        mutations of the comma rule left the ratio at 7.5-8.3). This asserts the
+        untouched, and the timing test would not notice — no mutation of the
+        comma rule has been shown to red the ratio assertion. This asserts the
         boundary directly, from both sides.
         """
         # 15 chars, pure alpha: alternative 1's discriminators BOTH fail (no
@@ -274,10 +274,25 @@ class TestNewRulesAreLinear:
     NOT WHAT A READER WOULD ASSUME. For the URL rules the ratio is a DEMONSTRATED
     detector: remove the `{0,31}` scheme bound and the sibling suites read 64.6x
     and 69.2x. For `_COMMA_BEARING_RUN` it is not, and no mutation has yet made
-    it one. Four attempts — the quadratic `{5,}` form this module's own comment
-    names, `*`-not-`+`, a comma-inclusive (ambiguous) atom, and a nested
-    `(?:A+)+` — all left the ratio at 7.5-8.3. They were caught, but by the
-    ENTRY and GUARD assertions, not by the timing.
+    it one. Four were tried against this rule — the quadratic `{5,}` form this
+    module's own comment names, `*`-not-`+`, a comma-inclusive (ambiguous) atom,
+    and an alternative that never fires. None red the ratio; each was caught
+    instead by the ENTRY or GUARD assertion.
+
+    NO RATIO NUMBERS ARE QUOTED HERE, DELIBERATELY. An earlier revision cited a
+    "7.5-8.3" range from probes that rebound the module NAME
+    `_CREDENTIAL_KEYVALUE_TOKEN`. That patch is INERT: `_CREDENTIAL_PATTERNS`
+    captured the compiled object at import, so `_CREDENTIAL_PATTERNS[18] IS` the
+    old pattern and `scrub_credentials` never saw the mutant. The ratio sat near
+    8 because nothing was mutated — a non-reddening result read as a property of
+    the rule without proving the mutation reached the code
+    (`rules/instrument-discipline.md` MUST-2(b), the exact failure it names).
+
+    The four above are cited because their REACH IS ESTABLISHED: each rewrote
+    the pattern in SOURCE and re-imported, and each changed observable behaviour
+    while applied — the never-fires mutant reds the residual pins, the `{5,}`
+    form reds the entry assertion. A mutation that changes no assertion is not
+    evidence about the ratio; it is an unvalidated instrument.
 
     That is a property of the construct, not a blind test. This alternative has
     no mandatory element after its group, so a match succeeds as soon as the
