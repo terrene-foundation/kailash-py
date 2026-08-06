@@ -47,30 +47,24 @@ INPUT_KWARGS = frozenset({"parameters", "inputs"})
 # Entry points DELIBERATELY passing the caller's mapping through unwrapped.
 # Each entry is an audited decision, not an oversight. Keyed by
 # "<path relative to repo root>::<enclosing function>".
-AUDITED_RAW_INPUT_SITES: dict[str, str] = {
-    "packages/kailash-nexus/src/nexus/core.py::_execute_workflow": (
-        "KNOWN CONFLICT with the structural rule -- this entry is on borrowed "
-        "time and MUST be removed once the site binds. The rule in "
-        "kailash/workflow/input_envelope.py says an entry point with a SINGLE "
-        "caller-arguments slot binds, whatever the slot is named. "
-        "_execute_workflow(self, workflow_name, inputs) has exactly one, so "
-        "the rule says it should BIND. It is listed here ONLY because the "
-        "shard that wrote the rule does not own nexus/core.py. "
-        "test_audited_sites_are_exempt_under_the_structural_rule is a strict "
-        "xfail pinning this conflict: it XPASSes -- and fails the suite -- the "
-        "moment the site binds, forcing this entry out. "
-        "The two reasons previously given here are BOTH refuted and must not "
-        "be reinstated: (1) 'not a channel' is false -- it raises HTTPException "
-        "400/404/500, runs validate_workflow_name (path traversal) and "
-        "validate_workflow_inputs (request size), and core.py's own comment "
-        "calls it 'the execute route'; (2) 'not route-registered' is true but "
-        "protects nothing -- skills/03-nexus/nexus-api-patterns.md teaches "
-        "custom endpoints to call `await app._execute_workflow(name, body)` "
-        "directly, so the caller's OWN route becomes a workflow entry point "
-        "that does not bind, and a `parameters.get(...)` workflow raises "
-        "NameError inside the documented example."
-    ),
-}
+#
+# EMPTY, and that is the correct state: every discovered entry point binds.
+# The last entry was nexus/core.py::_execute_workflow, removed when that site
+# started binding. Its two recorded justifications were BOTH refuted and must
+# not be reinstated for any site: (1) "not a channel" -- _execute_workflow
+# raises HTTPException 400/404/500 and runs validate_workflow_name (path
+# traversal) and validate_workflow_inputs (request size); core.py's own
+# comment calls it "the execute route"; (2) "not route-registered" -- true at
+# the time, but it protected nothing, because skills/03-nexus/
+# nexus-api-patterns.md teaches custom endpoints to call
+# `await app._execute_workflow(name, body)` directly, which makes the CALLER's
+# route an entry point that would not bind.
+#
+# Adding an entry here is expensive on purpose. It must survive BOTH gates
+# below: the site must actually be raw (test_audited_sites_are_actually_raw)
+# AND its enclosing function must offer the caller a real choice of slots
+# (test_audited_sites_are_exempt_under_the_structural_rule).
+AUDITED_RAW_INPUT_SITES: dict[str, str] = {}
 
 
 def _enclosing_function(tree: ast.Module, target: ast.Call) -> str:
@@ -326,17 +320,39 @@ def test_offers_choice_is_two_or_more_slots(source, expected):
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "nexus/core.py::_execute_workflow takes a single `inputs` slot, so the "
-        "structural rule says it MUST bind -- but it is allowlisted here. The "
-        "rule and the allowlist genuinely conflict and the site should bind; "
-        "the shard that wrote the rule does not own core.py. Strict xfail so "
-        "this FAILS the moment the site binds, forcing the allowlist entry out "
-        "instead of leaving a stale exemption that masks a future raw site."
-    ),
-)
+def test_audited_sites_are_actually_raw():
+    """An allowlisted site MUST actually BE raw. A binding site is stale.
+
+    This is the gate that was missing. Its absence was a real defect in this
+    guard: the sibling check below reads only the allowlist keys and the
+    enclosing function's SIGNATURE, and binding changes neither -- so when
+    ``nexus/core.py::_execute_workflow`` started binding, nothing here
+    noticed. The suite stayed green carrying an entry that declared a site raw
+    while it enveloped, and that entry masked the whole
+    ``path::enclosing_function`` key: any raw execution call added anywhere
+    inside that function would have been silently exempted.
+
+    The allowlist means "this site is deliberately raw". The moment the site
+    binds, the entry is false, and a false exemption is exactly where a new
+    raw site hides.
+
+    Falsifying result: allowlist a site that binds and this REDS, naming it.
+    Verified by probe, not assumed -- an entry for any currently-discovered
+    site fails here, because every discovered site now binds.
+    """
+    binding_sites = {key for key, _, envelopes in _discover_entry_points() if envelopes}
+    stale = sorted(set(AUDITED_RAW_INPUT_SITES) & binding_sites)
+    assert not stale, (
+        "allowlisted sites that actually BIND the envelope -- the entry claims "
+        "the site is deliberately raw, which is now false:\n"
+        + "\n".join(f"  {key}" for key in stale)
+        + "\nDelete the entry. While it is listed, it masks its whole "
+        "`path::enclosing_function` key, so a raw call added inside that "
+        "function would be exempted silently."
+    )
+
+
+@pytest.mark.regression
 def test_audited_sites_are_exempt_under_the_structural_rule():
     """An allowlisted site MUST be one the structural rule actually exempts.
 
@@ -345,10 +361,13 @@ def test_audited_sites_are_exempt_under_the_structural_rule():
     one carry meaning. A site with a single arguments slot is NOT exempt, and
     allowlisting it anyway is the rule contradicting its own allowlist.
 
-    Falsifying result: were every allowlisted site to offer a choice this
-    would pass, and the strict-xfail marker would turn that pass into a
-    failure -- which is the intended signal to delete both the marker and the
-    entry.
+    Note what this check CANNOT see: it reads the allowlist keys and each
+    enclosing function's signature, so it is blind to whether the site binds.
+    That is why ``test_audited_sites_are_actually_raw`` exists alongside it --
+    the two gates fail on different things and neither subsumes the other.
+
+    Falsifying result: allowlist a single-slot site and this REDS, naming the
+    site and its slot list.
     """
     not_exempt = sorted(
         f"{key} (input slots: {_slots_for(key)})"
