@@ -657,7 +657,7 @@ Per `rules/trust-plane-security.md` MUST NOT Rule 3, callers MUST `del` returned
 
 ### Cross-SDK
 
-A matching scaffold is expected on the Rust SDK (`kailash-rs`) using a parallel audited Rust SLIP-0039 implementation. The serialised paper-print form is the cross-SDK interop surface. Per `rules/cross-sdk-inspection.md` a follow-up issue MUST be filed on `esperie/kailash-rs` if the matching scaffold is not yet present.
+A matching scaffold is expected on the Rust SDK (`kailash-rs`) using a parallel audited Rust SLIP-0039 implementation. The serialised paper-print form is the cross-SDK interop surface. Per `rules/cross-sdk-inspection.md` a follow-up issue MUST be filed on the Rust SDK if the matching scaffold is not yet present.
 
 ### Tests
 
@@ -860,7 +860,7 @@ through their underlying Layer-1 primitives.
 
 ### 32.5 Cross-SDK alignment
 
-Cross-SDK sibling: `esperie-enterprise/kailash-rs` (companion conformance
+Cross-SDK sibling: the Rust SDK (companion conformance
 issue). EATP-08 is wire-format-breaking; the version bump and the
 transition provision for already-emitted `ed25519+sha256` records (an open
 EATP-08 §4 erratum question — flagged to mint, not resolved unilaterally)
