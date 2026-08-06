@@ -357,7 +357,13 @@ class TestMCPServerToolDecorator:
     """Test MCPServer tool decorator functionality."""
 
     def test_tool_decorator_with_required_permission(self):
-        """Test tool decorator with required_permission."""
+        """Test tool decorator with required_permission.
+
+        The registry stores permissions as a normalized tuple (never a bare
+        string) so a single-permission tool and a multi-permission tool share
+        one representation, both enforced by AuthManager._authorize checking
+        every entry.
+        """
         server = MCPServer("test-server")
 
         @server.tool(required_permission="admin.execute")
@@ -367,7 +373,7 @@ class TestMCPServerToolDecorator:
         # Check registry
         assert "test_tool" in server._tool_registry
         tool_info = server._tool_registry["test_tool"]
-        assert tool_info["required_permission"] == "admin.execute"
+        assert tool_info["required_permission"] == ("admin.execute",)
 
     def test_tool_decorator_with_required_permissions_single(self):
         """Test tool decorator with required_permissions (single)."""
@@ -379,25 +385,25 @@ class TestMCPServerToolDecorator:
 
         # Check registry
         tool_info = server._tool_registry["test_tool"]
-        assert tool_info["required_permission"] == "admin.execute"
+        assert tool_info["required_permission"] == ("admin.execute",)
 
     def test_tool_decorator_with_required_permissions_multiple(self):
-        """Test tool decorator with required_permissions (multiple)."""
+        """Test tool decorator with required_permissions (multiple).
+
+        ALL declared permissions are retained and enforced -- the decorator
+        previously kept only the first and silently dropped the rest behind
+        a logger.warning (a tool declaring ["admin", "billing"] was enforced
+        against "admin" alone). That warning no longer exists; nothing is
+        dropped, so there is nothing to warn about.
+        """
         server = MCPServer("test-server")
 
-        with patch("kailash_mcp.server.logger") as mock_logger:
+        @server.tool(required_permissions=["admin.execute", "user.read"])
+        def test_tool():
+            return "test"
 
-            @server.tool(required_permissions=["admin.execute", "user.read"])
-            def test_tool():
-                return "test"
-
-            # Should use first permission and log warning
-            tool_info = server._tool_registry["test_tool"]
-            assert tool_info["required_permission"] == "admin.execute"
-
-            mock_logger.warning.assert_called_with(
-                "Tool test_tool: Multiple permissions specified, using first: admin.execute"
-            )
+        tool_info = server._tool_registry["test_tool"]
+        assert tool_info["required_permission"] == ("admin.execute", "user.read")
 
     def test_tool_decorator_with_conflicting_permissions(self):
         """Test tool decorator with conflicting permission parameters."""
@@ -524,7 +530,7 @@ class TestMCPServerToolDecorator:
         assert tool_info["cache_key"] == "test_cache"
         assert tool_info["cache_ttl"] == 600
         assert tool_info["format_response"] == "json"
-        assert tool_info["required_permission"] == "admin.execute"
+        assert tool_info["required_permission"] == ("admin.execute",)
         assert tool_info["rate_limit"] == {"requests_per_minute": 10}
         assert tool_info["enable_circuit_breaker"] is True
         assert tool_info["timeout"] == 30.0
