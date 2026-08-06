@@ -43,6 +43,54 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## DECISION — F2's recommended fix was WRONG, and the lane proved it
+
+`R2-CORRECT` F2 reported a parity break: the same body yields `parameters.get("a") == 1`
+over HTTP and `None` over `APIChannel`/`MCPChannel`. It recommended option (a) — leave both
+channels raw. I passed that recommendation to `F-ENVELOPE` without testing it. **Both the
+finding's framing and my redirect were wrong.**
+
+`F-ENVELOPE` simulated (a) — reverted both sites, ran the behavioural drivers, restored
+byte-identical with `cmp` — and captured what (a) actually ships:
+
+```
+NameError: name 'parameters' is not defined
+  File "src/kailash/nodes/code/python.py", line 495, in execute_code
+```
+
+That is issue #1720 itself. Option (a) would have REINSTATED the defect this entire branch
+exists to close.
+
+**The two calls F2 compared are not equivalent.** `WorkflowRequest` has TWO caller slots
+(`inputs` = raw, `parameters` = envelope), so an HTTP caller CHOOSES. `APIChannel` and
+`MCPChannel::_handle_execute_workflow` have ONE arguments slot, also spelled `inputs`. F2
+compared HTTP's OPT-OUT slot against the channel's ONLY slot. The equivalent HTTP call is
+`{"parameters": P}`, which agrees with the channels exactly.
+
+So the original discriminator — "a field named `inputs` means opt-out" — was not merely
+applied inconsistently (F2's claim, and my commit `23ff5cbf2`'s claim that it was "applied
+throughout"). It keys on a field NAME that carries TWO DIFFERENT ROLES, so it could not have
+been applied consistently by anyone.
+
+**Adopted rule (option (c)) — structural, not name-based:**
+
+> An entry point that offers the caller a CHOICE between a raw slot and an arguments slot
+> honors the choice. An entry point with a SINGLE caller-arguments slot binds the envelope,
+> whatever that slot is named.
+
+No behavioural change; the codebase is already consistent under it. Required before close:
+the rule must be checked against `nexus/core.py::_execute_workflow` (if that site has a
+single slot, the rule says BIND, which would contradict keeping it allowlisted — resolve
+explicitly, do not ship a rule its own allowlist violates); the `{**body, "parameters": body}`
+clobber of a caller-supplied `parameters` key must be pinned as intentional; and both the
+equivalent-call parity test and the opt-out-asymmetry test must land with established REDs.
+
+**The transferable part:** a reviewer's FINDING can be sound while its RECOMMENDED FIX is
+not, and an orchestrator relaying the recommendation untested adds a second failure on top.
+The lane refusing to implement it — with a reproduction rather than an argument — is the
+control that caught it. That is the fourth time this branch has had a correction caught by
+someone declining to take the previous party's word.
+
 ## Session-G state
 
 - **Session F's 63-file working tree is COMMITTED** — 11 slices, `23ff5cbf2`..`dc69cb786`,
