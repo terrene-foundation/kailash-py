@@ -21,6 +21,7 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
+    get_type_hints,
     runtime_checkable,
 )
 
@@ -58,6 +59,97 @@ _MAX_RATE_LIMIT_TRACKED_CLIENTS = 10_000
 
 # Minute buckets older than this many windows are unreachable by the limit check.
 _RATE_LIMIT_STALE_BUCKET_AGE = 5
+
+
+class _Unset:
+    """Sentinel for "the caller did not supply this argument".
+
+    ``rate_limit=None`` is DOCUMENTED as "unlimited", but None was also doing
+    duty as the not-supplied marker, so the documented value could never reach
+    its documented behaviour -- it fell through to the configured default
+    instead. A kwarg accepted at the public surface with no effect on the body
+    is the silent-fallback mode at the API surface (zero-tolerance Rule 3c).
+    Separating the two meanings is the only fix that keeps BOTH: an explicit
+    None means unlimited, and omitting the argument still inherits the config.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return "<not supplied>"
+
+
+_UNSET = _Unset()
+
+
+def _coerce_rate_limit(value: Any, source: str) -> Optional[int]:
+    """Normalise a configured rate limit, rejecting misconfiguration loudly.
+
+    Args:
+        value: The raw limit -- ``None``, an int, or an integral float.
+        source: Where it came from, named verbatim in the error message
+            (``"rate_limit"`` for the decorator kwarg,
+            ``"rate_limit_config['default_rate_limit']"`` for the constructor
+            config) so the operator knows which one to edit.
+
+    Returns:
+        The limit in requests per minute, or None for unlimited.
+
+    Raises:
+        ValueError: For any value that cannot be a request count.
+
+    Every rejection below replaces a behaviour that was silent, and three of
+    the four failed OPEN:
+
+    * ``bool`` -- ``isinstance(True, int)`` is True in Python, so ``True``
+      registered as a limit of ONE request per minute and ``False`` as zero,
+      i.e. unlimited. A boolean in an int-typed config field is always a
+      mistake, and neither reading of it was announced.
+    * negative -- failed the ``> 0`` guard and resolved to unlimited, so a
+      typo'd minus sign silently removed rate limiting altogether.
+    * non-integral float -- ``int(0.5)`` is 0, which is unlimited, so coercing
+      every float would import the same fail-open.
+
+    An INTEGRAL float is ACCEPTED rather than rejected. Configuration loaded
+    from JSON, YAML, or an env-var pipeline routinely arrives as ``50.0``, and
+    a limit of "fifty point zero" is unambiguous; raising there took the whole
+    application down at import time for a value whose meaning was never in
+    doubt. Rejecting it would be choosing a startup outage over a lossless
+    conversion.
+
+    ``0`` keeps its pre-existing meaning of unlimited (from the original
+    ``rate_limit > 0`` guard) and is documented as such on ``endpoint()``. The
+    other reading -- zero requests allowed, therefore reject everything --
+    would convert an existing ``0`` config into a total outage on upgrade.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{source} must be an int or None (None = unlimited); got bool "
+            f"{value!r}. A bool passes Python's int check, so this would "
+            f"otherwise mean {'a limit of 1 request per minute' if value else 'unlimited'}."
+        )
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(
+                f"{source} must be a whole number of requests per minute; got "
+                f"{value!r}. Rounding it would silently change the limit."
+            )
+        value = int(value)
+    if not isinstance(value, int):
+        raise ValueError(
+            f"{source} must be an int or None (None = unlimited); got "
+            f"{type(value).__name__}"
+        )
+    if value < 0:
+        raise ValueError(
+            f"{source} must not be negative; got {value}. A negative limit "
+            f"previously resolved to unlimited, i.e. it silently disabled "
+            f"rate limiting. Use 0 or None for unlimited."
+        )
+    # 0 is unlimited -- see the docstring above for why that is preserved.
+    return value or None
 
 
 class NexusConfig:
@@ -1579,13 +1671,18 @@ Check the documentation or explore available resources.
             top-level names, and the SAME registered workflow must behave
             identically on every channel.
 
-            This binding is byte-for-byte what
-            ``kailash.api.workflow_api.WorkflowRequest.get_inputs`` produces
-            for the HTTP/CLI ``{"parameters": {...}}`` body, which is what
-            makes API/CLI/MCP parity hold. Collision precedence matches that
-            helper exactly: an inner key literally named ``parameters`` loses
-            to the envelope, and a key matching a NODE ID is scoped to that
-            node by the runtime on every channel alike.
+            The binding comes from
+            ``kailash.workflow.input_envelope.bind_parameter_envelope``, the
+            one place that decision is made for every entry point — HTTP,
+            CLI, WebSocket, the Core SDK channels, and here. This path used to
+            open-code the same mapping instead: equivalent that day, and a
+            guarantee that the NEXT change to the envelope contract would land
+            on the other channels and skip the busiest one, re-opening the
+            API/CLI/MCP divergence the helper exists to close. Collision
+            precedence is the helper's, not this call site's: an inner key
+            literally named ``parameters`` loses to the envelope, and a key
+            matching a NODE ID is scoped to that node by the runtime on every
+            channel alike.
 
             Historical note: this previously forwarded ONLY
             ``{"parameters": params}`` while the HTTP endpoint UNWRAPPED its
@@ -1602,8 +1699,10 @@ Check the documentation or explore available resources.
             """
             import json
 
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
             execution_result = await shared_runtime.execute_workflow_async(
-                workflow, inputs={**params, "parameters": params}
+                workflow, inputs=bind_parameter_envelope(params)
             )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
@@ -2202,7 +2301,7 @@ Check the documentation or explore available resources.
         self,
         path: str,
         methods: Optional[List[str]] = None,
-        rate_limit: Optional[int] = None,
+        rate_limit: Any = _UNSET,
         **fastapi_kwargs,
     ):
         """Decorator to register custom REST endpoint (API-only).
@@ -2213,7 +2312,16 @@ Check the documentation or explore available resources.
         Args:
             path: URL path pattern (e.g., "/api/conversations/{conversation_id}")
             methods: HTTP methods (default: ["GET"])
-            rate_limit: Requests per minute limit (default: 100, None=unlimited)
+            rate_limit: Requests per minute limit. Accepts an int, an integral
+                float (``50.0`` -- config from JSON/YAML/env commonly yields
+                one), or None. ``None`` means UNLIMITED. ``0`` also means
+                unlimited, preserved from the original ``> 0`` guard. OMITTING
+                the argument is distinct from passing None: it inherits
+                ``rate_limit_config["default_rate_limit"]``, which itself
+                defaults to 100. A bool, a negative number, or a fractional
+                float raises at registration -- see :func:`_coerce_rate_limit`
+                for why each of those was previously silent, and mostly
+                fail-open.
             **fastapi_kwargs: Additional FastAPI route parameters
                 - status_code: int - HTTP status code for successful response
                 - response_model: Type - Pydantic model for response validation
@@ -2237,11 +2345,9 @@ Check the documentation or explore available resources.
         if methods is None:
             methods = ["GET"]
 
-        # Use global rate limit config or endpoint-specific limit
-        if rate_limit is None:
-            # Check if global rate limit is configured
-            rate_limit = self.rate_limit_config.get("default_rate_limit", 100)
-
+        # Resolve the limit. NOT-SUPPLIED falls back to the config; an
+        # explicit None is the documented "unlimited" and must not.
+        #
         # `rate_limit_config` is Dict[str, Any], so an explicit
         # {"default_rate_limit": None} resolves to None here rather than to the
         # 100 default -- and the raw value was then compared with `> 0` inside
@@ -2249,19 +2355,20 @@ Check the documentation or explore available resources.
         # instances of 'NoneType' and 'int'" on EVERY request to the endpoint
         # (an unconditional HTTP 500 on a public constructor kwarg).
         #
-        # None is documented above as "unlimited", and a non-positive limit
-        # already meant unlimited (the old `rate_limit > 0` guard), so both
-        # collapse to a single Optional[int] the wrapper narrows on once. A
-        # non-int, non-None configured value is a misconfiguration and raises
-        # loudly here rather than becoming a TypeError per request.
-        if rate_limit is not None and not isinstance(rate_limit, int):
-            raise ValueError(
-                "rate_limit must be an int or None (None = unlimited); got "
-                f"{type(rate_limit).__name__}"
+        # Both origins are normalised through ONE helper so that a value
+        # arriving from the constructor kwarg and the same value passed to the
+        # decorator cannot be validated differently -- they were, and the
+        # config path was the looser of the two. The helper raises at
+        # REGISTRATION, where an operator can act on it, rather than letting a
+        # misconfiguration become a per-request TypeError or a silent
+        # fail-open.
+        if isinstance(rate_limit, _Unset):
+            effective_rate_limit = _coerce_rate_limit(
+                self.rate_limit_config.get("default_rate_limit", 100),
+                "rate_limit_config['default_rate_limit']",
             )
-        effective_rate_limit: Optional[int] = (
-            rate_limit if rate_limit is not None and rate_limit > 0 else None
-        )
+        else:
+            effective_rate_limit = _coerce_rate_limit(rate_limit, "rate_limit")
 
         def _declares_fastapi_request(handler: Any) -> bool:
             """True when ``handler`` declares a FastAPI ``Request`` parameter.
@@ -2270,6 +2377,17 @@ Check the documentation or explore available resources.
             ``Request`` instance among the handler's args/kwargs, so this is
             the registration-time predicate for "will rate limiting actually
             run for this handler".
+
+            The annotation is RESOLVED rather than name-matched. A quoted
+            annotation -- which is what every annotation in a ``from __future__
+            import annotations`` module is -- previously matched on its bare
+            name, so ANY class called ``Request`` satisfied it: a Pydantic BODY
+            model named ``Request`` is the common case. The runtime resolves by
+            ``isinstance(arg, fastapi.Request)`` and would never find one, so
+            the predicate reported ENFORCED and stayed silent over a completely
+            unlimited endpoint whose registration log still advertised the
+            limit. Two different tests for the same question is the defect;
+            resolving the annotation makes them one test.
             """
             from fastapi import Request
 
@@ -2280,15 +2398,36 @@ Check the documentation or explore available resources.
                 # absent, so stay silent rather than emit a false warning.
                 return True
 
-            for parameter in signature.parameters.values():
-                annotation = parameter.annotation
-                if annotation is Request:
-                    return True
-                # A quoted / PEP-563 annotation arrives as a string; compare on
-                # the bare name so `"Request"` and `"fastapi.Request"` match.
-                if (
-                    isinstance(annotation, str)
-                    and annotation.split("[")[0].rsplit(".", 1)[-1] == "Request"
+            try:
+                hints = get_type_hints(handler)
+            except Exception as exc:
+                # The annotations exist but do not resolve here (a forward
+                # reference to a name not importable at registration time, an
+                # exotic callable). "Cannot prove absence" is not "absent", so
+                # the inert-limit WARN stays silent -- but the failure itself
+                # is reported, because a security control whose verification
+                # did not run must not look identical to one that passed.
+                logger.warning(
+                    "nexus.endpoint.rate_limit_unverifiable: could not resolve "
+                    "the annotations of handler %r for %s %s (%s: %s), so "
+                    "whether rate limiting engages could NOT be verified at "
+                    "registration. If the handler declares no `request: "
+                    "Request` parameter, rate_limit=%s has no effect.",
+                    getattr(handler, "__name__", repr(handler)),
+                    "/".join(methods),
+                    path,
+                    type(exc).__name__,
+                    exc,
+                    effective_rate_limit,
+                )
+                return True
+
+            for name in signature.parameters:
+                hint = hints.get(name)
+                # `issubclass` covers a user-defined Request subclass, which
+                # FastAPI injects exactly as it injects Request itself.
+                if hint is Request or (
+                    isinstance(hint, type) and issubclass(hint, Request)
                 ):
                     return True
             return False
@@ -2302,7 +2441,7 @@ Check the documentation or explore available resources.
 
             # SECURITY: Add rate limiting wrapper
             import time
-            from collections import defaultdict
+            from collections import OrderedDict
             from functools import wraps
             from typing import Dict as TypingDict
 
@@ -2334,14 +2473,17 @@ Check the documentation or explore available resources.
                 )
 
             # Simple in-memory rate limiter (per client IP).
+            #
             # Inner key is the minute bucket -- always an int
             # (`int(time.time() // rate_limit_window)`), never a str. This dict
             # is function-local and never escapes the closure, so those are the
             # only keys it can ever hold; the previous `str` annotation made
             # the bucket-eviction comparison below read as `str < int`.
-            request_counts: TypingDict[str, TypingDict[int, int]] = defaultdict(
-                lambda: defaultdict(int)
-            )
+            #
+            # An OrderedDict in least-recently-used order, NOT a plain dict:
+            # it is what makes the outer bound cost O(1) per request. The
+            # eviction site below records what the alternative cost.
+            request_counts: "OrderedDict[str, TypingDict[int, int]]" = OrderedDict()
             rate_limit_window = 60  # 1 minute window
 
             @wraps(func)
@@ -2398,55 +2540,63 @@ Check the documentation or explore available resources.
                     client_ip = request.client.host if request.client else "unknown"
                     current_minute = int(time.time() // rate_limit_window)
 
+                    # Touch this client, moving it to the MOST-recently-used
+                    # end. Everything below depends on that ordering.
+                    buckets = request_counts.get(client_ip)
+                    if buckets is None:
+                        buckets = {}
+                        request_counts[client_ip] = buckets
+
+                        # Bound the outer map. This has to bound BOTH levels:
+                        # the inner minute buckets for this client (below), AND
+                        # the outer per-client-IP dict (here). Only the inner
+                        # half existed originally, so every IP ever seen
+                        # retained an entry for the process lifetime --
+                        # unbounded under source-address rotation, which is
+                        # trivial over IPv6.
+                        #
+                        # The bound costs O(1) amortised: LRU order means the
+                        # coldest client is always at the front, so a single
+                        # popitem evicts it. The first version of this bound
+                        # instead scanned every entry computing max() over its
+                        # buckets and then SORTED all of them, to delete
+                        # exactly one -- and because a flood keeps the map full,
+                        # that ran on EVERY new client, forever, not amortised.
+                        # Measured: 2.5 us/request below the cap, 17,660
+                        # us/request at it. Those 17.66 ms are synchronous CPU
+                        # inside an `async def` with no await point, so they
+                        # block the event loop for the entire process, every
+                        # endpoint -- a whole-server DoS reachable by rotating
+                        # source addresses, i.e. by the exact traffic the bound
+                        # was added to survive.
+                        #
+                        # The in-flight client is never the victim: it was just
+                        # moved to the most-recently-used end, and popitem
+                        # takes from the other one. Eviction fails OPEN for the
+                        # client dropped (its counter restarts), which grants
+                        # an attacker nothing they did not already have --
+                        # rotating to a fresh address already yields a fresh
+                        # counter.
+                        while len(request_counts) > _MAX_RATE_LIMIT_TRACKED_CLIENTS:
+                            request_counts.popitem(last=False)
+                    else:
+                        request_counts.move_to_end(client_ip)
+
                     # Check rate limit
-                    if (
-                        request_counts[client_ip][current_minute]
-                        >= effective_rate_limit
-                    ):
+                    if buckets.get(current_minute, 0) >= effective_rate_limit:
                         raise HTTPException(
                             status_code=429,
                             detail=f"Rate limit exceeded. Maximum {effective_rate_limit} requests per minute.",
                         )
 
                     # Increment counter
-                    request_counts[client_ip][current_minute] += 1
+                    buckets[current_minute] = buckets.get(current_minute, 0) + 1
 
-                    # Cleanup. This has to bound BOTH levels: the inner minute
-                    # buckets for this client, AND the outer per-client-IP dict.
-                    # Only the inner half existed before, so every IP ever seen
-                    # retained an entry for the process lifetime -- unbounded
-                    # under source-address rotation, which is trivial over IPv6.
+                    # Bound the inner level: minute buckets old enough that the
+                    # limit check can never read them again.
                     stale_before = current_minute - _RATE_LIMIT_STALE_BUCKET_AGE
-
-                    buckets = request_counts[client_ip]
                     for old_minute in [m for m in buckets if m < stale_before]:
                         del buckets[old_minute]
-                    if not buckets:
-                        del request_counts[client_ip]
-
-                    if len(request_counts) > _MAX_RATE_LIMIT_TRACKED_CLIENTS:
-                        # Pass 1 -- LOSSLESS. The limit check only ever reads
-                        # the CURRENT minute, so a client whose newest bucket is
-                        # already stale carries no enforcement value at all.
-                        for ip in [
-                            ip
-                            for ip, b in request_counts.items()
-                            if not b or max(b) < stale_before
-                        ]:
-                            del request_counts[ip]
-
-                        # Pass 2 -- LOSSY, and only if still over the cap (every
-                        # tracked client is recent, i.e. an active flood). Drops
-                        # least-recently-active first; see the constant's note
-                        # on why failing open here grants an attacker nothing.
-                        overflow = len(request_counts) - _MAX_RATE_LIMIT_TRACKED_CLIENTS
-                        if overflow > 0:
-                            by_recency = sorted(
-                                request_counts,
-                                key=lambda ip: max(request_counts[ip], default=0),
-                            )
-                            for ip in by_recency[:overflow]:
-                                del request_counts[ip]
 
                 # Call original function
                 return await func(*args, **kwargs)

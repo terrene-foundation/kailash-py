@@ -281,6 +281,11 @@ def test_non_int_rate_limit_config_raises_loudly_at_registration():
     Before the fix a string limit produced the same per-request TypeError as
     None. Silently treating it as unlimited would be a silent fallback, so it
     raises where the operator can see it.
+
+    The match is anchored on the invariant half of the message. The prefix now
+    names WHERE the bad value came from (the config key vs the decorator
+    kwarg), because the two are validated by one helper and an operator
+    reading the traceback needs to know which one to edit.
     """
     app = Nexus(
         api_port=8244,
@@ -291,7 +296,7 @@ def test_non_int_rate_limit_config_raises_loudly_at_registration():
     )
 
     try:
-        with pytest.raises(ValueError, match="rate_limit must be an int or None"):
+        with pytest.raises(ValueError, match="must be an int or None"):
 
             @app.endpoint("/probe-bad-config", methods=["GET"])
             async def probe():

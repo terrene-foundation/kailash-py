@@ -22,7 +22,9 @@ fail-open side effect rather than the property under test. The synthetic
 requests exercise the real wrapper, including the real cleanup path.
 """
 
-from collections import defaultdict
+import gc
+import time
+from typing import MutableMapping
 
 import pytest
 from fastapi import Request
@@ -30,15 +32,17 @@ from nexus import Nexus
 from nexus.core import _MAX_RATE_LIMIT_TRACKED_CLIENTS
 
 
-def _request_counts_of(wrapper) -> defaultdict:
+def _request_counts_of(wrapper) -> MutableMapping:
     """Return the ``request_counts`` map captured in the wrapper's closure."""
     for cell in wrapper.__closure__ or ():
         try:
             value = cell.cell_contents
         except ValueError:  # pragma: no cover - empty cell
             continue
-        # The only defaultdict in this closure is the per-IP counter map.
-        if isinstance(value, defaultdict):
+        # The only mapping in this closure is the per-IP counter map. Matched
+        # on `dict` rather than a concrete subclass so the probe survives the
+        # limiter switching its container (defaultdict -> OrderedDict).
+        if isinstance(value, dict):
             return value
     raise AssertionError(
         "could not locate request_counts in the wrapper closure; the limiter's "
@@ -98,6 +102,104 @@ async def test_client_ip_map_stays_bounded_under_address_rotation():
         assert len(counts) <= _MAX_RATE_LIMIT_TRACKED_CLIENTS, (
             f"counter map grew to {len(counts)} entries for {rotations} distinct "
             f"client IPs; cap is {_MAX_RATE_LIMIT_TRACKED_CLIENTS}"
+        )
+    finally:
+        if app._running:
+            app.stop()
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
+    """Reaching the cap MUST NOT make every subsequent request expensive.
+
+    The sibling test above asserts only that the map stays bounded, and it
+    passes at ANY per-request cost. The first bounding fix paid for the bound
+    with a full scan plus a full sort of the map on EVERY new client once the
+    cap was reached -- not amortised, per request, forever. Measured at
+    2.5 us/request below the cap and 17,660 us/request at it: 17.66 ms of
+    synchronous CPU inside an ``async def`` with no await point, which blocks
+    the event loop for the whole process, every endpoint. Rotating source
+    addresses (trivial over IPv6) is all it takes to hold it there.
+
+    The bound is expressed as a SELF-NORMALIZING RATIO of two measurements
+    taken in the same run on the same machine, not as an absolute wall-clock
+    threshold: an absolute threshold has to be set loose enough for the
+    slowest CI runner, which is exactly loose enough to hide the regression,
+    and it ratchets upward every time it flakes.
+
+    The garbage collector is held off across BOTH measurement windows, and
+    only across those. A full map keeps ~10k live container objects, so a
+    generational pass costs far more at the cap than below it -- real, but a
+    cost of the BOUND itself, not of the eviction path this test is about.
+    Leaving it in measured a property nobody is asserting: the ratio came out
+    at 1x running the file alone and 389x under the full suite, with the same
+    fixed code. Suspending it symmetrically is what makes the two windows
+    comparable.
+
+    Falsifying result: before the fix the ratio measures in the thousands
+    (5867x, 8142.6 us vs 1.4 us per request, measured under this instrument).
+    """
+    app = Nexus(
+        api_port=8253,
+        enable_durability=False,
+        enable_auth=False,
+        enable_monitoring=False,
+    )
+
+    @app.endpoint("/probe-cost", methods=["GET"], rate_limit=1000)
+    async def probe(request: Request):
+        return {"ok": True}
+
+    def _ip(i: int) -> str:
+        return f"10.{i // 65536}.{(i // 256) % 256}.{i % 256}"
+
+    async def drive(start: int, stop: int) -> None:
+        for i in range(start, stop):
+            await probe(request=_synthetic_request(_ip(i)))
+
+    async def measure(start: int, stop: int) -> float:
+        """Wall time for ``stop - start`` new clients, with the GC held off."""
+        gc.collect()
+        was_enabled = gc.isenabled()
+        gc.disable()
+        try:
+            started = time.perf_counter()
+            await drive(start, stop)
+            return time.perf_counter() - started
+        finally:
+            if was_enabled:
+                gc.enable()
+
+    try:
+        counts = _request_counts_of(probe)
+        sample = 500
+
+        # Phase 1 -- comfortably below the cap. Warm first so the measured
+        # window excludes first-call import/JIT effects.
+        await drive(0, 1000)
+        below_cap = await measure(1000, 1000 + sample)
+
+        # Phase 2 -- fill exactly to the cap, then measure the same number of
+        # NEW clients, each of which now triggers the eviction path.
+        await drive(1000 + sample, _MAX_RATE_LIMIT_TRACKED_CLIENTS)
+        assert len(counts) == _MAX_RATE_LIMIT_TRACKED_CLIENTS, (
+            "expected the map to be exactly full before measuring the "
+            f"at-cap cost; it holds {len(counts)}"
+        )
+
+        at_cap = await measure(
+            _MAX_RATE_LIMIT_TRACKED_CLIENTS,
+            _MAX_RATE_LIMIT_TRACKED_CLIENTS + sample,
+        )
+
+        ratio = at_cap / below_cap
+        assert ratio <= 25, (
+            f"per-request cost at the cap is {ratio:.0f}x the below-cap cost "
+            f"({at_cap / sample * 1e6:.1f} us vs {below_cap / sample * 1e6:.1f} us "
+            "per request). Eviction is not amortised: every new client pays a "
+            "full pass over the map. This runs synchronously inside an async "
+            "handler, so it blocks the event loop for the entire process."
         )
     finally:
         if app._running:
