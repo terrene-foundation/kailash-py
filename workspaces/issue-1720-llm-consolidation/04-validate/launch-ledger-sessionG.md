@@ -59,6 +59,43 @@ Rule for the next dispatch: if a read-only reviewer must produce a durable artif
 the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
 agent. Do not put a file-write step in a read-only specialist's prompt.
 
+## STANDING RULE — commit with a PATHSPEC; `git add` publishes to a SHARED index
+
+`git add` in this checkout writes to an index **every agent shares**. A sibling's next bare
+`git commit` then takes whatever you staged, under the sibling's message. It happened:
+`2f0476251` (F-NEXUS) swept three of F-ENVELOPE's staged files; the amend to `610cc1643`
+returned them to staged; F-ENVELOPE re-committed them as `736e3d449`.
+
+**Verified independently — nothing was lost:** no file appears in both commits, `736e3d449`
+holds exactly F-ENVELOPE's 3 files, `610cc1643` holds F-NEXUS's 5.
+
+    git commit -F <msgfile> -- <your paths>          # race-free
+    git add <paths> && git commit                    # BLOCKED in a shared checkout
+
+The pathspec form commits straight from the working tree and never touches another agent's
+index entries. **The orchestrator was doing the unsafe thing too** — every session-G commit
+above used `git add` + bare `git commit` and was equally exposed; it simply did not collide.
+Broadcast to all live lanes.
+
+## FINDING (out of scope, recorded not fixed) — cross-CLI skill drift
+
+`03-nexus/nexus-api-patterns.md` differs by CLI:
+
+| copy              | lines | `_execute_workflow` mentions |
+| ----------------- | ----- | ---------------------------- |
+| `.claude/skills/` | 127   | **0**                        |
+| `.codex/skills/`  | 235   | 5                            |
+| `.gemini/skills/` | 235   | 5                            |
+
+The CC copy is missing ~108 lines the other two carry, including the documented
+`app._execute_workflow(...)` pattern that refuted the allowlist exemption below. Surfaced
+because a lane cited the CC path and the citation did not resolve — the content was real, in
+the other two copies.
+
+NOT fixed here: this is a COC-artifact concern (`.claude/**`), and per `issue-triage-routing.md`
+this repo is `coc-build`, so it routes cross-SDK-first through `/codify` Step 7a, not into a
+release branch. Folding artifact edits into a 115-commit release branch is scope creep.
+
 ## DECISION — F2's recommended fix was WRONG, and the lane proved it
 
 `R2-CORRECT` F2 reported a parity break: the same body yields `parameters.get("a") == 1`
