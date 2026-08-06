@@ -118,7 +118,20 @@ class GrepTool(Tool):
         elif output_mode == "content":
             return self._content_mode(files, regex, context_lines, head_limit)
         else:
-            return ToolResult.failure(f"Unknown output_mode: {output_mode!r}")
+            # SCRUBBED for the same REASON as the `pattern` branch at :102 —
+            # `output_mode` is a declared property of this tool's own
+            # `parameters_schema`, so it arrives verbatim from a model tool
+            # call and is remote-derived by construction.
+            #
+            # NOT the same RISK, and the distinction is worth keeping: a
+            # credential inside a `command` is routine (`curl -H`, a `psql`
+            # DSN, an `export`), whereas a model putting one in an enum-valued
+            # `output_mode` is far-fetched. This is fixed because it is the
+            # same CLASS, swept when the class was being closed; claiming
+            # equal risk would be over-stating it.
+            return ToolResult.failure(
+                f"Unknown output_mode: {scrub_remote_error(output_mode)}"
+            )
 
     # ------------------------------------------------------------------
     # Output mode implementations

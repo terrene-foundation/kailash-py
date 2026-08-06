@@ -1216,6 +1216,39 @@ def scrub_remote_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER)
     doctrine gap closed BEFORE it shipped a leak, not after — which is the
     difference between this entry and the ``re.compile`` one.
 
+    ``Path.glob`` — NO ECHO, AND THE BRANCH SET MOVES BETWEEN RELEASES. Probed
+    per branch on CPython 3.10 / 3.11 / 3.12 / 3.13 / 3.14 because
+    ``delegate/tools/glob_tool`` passes a MODEL-supplied ``pattern`` to it, so
+    the site turns entirely on Test 2. No branch echoes a credential-bearing
+    pattern on ANY of the five::
+
+        misplaced ``**`` -> "Invalid pattern: '**' can only be an entire
+                            path component"        3.10-3.12 ONLY; gone 3.13+
+        empty/dot-only   -> "Unacceptable pattern: ''"      3.10-3.12, 3.14
+                            "Unacceptable pattern: PosixPath('.')"      3.13
+        embedded NUL     -> "embedded null character in path"
+                            ValueError on 3.13 ONLY; no raise on 3.10-3.12, 3.14
+        absolute pattern -> "Non-relative patterns are unsupported"
+                            NotImplementedError (NOT ValueError), all five
+
+    The only raise that interpolates at all is ``Unacceptable pattern``, and it
+    is reachable ONLY when the pattern normalizes to no tail components
+    (``""``, ``"."``, ``"./"``) — shapes that cannot carry a credential. So
+    ``glob_tool`` is LOCAL on the evidence, and recording that is the point: a
+    NO-echo verdict is a result, and leaving this family out of the enumeration
+    is what forces the next author to guess.
+
+    TWO THINGS THIS ENTRY EXISTS TO WARN ABOUT, both invisible from one
+    interpreter. First, the branch SET is not stable — two of the four rows
+    above differ between 3.12 and 3.13 in BOTH directions (a ValueError
+    removed, another added), so a verdict measured on one interpreter is not a
+    verdict about the versions this package supports. Second, the absolute-
+    pattern branch raises ``NotImplementedError``, a ``RuntimeError`` subclass:
+    an ``except ValueError`` around a glob does not catch it, which is a
+    correctness bug independent of the scrub question and is exactly how it sat
+    unnoticed. Probe every branch AND every supported interpreter, or the
+    sample is again standing in for the enumeration.
+
     NAMED CARVE-OUT — FILESYSTEM-PATH OPERANDS STAY LOCAL. A file tool whose
     path argument came from a model (``file_read``, ``file_write``,
     ``file_edit``) raises an ``OSError`` that DOES echo the path, which by the

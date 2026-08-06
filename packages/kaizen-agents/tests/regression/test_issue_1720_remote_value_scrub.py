@@ -493,51 +493,77 @@ class TestProbedOperandEchoVerdicts:
         assert secret in str(excinfo.value)
 
     @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
-    def test_path_glob_value_error_branches_do_not_echo_the_pattern(
+    def test_path_glob_no_branch_echoes_a_credential_bearing_pattern(
         self, secret: str
     ) -> None:
-        """`Path.glob` — the family `glob_tool` compiles a MODEL-supplied operand with.
+        """`Path.glob` — the family `glob_tool` passes a MODEL-supplied operand to.
 
-        Probed per BRANCH rather than sampled, because sampling `re.compile`
-        is what produced the wrong verdict above. CPython 3.13's `Path.glob`
-        has exactly two `ValueError`-raising branches reachable from a pattern
-        string (`pathlib/_local.py`):
+        VERDICT: NO echo, which is why `glob_tool` keeps `scrub_local_error`.
+        A no-echo result is a result, not an absence — this site is LOCAL on
+        measured evidence, unlike `grep_tool` below which demonstrably leaked.
 
-        * `not parts`  -> "Unacceptable pattern: {pattern!r}"  — INTERPOLATES,
-          but only reachable when the pattern normalizes to NO tail components
-          (`""`, `"."`, `"./"`, `"././."`), every one of which reprs as
-          `PosixPath('.')`. A credential-bearing pattern always has a tail
-          part, so it can never reach this raise.
-        * embedded NUL -> "lstat: embedded null character in path" — a
-          condition class, no operand.
+        Probed per BRANCH and across INTERPRETERS, because sampling is exactly
+        what produced the wrong `re.compile` verdict above. Measured on CPython
+        3.10 / 3.11 / 3.12 / 3.13 / 3.14, none echoes::
 
-        Verdict on this interpreter: NO `ValueError` branch echoes a
-        credential-bearing operand. This reads the REAL messages, so a CPython
-        that adds an echoing branch returns the other answer here instead of
-        leaving the site's classification standing on a stale verdict.
+            misplaced-`**` -> "Invalid pattern: '**' can only be an entire
+                              path component"      (3.10-3.12 only; gone 3.13+)
+            empty/dot-only -> "Unacceptable pattern: ''"          (3.10-3.12, 3.14)
+                              "Unacceptable pattern: PosixPath('.')"    (3.13)
+            embedded NUL   -> "embedded null character in path"   (ValueError on
+                              3.13 ONLY; not raised on 3.10-3.12, 3.14)
+            absolute       -> "Non-relative patterns are unsupported"
+                              (NotImplementedError, all five)
+
+        The only raise that interpolates at all is "Unacceptable pattern",
+        reachable ONLY when the pattern normalizes to no tail components
+        (`""`, `"."`, `"./"`), none of which can carry a credential.
+
+        Written as "whatever happens, the operand must not appear" rather than
+        as per-branch `pytest.raises`, because the branch SET is not stable
+        across the interpreters this package supports — asserting that a
+        specific input raises would red on 3.12/3.14 for reasons that have
+        nothing to do with the echo question under test. This formulation reads
+        the REAL messages on whatever interpreter runs it, so a CPython that
+        starts echoing returns the other answer instead of leaving the
+        classification standing on a stale verdict.
         """
         base = pathlib.Path.cwd()
+        candidates = [
+            secret,
+            f"./{secret}",
+            f"{secret}/..",
+            f"{secret}\x00",
+            f"\x00{secret}",
+            f"a/**{secret}/b",
+            f"[{secret}",
+            f"/{secret}/*",
+            f"{secret}//",
+        ]
 
-        # Branch 1 — the interpolating one. Unreachable with a real operand.
-        with pytest.raises(ValueError) as excinfo:
-            list(base.glob(""))
-        assert secret not in str(excinfo.value)
-        assert repr(base.with_segments(secret)._tail) != "[]", (
-            "premise: a credential-bearing pattern must have a tail component, "
-            "which is what keeps it away from the interpolating raise"
+        echoed: list[tuple[str, str, str]] = []
+        for pattern in candidates:
+            try:
+                list(base.glob(pattern))
+            except Exception as exc:  # every raise, not only ValueError
+                if secret in str(exc):
+                    echoed.append((pattern, type(exc).__name__, str(exc)))
+
+        assert echoed == [], (
+            "a Path.glob branch now echoes its pattern operand: "
+            f"{echoed!r}. glob_tool's LOCAL classification was derived from "
+            "the absence of exactly this, so it must be re-derived — the "
+            "conservative preset does not claim a prefix-less credential."
         )
-
-        # Branch 2 — embedded NUL, reachable WITH the operand present.
-        with pytest.raises(ValueError) as excinfo:
-            list(base.glob(f"{secret}\x00"))
-        assert secret not in str(excinfo.value)
 
     def test_path_glob_absolute_pattern_is_NOT_a_value_error(self) -> None:
         """The branch an `except ValueError` cannot catch.
 
         A model-supplied absolute pattern raises `NotImplementedError`, which
-        is a `RuntimeError` subclass. `glob_tool` caught only `ValueError`, so
-        this escaped the tool's own contract entirely.
+        is a `RuntimeError` subclass, on all five interpreters probed.
+        `glob_tool` caught only `ValueError`, so this escaped the tool's own
+        contract entirely and surfaced to the model as an unactionable
+        "failed with NotImplementedError".
         """
         assert not issubclass(NotImplementedError, ValueError)
         with pytest.raises(NotImplementedError):
@@ -593,47 +619,71 @@ class TestGrepToolPatternIsModelOutputAndMustBeScrubbedRemote:
             "and the conservative preset does not claim a prefix-less shape."
         )
 
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_unknown_output_mode_is_scrubbed_too(self, secret: str) -> None:
+        """The sibling operand on the same tool, swept when the class was closed.
+
+        `output_mode` is a declared property of the tool's `parameters_schema`
+        (`kwargs.get("output_mode", ...)`), so it is model-supplied exactly as
+        `pattern` is, and the unknown-mode branch interpolated it raw while the
+        branch 19 lines above already scrubbed. Lower RISK than the `pattern`
+        or `command` operands — a model has no reason to put a credential in an
+        enum-valued field — but the same CLASS, which is the reason it is
+        fixed rather than a claim that it is equally dangerous.
+        """
+        from kaizen_agents.delegate.tools.grep_tool import GrepTool
+
+        result = GrepTool().execute(pattern="x", output_mode=secret)
+
+        assert result.is_error, "an unknown output_mode must fail"
+        assert secret not in result.error
+
 
 @pytest.mark.regression
-class TestGlobToolPatternIsModelOutputAndIsClassifiedRemote:
+class TestGlobToolPatternIsModelOutputAndProbedLocal:
     """`glob_tool.py`'s `pattern` AND `path` are both model-supplied.
 
-    HONEST VERDICT, stated as measured rather than as convenient: the probes in
-    `TestProbedOperandEchoVerdicts` found NO `Path.glob` `ValueError` branch on
-    CPython 3.13.7 that echoes a credential-bearing operand. So unlike
-    `grep_tool` — where the group-name branch demonstrably leaked — this site
-    was not shipping a live leak, and saying otherwise would be inventing
-    evidence the probes did not produce.
+    VERDICT: LOCAL, and that is the MEASURED answer rather than the inherited
+    one. The probes in `TestProbedOperandEchoVerdicts` found NO `Path.glob`
+    branch on CPython 3.10 / 3.11 / 3.12 / 3.13 / 3.14 that echoes a
+    credential-bearing pattern. So unlike `grep_tool` — where the group-name
+    branch demonstrably leaked — this site was never shipping a leak, and
+    switching it to the REMOTE preset would have been a change with no effect
+    on any supported interpreter, which then reads to the next author as
+    "this site was found to echo". A no-echo result is a result.
 
-    It is classified REMOTE anyway, for two reasons that do not depend on a
-    leak existing today:
+    The site passes doctrine Test 1 (raised in-process by pathlib) and, on the
+    evidence, Test 2 as well (no branch carries the operand) — which is what
+    LOCAL means. The defense against a future CPython that starts echoing is
+    the pinned probe, not a pre-emptive preset: the probe reads real messages
+    and reds, forcing the classification to be re-derived.
 
-    1. THE BRANCH SET IS VERSION-DEPENDENT. `Path.glob` raised `ValueError`
-       for a mis-placed `**` component through 3.12 and stopped in 3.13; the
-       set of raises this `except` catches is not stable across the
-       interpreters this package supports, and a re-added interpolating branch
-       would leak silently under the conservative preset.
-    2. THE SWITCH COSTS NOTHING. The named filesystem-path carve-out in
-       `scrub_remote_error`'s doctrine exists because switching a
-       path-echoing site would blank useful path segments for no credential
-       gain. That reasoning does not reach here: these messages carry a
-       condition class (`"Unacceptable pattern: PosixPath('.')"`,
-       `"embedded null character"`), never a path the agent can act on. There
-       is no diagnostic payload to protect, so the doctrine's own tie-breaker
-       applies — over-redacting costs a correlation handle, under-redacting
-       leaks a credential.
+    The `path` operand is separately covered by the doctrine's NAMED
+    filesystem-path carve-out — `redact_paths=False` on BOTH presets, so
+    scrubbing `:47`'s "Directory not found: {base}" would redact nothing.
     """
 
     @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
-    def test_null_byte_pattern_does_not_leak_a_prefixless_credential(
-        self, secret: str
-    ) -> None:
+    def test_no_pattern_shape_leaks_a_prefixless_credential(self, secret: str) -> None:
+        """Every failure-inducing shape, whatever this interpreter does with it.
+
+        Deliberately NOT asserting `is_error` per shape: the NUL pattern raises
+        `ValueError` on 3.13 ONLY and is accepted without raising on
+        3.10-3.12 and 3.14, so pinning the failure would red on those for a
+        reason unrelated to the leak question. What must hold on EVERY
+        interpreter is that the operand never reaches the tool result.
+        """
         from kaizen_agents.delegate.tools.glob_tool import GlobTool
 
-        result = GlobTool().execute(pattern=f"{secret}\x00")
-
-        assert result.is_error, "an embedded NUL must fail, not match"
-        assert secret not in result.error
+        for pattern in (f"{secret}\x00", f"a/**{secret}/b", f"/{secret}/*"):
+            result = GlobTool().execute(pattern=pattern)
+            assert secret not in result.error, (
+                f"glob_tool surfaced the model-supplied pattern {pattern!r} in "
+                "its error; the conservative preset does not claim a "
+                "prefix-less shape, so the LOCAL classification must be "
+                "re-derived"
+            )
+            assert secret not in result.output
 
     def test_absolute_pattern_fails_as_a_tool_result_not_an_exception(self) -> None:
         """`NotImplementedError` is not a `ValueError` and escaped the tool.

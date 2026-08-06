@@ -1384,7 +1384,7 @@ class UserFilteredAgentDiscovery:
         *,
         surface: str,
         protection_off: str,
-    ) -> bool:
+    ) -> tuple[str, str] | None:
         """Decide whether a skill-metadata call is identity-scoped.
 
         ONE predicate for BOTH skill-metadata surfaces, and that is the point
@@ -1394,8 +1394,17 @@ class UserFilteredAgentDiscovery:
         callable means a future edit cannot teach one surface and forget the
         other, because there is only one place to teach.
 
-        Returns True when the call is MEDIATED (route through
-        `_check_user_access`), False when it is the unfiltered legacy path.
+        Returns the NARROWED `(user_id, organization_id)` pair when the call is
+        MEDIATED, or None for the unfiltered legacy path.
+
+        Returning the pair rather than a bool is deliberate: `_check_user_access`
+        and `find_agents_for_user` both declare `user_id: str` (not optional),
+        so a bool return would leave every call site passing `str | None` into a
+        `str` parameter and relying on a correlation the type system cannot see
+        — precisely the "sibling field that currently correlates" shape the
+        constraints guard above was fixed for. Handing back the narrowed values
+        makes the guarantee the guard actually provides the same thing the
+        callee's signature demands.
 
         THREE CASES, and the middle one is the fix:
 
@@ -1421,11 +1430,14 @@ class UserFilteredAgentDiscovery:
         whether an empty organization is acceptable. That is the authority's
         question, not this method's.
         """
-        supplied = {
-            "user_id": user_id is not None,
-            "organization_id": organization_id is not None,
-        }
-        if all(supplied.values()):
+        # Written as an explicit two-way `is not None` conjunction rather than
+        # an `all(...)` over a dict so the narrowing to `str` falls out of the
+        # control flow. The dict form needed an `assert` to convince a type
+        # checker, and an `assert` is stripped under `-O` — a guard that
+        # evaporates under an interpreter flag is the wrong shape for anything
+        # standing next to an authorization decision, even when it is only
+        # carrying type information.
+        if user_id is not None and organization_id is not None:
             # BLANK is malformed INPUT, and rejecting it is NOT the truthiness
             # test coming back in through the side door. The two are different
             # questions asked of different things: truthiness asked whether an
@@ -1460,8 +1472,12 @@ class UserFilteredAgentDiscovery:
                     "Pass a real identity, or omit both arguments to "
                     "explicitly request the unfiltered listing."
                 )
-            return True
+            return user_id, organization_id
 
+        supplied = {
+            "user_id": user_id is not None,
+            "organization_id": organization_id is not None,
+        }
         if any(supplied.values()):
             missing = [name for name, present in supplied.items() if not present]
             given = [name for name, present in supplied.items() if present]
@@ -1498,7 +1514,7 @@ class UserFilteredAgentDiscovery:
                     ),
                 },
             )
-        return False
+        return None
 
     async def get_skill_metadata(
         self,
@@ -1537,7 +1553,7 @@ class UserFilteredAgentDiscovery:
             ValueError: If exactly one of `user_id` / `organization_id` is
                 supplied (fail closed on a partial identity).
         """
-        scoped = self._resolve_identity_scope(
+        scope = self._resolve_identity_scope(
             user_id,
             organization_id,
             surface="get_skill_metadata",
@@ -1560,9 +1576,10 @@ class UserFilteredAgentDiscovery:
         if agent_metadata is None:
             return None
 
-        if scoped:
+        if scope is not None:
+            scoped_user_id, scoped_org_id = scope
             has_access, _ = await self._check_user_access(
-                user_id, organization_id, agent_metadata
+                scoped_user_id, scoped_org_id, agent_metadata
             )
             if not has_access:
                 return None
@@ -1592,7 +1609,7 @@ class UserFilteredAgentDiscovery:
             ValueError: If exactly one of `user_id` / `organization_id` is
                 supplied (fail closed on a partial identity).
         """
-        scoped = self._resolve_identity_scope(
+        scope = self._resolve_identity_scope(
             user_id,
             organization_id,
             surface="list_skill_metadata",
@@ -1602,8 +1619,9 @@ class UserFilteredAgentDiscovery:
             ),
         )
 
-        if scoped:
-            agents = await self.find_agents_for_user(user_id, organization_id)
+        if scope is not None:
+            scoped_user_id, scoped_org_id = scope
+            agents = await self.find_agents_for_user(scoped_user_id, scoped_org_id)
             return [
                 AgentSkillMetadata.from_agent(a.metadata.agent, a.agent_id)
                 for a in agents
