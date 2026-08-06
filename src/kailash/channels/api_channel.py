@@ -288,8 +288,14 @@ class APIChannel(Channel):
             # Execute workflow
             if workflow_registration.type == "embedded":
                 workflow = workflow_registration.workflow
+                from kailash.workflow.input_envelope import bind_parameter_envelope
+
+                # Bind BOTH shapes: this channel serves the same registrations
+                # as the HTTP route, so a workflow reading `parameters.get(...)`
+                # must resolve here too. Passing `inputs` raw bound only bare
+                # top-level names and raised NameError for the convention.
                 results, run_id = self.workflow_server.runtime.execute(
-                    workflow, parameters=inputs
+                    workflow, parameters=bind_parameter_envelope(inputs)
                 )
             else:
                 # Handle proxied workflows

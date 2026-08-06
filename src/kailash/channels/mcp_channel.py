@@ -455,8 +455,15 @@ class MCPChannel(Channel):
                 # Execute workflow
                 workflow = self._workflow_registry.get(registration.workflow_name)
                 if workflow and self.runtime is not None:
+                    from kailash.workflow.input_envelope import (
+                        bind_parameter_envelope,
+                    )
+
+                    # MCP tools/call arguments are the caller's workflow
+                    # arguments -- the same role the `parameters` envelope
+                    # fills on the HTTP, CLI and other MCP paths.
                     results, run_id = await self.runtime.execute_async(
-                        workflow, parameters=arguments
+                        workflow, parameters=bind_parameter_envelope(arguments)
                     )
                     result = {
                         "results": results,
@@ -606,8 +613,12 @@ class MCPChannel(Channel):
             return {"success": False, "error": "Runtime not available"}
 
         try:
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
+            # Same binding as _handle_tools_call above and every other channel:
+            # one registration, one input contract.
             results, run_id = await self.runtime.execute_async(
-                workflow, parameters=inputs
+                workflow, parameters=bind_parameter_envelope(inputs)
             )
             return {
                 "success": True,

@@ -625,8 +625,12 @@ class CLIChannel(Channel):
 
         start_time = time.monotonic()
         try:
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
+            # The CLI's --input JSON is the caller's workflow arguments, the
+            # same role the `parameters` envelope fills on every other channel.
             results, run_id = await self.runtime.execute_async(
-                workflow, parameters=inputs
+                workflow, parameters=bind_parameter_envelope(inputs)
             )
         except Exception as e:
             logger.error(f"Workflow execution failed for '{workflow_name}': {e}")

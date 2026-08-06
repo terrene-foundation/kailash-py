@@ -86,8 +86,12 @@ class TestExecuteWorkflowCommand:
         assert result["execution_time_ms"] >= 0
 
         mock_builder.build.assert_called_once()
+        # The CLI binds the `parameters` envelope like every other channel,
+        # so a no-argument invocation passes an EMPTY envelope rather than a
+        # bare {} -- that is what lets a workflow reach its own
+        # `parameters.get("x", default)` defaults instead of raising NameError.
         channel.runtime.execute_workflow_async.assert_awaited_once_with(
-            mock_built, inputs={}
+            mock_built, inputs={"parameters": {}}
         )
 
     @pytest.mark.asyncio
@@ -112,7 +116,13 @@ class TestExecuteWorkflowCommand:
         assert result["success"] is True
         channel.runtime.execute_workflow_async.assert_awaited_once()
         call_kwargs = channel.runtime.execute_workflow_async.call_args
-        assert call_kwargs.kwargs["inputs"] == {"key": "value"}
+        # BOTH shapes: each key at workflow level AND the whole mapping
+        # under `parameters`, so the same workflow source runs here and on
+        # the HTTP / MCP / WebSocket channels alike.
+        assert call_kwargs.kwargs["inputs"] == {
+            "key": "value",
+            "parameters": {"key": "value"},
+        }
 
     @pytest.mark.asyncio
     async def test_execute_workflow_invalid_json_input(self, channel):
@@ -178,7 +188,7 @@ class TestExecuteWorkflowCommand:
 
         assert result["success"] is True
         channel.runtime.execute_workflow_async.assert_awaited_once_with(
-            pre_built, inputs={}
+            pre_built, inputs={"parameters": {}}
         )
 
     @pytest.mark.asyncio
