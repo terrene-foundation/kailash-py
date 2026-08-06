@@ -32,6 +32,7 @@ the posture actually claims to leave alone.
 from __future__ import annotations
 
 import base64
+import gc
 import re
 import time
 
@@ -43,6 +44,55 @@ from kaizen.nodes.ai.error_sanitizer import (
 )
 
 pytestmark = pytest.mark.regression
+
+
+def _linearity_ratio(small: str, large: str, reps: int = 5) -> float:
+    """Cost of the 8x payload relative to the baseline, in CPU TIME.
+
+    ONE helper for all three linearity tests below, which previously carried
+    three identical inline copies. `time.process_time()`, NOT
+    `time.perf_counter()`, and that swap is the fix rather than a refinement:
+    the property under test is how much WORK the URL rules do as the input
+    grows, while wall clock measures that PLUS every other process on the
+    machine, and this repo's suites routinely run several at once. On wall
+    clock `test_scheme_broadening_is_linear_on_input_with_no_scheme` failed at
+    109.8x against its own 25x bound on a rule nobody had touched, minutes
+    after passing in isolation; sibling units in this package swung between 8x
+    and 101x across consecutive runs of identical code. `process_time` excludes
+    the intervals this process was descheduled, which is exactly that noise.
+
+    That flakiness is not cosmetic. A ratio test that fires on unchanged code
+    trains the next reader to raise the bound, and `rules/testing.md`
+    § Complexity Bounds names the threshold bump as the institutional tell for
+    a buried complexity regression. The instrument had to become trustworthy
+    rather than the bound become loose.
+
+    Interleaving and the GC pause are secondary defences: pairing each large
+    sample with an adjacent small one keeps any residual drift common to both,
+    and a collection landing inside the longer measurement would otherwise be
+    indistinguishable from super-linear cost.
+
+    Still self-normalising: no absolute threshold anywhere. Verified to still
+    FIRE — with the `{0,31}` scheme bound removed the ratio reads ~69x.
+    """
+    small_best = float("inf")
+    large_best = float("inf")
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        for _ in range(reps):
+            start = time.process_time()
+            sanitize_provider_error(RuntimeError(small), "test")
+            small_best = min(small_best, time.process_time() - start)
+
+            start = time.process_time()
+            sanitize_provider_error(RuntimeError(large), "test")
+            large_best = min(large_best, time.process_time() - start)
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+    return large_best / max(small_best, 1e-9)
+
 
 # --- Gap 1: connection-string credentials across schemes ---------------------
 
@@ -313,15 +363,7 @@ def test_url_auth_scan_is_linear_not_quadratic() -> None:
     small = "http://" + "a:" * 4_000  # 8k chars
     large = "http://" + "a:" * 32_000  # 64k chars, 8x
 
-    def cost(text: str, reps: int = 5) -> float:
-        best = float("inf")
-        for _ in range(reps):
-            start = time.perf_counter()
-            sanitize_provider_error(RuntimeError(text), "test")
-            best = min(best, time.perf_counter() - start)
-        return best
-
-    ratio = cost(large) / cost(small)
+    ratio = _linearity_ratio(small, large)
     assert ratio < 25, (
         f"sanitize_provider_error scaled {ratio:.1f}x for an 8x longer token "
         f"(linear ~8x, quadratic ~64x) — a userinfo quantifier probably lost "
@@ -507,15 +549,7 @@ def test_scheme_broadening_is_linear_on_input_with_no_scheme() -> None:
         "before the URL rules run; this test would pass vacuously"
     )
 
-    def cost(text: str, reps: int = 5) -> float:
-        best = float("inf")
-        for _ in range(reps):
-            start = time.perf_counter()
-            sanitize_provider_error(RuntimeError(text), "test")
-            best = min(best, time.perf_counter() - start)
-        return best
-
-    ratio = cost(large) / max(cost(small), 1e-9)
+    ratio = _linearity_ratio(small, large)
     assert ratio < 25, (
         f"8x input scaled {ratio:.1f}x — the scheme prefix is backtracking "
         "quadratically; check that every URL rule bounds it "
@@ -540,15 +574,7 @@ def test_overflow_rule_scan_is_linear_not_quadratic() -> None:
     small = "http://" + "a:" * 4_000
     large = "http://" + "a:" * 32_000
 
-    def cost(text: str, reps: int = 5) -> float:
-        best = float("inf")
-        for _ in range(reps):
-            start = time.perf_counter()
-            sanitize_provider_error(RuntimeError(text), "test")
-            best = min(best, time.perf_counter() - start)
-        return best
-
-    ratio = cost(large) / max(cost(small), 1e-9)
+    ratio = _linearity_ratio(small, large)
     assert ratio < 25, (
         f"8x input scaled {ratio:.1f}x — the overflow rule is backtracking "
         "quadratically; check that its first run still excludes ':'"

@@ -646,6 +646,118 @@ def normalize_access_constraints(
     )
 
 
+def _require_identity_or_raise(
+    user_id: str | None,
+    organization_id: str | None,
+    *,
+    surface: str,
+    omission_remedy: str,
+) -> tuple[str, str]:
+    """THE fail-closed caller-identity predicate. One implementation, N surfaces.
+
+    Every public surface of `UserFilteredAgentDiscovery` that takes a caller
+    identity routes here. That is not tidiness: the identity check landed
+    piecemeal, one surface per review round, and each round the sibling that
+    did not get it kept the exact defect the round had just closed. A predicate
+    the surfaces SHARE cannot drift; three that "must agree" always do
+    (`rules/security.md` § Credential Decode Helpers states the general form,
+    § Enforcement-Surface Parity the specific one).
+
+    Two refusals, and both are refusals of MALFORMED INPUT rather than of a
+    caller:
+
+    * MISSING / PARTIAL — one or both halves are `None`. A half-identity
+      previously WIDENED to "every registered agent", so a caller who supplied
+      LESS received MORE, which is the inverse of what an authorization
+      parameter means. Refusing is the only disposition an attacker cannot
+      reach by choosing what to omit.
+    * BLANK — a supplied half is empty or whitespace-only. Refused rather than
+      forwarded because a blank id is not a scope the permission checker can
+      evaluate, and checkers differ on what they do with one: a LAX checker
+      reads an empty organization as "unscoped" and GRANTS. `security.md`
+      § Input Validation puts that check at the boundary, and the § Redactor
+      Contract length floor is the same shape — refuse with a typed error
+      naming the offending field rather than hand a degenerate value to the
+      authority and hope.
+
+    `is not None`, NOT truthiness, and the identity test is load-bearing:
+    `_FalsyOrgId("org-1")` — present, non-empty, `__bool__` False — is SUPPLIED
+    and gets mediated, which is precisely the case a truthiness guard got
+    wrong. The BLANK check that follows is not truthiness coming back through
+    the side door; it asks a different question of a different thing (does a
+    supplied STRING carry characters), and it is `isinstance`-gated so a
+    non-`str` id type is never asked.
+
+    `omission_remedy` is the one sentence that legitimately differs per
+    surface, because the surfaces genuinely differ: the skill-metadata methods
+    default both parameters and therefore HAVE a documented unfiltered form to
+    point the caller at, while `find_agents_for_user` declares both as required
+    `str` and has none. Parameterising the remedy is what lets the CHECK stay
+    identical while the ADVICE stays accurate.
+
+    Returns the NARROWED `(user_id, organization_id)` pair rather than a bool
+    so the callee signatures (`_check_user_access` declares `str`, not
+    `str | None`) are satisfied by control flow instead of by a correlation the
+    type system cannot see.
+    """
+    supplied = {
+        "user_id": user_id is not None,
+        "organization_id": organization_id is not None,
+    }
+    if not all(supplied.values()):
+        missing = [name for name, present in supplied.items() if not present]
+        given = [name for name, present in supplied.items() if present]
+        raise ValueError(
+            f"{surface}() received a {'PARTIAL' if given else 'MISSING'} caller "
+            "identity: "
+            + (
+                f"{', '.join(given)} supplied, {', '.join(missing)} missing. "
+                if given
+                else f"{' and '.join(missing)} are both absent. "
+            )
+            + "Both are required to filter by permission; supplying one alone "
+            "previously returned every registered agent unfiltered. " + omission_remedy
+        )
+
+    blank = [
+        name
+        for name, value in (
+            ("user_id", user_id),
+            ("organization_id", organization_id),
+        )
+        if isinstance(value, str) and not value.strip()
+    ]
+    if blank:
+        raise ValueError(
+            f"{surface}() received a BLANK caller identity: "
+            f"{', '.join(blank)} is empty or whitespace-only. An empty "
+            "identity is not a permission scope; it previously bypassed "
+            "filtering and returned every registered agent. " + omission_remedy
+        )
+
+    # Narrowed by the `is not None` guard above.
+    return user_id, organization_id  # type: ignore[return-value]
+
+
+#: Remedy sentence for the two surfaces that DO have a documented unfiltered
+#: form (both identity parameters are defaulted, so omitting them is a
+#: pre-existing supported call shape kept reachable-but-loud).
+_REMEDY_UNFILTERED_AVAILABLE: Final[str] = (
+    "Pass a real identity for both, or omit both arguments to explicitly "
+    "request the unfiltered listing."
+)
+
+#: Remedy sentence for `find_agents_for_user`, which declares both parameters
+#: as required `str` with no default. An all-`None` call was never a supported
+#: shape there, so there is no unfiltered form to offer and none is invented:
+#: offering one would ADD a wide path under cover of a fail-closed fix.
+_REMEDY_NO_UNFILTERED_FORM: Final[str] = (
+    "Both are required on this surface, which has no unfiltered form; use "
+    "list_skill_metadata() with no arguments if an unmediated listing is "
+    "genuinely intended."
+)
+
+
 @dataclass
 class AgentWithAccess:
     """Agent metadata combined with access information.
@@ -1032,6 +1144,15 @@ class UserFilteredAgentDiscovery:
             List of AgentWithAccess with access metadata
 
         Raises:
+            ValueError: The caller identity is PARTIAL (exactly one half
+                supplied), MISSING (neither) or BLANK (a supplied half is
+                empty/whitespace-only). Fail CLOSED — see
+                `_require_identity_or_raise`. Unlike the two skill-metadata
+                surfaces this method has NO unfiltered form to fall back to:
+                both parameters are declared required `str` with no default, so
+                an identity-less call was never a supported shape here and
+                inventing one now would ADD a wide path under cover of a
+                fail-closed fix.
             ReasoningDegradedError: `capability_filter` ONLY — the LLM
                 capability judge degraded for EVERY registered agent (#1981),
                 so the registry has no ranking to filter. Deliberately
@@ -1043,6 +1164,25 @@ class UserFilteredAgentDiscovery:
                 emitted first so the degradation is triageable at THIS layer
                 too (`rules/observability.md` MUST Rule 3).
         """
+        # FIRST, before any registry work. This surface is the one that returns
+        # the RICHER payload (`AgentWithAccess` carries `AccessMetadata` — the
+        # permission level and the whole constraint envelope), and it is also
+        # the MEDIATED PATH `list_skill_metadata` delegates to. The guard
+        # therefore belongs in this CALLEE rather than only in the callers
+        # above it: placed here it closes the class, placed there it would
+        # close two instances of it.
+        #
+        # The refusal precedes the registry lookup because a degenerate
+        # identity is not a scope any lookup can be performed under — both
+        # branches below (`find_agents_by_capability` and `list_agents`) are
+        # covered by the single guard rather than one each.
+        user_id, organization_id = _require_identity_or_raise(
+            user_id,
+            organization_id,
+            surface="find_agents_for_user",
+            omission_remedy=_REMEDY_NO_UNFILTERED_FORM,
+        )
+
         # Get all agents from registry
         if capability_filter:
             try:
@@ -1387,12 +1527,20 @@ class UserFilteredAgentDiscovery:
     ) -> tuple[str, str] | None:
         """Decide whether a skill-metadata call is identity-scoped.
 
-        ONE predicate for BOTH skill-metadata surfaces, and that is the point
-        rather than tidiness. The originating defect was one surface carrying a
-        control its sibling in this same file did not
-        (`rules/security.md` § Enforcement-Surface Parity): a single shared
-        callable means a future edit cannot teach one surface and forget the
-        other, because there is only one place to teach.
+        THE OPTIONAL-IDENTITY WRAPPER around `_require_identity_or_raise`. This
+        method owns exactly ONE thing the shared predicate does not: the
+        NEITHER-supplied case, which on these two surfaces means "the caller
+        explicitly asked for the unfiltered listing" and is a documented
+        pre-existing shape. Everything else — the PARTIAL refusal, the BLANK
+        refusal, the narrowing — is delegated, because it must be IDENTICAL at
+        every identity-taking surface in this class and the ONLY way to
+        guarantee that is to have one implementation
+        (`rules/security.md` § Enforcement-Surface Parity).
+
+        The earlier form of this method carried those checks INLINE, which is
+        how `find_agents_for_user` — the third identity-taking surface, and the
+        one this class's own docstring advertises — went two review rounds
+        without them: there was nothing for it to call.
 
         Returns the NARROWED `(user_id, organization_id)` pair when the call is
         MEDIATED, or None for the unfiltered legacy path.
@@ -1406,88 +1554,35 @@ class UserFilteredAgentDiscovery:
         makes the guarantee the guard actually provides the same thing the
         callee's signature demands.
 
-        THREE CASES, and the middle one is the fix:
+        THREE CASES, and only the third is decided here:
 
-        * BOTH supplied -> mediated.
-        * EXACTLY ONE supplied -> `ValueError`. FAIL CLOSED. A half-identity
-          previously widened to "every registered agent", so a caller who
-          supplied LESS received MORE — the inverse of what an authorization
-          parameter means. Refusing is the only disposition that cannot be
-          reached by an attacker choosing what to omit.
+        * BOTH supplied -> mediated (the shared predicate narrows and returns).
+        * EXACTLY ONE supplied, or a supplied half BLANK -> `ValueError` from
+          the shared predicate. FAIL CLOSED.
         * NEITHER supplied -> unfiltered, but LOUD (once per instance per
-          surface).
+          surface). THIS case is what makes these two surfaces different from
+          `find_agents_for_user`, and it is the only reason this wrapper exists.
 
-        `is not None`, NOT truthiness, and that identity test is load-bearing
-        exactly as it is in `_check_user_access`. The guard here was
-        `if user_id and organization_id:` while the fix at that method's
-        checker guard was already `is not None` — the same defect class, live
-        at a sibling surface in the same file. Under truthiness,
-        `organization_id=""` (and any org id whose `__bool__` is False, or
-        whose `__len__` is 0 — an id type wrapping an empty tenant scope) was
-        NOT "supplied", so it fell to the unfiltered branch and disclosed every
+        The NEITHER branch is tested FIRST and with `is None`, NOT truthiness,
+        and that ordering is load-bearing: under the old truthiness guard
+        `organization_id=""` (or any org id whose `__bool__` is False, or whose
+        `__len__` is 0 — an id type wrapping an empty tenant scope) was NOT
+        "supplied", so it fell to the unfiltered branch and disclosed every
         agent's `input_schema` and `capabilities` with no check and no warning.
-        Under identity it IS supplied, so the permission checker decides
-        whether an empty organization is acceptable. That is the authority's
-        question, not this method's.
+        Under identity it IS supplied, so it reaches the shared predicate,
+        which refuses it as malformed rather than widening.
         """
-        # Written as an explicit two-way `is not None` conjunction rather than
-        # an `all(...)` over a dict so the narrowing to `str` falls out of the
-        # control flow. The dict form needed an `assert` to convince a type
-        # checker, and an `assert` is stripped under `-O` — a guard that
-        # evaporates under an interpreter flag is the wrong shape for anything
-        # standing next to an authorization decision, even when it is only
-        # carrying type information.
-        if user_id is not None and organization_id is not None:
-            # BLANK is malformed INPUT, and rejecting it is NOT the truthiness
-            # test coming back in through the side door. The two are different
-            # questions asked of different things: truthiness asked whether an
-            # ARBITRARY OBJECT was "present" and got the wrong answer for any
-            # id type defining `__bool__`/`__len__`; this asks whether a
-            # SUPPLIED STRING carries any characters. `_FalsyOrgId("org-1")` —
-            # present, non-empty, falsy — passes here and is mediated, which
-            # is exactly the case truthiness got wrong.
-            #
-            # Refused rather than forwarded because a blank id is not a scope
-            # the permission checker can meaningfully evaluate, and checkers
-            # differ on what they do with one: a lax checker may read an empty
-            # organization as "unscoped" and grant. `rules/security.md`
-            # § Input Validation puts that check at the boundary, and the
-            # § Redactor Contract length floor is the same shape — refuse with
-            # a typed error naming the offending field rather than hand a
-            # degenerate value to the authority and hope.
-            blank = [
-                name
-                for name, value in (
-                    ("user_id", user_id),
-                    ("organization_id", organization_id),
-                )
-                if isinstance(value, str) and not value.strip()
-            ]
-            if blank:
-                raise ValueError(
-                    f"{surface}() received a BLANK caller identity: "
-                    f"{', '.join(blank)} is empty or whitespace-only. An empty "
-                    "identity is not a permission scope; it previously "
-                    "bypassed filtering and returned every registered agent. "
-                    "Pass a real identity, or omit both arguments to "
-                    "explicitly request the unfiltered listing."
-                )
-            return user_id, organization_id
-
-        supplied = {
-            "user_id": user_id is not None,
-            "organization_id": organization_id is not None,
-        }
-        if any(supplied.values()):
-            missing = [name for name, present in supplied.items() if not present]
-            given = [name for name, present in supplied.items() if present]
-            raise ValueError(
-                f"{surface}() received a PARTIAL caller identity: "
-                f"{', '.join(given)} supplied, {', '.join(missing)} missing. "
-                "Both are required to filter by permission; supplying one "
-                "alone previously returned every registered agent unfiltered. "
-                "Pass both to filter, or neither to explicitly request the "
-                "unfiltered listing."
+        # NEITHER-supplied is decided here and nowhere else: it is the only
+        # disposition that differs between this wrapper and the required-identity
+        # surface. Everything below the branch is delegated so the two cannot
+        # diverge. Written as an explicit `is None` conjunction rather than an
+        # `all(...)` over a dict so the narrowing falls out of control flow.
+        if user_id is not None or organization_id is not None:
+            return _require_identity_or_raise(
+                user_id,
+                organization_id,
+                surface=surface,
+                omission_remedy=_REMEDY_UNFILTERED_AVAILABLE,
             )
 
         # Unfiltered path. Kept reachable because it predates this change and

@@ -57,6 +57,20 @@ vector, not a micro-optimisation concern. Any new pattern MUST bound its
 quantifiers OR establish a deterministic split point, and MUST land with a
 self-normalising linearity test whose input does NOT contain ``://`` — an input that matches the scheme immediately is
 structurally blind to scheme-prefix backtracking.
+
+A LINEARITY TEST MUST ALSO REACH THE QUANTIFIER IT CLAIMS TO MEASURE, and that
+is a SEPARATE requirement from the one above. ``_COMMA_BEARING_RUN`` shipped
+with a probe whose payload could not enter it: the units were ``password=,``
+and ``password:,``, and this rule's leading atom EXCLUDES ``,``, so the
+alternative failed at its first character at every offset and the
+``(?:,+...)+`` group was never entered at all. The timing assertion returned
+the same verdict whether the group was linear or quadratic — a check that
+cannot discriminate is not evidence (``rules/instrument-discipline.md``
+MUST-1). Every linearity unit MUST therefore carry an ENTRY assertion — the
+pattern's match on the payload must actually span the construct under test —
+and the probe MUST include the FAILING path (a payload that reaches the
+quantifier and then fails), because a quantifier that always succeeds never
+backtracks and so is measured by nothing.
 """
 
 from __future__ import annotations
@@ -198,6 +212,42 @@ _CREDENTIAL_KEY_NAMES: Final[str] = (
 #: retrying`` cannot match this alternative (no comma with run characters
 #: after it), so prose stays diagnosable — the ~180-sink regression the
 #: lookahead exists to avoid.
+#:
+#: DOCUMENTED RESIDUAL — THIS ALTERNATIVE OVER-REDACTS, DELIBERATELY.
+#:
+#: When it fires it consumes to the end of the comma-joined token, so a
+#: comma-separated FIELD LIST after a credential key loses every field, not
+#: just the secret::
+#:
+#:     password=abc,user=bob,host=dblocal   ->   [REDACTED]
+#:
+#: That is a real diagnosability cost on the conservative preset, which is the
+#: cost ``redact_opaque_tokens=False`` exists to avoid, so it is a decision and
+#: is recorded as one rather than left for the next reader to "fix".
+#:
+#: IT IS NOT BOUNDABLE. Once the key has announced a secret, ``ab,cdefghij``
+#: (a password containing a comma — the leak this alternative was added to
+#: close) and ``abc,user=bob`` (a short value followed by a field list) are the
+#: SAME STRING SHAPE. Bounding the run means guessing where the value ends, and
+#: a wrong guess UNDER-redacts a live credential. Under-redaction leaks;
+#: over-redaction blanks text a human still gets the gist of. The module
+#: already takes that trade explicitly at ``_AWS_SECRET_CONTIGUOUS_RUN`` and
+#: takes it again here, for the same reason and in the same direction.
+#:
+#: TWO PRE-EXISTING BOUNDS ALREADY CONTAIN THE BLAST RADIUS, and both are
+#: pinned by tests so a future edit cannot quietly widen them:
+#:
+#:   1. ALTERNATION ORDER. The token rule's alternatives are tried in order and
+#:      the FIRST one wins, so whenever the pre-comma segment is ITSELF
+#:      secret-shaped the earlier alternative claims it and stops at the comma:
+#:      ``password=hunter2,user=bob`` -> ``[REDACTED],user=bob``. This
+#:      alternative therefore only reaches a field list in the case where the
+#:      announced value is NOT secret-shaped — i.e. exactly the case where the
+#:      rule cannot tell whether the comma is inside the value.
+#:   2. NO WHITESPACE. The run atom excludes whitespace, so the ordinary
+#:      ``key=value, key=value`` spelling (comma SPACE) does not match at all:
+#:      ``password=xyz, user=bob`` is untouched. The residual needs a
+#:      comma-separated list written with no spaces.
 _COMMA_BEARING_RUN: Final[str] = r"[^\s\"';&,]+(?:,+[^\s\"';&,]+)+"
 
 #: Six run characters, counted with a FIXED repetition rather than a greedy

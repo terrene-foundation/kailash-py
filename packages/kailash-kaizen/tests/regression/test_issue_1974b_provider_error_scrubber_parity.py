@@ -33,6 +33,7 @@ ever unwound or a shape regresses.
 from __future__ import annotations
 
 import ast
+import gc
 import time
 from pathlib import Path
 
@@ -450,11 +451,15 @@ def test_benign_provider_errors_survive_unredacted(benign: str) -> None:
 # unbounded-scheme ReDoS measures 41x and asserts in ~13 s.
 _LINEARITY_BASE_UNITS = 2_000  # -> ~7.8 KB baseline, ~62 KB at 8x
 
-# min-of-N. The SMALL payload is timer-noise-dominated and needs many samples;
-# the LARGE one runs long enough that 3 is plenty — and keeping it at 3 is what
-# bounds the failing-run wall clock.
-_LINEARITY_REPEATS_SMALL = 9
-_LINEARITY_REPEATS_LARGE = 3
+# min-of-N, and the two payloads are sampled INTERLEAVED (see `_ratio`), so the
+# count is necessarily shared. 5 keeps the failing-run wall clock bounded: a
+# real quadratic regression makes each LARGE sample expensive, and the point of
+# this test is to assert, not to hang.
+#
+# The counts used to be asymmetric (9 small / 3 large) because the small
+# payload is timer-noise-dominated. Interleaving supersedes that: pairing the
+# samples is a stronger noise defence than sampling either one more often.
+_LINEARITY_REPEATS = 5
 
 # The scheme-backtracking payload unit. EVERY character is in the URL rules'
 # scheme class `[A-Za-z0-9+.-]`, so an UNBOUNDED scheme run rescans the whole
@@ -468,21 +473,50 @@ _LINEARITY_REPEATS_LARGE = 3
 _SCHEME_BACKTRACK_UNIT = "a.b-"
 
 
-def _cost(payload: str, repeats: int) -> float:
-    """Minimum wall-clock over N runs — min is the noise-robust estimator."""
-    best = float("inf")
-    for _ in range(repeats):
-        start = time.perf_counter()
-        ProviderError(status=500, body_snippet=payload)
-        best = min(best, time.perf_counter() - start)
-    return best
-
-
 def _ratio(small: str, large: str) -> float:
-    """Cost of the 8x payload relative to the baseline."""
-    small_cost = _cost(small, _LINEARITY_REPEATS_SMALL)
-    large_cost = _cost(large, _LINEARITY_REPEATS_LARGE)
-    return large_cost / max(small_cost, 1e-9)
+    """Cost of the 8x payload relative to the baseline, in CPU TIME.
+
+    `time.process_time()`, NOT `time.perf_counter()`, and that swap is the fix
+    rather than a refinement. The property under test is how much WORK the URL
+    rules do as the input grows; wall clock measures that PLUS every other
+    process on the machine, and this repo's suites routinely run several at
+    once. On wall clock this test failed at 42.4x against its own 25x bound on
+    a rule nobody had touched, while passing in isolation minutes earlier — and
+    a sibling suite's units swung between 8x and 101x across consecutive runs
+    of identical code. `process_time` excludes the intervals this process was
+    descheduled, which is exactly that noise.
+
+    That flakiness is not cosmetic. A ratio test that fires on unchanged code
+    trains the next reader to raise the bound, and `rules/testing.md`
+    § Complexity Bounds names the threshold bump as the institutional tell for
+    a buried complexity regression. The instrument had to become trustworthy
+    rather than the bound become loose.
+
+    Interleaving and the GC pause are kept as secondary defences: pairing each
+    large sample with an adjacent small one keeps any residual drift common to
+    both, and a collection landing inside the longer measurement would
+    otherwise be indistinguishable from super-linear cost.
+
+    Still self-normalising: no absolute threshold anywhere. Verified to still
+    FIRE — with the `{0,31}` scheme bound removed the ratio reads ~98x.
+    """
+    small_best = float("inf")
+    large_best = float("inf")
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        for _ in range(_LINEARITY_REPEATS):
+            start = time.process_time()
+            ProviderError(status=500, body_snippet=small)
+            small_best = min(small_best, time.process_time() - start)
+
+            start = time.process_time()
+            ProviderError(status=500, body_snippet=large)
+            large_best = min(large_best, time.process_time() - start)
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+    return large_best / max(small_best, 1e-9)
 
 
 def test_provider_error_scrub_is_linear_on_input_with_no_scheme() -> None:
