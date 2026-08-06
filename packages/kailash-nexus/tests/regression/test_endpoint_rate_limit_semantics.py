@@ -44,6 +44,7 @@ import logging
 
 import pytest
 from fastapi import Request as FastAPIRequest
+from fastapi.exceptions import FastAPIError
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
@@ -435,6 +436,41 @@ def test_unresolvable_annotation_reports_unverifiable_not_a_false_verdict(caplog
             f"unverified endpoint reads exactly like a verified one: {messages}"
         )
         assert "NoSuchTypeAnywhere" in unverifiable[0], unverifiable[0]
+    finally:
+        if app._running:
+            app.stop()
+
+
+@pytest.mark.regression
+def test_fastapi_rejects_a_union_request_annotation_at_registration():
+    """A union-wrapped ``Request`` cannot reach the inert-WARN predicate.
+
+    This pins a REFUTATION, and it is here so the same non-bug is not "fixed"
+    again. An audit proposed unwrapping unions in the predicate, reasoning that
+    ``Request | None`` resolves to a ``types.UnionType`` -- not a ``type`` --
+    so the type-only test would false-negative and emit a bogus
+    ``rate_limit_inert`` WARN for an endpoint that really does enforce.
+
+    The premise is false. FastAPI special-cases a BARE ``Request`` for
+    injection; wrapped in a union it is treated as a request-body field
+    instead, and schema generation fails at REGISTRATION -- before the
+    predicate runs. So the handler the warning would have been wrong about
+    cannot be created at all, and the type-only test is sufficient.
+
+    Falsifying result: were FastAPI to start accepting the union form, this
+    test stops raising and FAILS, which is the signal that the predicate now
+    genuinely needs to unwrap unions. That is the condition under which the
+    proposed fix becomes correct.
+    """
+    app = _nexus(8276)
+
+    try:
+        with pytest.raises(FastAPIError, match="valid Pydantic field type"):
+
+            @app.endpoint("/probe-union", methods=["GET"], rate_limit=3)
+            async def probe(request: FastAPIRequest | None = None):
+                return {"ok": True}
+
     finally:
         if app._running:
             app.stop()

@@ -2426,6 +2426,30 @@ Check the documentation or explore available resources.
                 hint = hints.get(name)
                 # `issubclass` covers a user-defined Request subclass, which
                 # FastAPI injects exactly as it injects Request itself.
+                #
+                # A type-only test is SUFFICIENT, and that was checked rather
+                # than assumed. An audit proposed unwrapping unions here, on the
+                # theory that `Request | None` / `Optional[Request]` resolve to
+                # a `types.UnionType` / `typing.Union` -- not a `type` -- so
+                # this test would false-negative and emit a bogus
+                # `rate_limit_inert` WARN for an endpoint that does enforce.
+                #
+                # The premise is false: FastAPI REJECTS those annotations at
+                # registration, so such a handler cannot exist to be warned
+                # about. Driving one raises, before this predicate is ever
+                # reached:
+                #
+                #   FastAPIError: Invalid args for response field! Hint: check
+                #   that starlette.requests.Request | None is a valid Pydantic
+                #   field type.
+                #
+                # FastAPI special-cases a bare `Request` for injection; wrapped
+                # in a union it is treated as a body field instead and fails
+                # schema generation. `Annotated[Request, ...]` is likewise
+                # unaffected -- `get_type_hints` strips `Annotated` metadata
+                # unless `include_extras=True`, so it arrives here as the bare
+                # class. Pinned by
+                # test_fastapi_rejects_a_union_request_annotation_at_registration.
                 if hint is Request or (
                     isinstance(hint, type) and issubclass(hint, Request)
                 ):
