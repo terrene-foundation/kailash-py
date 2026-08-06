@@ -4594,7 +4594,21 @@ Check the documentation or explore available resources.
         ``_warnings`` is bound as a default argument so the finalizer still
         works during interpreter shutdown, when module globals are torn down.
         """
-        if self.runtime is not None:
+        # `getattr`, NOT `self.runtime`: a finalizer runs on PARTIALLY
+        # CONSTRUCTED instances too. If `__init__` raises before it binds
+        # `runtime`, a bare attribute access raises AttributeError INSIDE
+        # `__del__` -- and an exception in a finalizer surfaces as an
+        # unraisable at whatever unrelated point GC happens to fire, reddening
+        # a ROTATING set of tests that have nothing to do with Nexus. `main`
+        # carried this guard; it was lost on this branch, and the symptom was
+        # two runs of the nexus suite failing 7 tests in one file and 1 in
+        # another, neither reproducible.
+        #
+        # Warn-only body is deliberate and MUST NOT be reverted to `main`'s
+        # form, which also called `self.close()`: per `patterns.md` § Async
+        # Resource Cleanup, calling close() from a finalizer deadlocks when
+        # __del__ fires from inside logging's GC pass.
+        if getattr(self, "runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {type(self).__name__}. Call app.close() explicitly, "
                 f"or use 'with {type(self).__name__}(...) as app:' — the shared "
