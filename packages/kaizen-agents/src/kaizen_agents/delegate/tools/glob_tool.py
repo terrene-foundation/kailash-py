@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from kaizen.utils.credential_scrub import scrub_local_error
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 
@@ -48,8 +48,34 @@ class GlobTool(Tool):
 
         try:
             matches = list(base.glob(pattern))
-        except ValueError as exc:
-            return ToolResult.failure(f"Invalid glob pattern: {scrub_local_error(exc)}")
+        except (ValueError, NotImplementedError) as exc:
+            # `NotImplementedError` IS caught, and it is not defensive padding:
+            # `Path.glob` raises it — NOT a `ValueError` — for an absolute
+            # pattern (`pathlib/_local.py`, "Non-relative patterns are
+            # unsupported"), and `pattern` is model-supplied. A model asking
+            # for `/etc/**/*.pem` therefore escaped this `except` entirely and
+            # raised out of `execute()`, where the agent loop degrades it to a
+            # bare "failed with NotImplementedError" — unactionable for the
+            # model, and indistinguishable from a real defect in the tool.
+            #
+            # SCRUBBED with the REMOTE preset, not the conservative one, even
+            # though the probes found NO echoing branch on CPython 3.13
+            # (`TestProbedOperandEchoVerdicts`, `Path.glob` entries — recorded
+            # as measured, so this is not claiming a leak that was not found).
+            # Two reasons that do not depend on one:
+            #   1. The branch set is VERSION-DEPENDENT — `Path.glob` raised
+            #      ValueError for a misplaced `**` component through 3.12 and
+            #      stopped in 3.13 — so an interpolating branch re-added
+            #      upstream would leak silently under the conservative preset.
+            #   2. The switch costs nothing here. The doctrine's named
+            #      filesystem-path carve-out is justified by there being a PATH
+            #      the agent needs; these messages carry a condition class
+            #      ("Unacceptable pattern: PosixPath('.')", "embedded null
+            #      character"), never one. With no diagnostic payload to
+            #      protect, the doctrine's own tie-breaker decides it.
+            return ToolResult.failure(
+                f"Invalid glob pattern: {scrub_remote_error(exc)}"
+            )
 
         # Filter to files only (exclude directories)
         files = [p for p in matches if p.is_file()]

@@ -37,6 +37,7 @@ import base64
 import datetime
 import ipaddress
 import json
+import pathlib
 
 import pytest
 
@@ -463,9 +464,9 @@ class TestProbedOperandEchoVerdicts:
         """
         with pytest.raises(ValueError) as excinfo:
             datetime.datetime.strptime("2020", f"{fmt_prefix}{secret}")
-        assert secret in str(
-            excinfo.value
-        ), f"the {branch} branch no longer echoes the format operand"
+        assert secret in str(excinfo.value), (
+            f"the {branch} branch no longer echoes the format operand"
+        )
         assert secret not in scrub_remote_error(excinfo.value)
 
     @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
@@ -490,6 +491,57 @@ class TestProbedOperandEchoVerdicts:
         with pytest.raises(ValueError) as excinfo:
             ipaddress.ip_network(secret)
         assert secret in str(excinfo.value)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_path_glob_value_error_branches_do_not_echo_the_pattern(
+        self, secret: str
+    ) -> None:
+        """`Path.glob` — the family `glob_tool` compiles a MODEL-supplied operand with.
+
+        Probed per BRANCH rather than sampled, because sampling `re.compile`
+        is what produced the wrong verdict above. CPython 3.13's `Path.glob`
+        has exactly two `ValueError`-raising branches reachable from a pattern
+        string (`pathlib/_local.py`):
+
+        * `not parts`  -> "Unacceptable pattern: {pattern!r}"  — INTERPOLATES,
+          but only reachable when the pattern normalizes to NO tail components
+          (`""`, `"."`, `"./"`, `"././."`), every one of which reprs as
+          `PosixPath('.')`. A credential-bearing pattern always has a tail
+          part, so it can never reach this raise.
+        * embedded NUL -> "lstat: embedded null character in path" — a
+          condition class, no operand.
+
+        Verdict on this interpreter: NO `ValueError` branch echoes a
+        credential-bearing operand. This reads the REAL messages, so a CPython
+        that adds an echoing branch returns the other answer here instead of
+        leaving the site's classification standing on a stale verdict.
+        """
+        base = pathlib.Path.cwd()
+
+        # Branch 1 — the interpolating one. Unreachable with a real operand.
+        with pytest.raises(ValueError) as excinfo:
+            list(base.glob(""))
+        assert secret not in str(excinfo.value)
+        assert repr(base.with_segments(secret)._tail) != "[]", (
+            "premise: a credential-bearing pattern must have a tail component, "
+            "which is what keeps it away from the interpolating raise"
+        )
+
+        # Branch 2 — embedded NUL, reachable WITH the operand present.
+        with pytest.raises(ValueError) as excinfo:
+            list(base.glob(f"{secret}\x00"))
+        assert secret not in str(excinfo.value)
+
+    def test_path_glob_absolute_pattern_is_NOT_a_value_error(self) -> None:
+        """The branch an `except ValueError` cannot catch.
+
+        A model-supplied absolute pattern raises `NotImplementedError`, which
+        is a `RuntimeError` subclass. `glob_tool` caught only `ValueError`, so
+        this escaped the tool's own contract entirely.
+        """
+        assert not issubclass(NotImplementedError, ValueError)
+        with pytest.raises(NotImplementedError):
+            list(pathlib.Path.cwd().glob(f"/{AWS_SECRET_SHAPE}/*"))
 
     @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
     def test_key_error_str_is_the_repr_of_the_missing_key(self, secret: str) -> None:
@@ -540,3 +592,122 @@ class TestGrepToolPatternIsModelOutputAndMustBeScrubbedRemote:
             "error. `re.compile` echoes the operand on the group-name branch, "
             "and the conservative preset does not claim a prefix-less shape."
         )
+
+
+@pytest.mark.regression
+class TestGlobToolPatternIsModelOutputAndIsClassifiedRemote:
+    """`glob_tool.py`'s `pattern` AND `path` are both model-supplied.
+
+    HONEST VERDICT, stated as measured rather than as convenient: the probes in
+    `TestProbedOperandEchoVerdicts` found NO `Path.glob` `ValueError` branch on
+    CPython 3.13.7 that echoes a credential-bearing operand. So unlike
+    `grep_tool` — where the group-name branch demonstrably leaked — this site
+    was not shipping a live leak, and saying otherwise would be inventing
+    evidence the probes did not produce.
+
+    It is classified REMOTE anyway, for two reasons that do not depend on a
+    leak existing today:
+
+    1. THE BRANCH SET IS VERSION-DEPENDENT. `Path.glob` raised `ValueError`
+       for a mis-placed `**` component through 3.12 and stopped in 3.13; the
+       set of raises this `except` catches is not stable across the
+       interpreters this package supports, and a re-added interpolating branch
+       would leak silently under the conservative preset.
+    2. THE SWITCH COSTS NOTHING. The named filesystem-path carve-out in
+       `scrub_remote_error`'s doctrine exists because switching a
+       path-echoing site would blank useful path segments for no credential
+       gain. That reasoning does not reach here: these messages carry a
+       condition class (`"Unacceptable pattern: PosixPath('.')"`,
+       `"embedded null character"`), never a path the agent can act on. There
+       is no diagnostic payload to protect, so the doctrine's own tie-breaker
+       applies — over-redacting costs a correlation handle, under-redacting
+       leaks a credential.
+    """
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_null_byte_pattern_does_not_leak_a_prefixless_credential(
+        self, secret: str
+    ) -> None:
+        from kaizen_agents.delegate.tools.glob_tool import GlobTool
+
+        result = GlobTool().execute(pattern=f"{secret}\x00")
+
+        assert result.is_error, "an embedded NUL must fail, not match"
+        assert secret not in result.error
+
+    def test_absolute_pattern_fails_as_a_tool_result_not_an_exception(self) -> None:
+        """`NotImplementedError` is not a `ValueError` and escaped the tool.
+
+        A model asking for `/etc/**/*.pem` raised out of `execute()` instead of
+        returning a `ToolResult`. The agent loop degrades an escaping exception
+        to a bare type name, so the model was told "GlobTool failed with
+        NotImplementedError" — unactionable, and indistinguishable from a real
+        defect in the tool.
+        """
+        from kaizen_agents.delegate.tools.glob_tool import GlobTool
+
+        result = GlobTool().execute(pattern=f"/{AWS_SECRET_SHAPE}/*")
+
+        assert result.is_error
+        assert AWS_SECRET_SHAPE not in result.error
+
+    def test_a_valid_pattern_still_works(self) -> None:
+        """The scrub must not break the tool's normal path."""
+        from kaizen_agents.delegate.tools.glob_tool import GlobTool
+
+        result = GlobTool().execute(
+            pattern="*.py", path=str(pathlib.Path(__file__).parent)
+        )
+        assert not result.is_error
+        assert "test_issue_1720_remote_value_scrub.py" in result.output
+
+
+@pytest.mark.regression
+class TestBashToolDoesNotEchoTheModelSuppliedCommand:
+    """LOW-6. Two sites interpolated the command raw; a third already scrubbed.
+
+    The `OSError` branch of the same function was already routed through
+    `scrub_remote_error`, so the contract was established for this function and
+    these two were simply missed — which is the shape of a partial sweep, not a
+    considered exemption.
+
+    `command` is a REQUIRED field of the tool's own `parameters_schema`, so it
+    arrives verbatim from a model tool call. A model that pastes a credential
+    into a command it wants run (an `export`, a `curl -H`, a `psql` DSN) puts
+    that credential into both messages below.
+    """
+
+    @staticmethod
+    def _tool(allow: bool):
+        from kaizen_agents.delegate.tools.bash_tool import BashTool
+
+        return BashTool(permission_gate=lambda _cmd: allow)
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_permission_denied_message_scrubs_the_command(self, secret: str) -> None:
+        result = self._tool(allow=False).execute(
+            command=f"curl -H 'x-api-key: {secret}' https://example.invalid"
+        )
+
+        assert result.is_error
+        assert secret not in result.error, (
+            "the permission-denied message echoed the model-supplied command "
+            "verbatim, so a credential in a command the gate REFUSED to run "
+            "was disclosed by the refusal itself"
+        )
+
+    @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)
+    def test_timeout_message_scrubs_the_command(self, secret: str) -> None:
+        result = self._tool(allow=True).execute(
+            command=f"sleep 30 # {secret}",
+            timeout=1,
+        )
+
+        assert result.is_error
+        assert "timed out" in result.error
+        assert secret not in result.error
+
+    def test_the_denied_message_stays_diagnosable(self) -> None:
+        """Scrubbing must not blank an ordinary command."""
+        result = self._tool(allow=False).execute(command="rm -rf /")
+        assert "rm -rf /" in result.error

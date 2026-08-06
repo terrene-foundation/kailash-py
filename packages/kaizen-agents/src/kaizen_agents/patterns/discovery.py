@@ -961,6 +961,13 @@ class UserFilteredAgentDiscovery:
         # `_check_user_access` for why both shapes must be supported.
         self._checker_takes_user_kwargs = _accepts_user_kwargs(permission_checker)
 
+        #: Skill-metadata surfaces that have already warned about being called
+        #: without a caller identity. Per INSTANCE and per SURFACE so the wide
+        #: path is announced once for each distinct unmediated call site,
+        #: rather than once per request (spam) or once per process (a second
+        #: mis-wired surface would be silenced by the first).
+        self._warned_unfiltered_surfaces: set[str] = set()
+
         # `permission_checker` defaults to None, and with it None
         # `_check_user_access` unconditionally returns
         # `(True, AccessMetadata(permission_level="execute"))` for every user
@@ -1370,22 +1377,195 @@ class UserFilteredAgentDiscovery:
             constraints=AccessConstraints(),
         )
 
+    def _resolve_identity_scope(
+        self,
+        user_id: str | None,
+        organization_id: str | None,
+        *,
+        surface: str,
+        protection_off: str,
+    ) -> bool:
+        """Decide whether a skill-metadata call is identity-scoped.
+
+        ONE predicate for BOTH skill-metadata surfaces, and that is the point
+        rather than tidiness. The originating defect was one surface carrying a
+        control its sibling in this same file did not
+        (`rules/security.md` § Enforcement-Surface Parity): a single shared
+        callable means a future edit cannot teach one surface and forget the
+        other, because there is only one place to teach.
+
+        Returns True when the call is MEDIATED (route through
+        `_check_user_access`), False when it is the unfiltered legacy path.
+
+        THREE CASES, and the middle one is the fix:
+
+        * BOTH supplied -> mediated.
+        * EXACTLY ONE supplied -> `ValueError`. FAIL CLOSED. A half-identity
+          previously widened to "every registered agent", so a caller who
+          supplied LESS received MORE — the inverse of what an authorization
+          parameter means. Refusing is the only disposition that cannot be
+          reached by an attacker choosing what to omit.
+        * NEITHER supplied -> unfiltered, but LOUD (once per instance per
+          surface).
+
+        `is not None`, NOT truthiness, and that identity test is load-bearing
+        exactly as it is in `_check_user_access`. The guard here was
+        `if user_id and organization_id:` while the fix at that method's
+        checker guard was already `is not None` — the same defect class, live
+        at a sibling surface in the same file. Under truthiness,
+        `organization_id=""` (and any org id whose `__bool__` is False, or
+        whose `__len__` is 0 — an id type wrapping an empty tenant scope) was
+        NOT "supplied", so it fell to the unfiltered branch and disclosed every
+        agent's `input_schema` and `capabilities` with no check and no warning.
+        Under identity it IS supplied, so the permission checker decides
+        whether an empty organization is acceptable. That is the authority's
+        question, not this method's.
+        """
+        supplied = {
+            "user_id": user_id is not None,
+            "organization_id": organization_id is not None,
+        }
+        if all(supplied.values()):
+            # BLANK is malformed INPUT, and rejecting it is NOT the truthiness
+            # test coming back in through the side door. The two are different
+            # questions asked of different things: truthiness asked whether an
+            # ARBITRARY OBJECT was "present" and got the wrong answer for any
+            # id type defining `__bool__`/`__len__`; this asks whether a
+            # SUPPLIED STRING carries any characters. `_FalsyOrgId("org-1")` —
+            # present, non-empty, falsy — passes here and is mediated, which
+            # is exactly the case truthiness got wrong.
+            #
+            # Refused rather than forwarded because a blank id is not a scope
+            # the permission checker can meaningfully evaluate, and checkers
+            # differ on what they do with one: a lax checker may read an empty
+            # organization as "unscoped" and grant. `rules/security.md`
+            # § Input Validation puts that check at the boundary, and the
+            # § Redactor Contract length floor is the same shape — refuse with
+            # a typed error naming the offending field rather than hand a
+            # degenerate value to the authority and hope.
+            blank = [
+                name
+                for name, value in (
+                    ("user_id", user_id),
+                    ("organization_id", organization_id),
+                )
+                if isinstance(value, str) and not value.strip()
+            ]
+            if blank:
+                raise ValueError(
+                    f"{surface}() received a BLANK caller identity: "
+                    f"{', '.join(blank)} is empty or whitespace-only. An empty "
+                    "identity is not a permission scope; it previously "
+                    "bypassed filtering and returned every registered agent. "
+                    "Pass a real identity, or omit both arguments to "
+                    "explicitly request the unfiltered listing."
+                )
+            return True
+
+        if any(supplied.values()):
+            missing = [name for name, present in supplied.items() if not present]
+            given = [name for name, present in supplied.items() if present]
+            raise ValueError(
+                f"{surface}() received a PARTIAL caller identity: "
+                f"{', '.join(given)} supplied, {', '.join(missing)} missing. "
+                "Both are required to filter by permission; supplying one "
+                "alone previously returned every registered agent unfiltered. "
+                "Pass both to filter, or neither to explicitly request the "
+                "unfiltered listing."
+            )
+
+        # Unfiltered path. Kept reachable because it predates this change and
+        # is the documented single-tenant / internal-catalogue usage, so
+        # fail-closed here would break existing callers — the same
+        # backward-compat constraint `__init__` faces, resolved the same way
+        # (`rules/security.md` § "Secure-Default For A New Security Feature":
+        # loud WARN when on-by-default is not available). What changes is that
+        # the wide path is no longer SILENT (`rules/zero-tolerance.md` Rule 3).
+        #
+        # Once per instance per surface, matching `__init__`'s one-time
+        # warning: a per-call warning on a discovery hot path is log spam, and
+        # spam is how a loud signal becomes a filtered-out one
+        # (`rules/observability.md` MUST NOT § log-spam in hot loops).
+        if surface not in self._warned_unfiltered_surfaces:
+            self._warned_unfiltered_surfaces.add(surface)
+            logger.warning(
+                f"discovery.{surface}.unfiltered",
+                extra={
+                    "protection_off": protection_off,
+                    "wiring": (
+                        f"pass user_id= and organization_id= to {surface}() to "
+                        "filter by caller permission"
+                    ),
+                },
+            )
+        return False
+
     async def get_skill_metadata(
         self,
         agent_id: str,
+        user_id: str | None = None,
+        organization_id: str | None = None,
     ) -> AgentSkillMetadata | None:
         """
         Get skill metadata for an agent.
 
+        When `user_id` AND `organization_id` are supplied the lookup is
+        MEDIATED through `_check_user_access`, and a denied caller receives
+        `None` — deliberately indistinguishable from "no such agent", so a
+        denial does not confirm the agent exists.
+
+        This surface previously took no identity at all and performed NO
+        permission check, while returning the agent's signature-derived
+        `input_schema`, its capabilities and its suggested prompts — the same
+        disclosure class as the gated-`inputSchema` MCP leak closed under this
+        issue. The identity parameters are optional rather than required
+        because out-of-package callers already invoke the one-argument form;
+        the unscoped call is preserved and made loud instead
+        (see `_resolve_identity_scope`).
+
         Args:
             agent_id: Agent identifier
+            user_id: Caller's user ID. Required together with
+                `organization_id`; supplying exactly one raises `ValueError`.
+            organization_id: Caller's organization ID.
 
         Returns:
-            AgentSkillMetadata or None if agent not found
+            AgentSkillMetadata, or None if the agent is absent OR the caller
+            is not permitted to see it.
+
+        Raises:
+            ValueError: If exactly one of `user_id` / `organization_id` is
+                supplied (fail closed on a partial identity).
         """
+        scoped = self._resolve_identity_scope(
+            user_id,
+            organization_id,
+            surface="get_skill_metadata",
+            protection_off=(
+                "per-caller permission filtering — the agent's input_schema, "
+                "capabilities and suggested prompts are returned to any caller"
+            ),
+        )
+
         agent_metadata = await self._registry.get_agent(agent_id)
-        if not agent_metadata:
+        # `is None`, not truthiness — swept alongside the identity guard above
+        # under `rules/security.md` § Enforcement-Surface Parity rather than
+        # left as the one remaining instance of the class in this file.
+        # `_registry` is INJECTED, so `get_agent` may return any duck-typed
+        # metadata object; one defining `__len__`/`__bool__` (a metadata type
+        # that proxies its capability collection, say) would read as absent
+        # while being a live record. That direction fails CLOSED — the caller
+        # gets None — so it is a correctness bug rather than a disclosure one,
+        # which is precisely why it would have sat here unnoticed.
+        if agent_metadata is None:
             return None
+
+        if scoped:
+            has_access, _ = await self._check_user_access(
+                user_id, organization_id, agent_metadata
+            )
+            if not has_access:
+                return None
 
         return AgentSkillMetadata.from_agent(
             agent=agent_metadata.agent,
@@ -1401,21 +1581,36 @@ class UserFilteredAgentDiscovery:
         List skill metadata for all accessible agents.
 
         Args:
-            user_id: Optional user ID for filtering
-            organization_id: Optional organization ID for filtering
+            user_id: Caller's user ID. Required together with
+                `organization_id`; supplying exactly one raises `ValueError`.
+            organization_id: Caller's organization ID.
 
         Returns:
             List of AgentSkillMetadata
+
+        Raises:
+            ValueError: If exactly one of `user_id` / `organization_id` is
+                supplied (fail closed on a partial identity).
         """
-        if user_id and organization_id:
+        scoped = self._resolve_identity_scope(
+            user_id,
+            organization_id,
+            surface="list_skill_metadata",
+            protection_off=(
+                "per-caller permission filtering — every registered agent's "
+                "input_schema and capabilities are returned to any caller"
+            ),
+        )
+
+        if scoped:
             agents = await self.find_agents_for_user(user_id, organization_id)
             return [
                 AgentSkillMetadata.from_agent(a.metadata.agent, a.agent_id)
                 for a in agents
             ]
-        else:
-            agents = await self._registry.list_agents()
-            return [AgentSkillMetadata.from_agent(a.agent, a.agent_id) for a in agents]
+
+        unfiltered = await self._registry.list_agents()
+        return [AgentSkillMetadata.from_agent(a.agent, a.agent_id) for a in unfiltered]
 
 
 __all__ = [
