@@ -23,11 +23,13 @@ requests exercise the real wrapper, including the real cleanup path.
 """
 
 import gc
+import statistics
 import time
 from typing import MutableMapping
 
 import pytest
 from fastapi import Request
+
 from nexus import Nexus
 from nexus.core import _MAX_RATE_LIMIT_TRACKED_CLIENTS
 
@@ -137,8 +139,18 @@ async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
     fixed code. Suspending it symmetrically is what makes the two windows
     comparable.
 
-    Falsifying result: before the fix the ratio measures in the thousands
-    (5867x, 8142.6 us vs 1.4 us per request, measured under this instrument).
+    Each phase is the MEDIAN of several short windows rather than one long
+    one. On a loaded machine a single OS preemption lands in exactly one
+    window; against a sub-millisecond baseline that one stall is enough to
+    invent a ratio out of nothing, and this test did flake that way once
+    under concurrent suites. The median discards it. It cannot hide a real
+    regression, because the un-amortised eviction is slow in EVERY window,
+    which is what makes the median the right summary rather than a wider
+    threshold -- a wider threshold buys the same stability by giving up the
+    resolution the test exists for.
+
+    Falsifying result: with the un-amortised eviction restored, this
+    instrument measures 5858x (9700.3 us vs 1.7 us per request).
     """
     app = Nexus(
         api_port=8253,
@@ -158,48 +170,56 @@ async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
         for i in range(start, stop):
             await probe(request=_synthetic_request(_ip(i)))
 
-    async def measure(start: int, stop: int) -> float:
-        """Wall time for ``stop - start`` new clients, with the GC held off."""
-        gc.collect()
-        was_enabled = gc.isenabled()
-        gc.disable()
-        try:
-            started = time.perf_counter()
-            await drive(start, stop)
-            return time.perf_counter() - started
-        finally:
-            if was_enabled:
-                gc.enable()
+    windows = 5
+    window_size = 200
+    measured = windows * window_size
+
+    async def measure(start: int) -> float:
+        """Median per-request seconds over ``windows`` windows of new clients.
+
+        The GC is held off inside the windows only -- see the docstring.
+        """
+        per_request = []
+        for w in range(windows):
+            first = start + w * window_size
+            gc.collect()
+            was_enabled = gc.isenabled()
+            gc.disable()
+            try:
+                started = time.perf_counter()
+                await drive(first, first + window_size)
+                per_request.append((time.perf_counter() - started) / window_size)
+            finally:
+                if was_enabled:
+                    gc.enable()
+        return statistics.median(per_request)
 
     try:
         counts = _request_counts_of(probe)
-        sample = 500
 
         # Phase 1 -- comfortably below the cap. Warm first so the measured
-        # window excludes first-call import/JIT effects.
+        # windows exclude first-call import/JIT effects.
         await drive(0, 1000)
-        below_cap = await measure(1000, 1000 + sample)
+        below_cap = await measure(1000)
 
         # Phase 2 -- fill exactly to the cap, then measure the same number of
         # NEW clients, each of which now triggers the eviction path.
-        await drive(1000 + sample, _MAX_RATE_LIMIT_TRACKED_CLIENTS)
+        await drive(1000 + measured, _MAX_RATE_LIMIT_TRACKED_CLIENTS)
         assert len(counts) == _MAX_RATE_LIMIT_TRACKED_CLIENTS, (
             "expected the map to be exactly full before measuring the "
             f"at-cap cost; it holds {len(counts)}"
         )
 
-        at_cap = await measure(
-            _MAX_RATE_LIMIT_TRACKED_CLIENTS,
-            _MAX_RATE_LIMIT_TRACKED_CLIENTS + sample,
-        )
+        at_cap = await measure(_MAX_RATE_LIMIT_TRACKED_CLIENTS)
 
         ratio = at_cap / below_cap
         assert ratio <= 25, (
             f"per-request cost at the cap is {ratio:.0f}x the below-cap cost "
-            f"({at_cap / sample * 1e6:.1f} us vs {below_cap / sample * 1e6:.1f} us "
-            "per request). Eviction is not amortised: every new client pays a "
-            "full pass over the map. This runs synchronously inside an async "
-            "handler, so it blocks the event loop for the entire process."
+            f"({at_cap * 1e6:.1f} us vs {below_cap * 1e6:.1f} us per request, "
+            f"median of {windows} windows of {window_size}). Eviction is not "
+            "amortised: every new client pays a full pass over the map. This "
+            "runs synchronously inside an async handler, so it blocks the "
+            "event loop for the entire process."
         )
     finally:
         if app._running:
