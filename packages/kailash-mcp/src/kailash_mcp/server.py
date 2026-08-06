@@ -5548,18 +5548,17 @@ class MCPServer:
             "target_client": target_client,
             "request_id": request_id,
         }
-        approval_error = await self._evaluate_sampling_approval(approval_context)
+        # Returns a COMPLETE envelope, not a (code, message) tuple: the
+        # exception arms build theirs through ``_internal_error_envelope`` so
+        # no approver-derived text reaches this unauthenticated caller, and
+        # that envelope carries a correlationId this layer must not flatten.
+        # The rejection is logged inside — logging it again HERE is what put
+        # the approver's raw exception text into a second ``extra`` field.
+        approval_error = await self._evaluate_sampling_approval(
+            approval_context, request_id
+        )
         if approval_error is not None:
-            code, message = approval_error
-            logger.warning(
-                "sampling.approval.rejected",
-                extra={"code": code, "reason": message},
-            )
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": code, "message": message},
-                "id": request_id,
-            }
+            return approval_error
 
         # (4) Dispatch the approved sampling request to the target client.
         sampling_params: Dict[str, Any] = {
@@ -5736,13 +5735,13 @@ class MCPServer:
                     ev_fut.cancel()
 
     async def _evaluate_sampling_approval(
-        self, context: Dict[str, Any]
-    ) -> Optional["tuple[int, str]"]:
+        self, context: Dict[str, Any], request_id: Any
+    ) -> Optional[Dict[str, Any]]:
         """Run the HITL approval gate for a sampling request.
 
         Returns ``None`` when the request is APPROVED (dispatch may proceed),
-        or a ``(json_rpc_error_code, message)`` tuple when it is NOT approved.
-        Fails CLOSED: when no approver is bound the request is rejected with
+        or a complete JSON-RPC error envelope when it is NOT approved. Fails
+        CLOSED: when no approver is bound the request is rejected with
         ``MCP_SAMPLING_REJECTED`` — the server never auto-approves
         model-generated content (security.md § HITL fail-closed).
 
@@ -5752,15 +5751,56 @@ class MCPServer:
           (``MCP_SAMPLING_DECLINED``);
         * raise ``asyncio.TimeoutError`` → review timeout
           (``MCP_SAMPLING_TIMEOUT``);
-        * raise ``MCPError`` → that error's code + message;
-        * raise any other exception → treated as a rejection
-          (``MCP_SAMPLING_REJECTED``), logged, never swallowed silently.
+        * raise ``MCPError`` → that error's CODE, with a correlation id in
+          place of its message (see below);
+        * raise any other exception → a rejection
+          (``MCP_SAMPLING_REJECTED``) carrying a correlation id.
+
+        NO EXCEPTION-DERIVED TEXT REACHES THE CALLER. ``sampling/createMessage``
+        is dispatched by ``_dispatch_ws_method``, which authenticates nothing,
+        so this handler answers an UNAUTHENTICATED caller exactly as every
+        other one does — and it was the only handler on that dispatch table
+        that did not route its exception arms through
+        ``_internal_error_envelope``. An approver is arbitrary
+        application-supplied code; ``f"sampling approval failed: {exc}"``
+        returned whatever it raised, verbatim. Observed: an approver raising a
+        connection error sent
+        ``postgresql://svc:<credential>@db.internal:5432/app`` plus an internal
+        filesystem path to a caller holding no credentials.
+
+        ``MCPError`` is NOT exempt, which is the non-obvious half. Its CODE is
+        server-authored — an enum member — and is preserved, because that is
+        how an approver signals WHICH refusal this is. Its MESSAGE is not
+        necessarily server-authored: the enhanced tool wrapper builds
+        ``ToolError(f"Tool execution failed: {e}")``, embedding foreign text in
+        an ``MCPError``. "It is an MCPError" is therefore not sufficient to
+        call a message caller-safe, which is why the stdio branch matches on a
+        dedicated ``ToolNotAvailableError`` type rather than on ``MCPError``.
+
+        The server-authored refusals below (no approver bound, timeout,
+        declined) are fixed strings this module wrote, carry nothing derived
+        from an exception, and are returned verbatim on purpose: they tell the
+        caller what to DO, and replacing them with a correlation id would cost
+        the operator a log lookup to recover text the server already knows.
         """
+
+        def _refusal(code: "MCPErrorCode", message: str) -> Dict[str, Any]:
+            """A server-authored refusal — safe to return verbatim."""
+            logger.warning(
+                "sampling.approval.rejected",
+                extra={"code": code.value, "reason": message},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": code.value, "message": message},
+                "id": request_id,
+            }
+
         approver = self._sampling_approver
         if approver is None:
             # Fail closed — the default posture is deny, not auto-approve.
-            return (
-                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_REJECTED,
                 "sampling requires human-in-the-loop approval but no approver is "
                 "bound; the server fails closed and will not auto-approve "
                 "model-generated content (bind one via set_sampling_approver)",
@@ -5771,25 +5811,37 @@ class MCPServer:
             if inspect.isawaitable(decision):
                 decision = await decision
         except asyncio.TimeoutError:
-            return (
-                MCPErrorCode.MCP_SAMPLING_TIMEOUT.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_TIMEOUT,
                 "sampling approval timed out awaiting human review",
             )
         except MCPError as exc:
-            return (exc.error_code.value, exc.message)
-        except Exception as exc:  # noqa: BLE001 - surfaced as a rejection, logged
-            logger.warning(
-                "sampling.approval.error",
-                extra={"error": str(exc)},
+            # Keep the approver's CODE, drop its MESSAGE — see the docstring.
+            return self._internal_error_envelope(
+                exc,
+                summary="sampling approval failed",
+                request_id=request_id,
+                event="sampling.approval.error",
+                code=exc.error_code.value,
             )
-            return (
-                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
-                f"sampling approval failed: {exc}",
+        except Exception as exc:  # noqa: BLE001 - surfaced as a rejection, logged
+            # ``_internal_error_envelope`` also replaces the unscrubbed
+            # ``extra={"error": str(exc)}`` this arm used to log: it routes
+            # through ``_log_and_correlate``, which applies ``mask_error_text``
+            # to both the message and the traceback. Scrubbing the caller path
+            # while leaving the log path raw would only relocate the credential
+            # to the structured sink.
+            return self._internal_error_envelope(
+                exc,
+                summary="sampling approval failed",
+                request_id=request_id,
+                event="sampling.approval.error",
+                code=MCPErrorCode.MCP_SAMPLING_REJECTED.value,
             )
 
         if not decision:
-            return (
-                MCPErrorCode.MCP_SAMPLING_DECLINED.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_DECLINED,
                 "sampling request declined by human reviewer",
             )
         return None

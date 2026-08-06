@@ -28,6 +28,7 @@ the class under test); a minimal capturing transport double satisfies the
 """
 
 import asyncio
+import re
 
 import pytest
 from kailash_mcp.errors import MCPError, MCPErrorCode
@@ -321,8 +322,20 @@ async def test_sampling_timeout_uses_timeout_code():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_sampling_approver_mcperror_propagates_code():
-    """An approver raising MCPError surfaces that specific code + message."""
+async def test_sampling_approver_mcperror_propagates_code_but_not_message():
+    """An approver raising MCPError surfaces that specific CODE, not its text.
+
+    This test used to assert the message propagated too. That assertion pinned
+    the behaviour a later fix had to REMOVE: ``sampling/createMessage`` is
+    dispatched by ``_dispatch_ws_method``, which authenticates nothing, and an
+    ``MCPError``'s message is not necessarily server-authored — the enhanced
+    tool wrapper builds ``ToolError(f"Tool execution failed: {e}")``, embedding
+    arbitrary foreign text inside an ``MCPError``. So the message is now
+    replaced with a fixed summary plus a correlation id, and the detail moves
+    server-side. The CODE is an enum member, is genuinely server-authored, and
+    still propagates — that is what this test is named for. See
+    ``test_issue_1998_sampling_approver_error_leak.py``.
+    """
     server = _make_server()
 
     def approver(ctx):
@@ -337,7 +350,14 @@ async def test_sampling_approver_mcperror_propagates_code():
         "req-9",
     )
     assert result["error"]["code"] == MCPErrorCode.MCP_SAMPLING_DECLINED.value
-    assert "policy blocked" in result["error"]["message"]
+    assert "policy blocked" not in result["error"]["message"], (
+        "the approver's own message reached an unauthenticated caller: "
+        f"{result['error']['message']!r}"
+    )
+    assert re.search(r"correlation id: [0-9a-f]{8,}", result["error"]["message"]), (
+        "the detail must be MOVED server-side under a correlation id, not "
+        f"dropped: {result['error']['message']!r}"
+    )
 
 
 @pytest.mark.regression
