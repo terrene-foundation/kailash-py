@@ -75,6 +75,7 @@ from kailash_mcp.errors import (
     RetryStrategy,
     ServiceDiscoveryError,
     ToolError,
+    ToolNotAvailableError,
     TransportError,
     ValidationError,
 )
@@ -211,6 +212,7 @@ __all__ = [
     "AuthorizationError",
     "RateLimitError",
     "ToolError",
+    "ToolNotAvailableError",
     "ResourceError",
     "TransportError",
     "ServiceDiscoveryError",

@@ -40,6 +40,14 @@ enumerate the same registry and hand-wrote their own projection:
   ``completion/complete`` returned every tool's full ``inputSchema`` and made
   the ``tools/list`` suppression decorative.
 
+A FOURTH emitter was added for #1998: FastMCP's OWN tool list, which the sync
+``run()`` serves on the DEFAULT transport. It reads no registry this repo owns,
+so no amount of varying the three registry readers above could see it — the
+suppression was complete on every surface a reader here could reach, and absent
+on the one most deployments actually publish. An emitter set derived from "the
+functions in this file that loop over ``_tool_registry``" is exactly the shape
+that blind spot takes; add a new transport HERE, not only a new reader.
+
 The claim under test is "a permission-gated tool's argument surface must not
 reach a caller that cannot be authorized" — a claim about EVERY reader of the
 registry, not about one function. Every test below therefore runs against all
@@ -136,10 +144,52 @@ async def _emit_stdio_list(server: MCPServer, monkeypatch=None) -> dict:
     return {t["name"]: t for t in payload["result"]["tools"]}
 
 
+async def _emit_default_transport(server: MCPServer, monkeypatch=None) -> dict:
+    """The DEFAULT transport: FastMCP's OWN tool list (#1998).
+
+    ``run()`` with ``transport="stdio"`` — the default — serves
+    ``self._mcp.run()``, so FastMCP's registry IS the advertisement most
+    deployments publish. FastMCP owns that enumeration and exposes no hook in
+    it, so the projection is applied to the REGISTRATION
+    (``_project_tool_onto_fastmcp`` / ``_withhold_tool_from_fastmcp``) rather
+    than by filtering here. Driven through the real protocol handler stack —
+    only the byte transport differs from a live stdio client.
+    """
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    if server._mcp is None:
+        server._init_mcp()
+    async with create_connected_server_and_client_session(server._mcp) as client:
+        listed = await client.list_tools()
+
+    entries = {}
+    for t in listed.tools:
+        # Built field by field from what the WIRE carried, so an assertion
+        # cannot pass because this helper forgot to copy a field across.
+        entry = {
+            "name": t.name,
+            "description": t.description or "",
+            "inputSchema": t.inputSchema,
+        }
+        if getattr(t, "outputSchema", None) is not None:
+            entry["outputSchema"] = t.outputSchema
+        if getattr(t, "annotations", None) is not None:
+            entry["annotations"] = t.annotations
+        entries[t.name] = entry
+    return entries
+
+
+# The default transport publishes no outputSchema for ANY tool — see the skip
+# in ``test_gated_tool_output_schema_not_disclosed``, which reads this flag
+# rather than letting that test's ungated CONTROL pass vacuously.
+_emit_default_transport.advertises_output_schema = False
+
+
 EMITTERS = [
     pytest.param(_emit_tools_list, id="tools_list"),
     pytest.param(_emit_completion, id="completion_complete"),
     pytest.param(_emit_stdio_list, id="stdio_tools_list"),
+    pytest.param(_emit_default_transport, id="default_transport_fastmcp"),
 ]
 
 
@@ -330,6 +380,25 @@ async def test_gated_tool_output_schema_not_disclosed(emit):
         "a discovery surface disclosed a permission-gated tool's result shape: "
         f"{tools['admin_purge']!r}"
     )
+
+    if not getattr(emit, "advertises_output_schema", True):
+        # The default transport advertises NO outputSchema for ANY tool: the
+        # decorator's ``output_schema=`` is stored in ``_tool_registry`` and
+        # never reaches FastMCP's registration, so FastMCP has nothing to
+        # publish. The gated assertion above therefore holds vacuously HERE
+        # (nothing is advertised, so nothing leaks) — stated rather than hidden.
+        # This is a FUNCTIONAL gap, not a disclosure one: clients on the
+        # default transport cannot validate structuredContent against a
+        # declared schema. Deliberately NOT fixed alongside #1998 — supplying
+        # an output schema to FastMCP also arms its result validation, which
+        # would change whether existing tool results are accepted, and that is
+        # a behaviour change no security finding calls for.
+        pytest.skip(
+            "default transport advertises no outputSchema for any tool "
+            "(output_schema= never reaches the FastMCP registration); the "
+            "ungated CONTROL has nothing to assert on this emitter"
+        )
+
     # CONTROL: an ungated tool's outputSchema IS still advertised, so the
     # assertion above cannot pass by dropping outputSchema everywhere.
     assert tools["public_count"].get("outputSchema") == {

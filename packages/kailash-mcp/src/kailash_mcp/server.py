@@ -65,6 +65,7 @@ import json
 import logging
 import re
 import time
+import traceback
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
@@ -98,6 +99,7 @@ from kailash_mcp.errors import (
     ResourceError,
     RetryableOperation,
     ToolError,
+    ToolNotAvailableError,
     ValidationError,
 )
 from kailash_mcp.protocol.protocol import (
@@ -113,6 +115,15 @@ from kailash_mcp.utils import (
     build_input_schema,
     format_response,
 )
+
+# Credential scrubber for SERVER-SIDE diagnostics. kailash-mcp already depends
+# on it (``transports.py`` uses the same helper), so no new dependency: a driver
+# or client library routinely quotes the connection string it failed on, and the
+# raw text reaches a log file that is far more widely readable than the
+# database it names (observability.md § "No secrets in logs"). It is NOT the
+# caller-facing defence — nothing derived from an exception is returned to an
+# unauthenticated caller; see ``MCPServer._internal_error_envelope``.
+from kailash.utils.url_credentials import mask_error_text
 
 logger = logging.getLogger(__name__)
 
@@ -903,7 +914,7 @@ class MCPServerBase(ABC):
             logger.info("Running FastMCP server in stdio mode")
             self._mcp.run()
         except Exception as e:
-            logger.error(f"Failed to start server: {e}")
+            logger.error(f"Failed to start server: {mask_error_text(str(e))}")
             raise
         finally:
             self._running = False
@@ -1179,6 +1190,12 @@ class MCPServer:
         self._tool_registry: Dict[str, Dict[str, Any]] = {}
         self._resource_registry: Dict[str, Dict[str, Any]] = {}
         self._prompt_registry: Dict[str, Dict[str, Any]] = {}
+
+        # FastMCP registrations withheld by ``disable_tool`` (#1998). The
+        # ORIGINAL registration object is parked here rather than rebuilt on
+        # ``enable_tool``, so re-enabling restores the exact projection that was
+        # applied at registration instead of a re-derived approximation.
+        self._fastmcp_withheld_tools: Dict[str, Any] = {}
 
         # Client management for new handlers
         self.client_info: Dict[str, Dict[str, Any]] = {}
@@ -1560,7 +1577,9 @@ class MCPServer:
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
         except ImportError as e1:
-            logger.warning(f"Independent FastMCP not available: {e1}")
+            logger.warning(
+                f"Independent FastMCP not available: {mask_error_text(str(e1))}"
+            )
             try:
                 # Fallback to official MCP FastMCP (when fixed)
                 from mcp.server import FastMCP
@@ -1568,7 +1587,9 @@ class MCPServer:
                 self._mcp = FastMCP(self.name)
                 logger.info(f"Initialized official FastMCP server: {self.name}")
             except ImportError as e2:
-                logger.warning(f"Official FastMCP not available: {e2}")
+                logger.warning(
+                    f"Official FastMCP not available: {mask_error_text(str(e2))}"
+                )
                 # Final fallback: Create a minimal FastMCP-compatible wrapper
                 logger.info(f"Using low-level MCP Server fallback for: {self.name}")
                 self._mcp = self._create_fallback_server()
@@ -1579,6 +1600,12 @@ class MCPServer:
 
         class FallbackMCPServer:
             """Minimal FastMCP-compatible server for when FastMCP is unavailable."""
+
+            # Read by ``_fastmcp_serves_no_protocol`` (#1998). ``run()`` below
+            # raises NotImplementedError and nothing here derives a schema, so
+            # this object never advertises a tool to any caller and has no
+            # disclosure surface for the gated projection to rewrite.
+            _kailash_serves_no_protocol = True
 
             def __init__(self, name: str):
                 self.name = name
@@ -1633,6 +1660,134 @@ class MCPServer:
                 )
 
         return FallbackMCPServer(self.name)
+
+    # ------------------------------------------------------------------
+    # FastMCP registration projection (#1998)
+    #
+    # Tools are registered TWICE: once in ``_tool_registry`` (which every
+    # in-repo discovery surface reads through ``_public_tool_view``) and once
+    # with FastMCP (``self._mcp.tool()(enhanced_func)``), which builds its OWN
+    # tool list. The DEFAULT transport — sync ``run()`` with
+    # ``transport="stdio"`` — serves FastMCP's list, so the disclosure contract
+    # has to be applied to the FastMCP REGISTRATION, not filtered out of its
+    # enumeration: FastMCP owns that enumeration and there is no hook in it.
+    # ------------------------------------------------------------------
+
+    def _fastmcp_serves_no_protocol(self) -> bool:
+        """True when ``self._mcp`` cannot serve a protocol to any caller.
+
+        The only such object is ``_create_fallback_server``'s shim, whose
+        ``run()`` raises ``NotImplementedError``. It stores bare functions and
+        derives no schema, so it has NO disclosure surface to gate. Recognising
+        it explicitly (rather than letting the locator below fail soft) keeps
+        the unrecognised-FastMCP case loud.
+        """
+        return getattr(self._mcp, "_kailash_serves_no_protocol", False) is True
+
+    def _fastmcp_tool_container(self) -> Optional[Dict[str, Any]]:
+        """FastMCP's OWN mutable ``name -> registration`` mapping, or None.
+
+        Both supported FastMCP implementations keep their tools in a dict on a
+        tool manager; the shim keeps them on itself. Returning the live
+        container (rather than copying) is what lets ``disable_tool`` withhold a
+        registration and ``enable_tool`` put the SAME object back.
+        """
+        manager = getattr(self._mcp, "_tool_manager", None)
+        for owner in (manager, self._mcp):
+            if owner is None:
+                continue
+            container = getattr(owner, "_tools", None)
+            if isinstance(container, dict):
+                return container
+        return None
+
+    def _require_fastmcp_tool_container(self, tool_name: str) -> Dict[str, Any]:
+        """Locate the container or fail CLOSED with a loud, actionable error.
+
+        Reachable only under a FastMCP implementation whose registration layout
+        this code does not recognise. Continuing would mean serving that tool's
+        full argument surface — or a disabled tool — on the DEFAULT transport
+        with nothing recording that the gate did not apply, which is exactly the
+        #1998 failure this method exists to prevent.
+        """
+        container = self._fastmcp_tool_container()
+        if container is None:
+            raise MCPError(
+                "Cannot apply the tool-disclosure gate to the FastMCP "
+                f"registration for {tool_name!r}: this FastMCP implementation "
+                f"({type(self._mcp).__name__}) exposes no recognised tool "
+                "container. Refusing to register rather than serve a "
+                "permission-gated tool's full argument surface, or a disabled "
+                "tool, on the default (stdio) transport. See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+        return container
+
+    def _project_tool_onto_fastmcp(self, tool_name: str) -> None:
+        """Apply ``_public_tool_view``'s decision to the FastMCP registration.
+
+        Called once per tool at registration. Only a GATED tool is rewritten:
+        an ungated tool's FastMCP-derived advertisement already matches its
+        invocation contract, and overwriting it with the separately-derived
+        ``input_schema`` would make the two disagree for no security gain.
+
+        The rewrite touches the ADVERTISED fields only (``parameters`` is what
+        ``tools/list`` serialises as ``inputSchema``). Argument VALIDATION and
+        dispatch run off the registration's own function metadata, so
+        invocation — including ``required_permission`` enforcement inside the
+        enhanced wrapper — is unchanged. That is why #1998 is a disclosure bug
+        and not an authentication bypass.
+        """
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+
+        info = self._tool_registry[tool_name]
+        if not self._tool_is_gated(info):
+            return
+
+        view = self._public_tool_view(tool_name, info)
+        if view is None:
+            # Unreachable at registration: ``disabled`` is only ever set by
+            # ``disable_tool``, which owns the withhold on this surface.
+            self._withhold_tool_from_fastmcp(tool_name)
+            return
+
+        entry = self._require_fastmcp_tool_container(tool_name).get(tool_name)
+        if entry is None or not hasattr(entry, "parameters"):
+            raise MCPError(
+                "Cannot apply the tool-disclosure gate to the FastMCP "
+                f"registration for {tool_name!r}: the registration object "
+                f"({type(entry).__name__}) exposes no advertised-schema "
+                "attribute. Refusing to serve a permission-gated tool's full "
+                "argument surface on the default (stdio) transport. See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+
+        entry.parameters = view["inputSchema"]
+        entry.description = view["description"]
+        logger.debug(
+            "tool.fastmcp_registration.gated_projection_applied",
+            extra={"tool": tool_name},
+        )
+
+    def _withhold_tool_from_fastmcp(self, tool_name: str) -> None:
+        """Remove a disabled tool's FastMCP registration (park it for re-enable)."""
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+        if tool_name in self._fastmcp_withheld_tools:
+            return
+        container = self._require_fastmcp_tool_container(tool_name)
+        entry = container.pop(tool_name, None)
+        if entry is not None:
+            self._fastmcp_withheld_tools[tool_name] = entry
+
+    def _restore_tool_to_fastmcp(self, tool_name: str) -> None:
+        """Put a re-enabled tool's ORIGINAL FastMCP registration back."""
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+        entry = self._fastmcp_withheld_tools.pop(tool_name, None)
+        if entry is not None:
+            self._require_fastmcp_tool_container(tool_name)[tool_name] = entry
 
     def tool(
         self,
@@ -1903,6 +2058,16 @@ class MCPServer:
                         },
                     )
 
+            # #1998 — FastMCP registered ``enhanced_func`` above and derived its
+            # OWN advertisement from it. ``functools.wraps`` makes
+            # ``inspect.signature`` follow ``__wrapped__``, so that
+            # advertisement carried the ORIGINAL function's full parameter set
+            # and its complete ``Args:`` docstring block. The DEFAULT transport
+            # serves that advertisement, so the gate has to be applied to the
+            # registration itself — do it now that the registry entry (which
+            # ``_public_tool_view`` reads) exists.
+            self._project_tool_onto_fastmcp(tool_name)
+
             logger.debug(
                 f"Registered enhanced tool: {tool_name} "
                 f"(cached: {cache_key is not None}, "
@@ -1912,6 +2077,86 @@ class MCPServer:
             return mcp_tool  # type: ignore[reportReturnType]
 
         return decorator
+
+    # ------------------------------------------------------------------
+    # Caller-facing error envelopes
+    #
+    # These handlers answer callers that presented NO credentials — the stdio
+    # loop authenticates nothing at the transport and ``_dispatch_ws_method``
+    # routes to them with only ``(params, request_id)``. Returning ``str(e)``
+    # therefore published whatever the raised exception carried: absolute
+    # filesystem paths, internal module and class names, driver output, and any
+    # credential a driver quoted back out of a connection string.
+    # ------------------------------------------------------------------
+
+    def _log_and_correlate(self, exc: BaseException, event: str, **context: Any) -> str:
+        """Log an exception server-side (scrubbed) under a fresh correlation id.
+
+        Returns the id, which is the ONLY thing about the failure that goes back
+        to the caller. The operator joins the two by grepping the id, so the
+        detail is moved rather than lost.
+        """
+        correlation_id = uuid.uuid4().hex[:12]
+        # The traceback is formatted and scrubbed HERE rather than passed as
+        # ``exc_info=True``. The logging module renders exc_info by calling the
+        # exception's own ``__str__``, which would put the unscrubbed text —
+        # including any credential a driver quoted back — into the record's
+        # message body, defeating the scrub applied to the ``error`` field.
+        formatted = "".join(
+            traceback.format_exception(type(exc), exc, exc.__traceback__)
+        )
+        logger.error(
+            event,
+            extra={
+                "correlation_id": correlation_id,
+                "error_type": type(exc).__name__,
+                "error": mask_error_text(str(exc)),
+                "traceback": mask_error_text(formatted),
+                **context,
+            },
+        )
+        return correlation_id
+
+    def _internal_error_envelope(
+        self,
+        exc: BaseException,
+        *,
+        summary: str,
+        request_id: Any,
+        event: str,
+        code: int = -32603,
+        **context: Any,
+    ) -> Dict[str, Any]:
+        """A JSON-RPC error envelope that carries NO exception-derived text.
+
+        ``summary`` is a fixed, server-authored string naming the OPERATION that
+        failed (never the reason); the correlation id is what makes the failure
+        actionable — the caller quotes it, the operator greps it.
+        """
+        correlation_id = self._log_and_correlate(exc, event, **context)
+        return {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": f"{summary} (correlation id: {correlation_id})",
+                "data": {"correlationId": correlation_id},
+            },
+            "id": request_id,
+        }
+
+    def _refuse_if_disabled(self, tool_name: str) -> None:
+        """Refuse an invocation of a ``disable_tool()``'d tool.
+
+        Called by BOTH enhanced wrappers, which is what makes the refusal
+        transport-independent: the wrapper is the object every dispatch path
+        ultimately calls, so a path that never learned about the ``disabled``
+        flag still cannot run the tool. ``_execute_tool`` keeps its own check
+        for the same reason — it resolves handlers that predate the wrapper.
+        """
+        if self._tool_registry.get(tool_name, {}).get("disabled", False):
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' is currently disabled", tool_name=tool_name
+            )
 
     def _cache_key_scope(
         self, session_id: str, tool_name: str, per_principal: bool
@@ -1952,6 +2197,13 @@ class MCPServer:
         ``required_permission`` accepts a single permission string or a sequence
         of them. ALL listed permissions are enforced on every call — see
         ``AuthManager._authorize``.
+
+        Both wrappers refuse a ``disable_tool()``'d tool before doing anything
+        else. That check used to live ONLY in ``_execute_tool``, so every
+        dispatch path that calls the wrapper directly — FastMCP's own
+        ``tools/call`` on the DEFAULT transport among them — executed a disabled
+        tool (#1998). Enforcing it in the wrapper binds EVERY path, including
+        any transport added later, because the wrapper is what gets registered.
         """
         # Normalise to a tuple ONCE, here, so both wrappers below close over the
         # identical value and cannot drift in how they read it.
@@ -1965,6 +2217,9 @@ class MCPServer:
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
+            # A disabled tool is not invocable on ANY path (#1998).
+            self._refuse_if_disabled(tool_name)
+
             # Generate session ID for tracking
             session_id = str(uuid.uuid4())
             start_time = time.time() if self.metrics.enabled else None
@@ -2240,7 +2495,9 @@ class MCPServer:
                 self._tool_registry[tool_name]["error_count"] += 1
                 self._tool_registry[tool_name]["last_called"] = time.time()
 
-                logger.error(f"Error in tool {tool_name}: {mcp_error}")
+                logger.error(
+                    f"Error in tool {tool_name}: {mask_error_text(str(mcp_error))}"
+                )
                 raise mcp_error
 
             finally:
@@ -2250,6 +2507,9 @@ class MCPServer:
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
+            # A disabled tool is not invocable on ANY path (#1998).
+            self._refuse_if_disabled(tool_name)
+
             # Generate session ID for tracking
             session_id = str(uuid.uuid4())
             start_time = time.time() if self.metrics.enabled else None
@@ -2490,7 +2750,9 @@ class MCPServer:
                 self._tool_registry[tool_name]["error_count"] += 1
                 self._tool_registry[tool_name]["last_called"] = time.time()
 
-                logger.error(f"Error in tool {tool_name}: {mcp_error}")
+                logger.error(
+                    f"Error in tool {tool_name}: {mask_error_text(str(mcp_error))}"
+                )
                 raise mcp_error
 
             finally:
@@ -2532,7 +2794,7 @@ class MCPServer:
                 }
             return formatted
         except Exception as e:
-            logger.warning(f"Failed to format response: {e}")
+            logger.warning(f"Failed to format response: {mask_error_text(str(e))}")
             return result
 
     def _chunk_large_response(self, data: Any, chunk_size: int = 1000) -> List[str]:
@@ -2890,9 +3152,18 @@ class MCPServer:
         return self._tool_registry.get(tool_name)
 
     def disable_tool(self, tool_name: str) -> bool:
-        """Temporarily disable a tool."""
+        """Temporarily disable a tool.
+
+        The flag alone only bound the surfaces that READ it. FastMCP keeps its
+        own registration and never consults it, so the DEFAULT transport both
+        listed and executed a disabled tool (#1998); the registration is
+        therefore withheld here as well. Invocation is refused independently by
+        both enhanced wrappers, so a transport this method cannot reach still
+        cannot run the tool.
+        """
         if tool_name in self._tool_registry:
             self._tool_registry[tool_name]["disabled"] = True
+            self._withhold_tool_from_fastmcp(tool_name)
             logger.info(f"Disabled tool: {tool_name}")
             return True
         return False
@@ -2901,18 +3172,30 @@ class MCPServer:
         """Re-enable a disabled tool."""
         if tool_name in self._tool_registry:
             self._tool_registry[tool_name]["disabled"] = False
+            self._restore_tool_to_fastmcp(tool_name)
             logger.info(f"Enabled tool: {tool_name}")
             return True
         return False
 
     def _execute_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Execute a tool directly (for testing purposes)."""
+        """Execute a tool directly (for testing purposes).
+
+        The three refusals below are the server's OWN availability decisions, so
+        they raise ``ToolNotAvailableError`` rather than a bare ``ValueError``.
+        That type — not the wording — is how ``run_stdio`` tells them apart from
+        a tool BODY that raised, and returns them verbatim while replacing any
+        body exception with a correlation id.
+        """
         if tool_name not in self._tool_registry:
-            raise ValueError(f"Tool '{tool_name}' not found in registry")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' not found in registry", tool_name=tool_name
+            )
 
         tool_info = self._tool_registry[tool_name]
         if tool_info.get("disabled", False):
-            raise ValueError(f"Tool '{tool_name}' is currently disabled")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' is currently disabled", tool_name=tool_name
+            )
 
         # Get the tool handler (the enhanced function)
         if "handler" in tool_info:
@@ -2920,7 +3203,9 @@ class MCPServer:
         elif "function" in tool_info:
             handler = tool_info["function"]
         else:
-            raise ValueError(f"Tool '{tool_name}' has no valid handler")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' has no valid handler", tool_name=tool_name
+            )
 
         # Update statistics
         tool_info["call_count"] = tool_info.get("call_count", 0) + 1
@@ -2992,20 +3277,20 @@ class MCPServer:
             else:
                 # Default to FastMCP (STDIO) server.
                 #
-                # #1998 — this serves FastMCP's OWN registry, which was never
-                # taught ``_public_tool_view``: a permission-gated tool
-                # advertises its full inputSchema and Args: docstring block, and
-                # a ``disable_tool()``'d tool is listed AND executable.
-                # ``run_async()`` -> ``run_stdio()`` is gated; this path is not.
-                # Invocation authorization holds on both (the enhanced wrapper
-                # is what FastMCP registered).
+                # This serves FastMCP's OWN registry. That registry is taught
+                # ``_public_tool_view``'s decision at REGISTRATION time
+                # (``_project_tool_onto_fastmcp``) rather than filtered here,
+                # because FastMCP owns its enumeration and exposes no hook in
+                # it; ``disable_tool`` withholds the registration outright and
+                # both enhanced wrappers refuse a disabled tool at invoke. See
+                # #1998 for the gap this closed.
                 logger.info("Starting FastMCP server in STDIO mode...")
                 self._mcp.run()  # type: ignore[reportOptionalMemberAccess]
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
 
             # Record error if aggregator is enabled
             if self.error_aggregator:
@@ -3250,7 +3535,9 @@ class MCPServer:
                         await self._dispatch_ws_method(method, params, None, client_id)
                     except Exception as exc:  # notifications expect no response
                         logger.warning(
-                            "ws.notification.error method=%s error=%s", method, exc
+                            "ws.notification.error method=%s error=%s",
+                            method,
+                            mask_error_text(str(exc)),
                         )
                 return None
 
@@ -3272,16 +3559,18 @@ class MCPServer:
             return await self._dispatch_ws_method(method, params, request_id, client_id)
 
         except Exception as e:
-            logger.error(f"Error handling WebSocket message: {e}")
+            logger.error(f"Error handling WebSocket message: {mask_error_text(str(e))}")
             # A notification (absent id) never receives a response, even on
             # internal error.
             if request.get("id") is None:
                 return None
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
-                "id": request.get("id"),
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Internal error",
+                request_id=request.get("id"),
+                event="websocket.message.error",
+                method=request.get("method"),
+            )
 
     async def _dispatch_ws_method(
         self,
@@ -3426,6 +3715,25 @@ class MCPServer:
             "id": request_id,
         }
 
+    def _tool_is_gated(self, info: Dict[str, Any]) -> bool:
+        """Single owner of "is there a boundary this caller cannot cross?".
+
+        Fail closed: a permission boundary exists AND no caller can be
+        authorized against it at discovery time. Read by BOTH
+        ``_public_tool_view`` (the in-repo discovery surfaces) and
+        ``_project_tool_onto_fastmcp`` (the default transport's own
+        registration), so the two cannot drift on which tools are gated.
+
+        Gating applies ONLY when an ``auth_provider`` is configured. Without
+        one, ``required_permission`` is never enforced on the invoke path
+        either, so there is no boundary to protect and withholding would cost
+        discovery for no security gain.
+        """
+        return (
+            self.auth_manager is not None
+            and info.get("required_permission") is not None
+        )
+
     def _public_tool_view(
         self, name: str, info: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -3444,17 +3752,23 @@ class MCPServer:
         ``inputSchema``, making the ``tools/list`` suppression decorative. Add a
         new discovery surface by CALLING this, never by copying it.
 
-        SCOPE — this contract is TRANSPORT-SCOPED, see #1998. Tools are also
-        registered with FastMCP (``self._mcp.tool()(enhanced_func)``), and
-        FastMCP builds its OWN tool list from the wrapped function, never
-        consulting this projection or the ``disabled`` flag. So the sync
+        THE DEFAULT TRANSPORT REACHES THIS DECISION BY A DIFFERENT ROUTE (#1998).
+        Tools are also registered with FastMCP
+        (``self._mcp.tool()(enhanced_func)``), and FastMCP builds its OWN tool
+        list from the wrapped function — it cannot be made to call this method,
+        because it owns that enumeration and exposes no hook in it. So the sync
         ``run()`` with ``transport="stdio"`` (the DEFAULT), which serves
-        ``self._mcp.run()``, advertises a gated tool's full ``inputSchema`` and
-        its complete ``Args:`` docstring block, and both lists and executes a
-        ``disable_tool()``'d tool. ``run_async()`` -> ``run_stdio()`` IS gated.
-        Invocation authorization is unaffected on either path (the enhanced
-        wrapper is what FastMCP holds). Closing the gap means routing FastMCP's
-        own enumeration through here — tracked in #1998.
+        ``self._mcp.run()``, is bound at REGISTRATION instead:
+        ``_project_tool_onto_fastmcp`` rewrites the gated tool's advertised
+        schema and description to THIS view's values, ``disable_tool`` withholds
+        the registration entirely, and both enhanced wrappers refuse a disabled
+        tool at invoke. The shared decision both routes read is
+        ``_tool_is_gated``; keep it that way rather than re-deriving "is this
+        gated" in either place. Until that landed, the default transport
+        advertised a gated tool's full ``inputSchema`` and complete ``Args:``
+        block and both listed and executed a ``disable_tool()``'d tool.
+        Invocation authorization was never affected on either path (the
+        enhanced wrapper is what FastMCP holds).
 
         Two independent suppressions:
 
@@ -3481,12 +3795,7 @@ class MCPServer:
         if info.get("disabled", False):
             return None
 
-        # Fail closed: a permission boundary exists AND this caller cannot be
-        # authorized against it.
-        gated = (
-            self.auth_manager is not None
-            and info.get("required_permission") is not None
-        )
+        gated = self._tool_is_gated(info)
 
         description = info.get("description", "")
         if gated and description:
@@ -4011,11 +4320,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Resource read error: {str(e)}"},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Resource read error",
+                request_id=request_id,
+                event="resources.read.error",
+            )
 
     @staticmethod
     def _is_valid_resource_uri(uri: Any) -> bool:
@@ -4163,14 +4473,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"Prompt generation error: {str(e)}",
-                },
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Prompt generation error",
+                request_id=request_id,
+                event="prompts.get.error",
+            )
 
     async def _handle_subscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -4214,17 +4522,21 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
+            # The code selection reads the exception SERVER-side, which is
+            # fine; only the message crosses back to the caller.
             error_code = -32603
             if "permission" in str(e).lower() or "not authorized" in str(e).lower():
                 error_code = -32601
             elif "rate limit" in str(e).lower():
                 error_code = -32601
 
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": error_code, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Subscribe failed",
+                request_id=request_id,
+                event="subscribe.error",
+                code=error_code,
+            )
 
     async def _handle_unsubscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -4260,11 +4572,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Unsubscribe failed",
+                request_id=request_id,
+                event="unsubscribe.error",
+            )
 
     async def _handle_batch_subscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -4303,11 +4616,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Batch subscribe failed",
+                request_id=request_id,
+                event="batch_subscribe.error",
+            )
 
     async def _handle_batch_unsubscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -4343,11 +4657,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Batch unsubscribe failed",
+                request_id=request_id,
+                event="batch_unsubscribe.error",
+            )
 
     async def _handle_connection_close(self, client_id: str):
         """Handle WebSocket connection close."""
@@ -4404,7 +4719,7 @@ class MCPServer:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to compress message: {e}")
+            logger.warning(f"Failed to compress message: {mask_error_text(str(e))}")
             return message
 
     def _decompress_message(self, compressed_message: Dict[str, Any]) -> Dict[str, Any]:
@@ -4428,13 +4743,18 @@ class MCPServer:
             return json.loads(decompressed_json.decode("utf-8"))
 
         except Exception as e:
-            logger.error(f"Failed to decompress message: {e}")
-            # Return a sensible error message
+            # This handler has no request id (the frame never decoded), so it
+            # cannot use the shared envelope; it applies the same contract.
+            correlation_id = self._log_and_correlate(e, "websocket.decompress.error")
             return {
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32603,
-                    "message": f"Failed to decompress message: {e}",
+                    "message": (
+                        "Failed to decompress message "
+                        f"(correlation id: {correlation_id})"
+                    ),
+                    "data": {"correlationId": correlation_id},
                 },
             }
 
@@ -4464,7 +4784,10 @@ class MCPServer:
                     f"Sent notification to client {client_id}: {notification['method']}"
                 )
             except Exception as e:
-                logger.error(f"Failed to send notification to client {client_id}: {e}")
+                logger.error(
+                    "Failed to send notification to client "
+                    f"{client_id}: {mask_error_text(str(e))}"
+                )
 
     async def _handle_logging_set_level(
         self, params: Dict[str, Any], request_id: Any
@@ -4894,12 +5217,16 @@ class MCPServer:
             return {"jsonrpc": "2.0", "result": result, "id": request_id}
 
         except Exception as e:
-            logger.error(f"Completion error: {e}")
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Completion failed: {str(e)}"},
-                "id": request_id,
-            }
+            # This surface is reachable with NO credentials (see the ref_type
+            # == "tool" branch above), so nothing derived from the exception
+            # may appear in the response.
+            return self._internal_error_envelope(
+                e,
+                summary="Completion failed",
+                request_id=request_id,
+                event="completion.error",
+                ref_type=ref_type,
+            )
 
     async def _handle_sampling_create_message(
         self, params: Dict[str, Any], request_id: Any
@@ -5093,16 +5420,15 @@ class MCPServer:
                 fut.cancel()
             logger.warning(
                 "sampling.dispatch_failed",
-                extra={"sampling_id": sampling_id, "error": str(exc)},
+                extra={"sampling_id": sampling_id, "error": mask_error_text(str(exc))},
             )
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"failed to dispatch sampling request: {exc}",
-                },
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                exc,
+                summary="failed to dispatch sampling request",
+                request_id=request_id,
+                event="sampling.dispatch.error",
+                sampling_id=sampling_id,
+            )
 
         try:
             completion = await asyncio.wait_for(fut, self._sampling_timeout)
@@ -5278,11 +5604,13 @@ class MCPServer:
 
         NOTE — this is NOT the loop the sync ``run()`` serves. ``run()`` with
         ``transport="stdio"`` (the DEFAULT) calls ``self._mcp.run()``, i.e.
-        FastMCP's own server over FastMCP's own registry, which never consults
-        ``_public_tool_view`` or the ``disabled`` flag. This loop is reached
-        from ``run_async()``. The two stdio paths therefore have DIFFERENT
-        disclosure behaviour for the same registry — see #1998, which tracks
-        routing FastMCP's enumeration through the same gate.
+        FastMCP's own server over FastMCP's own registry. This loop is reached
+        from ``run_async()``. The two stdio paths reach the SAME disclosure
+        decision by different routes: this one calls ``_public_tool_view``
+        directly, FastMCP's is bound at registration by
+        ``_project_tool_onto_fastmcp`` (#1998). A change to what a tool
+        discloses therefore belongs in ``_public_tool_view`` / ``_tool_is_gated``,
+        never in either route.
         """
         if self._mcp is None:
             self._init_mcp()
@@ -5345,10 +5673,29 @@ class MCPServer:
                                         ]
                                     },
                                 }
-                            except Exception as e:
+                            except ToolNotAvailableError as e:
+                                # The server's OWN availability refusal —
+                                # authored here, embeds no foreign text, and is
+                                # the useful answer for a legitimate client.
                                 response = {
                                     "id": request.get("id"),
                                     "error": {"code": -32603, "message": str(e)},
+                                }
+                            except Exception as e:
+                                # A tool BODY raised. Its text may carry
+                                # internal paths, driver output, or a
+                                # credential, and this loop authenticates
+                                # nothing — return a correlation id instead.
+                                envelope = self._internal_error_envelope(
+                                    e,
+                                    summary="Tool execution failed",
+                                    request_id=request.get("id"),
+                                    event="stdio.tools_call.error",
+                                    tool=tool_name,
+                                )
+                                response = {
+                                    "id": envelope["id"],
+                                    "error": envelope["error"],
                                 }
                         else:
                             response = {
@@ -5385,7 +5732,7 @@ class MCPServer:
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
             raise
         finally:
             self._running = False
@@ -5449,7 +5796,7 @@ class MCPServer:
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
 
             # Record error if aggregator is enabled
             if self.error_aggregator:
