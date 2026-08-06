@@ -38,6 +38,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+
 from kailash.nodes.base import NodeRegistry
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
