@@ -5,19 +5,43 @@ MUST-1: consult BEFORE every spawn, match AGAINST every completion notification.
 
 ## Agent launches
 
-| Track                              | Agent        | Owns (exclusive)                                                                                                                                                                                            | Status                                             |
-| ---------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Round-2 adversarial security       | `R2-SEC`     | read-only                                                                                                                                                                                                   | **QUERIED — silent, no findings file as of 19:20** |
-| Round-2 correctness/invariant      | `R2-CORRECT` | read-only                                                                                                                                                                                                   | **DONE — 5 HIGH + 3 MED + 1 MED(env)**             |
-| Round-2 release integrity          | `R2-RELEASE` | read-only                                                                                                                                                                                                   | **DONE — 1 MEDIUM, order verified**                |
-| Fix nexus rate-limit (F4/F5/F6/F7) | `F-NEXUS`    | `packages/kailash-nexus/src/nexus/core.py`, `packages/kailash-nexus/tests/regression/**`                                                                                                                    | in-flight                                          |
-| Fix envelope guard (F1/F2/F3)      | `F-ENVELOPE` | `src/kailash/workflow/input_envelope.py`, `src/kailash/api/workflow_api.py`, `src/kailash/channels/*.py`, `tests/regression/test_*envelope*`, `test_channel_parameters*`, `test_issue_workflow_parameters*` | in-flight                                          |
+| Track                              | Agent        | Owns (exclusive)                                                                                                                                                                                            | Status                                               |
+| ---------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Round-2 adversarial security       | `R2-SEC`     | read-only                                                                                                                                                                                                   | **DONE — 2 HIGH + 3 MED + 1 LOW, all 5 scope areas** |
+| Round-2 correctness/invariant      | `R2-CORRECT` | read-only                                                                                                                                                                                                   | **DONE — 5 HIGH + 3 MED + 1 MED(env)**               |
+| Round-2 release integrity          | `R2-RELEASE` | read-only                                                                                                                                                                                                   | **DONE — 1 MEDIUM, order verified**                  |
+| Fix nexus rate-limit (F4/F5/F6/F7) | `F-NEXUS`    | `packages/kailash-nexus/src/nexus/core.py`, `packages/kailash-nexus/tests/regression/**`                                                                                                                    | in-flight                                            |
+| Fix envelope guard (F1/F2/F3)      | `F-ENVELOPE` | `src/kailash/workflow/input_envelope.py`, `src/kailash/api/workflow_api.py`, `src/kailash/channels/*.py`, `tests/regression/test_*envelope*`, `test_channel_parameters*`, `test_issue_workflow_parameters*` | in-flight                                            |
 
-**File ownership is disjoint by construction** — the two fix lanes share no file. Deliberate
+Two further fix lanes launched after the reviewers freed capacity:
+
+| Track                                               | Agent      | Owns (exclusive)                                                                                             | Status    |
+| --------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| kaizen-agents disclosure (HIGH-2/MED-3/MED-4/LOW-6) | `F-AGENTS` | `packages/kaizen-agents/src/.../patterns/discovery.py`, `delegate/tools/{glob,bash}_tool.py`, its `tests/**` | in-flight |
+| MCP stdio gate bypass (HIGH-1 #1998 / MED-5)        | `F-MCP`    | `packages/kailash-mcp/**`, `tests/unit/mcp_server/**`                                                        | in-flight |
+
+**File ownership is disjoint by construction** — the four fix lanes share no file. Deliberate
 deviation from `worktree-isolation.md` Rule 1 recorded here rather than taken silently: the
 `.venv` is checkout-bound (the traps mandate `.venv/bin/python`, and a per-worktree
-`uv sync --all-extras --dev` is expensive), so both lanes run in the main checkout with
+`uv sync --all-extras --dev` is expensive), so all lanes run in the main checkout with
 exclusive file assignment and an explicit ban on every index-touching git command.
+
+## ORCHESTRATOR ERROR — tool-inventory mismatch on R2-SEC
+
+I dispatched `security-reviewer` with an instruction to "write findings to
+`scratchpad/R2-SEC-findings.md` AS YOU GO". That specialist is READ-ONLY — no Write, no
+Edit, no Bash. `agents.md` § "Verify Specialist Tool Inventory Before Implementation
+Delegation" names this exact failure and I did not check before dispatching.
+
+No output was lost: R2-SEC flagged the block in its FIRST message, completed all five scope
+areas, and persisted every finding to the shared task list instead (#3–#9), each with quoted
+code, file:line, the attack, the falsifying result, and the fix. **Its file-write instruction
+was the defect, not its silence** — and the ledger's earlier "QUERIED — silent" row was my
+misreading of a lane that was working correctly the whole time.
+
+Rule for the next dispatch: if a read-only reviewer must produce a durable artifact, either
+the orchestrator writes it from the returned text, or the work goes to an Edit+Bash-capable
+agent. Do not put a file-write step in a read-only specialist's prompt.
 
 ## Session-G state
 
