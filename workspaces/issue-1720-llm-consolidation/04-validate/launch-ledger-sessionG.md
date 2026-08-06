@@ -82,6 +82,43 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## INSTRUMENT FAILURE 7 — A NEW SPECIES, AND MY PARALLELISM CAUSED IT
+
+The six before this could not FAIL. This one **fails on unchanged code**, which is worse in a
+specific way: it teaches the next reader to raise the bound, and raising a complexity bound is
+the buried-regression tell `testing.md` § Complexity Bounds exists to name.
+
+The linearity tests measured WALL CLOCK — so they measured every other process on the box.
+**Three of my lanes were running suites concurrently.** Same unmodified units, consecutive runs:
+
+    [8.0, 8.1, 93.0]   [65.6, 49.4, 96.5]   [101.0, 7.9, 7.9]
+
+Two suites FAILED against their own 25x bound on rules NOBODY had touched — 109.8x and 42.4x —
+having passed in isolation minutes earlier.
+
+**This is a cost of the orchestration model, not of the code.** I chose to run 3-4 lanes
+concurrently, each running pytest. Any wall-clock-derived measurement taken in this session is
+suspect for that reason, including ones I cited. Recorded as MY defect, because a future
+session running lanes in parallel will reproduce it exactly.
+
+**The lane fixed the INSTRUMENT, not the bound.** `time.process_time()` excludes descheduled
+intervals; the same units then read `[8.1, 7.9, 8.1]`, `[7.9, 8.1, 8.0]`, `[8.1, 7.9, 8.1]`.
+No absolute threshold anywhere — still self-normalising ratios.
+
+**And it swept the CLASS, then proved the instruments still FIRE.** 3 files, 6 ratio asserts
+(one file had three identical inline copies, now one helper). Each re-verified after the swap:
+quadratic comma rule → RED; the `{0,31}` URL-scheme bound removed → 64.6x / 69.2x RED. Its
+words, and this is the discipline: _"a disarmed instrument would have been the worse outcome,
+so that check was mandatory."_ Fixing a flaky test by making it incapable of firing is the
+trap, and it checked.
+
+**Verified by me under the failing condition:** the linearity tests pass right now, with two
+round-4 lanes running suites concurrently — the exact load that produced the false failures.
+
+**Methodological note worth propagating:** `min`-over-repeats of the SAME payload also flattered
+the numbers — warm caches made a 64 KB payload read 12 ms where a UNIQUE payload read 78 ms.
+Unique-payload measurement is what exposed it.
+
 ## THE DURABLE RULE OF THIS SESSION — "N sites swept" is a claim about the PATTERN, not the code
 
 Offered by `F-MCP` after its THIRD self-caught instrument failure, and it generalises past this
