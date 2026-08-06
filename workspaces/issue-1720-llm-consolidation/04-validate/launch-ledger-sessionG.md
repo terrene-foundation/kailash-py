@@ -82,6 +82,61 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## ORCHESTRATOR ERROR 8 — MY WORKTREE DEVIATION WAS WRONG, AND EVERY SUITE RESULT IS SUSPECT
+
+**This supersedes the "File ownership is disjoint by construction" justification recorded
+earlier in this ledger. That reasoning was wrong, and it was mine.**
+
+A lane captured a live mutation window in `discovery.py`:
+
+    return cls(
+    -    permission_level=DENIED_PERMISSION_LEVEL,
+    -    constraints=AccessConstraints.deny(),
+    -    denied=True,
+    +    permission_level="execute",
+    +    constraints=AccessConstraints(),
+    )
+
+`AccessMetadata.deny()` returning a full `execute` grant with unlimited constraints. Restored
+11 seconds later, correctly — **the hazard is the WINDOW, not residue.**
+
+**The generalisation, and it refutes my justification directly:**
+
+> Exclusive file ownership prevents write CONFLICTS but not transient invalid STATES. Owning a
+> file grants the right to CHANGE it, not the right to make it temporarily WRONG while three
+> other lanes import it.
+
+I justified running four lanes in ONE checkout on the `.venv` being checkout-bound. That
+reasoning covers conflicts. **It does not cover mutation windows,** and I did not think of them.
+`worktree-isolation.md` Rule 1 exists for this; my documented deviation from it was not sound.
+
+**THE CONSEQUENCE I MUST NOT SOFTEN — every full-suite result this session is unsound IN
+PRINCIPLE.** Not merely the two flaky nexus runs and the 9 unreproducible parity failures: the
+GREENS too, including the ones I ran myself and cited as orchestrator-verified (root unit 4798,
+root regression 1566/1567, kaizen 1367, kaizen-agents 687, mcp 645/647/649, nexus regression
+125). Each was taken while other lanes could have had a module neutered. A green obtained while
+a sibling has broken the module under test proves nothing — and a lane's own greens are the
+uncomfortable half, because a mutation can make a test PASS that should have failed.
+
+**This does not invalidate the FIXES.** Every fix on this branch has an individually-established
+RED-then-GREEN, most driven end to end, several reproduced independently by a second lane. What
+is weakened is the AGGREGATE suite-level assurance, which is exactly the claim convergence rests
+on.
+
+**Required before any convergence claim:** a full verification run on a CLEAN tree with NO lane
+mutating anything, and that run — not any earlier one — is the baseline. Recorded as an
+obligation rather than done here, because a mutating lane is still live.
+
+**Corrective:** mutation experiments patch the compiled object IN-PROCESS (rebind / monkeypatch
+/ rebuild the pattern) or work on a COPY. Rewriting shared source belongs in a worktree. A lane
+noted its FIRST probe did exactly this with zero blast radius and it then "improved" to
+rewriting files — the improvement was the defect.
+
+Surfaced by `F3-AGENTS`, which recorded its OWN ~15 write cycles on `credential_scrub.py` as a
+prime suspect for failures it had itself asked round 4 to investigate. Naming your own tooling
+as the likely cause of a finding you filed is the hardest direction to report in, and it is why
+this was found at all.
+
 ## ORCHESTRATOR ERROR 7 — I VIOLATED `symbol-anchored-citations.md` MUST-3, REPEATEDLY
 
 Not a new lesson. An EXISTING rule, binding since its grace expired 2026-07-07, that I did not
