@@ -82,6 +82,54 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## INSTRUMENT FAILURE 8 — A NAME REBIND THAT NEVER REACHED THE CODE, QUOTED IN COMMITTED DOCSTRINGS
+
+The most subtle of the eight, and it reached DURABLE artifacts before anyone caught it.
+
+A timing probe mutated by rebinding the module-level name
+(`cs._CREDENTIAL_KEYVALUE_TOKEN = pat`) and then measured `cs.scrub_credentials`. But
+`_CREDENTIAL_PATTERNS` captured the ORIGINAL compiled object at module init, and
+`scrub_credentials` iterates that list — so the rebind changed a name nothing consults.
+
+**Verified independently here, not relayed:**
+
+    list captured the same object?: True
+    before='[REDACTED] '   during-name-rebind='[REDACTED] '
+    REBIND IS INERT
+
+So "four mutations left the ratio at 7.5-8.3" measured NOTHING. The ratio stayed flat because
+nothing was mutated — not because the mutations were inert AS COMPLEXITY MUTATIONS. Those are
+different claims and only the second would have been informative. `instrument-discipline.md`
+MUST-2(b) names exactly this: a non-reddening result read as a property of the code without
+proving the mutation reached it.
+
+**It propagated into two COMMITTED test docstrings** before being caught — a durable false claim,
+the same category as the false all-clear that reached a shipped CHANGELOG. Correction routed to
+the file's owner as a FOLLOW-UP commit; the accurate replacement cites NO ratio, and states the
+structural reasons instead.
+
+**Scoped tightly, so the correction does not over-reach:** reason (b) STANDS (standalone
+`re.compile` patterns that never touched the module — the k=5..25 curve, 0.000002s → 2.228s with
+a mandatory tail). Reason (c) STANDS (measured via `.search()` directly). **#21's CONCLUSION
+stands.** Only the supporting timing measurement is void.
+
+**THE GENERAL LESSON, which is the transferable part:**
+
+> Rebinding a module-level NAME is INERT whenever the object has already been captured into a
+> collection, a default argument, or another module's import. An in-memory mutation probe MUST
+> verify the patch changes observable behaviour WHILE APPLIED, before any measurement taken
+> under it is cited.
+
+**This also vindicates the audit lane's method and corrects my own guidance twice over.** I told
+it to "patch in-process"; in-process patching is exactly what failed here. Its `[M2-REACHED]`
+stderr probe — proving the mutation EXECUTES before any conclusion is drawn — is precisely the
+defense, and it is the half people skip.
+
+**Knock-on, self-reported:** the reviewer's own #22 cell "in-memory + dedicated process = SAFE —
+MEASURED" is WEAKER than stated. Its probes had zero blast radius partly BECAUSE THEY WERE
+INERT, so they do not demonstrate that an EFFECTIVE in-memory mutation is safe. The
+sequential-vs-concurrent measurement from the other lane carries that cell instead.
+
 ## ROUTING DECISION — #23 goes to `/codify` Step 7a, NOT this branch. And the substance is real.
 
 Both lanes recommended it and I agree: `.claude/rules/**` is a COC-artifact concern, this repo
