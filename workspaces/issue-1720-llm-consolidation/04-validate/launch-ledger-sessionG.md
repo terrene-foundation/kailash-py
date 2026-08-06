@@ -82,6 +82,45 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## ORCHESTRATOR ERROR 6 — MUTATION TESTING IN A SHARED CHECKOUT POISONS SIBLING SUITES
+
+Second concurrency-induced instrument failure, same root cause as #7 below, different mechanism
+— and this one has a clean general form.
+
+I ran a MUTATION AUDIT concurrently with two lanes running full suites in ONE checkout. A
+mutation is a **global** edit. While the audit held
+
+    credential_scrub.py  ->  return text   # MUTATION: identity scrubber
+
+a sibling lane's suite `rglob`ed the repo, read that file, and failed
+`test_scrub_credentials_call_sites_do_not_weaken` — correctly, against a scrubber someone had
+neutered on purpose. It re-ran 4.5 minutes later and got a DIFFERENT failure, because the
+mutation set had moved underneath it. It could not reproduce either, verified mechanically that
+its own change was comment-only, and reported the hypothesis (a scanner reading every lane's
+files) WITHOUT asserting it. That hypothesis was correct.
+
+**The general form, which is the part worth keeping:**
+
+> Parallel lanes in ONE checkout make any test that reads GLOBAL state non-deterministic —
+> wall-clock timing (error 7) and the filesystem (this one). **Mutation testing is
+> fundamentally incompatible with concurrent suite runs in a shared tree**, because the
+> mutation is visible to every reader, and neither side can tell a real failure from a
+> sibling's deliberate breakage.
+
+Both failure modes were invisible to the lanes experiencing them and diagnosable only from the
+orchestration layer, which is where the choice was made. **Cost so far: two lanes' results made
+unreliable, ~5 minutes of re-runs, and two failures that looked like defects and were not.**
+
+Corrective actions taken: the audit switched to mutating a COPY (or holding an in-tree mutation
+only for the shortest possible window, restoring and verifying `git diff` empty before moving
+on, never while idle); the suite lane was told to check `git status --porcelain` on a failure's
+blast radius BEFORE reporting it, and to record tree state as part of the evidence — a pass or
+fail is only interpretable against a known tree, exactly as an enumeration claim is only
+interpretable with its pattern stated.
+
+**The worst outcome this narrowly avoided:** a `return text` scrubber left in the tree by an
+audit whose entire purpose was catching instruments that cannot fail.
+
 ## INSTRUMENT FAILURE 7 — A NEW SPECIES, AND MY PARALLELISM CAUSED IT
 
 The six before this could not FAIL. This one **fails on unchanged code**, which is worse in a
