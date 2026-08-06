@@ -35,6 +35,7 @@ and execute on ``tools/call``. Each was the observed pre-fix behaviour.
 
 import pytest
 from kailash_mcp.auth.providers import APIKeyAuth
+from kailash_mcp.errors import MCPError, ToolError
 from kailash_mcp.server import MCPServer
 from mcp.shared.memory import create_connected_server_and_client_session
 
@@ -323,3 +324,120 @@ async def test_gated_tool_invocation_still_refused_without_credentials():
         result = await client.call_tool("admin_delete_user", {"user_id": "u1"})
 
     assert result.isError, "an uncredentialed gated invocation must be refused"
+
+
+# ---------------------------------------------------------------------------
+# A THIRD FastMCP implementation — the projection must fail CLOSED
+#
+# ``_init_mcp`` tries the independent ``fastmcp`` package first, then
+# ``mcp.server.FastMCP``, then a local shim. Only the second and third are
+# installed here, so the first is a registration layout this code has never
+# run against — the same "a path nothing taught the control" shape as #1998
+# itself. It must refuse to register rather than serve an ungated schema.
+# ---------------------------------------------------------------------------
+
+
+class _UnrecognisedLayoutFastMCP:
+    """A FastMCP that keeps tools somewhere this code does not look."""
+
+    def __init__(self):
+        self.registry = {}  # neither ``_tools`` nor ``_tool_manager._tools``
+
+    def tool(self, *args, **kwargs):
+        def decorator(func):
+            self.registry[func.__name__] = func
+            return func
+
+        return decorator
+
+
+class _ParamlessEntryFastMCP:
+    """A recognised container whose entries expose no advertised schema."""
+
+    class _Entry:
+        def __init__(self, fn):
+            self.fn = fn  # no ``parameters`` attribute
+
+    def __init__(self):
+        self._tool_manager = type("TM", (), {})()
+        self._tool_manager._tools = {}
+
+    def tool(self, *args, **kwargs):
+        def decorator(func):
+            self._tool_manager._tools[func.__name__] = self._Entry(func)
+            return func
+
+        return decorator
+
+
+@pytest.mark.parametrize(
+    "fake_factory",
+    [
+        pytest.param(_UnrecognisedLayoutFastMCP, id="unrecognised_container"),
+        pytest.param(_ParamlessEntryFastMCP, id="entry_without_parameters"),
+    ],
+)
+def test_gated_registration_fails_closed_on_unknown_fastmcp_layout(fake_factory):
+    """Refuse to register rather than publish an ungated argument surface."""
+    server = MCPServer(
+        "regression-1998-unknown",
+        auth_provider=APIKeyAuth(keys={"admin-key": {"permissions": ["admin.write"]}}),
+    )
+    server._mcp = fake_factory()
+
+    with pytest.raises(MCPError, match="tool-disclosure gate"):
+
+        @server.tool(required_permission="admin.write")
+        def admin_delete_user(user_id: str) -> str:
+            """Delete an account.
+
+            Args:
+                user_id: The account to delete.
+            """
+            return "deleted"
+
+
+def test_ungated_registration_still_works_on_unknown_fastmcp_layout():
+    """CONTROL: the guard keys on the GATE, not on the unknown layout.
+
+    Without this, the test above would pass for a guard that simply raised on
+    every registration against an unfamiliar FastMCP.
+    """
+    server = MCPServer("regression-1998-unknown-ungated")
+    server._mcp = _UnrecognisedLayoutFastMCP()
+
+    @server.tool()
+    def public_search(query: str) -> str:
+        """Search."""
+        return "results"
+
+    assert "public_search" in server._tool_registry
+
+
+def test_disable_tool_on_unknown_layout_blocks_invoke_then_reports_loudly():
+    """A half-applied disable must be loud, and must still block invocation.
+
+    The registry flag is set BEFORE the withhold is attempted, so the wrapper
+    refuses the tool even when the listing cannot be updated; the raise tells
+    the operator the advertisement may still name it. Silence here would be the
+    worst outcome — an operator believing a tool is fully disabled.
+    """
+    server = MCPServer("regression-1998-unknown-disable")
+    server._mcp = _UnrecognisedLayoutFastMCP()
+
+    @server.tool()
+    def echo(text: str) -> str:
+        """Echo."""
+        return text
+
+    handler = server._tool_registry["echo"]["function"]
+
+    with pytest.raises(MCPError, match="tool-disclosure gate"):
+        server.disable_tool("echo")
+
+    assert server._tool_registry["echo"]["disabled"] is True, (
+        "the flag must land before the withhold is attempted, or a failed "
+        "withhold would leave the tool fully invocable"
+    )
+    with pytest.raises(ToolError, match="disabled"):
+        handler(text="hi")
