@@ -82,6 +82,42 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## BASELINE — PARTIAL, AND SELF-VALIDATING. Four trees ESTABLISHED, three UNESTABLISHED.
+
+Every earlier suite number this session was recorded as unsound (a sibling could have had a
+module neutered mid-run). These four are the replacement, taken under a protocol that can
+DETECT the contamination rather than assume its absence: fingerprint `git status --porcelain`
+before AND after each run, and treat the numbers as VOID unless both match.
+
+| Tree                                                                | Result                                    | Verdict                           |
+| ------------------------------------------------------------------- | ----------------------------------------- | --------------------------------- |
+| root `tests/unit/` (CI Tier-1)                                      | **4798 passed, 4 skipped**                | **VALID** — fingerprint identical |
+| root `tests/regression/` (infra-filtered; the tier CI does NOT run) | **1567 passed, 2 skipped, 22 deselected** | **VALID**                         |
+| `tests/unit/mcp_server/` (CI-visible)                               | **645 passed**                            | **VALID**                         |
+| `packages/kailash-mcp/tests/`                                       | **649 passed, 1 skipped**                 | **VALID**                         |
+| `packages/kailash-nexus/tests/`                                     | —                                         | **UNESTABLISHED**                 |
+| `packages/kaizen-agents/tests/`                                     | —                                         | **UNESTABLISHED**                 |
+| `packages/kailash-kaizen/tests/regression/`                         | —                                         | **UNESTABLISHED**                 |
+
+**UNESTABLISHED means NOT RUN TO COMPLETION — it does NOT mean failing.** All three timed out at
+the 10-minute cap. `kaizen-agents` alone took **151s** earlier tonight and did not finish in
+**600s** here: a ~4x slowdown, i.e. resource contention from the still-active audit lane, not a
+defect. Each of the three was green in an earlier (unsound) run; those runs are exactly what
+this baseline exists to replace, so citing them would defeat the point.
+
+**The protocol worked, and that is the durable part.** The fingerprint check is a discriminating
+instrument for the baseline ITSELF — it returns a different answer when the tree moves mid-run.
+Given that this session produced eight non-discriminating instruments, a verification run whose
+own soundness could not be checked would have been the ninth.
+
+**The contention is the same root cause as errors 6 and 7:** parallel lanes in one checkout.
+Wall-clock timing, filesystem reads, and now CPU contention severe enough to make a 151s suite
+exceed 600s. Three distinct symptoms of one orchestration choice that was mine.
+
+**To finish this:** re-run the three UNESTABLISHED trees once no lane is active, under the same
+before/after fingerprint protocol. That is a mechanical step, not a judgement call, and it is
+the last thing standing between here and a suite-level claim worth making.
+
 ## FINAL ACCOUNTING (VERIFIED BY ME, NOT RELAYED) — the valid set is FOUR, and the void two are SEPARATE
 
 Third and last correction to this item. The first two were relayed; **this one I verified**,
