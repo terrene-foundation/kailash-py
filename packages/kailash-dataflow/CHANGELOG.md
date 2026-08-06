@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.20.0] — 2026-08-05 — Generated identifiers fitted to the connection's dialect; database-type detection fails closed (#1971)
+
 ### Fixed — generated identifiers are fitted to the connection's dialect (#1971)
 
 - **DataFlow-GENERATED identifiers are now fitted to the target dialect's length
@@ -41,6 +43,21 @@
   the new generated name before upgrading, or pin the old name explicitly with
   `__tablename__`. Models whose generated names are within the dialect budget are
   unaffected — short names are returned unchanged, not rewritten.
+
+- **Database-type detection now fails closed on an unrecognized connection-string
+  scheme (HIGH), instead of silently defaulting to SQLite's loosest identifier
+  budget.** A connection string using a driver variant `ConnectionParser` didn't
+  special-case (e.g. `postgres+asyncpg://`, `mariadb://`) fell through a broad
+  exception handler straight to `"sqlite"` — with only a debug-level log — so an
+  ordinary PostgreSQL/MySQL connection could get SQLite's 128-character identifier
+  budget instead of PostgreSQL's 63 or MySQL's 64, generate an over-length name,
+  and have it silently truncated server-side, aliasing two differently-named
+  models onto one physical table. This is exactly the collision the fixes above
+  exist to prevent, reached by a different path (a mis-detected dialect budget,
+  rather than a bad truncation). Detection now recognizes the common
+  driver-qualified DSN forms for PostgreSQL and MySQL/MariaDB and raises a typed,
+  actionable error naming the supported schemes for anything it cannot map,
+  instead of guessing.
 
 ## [2.19.1] - 2026-07-21
 

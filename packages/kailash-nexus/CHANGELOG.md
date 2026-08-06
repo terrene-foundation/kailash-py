@@ -96,6 +96,31 @@
   aborted. Un-nameable files are now skipped individually with a `WARNING` naming the
   file and the reason, and discovery continues.
 
+### Fixed — `Nexus.__del__` no longer risks a garbage-collection-time deadlock
+
+- **`Nexus.__del__` previously called `close()` directly** if a `Nexus` instance was
+  garbage-collected without the caller having cleaned it up explicitly. `close()` can
+  reach event-loop/selector initialization that itself emits a log line; because the
+  finalizer can run from inside Python's own logging machinery during GC, that log
+  call can try to re-acquire a logging lock the finalizer thread already holds, and
+  the process deadlocks. This is the same class of hazard already fixed for
+  `DataFlow.__del__` (2026-04-16 "DataFlow unit suite hangs" incident). `__del__` now
+  only emits a `ResourceWarning` naming the caller-facing cleanup call, and does
+  nothing else — real cleanup remains the caller's responsibility via `await
+nexus.close()`. **No API change**; this only removes an unsafe implicit cleanup
+  path that most callers never relied on (an object that is closed explicitly is
+  unaffected).
+
+### Fixed — MCP channel `parameters` envelope parity with HTTP/CLI
+
+- **A workflow registered via `Nexus.register()` and invoked over the MCP channel could 200 while the SAME workflow 500'd over HTTP/CLI, or vice versa.** The MCP `tools/call` execute path forwarded arguments to the runtime ONLY as `{"parameters": params}`; a workflow reading its inputs as bare top-level names (rather than `parameters.get(...)`) worked over HTTP/CLI (`kailash.api.workflow_api.WorkflowRequest.get_inputs()` binds both shapes — see the core `kailash` 2.63.0 CHANGELOG entry) but failed over MCP. Arguments are now forwarded in both shapes here too — every key at workflow level AND the whole mapping under `parameters` — matching `get_inputs()`'s collision precedence exactly (an inner key literally named `parameters` loses to the envelope).
+
+### Fixed — `rate_limit_config` and `/metrics` registration reliability
+
+- **`rate_limit_config={"default_rate_limit": None}` (the documented "unlimited" spelling) crashed every request to the endpoint with an unconditional HTTP 500.** `None` reached a `rate_limit > 0` comparison inside the request wrapper and raised `TypeError: '>' not supported between instances of 'NoneType' and 'int'` on every call — the documented `None` = unlimited behavior had never actually been implemented. A non-int, non-`None` configured value is now rejected loudly at registration (`ValueError`) instead of surfacing as a per-request `TypeError`.
+- **A configured `rate_limit=` silently did nothing on any handler whose FastAPI `Request` parameter was not literally named `request`.** The wrapper only checked `kwargs["request"]`, so a handler declaring `req: Request` (or any other name) was never rate-limited while the registration log still reported `rate_limit=N/min` as if it were active. Request detection is now by parameter TYPE, matching `Request` regardless of name; a handler that still cannot be rate-limited (declares no `Request`-typed parameter at all) now gets a one-time `nexus.endpoint.rate_limit_inert` WARNING at registration naming the handler and the exact fix, instead of silently advertising a protection it cannot enforce.
+- **`register_metrics_endpoint` could raise a bare `TypeError` instead of its documented `ImportError`-only contract** when `nexus.fastapi_app` (or the gateway's `app`) was a test stand-in without a real, mutable `routes` list — the route-replacement code path slice-assigns `app.routes`, which requires an actual list. A new `_route_bearing()` guard checks for a real `routes` list before attempting the FastAPI-app registration path, falling through to the `HTTPTransport` registration path (which does not need one) otherwise.
+
 ## [2.15.0] — 2026-07-25 — Deployment lifecycle: deregister + non-blocking start (#1959)
 
 ### Added

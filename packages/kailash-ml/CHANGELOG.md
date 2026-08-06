@@ -1,5 +1,15 @@
 # kailash-ml Changelog
 
+## [Unreleased]
+
+## [2.2.3] — 2026-08-05 — Identifier-length validation now uses a real dialect budget (#1971)
+
+Patch release. Internal call-site fix — no public API change.
+
+### Fixed
+
+- **Internal SQL identifier validation no longer relies on a silent default.** `kailash.db.dialect._validate_identifier`'s `max_length` argument is now required rather than defaulting to SQLite's 128-character budget; every internal call site in this package (`MLEngine`'s model-name validation, the SQL-backed engine's table/index bootstrap, and `SqliteTrackerStore`'s `ALTER TABLE ADD COLUMN` path) now passes the explicit `DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` sentinel it always effectively used. No behavior change for callers of this package — this closes the residual half of the identifier-collision hardening shipped in kailash-dataflow 2.20.0 (#1971) at the shared core-SDK validator kailash-ml also calls.
+
 ## [2.2.2] — 2026-06-23 — numba floor fixes Python 3.12+ fresh-install (#1430)
 
 Patch release. Dependency-constraint fix — no public API change.

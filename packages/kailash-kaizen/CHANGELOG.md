@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.46.0] — 2026-08-05 — Credential-sanitization hardening completed; A2A capability matching fixed (#1970, #1973, #1974, #1981)
+
+**Upgrade note: this release does NOT include the discovery-permission fail-open fix.** That fix lives in the separate `kaizen-agents` package (`UserFilteredAgentDiscovery`, not part of `kailash-kaizen`) and ships in `kaizen-agents` 0.13.0. `kaizen-agents` 0.12.0 declares `kailash-kaizen>=2.36.0` with no upper cap, so upgrading `kailash-kaizen` to 2.46.0 satisfies that floor and gives a dependency resolver no reason to also upgrade `kaizen-agents` — an environment can report `kailash-kaizen` upgraded while `kaizen-agents` silently stays on 0.12.0 with its fail-open permission checker still live. If your deployment uses `kaizen-agents`, upgrade it explicitly to `>=0.13.0` alongside this release; see the `kaizen-agents` CHANGELOG for the fix itself.
+
 ### Changed (behavior — potentially breaking)
 
 - **`Capability.matches_requirement` is now synchronous (#1973).** It shipped as
@@ -85,6 +89,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`"Agent execution error (<Type>): <message>"`) rather than a bare `str(e)`.
   The event stream crosses a process boundary to consumers, so an unsanitized
   agent exception could ship a credential.
+
+### Added — caller-selectable credential scrub aggression
+
+- **`scrub_credentials(text, *, redact_opaque_tokens=True, redact_paths=True)`
+  gains two keyword-only flags**, both defaulting to the prior (aggressive)
+  behavior — fully backward-compatible for any existing caller. Turning both
+  off keeps only the rules anchored on a literal that cannot occur outside a
+  real credential (`sk-`, `AKIA`, `ghp_`, `hf_`, `fw_`, `xox?-`, `sk_live_`,
+  `sig=`, `Bearer`/`Basic`, bare JWTs, URL-userinfo/DSN credentials), and turns
+  off the two shape-only rules (`redact_opaque_tokens`: 32+/40+ char runs,
+  which also claim git SHAs, MD5 digests, and long identifiers) and the
+  internal-path rules (`redact_paths`: `$HOME` paths, Azure resource names).
+- **`scrub_local_error(text)`** is a new convenience wrapper applying that
+  conservative combination — for exception text from an in-process failure
+  (a filesystem error, a local tool result) where the redacted bytes ARE the
+  diagnostic a caller or an LLM agent needs to retry correctly, not a
+  disclosure risk. `scrub_remote_error(text)` is the paired wrapper for the
+  existing aggressive default, naming intent at call sites that handle a
+  provider/HTTP/subprocess boundary exception.
+
+### Fixed — further credential-sanitization gaps closed (#1970, #1974)
+
+The #1970/#1974 sweep above closed the majority of the credential-leak
+surface; this batch closes the residual gaps found by follow-up adversarial
+review, mostly on paths the first sweep's site-by-site approach could not see
+because the leak and its (correctly-scrubbed) sibling sat two lines apart.
+
+- **A third, independent credential scrubber existed on a logging path and had
+  drifted from the shared module on 9 of 10 vendor shapes.**
+  `SensitiveDataRedactor.PATTERNS` (`core/autonomy/hooks/security/redaction.py`,
+  reachable via the built-in logging hook) caught `sk-`/`pk-` and missed AWS
+  `AKIA`/`ASIA`, `ghp_`, `hf_`, `fw_`, Slack `xoxb-`, Stripe `sk_live_`, Azure
+  SAS `sig=`, and URL-embedded DSNs. It now delegates the vendor-credential
+  half to the shared scrubber and keeps its own list for the non-credential
+  PII classes (credit cards, SSNs, emails, IPs) that the shared module
+  doesn't cover, plus two field-shaped forms it deliberately retains
+  alongside the delegation (`password: ...`, `Bearer ...`, and the
+  `sk-`/`pk-`-prefixed `api_key` pattern — the latter kept because it also
+  accepts the `pk_` shape and a `_` separator the shared rule doesn't), with
+  a parity test in both directions so the two cannot drift again.
+- **`ProviderError.body_snippet`** (fed the full, unredacted provider response
+  body at its three construction sites) had its own independent scrubber that
+  never learned the #1974 pattern additions and leaked all eight vendor
+  credential shapes. It now delegates to the shared module.
+- **`FallbackResult.to_dict()` serialized the raw provider exception** even
+  though `FallbackRouter` had already sanitized the same exception into
+  `FallbackEvent.error_message` two lines earlier — one dict carried the same
+  credential twice, scrubbed under one key and raw under `error`. Also: the
+  regression suite covering this sweep never actually ran in CI (its autouse
+  fixture silently skipped without an ambient `.env`-provided model name), so
+  it reported green with zero real coverage for the file's entire life.
+- **Structured-output parse-failure messages interpolated the raw provider
+  response body unscrubbed** (`f"... Content: {content[:500]}"`) right next to
+  an already-scrubbed exception — the scrub protected the half of the message
+  that carried no credential and skipped the half that did.
+- **A regex compiled from a caller-supplied `grep_tool` pattern could leak a
+  prefix-less credential via CPython's "unknown group name" error message**,
+  which echoes the offending group name verbatim; this path was previously
+  (incorrectly) classified as safe because it raises in-process.
+- **Both credential-redaction URL rules (`Bearer`-only, and no `Basic`, no bare
+  `password=`/`api_key=` key-value pairs) missed HTTP Basic auth and bare
+  credential-announcing `key=value` literals** — `Authorization: Basic
+dXNlcjpwYXNzd29yZA==` (reversible base64, not a digest) and
+  `password=hunter2longenough` both passed through unredacted under the
+  conservative preset. Both are now covered on both presets.
+- **The key=value credential rule blanked ordinary diagnostic prose that
+  merely followed a credential-suggestive key name**, e.g. `invalid value for
+'api_key': expected string` and `api_key: Optional[str]` were fully redacted
+  even though neither carries a secret. The rule is now split by aggression: a
+  token-shape check (value must look like an issued key — 16+ alphanumeric, or
+  contains a digit/punctuation) runs on both presets; the original
+  unconstrained form is retained only under the aggressive preset for short
+  pure-alphabetic secrets.
+- **A compact-JSON provider error body could be over-redacted into invalid
+  JSON** — the URL-credential rules' greedy userinfo match, with no delimiter
+  other than whitespace, ran from the first `scheme://` to the LAST `@`
+  anywhere in a whitespace-free JSON body, swallowing an unrelated closing
+  brace and leaving a body a caller's `json.loads()` could no longer parse.
+  The userinfo match now stops at an unescaped quote followed by a JSON
+  structural delimiter (`,` `}` `]` `:`), closing the JSON-boundary crossing
+  while still catching every real credential shape, including one embedded
+  inside a JSON string value.
+- **The scrubber's vendor-prefix table was missing two first-class providers.**
+  Hugging Face (`hf_...`) and Fireworks (`fw_...`) API key shapes were not
+  claimed by any rule (both fall under the generic-hex length threshold and
+  contain an underscore, which defeats the word-boundary check other prefixed
+  rules rely on) and passed through unredacted in provider-error bodies.
+- **`show_error` printed the raw, unscrubbed exception the caller had just
+  logged in sanitized form one line above** — the same exception object was
+  handed to both, and only the log line was scrubbed. Fixed at the sink
+  (`rich_output.show_error`) rather than at the one known caller, so future
+  callers inherit the fix.
+- **The SSE stream's read-error handler wrote to `sys.stderr` via `print()`**
+  instead of the module's own logger — unstructured, unroutable, and gone on
+  process restart. It now logs at ERROR (the read loop returns and the
+  caller's message stream ends, which is a failed operation, not a degraded
+  one) through the existing credential-sanitized path.
+- **Keyless local providers (e.g. Ollama) were reported unavailable purely for
+  lacking an API key.** `resolve_deployment_for("ollama", ...)` gated
+  availability on credential presence, so a working local Ollama install with
+  no API key configured raised `"Provider ollama is not available"`.
+  Availability is now resolved declaratively so any keyless/local provider is
+  covered by the same property, not a hardcoded provider-name check.
+- **A degraded reasoning judgment (#1981) could abort an entire `A2ACoordinatorNode`
+  workflow** even though the node's own docstring promises "errors returned in
+  the result dictionary" — it had no exception handling around the new
+  `ReasoningDegradedError`. It's now caught (narrowly — a genuine
+  `RuntimeError` still propagates) and returned as `{"success": False,
+"degraded": True, ...}`. A related workflow-status bookkeeping fix: the
+  workflow's status is now published only after routing completes, so a
+  degraded route no longer leaves a permanently-queryable phantom workflow
+  entry that can never complete or clear.
 
 ## [2.45.0] — 2026-07-25 — Follow-up hardening: sanitizer redaction, Nexus lifecycle, RAG log hygiene
 
