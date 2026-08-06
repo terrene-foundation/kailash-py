@@ -82,6 +82,72 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## ORCHESTRATOR ERROR 5 — my THIRD wrong fix-recommendation; I am done prescribing shape
+
+For R3-MED-4 I mandated routing `find_agents_for_user` through `_resolve_identity_scope`.
+**Wrong, and in the dangerous direction.** That function has THREE branches, and the third is
+"NEITHER supplied → unfiltered", returning `None` — this file's established sentinel for
+"return everything" (`list_skill_metadata` branches `if scope is not None:` and otherwise falls
+to `registry.list_agents()`). Routing wholesale would have handed an "unfiltered" value to an
+input previously forwarded to the checker: **a widening shipped under cover of a fail-closed
+fix.**
+
+Claim strength, stated precisely by the reviewer and worth preserving: it did NOT observe a
+widened implementation, because one was never written. The claim is that the recommendation
+PUSHED toward the widening, not that the widening was measured. `F3-AGENTS` reached the same
+conclusion independently and wrote it into the shipped docstring — "inventing one now would ADD
+a wide path under cover of a fail-closed fix."
+
+**The reviewer also refused to manufacture evidence, and that is the transferable part.** I
+asked it to "quote the failure". Its answer: _"NO test would have gone red. NO legitimate
+caller passes a blank pair. I looked; I will not manufacture a test name to fit the question's
+shape. That absence IS the point — the widening would have shipped silently."_ A question
+phrased to expect a citation invites one; declining is what keeps the chain honest.
+
+**Three wrong recommendations from me now** (F2 envelope, #13 identity, plus the
+"silently raw" mischaracterisation). All three had sound FINDINGS behind them and were caught
+by a lane that reproduced rather than argued. **Standing correction to my own conduct: name the
+INVARIANT, let the lane choose the shape.** I have prescribed implementation three times and
+been wrong three times; the lanes have the file-local knowledge and I do not.
+
+**The corrected shape (landed, verified):** `_require_identity_or_raise` (`discovery.py:649`)
+refuses BLANK/PARTIAL/MISSING; `find_agents_for_user` calls it FIRST (`:1181-1186`);
+`_resolve_identity_scope`'s both-supplied branch calls the SAME predicate — so the surfaces
+cannot drift — WITHOUT importing the third branch. Discriminating probe (the 4th row is what
+makes it non-vacuous; a guard refusing everything would produce identical first three rows):
+
+    find_agents_for_user('', '')     -> ValueError  BLANK caller identity
+    find_agents_for_user(None, None) -> ValueError  MISSING caller identity
+    find_agents_for_user('u1', '')   -> ValueError  BLANK caller identity: org
+    find_agents_for_user('u1', 'o1') -> ACCEPTED    checker handed [('u1','o1')]
+
+84 passed across five suites.
+
+## NAMED RESIDUALS — what round 3 did NOT establish
+
+Recorded because a silent seam reads as reviewed. These are the reviewer's own words on the
+limits of its evidence, and they carry into any convergence claim:
+
+- **Seam 2 (rate-limit × envelope): CLEAN but STATIC only** — AST identifier set + control
+  flow. No live 429-then-retry driven through a running app.
+- **Seam 3 (validator ordering): CLEAN for key smuggling**, but the 2× serialized-size concern
+  was checked against `async_local.py` ONLY. Checkpoint store, DLQ and audit paths NOT
+  enumerated; if any serializes workflow inputs, the size-cap doubling is real.
+- **Seam 4 (scrub × correlation): HIGH-2 found by reading the HELPER, not all ~13 call sites.**
+  Not confirmed that every `summary=` is server-authored; one interpolating exception text
+  would be a separate leak.
+- **A gap in the sweep's OWN method filter, found and closed by the reviewer:** it had narrowed
+  to `execute_workflow_async`/`execute_async` (a bare `execute` matched hundreds of DB-cursor
+  calls), so it would have missed raw SYNC `runtime.execute(wf, ...)`. Re-scanned by RECEIVER
+  name: **14 sync sites outside the guard's denominator, all `binds=False`.** Since
+  `RUNTIME_EXEC_METHODS` already includes `execute`, widening `SCANNED_TREES` surfaces all 14 —
+  each needs bind-or-allowlist. `api/gateway.py:727::execute_chain` (`parameters=result`,
+  caller-supplied first hop) is the one flagged worth real triage; 12 lower-layer forwarders are
+  named UNVERIFIED rather than implied clear, since re-binding them would double-envelope.
+
+**Both a hand-written TREE list and a hand-narrowed METHOD filter failed here, in the guard and
+in the sweep auditing it.** That is the same class twice in one round.
+
 ## A FALSE ALL-CLEAR REACHED THE CHANGELOG — self-reported, and the sharpest instance yet
 
 `F-MCP` reported TWO non-discriminating instruments **in its own work**, unprompted. This is
