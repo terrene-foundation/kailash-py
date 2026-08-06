@@ -53,6 +53,27 @@ The opt-out is deliberately narrow: it exists only where the caller was given
 a second slot to express it, plus the audited programmatic helper recorded in
 ``tests/regression/test_workflow_input_envelope_entry_points.py``.
 
+A CALLER'S OWN ``parameters`` KEY IS OVERWRITTEN -- INTENTIONALLY
+-----------------------------------------------------------------
+
+The binding is ``{**body, "parameters": body}``, so a caller whose payload
+already contains a key literally named ``parameters`` does not get that value
+at ``parameters``; the envelope does. This is surprising, so it is written
+down: the envelope binding is a contract every ``parameters.get(...)``
+workflow depends on, and it MUST NOT become conditional on caller data -- a
+workflow whose arguments happened to include a ``parameters`` key would
+otherwise see ``parameters`` mean something different from every other call.
+The caller's colliding value stays reachable at ``parameters["parameters"]``,
+so nothing is lost.
+
+The clobber is also IDENTICAL on every surface -- an HTTP ``{"parameters": P}``
+body and a channel ``inputs=P`` call both yield ``{**P, "parameters": P}`` --
+so it is a property of the shared binder, not a per-channel divergence. Both
+halves are pinned (binder, HTTP, and cross-surface) in
+``test_channel_parameters_envelope_behaviour.py`` and
+``test_issue_workflow_parameters_envelope_parity.py``. Do not "fix" the
+overwrite without changing that contract deliberately.
+
 Kept free of any ``kailash`` imports on purpose: it is imported from the Core
 SDK channels AND from the separately-installed ``kailash-nexus`` transports, so
 it must not drag the workflow graph (or anything else) into those import paths.

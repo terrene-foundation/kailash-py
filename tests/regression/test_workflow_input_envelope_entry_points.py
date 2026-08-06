@@ -49,33 +49,77 @@ INPUT_KWARGS = frozenset({"parameters", "inputs"})
 # "<path relative to repo root>::<enclosing function>".
 AUDITED_RAW_INPUT_SITES: dict[str, str] = {
     "packages/kailash-nexus/src/nexus/core.py::_execute_workflow": (
-        "NOT route-registered: no router binding anywhere in nexus/src calls "
-        "it, so no caller reaches it over a channel and it cannot break "
-        "multi-channel parity. (It is NOT merely 'not a channel' -- it raises "
-        "HTTPException 400/404/500 and runs validate_workflow_name and "
-        "validate_workflow_inputs, and core.py's own comment calls it 'the "
-        "execute route'. Only the absent registration carries this "
-        "disposition; if a router ever binds it, this entry MUST be removed "
-        "and the site must bind.) It is reachable programmatically, and its "
-        "parameter is literally named `inputs` -- the opt-OUT form "
-        "WorkflowRequest draws against `parameters`. A programmatic caller "
-        "that wants envelope semantics calls "
-        "bind_parameter_envelope(body) and passes the result; passing "
-        "{'parameters': body} by hand is the WRAPPED-ONLY shape that broke "
-        "bare top-level names before the fix."
+        "KNOWN CONFLICT with the structural rule -- this entry is on borrowed "
+        "time and MUST be removed once the site binds. The rule in "
+        "kailash/workflow/input_envelope.py says an entry point with a SINGLE "
+        "caller-arguments slot binds, whatever the slot is named. "
+        "_execute_workflow(self, workflow_name, inputs) has exactly one, so "
+        "the rule says it should BIND. It is listed here ONLY because the "
+        "shard that wrote the rule does not own nexus/core.py. "
+        "test_audited_sites_are_exempt_under_the_structural_rule is a strict "
+        "xfail pinning this conflict: it XPASSes -- and fails the suite -- the "
+        "moment the site binds, forcing this entry out. "
+        "The two reasons previously given here are BOTH refuted and must not "
+        "be reinstated: (1) 'not a channel' is false -- it raises HTTPException "
+        "400/404/500, runs validate_workflow_name (path traversal) and "
+        "validate_workflow_inputs (request size), and core.py's own comment "
+        "calls it 'the execute route'; (2) 'not route-registered' is true but "
+        "protects nothing -- skills/03-nexus/nexus-api-patterns.md teaches "
+        "custom endpoints to call `await app._execute_workflow(name, body)` "
+        "directly, so the caller's OWN route becomes a workflow entry point "
+        "that does not bind, and a `parameters.get(...)` workflow raises "
+        "NameError inside the documented example."
     ),
 }
 
 
-def _enclosing_function(tree: ast.AST, target: ast.AST) -> str:
+def _enclosing_function(tree: ast.Module, target: ast.Call) -> str:
     """Name of the innermost function containing ``target``."""
     best = "<module>"
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            end = getattr(node, "end_lineno", node.lineno)
+            end = node.end_lineno or node.lineno
             if node.lineno <= target.lineno <= end:
                 best = node.name
     return best
+
+
+def _input_slots(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    """Names of ``func``'s parameters that carry workflow-level inputs.
+
+    The structural rule turns on HOW MANY of these a caller is offered: two
+    (``inputs`` AND ``parameters``) means the caller can express a choice, so
+    an opt-out is meaningful; one means it is the sole arguments slot and MUST
+    bind, whatever it happens to be named.
+
+    Scope: this counts FUNCTION PARAMETERS, which is how every allowlisted
+    site expresses its slots. A surface that offers its slots as model FIELDS
+    instead -- ``WorkflowRequest`` has ``inputs`` and ``parameters`` as
+    pydantic fields, not arguments -- would count as ZERO here. That is not a
+    bug to route around: no such surface is in ``SCANNED_TREES`` or the
+    allowlist, and reading a field-based surface with this helper would give a
+    confidently wrong answer. Extend the helper before pointing it at one.
+    """
+    spec = func.args
+    every = [*spec.posonlyargs, *spec.args, *spec.kwonlyargs]
+    if spec.vararg:
+        every.append(spec.vararg)
+    if spec.kwarg:
+        every.append(spec.kwarg)
+    return [arg.arg for arg in every if arg.arg in INPUT_KWARGS]
+
+
+def _offers_input_choice(site_key: str) -> bool:
+    """True when the site's enclosing function offers TWO input slots."""
+    rel, _, func_name = site_key.partition("::")
+    module = ast.parse((REPO_ROOT / rel).read_text(), rel)
+    for node in ast.walk(module):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == func_name
+        ):
+            return len(_input_slots(node)) >= 2
+    raise AssertionError(f"no function {func_name!r} in {rel}")
 
 
 def _binds_envelope(call: ast.Call) -> bool:
@@ -239,6 +283,97 @@ def test_binds_envelope_rejects_pre_fix_shapes(source):
     ``{"parameters": kwargs}`` left the whole scan green.
     """
     assert _binds_envelope(_first_exec_call(source)) is False, source
+
+
+# Both polarities of the slot-count predicate the xfail below rests on. Without
+# these, a predicate that always returned "one slot" would produce the same
+# XFAIL and look identical in the run output.
+SLOT_COUNT_CASES = {
+    "single-slot-inputs": ("async def f(self, name, inputs): pass", ["inputs"]),
+    "single-slot-parameters": ("def f(self, wf, parameters): pass", ["parameters"]),
+    "choice-both-slots": (
+        "def f(self, inputs, parameters): pass",
+        ["inputs", "parameters"],
+    ),
+    "choice-kwonly": (
+        "def f(self, *, inputs=None, parameters=None): pass",
+        ["inputs", "parameters"],
+    ),
+    "no-input-slot": ("def f(self, workflow_name): pass", []),
+}
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "source,expected", SLOT_COUNT_CASES.values(), ids=SLOT_COUNT_CASES
+)
+def test_input_slots_counts_the_caller_offered_slots(source, expected):
+    """The slot count MUST distinguish a choice from a sole arguments slot."""
+    func = ast.parse(source).body[0]
+    assert isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef))
+    assert _input_slots(func) == expected, source
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "source,expected", SLOT_COUNT_CASES.values(), ids=SLOT_COUNT_CASES
+)
+def test_offers_choice_is_two_or_more_slots(source, expected):
+    """A choice is TWO slots; one or zero is not a choice."""
+    func = ast.parse(source).body[0]
+    assert isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef))
+    assert (len(_input_slots(func)) >= 2) is (len(expected) >= 2), source
+
+
+@pytest.mark.regression
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "nexus/core.py::_execute_workflow takes a single `inputs` slot, so the "
+        "structural rule says it MUST bind -- but it is allowlisted here. The "
+        "rule and the allowlist genuinely conflict and the site should bind; "
+        "the shard that wrote the rule does not own core.py. Strict xfail so "
+        "this FAILS the moment the site binds, forcing the allowlist entry out "
+        "instead of leaving a stale exemption that masks a future raw site."
+    ),
+)
+def test_audited_sites_are_exempt_under_the_structural_rule():
+    """An allowlisted site MUST be one the structural rule actually exempts.
+
+    The rule exempts an entry point that offers the caller a CHOICE -- both an
+    ``inputs`` slot and a ``parameters`` slot -- because only then does picking
+    one carry meaning. A site with a single arguments slot is NOT exempt, and
+    allowlisting it anyway is the rule contradicting its own allowlist.
+
+    Falsifying result: were every allowlisted site to offer a choice this
+    would pass, and the strict-xfail marker would turn that pass into a
+    failure -- which is the intended signal to delete both the marker and the
+    entry.
+    """
+    not_exempt = sorted(
+        f"{key} (input slots: {_slots_for(key)})"
+        for key in AUDITED_RAW_INPUT_SITES
+        if not _offers_input_choice(key)
+    )
+    assert not not_exempt, (
+        "allowlisted sites the structural rule does NOT exempt -- each offers "
+        "a single caller-arguments slot, so the rule says it must bind:\n"
+        + "\n".join(f"  {row}" for row in not_exempt)
+        + "\nEither bind the site and delete its entry, or amend the rule."
+    )
+
+
+def _slots_for(site_key: str) -> list[str]:
+    """The input-slot names of a site's enclosing function (for messages)."""
+    rel, _, func_name = site_key.partition("::")
+    module = ast.parse((REPO_ROOT / rel).read_text(), rel)
+    for node in ast.walk(module):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == func_name
+        ):
+            return _input_slots(node)
+    return []
 
 
 @pytest.mark.regression

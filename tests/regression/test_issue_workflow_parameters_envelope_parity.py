@@ -375,6 +375,54 @@ def test_equivalent_calls_agree_across_http_and_single_slot_channels(parity_serv
 
 
 @pytest.mark.regression
+def test_caller_parameters_key_is_clobbered_identically_on_every_surface(
+    parity_server,
+):
+    """The clobber is a BINDER property, not a per-channel divergence.
+
+    ``bind_parameter_envelope`` is ``{**body, "parameters": body}``, so a
+    caller whose payload already has a ``parameters`` key does not get that
+    value at ``parameters`` -- the envelope does. That is intentional (the
+    envelope must not become conditional on caller data), and it is CONSISTENT
+    across surfaces, which is the half nothing asserted before: the binder
+    test and the HTTP collision test each pinned ONE surface, so a channel
+    that clobbered differently would have passed both.
+
+    Falsifying result: if either surface stopped clobbering, or clobbered to a
+    different shape, the two views diverge and this fails.
+    """
+    _, api_port = parity_server
+    colliding = {"parameters": {"inner": 1}, "b": 2}
+
+    probe_workflow = WorkflowBuilder()
+    probe_workflow.add_node(
+        "PythonCodeNode", "probe", {"code": "result = {'view': dict(parameters)}"}
+    )
+    app, _ = parity_server
+    app.register("parity_probe_clobber", probe_workflow.build())
+
+    response = requests.post(
+        f"http://localhost:{api_port}/workflows/parity_probe_clobber",
+        json={"parameters": colliding},
+        timeout=30,
+    )
+    assert response.status_code == 200, response.text
+    via_http = response.json()["outputs"]["probe"]["result"]["view"]
+
+    (via_channel,) = _parameters_view_via_channels(colliding)
+
+    # The envelope won on BOTH surfaces, to the SAME shape.
+    assert via_http == via_channel, (
+        "the `parameters`-key clobber differs by surface -- it is a property "
+        f"of the shared binder, so it must not: HTTP={via_http!r} "
+        f"channel={via_channel!r}"
+    )
+    assert via_http == colliding, via_http
+    # The caller's own colliding value is not lost, just relocated.
+    assert via_http["parameters"] == {"inner": 1}, via_http
+
+
+@pytest.mark.regression
 def test_single_slot_channels_do_not_read_inputs_as_opt_out(parity_server):
     """The opt-out is structural, and its boundary is PINNED.
 
