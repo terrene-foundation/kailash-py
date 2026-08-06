@@ -82,6 +82,43 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## CORRECTION TO THE ENTRY BELOW — IT IS HALF VOID, AND MY RECORD OF IT WAS OVER-BROAD
+
+**Correcting my own commit `<the instrument-failure-8 entry>` before it hardens.** I wrote that
+"four mutations left the ratio at 7.5-8.3" measured NOTHING. **That is over-broad. TWO of the
+four were validly applied.**
+
+The four attempts have two provenances:
+
+- **`F3-AGENTS`' two** (`{5,}` quadratic form, `*`-not-`+`) were applied by REWRITING THE SOURCE
+  FILE and re-importing in a FRESH SUBPROCESS. That genuinely takes effect. **Their data point is
+  VALID:** a real mutation left the ratio unchanged and was caught only by the entry/guard
+  assertions.
+- **`R3-COMPOSE`' two** (comma-inclusive atom, nested `(?:A+)+`) were NAME REBINDS and never
+  reached the code. Void, as verified.
+
+So the defect is **SCOPE and RANGE**, not the whole claim: "four mutations" should be two, and
+the `7.5-8.3` figure spans all four and is therefore contaminated by blending two provenances
+into one range.
+
+**THE DOCSTRINGS' CONCLUSION SURVIVES on the valid half alone.** A validly-applied mutation of
+this rule DID leave the timing assertion silent and WAS caught only by the entry/guard
+assertions — so `test_alternation_order_caps_the_failing_path`'s reason for existing stands. It
+is a documentation fix, not an open finding. Explicitly NOT downgraded because we are late: the
+assertions and their rationale are intact on valid evidence; two of four cited data points and
+the numeric range are wrong.
+
+**How I got it wrong, which is the same reflex one hop downstream.** The reviewer's STOP message
+said "the measurement was void" without distinguishing its half from the other lane's. I relayed
+that into a durable ledger entry and a commit body WITHOUT checking the other party's half —
+which is precisely the failure it had just described in ITSELF ("I generalised from my own case
+without checking the other party's"). It caught and corrected its own over-broad STOP
+unprompted; I am correcting mine here.
+
+**Net standing:** instrument failure 8 is REAL and its general lesson (a name rebind is inert
+once the object is captured into a collection) is unaffected — that is exactly why the void half
+was void. Only the count and the range in my write-up were over-stated.
+
 ## INSTRUMENT FAILURE 8 — A NAME REBIND THAT NEVER REACHED THE CODE, QUOTED IN COMMITTED DOCSTRINGS
 
 The most subtle of the eight, and it reached DURABLE artifacts before anyone caught it.
