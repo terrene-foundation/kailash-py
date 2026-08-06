@@ -1195,7 +1195,20 @@ class MCPServer:
         # ORIGINAL registration object is parked here rather than rebuilt on
         # ``enable_tool``, so re-enabling restores the exact projection that was
         # applied at registration instead of a re-derived approximation.
+        #
+        # INVARIANT: a name is parked here ONLY while it is ABSENT from the live
+        # FastMCP container, and the parked object is always the MOST RECENT
+        # registration for that name. Both halves are enforced at the three
+        # sites that can break them — ``_withhold_tool_from_fastmcp`` (keys on
+        # container membership, never on this dict), ``_restore_tool_to_fastmcp``
+        # (refuses to overwrite a live entry), and ``_register_tool_with_fastmcp``
+        # (drops the park in the same step that replaces the registration).
         self._fastmcp_withheld_tools: Dict[str, Any] = {}
+        # Liveness-proven ``(owner, container)`` pair for the FastMCP tool
+        # container. Cached because proving liveness writes a sentinel through
+        # the dispatch path; the identity re-check below is what keeps a stale
+        # cache from being used after ``self._mcp`` is replaced.
+        self._fastmcp_container_proven: Optional[Tuple[Any, Dict[str, Any]]] = None
 
         # Client management for new handlers
         self.client_info: Dict[str, Dict[str, Any]] = {}
@@ -1684,6 +1697,10 @@ class MCPServer:
         """
         return getattr(self._mcp, "_kailash_serves_no_protocol", False) is True
 
+    # Key written into a candidate FastMCP tool container to prove it is the
+    # mapping the server DISPATCHES from rather than a defensive copy.
+    _CONTAINER_LIVENESS_PROBE = "__kailash_fastmcp_liveness_probe__"
+
     def _fastmcp_tool_container(self) -> Optional[Dict[str, Any]]:
         """FastMCP's OWN mutable ``name -> registration`` mapping, or None.
 
@@ -1691,15 +1708,96 @@ class MCPServer:
         tool manager; the shim keeps them on itself. Returning the live
         container (rather than copying) is what lets ``disable_tool`` withhold a
         registration and ``enable_tool`` put the SAME object back.
+
+        "Live" is PROVEN here, never assumed. An implementation whose ``_tools``
+        is a property returning a defensive COPY satisfies ``isinstance(...,
+        dict)`` exactly as the real container does — and then every withhold and
+        restore writes into an object FastMCP never reads. The gate would
+        silently not apply while every test that inspects the returned mapping
+        still passed, because the copy faithfully reflects the write. Fail-open
+        here is indistinguishable from working, so a candidate that cannot be
+        proven live is REJECTED and the caller raises.
         """
+        proven = self._fastmcp_container_proven
+        if proven is not None:
+            owner, container = proven
+            if getattr(owner, "_tools", None) is container:
+                return container
+            # ``self._mcp`` was replaced (tests do this); re-prove from scratch.
+            self._fastmcp_container_proven = None
+
         manager = getattr(self._mcp, "_tool_manager", None)
         for owner in (manager, self._mcp):
             if owner is None:
                 continue
             container = getattr(owner, "_tools", None)
-            if isinstance(container, dict):
-                return container
+            if not isinstance(container, dict):
+                continue
+            if not self._fastmcp_tool_container_is_live(owner, container):
+                logger.warning(
+                    "tool.fastmcp_registration.container_not_live",
+                    extra={
+                        "owner": type(owner).__name__,
+                        "hint": (
+                            "this object's tool mapping does not round-trip a "
+                            "write, so it is a copy rather than the mapping "
+                            "FastMCP dispatches from; the disclosure gate "
+                            "cannot be applied through it"
+                        ),
+                    },
+                )
+                continue
+            self._fastmcp_container_proven = (owner, container)
+            return container
         return None
+
+    def _fastmcp_tool_container_is_live(
+        self, owner: Any, container: Dict[str, Any]
+    ) -> bool:
+        """Prove ``container`` is what ``owner`` actually reads, two ways.
+
+        1. IDENTITY — a second read of ``owner._tools`` returns the SAME object.
+           A property returning ``dict(self._real)`` fails here immediately.
+        2. ROUND TRIP — a sentinel written into the candidate is observable
+           through the owner's OWN lookup path (``get_tool``, which is what
+           dispatch calls), falling back to re-reading ``_tools``. This catches
+           a copy cached behind a stable identity, which proof 1 alone cannot
+           tell apart from the real container.
+
+        The sentinel is removed in ``finally`` and the verdict is cached by the
+        caller, so the write happens once per container — at registration, when
+        tools are being added anyway.
+        """
+        if getattr(owner, "_tools", None) is not container:
+            return False
+
+        probe = self._CONTAINER_LIVENESS_PROBE
+        sentinel = object()
+        container[probe] = sentinel
+        try:
+            lookup = getattr(owner, "get_tool", None)
+            if callable(lookup):
+                try:
+                    return lookup(probe) is sentinel
+                except Exception as exc:
+                    # An owner whose lookup path will not take an unknown name
+                    # cannot be probed through it. Fall through to the weaker
+                    # (but still discriminating) attribute re-read rather than
+                    # rejecting a legitimate implementation outright.
+                    logger.debug(
+                        "tool.fastmcp_registration.lookup_probe_unavailable",
+                        extra={
+                            "owner": type(owner).__name__,
+                            "error": mask_error_text(str(exc)),
+                        },
+                    )
+            observed = getattr(owner, "_tools", None)
+            return isinstance(observed, dict) and observed.get(probe) is sentinel
+        finally:
+            container.pop(probe, None)
+            observed = getattr(owner, "_tools", None)
+            if isinstance(observed, dict):
+                observed.pop(probe, None)
 
     def _require_fastmcp_tool_container(self, tool_name: str) -> Dict[str, Any]:
         """Locate the container or fail CLOSED with a loud, actionable error.
@@ -1765,16 +1863,75 @@ class MCPServer:
 
         entry.parameters = view["inputSchema"]
         entry.description = view["description"]
+        self._project_output_schema_onto_fastmcp(entry, tool_name, view)
         logger.debug(
             "tool.fastmcp_registration.gated_projection_applied",
             extra={"tool": tool_name},
         )
 
-    def _withhold_tool_from_fastmcp(self, tool_name: str) -> None:
-        """Remove a disabled tool's FastMCP registration (park it for re-enable)."""
-        if self._mcp is None or self._fastmcp_serves_no_protocol():
+    # Attribute names under which a FastMCP registration may hold the output
+    # schema it ADVERTISES. Both supported implementations use the first.
+    _FASTMCP_OUTPUT_SCHEMA_ATTRS = ("output_schema", "outputSchema")
+
+    def _project_output_schema_onto_fastmcp(
+        self, entry: Any, tool_name: str, view: Dict[str, Any]
+    ) -> None:
+        """Mirror the view's ``outputSchema`` decision onto the registration.
+
+        The projection has to carry EVERY advertised field the view decides, not
+        the ones that happened to be in hand. It set ``parameters`` and
+        ``description`` only, while FastMCP derives its OWN output schema from
+        the wrapped function's RETURN annotation — so a gated tool returning a
+        ``BaseModel`` / ``TypedDict`` / ``dict[str, ...]`` published its result
+        shape (field names included) on the default transport while
+        ``_public_tool_view`` withheld exactly that everywhere else.
+
+        Advertisement only: ``Tool.run`` converts results through
+        ``fn_metadata``, never through this field, so a credentialed caller's
+        result is unchanged.
+        """
+        if "outputSchema" in view:
+            # The view PUBLISHES a result shape for this tool — leave whatever
+            # the registration derived alone. Keyed on the view rather than on a
+            # re-derived "is gated" so the two cannot disagree.
             return
-        if tool_name in self._fastmcp_withheld_tools:
+
+        for attr in self._FASTMCP_OUTPUT_SCHEMA_ATTRS:
+            if getattr(entry, attr, None) is not None:
+                setattr(entry, attr, None)
+
+        # Fail closed on an implementation that spells the field a third way:
+        # silently missing it would republish the exact surface this withholds.
+        leftover = [
+            name
+            for name in dir(entry)
+            if not name.startswith("__")
+            and "outputschema" in name.replace("_", "").lower()
+            and getattr(entry, name, None) is not None
+        ]
+        if leftover:
+            raise MCPError(
+                "Cannot withhold the result shape of permission-gated tool "
+                f"{tool_name!r}: its FastMCP registration still advertises an "
+                f"output schema via {leftover!r}. Refusing to publish a gated "
+                "tool's result shape on the default (stdio) transport. "
+                "See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+
+    def _withhold_tool_from_fastmcp(self, tool_name: str) -> None:
+        """Remove a disabled tool's FastMCP registration (park it for re-enable).
+
+        Idempotent by construction rather than by an "already parked" guard.
+        That guard was the defect: after a tool was re-registered under the same
+        name, the parked entry still existed, so a second ``disable_tool``
+        returned early and left the NEW registration advertised — reopening the
+        #1998 disclosure on a tool the operator had just disabled. Popping the
+        container unconditionally is naturally idempotent (a second call finds
+        nothing and leaves the parked entry untouched) AND correct after
+        re-registration (it parks whatever is CURRENT).
+        """
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
             return
         container = self._require_fastmcp_tool_container(tool_name)
         entry = container.pop(tool_name, None)
@@ -1782,12 +1939,41 @@ class MCPServer:
             self._fastmcp_withheld_tools[tool_name] = entry
 
     def _restore_tool_to_fastmcp(self, tool_name: str) -> None:
-        """Put a re-enabled tool's ORIGINAL FastMCP registration back."""
+        """Put a re-enabled tool's ORIGINAL FastMCP registration back.
+
+        Refuses to overwrite a LIVE entry. ``tool()`` drops the park in the same
+        step that replaces a registration, so a park co-existing with a live
+        entry means some other path replaced it — and writing the parked (older)
+        object back would republish a PREVIOUS registration's advertised schema
+        AND dispatch its wrapper, which closes over that registration's
+        ``required_permission``. Discarding the stale park is the fail-closed
+        choice: the live entry is the one ``_tool_registry`` describes.
+
+        This is the third site holding the ``_fastmcp_withheld_tools``
+        invariant, and the only one that holds it against a caller neither of
+        the other two ever saw.
+        """
         if self._mcp is None or self._fastmcp_serves_no_protocol():
             return
         entry = self._fastmcp_withheld_tools.pop(tool_name, None)
-        if entry is not None:
-            self._require_fastmcp_tool_container(tool_name)[tool_name] = entry
+        if entry is None:
+            return
+        container = self._require_fastmcp_tool_container(tool_name)
+        if tool_name in container:
+            logger.warning(
+                "tool.fastmcp_registration.stale_park_discarded",
+                extra={
+                    "tool": tool_name,
+                    "hint": (
+                        "a live registration already exists under this name, so "
+                        "the parked one is from a superseded registration; "
+                        "restoring it would reinstate that registration's "
+                        "advertised schema and its permission closure"
+                    ),
+                },
+            )
+            return
+        container[tool_name] = entry
 
     def tool(
         self,
@@ -1981,6 +2167,16 @@ class MCPServer:
                 stream_response,
                 cache_per_principal=not cache_shared_across_callers,
             )
+
+            # A registration parked by ``disable_tool`` is STALE the moment this
+            # one replaces it, and must not outlive it. Left behind, a later
+            # ``enable_tool`` wrote the OLD entry back over this one — which,
+            # when the old tool was ungated and this one is gated, restored a
+            # wrapper closing over the old (empty) permission set and turned a
+            # disclosure bug into an authorization bypass on the default
+            # transport. Dropped BEFORE the new registration lands so no window
+            # exists where both are live.
+            self._fastmcp_withheld_tools.pop(tool_name, None)
 
             # Register with FastMCP
             mcp_tool = self._mcp.tool()(enhanced_func)  # type: ignore[union-attr]
