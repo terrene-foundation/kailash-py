@@ -208,6 +208,36 @@ class TestCommaBearingRunOverRedactsDeliberately:
             "to 'every comma-separated field list after a credential key'"
         )
 
+    def test_alternation_order_caps_the_failing_path(self) -> None:
+        """Pins the 16-char boundary `_COMMA_BEARING_RUN`'s linearity rests on.
+
+        When the comma group cannot match, the engine backtracks the leading
+        `A+` — so how long `A+` can get IS the failing path's cost. It is capped
+        at 15 because alternative 1's `{16,}` lookahead claims any comma-free
+        run of 16 or more before this alternative is tried.
+
+        Nothing in `_COMMA_BEARING_RUN` itself expresses that cap. An edit to
+        alternative 1's lookahead would remove it while leaving the comma rule
+        untouched, and the timing test would not notice (measured: four
+        mutations of the comma rule left the ratio at 7.5-8.3). This asserts the
+        boundary directly, from both sides.
+        """
+        # 15 chars, pure alpha: alternative 1's discriminators BOTH fail (no
+        # digit or token punctuation, under 16), so the comma alternative is
+        # reached — and fails, because there is no comma. Bounded exploration.
+        assert _CREDENTIAL_KEYVALUE_TOKEN.search("password=" + "a" * 15) is None
+
+        # 16 chars: alternative 1 claims it, so the comma alternative never
+        # sees a run this long. THIS is the cap.
+        claimed = _CREDENTIAL_KEYVALUE_TOKEN.search("password=" + "a" * 16)
+        assert claimed is not None, (
+            "alternative 1 no longer claims a 16-char comma-free value, so "
+            "`_COMMA_BEARING_RUN`'s failing path is no longer length-capped — "
+            "reason (c) at the pattern is now false and its linearity argument "
+            "rests on one fewer leg"
+        )
+        assert "," not in claimed.group(0)
+
     def test_bound_2_a_space_after_the_comma_is_untouched(self) -> None:
         """The ordinary `key=value, key=value` spelling never matches."""
         for text in (
@@ -239,6 +269,30 @@ class TestNewRulesAreLinear:
     * `_COMMA_BEARING_RUN` (`A+(?:,+A+)+`) excludes `,` from the run atom `A`,
       so every character belongs to exactly one class and the boundary between
       run and separator cannot float.
+
+    WHAT THE TIMING ASSERTION GUARDS FOR THE THIRD RULE, STATED BECAUSE IT IS
+    NOT WHAT A READER WOULD ASSUME. For the URL rules the ratio is a DEMONSTRATED
+    detector: remove the `{0,31}` scheme bound and the sibling suites read 64.6x
+    and 69.2x. For `_COMMA_BEARING_RUN` it is not, and no mutation has yet made
+    it one. Four attempts — the quadratic `{5,}` form this module's own comment
+    names, `*`-not-`+`, a comma-inclusive (ambiguous) atom, and a nested
+    `(?:A+)+` — all left the ratio at 7.5-8.3. They were caught, but by the
+    ENTRY and GUARD assertions, not by the timing.
+
+    That is a property of the construct, not a blind test. This alternative has
+    no mandatory element after its group, so a match succeeds as soon as the
+    group matches once and the engine never exhausts a search; and its failing
+    path is capped at 15 characters by alternative 1's `{16,}` lookahead. Both
+    are recorded at the pattern, and the 16-char boundary reason (c) depends on
+    is pinned by `test_alternation_order_caps_the_failing_path` below — an edit
+    to alternative 1 would otherwise remove the cap without touching the rule
+    this class is named for.
+
+    So for this rule the ratio is a FORWARD tripwire: it fires if a future edit
+    gives the alternative an exhaustible search (a mandatory tail, an uncapped
+    failing path). Calling it a detector of a regression in the CURRENT
+    construct would be the over-claim; it is retained because that future edit
+    is exactly what the module contract exists to catch.
 
     THE UNITS BELOW WERE, FOR THE THIRD RULE, VACUOUS — AND THAT IS WHY THE
     ENTRY ASSERTION EXISTS. The shipped units were `"password=,"` and

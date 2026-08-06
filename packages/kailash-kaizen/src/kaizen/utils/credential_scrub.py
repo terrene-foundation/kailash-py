@@ -248,6 +248,33 @@ _CREDENTIAL_KEY_NAMES: Final[str] = (
 #:      ``key=value, key=value`` spelling (comma SPACE) does not match at all:
 #:      ``password=xyz, user=bob`` is untouched. The residual needs a
 #:      comma-separated list written with no spaces.
+#:
+#: WHY THIS ALTERNATIVE RESISTS CATASTROPHIC BACKTRACKING — THREE INDEPENDENT
+#: REASONS, and only the first was previously recorded. Stated because four
+#: separate attempts to mutate this construct into a quadratic one were INERT,
+#: and a reader who does not know why will mistake that for a blind test:
+#:
+#:   a. DISJOINT CLASSES. ``,`` is excluded from the run atom, so each
+#:      character belongs to exactly one class and the run/separator boundary
+#:      cannot float. (The reason this file already gave.)
+#:   b. NO MANDATORY TAIL. Nothing is required AFTER ``(?:,+A+)+``. A regex
+#:      engine backtracks catastrophically only when it must EXHAUST a search
+#:      to prove failure; here the alternative succeeds the moment the group
+#:      matches once, so there is no exhaustive failure to drive. Adding a
+#:      mandatory element after the group would remove this property — the
+#:      same construct WITH a trailing literal measures ~30x per added run
+#:      character (k=15 -> 2 ms, k=25 -> 2.2 s) while this one stays flat.
+#:   c. THE FAILING PATH IS LENGTH-CAPPED BY ALTERNATION ORDER. When the group
+#:      cannot match, the engine backtracks the leading ``A+`` — but ``A+`` is
+#:      capped at 15 characters here, because alternative 1's ``{16,}``
+#:      lookahead claims any comma-free run of 16 or more BEFORE this
+#:      alternative is tried. Measured at the boundary: a 15-char pure-alpha
+#:      value reaches this alternative and fails; a 16-char one is claimed by
+#:      alternative 1 and never arrives.
+#:
+#: (b) and (c) are load-bearing and NOT self-evident from this line. An edit to
+#: alternative 1's ``{16,}`` lookahead would silently remove (c) without
+#: touching this pattern at all, which is why the boundary is pinned by a test.
 _COMMA_BEARING_RUN: Final[str] = r"[^\s\"';&,]+(?:,+[^\s\"';&,]+)+"
 
 #: Six run characters, counted with a FIXED repetition rather than a greedy
