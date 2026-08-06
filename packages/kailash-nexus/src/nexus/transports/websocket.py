@@ -704,9 +704,16 @@ class WebSocketTransport(Transport):
         if self._registry is not None:
             workflow = self._registry.get_workflow(handler_def.name)
             if workflow is not None:
+                from kailash.workflow.input_envelope import bind_parameter_envelope
+
                 runtime = self._get_shared_runtime()
                 inputs = params if isinstance(params, dict) else {}
-                results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+                # Same registry as every other channel, so the same binding:
+                # a `parameters.get(...)` workflow must not depend on which
+                # transport the caller reached it through.
+                results, run_id = await runtime.execute_workflow_async(
+                    workflow, bind_parameter_envelope(inputs)
+                )
                 return {"results": results, "run_id": run_id}
 
         raise ValueError(
