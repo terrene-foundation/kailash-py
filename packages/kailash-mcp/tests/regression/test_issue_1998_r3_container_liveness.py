@@ -15,12 +15,18 @@ R3-MED-3 — ``_fastmcp_tool_container`` could not tell a LIVE mapping from a CO
     the caller must raise when it cannot.
 
     Two copy shapes, needing two different proofs:
-      * FRESH copy per access — caught by the identity re-read alone.
-      * ONE cached copy, identity-stable — passes the identity re-read; only the
-        round trip through the owner's OWN lookup path (``get_tool``, which is
-        what dispatch calls) shows the write is invisible. ``_CachedCopyFastMCP``
-        below exists specifically to isolate that second proof; without it a
-        regression that dropped the round trip would go unnoticed.
+      * FRESH copy per access — caught by the public read alone
+        (``owner._tools is container`` fails on the second access).
+      * ONE cached copy, identity-stable — passes the public read; caught only
+        by asking whether the mapping is the STORED instance attribute rather
+        than something a descriptor computed. ``_CachedCopyFastMCP`` below
+        exists specifically to isolate that second proof; without it a
+        regression that dropped it would go unnoticed.
+
+    Both proofs are READS. An earlier version wrote a sentinel key and removed
+    it in a ``finally``; that was observable from inside the window, so it
+    introduced a disclosure on the surface this machinery gates. See
+    ``test_proving_liveness_writes_nothing_into_the_live_container``.
 
 R3-HIGH-1 (third site) — ``_restore_tool_to_fastmcp`` overwrote a LIVE entry.
     ``tool()`` drops the park in the same step that replaces a registration, so
@@ -98,7 +104,7 @@ class _CachedCopyFastMCP:
     The pathological case: ``getattr(owner, "_tools")`` returns the same object
     every time, so an identity re-read cannot distinguish it from the real
     container. Dispatch reads ``_store``, so a write into the snapshot is
-    invisible — which only the lookup-path round trip can show.
+    invisible — which only the stored-attribute proof can show.
     """
 
     def __init__(self):
@@ -177,12 +183,14 @@ def test_disable_refuses_a_container_it_cannot_prove_live(factory):
     )
 
 
-def test_identity_stable_copy_is_rejected_by_the_round_trip_specifically():
-    """Isolate proof 2: identity alone accepts the cached copy, the trip does not.
+def test_identity_stable_copy_is_rejected_by_the_stored_attribute_proof():
+    """Isolate proof 2: the public read alone accepts the cached copy.
 
-    Without this, an implementation that dropped the lookup-path round trip
+    Without this, an implementation that kept only ``owner._tools is container``
     would still pass every other test in this file — the fresh-copy fixture is
-    caught by the identity re-read on its own.
+    caught by that read on its own. A cached copy is identity-STABLE, which is
+    exactly why the second proof has to ask a different question: is this the
+    STORED attribute, or something a descriptor computed?
     """
     server = MCPServer("r3-live-proof2")
     server._mcp = _CachedCopyFastMCP()
@@ -191,14 +199,70 @@ def test_identity_stable_copy_is_rejected_by_the_round_trip_specifically():
 
     assert getattr(owner, "_tools", None) is container, (
         "this fixture is identity-STABLE by construction; if that ever stops "
-        "holding it no longer isolates the round-trip proof"
+        "holding it no longer isolates the second proof"
     )
     assert server._fastmcp_tool_container_is_live(owner, container) is False, (
         "an identity-stable mapping that dispatch does not read was accepted " "as live"
     )
 
 
-def test_live_container_is_accepted_and_leaves_no_probe_behind():
+class _RecordingDict(dict):
+    """A container that records every mutation attempted against it."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.mutations = []
+
+    def __setitem__(self, key, value):
+        self.mutations.append(("set", key))
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        self.mutations.append(("del", key))
+        super().__delitem__(key)
+
+    def pop(self, key, *default):
+        self.mutations.append(("pop", key))
+        return super().pop(key, *default)
+
+
+def test_proving_liveness_writes_nothing_into_the_live_container():
+    """The proof must not put anything in the container, even transiently.
+
+    An earlier version wrote a sentinel key and removed it in a ``finally``.
+    That was observable: instrumenting a read inside the window showed
+    ``['__kailash_fastmcp_liveness_probe__', 'gated']``, so a ``tools/list``
+    landing there would have advertised the probe key to an uncredentialed
+    caller — a disclosure on the exact surface this machinery gates.
+
+    A window that only MIGHT be raced is not closed, so the proof was changed
+    to read-only rather than made faster. This asserts the property directly:
+    zero mutations while resolving. It cannot be satisfied by a write that is
+    merely cleaned up afterwards.
+    """
+    server = MCPServer("r3-live-nowrite")
+
+    @server.tool()
+    def echo(text: str) -> str:
+        """Echo."""
+        return text
+
+    manager = server._mcp._tool_manager
+    recording = _RecordingDict(manager._tools)
+    manager._tools = recording
+    recording.mutations.clear()
+
+    resolved = server._fastmcp_tool_container()
+
+    assert resolved is recording, "the recording container was not accepted"
+    assert recording.mutations == [], (
+        "proving liveness mutated the LIVE container; anything enumerating "
+        f"tools in that window observes it: {recording.mutations}"
+    )
+    assert sorted(recording) == ["echo"]
+
+
+def test_live_container_is_accepted_and_left_untouched():
     """CONTROL: the proof must not reject the real thing, nor pollute it."""
     server = MCPServer("r3-live-control")
 
@@ -212,10 +276,9 @@ def test_live_container_is_accepted_and_leaves_no_probe_behind():
     assert (
         container is server._mcp._tool_manager._tools
     ), "the returned mapping must BE the one FastMCP dispatches from"
-    assert sorted(container) == ["echo"], (
-        "the liveness probe wrote a sentinel and did not remove it: "
-        f"{sorted(container)}"
-    )
+    assert sorted(container) == [
+        "echo"
+    ], f"resolving the container changed its contents: {sorted(container)}"
 
     server.disable_tool("echo")  # must not raise
     server.enable_tool("echo")  # must not raise

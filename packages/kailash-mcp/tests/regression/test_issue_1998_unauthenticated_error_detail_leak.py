@@ -52,16 +52,41 @@ CORRELATION_RE = re.compile(r"correlation id: ([0-9a-f]{8,})", re.IGNORECASE)
 def _server_side_record(caplog, event: str):
     """The structured record for ``event``.
 
-    Detail is carried in ``extra=`` FIELDS, not interpolated into the message
-    (observability.md MUST-3), so ``caplog.text`` — which renders the message
-    only — cannot see it. Read the record.
+    The scrubbed error and traceback are carried in ``extra=`` FIELDS, which a
+    stdlib formatter does not render, so those are read off the record. The
+    correlation ID is NOT read that way — see
+    ``_assert_correlation_id_is_greppable``.
     """
     for record in caplog.records:
-        if record.getMessage() == event:
+        if record.getMessage().startswith(event):
             return record
     raise AssertionError(
         f"no server-side record for {event!r}; got "
         f"{[r.getMessage() for r in caplog.records]}"
+    )
+
+
+def _assert_correlation_id_is_greppable(caplog, correlation_id: str) -> None:
+    """The id the caller was handed must appear in the RENDERED log output.
+
+    Asserting ``record.correlation_id == correlation_id`` is what this used to
+    do, and it could not fail: a LogRecord attribute set from ``extra=`` is
+    present whether or not ANY formatter renders it. That assertion passes
+    identically in a world where the operator can grep the id and a world where
+    they cannot — so it could never have caught the defect it appeared to
+    cover, which is exactly what happened. No formatter in this package or in
+    ``src/kailash/**`` names the extras, and neither package depends on
+    structlog or python-json-logger, so the rendered message is the only place
+    a real operator can find the id.
+
+    ``caplog.text`` is the rendered output of a stock stdlib Formatter, which
+    is the side of the boundary the contract is about.
+    """
+    assert correlation_id in caplog.text, (
+        "the caller was handed correlation id "
+        f"{correlation_id!r}, but grepping it over the rendered server log "
+        "finds nothing — the failure is undiagnosable rather than merely "
+        f"non-leaking: {caplog.text!r}"
     )
 
 
@@ -151,9 +176,10 @@ async def test_completion_error_logs_scrubbed_detail_server_side(monkeypatch, ca
     record = _server_side_record(caplog, "completion.error")
     logged = _rendered(record)
 
+    _assert_correlation_id_is_greppable(caplog, correlation_id)
     assert record.correlation_id == correlation_id, (
-        "the server-side record must carry the SAME correlation id, or the id "
-        f"the caller quotes cannot be traced: {logged!r}"
+        "the structured sink must ALSO carry the id as a field; this is the "
+        f"weaker of the two checks and never fails on its own: {logged!r}"
     )
     assert SECRET_PATH in logged, (
         "the operator loses all diagnostic value if the detail is dropped "
@@ -220,6 +246,7 @@ async def test_stdio_call_error_logs_scrubbed_detail_server_side(caplog):
     record = _server_side_record(caplog, "stdio.tools_call.error")
     logged = _rendered(record)
 
+    _assert_correlation_id_is_greppable(caplog, correlation_id)
     assert record.correlation_id == correlation_id, logged
     assert SECRET_PATH in logged, logged
     assert (

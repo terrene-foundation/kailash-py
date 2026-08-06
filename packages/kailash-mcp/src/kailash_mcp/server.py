@@ -1204,11 +1204,6 @@ class MCPServer:
         # (refuses to overwrite a live entry), and ``_register_tool_with_fastmcp``
         # (drops the park in the same step that replaces the registration).
         self._fastmcp_withheld_tools: Dict[str, Any] = {}
-        # Liveness-proven ``(owner, container)`` pair for the FastMCP tool
-        # container. Cached because proving liveness writes a sentinel through
-        # the dispatch path; the identity re-check below is what keeps a stale
-        # cache from being used after ``self._mcp`` is replaced.
-        self._fastmcp_container_proven: Optional[Tuple[Any, Dict[str, Any]]] = None
 
         # Client management for new handlers
         self.client_info: Dict[str, Dict[str, Any]] = {}
@@ -1697,10 +1692,6 @@ class MCPServer:
         """
         return getattr(self._mcp, "_kailash_serves_no_protocol", False) is True
 
-    # Key written into a candidate FastMCP tool container to prove it is the
-    # mapping the server DISPATCHES from rather than a defensive copy.
-    _CONTAINER_LIVENESS_PROBE = "__kailash_fastmcp_liveness_probe__"
-
     def _fastmcp_tool_container(self) -> Optional[Dict[str, Any]]:
         """FastMCP's OWN mutable ``name -> registration`` mapping, or None.
 
@@ -1718,14 +1709,6 @@ class MCPServer:
         here is indistinguishable from working, so a candidate that cannot be
         proven live is REJECTED and the caller raises.
         """
-        proven = self._fastmcp_container_proven
-        if proven is not None:
-            owner, container = proven
-            if getattr(owner, "_tools", None) is container:
-                return container
-            # ``self._mcp`` was replaced (tests do this); re-prove from scratch.
-            self._fastmcp_container_proven = None
-
         manager = getattr(self._mcp, "_tool_manager", None)
         for owner in (manager, self._mcp):
             if owner is None:
@@ -1739,65 +1722,56 @@ class MCPServer:
                     extra={
                         "owner": type(owner).__name__,
                         "hint": (
-                            "this object's tool mapping does not round-trip a "
-                            "write, so it is a copy rather than the mapping "
+                            "this object's tool mapping is computed rather than "
+                            "stored, so it is a copy rather than the mapping "
                             "FastMCP dispatches from; the disclosure gate "
                             "cannot be applied through it"
                         ),
                     },
                 )
                 continue
-            self._fastmcp_container_proven = (owner, container)
             return container
         return None
 
     def _fastmcp_tool_container_is_live(
         self, owner: Any, container: Dict[str, Any]
     ) -> bool:
-        """Prove ``container`` is what ``owner`` actually reads, two ways.
+        """Prove ``container`` is the object ``owner``'s own methods read.
 
-        1. IDENTITY — a second read of ``owner._tools`` returns the SAME object.
-           A property returning ``dict(self._real)`` fails here immediately.
-        2. ROUND TRIP — a sentinel written into the candidate is observable
-           through the owner's OWN lookup path (``get_tool``, which is what
-           dispatch calls), falling back to re-reading ``_tools``. This catches
-           a copy cached behind a stable identity, which proof 1 alone cannot
-           tell apart from the real container.
+        Both proofs are READS. An earlier version wrote a sentinel key into the
+        candidate and looked for it through ``get_tool``; that worked, but it
+        put a synthetic entry in the LIVE container for the duration, and
+        anything enumerating tools in that window observed it — confirmed, not
+        assumed: a reader inside the window saw
+        ``['__kailash_fastmcp_liveness_probe__', 'gated']``. Introducing a
+        disclosure on the very surface this machinery exists to gate is not a
+        trade worth making for a diagnostic, so liveness is now established
+        without mutating anything and the window does not exist to be raced.
 
-        The sentinel is removed in ``finally`` and the verdict is cached by the
-        caller, so the write happens once per container — at registration, when
-        tools are being added anyway.
+        1. The public read yields it — ``owner._tools is container``.
+        2. It is the STORED instance attribute, not a computed value —
+           ``vars(owner)["_tools"] is container``.
+
+        Together these are the identity comparison against the object FastMCP
+        dispatches from: every enumeration and lookup FastMCP performs
+        (``get_tool``, ``list_tools``, ``add_tool``) reads ``self._tools``, and
+        (2) establishes that such a read resolves to THIS object rather than to
+        a descriptor that rebuilds or caches a copy. A ``property`` returning
+        ``dict(self._store)`` fails (2) whether it rebuilds per access or hands
+        back one cached snapshot — the shape that defeats a naive identity
+        check, because a cached copy is identity-STABLE.
+
+        An owner with no instance ``__dict__`` (``__slots__``) cannot be proven
+        this way and is rejected: the caller then raises with an actionable
+        message, which is the required disposition for "cannot prove", not a
+        reason to relax the proof.
         """
         if getattr(owner, "_tools", None) is not container:
             return False
-
-        probe = self._CONTAINER_LIVENESS_PROBE
-        sentinel = object()
-        container[probe] = sentinel
-        try:
-            lookup = getattr(owner, "get_tool", None)
-            if callable(lookup):
-                try:
-                    return lookup(probe) is sentinel
-                except Exception as exc:
-                    # An owner whose lookup path will not take an unknown name
-                    # cannot be probed through it. Fall through to the weaker
-                    # (but still discriminating) attribute re-read rather than
-                    # rejecting a legitimate implementation outright.
-                    logger.debug(
-                        "tool.fastmcp_registration.lookup_probe_unavailable",
-                        extra={
-                            "owner": type(owner).__name__,
-                            "error": mask_error_text(str(exc)),
-                        },
-                    )
-            observed = getattr(owner, "_tools", None)
-            return isinstance(observed, dict) and observed.get(probe) is sentinel
-        finally:
-            container.pop(probe, None)
-            observed = getattr(owner, "_tools", None)
-            if isinstance(observed, dict):
-                observed.pop(probe, None)
+        instance_attrs = getattr(owner, "__dict__", None)
+        if not isinstance(instance_attrs, dict):
+            return False
+        return instance_attrs.get("_tools", None) is container
 
     def _require_fastmcp_tool_container(self, tool_name: str) -> Dict[str, Any]:
         """Locate the container or fail CLOSED with a loud, actionable error.
@@ -2291,6 +2265,17 @@ class MCPServer:
         Returns the id, which is the ONLY thing about the failure that goes back
         to the caller. The operator joins the two by grepping the id, so the
         detail is moved rather than lost.
+
+        THE ID IS IN THE RENDERED MESSAGE, not only in ``extra``. A stdlib
+        ``logging.Formatter`` renders extras only if the format string names
+        them, and no formatter in this package or in ``src/kailash/**`` does —
+        neither package depends on structlog or python-json-logger. So the id
+        went out to callers while the log line read ``completion.error`` and
+        nothing else, and grepping it over a real log found NOTHING. That is
+        worse than the leak this machinery replaced: the caller was handed a
+        reference to a record no operator could locate. The extras are kept for
+        structured sinks, which is where the scrubbed error and traceback still
+        go; the message carries the join key so the stdlib path works too.
         """
         correlation_id = uuid.uuid4().hex[:12]
         # The traceback is formatted and scrubbed HERE rather than passed as
@@ -2302,7 +2287,10 @@ class MCPServer:
             traceback.format_exception(type(exc), exc, exc.__traceback__)
         )
         logger.error(
+            "%s correlation_id=%s error_type=%s",
             event,
+            correlation_id,
+            type(exc).__name__,
             extra={
                 "correlation_id": correlation_id,
                 "error_type": type(exc).__name__,
