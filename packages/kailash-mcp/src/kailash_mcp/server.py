@@ -1748,6 +1748,17 @@ class MCPServer:
         trade worth making for a diagnostic, so liveness is now established
         without mutating anything and the window does not exist to be raced.
 
+        THE WINDOW WAS REACHABLE WHILE SERVING — it was NOT registration-time
+        only, which is the reason a lock would have been required had the write
+        been kept. Container resolution also happens on ``disable_tool`` /
+        ``enable_tool``, which are public methods callable at any time; and on
+        a server with no GATED tool the projection early-returns before ever
+        resolving, so the FIRST resolution is that runtime call. Measured: a
+        server registering one ungated tool performs zero resolutions during
+        registration, then one from inside ``disable_tool`` (via
+        ``_withhold_tool_from_fastmcp`` -> ``_require_fastmcp_tool_container``).
+        Reads need no lock, so nothing here serialises.
+
         1. The public read yields it — ``owner._tools is container``.
         2. It is the STORED instance attribute, not a computed value —
            ``vars(owner)["_tools"] is container``.
