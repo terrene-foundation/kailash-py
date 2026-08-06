@@ -279,9 +279,11 @@ def test_binds_envelope_rejects_pre_fix_shapes(source):
     assert _binds_envelope(_first_exec_call(source)) is False, source
 
 
-# Both polarities of the slot-count predicate the xfail below rests on. Without
-# these, a predicate that always returned "one slot" would produce the same
-# XFAIL and look identical in the run output.
+# Both polarities of the slot-count predicate that
+# test_audited_sites_are_exempt_under_the_structural_rule rests on. Without
+# these, a predicate that always reported "one slot" would produce an
+# identical run output on an empty allowlist -- every check vacuously green,
+# and no way to tell that from a working guard.
 SLOT_COUNT_CASES = {
     "single-slot-inputs": ("async def f(self, name, inputs): pass", ["inputs"]),
     "single-slot-parameters": ("def f(self, wf, parameters): pass", ["parameters"]),
