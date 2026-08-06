@@ -20,6 +20,22 @@ Two further fix lanes launched after the reviewers freed capacity:
 | kaizen-agents disclosure (HIGH-2/MED-3/MED-4/LOW-6) | `F-AGENTS` | `packages/kaizen-agents/src/.../patterns/discovery.py`, `delegate/tools/{glob,bash}_tool.py`, its `tests/**` | in-flight |
 | MCP stdio gate bypass (HIGH-1 #1998 / MED-5)        | `F-MCP`    | `packages/kailash-mcp/**`, `tests/unit/mcp_server/**`                                                        | in-flight |
 
+**BOUNDARY EXTENSION granted to `F-AGENTS`** (verified both files clean and unheld first):
+`packages/kaizen-agents/src/kaizen_agents/delegate/tools/grep_tool.py` (a same-class raw
+model-supplied operand at :121, sibling of the LOW-6 bash sites — `autonomous-execution.md`
+MUST-4 fix-now, not file-forward) and
+`packages/kailash-kaizen/src/kaizen/utils/credential_scrub.py` (the doctrine enumeration at
+:1168-1184 must record the measured `Path.glob` verdicts, or the next author re-guesses the
+way the `re.compile` leak shipped).
+
+**`glob_tool.py:47` examined and REJECTED as a finding** — not overlooked. Confirmed
+EMPIRICALLY, not by reasoning: both presets leave a filesystem path fully intact
+(`scrub_local_error` and `scrub_remote_error` each return
+`/Users/someone/secret-project/config.yaml` unchanged), so scrubbing there is a no-op that
+would read to a future author as "handled". It also matches the convention at
+`file_read.py:55`, `file_edit.py:62`, `grep_tool.py:112` — changing one of four creates the
+asymmetry the parity rule warns about.
+
 **File ownership is disjoint by construction** — the four fix lanes share no file. Deliberate
 deviation from `worktree-isolation.md` Rule 1 recorded here rather than taken silently: the
 `.venv` is checkout-bound (the traps mandate `.venv/bin/python`, and a per-worktree
