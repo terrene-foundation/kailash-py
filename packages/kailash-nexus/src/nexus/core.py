@@ -42,6 +42,23 @@ from nexus.transports.mcp import MCPTransport
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Hard cap on distinct client IPs tracked by ONE endpoint's in-memory rate
+# limiter. The limiter keys per client IP, and only the CURRENT minute bucket is
+# ever read, so a stale entry has no enforcement value -- but nothing evicted the
+# outer key, so every IP ever seen persisted for the process lifetime. An
+# attacker rotating source addresses (trivial over IPv6) grew it without bound.
+#
+# The cap makes that growth bounded rather than unbounded. Eviction fails OPEN
+# for the evicted IP (its counter restarts), which grants an attacker NOTHING
+# they do not already have -- rotating to a fresh IP already yields a fresh
+# counter -- while replacing a whole-process memory exhaustion with a bounded,
+# per-IP allowance reset. ~10k IPs/endpoint is well beyond legitimate concurrent
+# clients and costs single-digit MB.
+_MAX_RATE_LIMIT_TRACKED_CLIENTS = 10_000
+
+# Minute buckets older than this many windows are unreachable by the limit check.
+_RATE_LIMIT_STALE_BUCKET_AGE = 5
+
 
 class NexusConfig:
     """Configuration object for Nexus components."""
@@ -1555,11 +1572,26 @@ Check the documentation or explore available resources.
             """Execute workflow with given parameters.
 
             Args from MCP ``tools/call`` arrive as kwargs in ``params``.
-            They are wrapped under the ``parameters`` key when forwarded to
-            the runtime — Kailash workflow nodes (esp. PythonCodeNode) read
-            their inputs as ``parameters.get(...)`` from the executing
-            namespace, so the workflow's ``parameters`` variable is the
-            on-wire convention shared with the HTTP /execute endpoint.
+            They are forwarded to the runtime in BOTH shapes — each key at
+            workflow level AND the whole mapping under the ``parameters``
+            key — because Kailash workflow nodes (esp. PythonCodeNode) may
+            read their inputs either as ``parameters.get(...)`` or as bare
+            top-level names, and the SAME registered workflow must behave
+            identically on every channel.
+
+            This binding is byte-for-byte what
+            ``kailash.api.workflow_api.WorkflowRequest.get_inputs`` produces
+            for the HTTP/CLI ``{"parameters": {...}}`` body, which is what
+            makes API/CLI/MCP parity hold. Collision precedence matches that
+            helper exactly: an inner key literally named ``parameters`` loses
+            to the envelope, and a key matching a NODE ID is scoped to that
+            node by the runtime on every channel alike.
+
+            Historical note: this previously forwarded ONLY
+            ``{"parameters": params}`` while the HTTP endpoint UNWRAPPED its
+            envelope, so a ``parameters.get(...)`` workflow returned 200 over
+            MCP and HTTP 500 over API/CLI. The docstring asserted the two
+            shared a convention; they did not.
 
             Returns a JSON string. ``MCPServer._handle_call_tool`` wraps
             the return value with ``str(result)`` into a text content
@@ -1571,7 +1603,7 @@ Check the documentation or explore available resources.
             import json
 
             execution_result = await shared_runtime.execute_workflow_async(
-                workflow, inputs={"parameters": params}
+                workflow, inputs={**params, "parameters": params}
             )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
@@ -2210,6 +2242,57 @@ Check the documentation or explore available resources.
             # Check if global rate limit is configured
             rate_limit = self.rate_limit_config.get("default_rate_limit", 100)
 
+        # `rate_limit_config` is Dict[str, Any], so an explicit
+        # {"default_rate_limit": None} resolves to None here rather than to the
+        # 100 default -- and the raw value was then compared with `> 0` inside
+        # the request wrapper, raising "TypeError: '>' not supported between
+        # instances of 'NoneType' and 'int'" on EVERY request to the endpoint
+        # (an unconditional HTTP 500 on a public constructor kwarg).
+        #
+        # None is documented above as "unlimited", and a non-positive limit
+        # already meant unlimited (the old `rate_limit > 0` guard), so both
+        # collapse to a single Optional[int] the wrapper narrows on once. A
+        # non-int, non-None configured value is a misconfiguration and raises
+        # loudly here rather than becoming a TypeError per request.
+        if rate_limit is not None and not isinstance(rate_limit, int):
+            raise ValueError(
+                "rate_limit must be an int or None (None = unlimited); got "
+                f"{type(rate_limit).__name__}"
+            )
+        effective_rate_limit: Optional[int] = (
+            rate_limit if rate_limit is not None and rate_limit > 0 else None
+        )
+
+        def _declares_fastapi_request(handler: Any) -> bool:
+            """True when ``handler`` declares a FastAPI ``Request`` parameter.
+
+            The rate-limit wrapper below can only engage when it finds a
+            ``Request`` instance among the handler's args/kwargs, so this is
+            the registration-time predicate for "will rate limiting actually
+            run for this handler".
+            """
+            from fastapi import Request
+
+            try:
+                signature = inspect.signature(handler)
+            except (TypeError, ValueError):
+                # Un-introspectable callable: cannot prove the parameter is
+                # absent, so stay silent rather than emit a false warning.
+                return True
+
+            for parameter in signature.parameters.values():
+                annotation = parameter.annotation
+                if annotation is Request:
+                    return True
+                # A quoted / PEP-563 annotation arrives as a string; compare on
+                # the bare name so `"Request"` and `"fastapi.Request"` match.
+                if (
+                    isinstance(annotation, str)
+                    and annotation.split("[")[0].rsplit(".", 1)[-1] == "Request"
+                ):
+                    return True
+            return False
+
         def decorator(func):
             # Validate gateway initialized
             if self._http_transport.gateway is None:
@@ -2223,8 +2306,40 @@ Check the documentation or explore available resources.
             from functools import wraps
             from typing import Dict as TypingDict
 
-            # Simple in-memory rate limiter (per client IP)
-            request_counts: TypingDict[str, TypingDict[str, int]] = defaultdict(
+            # A configured `rate_limit=` that cannot engage is a documented
+            # kwarg with zero effect on the body -- the silent-fallback mode at
+            # the API surface (zero-tolerance Rule 3c). The wrapper below can
+            # only rate-limit when it finds a FastAPI `Request` among the
+            # handler's args/kwargs, so a handler declaring none is never
+            # limited no matter what `rate_limit=` says.
+            #
+            # Enforcement behaviour is deliberately UNCHANGED for every
+            # existing endpoint -- making limiting unconditional would alter
+            # security behaviour repo-wide. What ends is the SILENCE: this is
+            # security.md's secure-default pattern, where on-by-default is
+            # infeasible for backward-compat so a loud one-time WARN at
+            # registration names the OFF protection and its exact wiring.
+            if effective_rate_limit is not None and not _declares_fastapi_request(func):
+                logger.warning(
+                    "nexus.endpoint.rate_limit_inert: rate_limit=%s is configured "
+                    "for %s %s but the handler %r declares no FastAPI Request "
+                    "parameter, so NO rate limiting will be applied to it. "
+                    "Fix: add a `request: Request` parameter to the handler "
+                    "(import `Request` from `fastapi`); the value is supplied "
+                    "by the framework and the handler need not use it.",
+                    effective_rate_limit,
+                    "/".join(methods),
+                    path,
+                    getattr(func, "__name__", repr(func)),
+                )
+
+            # Simple in-memory rate limiter (per client IP).
+            # Inner key is the minute bucket -- always an int
+            # (`int(time.time() // rate_limit_window)`), never a str. This dict
+            # is function-local and never escapes the closure, so those are the
+            # only keys it can ever hold; the previous `str` annotation made
+            # the bucket-eviction comparison below read as `str < int`.
+            request_counts: TypingDict[str, TypingDict[int, int]] = defaultdict(
                 lambda: defaultdict(int)
             )
             rate_limit_window = 60  # 1 minute window
@@ -2233,16 +2348,40 @@ Check the documentation or explore available resources.
             async def rate_limited_func(*args, **kwargs):
                 from fastapi import HTTPException, Request
 
-                # Extract FastAPI Request object (not Pydantic models)
+                # Extract the FastAPI Request object (never a Pydantic model).
+                #
+                # Resolution is by TYPE, not by parameter NAME. FastAPI invokes
+                # the endpoint as `dependant.call(**values)`, so `args` is empty
+                # on that path and every declared parameter arrives in `kwargs`
+                # under ITS OWN name -- `req: Request` lands in `kwargs["req"]`,
+                # never `kwargs["request"]`.
+                #
+                # Matching only the literal key `"request"` therefore left every
+                # idiomatically-named handler (`req`, `http_request`, ...)
+                # completely UNLIMITED while the registration log still
+                # advertised `rate_limit=N/min`, and the inert-limit WARN stayed
+                # silent because ITS test is the ANNOTATION, which is
+                # name-agnostic. Predicate and runtime disagreed, so the warning
+                # added to end that silence could not fire on the broken case.
+                # Scanning by isinstance makes the two the same test.
                 request = None
 
-                # Check kwargs first
-                if "request" in kwargs:
-                    arg = kwargs["request"]
-                    if isinstance(arg, Request):
-                        request = arg
+                # Conventional name first, so a handler declaring more than one
+                # Request-typed parameter resolves deterministically to the one
+                # callers expect rather than to dict-ordering.
+                conventional = kwargs.get("request")
+                if isinstance(conventional, Request):
+                    request = conventional
 
-                # If not found in kwargs, check args
+                # Any other parameter name -- the case the literal-key check missed.
+                if request is None:
+                    for arg in kwargs.values():
+                        if isinstance(arg, Request):
+                            request = arg
+                            break
+
+                # Positional args: retained for non-FastAPI callers that invoke
+                # the wrapped function directly rather than through the router.
                 if request is None:
                     for arg in args:
                         if isinstance(arg, Request):
@@ -2253,30 +2392,61 @@ Check the documentation or explore available resources.
                 if (
                     request is not None
                     and isinstance(request, Request)
-                    and rate_limit > 0
+                    and effective_rate_limit is not None
                 ):
                     # Get client IP
                     client_ip = request.client.host if request.client else "unknown"
                     current_minute = int(time.time() // rate_limit_window)
 
                     # Check rate limit
-                    if request_counts[client_ip][current_minute] >= rate_limit:
+                    if (
+                        request_counts[client_ip][current_minute]
+                        >= effective_rate_limit
+                    ):
                         raise HTTPException(
                             status_code=429,
-                            detail=f"Rate limit exceeded. Maximum {rate_limit} requests per minute.",
+                            detail=f"Rate limit exceeded. Maximum {effective_rate_limit} requests per minute.",
                         )
 
                     # Increment counter
                     request_counts[client_ip][current_minute] += 1
 
-                    # Cleanup old entries (prevent memory leak)
-                    old_minutes = [
-                        m
-                        for m in request_counts[client_ip].keys()
-                        if m < current_minute - 5
-                    ]
-                    for old_minute in old_minutes:
-                        del request_counts[client_ip][old_minute]
+                    # Cleanup. This has to bound BOTH levels: the inner minute
+                    # buckets for this client, AND the outer per-client-IP dict.
+                    # Only the inner half existed before, so every IP ever seen
+                    # retained an entry for the process lifetime -- unbounded
+                    # under source-address rotation, which is trivial over IPv6.
+                    stale_before = current_minute - _RATE_LIMIT_STALE_BUCKET_AGE
+
+                    buckets = request_counts[client_ip]
+                    for old_minute in [m for m in buckets if m < stale_before]:
+                        del buckets[old_minute]
+                    if not buckets:
+                        del request_counts[client_ip]
+
+                    if len(request_counts) > _MAX_RATE_LIMIT_TRACKED_CLIENTS:
+                        # Pass 1 -- LOSSLESS. The limit check only ever reads
+                        # the CURRENT minute, so a client whose newest bucket is
+                        # already stale carries no enforcement value at all.
+                        for ip in [
+                            ip
+                            for ip, b in request_counts.items()
+                            if not b or max(b) < stale_before
+                        ]:
+                            del request_counts[ip]
+
+                        # Pass 2 -- LOSSY, and only if still over the cap (every
+                        # tracked client is recent, i.e. an active flood). Drops
+                        # least-recently-active first; see the constant's note
+                        # on why failing open here grants an attacker nothing.
+                        overflow = len(request_counts) - _MAX_RATE_LIMIT_TRACKED_CLIENTS
+                        if overflow > 0:
+                            by_recency = sorted(
+                                request_counts,
+                                key=lambda ip: max(request_counts[ip], default=0),
+                            )
+                            for ip in by_recency[:overflow]:
+                                del request_counts[ip]
 
                 # Call original function
                 return await func(*args, **kwargs)
@@ -2310,7 +2480,11 @@ Check the documentation or explore available resources.
 
             # Log registration
             methods_str = ", ".join(methods)
-            rate_limit_str = f", rate_limit={rate_limit}/min" if rate_limit > 0 else ""
+            rate_limit_str = (
+                f", rate_limit={effective_rate_limit}/min"
+                if effective_rate_limit is not None
+                else ""
+            )
             logger.info(
                 f"✅ Custom endpoint registered: {methods_str} {path} (API-only{rate_limit_str})"
             )
@@ -3546,7 +3720,20 @@ Check the documentation or explore available resources.
             for fname in flat_names
         ]
         _params.append(_inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD))
-        _extractor_wrapper.__signature__ = _inspect.Signature(_params)
+        # PEP 362 sanctions overriding `inspect.signature()` by assigning
+        # `__signature__` on a callable, and `_derive_params_from_signature`
+        # (kailash/nodes/handler.py) depends on exactly that. typeshed does not
+        # declare `__signature__` on `types.FunctionType`, so a direct
+        # attribute assignment is a checker error even though the runtime
+        # contract is correct. `setattr` states that the attribute is set
+        # dynamically, which is what is happening, without changing runtime
+        # behaviour. NOT a suppression: the alternative type-level fixes were
+        # tried and rejected -- a Protocol-typed alias fails structurally (a
+        # plain function has no `__signature__` to satisfy the protocol at bind
+        # time), and converting the wrapper to a callable class would make
+        # `inspect.iscoroutinefunction` False for it, silently changing the
+        # async detection this handler path relies on.
+        setattr(_extractor_wrapper, "__signature__", _inspect.Signature(_params))
         _extractor_wrapper.__name__ = getattr(func, "__name__", name)
         _extractor_wrapper.__doc__ = description or getattr(func, "__doc__", "")
 
@@ -3799,6 +3986,30 @@ Check the documentation or explore available resources.
                 logger.error(f"Background task failed: {e}", exc_info=True)
 
         task = asyncio.create_task(_safe_wrapper())
+
+        def _close_if_never_started(_task: asyncio.Task) -> None:
+            """Release ``coro`` when the task finished without ever awaiting it.
+
+            The TASK wraps ``_safe_wrapper``, not ``coro``. A ``cancel()``
+            landing before the loop first schedules the wrapper cancels it at
+            its very first step -- throwing into a not-yet-started coroutine
+            propagates without executing its body, so ``_safe_wrapper``'s own
+            ``except`` never runs and ``await coro`` never happens. ``coro`` is
+            then left un-started and CPython emits "RuntimeWarning: coroutine
+            ... was never awaited" from its finalizer at an arbitrary later GC,
+            attributed to whatever code triggered collection.
+
+            A done-callback is the only hook that still fires in that path.
+            The CORO_CREATED guard keeps this a no-op whenever the coroutine
+            did start, so a running or completed coroutine is never touched.
+            """
+            if (
+                inspect.iscoroutine(coro)
+                and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
+            ):
+                coro.close()
+
+        task.add_done_callback(_close_if_never_started)
         return task
 
     @staticmethod
@@ -4348,6 +4559,30 @@ Check the documentation or explore available resources.
                 logger.info("Monitoring enabled via enterprise gateway")
             except Exception as e:
                 logger.error(f"Failed to enable monitoring: {e}")
+
+        # Expose the nexus_* Prometheus series. The enterprise gateway's own
+        # /metrics route renders only the Core SDK's kailash_* collectors, so
+        # without this call the nexus.metrics collectors are never initialised
+        # into the default registry and MonitoringPlugin's advertised "metrics
+        # collection" is a no-op at this facade (the plugin only sets
+        # _monitoring_enabled / _metrics, which no production path reads).
+        # register_metrics_endpoint is idempotent: it guards collector creation
+        # behind _metrics_initialized and replaces any existing /metrics route.
+        from .metrics import register_metrics_endpoint
+
+        try:
+            register_metrics_endpoint(self)
+        except ImportError:
+            # prometheus_client is the optional [metrics] extra. Its absence is
+            # a real, named degradation -- the nexus_* series stay unexposed --
+            # so it WARNs with the exact wiring rather than passing silently.
+            logger.warning(
+                "monitoring.metrics_endpoint.unavailable: prometheus_client is "
+                "not installed, so the nexus_* Prometheus series are NOT "
+                "exposed on /metrics. Install it with: "
+                "pip install kailash-nexus[metrics]"
+            )
+
         return self.use_plugin("monitoring")  # Fallback to plugin
 
     def use_plugin(self, plugin_name: str):
