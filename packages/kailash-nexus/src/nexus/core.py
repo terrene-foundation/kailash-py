@@ -4238,9 +4238,29 @@ Check the documentation or explore available resources.
 
             # Execute using runtime (consistent with SDK patterns)
             from kailash.runtime import get_runtime
+            from kailash.workflow.input_envelope import bind_parameter_envelope
 
+            # Bind through the shared binder, like every other entry point.
+            # This method offers the caller ONE arguments slot, so there is no
+            # choice for a raw pass-through to express -- and "it is not
+            # route-registered" protected nothing, because
+            # skills/03-nexus/nexus-api-patterns.md teaches custom endpoints to
+            # call `await app._execute_workflow(name, body)` directly. That
+            # makes the CALLER's route the entry point, so a workflow reading
+            # `parameters.get(...)` -- the documented convention every other
+            # channel binds for -- raised NameError inside the SDK's own worked
+            # example and surfaced as an opaque 500.
+            #
+            # AFTER validate_workflow_inputs, deliberately: that validator
+            # enforces the size cap and the dangerous-key/dunder rules against
+            # TOP-LEVEL keys only, so it has to see the caller's actual
+            # mapping. Enveloping first would halve the effective size limit
+            # (the payload is measured twice) and drop the caller's keys below
+            # the only level those rules inspect.
             runtime = get_runtime("async")
-            execution_result = await runtime.execute_workflow_async(workflow, inputs)
+            execution_result = await runtime.execute_workflow_async(
+                workflow, bind_parameter_envelope(inputs)
+            )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
             else:
