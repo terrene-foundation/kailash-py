@@ -82,6 +82,55 @@ The guard reported "every discovered entry point binds" with an EMPTY allowlist.
 of a denominator that omitted the tree containing the bug. **Third time on this branch an
 instrument built to prevent a class has exhibited that class.**
 
+## HEAD WAS RED — a test landed without its implementation
+
+`8d6ea624c` committed `packages/kailash-mcp/CHANGELOG.md` + a 378-line
+`test_issue_1998_r3_registration_hygiene.py` and **NOT `server.py`** (verified:
+`git show --name-only 8d6ea624c | grep -c server.py` → 0). The implementation stayed
+uncommitted in the shared working tree, so a fresh clone of HEAD failed 12 tests. The branch
+was red and nothing announced it.
+
+Cause: the pathspec discipline I mandated to stop index-sweeping cut the OTHER way here. A lane
+correctly limited its commit to its own paths — but its test and its implementation lived in
+different ownership scopes, so "commit only your paths" split a change that had to be atomic.
+
+Resolved by `F3-MCP` committing `server.py` WHOLE at `8f8577c36`, including the sibling's hunks
+(same functions, so pathspec could not separate them), and SAYING SO in the body rather than
+silently authoring another lane's work. `test_issue_1998_r3_registration_hygiene.py` now
+**12 passed**.
+
+**Standing rule this adds to the pathspec one:** a pathspec commit must still leave HEAD
+GREEN. If your paths alone do not, either the commit spans an ownership boundary — say so and
+coordinate — or you are splitting a change that is not separable. The two rules together:
+_commit only your paths, but never commit a red HEAD; if those conflict, the boundary is wrong,
+not the atomicity._
+
+## R3 MCP FINDINGS CLOSED — `8f8577c36`, with a THIRD guard the finding never named
+
+R3-HIGH-1 / MED-2 / MED-3 all closed, each RED-established through the real MCP protocol rather
+than a unit test of the changed function. HIGH-1's red, verbatim: `disabled tool STILL LISTED:
+True`, advertised `properties: ['secret_param']` (v1's), uncredentialed call `isError: False
+body: V1-EXECUTED`. Green: listed False, properties `[]`, `isError: True`.
+
+**The part worth carrying:** the fix landed at ALL THREE sites that can break the invariant, not
+the one the finding named. `_restore` refusing to overwrite a live entry was MISSING from the
+sibling lane's fix, which relied on `tool()` alone and would not hold against a path replacing a
+registration some other way. Fixing the class rather than the instance is what this branch had
+failed to do five times before.
+
+MED-3's liveness needs BOTH proofs and that is measured, not preferred: identity re-read alone
+passes a single CACHED copy (identity-stable), so only the sentinel round trip through the
+owner's `get_tool` catches it. A fixture isolates the second proof, because without it a
+regression dropping the round trip passes every other test.
+
+**Suites:** `tests/unit/mcp_server` 645 passed (baseline held); `packages/kailash-mcp/tests`
+640 passed, 1 skipped.
+
+**OPEN (bounded):** whether a concurrent `tools/list` can observe the sentinel between write and
+delete. "No sentinel left behind" is an end-state claim and does not speak to the window. Likely
+closed by construction if the probe is registration-time-only; asked, awaiting a one-line answer
+to record beside `_CONTAINER_LIVENESS_PROBE` (`server.py:1702`).
+
 ## ORCHESTRATOR ERROR 5 — my THIRD wrong fix-recommendation; I am done prescribing shape
 
 For R3-MED-4 I mandated routing `find_agents_for_user` through `_resolve_identity_scope`.
