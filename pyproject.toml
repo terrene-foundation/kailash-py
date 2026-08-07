@@ -307,6 +307,23 @@ known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 [tool.isort]
 profile = "black"
 known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+# Scaffold templates are NOT valid Python — they carry `{Placeholder}` substitution tokens
+# (e.g. `class Test{AgentName}Initialization:`), so every formatter fails to parse them.
+# Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /
+# `black .` skips them too. Without this, `black --check .` can never exit 0 (#1995).
+extend_skip_glob = ["*/docs/development/templates/*"]
+
+[tool.black]
+line-length = 88
+extend-exclude = '''
+/(
+    data/outputs
+  | outputs
+  | examples/outputs
+  | _build
+  | docs/development/templates
+)/
+'''
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore import ordering and undefined names in packages directory (separate packages)
