@@ -2573,8 +2573,13 @@ Check the documentation or explore available resources.
                     and isinstance(request, Request)
                     and effective_rate_limit is not None
                 ):
-                    # Get client IP
-                    client_ip = request.client.host if request.client else "unknown"
+                    # Get client IP — the ORIGINATING client under the operator's
+                    # trusted-proxy posture, not the immediate peer (#2007).
+                    # Local import matches this module's convention for
+                    # nexus.extractors.* (see validate_trusted_proxy_cidrs above).
+                    from nexus.extractors.proxy import client_key_for_request
+
+                    client_ip = client_key_for_request(request)
                     current_minute = int(time.time() // rate_limit_window)
 
                     # Touch this client, moving it to the MOST-recently-used

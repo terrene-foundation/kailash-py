@@ -10,6 +10,8 @@ from typing import Callable, Optional
 
 from fastapi import HTTPException, Request
 
+from nexus.extractors.proxy import client_key_for_request
+
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 
 
@@ -49,7 +51,8 @@ def rate_limit(
         user = getattr(request.state, "user", None)
         if user and getattr(user, "user_id", None):
             return f"user:{user.user_id}"
-        client_ip = request.client.host if request.client else "unknown"
+        # #2007 — originating client under the trusted-proxy posture, not the peer.
+        client_ip = client_key_for_request(request)
         return f"ip:{client_ip}"
 
     extractor = identifier_extractor or _default_identifier

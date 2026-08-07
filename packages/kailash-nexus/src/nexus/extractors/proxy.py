@@ -30,10 +30,57 @@ import ipaddress
 from typing import List, Optional, Sequence
 
 __all__ = [
+    "client_key_for_request",
     "peer_is_trusted",
     "resolve_client_host",
     "validate_trusted_proxy_cidrs",
 ]
+
+
+def client_key_for_request(request: object) -> str:
+    """Single owner of the per-caller identity every rate limiter keys on (#2007).
+
+    EVERY rate-limit surface MUST call this rather than re-deriving the key.
+    Add a new limiter by CALLING this, never by copying it — four surfaces
+    (``sse.py``, ``core.py``'s endpoint limiter, the auth rate-limit middleware
+    and its decorator) each hand-rolled ``request.client.host`` independently,
+    which is how the trusted-proxy posture came to apply to none of them.
+
+    Resolution order:
+
+    * ``request._nexus_resolved_client_host`` — the ORIGINATING client, already
+      decided by :func:`resolve_client_host` in the extractor middleware under
+      the operator's ``trusted_proxy_cidrs`` posture. This is the only value
+      that honours the trust configuration.
+    * ``request.client.host`` — the immediate TCP peer, when the extractor
+      middleware is not installed. The limiter stays usable standalone.
+    * ``"unknown"`` — the pre-existing sentinel, preserved rather than raising
+      or returning ``None`` so a client-less request keys deterministically.
+
+    Two properties are load-bearing and BOTH are pinned by
+    ``tests/regression/test_issue_2007_rate_limit_client_key.py``:
+
+    * **Unconfigured deployments are byte-identical.** With no trusted CIDRs
+      (the default ``[]``), ``resolve_client_host`` returns the peer, so the key
+      is exactly what it was before this helper existed.
+    * **Forwarded headers remain unspoofable.** The trust decision happens in
+      ``resolve_client_host`` against the immediate peer — never here. An
+      untrusted peer sending ``X-Forwarded-For`` resolves to its own peer IP, so
+      it cannot move itself into another caller's bucket.
+
+    The ``isinstance(..., str)`` guards are load-bearing, not defensive noise.
+    :func:`resolve_client_host` returns ``Optional[str]``, so a non-``str`` here
+    means the attribute did not come from the middleware — most commonly a
+    ``MagicMock`` in a test, which fabricates ANY attribute on access and would
+    otherwise make every mocked caller share one bucket keyed on a Mock repr.
+    Falling through to the peer on a non-``str`` is the fail-safe direction.
+    """
+    host = getattr(request, "_nexus_resolved_client_host", None)
+    if not isinstance(host, str) or not host:
+        client = getattr(request, "client", None)
+        peer = getattr(client, "host", None) if client is not None else None
+        host = peer if isinstance(peer, str) and peer else None
+    return host or "unknown"
 
 
 def peer_is_trusted(peer_ip: Optional[str], trusted_proxy_cidrs: Sequence[str]) -> bool:
