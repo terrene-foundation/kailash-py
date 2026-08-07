@@ -1,219 +1,149 @@
 ---
 owner: esperie
-last_reconciled_sha: 3a642d188
+last_reconciled_sha: 98e83dfbe
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-05/06 (sessions F and G)
+# Session Notes — 2026-08-06/07 (session G)
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain`.
+`fix/issue-1720-forest-drain` — **161 ahead of `main`, 93 UNPUSHED, working tree CLEAN.**
 
-## SESSION G SUPERSEDES THE HEADLINE BELOW — session F's tree IS COMMITTED
+Session F's risk was uncommitted work. **That is closed** — all 63 files committed in 13
+slices. Session G's risk is UNPUSHED work.
 
-The line that used to open this file — "NOTHING FROM SESSION F IS COMMITTED" — is now
-**FALSE**, and it is corrected here rather than deleted so a resumed session does not act on
-a remembered version of it. Session G committed all 63 files in 13 reviewable slices
-(`23ff5cbf2`..`5cf1fd8bc`, plus the session-G commits after). Working tree clean; a backup of
-the pre-commit state is at `scratchpad/sessionF-backup/` (tarball + patch).
+## Read first, in order
 
-**Everything in the session-F sections below that says "uncommitted" is stale in that one
-respect only.** The technical content stands; the storage claim does not.
+1. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-07.md`** — the current
+   decision report. PCF-triaged queue, 6 decision points, ordered next steps. **Start here.**
+2. **`04-validate/launch-ledger-sessionG.md`** — the authoritative record. Every finding, all
+   EIGHT of my orchestrator errors, every named residual. Long, and the § headers are navigable.
+3. This file's **Traps** below before touching anything.
 
-**READ `04-validate/launch-ledger-sessionG.md` FIRST** — it is the current authoritative
-record: round-2 findings, the four fix lanes and their exclusive file ownership, and two
-recorded orchestrator errors (a tool-inventory mismatch, and relaying a review recommendation
-that would have reinstated issue #1720).
+## THE ONE THING BLOCKED ON THE CO-OWNER
 
-### Session-G state in one screen
+**The push is rejected by GitHub secret scanning.** 93 commits, no off-machine copy. Two
+SYNTHETIC Stripe fixtures (`sk_live_` + 24 lowercase chars, sequential alphabet, siblings of
+AWS's own `AKIAIOSFODNN7EXAMPLE`) in unpushed commit `943278479`. Verified synthetic; absent
+from `main`. Co-owner chose allowlist-via-URL over history rewrite (a rewrite would invalidate
+`45ccac417`, cited publicly in the #1996 closure). Fixed forward in `5cf1fd8bc`.
 
-- **Round 2 ran and was NOT clean** — 3 reviewers, rotated lenses, all with genuine
-  ran-signals: **7 HIGH + 6 MEDIUM**. Convergence counter is **ZERO**. Release stays gated.
-- Four fix lanes in flight (nexus rate-limit / envelope / kaizen-agents disclosure / MCP
-  stdio gate). Disjoint file ownership — see the ledger before touching any of those files.
-- **PUSH IS BLOCKED** by GitHub secret scanning on two SYNTHETIC Stripe fixtures in unpushed
-  commit `943278479`. Co-owner chose allowlist-via-URL over a history rewrite (a rewrite
-  would invalidate `45ccac417`, cited publicly in the #1996 closure). Fixed forward in
-  `5cf1fd8bc` so it cannot recur. **The commits have NO off-machine copy until this clears.**
-- #1996 CLOSED (cites `45ccac417`). #2001 (bash_tool raw `command` echo) and #2002 (root
-  `tests/regression/` — 1,564 of 1,566 tests have no CI) FILED.
-- 18 stale provider-registry regression failures fixed (`d2f310cc6`); the guard is now
-  INVERTED to pin the removal.
-- **OPEN, needs the co-owner:** every BREAKING change here ships in a MINOR bump while the
-  CHANGELOGs claim semver adherence. Pre-existing project-wide pattern, not introduced here.
-  Recommendation on record: ship as-is, treat versioning policy as its own decision.
-
-## Read first (session F — technical content still current)
-
-0. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-06.md` — the CURRENT
-   decision report.** PCF-triaged queue, 6 decision points, the ordered next-steps list.
-   Supersedes `sweep-2026-08-05.md`. **Start here**; it tells you what to do, in order.
-1. `workspaces/issue-1720-llm-consolidation/04-validate/launch-ledger-sessionF.md` — the
-   AUTHORITATIVE record. Every claim below has its evidence there.
-2. `workspaces/issue-1720-llm-consolidation/04-validate/release-order-sessionF.md` — the
-   publish sequence is LOAD-BEARING and CI-unenforced.
-3. The three round-1 reviewer findings files in the session scratchpad (`R1-CONSUMER-findings.md`,
-   `R1-INTEG-findings.md`) — **scratchpad is EPHEMERAL; the ledger carries the summaries.**
+The two unblock URLs are in the session transcript. **Do not attempt a history rewrite** — that
+decision was made and the reasoning is in the ledger.
 
 ## Convergence position — state it honestly
 
-**ZERO clean rounds.** Round 1 ran (3 fresh reviewers, rotated lenses, all returned genuine
-ran-signals) and found **2 HIGH + 2 release-blocking + 6 MEDIUM/LOW**. Round-1 fixes are
-landing. Convergence needs a round AFTER those land, then a second clean one.
+**Counter ZERO.** Rounds 2, 3, and 4 all ran with rotated lenses; **round 4 was NOT clean**
+(2 branch-caused regressions, both now fixed). Round 5 is required, then a clean round.
 
-Do not read a large verified diff as convergence. `completion-criterion.md` MUST-4: a cap-stop
-is abnormal termination, never "done".
+Do NOT read "all findings closed" as convergence. `completion-criterion.md` MUST-4: a cap-stop
+is abnormal termination, never done.
 
-## What is DONE and independently verified (orchestrator-run, not lane-reported)
+## VERIFICATION STATUS — read before citing ANY suite number
 
-- **7 packages versioned atomically** — 0 split-state (re-derived with `tomllib`+regex).
-  core 2.63.0 / kaizen 2.46.0 / kaizen-agents 0.13.0 / dataflow 2.20.0 / nexus 2.16.0 /
-  ml 2.2.3 / **mcp 0.5.0 (was MISSING from the prior session's release list entirely)**.
-- **Core multi-channel parity fix** — `workflow_api.py::get_inputs`. Parity suite 7 passed.
-- **`rate_limit_config={"default_rate_limit": None}`** was an unconditional 500 on every
-  request while the docstring documented it as "unlimited". Fixed; 12 tests pass.
-- **Rate-limit WARN predicate/runtime mismatch (HIGH-1)** — fixed; wrapper now resolves by TYPE.
-- **Rate-limiter IP-dimension unbounded (MEDIUM-1)** — fixed, two-pass eviction.
-- **discovery len/items guards (MED)** — both branches MATERIALIZE ONCE. Red established by
-  orchestrator: **11 failed pre-fix, 640 pass post-fix.**
-- **advisory-memo saturation (MED)** — now rate-limits rather than floods.
-- **9 stale mcp permission tests PORTED** — `tests/unit/mcp_server/` 645 passed (was 9 failed).
-  **TWO of the nine were asserting the VULNERABILITY** (`assert required_permission ==
-"admin.execute"` + a warning that the second permission was dropped). Greening by changing the
-  product would have re-opened ">1 permissions dropped to first".
-- **`specs/mcp-server.md` documented the auth bypass as INTENDED — in TWO places** (`:141` and
-  `:694`, the second framed as a feature). Both fixed. `specs/mcp-auth.md` had the same
-  single-string permission type. **A spec that contradicts the code is an instruction to a future
-  session to re-open the bug.**
-- nexus 2370 passed / 0 failed; kaizen-agents regression 640 passed.
+**Every suite number produced before the protocol change is UNSOUND**, including ones earlier
+session-G reports called orchestrator-verified. Four lanes ran concurrently in ONE checkout; a
+sibling could have had a module neutered mid-run (one was caught: `AccessMetadata.deny()`
+returning a full `execute` grant, restored 11s later).
 
-## HIGH-2 — LANDED AND VERIFIED (this section was written before it closed)
+**Protocol now: fingerprint `git status --porcelain` BEFORE and AFTER each run; the numbers are
+VOID unless both match.**
 
-**Fixed via ONE shared binder: `src/kailash/workflow/input_envelope.py::bind_parameter_envelope`**,
-imported by all six sites + `workflow_api.py` (six copies of the same expression was the drift
-shape). Orchestrator-verified: binder present, 7 importers, **16 passed** across the three
-envelope suites; lane reported 133 passed across guard+behaviour+parity+channel units and nexus
-2370/0.
+| Tree                                 | Result                                | Verdict           |
+| ------------------------------------ | ------------------------------------- | ----------------- |
+| root `tests/unit/`                   | 4798 passed, 4 skipped                | **VALID**         |
+| root `tests/regression/`             | 1567 passed, 2 skipped, 22 deselected | **VALID**         |
+| `tests/unit/mcp_server/`             | 645 passed                            | **VALID**         |
+| `packages/kailash-mcp/`              | 649 passed, 1 skipped                 | **VALID**         |
+| nexus / kaizen-agents / kaizen regr. | —                                     | **UNESTABLISHED** |
 
-**The derived denominator found a SEVENTH site on its first run** —
-`src/kailash/channels/mcp_channel.py::_handle_execute_workflow`, a second execution path in the
-same file as the one that was listed, sharing the same registry. **A hand-listed fix would have
-shipped with it still raw.** The real defect was never "six sites are unbound" — it was that the
-denominator was ASSERTED rather than DERIVED.
+UNESTABLISHED = not run to completion (10-min cap under lane contention), **NOT failing.**
+Lanes are idle now; re-running them is mechanical and is step 2 of the sweep's recommendation.
 
-`tests/regression/test_workflow_input_envelope_entry_points.py` derives the set by AST and carries
-**two self-checks**: it fails if the scan finds ZERO sites (drifted matcher ⇒ every assertion
-vacuous ⇒ reports clean forever), and it fails if the allowlist names a site that no longer exists
-(a stale exemption is exactly where a new raw site hides). A new entry point fails this test until
-its author binds or audits it.
+## What landed (all committed)
 
-**ONE site deliberately NOT bound, allowlisted with its reason in-code:**
-`nexus/core.py::_execute_workflow`. Its parameter is literally named `inputs` — the DOCUMENTED
-opt-out `WorkflowRequest` distinguishes from `parameters` and that the parity fix preserved. It is
-a private `_`-prefixed helper with no wire protocol. Binding it would leave the SDK with NO
-programmatic escape hatch. Discriminator applied throughout: **channel entry point → bind;
-programmatic `inputs=` passthrough → argue.** (`api_channel` IS bound despite its wire key also
-being `"inputs"` — it is a channel with no other route to the envelope.) To overrule: delete the
-allowlist entry; the guard will then require the binding.
+Round 2 (7 HIGH + 6 MED), round 3 (3 HIGH + 4 MED + 2 LOW), round 4 (2 REGRESSION + 3 STALE) —
+all fixed, each with an individually established RED→GREEN, most driven end to end.
 
-Also swept per Rule 4c: 3 stale assertions in `tests/unit/channels/test_cli_channel_execution.py`
-pinning the OLD raw binding, updated with the reason inline; full-corpus check found no others.
+Highlights worth knowing:
 
-## OUTSTANDING — nothing in flight; the items below are ROUTED, not started
+- **#1720 closed on the public route** (`568036906`, `2d2563d81`). The envelope guard's tree
+  list now carries an explicit INCLUSION CRITERION + every candidate tree with a verdict and
+  measured count — a future reader audits the CRITERION, not the list.
+- **MCP auth bypass** (`8f8577c36`): `disable_tool` → re-register → `enable_tool` restored a
+  stale UNGATED entry. Uncredentialed `tools/call` returned `V1-EXECUTED`. Fixed at all THREE
+  sites that can break the invariant.
+- **A hardening probe was itself disclosing** (`b1ac06e5b`) — the liveness sentinel was visible
+  to concurrent `tools/list`. Removed because the window could not be proven unreachable.
+- **Rate limiter fail-OPEN** (`98e83dfbe`): 2 of 4 write surfaces never coerced; a typo'd minus
+  silently disabled it. The corpus sweep found the 4th surface before the partial fix shipped.
+- **Finalizer guard restored** (`9f3e69de8`): `__del__` raised inside GC, reddening rotating
+  unrelated tests — the flaky-nexus explanation.
 
-**HIGH-2: the parity fix reaches 3 of 9 entry points.** `transports/mcp.py:168` and
-`transports/websocket.py:706` bind RAW, are PUBLIC (`nexus/__init__.py:68,71`), and serve the
-SAME registry — so one `nexus.register()` yields a workflow that succeeds on `core.py`'s MCP
-tool and **500s on `MCPTransport`'s**. Plus `core.py:4024` and three `src/kailash/channels/*`.
-Lane C was building a shared `kailash.workflow.input_envelope` helper. **VERIFY WHETHER IT LANDED.**
+Issues: **#1996 CLOSED**. **FILED: #2001 #2002 #2003 #2004 #2005.** **#2006 is NOT mine** —
+another session filed it.
 
-**And the half that matters more:** the parity test's denominator is THREE channels while its
-docstring says "every channel" — it certified parity while six channels were broken. The fix is
-a DERIVED denominator so a new un-updated entry point fails the test.
+## THE DURABLE LESSON — eight non-discriminating instruments
 
-## Other open items (routed, not fixed)
+Every real finding this session was an instrument that returned the same answer whether or not
+the defect existed. Eight of them. Two reached DURABLE artifacts (a shipped CHANGELOG
+all-clear; two committed docstrings). The transferable rules:
 
-- `bash_tool.py:65,77-79` interpolate the model-supplied `command` unscrubbed while the sibling
-  OSError branch was routed through `scrub_remote_error` by the same sweep.
-- **20 failures in `tests/regression/` that CI NEVER RUNS.** `unified-ci.yml:140-143` runs
-  `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` — NOT `tests/regression/`. The
-  never-delete regression directory has no CI coverage. Proven pre-existing (29 failed in BOTH
-  arms with lane A's files reverted).
-- 31 residual mypy/pyright findings in nexus, pre-existing, bounded follow-up.
-- `specs/mcp-server.md:5` version, and the extras-floor raise (REQUIRED post-publish, pre-core-tag).
+1. **"N sites swept" is a claim about the PATTERN, not the code.** State the pattern so the
+   reader sees what it could not match. (A grep matching only f-string interpolation reported
+   "14 of 14 fixed" having missed an entire syntactic form.)
+2. **A name rebind is INERT once the object is captured** into a collection, a default argument,
+   or another module's import. Verify the patch changes observable behaviour WHILE APPLIED.
+3. **Prove the mutation REACHES the code** before reading a non-red as vacuity — otherwise you
+   have two live hypotheses.
+4. **A bare line anchor manufactures PHANTOM FINDINGS in the verifier**, who cannot tell "the
+   fix moved this" from "the report was sloppy." Cite `<file>::<symbol>`.
 
-## DECISION OWED FROM THE CO-OWNER
+## Traps (carried + new)
 
-**Private org slug is in 21 tracked files of a PUBLIC repo** — TWO spellings, and the count
-below is the corrected one. The orchestrator first grepped only `esperie-enterprise` and reported
-17; lane B's class-sweep found a SHORTER variant `esperie/kailash-rs`, which adds 4 more files
-(3 older SWEEP reports + 1). **The orchestrator made the exact mistake it had just corrected lane
-B for: grepping ONE TOKEN instead of the CLASS.** Current spread: `deploy/deployments` 5,
-`tests/regression` 4, dataflow tests 4, root SWEEP reports 6, test-vectors/integration 2.
-specs/ is now CLEAN for both variants (5 files fixed).
-
-Original framing, unchanged in substance:
-**the private org slug is in a PUBLIC repo**
-(`terrene-foundation/kailash-py`), on `main` since ~2026-06-16 and in git HISTORY. specs FIXED;
-root sweep reports, deploy notes, and cross-SDK test vectors NOT. My recommendation: **do not
-fix it as part of this release** — history retains it so file edits are partial mitigation, it is
-unrelated to this branch, and whether an org NAME is sensitive is the co-owner's call. Recorded,
-not silently absorbed.
-
-## THE DURABLE LESSON — every real finding was a non-discriminating instrument
-
-Each of these was internally consistent and externally wrong. **This is the single most
-transferable thing from session F:**
-
-- a test reporting SKIPPED while all 100 requests 500'd
-- a pre-tag safety script that exited clean because `declare -A` needs bash 4 and macOS ships 3.2
-- the orchestrator grepping a document for `declare -A` and matching the PROSE ABOUT the bug
-- a parity test whose denominator was a third of its claim
-- a security review whose 1-minute silence nearly read as "clean" (it had found a HIGH)
-- lane C's own: _"I tested that the WARN fires when it should and stays silent when it should —
-  never that the silence was TRUE."_
-
-**Write tests that assert the RELATIONSHIP between two mechanisms**, not each in isolation.
-`test_predicate_and_runtime_agree_no_warn_implies_enforcement` is the model.
-
-## ORCHESTRATOR ERRORS — four, each caught by a lane refusing to take my word
-
-Recorded because the pattern matters more than the individual errors: **the orchestrator was the
-least reliable source of factual claims in this session.**
-
-1. "Nothing from this branch is in ANY changelog (verified)" — I never ran the check; three were.
-2. `kailash-mcp` omitted from the release set — by me AND by the prior session's notes.
-3. `discovery.permission_check_failed_open` called a BREAKING rename — it never existed on `main`
-   (introduced AND renamed inside this unreleased branch). **The same wrong framing is still in
-   `sweep-2026-08-05.md:210` — correct it if you touch that file.**
-4. `kailash-kaizen/pyproject.toml:38` cites `[Unreleased]` — it does not; zero hits.
-
-Corollary: **a snapshot of a shared tree with a live editor is not a state.** Two of my three
-in-flight defect flags were transient (a stashed file mid-RED, an import added seconds earlier).
-One was real. Ask the lane; do not infer from a diff.
-
-## Traps (carried forward + new)
-
-- **QUERY, never re-dispatch, on an idle/empty agent return.** Two reports this session arrived
-  only on the SECOND send. `W1-A-authz` NEVER reported once — all its work was verified by the
-  orchestrator from the tree. Re-dispatching would have destroyed it.
-- **Have agents write findings to a FILE as they go**, not only to the message channel.
-- **Restore from a `cp` backup, NEVER `git checkout --`** in a shared tree (restores from the
-  INDEX; destroys sibling lanes' unstaged work). Used successfully 3× this session.
-- The root `tests/` tree and `packages/kailash-nexus/tests/` **cannot be collected in one pytest
-  invocation** — duplicate `test_config.py`/`test_middleware.py` basenames abort collection with
-  4 errors. NOT stale `__pycache__`. Run trees separately.
-- `packages/kailash-kaizen` and `packages/kaizen-agents` cannot be collected together either.
-- `.venv/bin/python -m pytest` ALWAYS; `--timeout=120`; clear `__pycache__` before kaizen runs.
-- Do NOT run a broad `pkill -f pytest` — it killed another agent's suite.
+- **`.venv/bin/python -m pytest` ALWAYS**; `--timeout=120`. Bare python dies at conftest with
+  `ImportError: Node`.
+- Root `tests/` and `packages/kailash-nexus/tests/` **cannot** be collected together (duplicate
+  basenames). `kailash-kaizen` and `kaizen-agents` likewise. **Run every tree separately.**
+- Clear `__pycache__` before kaizen runs.
+- Do NOT `pkill -f pytest` — kills sibling suites.
 - `cd` PERSISTS between Bash calls. Use absolute paths.
+- **NEVER `git checkout --` / `reset` / `stash` / `clean`** in a shared tree.
+- **NEW — commit with a PATHSPEC**: `git commit -F <msg> -- <paths>`. `git add` publishes to an
+  index every lane shares; a bare commit already swept a sibling's staged files once.
+- **NEW — a pathspec commit must still leave HEAD GREEN.** One lane committed a test without its
+  implementation; a fresh clone failed 12 tests silently.
+- **NEW — compose the commit body from `git diff --cached --stat` AT COMMIT TIME**, not an
+  earlier tree read. That race produced an over-claiming message.
+- **NEW — mutation testing is INCOMPATIBLE with concurrent suite runs in a shared tree.** Use a
+  dedicated SHORT-LIVED process (not merely "in-process") or a copy. Ownership prevents write
+  CONFLICTS, not transient invalid STATES.
+- **NEW — never delete `.git/index.lock`.** Wait it out; a lane hit it and it cleared in ~1s.
 
-## Publish sequence — operator-manual, CI-UNENFORCED
+## My orchestrator errors (8) — full detail in the ledger
 
-**mcp 0.5.0 → kaizen 2.46.0 → kaizen-agents 0.13.0 → dataflow/nexus/ml → kailash 2.63.0 last.**
-kaizen 2.46.0 floors `kailash-mcp>=0.5.0`, which is NOT yet on PyPI — tagging out of order fails
-to resolve. `publish-pypi.yml` is tag-triggered with `needs:` scoped inside ONE package's job
-graph and zero cross-package ordering. The pre-tag verification script is in the release-order
-note and **currently FAILS correctly** (2 floors unsatisfiable — that is the right answer today).
+Recorded because the pattern matters: **the orchestrator was again the least reliable source of
+claims.** Tool-inventory mismatch (asked a read-only agent to write a file); FOUR wrong
+fix-recommendations, every one refuted by a lane's measurement or reproduction; a duplicate lane
+spawn (ledger tracked spawns, not task-list claims); an over-claiming commit body; a wrong
+worktree-deviation justification that made every suite number suspect; and repeated
+`symbol-anchored-citations` MUST-3 violations. **Standing correction: name the INVARIANT, let
+the lane choose the shape.**
 
-**Do NOT tag `mcp-v0.5.0` until the spec fixes are committed.**
+Posture: recorded, NOT self-assessed. The citation violations are past the cumulative threshold
+and route through gate-review adjudication — `/codify` should adjudicate rather than discover.
+
+## Next steps (from the sweep, in order)
+
+1. **Co-owner allowlists the two URLs → push.** Only unrecoverable risk.
+2. Re-run the 3 UNESTABLISHED trees under the fingerprint protocol.
+3. **Round 5**, rotated lens, over the round-4 fix surface; then a clean round.
+4. Close **#1998** (fixed by `cdfdc2f7e`/`8f8577c36`/`b1ac06e5b`, still open); label #2003/#2005
+   `deferred-quality`.
+5. Open the PR (draft body at `04-validate/pr-body-draft.md` — **re-derive its numbers first**).
+6. **`/release`**: mcp 0.5.0 → kaizen 2.46.0 → kaizen-agents 0.13.0 → dataflow/nexus/ml →
+   kailash 2.63.0 LAST. Then raise root extras floors.
+7. BUG queue — **#2006 and #2002 first**.
+
+**Owed to the co-owner and unanswered:** the semver question (BREAKING changes in MINOR bumps;
+recommendation = ship as-is, decide policy separately), and #1995's FOURTH Sweep-N gate.
