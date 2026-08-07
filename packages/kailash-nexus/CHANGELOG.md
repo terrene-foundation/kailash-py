@@ -2,6 +2,29 @@
 
 ## [2.16.0] - 2026-07-26 — Registration is fail-closed and all-or-nothing (#1972)
 
+### Fixed — `trusted_proxy_cidrs` now actually affects rate limiting (#2007)
+
+- **The trusted-proxy resolver was dead code.** `Nexus(trusted_proxy_cidrs=[...])` was
+  accepted, documented, and validated fail-fast, and the extractor middleware ran a full
+  RFC-7239 / `X-Forwarded-For` / `X-Real-IP` trust walk on every request — but nothing ever
+  read the result. Repo-wide, the resolved-client-host attribute had exactly one mention, and
+  it was the write. The setting changed no behaviour anywhere.
+- **All four rate limiters keyed on the immediate TCP peer instead.** `register_sse`, the
+  `endpoint()` rate limiter, the auth rate-limit middleware, and the `rate_limit` decorator
+  each re-derived `request.client.host` independently. Behind any reverse proxy, load
+  balancer, or ingress every caller presents the same peer address, so **all clients shared a
+  single rate-limit bucket** and one caller could exhaust the limit for everyone.
+- **Scoped honestly: this was never a bypass.** A TCP peer cannot be forged, so limits were
+  not evadable by sending a header — the previous keying erred fail-SAFE. The defect was
+  availability (a shared bucket) plus a configuration option that silently did nothing.
+- **Behaviour is unchanged for deployments that set no trusted CIDRs.** With the default
+  empty list, the resolver returns the peer, so the derived key is byte-identical to before.
+  An untrusted peer sending `X-Forwarded-For` still resolves to its own address and cannot
+  move itself into another caller's bucket; both properties are pinned by regression tests.
+- **Migration:** none required. Operators already passing `trusted_proxy_cidrs` will see rate
+  limits begin applying per originating client rather than per proxy — which is what the
+  setting always documented.
+
 ### Changed (BREAKING) — workflow-name validation now runs at `register()` (#1972)
 
 - **`Nexus.register(name, workflow)` validates `name` before mutating any state.**
