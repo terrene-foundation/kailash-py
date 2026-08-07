@@ -2,8 +2,14 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+**Versioning — read this before pinning.** This package is versioned in **lockstep with the
+Kailash monorepo** and does **NOT** follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+a **MINOR** release MAY contain breaking changes. Every one is labelled
+`### Changed (BREAKING)` in its entry below, with a migration note. If you need
+upgrade-safety guarantees, pin an exact version (`kailash-kaizen==X.Y.Z`) rather than a
+range such as `>=2.0`.
 
 ## [Unreleased]
 
