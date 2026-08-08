@@ -61,7 +61,7 @@ class MetricsCollector:
         self._gauges: dict[str, float] = {}
         self._histograms: dict[str, list[float]] = defaultdict(list)
 
-        logger.debug(f"MetricsCollector initialized with backend={backend}")
+        logger.debug("MetricsCollector initialized with backend=%s", backend)
 
     def counter(
         self, name: str, value: float = 1.0, labels: dict[str, str] | None = None
@@ -93,7 +93,7 @@ class MetricsCollector:
             )
         )
 
-        logger.debug(f"Counter incremented: {key} += {value}")
+        logger.debug("Counter incremented: %s += %s", key, value)
 
     def gauge(
         self, name: str, value: float, labels: dict[str, str] | None = None
@@ -126,7 +126,7 @@ class MetricsCollector:
             )
         )
 
-        logger.debug(f"Gauge set: {key} = {value}")
+        logger.debug("Gauge set: %s = %s", key, value)
 
     def histogram(
         self, name: str, value: float, labels: dict[str, str] | None = None
@@ -161,7 +161,7 @@ class MetricsCollector:
             )
         )
 
-        logger.debug(f"Histogram recorded: {key} = {value}")
+        logger.debug("Histogram recorded: %s = %s", key, value)
 
     @asynccontextmanager
     async def timer(self, name: str, labels: dict[str, str] | None = None):
@@ -186,7 +186,7 @@ class MetricsCollector:
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.histogram(name, duration_ms, labels)
-            logger.debug(f"Timer completed: {name} took {duration_ms:.2f}ms")
+            logger.debug("Timer completed: %s took %.2fms", name, duration_ms)
 
     @contextmanager
     def timer_sync(self, name: str, labels: dict[str, str] | None = None):
@@ -209,7 +209,7 @@ class MetricsCollector:
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self.histogram(name, duration_ms, labels)
-            logger.debug(f"Timer completed: {name} took {duration_ms:.2f}ms")
+            logger.debug("Timer completed: %s took %.2fms", name, duration_ms)
 
     def _metric_key(self, name: str, labels: dict[str, str]) -> str:
         """
@@ -341,7 +341,7 @@ class MetricsCollector:
                 lines.append(f"{name}_p99{label_block} {p99}")
 
         export_text = "\n".join(lines)
-        logger.debug(f"Exported {len(lines)} metric lines")
+        logger.debug("Exported %d metric lines", len(lines))
 
         return export_text
 
