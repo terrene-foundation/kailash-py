@@ -48,8 +48,13 @@ class HTTPTransport(Transport):
         enable_auth: Enable authentication.
         enable_monitoring: Enable monitoring.
         enable_durability: Enable durability features.
-        rate_limit: Default rate limit (requests/min).
+        rate_limit: Default rate limit (requests/min). Coerced through
+            ``nexus.core._coerce_rate_limit`` -- see :meth:`__init__`.
         runtime: Shared AsyncLocalRuntime.
+
+    Raises:
+        ValueError: If ``rate_limit`` is a bool, a non-integral float, a
+            negative int, or any non-int type. See :meth:`__init__`.
     """
 
     def __init__(
@@ -68,6 +73,37 @@ class HTTPTransport(Transport):
         rate_limit: Optional[int] = 100,
         runtime=None,
     ):
+        """Construct the transport.
+
+        ``rate_limit`` is COERCED, because this is the FIFTH surface that
+        writes ``_rate_limit`` and it was the last one still writing raw. The
+        other four -- ``Nexus(rate_limit=...)``, the
+        ``rate_limit_config['default_rate_limit']`` fallback, the
+        ``endpoint(rate_limit=...)`` kwarg, and ``RateLimitPlugin.apply`` --
+        all route through ``_coerce_rate_limit``.
+
+        The attribute name here is the SAME one the enforced path reads, and
+        ``sse.py::_rate_limit_exceeded`` reaches it by ``getattr`` duck-typing
+        (``getattr(nexus, "_rate_limit", None)``), guarded only by the
+        ``Optional[int]`` ANNOTATION -- which does not execute. Any value
+        failing ``> 0`` is read there as "no limit configured", so
+        ``HTTPTransport(rate_limit=-5)`` yields ``-5 <= 0 -> return False``:
+        silently unlimited, the exact fail-OPEN shape the other four surfaces
+        were changed to eliminate.
+
+        Whether some current caller happens never to read this attribute is a
+        REACHABILITY argument, not a safety one, and reachability arguments
+        against this defect class have already gone stale twice on this
+        surface. Coercing at the write is what makes the invariant hold
+        independently of who reads it.
+
+        Imported function-locally because ``nexus.core`` imports THIS module at
+        module scope (``core.py``: ``from nexus.transports.http import
+        HTTPTransport``); a module-level import here would be a cycle. Same
+        shared helper as the other four surfaces -- NOT a per-adapter copy.
+        """
+        from nexus.core import _coerce_rate_limit
+
         self._port = port
         self._cors_config = {
             "origins": cors_origins,
@@ -80,7 +116,9 @@ class HTTPTransport(Transport):
         self._enable_auth = enable_auth
         self._enable_monitoring = enable_monitoring
         self._enable_durability = enable_durability
-        self._rate_limit = rate_limit
+        self._rate_limit = _coerce_rate_limit(
+            rate_limit, "HTTPTransport(rate_limit=...)"
+        )
         self._runtime = runtime
 
         self._gateway = None
