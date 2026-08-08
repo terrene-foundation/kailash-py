@@ -342,9 +342,67 @@ class EnhancedStdioTransport(BaseTransport):
                 f"Failed to start process: {e}", transport_type="stdio"
             )
 
+    async def _terminate_process(self) -> bool:
+        """Stop the child, escalating if it ignores the graceful signal.
+
+        Returns True only if the process is genuinely gone. A False return
+        means the child MAY STILL BE RUNNING and the caller must keep the
+        handle so a later attempt can act on it.
+        """
+        process = self.process
+        pid = getattr(process, "pid", None)
+
+        try:
+            # Already exited: nothing to stop, and terminate() would raise.
+            if getattr(process, "returncode", None) is not None:
+                return True
+
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                # The child ignored the graceful signal. A graceful stop with
+                # no follow-up is exactly how an orphan survives.
+                if platform.system() != "Windows":
+                    process.kill()
+                # Bounded: an unbounded wait here hangs disconnect() forever
+                # if the kill does not land (and on Windows no kill is sent).
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+
+        except ProcessLookupError:
+            # The child exited between the check and the signal — that is the
+            # outcome we wanted, not a failure.
+            return True
+        except Exception as e:
+            logger.error(
+                "stdio.terminate.failed pid=%s error=%s detail=the child process "
+                "may still be running; the handle is RETAINED so a later "
+                "disconnect() can retry, and this transport will NOT report "
+                "itself disconnected",
+                pid,
+                e,
+            )
+            return False
+
+        return True
+
     async def disconnect(self) -> None:
-        """Terminate the subprocess."""
-        if not self._connected:
+        """Terminate the subprocess.
+
+        Reports success ONLY when the child is genuinely stopped. A failed
+        termination previously logged the error, nulled ``self.process`` in a
+        ``finally``, and then emitted "STDIO transport disconnected" anyway —
+        so the last line a status scraper saw said the transport had stopped
+        while the child was still running, and dropping the handle meant
+        nothing could ever retry the kill.
+
+        Retryable by design: the entry condition below admits a call whose
+        ``process`` survived a previous failure, because ``_connected`` is
+        cleared BEFORE termination is attempted — so keying the early return on
+        that flag alone made the second call a no-op and left a recoverable
+        orphan permanently orphaned.
+        """
+        if not self._connected and self.process is None:
             return
 
         self._connected = False
@@ -359,24 +417,12 @@ class EnhancedStdioTransport(BaseTransport):
 
         # Terminate process
         if self.process:
-            try:
-                # Try graceful termination first
-                self.process.terminate()
-
-                # Wait with timeout
-                try:
-                    await asyncio.wait_for(self.process.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    # Force kill if needed
-                    if platform.system() != "Windows":
-                        self.process.kill()
-                    await self.process.wait()
-
-            except Exception as e:
-                logger.error(f"Error terminating process: {e}")
-
-            finally:
-                self.process = None
+            if not await self._terminate_process():
+                # Keep the handle: it is the only thing that makes the orphan
+                # recoverable. No success line — `_terminate_process` has
+                # already logged the failure and named the pid.
+                return
+            self.process = None
 
         logger.info("STDIO transport disconnected")
 
