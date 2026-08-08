@@ -17,32 +17,42 @@ correction cycles on carried claims (`verify-claims-before-write.md` MUST-1/2).
 
 ## Status: NOT converged. Do not merge on the strength of this description alone.
 
-**Every test result below was taken against a working tree carrying UNCOMMITTED work
-from concurrent lanes.** At the time of writing:
+**The three gating security findings are CLOSED. The clean round has NOT run.** Those are
+different things, and only the second is convergence.
 
-```
-$ git status --porcelain packages/kaizen-agents/
- M packages/kaizen_agents/agents/nodes.py
- M packages/kaizen_agents/agents/register_builtin.py
- M packages/kaizen_agents/delegate/hooks.py
- M packages/kaizen_agents/delegate/session.py
- M tests/regression/test_local_error_sinks_are_scrubbed.py
- M tests/regression/test_log_sinks_do_not_releak_via_traceback.py
-```
+The adversarial round on `689f9ebd8` raised 9 findings, 2 HIGH. Verified in the code at
+the time of writing, not taken from a status report:
 
-So these numbers describe **the tree, not the committed branch**. The committed-state
-result is not established here, and re-deriving it after the tree settles is a
-prerequisite to merging — not a formality. During drafting the same command at the same
-HEAD returned `1 failed`, then `13 failed`, then `319 passed` across three reads; the
-cause was reading a file while another lane was writing it, not a flaky test. It is
-stable at `319 passed` over three consecutive runs now.
+- **F1** — a caller-supplied `repr()` reaching a log. Closed at `d6030aefe`;
+  `grep repr(handler)` returns nothing and `manager.py:469,479` now use
+  `type(handler).__name__`.
+- **F2** — the sink scanner blind to `exc_info`/`logger.exception`. Closed; the scanner
+  handles `logger.exception` (Shape 3a) and explicit truthy `exc_info` (Shape 3b).
+- **F3** — the preset choice unpinned. Closed by `test_remote_preset_claims_prefixless_credentials`
+  / `test_local_preset_deliberately_does_not`, which pin the distinction on a
+  prefix-less credential rather than a URL-userinfo shape both presets would redact.
 
-The adversarial security round on `689f9ebd8` raised 9 findings, 2 HIGH. F1 (a
-caller-supplied `repr()` reaching a log) is fixed at `d6030aefe`. F2 (the sink scanner
-being blind to `exc_info`/`logger.exception`) and F3 (the preset choice being unpinned)
-have code and tests present and passing, but in **uncommitted** form. F4–F9 are open
-follow-ups. **Convergence is not claimed, and cannot be until the tree is committed and
-re-measured.**
+F4–F9 remain open follow-ups. **A gate closing does not make a round clean — a clean
+round is something that runs, not something that follows.** It has not run. Do not read
+the closed gates as convergence.
+
+**Measurement honesty: this branch is under continuous commit by concurrent lanes, and
+HEAD moved four times during the verification pass** (`57e277b49` → `b417a83f9` →
+`ce96848ae` → `95b142320`). Consequently:
+
+- **Git-derived counts** below were taken at **`95b142320`**.
+- **Suite results** were taken at **`b417a83f9`**. They still stand, and that is checked
+  rather than assumed: everything that landed between the two pins touches only
+  `src/kailash/visualization/api.py`, one root `tests/regression/` file, and a workspace
+  document — **nothing inside the four packages those suites cover** — and zero files in
+  those suites reference `visualization` (positive control: 43 files in the same tree
+  reference `kailash`, so the grep does find things).
+- The source tree was clean at both pins. One untracked non-source file is present,
+  `kaizen_implementation_test.log` — which is the artifact of **#2011** itself, left in
+  place rather than deleted.
+
+**Re-derive the git counts at merge time.** They were accurate when taken and the branch
+has almost certainly moved since.
 
 ---
 
@@ -92,6 +102,13 @@ non-functional on Redis and now says so loudly instead of silently returning not
 
 **Metrics are scrapeable.** Histogram percentiles were emitted in a form no Prometheus
 scraper reads.
+
+**The monitoring stop endpoint no longer reports "stopped" without stopping.**
+`POST /api/v1/monitoring/stop` called `task.cancel()`, discarded the return, awaited and
+inspected nothing, and returned `{"status": "stopped"}` regardless — `cancel()` only
+_requests_ cancellation. This is the same false-success family as the cache `clear()` and
+the orphaned subprocess above, but at the worst surface of the three: a `status` field is
+a return value an orchestrator acts on, not a log line a human might read.
 
 **Shutdown no longer wedges (#2008).** A pooled-executor path and an `MCPChannel.__del__`
 doing cleanup work could deadlock during finalization. Pre-existing and production-side —
@@ -248,33 +265,36 @@ All commands run at the moment of writing. **Trees are run separately** — root
 and the package trees cannot be collected together (duplicate conftest basenames), and
 `kailash-kaizen` and `kaizen-agents` likewise.
 
-```
-$ git rev-list --left-right --count origin/main...HEAD     # 6 behind, 180 ahead
-$ git diff --shortstat origin/main...HEAD
-  359 files changed, 59777 insertions(+), 2845 deletions(-)
-$ git diff --name-only origin/main...HEAD -- '*test*' | wc -l          # 117
-$ git log origin/main..HEAD --pretty=%s | grep -oE '^[a-z]+' | sort | uniq -c
-  75 fix · 52 docs · 25 test · 21 chore · 4 style · 2 feat · 1 build
-```
-
-Suites executed (not collected — these are observed results):
+**Git-derived counts, at `95b142320`:**
 
 ```
-$ pytest packages/kailash-mcp/tests            -> 663 passed, 1 xfailed
-$ pytest packages/kailash-nexus/tests/regression -> 166 passed
+$ git rev-list --left-right --count origin/main...95b142320   # 6 behind, 202 ahead
+$ git diff --shortstat origin/main...95b142320
+  376 files changed, 62260 insertions(+), 2924 deletions(-)
+$ git diff --name-only origin/main...95b142320 -- '*test*' | wc -l      # 122
+$ git log origin/main..95b142320 --pretty=%s | grep -oE '^[a-z]+' | sort | uniq -c
+  78 fix · 62 docs · 30 test · 21 chore · 4 style · 2 feat · 1 perf · 1 build
+```
+
+**Suites executed at `b417a83f9`** (observed results, not collected counts):
+
+```
+$ pytest packages/kailash-mcp/tests               -> 670 passed, 1 xfailed
+$ pytest packages/kailash-nexus/tests/regression  -> 166 passed
 $ pytest packages/kailash-kaizen/tests/regression -> 1381 passed, 1 skipped, 22 xfailed
 $ pytest packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
-                                                -> 319 passed  (3 consecutive runs)
+                                                  -> 319 passed
 ```
 
-**All four readings include uncommitted concurrent-lane work** (see Status). They are
-not a measurement of the committed branch and must be re-derived once the tree settles.
+Both pins had a clean source tree. The gap between them is accounted for in Status: the
+intervening commits touch nothing inside the four packages these suites cover.
 
-Collected-only counts, for scale:
+Collected-only counts, for scale (re-derived at `51a3e4eaa` — HEAD moved again during
+this pass, which is the condition, not an anomaly):
 
 ```
-tests/regression 1591 · tests/unit 4883 · kailash-mcp 664 · kaizen regression 1404
-kaizen-agents 4055 · dataflow regression 850/873 (23 deselected) · nexus regression 166
+tests/regression 1593 · tests/unit 4883 · kailash-mcp 671
+kaizen regression 1404 · kaizen-agents 4076 · nexus regression 166
 ```
 
 The 22 `xfailed` in the kaizen regression tree are **strict** xfails pinning documented
