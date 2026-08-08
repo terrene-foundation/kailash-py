@@ -466,7 +466,7 @@ class PathwayManager:
             return result
 
         except TimeoutError:
-            handler_name = getattr(handler, "__name__", repr(handler))
+            handler_name = getattr(handler, "__name__", type(handler).__name__)
             error_msg = f"Hook timeout: {handler_name}"
             logger.warning(error_msg)
             return JourneyHookResult(
@@ -476,15 +476,26 @@ class PathwayManager:
             )
 
         except Exception as e:
-            handler_name = getattr(handler, "__name__", repr(handler))
+            handler_name = getattr(handler, "__name__", type(handler).__name__)
             error_msg = f"Hook error ({handler_name}): {scrub_remote_error(e)}"
             # ``logger.error``, NOT ``logger.exception``. ``handler`` is
             # CALLER-SUPPLIED, so ``e`` is whatever that hook raised -- an HTTP
             # client, a DB driver, an SDK -- and the traceback's final line
             # renders it raw, re-leaking what the scrub on the line above just
             # removed. ``handler_name`` is retained deliberately: it names the
-            # failing hook, which is the whole diagnostic, and it is a function
-            # name rather than exception content.
+            # failing hook, which is the whole diagnostic.
+            #
+            # The fallback is ``type(handler).__name__``, NOT ``repr(handler)``.
+            # ``handler`` is caller-supplied and typed as a CALLABLE, not as a
+            # function, so anything without ``__name__`` hit the old ``repr``
+            # fallback: ``functools.partial(post, url="https://u:pw@host")``
+            # renders its bound kwargs verbatim, and a callable object's
+            # dataclass-generated ``__repr__`` renders every field including a
+            # credential one. That reached BOTH this log line and the returned
+            # ``JourneyHookResult.error``. The type name cannot carry a payload
+            # by construction, which is why it is preferred over scrubbing the
+            # repr -- the scrubber's coverage is porous (a prefix-less 32-39
+            # char key, ``token=``, a %40-encoded ``@`` all survive it).
             logger.error(error_msg)
             return JourneyHookResult(
                 success=False,
