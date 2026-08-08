@@ -185,6 +185,17 @@ result = {
     @pytest.mark.e2e
     def test_data_scientist_progressive_enhancement(self, docker_env):
         """Test data scientist adding features progressively."""
+        # The /metrics route enable_monitoring() registers requires the
+        # optional [metrics] extra. Without prometheus_client it logs
+        # "monitoring.metrics_endpoint.unavailable" and registers no route, so
+        # the 200 asserted below is genuinely unreachable and skipping is
+        # honest. Same gate as
+        # tests/regression/test_enable_monitoring_registers_nexus_metrics.py.
+        pytest.importorskip(
+            "prometheus_client",
+            reason="/metrics requires the optional kailash-nexus[metrics] extra",
+        )
+
         from nexus import Nexus
 
         from kailash.workflow.builder import WorkflowBuilder
@@ -217,14 +228,25 @@ result = {
             # 3. Add monitoring
             n.enable_monitoring()
 
-            # Metrics endpoint may not be available in enterprise gateway by default
+            # ``enable_monitoring()`` registers GET /metrics via
+            # ``nexus.metrics.register_metrics_endpoint`` (core.py). There is no
+            # legitimate "the gateway might not expose it" branch: with
+            # prometheus_client installed the route MUST be there, and a 404
+            # means monitoring did not wire up. The previous `assert True` in an
+            # else-branch reported success under BOTH "monitoring works" and
+            # "the endpoint does not exist", so it could never fail.
             metrics_response = requests.get(f"http://localhost:{api_port}/metrics")
-            if metrics_response.status_code == 200:
-                assert len(metrics_response.text) > 0
-            else:
-                # Enterprise gateway may not expose metrics endpoint by default
-                # Just verify monitoring was enabled without error
-                assert True
+            assert metrics_response.status_code == 200, (
+                f"enable_monitoring() must register GET /metrics, but it "
+                f"returned {metrics_response.status_code}. Either "
+                f"register_metrics_endpoint() was not called (see "
+                f"Nexus.enable_monitoring in nexus/core.py) or the route was "
+                f"registered on a different app instance."
+            )
+            assert len(metrics_response.text) > 0, (
+                "/metrics returned 200 with an empty body -- no collectors are "
+                "registered, so monitoring is enabled in name only."
+            )
 
             # 4. Add auth later
             n.enable_auth()

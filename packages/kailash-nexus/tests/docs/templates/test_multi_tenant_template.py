@@ -88,8 +88,27 @@ class TestMultiTenantTemplate:
             actor_id: str
             action: str
 
-        # All models registered to their respective instances
-        assert True
+        # Assert the property this test is NAMED for: each model is registered
+        # to exactly the instance it was declared on, and to no other.
+        #
+        # `assert True` stood here, which passed whether the models were
+        # scoped, all registered on one instance, or never registered at all --
+        # the three outcomes the test exists to tell apart. Exact set equality
+        # is what distinguishes them: it catches BOTH a missing registration
+        # and a leaked one, where a membership check would only catch the
+        # first.
+        assert set(primary.list_models()) == {"User", "Project"}, (
+            "models declared with @primary.model must be registered on "
+            f"primary; it holds {sorted(primary.list_models())}"
+        )
+        assert set(analytics.list_models()) == {"PageView"}, (
+            "models declared with @analytics.model must be registered on "
+            f"analytics; it holds {sorted(analytics.list_models())}"
+        )
+        assert set(audit.list_models()) == {"AuditLog"}, (
+            "models declared with @audit.model must be registered on audit; "
+            f"it holds {sorted(audit.list_models())}"
+        )
 
     @pytest.fixture
     def tenant_app(self):
