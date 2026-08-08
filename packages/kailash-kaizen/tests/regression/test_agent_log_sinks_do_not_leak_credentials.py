@@ -42,6 +42,25 @@ pytestmark = pytest.mark.regression
 _SENTINEL = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-mixin"
 _LEAKY_DSN = f"postgresql://svc:{_SENTINEL}@db.example.invalid:5432/prod"
 
+#: A SECOND sentinel, pinning what the first one cannot.
+#:
+#: The sentinel above lives in URL userinfo, and the URL-userinfo rules run
+#: under BOTH presets -- so every assertion here stays GREEN if these sinks are
+#: downgraded from ``scrub_remote_error`` to ``scrub_local_error``, which turns
+#: OFF the only rule family that claims a credential carrying no vendor prefix.
+#: The commit that introduced the fix argues the REMOTE preset is correct for a
+#: provider surface; nothing pinned it.
+#:
+#: A bare 32-hex run: the Azure OpenAI ``api-key`` shape. Measured --
+#: ``scrub_remote_error`` redacts it, ``scrub_local_error`` passes it verbatim.
+#:
+#: PLACEMENT IS LOAD-BEARING and was got wrong once, in the sibling
+#: kaizen-agents file: the hex must sit in the message the SINK ACTUALLY
+#: SCRUBS. Put it in a chained inner exception and the downgrade probe does
+#: NOT red, because the scrubber is only ever handed the outer object.
+#: Verified here by running the downgrade both ways, not by inspection.
+_HEX_SENTINEL = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+
 
 def _chained_exception() -> Exception:
     """A wrapper whose ``__cause__`` carries the credential.
@@ -54,7 +73,9 @@ def _chained_exception() -> Exception:
         try:
             raise ConnectionError(f"could not connect: {_LEAKY_DSN}")
         except ConnectionError as inner:
-            raise RuntimeError("agent step failed") from inner
+            raise RuntimeError(
+                f"agent step failed (api-key {_HEX_SENTINEL})"
+            ) from inner
     except RuntimeError as wrapper:
         return wrapper
 
@@ -156,6 +177,11 @@ class TestLoggingMixinFailureSink:
         # Surfaces 1 (message), 2 (error_message field) and 3 (traceback) are
         # all inside `capture.text` by construction of _RenderingCapture.
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )
         # The diagnostic that is NOT the exception is deliberately retained.
         assert "RuntimeError" in capture.text
 
@@ -181,6 +207,11 @@ class TestCanonicalAuditForwardSinks:
             "audit.canonical_forward_failed" in capture.text
         ), "the forward sink never fired; this test would pass vacuously"
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )
         # The replacement diagnostic is present -- dropping exc_info must not
         # trade the leak for a blind spot.
         assert "RuntimeError" in capture.text

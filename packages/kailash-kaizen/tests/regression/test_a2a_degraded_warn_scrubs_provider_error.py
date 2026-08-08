@@ -44,6 +44,25 @@ pytestmark = pytest.mark.regression
 _SENTINEL = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-a2a"
 _LEAKY_URL = f"https://svc:{_SENTINEL}@api.example.invalid/v1/chat"
 
+#: A SECOND sentinel, pinning what the first one cannot.
+#:
+#: The sentinel above lives in URL userinfo, and the URL-userinfo rules run
+#: under BOTH presets -- so every assertion here stays GREEN if these sinks are
+#: downgraded from ``scrub_remote_error`` to ``scrub_local_error``, which turns
+#: OFF the only rule family that claims a credential carrying no vendor prefix.
+#: The commit that introduced the fix argues the REMOTE preset is correct for a
+#: provider surface; nothing pinned it.
+#:
+#: A bare 32-hex run: the Azure OpenAI ``api-key`` shape. Measured --
+#: ``scrub_remote_error`` redacts it, ``scrub_local_error`` passes it verbatim.
+#:
+#: PLACEMENT IS LOAD-BEARING and was got wrong once, in the sibling
+#: kaizen-agents file: the hex must sit in the message the SINK ACTUALLY
+#: SCRUBS. Put it in a chained inner exception and the downgrade probe does
+#: NOT red, because the scrubber is only ever handed the outer object.
+#: Verified here by running the downgrade both ways, not by inspection.
+_HEX_SENTINEL = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+
 
 class _Capture(logging.Handler):
     """Collects records AND their fully rendered form."""
@@ -90,7 +109,9 @@ def raising_provider():
     original = llm_agent.LLMAgentNode.run
 
     def _raise(self, **kwargs):
-        raise ConnectionError(f"connection refused talking to {_LEAKY_URL}")
+        raise ConnectionError(
+            f"connection refused talking to {_LEAKY_URL} " f"(api-key {_HEX_SENTINEL})"
+        )
 
     llm_agent.LLMAgentNode.run = _raise
     try:
@@ -122,6 +143,11 @@ def _assert_ran_then_clean(handler, expected_event: str):
     assert expected_event in rendered, (
         f"the degraded path never emitted {expected_event!r}; the test proves "
         f"nothing about scrubbing. Records: {handler.records}"
+    )
+    assert _HEX_SENTINEL not in rendered, (
+        f"the bare-hex shape survived at {expected_event!r}: this sink is on "
+        f"the LOCAL preset, which turns off the only rule that claims a "
+        f"prefix-less key: {rendered}"
     )
     assert _SENTINEL not in rendered, (
         f"raw provider exception reached the log surface at {expected_event!r}: "
