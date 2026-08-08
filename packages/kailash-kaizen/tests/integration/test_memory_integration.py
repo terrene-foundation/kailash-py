@@ -112,20 +112,33 @@ def test_buffer_memory_multi_session_isolation():
 
 @pytest.mark.integration
 def test_buffer_memory_clear_session():
-    """Test BufferMemory session clearing with real data."""
+    """Test BufferMemory session clearing with real data.
+
+    ``BufferMemory`` has no ``clear_session``; its real method is
+    ``clear(session_id)`` — same arity and same meaning, so this one IS a
+    straight rename (unlike the SharedMemoryPool calls below).
+    """
     memory = BufferMemory(max_turns=5)
     session_id = "integration_test_buffer_004"
+    other_session_id = "integration_test_buffer_004_bystander"
 
     # Add turns
     memory.save_turn(session_id, {"user": "Question", "agent": "Answer"})
+    memory.save_turn(other_session_id, {"user": "Other", "agent": "Other answer"})
     assert len(memory.load_context(session_id)["turns"]) == 1
 
     # Clear session
-    memory.clear_session(session_id)
+    memory.clear(session_id)
 
     # Verify session is empty
     context = memory.load_context(session_id)
     assert len(context["turns"]) == 0
+
+    # ...and that clearing was SCOPED to it. Without a bystander session, this
+    # test passes identically whether clear() drops one session or all of them.
+    assert (
+        len(memory.load_context(other_session_id)["turns"]) == 1
+    ), "clear(session_id) also dropped an unrelated session's history"
 
 
 @pytest.mark.integration
@@ -571,37 +584,67 @@ def test_knowledge_graph_memory_query():
 # =============================================================================
 
 
+def _share(pool, agent_id, *, topic, content, importance, **metadata):
+    """Write one insight through ``SharedMemoryPool``'s REAL contract.
+
+    These tests were written against an ``add_insight(agent_id, {topic,
+    insight, confidence})`` API that ``SharedMemoryPool`` has never had. Its
+    actual writer is ``write_insight(insight)`` — ONE dict, with ``agent_id``,
+    ``content``, ``tags``, ``importance`` and ``segment`` all REQUIRED and
+    validated. So this was never a method rename: both the arity and every
+    field name differ, and renaming the call would have raised ValueError on
+    the missing required fields rather than silently passing.
+
+    Mapping applied here: topic -> tags, insight -> content, confidence ->
+    importance. ``segment`` has no analogue in the old shape, so a single
+    constant is used — no test filters on it, and folding topic into it would
+    conflate two independent filter axes.
+    """
+    insight = {
+        "agent_id": agent_id,
+        "content": content,
+        "tags": [topic],
+        "importance": importance,
+        "segment": "collaboration",
+    }
+    if metadata:
+        insight["metadata"] = metadata
+    pool.write_insight(insight)
+    return insight
+
+
 @pytest.mark.integration
 def test_shared_memory_pool_multi_agent_sharing():
     """Test SharedMemoryPool allows multiple agents to share insights."""
     pool = SharedMemoryPool()
 
-    # Agent 1 shares insight
-    pool.add_insight(
+    _share(
+        pool,
         "agent_1",
-        {
-            "topic": "Python",
-            "insight": "Python is great for data science",
-            "confidence": 0.9,
-        },
+        topic="Python",
+        content="Python is great for data science",
+        importance=0.9,
     )
-
-    # Agent 2 shares insight
-    pool.add_insight(
+    _share(
+        pool,
         "agent_2",
-        {
-            "topic": "Python",
-            "insight": "Python has excellent libraries",
-            "confidence": 0.85,
-        },
+        topic="Python",
+        content="Python has excellent libraries",
+        importance=0.85,
     )
 
-    # Both agents can retrieve shared insights
-    insights_1 = pool.get_insights(agent_id="agent_1", topic="Python")
-    insights_2 = pool.get_insights(agent_id="agent_2", topic="Python")
+    # read_relevant excludes the caller's OWN insights by default, which is
+    # exactly the property under test: a shared pool is for reading what OTHER
+    # agents contributed. Each agent must therefore see precisely the other's.
+    insights_1 = pool.read_relevant(agent_id="agent_1", tags=["Python"])
+    insights_2 = pool.read_relevant(agent_id="agent_2", tags=["Python"])
 
-    assert len(insights_1) >= 1
-    assert len(insights_2) >= 1
+    assert [i["content"] for i in insights_1] == [
+        "Python has excellent libraries"
+    ], f"agent_1 did not receive agent_2's shared insight: {insights_1!r}"
+    assert [i["content"] for i in insights_2] == [
+        "Python is great for data science"
+    ], f"agent_2 did not receive agent_1's shared insight: {insights_2!r}"
 
 
 @pytest.mark.integration
@@ -609,23 +652,21 @@ def test_shared_memory_pool_topic_filtering():
     """Test SharedMemoryPool filters insights by topic."""
     pool = SharedMemoryPool()
 
-    # Add insights on different topics
-    pool.add_insight(
-        "agent_1", {"topic": "Python", "insight": "Python insight", "confidence": 0.9}
-    )
+    _share(pool, "agent_1", topic="Python", content="Python insight", importance=0.9)
+    _share(pool, "agent_1", topic="Java", content="Java insight", importance=0.8)
 
-    pool.add_insight(
-        "agent_1", {"topic": "Java", "insight": "Java insight", "confidence": 0.8}
-    )
+    # Read as a DIFFERENT agent. Reading as agent_1 would return nothing at all
+    # (exclude_own defaults True), and an "every result is Python" assertion
+    # over an empty list passes vacuously — it would hold just as well if the
+    # tag filter were ignored entirely.
+    python_insights = pool.read_relevant(agent_id="agent_2", tags=["Python"])
 
-    # Get Python-specific insights
-    python_insights = pool.get_insights(agent_id="agent_1", topic="Python")
-
-    # Should only return Python insights
-    assert all(
-        "Python" in str(insight) or insight.get("topic") == "Python"
-        for insight in python_insights
-    )
+    assert [i["content"] for i in python_insights] == [
+        "Python insight"
+    ], f"tag filtering did not return exactly the Python insight: {python_insights!r}"
+    assert "Java insight" not in str(
+        python_insights
+    ), f"an insight tagged Java survived a Python-only filter: {python_insights!r}"
 
 
 @pytest.mark.integration
@@ -633,27 +674,20 @@ def test_shared_memory_pool_insight_ranking():
     """Test SharedMemoryPool ranks insights by confidence."""
     pool = SharedMemoryPool()
 
-    # Add insights with different confidence scores
-    pool.add_insight(
-        "agent_1",
-        {"topic": "AI", "insight": "Low confidence insight", "confidence": 0.3},
+    _share(pool, "agent_1", topic="AI", content="Low", importance=0.3)
+    _share(pool, "agent_1", topic="AI", content="High", importance=0.95)
+    _share(pool, "agent_1", topic="AI", content="Medium", importance=0.6)
+
+    insights = pool.read_relevant(agent_id="agent_2", tags=["AI"], limit=2)
+
+    # The old assertion was `len(insights) <= 2`, which holds for ANY ordering
+    # and even for an empty result — it never checked the ranking this test is
+    # named for. Assert the actual order: highest importance first, and the
+    # lowest dropped by the limit.
+    assert [i["content"] for i in insights] == ["High", "Medium"], (
+        "insights were not returned in descending importance order: "
+        f"{[(i['content'], i['importance']) for i in insights]!r}"
     )
-
-    pool.add_insight(
-        "agent_1",
-        {"topic": "AI", "insight": "High confidence insight", "confidence": 0.95},
-    )
-
-    pool.add_insight(
-        "agent_1",
-        {"topic": "AI", "insight": "Medium confidence insight", "confidence": 0.6},
-    )
-
-    # Get insights (should be ranked)
-    insights = pool.get_insights(agent_id="agent_1", topic="AI", top_k=2)
-
-    # Should return top insights
-    assert len(insights) <= 2
 
 
 @pytest.mark.integration
@@ -661,34 +695,38 @@ def test_shared_memory_pool_cross_agent_collaboration():
     """Test SharedMemoryPool enables real cross-agent collaboration."""
     pool = SharedMemoryPool()
 
-    # Simulate multi-agent workflow
     # Agent 1: Research agent
-    pool.add_insight(
+    _share(
+        pool,
         "research_agent",
-        {
-            "topic": "ML",
-            "insight": "Machine learning requires large datasets",
-            "confidence": 0.9,
-            "source": "research",
-        },
+        topic="ML",
+        content="Machine learning requires large datasets",
+        importance=0.9,
+        source="research",
     )
 
-    # Agent 2: Implementation agent (uses research insights)
-    pool.get_insights(agent_id="implementation_agent", topic="ML")
+    # Agent 2: Implementation agent reads the research, then contributes
+    seen_by_implementation = pool.read_relevant(
+        agent_id="implementation_agent", tags=["ML"]
+    )
+    assert [i["agent_id"] for i in seen_by_implementation] == ["research_agent"], (
+        "the implementation agent did not receive the research agent's insight: "
+        f"{seen_by_implementation!r}"
+    )
 
-    # Agent 2 adds its own insight
-    pool.add_insight(
+    _share(
+        pool,
         "implementation_agent",
-        {
-            "topic": "ML",
-            "insight": "Implemented ML pipeline based on research",
-            "confidence": 0.85,
-            "source": "implementation",
-        },
+        topic="ML",
+        content="Implemented ML pipeline based on research",
+        importance=0.85,
+        source="implementation",
     )
 
-    # Agent 3: Validation agent (uses all insights)
-    all_insights = pool.get_insights(agent_id="validation_agent", topic="ML")
+    # Agent 3: Validation agent sees BOTH, since neither is its own
+    all_insights = pool.read_relevant(agent_id="validation_agent", tags=["ML"])
 
-    # Should have insights from multiple agents
-    assert len(all_insights) >= 2
+    assert sorted(i["agent_id"] for i in all_insights) == [
+        "implementation_agent",
+        "research_agent",
+    ], f"the validation agent did not see both contributors: {all_insights!r}"

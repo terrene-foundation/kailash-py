@@ -399,42 +399,73 @@ def test_agent_collaboration_research_synthesis():
 # =============================================================================
 
 
+def _share(pool, agent_id, *, topic, content, importance, **metadata):
+    """Write one insight through ``SharedMemoryPool``'s REAL contract.
+
+    These tests called ``add_insight(agent_id, {topic, insight, confidence})``,
+    an API ``SharedMemoryPool`` has never had. The real writer is
+    ``write_insight(insight)`` — ONE dict requiring ``agent_id``, ``content``,
+    ``tags``, ``importance`` and ``segment``. Both the arity and every field
+    name differ, so this was never a method rename: renaming the call would
+    have raised ValueError on the missing required fields.
+
+    Mapping: topic -> tags, insight -> content, confidence -> importance.
+    ``segment`` has no analogue in the old shape and no test filters on it, so
+    a single constant is used rather than conflating it with the tag axis.
+    """
+    insight = {
+        "agent_id": agent_id,
+        "content": content,
+        "tags": [topic],
+        "importance": importance,
+        "segment": "collaboration",
+    }
+    if metadata:
+        insight["metadata"] = metadata
+    pool.write_insight(insight)
+    return insight
+
+
 @pytest.mark.integration
 def test_insight_propagation_shared_memory_pool():
     """Test insights propagate through SharedMemoryPool."""
     pool = SharedMemoryPool()
 
     # Agent 1 adds insight
-    pool.add_insight(
+    _share(
+        pool,
         "agent_1",
-        {
-            "topic": "Python",
-            "insight": "Python has excellent data science libraries",
-            "confidence": 0.9,
-            "source": "research",
-        },
+        topic="Python",
+        content="Python has excellent data science libraries",
+        importance=0.9,
+        source="research",
     )
 
     # Agent 2 retrieves and builds on insight
-    agent_2_context = pool.get_insights(agent_id="agent_2", topic="Python")
+    agent_2_context = pool.read_relevant(agent_id="agent_2", tags=["Python"])
+    assert [i["agent_id"] for i in agent_2_context] == [
+        "agent_1"
+    ], f"agent_1's insight did not propagate to agent_2: {agent_2_context!r}"
 
     # Agent 2 adds derived insight
-    pool.add_insight(
+    _share(
+        pool,
         "agent_2",
-        {
-            "topic": "Python",
-            "insight": "Python's data science ecosystem includes NumPy and Pandas",
-            "confidence": 0.85,
-            "source": "synthesis",
-            "based_on": agent_2_context,
-        },
+        topic="Python",
+        content="Python's data science ecosystem includes NumPy and Pandas",
+        importance=0.85,
+        source="synthesis",
+        based_on=[i["content"] for i in agent_2_context],
     )
 
     # Agent 3 retrieves all insights
-    agent_3_context = pool.get_insights(agent_id="agent_3", topic="Python")
+    agent_3_context = pool.read_relevant(agent_id="agent_3", tags=["Python"])
 
     # Should have insights from multiple agents
-    assert len(agent_3_context) >= 2
+    assert sorted(i["agent_id"] for i in agent_3_context) == [
+        "agent_1",
+        "agent_2",
+    ], f"agent_3 did not receive both contributors' insights: {agent_3_context!r}"
 
 
 @pytest.mark.integration
@@ -449,7 +480,7 @@ def test_insight_propagation_with_real_llm():
     ) -> None:
         """Generate insight using LLM with access to prior insights."""
         context = (
-            "\n".join([f"- {ins.get('insight', '')}" for ins in prior_insights])
+            "\n".join([f"- {ins.get('content', '')}" for ins in prior_insights])
             if prior_insights
             else "No prior insights."
         )
@@ -461,30 +492,33 @@ def test_insight_propagation_with_real_llm():
 
         result = llm_provider.complete(messages, temperature=0.3, max_tokens=100)
 
-        pool.add_insight(
+        _share(
+            pool,
             agent_id,
-            {
-                "topic": "AI",
-                "insight": result["content"],
-                "confidence": 0.8,
-                "agent": agent_id,
-            },
+            topic="AI",
+            content=result["content"],
+            importance=0.8,
+            agent=agent_id,
         )
 
     # Agent 1 generates initial insight
     generate_insight("agent_1", "What is AI?", [])
 
     # Agent 2 builds on Agent 1's insight
-    agent_1_insights = pool.get_insights(agent_id="agent_2", topic="AI")
+    agent_1_insights = pool.read_relevant(agent_id="agent_2", tags=["AI"])
     generate_insight("agent_2", "How is AI used?", agent_1_insights)
 
     # Agent 3 synthesizes both
-    all_insights = pool.get_insights(agent_id="agent_3", topic="AI")
+    all_insights = pool.read_relevant(agent_id="agent_3", tags=["AI"])
     generate_insight("agent_3", "What is the future of AI?", all_insights)
 
     # Should have insights from all agents
-    final_insights = pool.get_insights(agent_id="final", topic="AI")
-    assert len(final_insights) >= 3
+    final_insights = pool.read_relevant(agent_id="final", tags=["AI"])
+    assert sorted(i["agent_id"] for i in final_insights) == [
+        "agent_1",
+        "agent_2",
+        "agent_3",
+    ], f"not every agent's LLM-generated insight reached the pool: {final_insights!r}"
 
 
 @pytest.mark.integration
@@ -493,25 +527,21 @@ def test_insight_propagation_topic_filtering():
     pool = SharedMemoryPool()
 
     # Add insights on different topics
-    pool.add_insight(
-        "agent_1", {"topic": "Python", "insight": "Python insight 1", "confidence": 0.9}
-    )
-
-    pool.add_insight(
-        "agent_1", {"topic": "Java", "insight": "Java insight 1", "confidence": 0.8}
-    )
-
-    pool.add_insight(
-        "agent_2",
-        {"topic": "Python", "insight": "Python insight 2", "confidence": 0.85},
-    )
+    _share(pool, "agent_1", topic="Python", content="Python insight 1", importance=0.9)
+    _share(pool, "agent_1", topic="Java", content="Java insight 1", importance=0.8)
+    _share(pool, "agent_2", topic="Python", content="Python insight 2", importance=0.85)
 
     # Get Python insights only
-    python_insights = pool.get_insights(agent_id="agent_3", topic="Python")
+    python_insights = pool.read_relevant(agent_id="agent_3", tags=["Python"])
 
     # Should only get Python insights
-    assert all("Python" in ins.get("topic", "") for ins in python_insights)
-    assert len(python_insights) == 2
+    assert all(
+        "Python" in ins.get("tags", []) for ins in python_insights
+    ), f"an insight not tagged Python survived the filter: {python_insights!r}"
+    assert sorted(i["content"] for i in python_insights) == [
+        "Python insight 1",
+        "Python insight 2",
+    ], f"expected exactly the two Python insights: {python_insights!r}"
 
 
 @pytest.mark.integration
@@ -520,26 +550,20 @@ def test_insight_propagation_confidence_ranking():
     pool = SharedMemoryPool()
 
     # Add insights with varying confidence
-    pool.add_insight(
-        "agent_1",
-        {"topic": "ML", "insight": "Low confidence insight", "confidence": 0.3},
-    )
-
-    pool.add_insight(
-        "agent_2",
-        {"topic": "ML", "insight": "High confidence insight", "confidence": 0.95},
-    )
-
-    pool.add_insight(
-        "agent_3",
-        {"topic": "ML", "insight": "Medium confidence insight", "confidence": 0.6},
-    )
+    _share(pool, "agent_1", topic="ML", content="Low", importance=0.3)
+    _share(pool, "agent_2", topic="ML", content="High", importance=0.95)
+    _share(pool, "agent_3", topic="ML", content="Medium", importance=0.6)
 
     # Get top 2 insights
-    top_insights = pool.get_insights(agent_id="agent_4", topic="ML", top_k=2)
+    top_insights = pool.read_relevant(agent_id="agent_4", tags=["ML"], limit=2)
 
-    # Should get highest confidence insights
-    assert len(top_insights) <= 2
+    # The old assertion was `len(top_insights) <= 2`, which holds for ANY
+    # ordering and for an empty result too — it never checked the ranking this
+    # test is named for. Assert the actual order and the dropped tail.
+    assert [i["content"] for i in top_insights] == ["High", "Medium"], (
+        "insights were not ranked by descending importance: "
+        f"{[(i['content'], i['importance']) for i in top_insights]!r}"
+    )
 
 
 @pytest.mark.integration
@@ -564,24 +588,34 @@ def test_insight_propagation_collaborative_refinement():
 
     # Agent 1 refines
     refined_1 = refine_insight("agent_1", initial_insight)
-    pool.add_insight(
+    _share(
+        pool,
         "agent_1",
-        {"topic": "Python", "insight": refined_1, "confidence": 0.7, "version": 1},
+        topic="Python",
+        content=refined_1,
+        importance=0.7,
+        version=1,
     )
 
     # Agent 2 refines further
-    agent_1_insights = pool.get_insights(agent_id="agent_2", topic="Python")
-    if agent_1_insights:
-        refined_2 = refine_insight("agent_2", agent_1_insights[0]["insight"])
-        pool.add_insight(
-            "agent_2",
-            {"topic": "Python", "insight": refined_2, "confidence": 0.85, "version": 2},
-        )
+    agent_1_insights = pool.read_relevant(agent_id="agent_2", tags=["Python"])
+    assert agent_1_insights, "agent_1's refinement never reached the pool"
+    refined_2 = refine_insight("agent_2", agent_1_insights[0]["content"])
+    _share(
+        pool,
+        "agent_2",
+        topic="Python",
+        content=refined_2,
+        importance=0.85,
+        version=2,
+    )
 
-    # Final insights should be more refined than initial
-    final_insights = pool.get_insights(agent_id="final", topic="Python")
-    assert len(final_insights) >= 1
+    # Final insights should carry BOTH refinement rounds
+    final_insights = pool.read_relevant(agent_id="final", tags=["Python"])
 
-    # Latest version should exist
-    versions = [ins.get("version", 0) for ins in final_insights]
-    assert max(versions) >= 1
+    versions = [ins.get("metadata", {}).get("version", 0) for ins in final_insights]
+    assert sorted(versions) == [1, 2], (
+        "both refinement rounds must be present and version-tagged; the old "
+        "assertion (max(versions) >= 1) passed on round 1 alone, so the second "
+        f"agent's refinement was never actually required: {final_insights!r}"
+    )
