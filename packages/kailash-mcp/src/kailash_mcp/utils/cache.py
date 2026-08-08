@@ -276,13 +276,81 @@ class UnifiedCache:
             async with self._flight_lock:
                 self._in_flight.pop(key, None)
 
+    def _namespace_pattern(self) -> str:
+        """Return the SCAN MATCH pattern covering exactly this cache's keys.
+
+        Mirrors :meth:`_make_key` (``{prefix}{name}:{key}``) so the pattern can
+        never drift from the keys actually written. Glob metacharacters in the
+        prefix/name are ESCAPED: a cache named ``tools*`` would otherwise match
+        ``mcp:tools-internal:...`` and delete a sibling cache's keys.
+        """
+        literal = f"{self.redis_prefix}{self.name}:"
+        escaped = "".join("\\" + ch if ch in "*?[]\\" else ch for ch in literal)
+        return f"{escaped}*"
+
     def clear(self):
-        """Clear cache."""
+        """Clear cache.
+
+        The memory backend clears in place. The Redis backend CANNOT be cleared
+        from a sync method — every Redis operation on this class is awaited — so
+        this RAISES rather than silently doing nothing. It previously executed
+        ``pass``, which left the cache fully populated while every caller (and
+        ``MCPServer.clear_cache``'s "Cleared cache" log line) reported success;
+        a cache that reports a successful invalidation and serves the stale
+        entries indefinitely is worse than one that refuses. Await
+        :meth:`aclear` instead.
+        """
         if self.is_redis:
-            # For async operations, this would need to be implemented separately
-            pass
-        else:
+            raise RuntimeError(
+                "UnifiedCache.clear() cannot clear a Redis-backed cache: every "
+                "Redis operation on this class is async. Await aclear() instead "
+                f"(cache name={self.name!r})."
+            )
+        self.lru_cache.clear()  # type: ignore[reportOptionalMemberAccess]
+
+    async def aclear(self) -> int:
+        """Delete every key owned by THIS cache. Returns the number deleted.
+
+        Scoped to this cache's own namespace (``{prefix}{name}:*``) via
+        SCAN + DELETE. ``FLUSHDB`` is deliberately NOT used: the Redis database
+        is shared with every other :class:`UnifiedCache` instance and, in most
+        deployments, with non-MCP consumers — flushing it to clear one cache
+        would destroy their keys, a far worse defect than the no-op this
+        replaces.
+
+        A failure is logged AND re-raised rather than swallowed: a clear that
+        silently fails leaves stale entries served indefinitely, which is the
+        exact failure mode this method exists to close.
+        """
+        if not self.is_redis:
             self.lru_cache.clear()  # type: ignore[reportOptionalMemberAccess]
+            return 0
+
+        pattern = self._namespace_pattern()
+        deleted = 0
+        cursor: Any = 0
+        try:
+            while True:
+                cursor, keys = await self.redis_client.scan(  # type: ignore[reportOptionalMemberAccess]
+                    cursor=cursor, match=pattern, count=500
+                )
+                if keys:
+                    await self.redis_client.delete(*keys)  # type: ignore[reportOptionalMemberAccess]
+                    deleted += len(keys)
+                # redis-py returns int 0 to end the sweep; some clients echo "0".
+                if int(cursor) == 0:
+                    break
+        except Exception as e:
+            logger.error(
+                "cache.redis.clear.error name=%s pattern=%s deleted=%d error=%s",
+                self.name,
+                pattern,
+                deleted,
+                e,
+            )
+            raise
+        logger.info("cache.redis.clear.ok name=%s deleted=%d", self.name, deleted)
+        return deleted
 
     def stats(self):
         """Get cache statistics."""
@@ -521,9 +589,22 @@ class CacheManager:
         return f"{func_name}:{digest}"
 
     def clear_all(self) -> None:
-        """Clear all caches."""
+        """Clear all caches (memory backend).
+
+        On a Redis-backed manager each :meth:`UnifiedCache.clear` raises, because
+        Redis cannot be cleared synchronously — await :meth:`aclear_all` instead.
+        The raise is deliberate: this method previously reported success while
+        clearing nothing.
+        """
         for cache in self._caches.values():
             cache.clear()
+
+    async def aclear_all(self) -> int:
+        """Clear all caches on either backend. Returns total Redis keys deleted."""
+        deleted = 0
+        for cache in self._caches.values():
+            deleted += await cache.aclear()
+        return deleted
 
     def stats(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics for all caches."""
@@ -567,5 +648,16 @@ def get_cache_stats() -> Dict[str, Dict[str, Any]]:
 
 
 def clear_all_caches() -> None:
-    """Clear all caches in the global cache manager."""
+    """Clear all caches in the global cache manager (memory backend).
+
+    Raises on a Redis-backed manager — await :func:`aclear_all_caches` instead.
+    """
     _global_cache_manager.clear_all()
+
+
+async def aclear_all_caches() -> int:
+    """Clear all caches in the global cache manager on either backend.
+
+    Returns the number of Redis keys deleted (0 on the memory backend).
+    """
+    return await _global_cache_manager.aclear_all()
