@@ -1,8 +1,10 @@
 """MCP Channel implementation for Model Context Protocol integration."""
 
 import asyncio
+import inspect
 import json
 import logging
+import threading
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -66,6 +68,12 @@ class MCPChannel(Channel):
     to connect and execute workflows through the MCP protocol.
     """
 
+    #: Seconds :meth:`stop` waits for the dedicated MCP server thread to exit
+    #: after ``mcp_server.stop()`` before logging a WARN and moving on. Bounded
+    #: because the thread is a daemon -- an unbounded join would reintroduce the
+    #: shutdown hang this timeout exists to avoid.
+    _MCP_SERVER_JOIN_TIMEOUT: float = 5.0
+
     def __init__(
         self,
         config: ChannelConfig,
@@ -103,7 +111,10 @@ class MCPChannel(Channel):
         # MCP-specific state
         self._clients: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
-        self._mcp_server_task: Optional[asyncio.Future[Any]] = None
+        # The blocking ``MCPServer.run()`` loop runs on a DEDICATED daemon
+        # thread, never on asyncio's default executor -- see :meth:`start` for
+        # the interpreter-shutdown hang that dispatch caused.
+        self._mcp_server_thread: Optional[threading.Thread] = None
 
         logger.info(f"Initialized MCP channel {self.name}")
 
@@ -212,6 +223,24 @@ class MCPChannel(Channel):
             handler=self._handle_channel_status,
         )
 
+    def _run_mcp_server_blocking(self) -> None:
+        """Body of the dedicated MCP server thread.
+
+        Runs the blocking ``MCPServer.run()`` serve loop. Any exception is
+        logged with its traceback -- the thread is the only frame that can see
+        it, so swallowing it silently would make a dead MCP channel
+        indistinguishable from a healthy one.
+        """
+        try:
+            self.mcp_server.run()
+        except Exception as e:
+            logger.error(
+                "MCP channel %s server loop terminated with an error: %s",
+                self.name,
+                e,
+                exc_info=True,
+            )
+
     async def start(self) -> None:
         """Start the MCP channel server."""
         if self.status == ChannelStatus.RUNNING:
@@ -223,11 +252,32 @@ class MCPChannel(Channel):
             self._setup_event_queue()
 
             # Start MCP server (Core SDK uses run() method, not start())
-            # For async operation, we need to run it in a separate task
             if hasattr(self.mcp_server, "run"):
-                # Core SDK MCPServer uses run() method
-                loop = asyncio.get_event_loop()
-                self._mcp_server_task = loop.run_in_executor(None, self.mcp_server.run)
+                # ``MCPServer.run()`` is a BLOCKING serve loop -- for
+                # ``transport == "websocket"`` it enters
+                # ``asyncio.run(self._run_websocket())`` and never returns until
+                # the server is torn down.
+                #
+                # It MUST NOT be dispatched onto asyncio's DEFAULT executor
+                # (``loop.run_in_executor(None, ...)``). That pool's workers are
+                # registered in ``concurrent.futures.thread._threads_queues``,
+                # and the ``_python_exit`` hook -- which CPython runs from
+                # ``threading._shutdown()`` -- ``join()``s every one of them
+                # UNCONDITIONALLY, daemon flag included. A worker parked inside
+                # ``run()`` never returns to its work queue, so that join blocks
+                # forever and the entire process hangs at interpreter exit
+                # (issue: nexus suite printed its full summary then never
+                # exited; the main thread sat in
+                # ``_python_exit -> Thread.join``).
+                #
+                # A dedicated daemon thread is NOT in ``_threads_queues``, so
+                # the interpreter abandons it at shutdown instead of joining it.
+                self._mcp_server_thread = threading.Thread(
+                    target=self._run_mcp_server_blocking,
+                    daemon=True,
+                    name=f"mcp-channel-{self.name}",
+                )
+                self._mcp_server_thread.start()
             else:
                 # Fallback to start() if available
                 await self.mcp_server.start()
@@ -288,20 +338,55 @@ class MCPChannel(Channel):
                 except asyncio.CancelledError:
                     pass
 
-            # Stop MCP server task if running
-            if hasattr(self, "_mcp_server_task") and self._mcp_server_task:
-                self._mcp_server_task.cancel()
-                try:
-                    await self._mcp_server_task
-                except asyncio.CancelledError:
-                    pass
-
-            # Stop MCP server
+            # Stop MCP server. This MUST precede joining the server thread --
+            # the thread is parked inside the blocking ``run()`` loop and only
+            # returns once the server itself is told to shut down.
+            requested_server_shutdown = False
             if self.mcp_server and hasattr(self.mcp_server, "stop"):
                 try:
-                    await self.mcp_server.stop()
+                    result = self.mcp_server.stop()
+                    if inspect.isawaitable(result):
+                        await result
+                    requested_server_shutdown = True
                 except Exception as e:
                     logger.warning(f"Error stopping MCP server: {e}")
+
+            # Reclaim the dedicated MCP server thread.
+            #
+            # NOTE: the previous implementation dispatched ``run()`` onto
+            # asyncio's default executor and called ``future.cancel()`` here.
+            # ``cancel()`` on an executor future whose work item has ALREADY
+            # started returns ``False`` and does nothing -- so that call was a
+            # silent no-op that left the server running and the pool worker
+            # wedged. The join below is the real reclaim; when it times out we
+            # say so at WARN rather than pretending the channel stopped.
+            thread, self._mcp_server_thread = self._mcp_server_thread, None
+            if thread is not None and thread.is_alive():
+                if requested_server_shutdown:
+                    thread.join(timeout=self._MCP_SERVER_JOIN_TIMEOUT)
+                    if thread.is_alive():
+                        logger.warning(
+                            "MCP channel %s server thread %r did not exit "
+                            "within %.1fs of mcp_server.stop(); it is a daemon "
+                            "thread and will be abandoned at interpreter exit "
+                            "rather than blocking shutdown.",
+                            self.name,
+                            thread.name,
+                            self._MCP_SERVER_JOIN_TIMEOUT,
+                        )
+                else:
+                    # No usable shutdown entry point, so nothing will ever
+                    # unwind the serve loop -- joining would burn the timeout
+                    # waiting for something that cannot happen. Say so instead.
+                    logger.warning(
+                        "MCP channel %s stopped, but %s exposes no usable "
+                        "stop(); server thread %r stays parked in run() and "
+                        "will be abandoned at interpreter exit. It is a daemon "
+                        "thread, so it does not block shutdown.",
+                        self.name,
+                        type(self.mcp_server).__name__,
+                        thread.name,
+                    )
 
             await self._cleanup()
 
