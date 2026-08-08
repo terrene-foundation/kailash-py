@@ -15,6 +15,8 @@ from typing import Any, Awaitable, Callable
 
 import anyio
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 from .protocol import BaseHook, HookHandler
 from .types import HookContext, HookEvent, HookPriority, HookResult
 
@@ -285,8 +287,14 @@ class HookManager:
             )
 
         except Exception as e:
-            error_msg = f"Hook error: {str(e)}"
-            logger.exception(f"Hook failed: {handler_name}")
+            # BOTH halves: `error_msg` is returned to the caller in the
+            # HookResult below AND `logger.exception` always sets exc_info,
+            # so the raw hook exception reached a return value and a
+            # traceback. Hooks are user-registered code holding their own
+            # credentials. `handler_name` is retained -- it names WHICH hook
+            # failed and is not exception-derived.
+            error_msg = f"Hook error: {scrub_remote_error(e)}"
+            logger.error("Hook failed: %s: %s", handler_name, scrub_remote_error(e))
             self._update_stats(handler_name, 0, success=False)
 
             # Call error handler if available

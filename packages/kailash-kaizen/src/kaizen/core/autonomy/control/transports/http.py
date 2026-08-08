@@ -68,6 +68,7 @@ import logging
 from typing import AsyncIterator
 
 import aiohttp
+
 from kaizen.core.autonomy.control.transport import Transport
 
 logger = logging.getLogger(__name__)
