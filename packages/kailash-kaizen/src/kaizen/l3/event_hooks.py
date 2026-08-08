@@ -25,6 +25,7 @@ from collections import defaultdict
 from typing import Any, Callable
 
 from kaizen.l3.events import L3Event, L3EventType
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 __all__ = [
     "L3EventBus",
@@ -109,12 +110,17 @@ class L3EventBus:
         for listener in specific + wildcard:
             try:
                 listener(event)
-            except Exception:
-                logger.exception(
-                    "Listener %r raised during event %s for agent %s",
+            except Exception as exc:
+                # Listeners are caller-registered; the traceback carried
+                # whatever they raised. The listener repr, event type and
+                # agent id are retained -- they identify WHICH listener failed
+                # on WHICH event, and none is exception-derived.
+                logger.error(
+                    "Listener %r raised during event %s for agent %s: %s",
                     listener,
                     event.event_type,
                     event.agent_id,
+                    scrub_remote_error(exc),
                 )
 
     def unsubscribe(

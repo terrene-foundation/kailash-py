@@ -31,6 +31,7 @@ from kaizen.execution.events import SkillCompleteEvent, SkillInvokeEvent
 from kaizen.execution.subagent_result import SkillResult
 from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
     from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
@@ -185,7 +186,10 @@ class SkillTool(BaseTool):
             )
 
         except Exception as e:
-            logger.exception(f"Failed to load skill: {e}")
+            # ``logger.exception`` always sets exc_info, so this leaked the raw
+            # message AND the traceback. Skill loading touches the filesystem
+            # and skill-declared config, either of which can carry secrets.
+            logger.error("Failed to load skill: %s", scrub_remote_error(e))
 
             # Emit error completion event
             complete_event = SkillCompleteEvent(

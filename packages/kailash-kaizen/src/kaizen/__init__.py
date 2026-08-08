@@ -52,6 +52,14 @@ def __getattr__(name: str) -> object:
             if _ilu.find_spec("kaizen_agents") is not None:
                 import logging as _logging
 
+                # ``exc_info`` DELIBERATELY KEPT (audited 2026-08-08 against the
+                # credential-leak sweep). What raises here is an ImportError
+                # from the `kaizen_agents` import: its message and traceback
+                # carry module names and filesystem paths, never a credential,
+                # because no provider, DSN or caller-supplied code is reachable
+                # from an import statement. The traceback is also the ENTIRE
+                # diagnostic -- "a broken kaizen_agents dependency" is
+                # unactionable without the import chain that failed.
                 _logging.getLogger(__name__).warning(
                     "kaizen.Agent: kaizen_agents is installed but its async Agent "
                     "could not be imported; falling back to the sync CoreAgent. "
@@ -77,7 +85,9 @@ except ImportError:
 from kaizen.core.agents import (  # Legacy agent for internal use; noqa: F401 - Re-exported for backward compatibility
     Agent as CoreAgent,
 )
-from kaizen.core.agents import AgentManager
+from kaizen.core.agents import (
+    AgentManager,
+)
 from kaizen.core.config import KaizenConfig, _global_config_manager
 
 # PERFORMANCE OPTIMIZED: Core framework exports for <100ms import
