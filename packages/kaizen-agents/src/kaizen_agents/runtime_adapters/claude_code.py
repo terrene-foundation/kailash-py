@@ -247,7 +247,19 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"Claude Code execution failed: {scrub_remote_error(e)}")
+            # ``logger.error``, NOT ``logger.exception``: this is the provider
+            # dispatch, so ``e`` routinely carries the provider's auth error
+            # text. ``logger.exception`` ALWAYS sets ``exc_info``, and the
+            # traceback renders the RAW exception -- and its chained
+            # ``__cause__`` -- on its final line, re-leaking verbatim what
+            # ``scrub_remote_error`` just removed from the message. Scrubbing
+            # the message while keeping the traceback protects nothing.
+            # Same reasoning, same fix as the eight sanitize sites in kaizen
+            # (llm/reasoning.py, judges/_judge.py, observability/
+            # trace_exporter.py); this adapter was missed by that sweep.
+            # ``error_type`` is preserved on the returned ExecutionResult
+            # below, so triage keeps the exception class without the bytes.
+            logger.error(f"Claude Code execution failed: {scrub_remote_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,

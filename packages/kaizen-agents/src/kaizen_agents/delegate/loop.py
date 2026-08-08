@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from kaizen_agents.delegate.compact import CompactionResult
     from kaizen_agents.delegate.tools.hydrator import ToolHydrator
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.adapters.openai_stream import StreamResult
 from kaizen_agents.delegate.adapters.protocol import StreamingChatAdapter
 from kaizen_agents.delegate.config.loader import KzConfig
@@ -745,7 +746,12 @@ class AgentLoop:
                 logger.warning(error_msg)
                 return tc_id, name, json.dumps({"error": error_msg})
             except Exception as exc:
-                logger.error("Tool %s failed: %s", name, exc, exc_info=True)
+                # Same asymmetry print_mode.py had: ``safe_msg`` below already
+                # withholds the exception text from the caller, while this log
+                # line shipped both the raw ``exc`` AND its traceback. A tool
+                # is arbitrary user code holding its own credentials, so the
+                # message it raises is exactly the unsafe surface.
+                logger.error("Tool %s failed: %s", name, scrub_remote_error(exc))
                 safe_msg = f"Tool '{name}' failed with {type(exc).__name__}"
                 return tc_id, name, json.dumps({"error": safe_msg})
 
@@ -835,7 +841,11 @@ class AgentLoop:
                 except Exception as exc:
                     display.finish_streaming()
                     display.show_error(f"Turn failed ({type(exc).__name__})")
-                    logger.error("Turn failed: %s", exc, exc_info=True)
+                    # ``run_turn`` is the provider-streaming call print_mode.py
+                    # iterates, so this sink sees the SAME exception one frame
+                    # before print_mode's -- scrubbing only the outer one would
+                    # have left the credential on this line.
+                    logger.error("Turn failed: %s", scrub_remote_error(exc))
 
             except KeyboardInterrupt:
                 self.interrupt()

@@ -1315,9 +1315,16 @@ class BaseAutonomousAgent(BaseAgent):
                 logger.info(f"Emergency checkpoint saved: {checkpoint_id}")
 
             except Exception as e:
+                # ``exc_info`` DROPPED. The scrub on the line below was added
+                # by the #1970 sweep but the ``exc_info=True`` beside it was
+                # left, so the traceback still rendered the raw exception AND
+                # its chained ``__cause__`` -- and ``save_checkpoint`` reaches
+                # the state backend, whose driver errors embed a DSN. Measured:
+                # with ``exc_info=True`` the rendered record carried the full
+                # connection string via the ``__cause__`` frame; with it
+                # dropped, only the scrubbed message remains.
                 logger.error(
-                    f"Failed to save emergency checkpoint: {scrub_remote_error(e)}",
-                    exc_info=True,
+                    f"Failed to save emergency checkpoint: {scrub_remote_error(e)}"
                 )
 
         # Create interrupt status

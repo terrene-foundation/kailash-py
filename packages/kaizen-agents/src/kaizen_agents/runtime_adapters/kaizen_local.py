@@ -506,7 +506,11 @@ class LocalKaizenAdapter(BaseRuntimeAdapter):
             return self.normalize_result(self._current_state)
 
         except Exception as e:
-            logger.exception(f"Execution error: {scrub_remote_error(e)}")
+            # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+            # claude_code adapter guard; see that site for the full rationale.
+            # The state below was ALREADY scrubbed while the log line beside it
+            # shipped the raw traceback: the same asymmetry print_mode.py had.
+            logger.error(f"Execution error: {scrub_remote_error(e)}")
             self._current_state.fail(error=scrub_remote_error(e))
 
             # Fire execution_error hook

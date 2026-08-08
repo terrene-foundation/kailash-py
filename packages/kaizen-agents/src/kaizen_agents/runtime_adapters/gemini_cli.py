@@ -309,7 +309,13 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"Gemini execution failed: {scrub_remote_error(e)}")
+            # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+            # claude_code adapter guard; see that site for the full rationale.
+            # ``logger.exception`` always sets ``exc_info`` and the traceback's
+            # final line re-leaks the raw provider error the scrub removed.
+            # All four runtime adapters are fixed in one change so they cannot
+            # drift (rules/security.md § Multi-Site Kwarg Plumbing).
+            logger.error(f"Gemini execution failed: {scrub_remote_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,

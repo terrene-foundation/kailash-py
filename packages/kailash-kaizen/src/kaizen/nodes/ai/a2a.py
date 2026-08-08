@@ -1932,12 +1932,35 @@ Focus on actionable intelligence rather than just listing what each agent said."
             # MUST NOT be silent (zero-tolerance.md Rule 3). WARN, not ERROR:
             # the operation still returns a usable summary to the caller
             # (observability.md MUST Rule 3 — WARN == succeeded via fallback).
+            #
+            # SANITIZED, because `super().run(...)` above IS the provider
+            # dispatch and `LLMAgentNode._on_error_hook`'s default body is a
+            # bare `raise error` — so any exception raised outside
+            # `_provider_llm_response`'s sanitizing wrapper reaches here RAW,
+            # and `str(exc)` put a URL-embedded credential straight into the
+            # log record. The `llm_unsuccessful` branch twenty lines up was
+            # already safe for the opposite reason: it reads the result dict's
+            # `error`, which `LLMAgentNode` has already sanitized. This makes
+            # the exception branch match its sibling instead of contradicting
+            # it (rules/security.md "No secrets in logs"; #1970 sweep).
+            #
+            # `scrub_remote_error` rather than `sanitize_provider_error`: both
+            # redact this, but the latter PREFIXES `"<surface> error: "`, and
+            # the #1973 contract (`test_issue_1973_a2a_capability_match.py`)
+            # pins `record.error` to the exception's own message so the failure
+            # stays queryable. `scrub_remote_error` is the REMOTE preset --
+            # opaque-token redaction ON, which is the correct posture for a
+            # provider surface -- and leaves everything else byte-identical.
+            # It is a named preset over the ONE `scrub_credentials`
+            # implementation, not a second scrubber.
+            from kaizen.utils.credential_scrub import scrub_remote_error
+
             logger.warning(
                 "a2a.summarize.llm_failed",
                 extra={
                     "provider": provider,
                     "model": model,
-                    "error": str(exc),
+                    "error": scrub_remote_error(exc),
                     "error_type": type(exc).__name__,
                     "context_items": len(context_items),
                 },
@@ -2293,9 +2316,21 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
                             },
                         )
         except Exception as exc:
+            # SANITIZED for the same reason as `a2a.summarize.llm_failed`: this
+            # block wraps `super().run(**extraction_kwargs)`, the provider
+            # dispatch, so a raw provider auth error reaches `str(exc)` here.
+            # The NARROW `except (json.JSONDecodeError, ValueError)` inside the
+            # try is deliberately left alone -- it cannot see a provider error
+            # (it wraps `json.loads` of the model's own output), and its
+            # message carries a parse position, never the payload.
+            from kaizen.utils.credential_scrub import scrub_remote_error
+
             logger.warning(
                 "a2a.stage1_primary_extraction.failed",
-                extra={"error": str(exc), "error_type": type(exc).__name__},
+                extra={
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
             )
 
         return []
@@ -2426,9 +2461,18 @@ Respond with a JSON array matching the input order:
                             },
                         )
         except Exception as exc:
+            # Sibling of the stage1 guard -- same provider-dispatch seam
+            # (`super().run(**enhancement_kwargs)`), same raw-`str(exc)` leak,
+            # fixed in lockstep so the three stages cannot drift
+            # (rules/security.md § Multi-Site Kwarg Plumbing).
+            from kaizen.utils.credential_scrub import scrub_remote_error
+
             logger.warning(
                 "a2a.stage3_quality_enhancement.failed",
-                extra={"error": str(exc), "error_type": type(exc).__name__},
+                extra={
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
             )
 
         return insights
@@ -2637,9 +2681,17 @@ Respond with JSON:
                             },
                         )
         except Exception as exc:
+            # Third sibling of the stage1/stage3 guards -- same
+            # `super().run(**synthesis_kwargs)` provider seam, fixed in the
+            # same change for the same reason.
+            from kaizen.utils.credential_scrub import scrub_remote_error
+
             logger.warning(
                 "a2a.stage6_meta_synthesis.failed",
-                extra={"error": str(exc), "error_type": type(exc).__name__},
+                extra={
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
             )
 
         return []

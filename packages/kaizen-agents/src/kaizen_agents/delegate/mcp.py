@@ -418,11 +418,16 @@ class McpClient:
         except asyncio.CancelledError:
             pass
         except Exception as exc:
+            # Was leaking twice (raw ``exc`` argument + ``exc_info`` traceback)
+            # and was the ONLY un-scrubbed sink left in this module -- the
+            # start-failure and initialize-failure sinks above already route
+            # through ``scrub_remote_error``. An MCP server is launched with
+            # credentials in its environment and this reader drains its pipe,
+            # so a decode/transport failure can surface that material verbatim.
             logger.error(
                 "MCP server %r: reader error: %s",
                 self._config.name,
-                exc,
-                exc_info=True,
+                scrub_remote_error(exc),
             )
             # Fail all pending futures
             for future in self._pending.values():

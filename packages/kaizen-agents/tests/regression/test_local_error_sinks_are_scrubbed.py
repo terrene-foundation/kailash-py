@@ -120,8 +120,18 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
 
 #: Measured surface, reproduced by ``_enumerate`` below. Pinned so the
 #: parametrisation cannot silently shrink to nothing and still report green.
-EXPECTED_FILES = 51
-EXPECTED_SITES = 180
+#:
+#: 51 -> 53 files, 180 -> 185 sites: the traceback-releak sweep routed five
+#: previously-bare sinks through the conservative preset. Two of the files had
+#: no scrubbed sink at all before it, which is what moves the FILE count:
+#:   delegate/delegate.py  +1 (new to the swept set)
+#:   delegate/loop.py      +2 (new to the swept set)
+#:   delegate/print_mode.py +1 (already swept; the log line beside an
+#:                              already-scrubbed return was still bare)
+#:   delegate/mcp.py       +1 (already swept; the reader-error sink was the
+#:                              only bare one left in that module)
+EXPECTED_FILES = 53
+EXPECTED_SITES = 185
 
 
 class _SinkScan(ast.NodeVisitor):

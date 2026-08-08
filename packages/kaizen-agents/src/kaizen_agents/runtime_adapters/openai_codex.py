@@ -280,7 +280,11 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"OpenAI execution failed: {scrub_remote_error(e)}")
+            # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+            # claude_code adapter guard; see that site for the full rationale.
+            # The traceback's final line re-leaks the raw provider error, so
+            # scrubbing only the message protected nothing here.
+            logger.error(f"OpenAI execution failed: {scrub_remote_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,

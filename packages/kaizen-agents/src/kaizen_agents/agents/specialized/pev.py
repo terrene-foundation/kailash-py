@@ -525,7 +525,9 @@ class PEVAgent(BaseAgent):
                 try:
                     plan = self._create_initial_plan(task=task.strip())
                 except Exception as e:
-                    logger.error(f"Error creating initial plan: {scrub_remote_error(e)}")
+                    logger.error(
+                        f"Error creating initial plan: {scrub_remote_error(e)}"
+                    )
                     return {
                         "error": "PLAN_CREATION_FAILED",
                         "plan": {},

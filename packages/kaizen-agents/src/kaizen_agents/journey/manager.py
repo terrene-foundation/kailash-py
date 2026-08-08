@@ -478,7 +478,14 @@ class PathwayManager:
         except Exception as e:
             handler_name = getattr(handler, "__name__", repr(handler))
             error_msg = f"Hook error ({handler_name}): {scrub_remote_error(e)}"
-            logger.exception(error_msg)
+            # ``logger.error``, NOT ``logger.exception``. ``handler`` is
+            # CALLER-SUPPLIED, so ``e`` is whatever that hook raised -- an HTTP
+            # client, a DB driver, an SDK -- and the traceback's final line
+            # renders it raw, re-leaking what the scrub on the line above just
+            # removed. ``handler_name`` is retained deliberately: it names the
+            # failing hook, which is the whole diagnostic, and it is a function
+            # name rather than exception content.
+            logger.error(error_msg)
             return JourneyHookResult(
                 success=False,
                 error=error_msg,
@@ -1037,7 +1044,11 @@ class PathwayManager:
             try:
                 return await pathway.execute(context)
             except Exception as e:
-                logger.exception(
+                # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+                # hook-error guard above. ``pathway.execute`` runs arbitrary
+                # user-defined pathway steps, so the traceback can carry any
+                # credential those steps touched.
+                logger.error(
                     f"Pathway execution error (graceful recovery): {scrub_remote_error(e)}"
                 )
                 return PathwayResult(

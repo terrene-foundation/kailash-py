@@ -531,7 +531,13 @@ class JourneyNexusAdapter:
                 }
 
             except Exception as e:
-                logger.exception(f"Journey processing error: {scrub_remote_error(e)}")
+                # ``logger.error``, NOT ``logger.exception``. Journey
+                # processing reaches LLM and DataFlow calls, so ``e`` can carry
+                # a provider key or a DSN; ``logger.exception`` always sets
+                # ``exc_info`` and the traceback re-leaks what the scrub on the
+                # SAME line removed. The returned ``error`` below was already
+                # scrubbed -- only the log line was not.
+                logger.error(f"Journey processing error: {scrub_remote_error(e)}")
                 result = {
                     "error": scrub_remote_error(e),
                     "session_id": session_id,
