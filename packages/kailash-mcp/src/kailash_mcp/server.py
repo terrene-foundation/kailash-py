@@ -3317,7 +3317,20 @@ class MCPServer:
         return health_status
 
     def clear_cache(self, cache_name: Optional[str] = None) -> None:
-        """Clear cache(s)."""
+        """Clear cache(s) on the memory backend.
+
+        On a Redis-backed server the underlying ``UnifiedCache.clear()`` RAISES
+        (Redis cannot be cleared from a sync method) and this propagates it —
+        await :meth:`aclear_cache` instead. Signature is unchanged: this stays
+        sync so no caller breaks, per ``zero-tolerance.md`` Rule 6a.
+
+        Every ``logger.info`` below sits AFTER the clear it reports, so a
+        refusal or failure can never emit a success line. That ordering is the
+        fix: this method previously logged "Cleared cache: <name>" while the
+        Redis branch of ``clear()`` executed ``pass``, handing the operator an
+        explicit confirmation of an invalidation that never happened — which
+        terminates the investigation that would have found the staleness.
+        """
         if cache_name:
             cache = self.cache.get_cache(cache_name)
             cache.clear()
@@ -3325,6 +3338,27 @@ class MCPServer:
         else:
             self.cache.clear_all()
             logger.info("Cleared all caches")
+
+    async def aclear_cache(self, cache_name: Optional[str] = None) -> int:
+        """Clear cache(s) on EITHER backend. Returns Redis keys deleted.
+
+        The working counterpart to :meth:`clear_cache`. Deletion is scoped to
+        each cache's own key namespace (never ``FLUSHDB``) — see
+        ``UnifiedCache.aclear``. The success line reports the ACTUAL number of
+        keys deleted rather than asserting that something happened, so the log
+        cannot claim more than the operation performed.
+        """
+        if cache_name:
+            cache = self.cache.get_cache(cache_name)
+            deleted = await cache.aclear()
+            logger.info(
+                "Cleared cache: %s (redis keys deleted=%d)", cache_name, deleted
+            )
+            return deleted
+
+        deleted = await self.cache.aclear_all()
+        logger.info("Cleared all caches (redis keys deleted=%d)", deleted)
+        return deleted
 
     def reset_circuit_breaker(self) -> None:
         """Reset circuit breaker to closed state."""

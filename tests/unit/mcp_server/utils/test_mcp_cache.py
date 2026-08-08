@@ -15,6 +15,7 @@ them needs a server. A test that genuinely needs Redis belongs in
 
 import asyncio
 import json
+import logging
 import re
 import threading
 import time
@@ -48,11 +49,17 @@ class _FakeRedis:
     for real instead of assumed.
     """
 
-    def __init__(self, fail_on_scan: bool = False):
+    def __init__(self, fail_on_scan: bool = False, page_size: int | None = None):
         self.store: dict[str, str] = {}
         self.flushdb_called = False
         self.flushall_called = False
+        self.scan_calls = 0
         self._fail_on_scan = fail_on_scan
+        # When set, SCAN returns at most `page_size` keys per call and a
+        # NON-ZERO continuation cursor — the multi-batch path. Without this the
+        # fake always answers in one page, so the caller's paging loop is
+        # structurally present but never actually driven round twice.
+        self._page_size = page_size
 
     async def get(self, key):
         return self.store.get(key)
@@ -70,7 +77,19 @@ class _FakeRedis:
     async def scan(self, cursor=0, match=None, count=None):
         if self._fail_on_scan:
             raise RuntimeError("scan exploded")
-        return 0, [k for k in self.store if _redis_glob(match).fullmatch(k)]
+        self.scan_calls += 1
+        matching = [k for k in self.store if _redis_glob(match).fullmatch(k)]
+        if self._page_size is None:
+            return 0, matching
+        # Page from the FRONT of what is still present, not from a numeric
+        # offset: the caller DELETES each page before asking for the next, so
+        # an offset would skip exactly the keys the previous delete removed and
+        # the fake would under-report while looking correct. A non-zero cursor
+        # is returned while anything remains, so the caller's loop must go
+        # round again to finish.
+        page = matching[: self._page_size]
+        remaining = len(matching) - len(page)
+        return (1 if remaining else 0), page
 
     async def flushdb(self):
         self.flushdb_called = True
@@ -683,6 +702,127 @@ class TestUnifiedCache:
 
         with pytest.raises(RuntimeError, match="scan exploded"):
             await cache.aclear()
+
+    @pytest.mark.asyncio
+    async def test_aclear_pages_until_the_cursor_returns_to_zero(self):
+        """The paging loop must go round more than once, not just look like it.
+
+        With a single-page fake the ``while True`` loop is structurally present
+        but only ever executes once, so a loop that broke after the first batch
+        would still pass. This fake returns a NON-ZERO cursor while keys
+        remain, so an early break leaves keys alive and the assertions RED.
+        """
+        redis = _FakeRedis(page_size=2)
+        cache = UnifiedCache(name="tools", redis_client=redis)
+        for i in range(5):
+            await cache.aset(f"k{i}", {"v": i})
+
+        deleted = await cache.aclear()
+
+        assert deleted == 5, f"paging stopped early: only {deleted} of 5 deleted"
+        assert redis.scan_calls > 1, (
+            "SCAN was called once, so the multi-batch path never ran and this "
+            "test is not exercising paging"
+        )
+        for i in range(5):
+            assert await cache.aget(f"k{i}") is None, f"k{i} survived a paged aclear()"
+
+
+class TestSyncSurfaceOnRedisIsLoudNotSilent:
+    """Sync ``get``/``set`` cannot reach Redis — they must SAY so, once.
+
+    They do NOT raise (unlike ``clear``): the sync half of ``cached()`` wraps a
+    sync function and has no async path to move to, so raising would make
+    ``@cached`` unusable on Redis. Silence is still blocked, so the degradation
+    is announced.
+    """
+
+    def test_sync_get_warns_once_naming_aget(self, caplog):
+        cache = UnifiedCache(name="tools", redis_client=_FakeRedis())
+
+        with caplog.at_level(logging.WARNING):
+            assert cache.get("k") is None
+            assert cache.get("k") is None
+            assert cache.get("k") is None
+
+        degraded = [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ]
+        assert len(degraded) == 1, (
+            "the degradation must be announced EXACTLY once per cache — "
+            f"0 is silence, >1 floods a hot path; got {len(degraded)}"
+        )
+        assert "aget" in degraded[0].getMessage(), "the WARN must name the replacement"
+
+    def test_sync_set_warns_and_stores_nothing(self, caplog):
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="tools", redis_client=redis)
+
+        with caplog.at_level(logging.WARNING):
+            cache.set("k", {"v": 1})
+
+        assert redis.store == {}, "sync set() must not appear to have stored anything"
+        degraded = [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ]
+        assert degraded, "sync set() degraded on Redis without saying so"
+        assert "aset" in degraded[0].getMessage()
+
+    def test_memory_backend_never_warns(self, caplog):
+        """The WARN is Redis-specific; the memory backend genuinely works."""
+        cache = UnifiedCache(name="tools", lru_cache=LRUCache())
+
+        with caplog.at_level(logging.WARNING):
+            cache.set("k", "v")
+            assert cache.get("k") == "v"
+
+        assert not [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ], "the memory backend is not degraded and must not warn"
+
+
+class TestCachedDecoratorAsyncPathUsesTheAsyncSurface:
+    """``@cached`` on an async function must actually cache on Redis.
+
+    The async wrapper previously called the SYNC ``get``/``set``, so every
+    ``@cached`` async function on a Redis-backed manager received NO caching at
+    all — from a context that could have awaited the whole time.
+    """
+
+    @pytest.mark.asyncio
+    async def test_async_cached_function_hits_redis_on_second_call(self):
+        manager = CacheManager(enabled=True, backend="memory")
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="calls", redis_client=redis)
+        manager._caches["calls"] = cache
+
+        calls = {"n": 0}
+
+        @manager.cached("calls")
+        async def compute(x):
+            calls["n"] += 1
+            return {"doubled": x * 2}
+
+        first = await compute(21)
+        assert first == {"doubled": 42}
+        assert calls["n"] == 1
+        assert redis.store, (
+            "nothing reached Redis — the async wrapper is still using the sync "
+            "surface, so this decorated function is uncached"
+        )
+
+        second = await compute(21)
+        assert second == {"doubled": 42}
+        assert calls["n"] == 1, (
+            f"the function ran {calls['n']} times: the cached value was not "
+            "read back, so @cached is a no-op on Redis"
+        )
 
     def test_stats_memory_backend(self):
         """Test stats operation with memory backend."""

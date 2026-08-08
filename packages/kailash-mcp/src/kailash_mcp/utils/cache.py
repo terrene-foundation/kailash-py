@@ -166,29 +166,63 @@ class UnifiedCache:
         self._in_flight: Dict[str, asyncio.Future] = {}
         self._flight_lock = asyncio.Lock()
 
+        # One WARN per cache when the sync surface degrades on Redis, so a
+        # hot-path caller does not flood the log on every call.
+        self._sync_degradation_warned = False
+
     def _make_key(self, key: str) -> str:
         """Make cache key with name prefix."""
         if self.is_redis:
             return f"{self.redis_prefix}{self.name}:{key}"
         return key
 
+    def _warn_sync_on_redis_once(self, method: str, replacement: str) -> None:
+        """Emit ONE loud WARN per cache when the sync surface degrades on Redis.
+
+        A sync method cannot await, so ``get``/``set`` genuinely cannot reach
+        Redis; the result is NO caching (slow but correct), not wrong data.
+        Unlike :meth:`clear`, they do NOT raise: the sync half of the
+        ``cached()`` decorator wraps a sync function and therefore has no async
+        path to move to, so raising would make ``@cached`` unusable on Redis —
+        a harder break than the degradation it reports. Silence is still
+        BLOCKED (``zero-tolerance.md`` Rule 3), so the degradation is announced
+        once per cache with the working replacement named.
+        """
+        if self._sync_degradation_warned:
+            return
+        self._sync_degradation_warned = True
+        logger.warning(
+            "cache.sync.degraded_on_redis name=%s method=%s replacement=%s "
+            "detail=sync %s cannot reach Redis (every Redis op here is awaited); "
+            "this cache is serving NO cached values on the sync surface",
+            self.name,
+            method,
+            replacement,
+            method,
+        )
+
     def get(self, key: str):
-        """Get value from cache."""
+        """Get value from cache.
+
+        On the Redis backend this always MISSES — a sync method cannot await —
+        and says so once via :meth:`_warn_sync_on_redis_once`. Await
+        :meth:`aget` for a working read.
+        """
         if self.is_redis:
-            # For Redis, we need async operations but this is called synchronously
-            # We'll implement async versions for the server to use
-            return None  # Fallback for now
-        else:
-            return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
+            self._warn_sync_on_redis_once("get", "aget")
+            return None
+        return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
 
     def set(self, key: str, value, ttl: Optional[int] = None):
-        """Set value in cache."""
+        """Set value in cache.
+
+        On the Redis backend this stores NOTHING — a sync method cannot await —
+        and says so once. Await :meth:`aset` for a working write.
+        """
         if self.is_redis:
-            # For Redis, we need async operations but this is called synchronously
-            # We'll implement async versions for the server to use
-            pass  # Fallback for now
-        else:
-            self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
+            self._warn_sync_on_redis_once("set", "aset")
+            return
+        self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
 
     async def aget(self, key: str):
         """Async get value from cache."""
@@ -464,8 +498,14 @@ class CacheManager:
                 # Create cache key from function name and arguments
                 cache_key = self._create_cache_key(func.__name__, args, kwargs)
 
-                # Try to get from cache
-                result = cache.get(cache_key)
+                # AWAIT the async surface. This wrapper previously called the
+                # SYNC `cache.get`/`cache.set`, which return None / store
+                # nothing on the Redis backend — so every `@cached` async
+                # function on a Redis-backed manager silently received NO
+                # caching at all, despite being in a context that can await.
+                # `aget`/`aset` fall through to the LRU on the memory backend,
+                # so this is a pure gain, not a backend-conditional path.
+                result = await cache.aget(cache_key)
                 if result is not None:
                     logger.debug(
                         "cache.async.hit func=%s key=%s",
@@ -481,7 +521,7 @@ class CacheManager:
                     cache_key,
                 )
                 result = await func(*args, **kwargs)
-                cache.set(cache_key, result)
+                await cache.aset(cache_key, result)
                 return result
 
             # Return appropriate wrapper based on function type
