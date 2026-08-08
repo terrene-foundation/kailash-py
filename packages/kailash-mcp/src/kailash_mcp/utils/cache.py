@@ -166,9 +166,12 @@ class UnifiedCache:
         self._in_flight: Dict[str, asyncio.Future] = {}
         self._flight_lock = asyncio.Lock()
 
-        # One WARN per cache when the sync surface degrades on Redis, so a
-        # hot-path caller does not flood the log on every call.
-        self._sync_degradation_warned = False
+        # One WARN per cache PER REASON when the sync surface degrades on
+        # Redis, so a hot-path caller does not flood the log on every call.
+        # Keyed by reason because the causes are distinct and an operator
+        # needs to see each: a sync `get`/`set` can never reach Redis, while
+        # a sync tool running INSIDE an event loop cannot use `asyncio.run`.
+        self._sync_degradation_warned: set = set()
 
     def _make_key(self, key: str) -> str:
         """Make cache key with name prefix."""
@@ -176,8 +179,10 @@ class UnifiedCache:
             return f"{self.redis_prefix}{self.name}:{key}"
         return key
 
-    def _warn_sync_on_redis_once(self, method: str, replacement: str) -> None:
-        """Emit ONE loud WARN per cache when the sync surface degrades on Redis.
+    def _warn_sync_on_redis_once(
+        self, method: str, replacement: str, detail: Optional[str] = None
+    ) -> None:
+        """Emit ONE loud WARN per cache PER REASON when the sync surface degrades.
 
         A sync method cannot await, so ``get``/``set`` genuinely cannot reach
         Redis; the result is NO caching (slow but correct), not wrong data.
@@ -186,19 +191,22 @@ class UnifiedCache:
         path to move to, so raising would make ``@cached`` unusable on Redis —
         a harder break than the degradation it reports. Silence is still
         BLOCKED (``zero-tolerance.md`` Rule 3), so the degradation is announced
-        once per cache with the working replacement named.
+        once per cache, per distinct cause, with the replacement named.
+
+        De-duplication is keyed on ``method`` so a caller hitting two different
+        causes sees both: one WARN would otherwise hide whichever fired second.
         """
-        if self._sync_degradation_warned:
+        if method in self._sync_degradation_warned:
             return
-        self._sync_degradation_warned = True
+        self._sync_degradation_warned.add(method)
         logger.warning(
             "cache.sync.degraded_on_redis name=%s method=%s replacement=%s "
-            "detail=sync %s cannot reach Redis (every Redis op here is awaited); "
-            "this cache is serving NO cached values on the sync surface",
+            "detail=%s; this cache is serving NO cached values on that path",
             self.name,
             method,
             replacement,
-            method,
+            detail
+            or (f"sync {method} cannot reach Redis (every Redis op here is awaited)"),
         )
 
     def get(self, key: str):

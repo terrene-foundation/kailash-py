@@ -2573,8 +2573,30 @@ class MCPServer:
                             # Check if we're already in an async context
                             try:
                                 asyncio.get_running_loop()
-                                # We're in an async context, but this is a sync function
-                                # Fall back to memory cache behavior (no caching for now)
+                                # A SYNC tool executing ON the loop thread cannot
+                                # await and cannot asyncio.run(), so the Redis
+                                # cache is unreachable and this call is NOT
+                                # cached. `_execute_tool` invokes sync handlers
+                                # directly (no thread offload), so this is the
+                                # NORMAL path for a sync tool on an async
+                                # transport — measured: caching is skipped
+                                # entirely, the tool body runs on every call.
+                                # Announced once per cache rather than skipped
+                                # silently; closing it properly is an
+                                # architectural change (offload sync tools to a
+                                # thread, or make the tool async), not a local
+                                # fix — an async tool takes the get_or_compute
+                                # path below and is unaffected.
+                                cache._warn_sync_on_redis_once(
+                                    "tool-cache-read-in-running-loop",
+                                    "declare the tool `async def`",
+                                    detail=(
+                                        "a SYNC tool running inside an event loop "
+                                        "cannot reach Redis (asyncio.run is "
+                                        "unavailable), so every call executes the "
+                                        "tool body uncached"
+                                    ),
+                                )
                                 result = None
                             except RuntimeError:
                                 # Not in async context, we can use asyncio.run
@@ -2627,22 +2649,40 @@ class MCPServer:
                 # Cache result if enabled
                 if cache_key and self.cache.enabled:
                     # For sync functions with Redis, handle async operations
+                    stored = False
                     if cache.is_redis:  # type: ignore[reportOptionalMemberAccess]
                         try:
                             # Check if we're already in an async context
                             try:
                                 asyncio.get_running_loop()
-                                # We're in an async context, but this is a sync function
-                                # Fall back to memory cache behavior (no caching for now)
-                                pass
+                                # Mirror of the read site above: a SYNC tool on
+                                # the loop thread cannot write to Redis either,
+                                # so this result is NOT cached and the next
+                                # identical call will re-execute the tool.
+                                cache._warn_sync_on_redis_once(  # type: ignore[reportOptionalMemberAccess]
+                                    "tool-cache-write-in-running-loop",
+                                    "declare the tool `async def`",
+                                    detail=(
+                                        "a SYNC tool running inside an event loop "
+                                        "cannot write to Redis (asyncio.run is "
+                                        "unavailable), so results are never cached"
+                                    ),
+                                )
                             except RuntimeError:
                                 # Not in async context, we can use asyncio.run
                                 asyncio.run(cache.aset(cache_lookup_key, result))  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
+                                stored = True
                         except Exception as e:
                             logger.debug(f"Redis cache set error in sync context: {e}")
                     else:
                         cache.set(cache_lookup_key, result)  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
-                    logger.debug(f"Cached result for {tool_name}")
+                        stored = True
+                    # Only claim a store that actually happened. This line
+                    # previously fired unconditionally, so it reported "Cached
+                    # result" for the skipped-write path above — the same
+                    # false-confirmation class as the old clear_cache() log.
+                    if stored:
+                        logger.debug(f"Cached result for {tool_name}")
 
                 # Track success metrics
                 if self.metrics.enabled and start_time is not None:
