@@ -337,23 +337,82 @@ class TestStorageBackendKeyResidency:
         makes the bug class impossible, so that ADDING a selector fails here
         loudly and forces whoever adds it to decide — explicitly — whether it
         refuses the plaintext backend outside development.
+
+        Both halves below are NAME-AGNOSTIC by construction. An earlier
+        version keyed on the substring ``"key_manager"``, which caught
+        ``get_key_manager`` and missed ``from_config``, ``create_backend``,
+        ``resolve_signer``, ``build`` and every other plausible factory name —
+        and the first two are arguably the MORE idiomatic names for the thing
+        it exists to catch. A denylist only ever catches the instance its
+        author thought of, so this asserts a positive allowlist instead.
         """
+        import ast
+        import pathlib
+
+        import kailash.trust
         import kailash.trust.key_manager as km
 
-        selector_names = [
+        # HALF 1 — allowlist over what this module DEFINES.
+        #
+        # Restricted to symbols whose ``__module__`` is this module, so the
+        # set is not churned by imports (``ABC``, ``datetime``, ``Optional``
+        # and the re-exported crypto helpers all live in ``dir(km)`` and none
+        # of them is part of this contract).
+        #
+        # The invariant is sharp: this module defines SIX symbols and every
+        # one is a class. It exposes no public function at all, so ANY new
+        # public callable reds this — whatever it is named.
+        defined_public = {
             name
             for name in dir(km)
-            if callable(getattr(km, name, None))
-            and not isinstance(getattr(km, name), type)
-            and "key_manager" in name.lower()
-        ]
-        assert selector_names == [], (
-            "kailash.trust.key_manager grew a key-manager factory "
-            f"({selector_names}). A selector CAN hand a caller "
-            "InMemoryKeyManager without them naming it, which makes its "
-            "plaintext-at-rest residency a production exposure rather than an "
-            "opt-in dev affordance. Add a test asserting the selector refuses "
-            "InMemoryKeyManager outside development, then update this guard."
+            if not name.startswith("_")
+            and callable(getattr(km, name, None))
+            and getattr(getattr(km, name), "__module__", None) == km.__name__
+        }
+        assert defined_public == {
+            "AWSKMSKeyManager",
+            "InMemoryKeyManager",
+            "KeyClass",
+            "KeyManagerError",
+            "KeyManagerInterface",
+            "KeyMetadata",
+        }, (
+            "kailash.trust.key_manager's public surface changed: "
+            f"{sorted(defined_public)}. If the new symbol is a factory or "
+            "resolver, it CAN hand a caller InMemoryKeyManager without them "
+            "naming it, which turns that backend's plaintext-at-rest residency "
+            "into a production exposure rather than an opt-in dev affordance. "
+            "Add a test asserting it refuses InMemoryKeyManager outside "
+            "development, then extend this allowlist."
+        )
+
+        # HALF 2 — nothing in the trust package CONSTRUCTS a manager for the
+        # caller. Half 1 only sees this one module, so a selector landing in
+        # ``kailash/trust/factory.py`` or a config resolver would be invisible
+        # to it. This closes that half by asking the question directly:
+        # does any code anywhere under kailash.trust build a key manager?
+        package_root = pathlib.Path(kailash.trust.__file__).parent
+        constructions = []
+        for source_file in sorted(package_root.rglob("*.py")):
+            try:
+                tree = ast.parse(source_file.read_text())
+            except (OSError, SyntaxError):  # pragma: no cover - unparseable
+                continue
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in ("InMemoryKeyManager", "AWSKMSKeyManager")
+                ):
+                    rel = source_file.relative_to(package_root)
+                    constructions.append(f"{rel}:{node.lineno}: {node.func.id}(...)")
+
+        assert constructions == [], (
+            "code under kailash.trust constructs a key manager on the caller's "
+            f"behalf: {constructions}. Every caller must name the backend it "
+            "wants, which is the single property containing InMemoryKeyManager's "
+            "plaintext-at-rest residency. If this construction is deliberate, "
+            "assert that it refuses InMemoryKeyManager outside development."
         )
 
     @pytest.mark.skipif(
