@@ -85,19 +85,34 @@ async def test_async_strategy_uses_async_local_runtime():
     with patch(
         "kaizen.strategies.async_single_shot.AsyncLocalRuntime"
     ) as mock_async_runtime:
-        # Configure mock
+        # Configure mock.
+        #
+        # The strategy enters the runtime as an async context manager
+        # (`async with AsyncLocalRuntime() as runtime:` in
+        # strategies/async_single_shot.py), so `runtime` is the value
+        # __aenter__() returns — NOT what AsyncLocalRuntime() returns.
+        # Configuring execute_workflow_async on the constructor's return value
+        # therefore wired it onto an object the strategy never touches: the
+        # call landed on an auto-created child mock, this mock's
+        # `.execute_workflow_async.called` stayed False, and the test reported
+        # "execute_workflow_async() was NOT called!" while the runtime was in
+        # fact being used exactly as intended. The __aenter__ hop is the fix.
         mock_async_instance = MagicMock()
         mock_async_instance.execute_workflow_async = AsyncMock(
             return_value=({"agent_exec": {"response": {"answer": "4"}}}, "run_123")
         )
-        mock_async_runtime.return_value = mock_async_instance
+        mock_async_runtime.return_value.__aenter__ = AsyncMock(
+            return_value=mock_async_instance
+        )
+        mock_async_runtime.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        try:
-            # Execute async
-            result = await agent.run_async(question="What is 2+2?")
-        except Exception:
-            # May fail for other reasons, that's OK
-            pass
+        # Execute async. This deliberately does NOT swallow exceptions: it used
+        # to sit in `except Exception: pass  # May fail for other reasons`,
+        # which turned every real failure into the misleading downstream
+        # message "AsyncLocalRuntime was NOT used!" — the runtime had in fact
+        # been used, and the actual error was only visible with
+        # --log-cli-level=WARNING.
+        result = await agent.run_async(question="What is 2+2?")
 
         # Then: Verify AsyncLocalRuntime was called (post-fix expectation)
         if not mock_async_runtime.called:
@@ -185,9 +200,9 @@ async def test_concurrent_async_execution_performance():
         f"Expected concurrent execution in <3.0s, got {execution_time:.2f}s. "
         "Possible thread pool serialization."
     )
-    assert len(successful_results) >= 8, (
-        f"Expected at least 8/10 successful, got {len(successful_results)}/10"
-    )
+    assert (
+        len(successful_results) >= 8
+    ), f"Expected at least 8/10 successful, got {len(successful_results)}/10"
 
 
 # =============================================================================
@@ -372,9 +387,9 @@ async def test_simple_execute_async_fallback_uses_async_openai():
         # Then: Should complete successfully with AsyncOpenAI
         assert result is not None, "Fallback path returned None"
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-        assert "answer" in result or "response" in result, (
-            f"Expected 'answer' or 'response' in result, got keys: {result.keys()}"
-        )
+        assert (
+            "answer" in result or "response" in result
+        ), f"Expected 'answer' or 'response' in result, got keys: {result.keys()}"
 
     finally:
         # Restore strategy
@@ -452,9 +467,9 @@ async def test_run_async_detects_async_strategy_correctly():
             )
 
         # Verify result
-        assert result["answer"] == "Mock async response", (
-            "Wrong method was called - expected execute_async() result"
-        )
+        assert (
+            result["answer"] == "Mock async response"
+        ), "Wrong method was called - expected execute_async() result"
 
     finally:
         # Restore strategy
