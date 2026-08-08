@@ -93,8 +93,23 @@ non-functional on Redis and now says so loudly instead of silently returning not
 **Metrics are scrapeable.** Histogram percentiles were emitted in a form no Prometheus
 scraper reads.
 
-**Shutdown no longer wedges.** A pooled-executor path and an `MCPChannel.__del__` doing
-cleanup work could deadlock during finalization.
+**Shutdown no longer wedges (#2008).** A pooled-executor path and an `MCPChannel.__del__`
+doing cleanup work could deadlock during finalization. Pre-existing and production-side —
+see the note under Issues for why it is filed as well as fixed.
+
+**An MCP subprocess can no longer be orphaned while the transport reports "disconnected".**
+`EnhancedStdioTransport.disconnect()` swallowed a failed process termination, nulled the
+process handle in a `finally` regardless, and then logged success anyway. Three
+consequences, the third being the serious one: a status scraper read the transport as
+stopped; the child process could still be running — a real OS resource, leaked; and
+dropping the handle made it **unrecoverable in-process**, because nothing was left to
+retry the kill with. A second lock-out compounded it — `_connected` is cleared _before_
+termination is attempted and the method early-returned on that flag, so even a retained
+handle would not have been retried. Termination now reports success or failure honestly:
+on failure the handle is kept, no success line is emitted, and the error names the
+surviving pid so an operator can clean up. The existing `terminate` → wait → `kill`
+escalation is preserved, with its second wait bounded — it was unbounded, so a kill that
+did not land hung `disconnect()` forever.
 
 **PostgreSQL identifiers stay inside the 63-byte limit.** Long model names generated
 identifiers PostgreSQL rejects outright, or — worse — that collide after silent
@@ -122,6 +137,7 @@ Fixes #1970
 Fixes #1972
 Fixes #1974
 Fixes #2007
+Fixes #2008
 Refs  #1996
 ```
 
@@ -130,12 +146,24 @@ Each `Fixes` was verified against the issue's own acceptance criteria — code c
 regressed. `#1996` is already `STATE: CLOSED`, so it is referenced rather than closed
 again.
 
+**On #2008, because it is easy to read backwards:** it was filed even though this branch
+fixes it (`a50fb78c6`, with `e13339c02` closing the sibling finalizer defect in the same
+file). That is not filing a bug we just wrote. The defect is **pre-existing and
+production-side** — every core release from `v0.8.6` (2025-07-22) through `v2.62.0`
+carries it, and users on those releases are hitting unclean shutdowns with no public
+record. The issue serves the released-version audience; the `Fixes` trailer serves this
+branch. Both are correct at once.
+
 **Referenced but NOT closed** — real work landed, acceptance criteria are not fully met:
 
 - `Refs #1971` — identifiers are fixed and 171 regression tests pass, but AC-2 ("`test_multi_database_e2e` passes") needs a live PostgreSQL; those legs skip here.
 - `Refs #1981` — structured output is requested, degradation is distinguishable at the API surface, and the all-zero ranking is gone; AC-3's cross-provider matrix has no leg that executes, because its live-provider test is unreachable in the kaizen tree.
 - `Refs #2003` — the call-time envelope behaviour is pinned by tests, but the 2× storage defect itself is untouched: `input_envelope.py:126` still self-binds and `database.py:463` still persists it.
 - `Refs #1997` — the Mistral key shape is pinned by a strict-xfail and still leaks; the gap is a documented design trade-off, not an oversight.
+- `Refs #2009` — the discovery permission-checker error path GRANTS access (authz fail-open). Deliberately unchanged: flipping it means a transient checker outage denies every user, so it is security-reviewed work in its own right. Filed as the tracking receipt that distinguishes a reasoned deferral from a silent dismissal.
+- `Refs #2010` — a stale E2E passes `description=` to `BaseAgent.__init__`, which has no such parameter. Git-proven pre-existing; cannot be verified RED→GREEN on a host with no provider.
+- `Refs #2011` — a test writes `kaizen_implementation_test.log` into the repo root, dirtying CI checkouts and voiding the run-fingerprint protocol.
+- `Refs #2012` — the 390-site un-triaged exception-sink surface in kailash-kaizen; deliberately its own shard, see Known not fixed.
 
 **Deliberately unreferenced:**
 
@@ -158,29 +186,42 @@ changes execution semantics for every existing tool body. Neither ships here. Th
 degradation is now announced once per cache, naming the remedy available today: declare
 the tool `async def` (async tools take a different path and were never affected).
 
-**The kailash-kaizen credential surface is NOT swept.** An AST scan of
-`packages/kailash-kaizen/` measures **397 bare sinks across 109 files** — places where a
-caught exception reaches a log record or a return value unscrubbed.
+**The kailash-kaizen credential surface is NOT swept — tracked as #2012.**
 
-**This is not a claim of 397 leaks.** Each site still needs the local-vs-remote triage
-that kaizen-agents received; an unknown subset are genuine credential channels and the
-rest will be benign local errors. The claim is narrower and firmer: **the package is not
-clean**, and any commit body on this branch that framed the surface as "closed" was
-scoped to a _class_, not to the package. Concretely, this branch closed the
-`exc_info`/`logger.exception` class in kaizen and left the raw-`{e}` class there almost
-entirely open.
+390 sites across 107 files in `packages/kailash-kaizen/src` where a caught exception's
+text reaches a log record or a return value without passing through a credential
+scrubber. This is an **un-triaged surface, not a defect count**: every site still needs
+the "where can this exception be RAISED" (local vs remote) classification that
+`kaizen-agents` already received, and only the remote-raised subset is a credential
+channel — the rest are local `OSError`/`ImportError`/`JSONDecodeError` whose path and
+module text are the diagnostic and must be preserved.
 
-The asymmetry has a structural cause worth knowing: kaizen-agents has an AST scanner
-guarding it and sits at 191 wrapped sites; kailash-kaizen has no scanner and sits at 397
-unwrapped. That is why every gap found in this round's reviews was in kaizen and none in
-kaizen-agents — the scanner is the difference, not the diligence.
+**28 of those sites sit in 8 files that ALREADY import a scrubber for their other
+sinks.** Those 8 are the highest-risk subset and the place to start: a half-swept file's
+import reads as evidence the file was handled, so it is where a reviewer is least likely
+to look and most likely to be wrong. The remaining 362 sites in 99 files were never
+touched by any sweep. **Every gap found in this round's reviews came from the half-swept
+category, not the untouched one** — if you take one thing from this entry, take that.
 
-**No systematic sweep of RETURN surfaces has been done anywhere.** Every sweep this
-session was log-shaped. `skill_tool.py` is the worked example: its log line was scrubbed
-while three _return_ surfaces stayed raw — including a `NativeToolResult` that reaches
-the **model** and enters the transcript. That is a wider and more persistent audience
-than a framework log, and it was invisible to a log-shaped lens. Fixed at that site; the
-class is unswept.
+Any commit body on this branch that framed the surface as "closed" was scoped to a
+_class_, not to the package: this branch closed the `exc_info`/`logger.exception` class
+in kaizen and left the raw-`{e}` class there almost entirely open. The asymmetry has a
+structural cause worth knowing, because it predicts where the next gap will be —
+kaizen-agents has an AST scanner guarding it and sits at 191 wrapped sites;
+kailash-kaizen has none. The scanner is the difference, not the diligence. #2012 carries
+the acceptance criteria and prescribes porting the scanner rather than hand-sweeping.
+
+**No systematic sweep of RETURN surfaces exists anywhere — captured as a second lens
+inside #2012.** Every sweep this session was log-shaped, and the lens is not merely
+un-swept but **un-instrumented**: `_SinkScan` does not distinguish a log sink from a
+return surface. It flagged `skill_tool.py`'s three return surfaces only _incidentally_,
+because the exception name happened to appear in string context inside the handler.
+
+**A path in a log is a diagnostic; the same path in a tool result is disclosure.** A
+`NativeToolResult` reaches the **model** and persists in the transcript — an audience
+strictly wider than a framework log, and one nobody rotates. A future shard porting the
+scanner must classify sink-vs-return rather than lump them: the two need opposite
+verdicts on the same text.
 
 **The credential-sink sweep is mid-flight.** The ~30-site kaizen-agents surface is being
 worked in another lane and part of it is still uncommitted; see Status.
@@ -266,7 +307,9 @@ The highest-value things to check, in order:
 3. **The four `Fixes` trailers** — each was verified against its issue's acceptance criteria, but they are durable claims and worth a second read.
 4. **The sync-tool caching decision** — the measurement is in the commit body of `0523ad633`; the architectural options are named there rather than chosen.
 5. **What "credential leak fixed" does and does not cover.** The closed work is
-   class-scoped. `packages/kailash-kaizen/` measures 397 bare sinks across 109 files and
+   class-scoped. `packages/kailash-kaizen/src` carries 390 un-triaged sink sites across
+   107 files (#2012) — 28 of them in 8 files that already import a scrubber, which is
+   where a reviewer is least likely to look — and
    is not swept, and no systematic sweep of RETURN surfaces has been done anywhere —
    every sweep this session was log-shaped, which is why a `NativeToolResult` reaching
    the model went unnoticed until a return-shaped lens was pointed at it.
