@@ -230,6 +230,31 @@ class MetricsCollector:
         label_str = ",".join(f'{k}="{v}"' for k, v in sorted(labels.items()))
         return f"{name}{{{label_str}}}"
 
+    def _split_metric_key(self, key: str) -> tuple[str, str]:
+        """Split a key built by ``_metric_key`` back into name and label block.
+
+        Needed because a SUFFIXED series (the histogram percentiles) must
+        render as ``name_p50{label="value"}`` -- in Prometheus exposition
+        format the suffix belongs to the metric NAME, before the label block.
+        Appending it to the composed key instead produces
+        ``name{label="value"}_p50``, which no scraper accepts.
+
+        Prometheus metric names cannot contain '{', so the first brace is an
+        unambiguous boundary, and the key is always produced by
+        ``_metric_key`` above.
+
+        Args:
+            key: A key previously returned by ``_metric_key``
+
+        Returns:
+            (name, label_block); label_block is "" for an unlabelled metric,
+            otherwise the literal ``{k="v",...}`` including both braces.
+        """
+        brace = key.find("{")
+        if brace == -1:
+            return key, ""
+        return key[:brace], key[brace:]
+
     def _calculate_percentile(self, values: list[float], percentile: float) -> float:
         """
         Calculate percentile from sorted values.
@@ -292,18 +317,28 @@ class MetricsCollector:
         for key, value in self._gauges.items():
             lines.append(f"{key} {value}")
 
-        # Export histograms (p50, p95, p99 percentiles)
+        # Export histograms (p50, p95, p99 percentiles).
+        #
+        # The percentile suffix attaches to the metric NAME, before the label
+        # block -- `latency_ms_p50{route="/x"}`, per the format documented in
+        # this method's own docstring. Appending it to the composed key
+        # instead yielded `latency_ms{route="/x"}_p50`, which the Prometheus
+        # text parser rejects ("Invalid value: '_p50'"), so every LABELLED
+        # histogram's percentiles were unscrapeable. Unlabelled histograms
+        # were unaffected, which is why counters and gauges -- which append
+        # no suffix -- never surfaced it.
         for key, values in self._histograms.items():
             if values:
                 sorted_values = sorted(values)
+                name, label_block = self._split_metric_key(key)
 
                 p50 = self._calculate_percentile(sorted_values, 0.50)
                 p95 = self._calculate_percentile(sorted_values, 0.95)
                 p99 = self._calculate_percentile(sorted_values, 0.99)
 
-                lines.append(f"{key}_p50 {p50}")
-                lines.append(f"{key}_p95 {p95}")
-                lines.append(f"{key}_p99 {p99}")
+                lines.append(f"{name}_p50{label_block} {p50}")
+                lines.append(f"{name}_p95{label_block} {p95}")
+                lines.append(f"{name}_p99{label_block} {p99}")
 
         export_text = "\n".join(lines)
         logger.debug(f"Exported {len(lines)} metric lines")
