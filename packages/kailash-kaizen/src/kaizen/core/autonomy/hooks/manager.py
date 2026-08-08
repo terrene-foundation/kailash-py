@@ -302,7 +302,10 @@ class HookManager:
                 try:
                     await handler.on_error(e, context)
                 except Exception as err_e:
-                    logger.error(f"Error handler failed: {err_e}")
+                    # ``handler.on_error`` is caller-supplied, same as the
+                    # handler itself; its failure carries whatever that code
+                    # touched.
+                    logger.error("Error handler failed: %s", scrub_remote_error(err_e))
 
             return HookResult(success=False, error=error_msg, duration_ms=0.0)
 
@@ -417,10 +420,30 @@ class HookManager:
                         logger.info(f"Loaded hook from {hook_file}: {attr_name}")
 
                     except Exception as e:
-                        logger.error(f"Failed to instantiate hook {attr_name}: {e}")
+                        # Hook INSTANTIATION runs a caller-supplied class's
+                        # ``__init__`` -- arbitrary code, which may open a DB
+                        # connection or an HTTP client, so a driver error
+                        # here carries a DSN or an endpoint credential. This
+                        # is the same channel the EXECUTION sink above cites;
+                        # 90899764a fixed that one and missed this, because
+                        # the grep that drove it looked for exc_info and
+                        # logger.exception, and this line has neither.
+                        logger.error(
+                            "Failed to instantiate hook %s: %s",
+                            attr_name,
+                            scrub_remote_error(e),
+                        )
 
             except Exception as e:
-                logger.error(f"Failed to load hook file {hook_file}: {e}")
+                # Loading imports a caller-supplied module, so module-level
+                # side effects run here. Sibling of the instantiate guard
+                # above; fixed in lockstep so the loading path cannot end up
+                # half-swept the way the file already was once.
+                logger.error(
+                    "Failed to load hook file %s: %s",
+                    hook_file,
+                    scrub_remote_error(e),
+                )
 
         logger.info(f"Discovered {discovered_count} hooks from {hooks_dir}")
         return discovered_count
