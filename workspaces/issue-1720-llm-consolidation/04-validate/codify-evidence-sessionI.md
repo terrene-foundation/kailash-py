@@ -24,15 +24,15 @@ being re-derived was already codified. It is. **This changes what the file is
 for, so it goes first.**
 
 `.claude/rules/instrument-discipline.md` — `priority: 0`, `scope: baseline`,
-`cli_delivery: baseline`. Title: *"A Check That Cannot Discriminate Is Not
-Evidence"*. Its governing question, verbatim at `:11`:
+`cli_delivery: baseline`. Title: _"A Check That Cannot Discriminate Is Not
+Evidence"_. Its governing question, verbatim at `:11`:
 
 > **Would this instrument produce a DIFFERENT result if the proposition were
 > false?**
 
 That is the same property §1 arrives at from nine observed failures, stated
-first. Its MUST-1 (`:17`) is *"Name The Falsifying Result Before Citing Any
-Check As Evidence"*; MUST-2 (`:32`) extends it to green tests and non-reddening
+first. Its MUST-1 (`:17`) is _"Name The Falsifying Result Before Citing Any
+Check As Evidence"_; MUST-2 (`:32`) extends it to green tests and non-reddening
 mutations. **[V]** — read from the file, not relayed. The orchestrator supplied
 the quote and explicitly flagged it as relayed; I re-read the frontmatter and
 body rather than accept it, which is the [R]→[V] transition this file's grading
@@ -47,16 +47,16 @@ A first draft of this section said the agents "could have quoted the rule". That
 understates it, and the stronger version is measurable. This branch's own prior
 session ledgers cite `instrument-discipline.md` by name and by MUST-clause:
 
-| ledger | citations | by MUST-clause |
-| --- | --- | --- |
-| `launch-ledger-sessionF.md` | 3 | 1 |
-| `launch-ledger-sessionG.md` | 2 | 1 |
-| `launch-ledger-sessionH.md` | 2 | 2 |
-| `launch-ledger-sessionI.md` | 3 | 1 |
+| ledger                      | citations | by MUST-clause |
+| --------------------------- | --------- | -------------- |
+| `launch-ledger-sessionF.md` | 3         | 1              |
+| `launch-ledger-sessionG.md` | 2         | 1              |
+| `launch-ledger-sessionH.md` | 2         | 2              |
+| `launch-ledger-sessionI.md` | 3         | 1              |
 
-Used correctly, as the governing rule, e.g. sessionG: *"the harder direction to
-find them and both are `instrument-discipline.md` MUST-1"*; sessionH: *"a fix
-whose RED→GREEN could not be established — `instrument-discipline.md` MUST-2"*.
+Used correctly, as the governing rule, e.g. sessionG: _"the harder direction to
+find them and both are `instrument-discipline.md` MUST-1"_; sessionH: _"a fix
+whose RED→GREEN could not be established — `instrument-discipline.md` MUST-2"_.
 **[V]** — counted with a negative control (`grep -c nonexistent-rule` → 0 in the
 same files, confirming the counts are real matches rather than a broken pattern).
 
@@ -70,19 +70,19 @@ occurred in those very sessions.
 That is the strongest form of the enforcement-gap claim available, and it is
 stronger than the version this section originally carried. A rule can be
 baseline-priority, loaded, quoted by clause, and correctly understood, and still
-not bind — because *understanding a test is not the same as having a second
-instrument to run it with*.
+not bind — because _understanding a test is not the same as having a second
+instrument to run it with_.
 
 ### So the finding is not what §1 thought it was
 
-| what §1 reads as | what it actually is |
-| --- | --- |
-| a property worth codifying | a property **already codified at baseline priority** |
-| a knowledge gap | an **enforcement gap** — the rule was loaded and violated anyway |
-| ~9 mistakes | **a violation RATE under an active rule**, and the rate is the datum |
+| what §1 reads as           | what it actually is                                                  |
+| -------------------------- | -------------------------------------------------------------------- |
+| a property worth codifying | a property **already codified at baseline priority**                 |
+| a knowledge gap            | an **enforcement gap** — the rule was loaded and violated anyway     |
+| ~9 mistakes                | **a violation RATE under an active rule**, and the rate is the datum |
 
 Nine or ten instances, four independent lanes, one session, at least four
-committed by agents *actively working on this exact class*. Not one of them was
+committed by agents _actively working on this exact class_. Not one of them was
 prevented by a baseline rule that states the test in its first line. **That is
 evidence the rule could not previously produce about itself**, and it is the
 session's actual contribution.
@@ -124,12 +124,12 @@ The rule states the TEST. It does not say how to SATISFY it. Every instance in
 non-discriminating check, because knowing the question does not tell you what to
 build. That gap is where this session's evidence is useful:
 
-| instrument | what makes it able to discriminate |
-| --- | --- |
-| a **sweep** | a **positive control** — show it finds the shape before trusting a zero |
+| instrument    | what makes it able to discriminate                                                     |
+| ------------- | -------------------------------------------------------------------------------------- |
+| a **sweep**   | a **positive control** — show it finds the shape before trusting a zero                |
 | a **scanner** | **negative controls** — cases that must NOT fire, or "flags everything" passes equally |
-| a **test** | an **outcome-shaped assertion**, not a mechanism-shaped one |
-| a **claim** | a **named falsifying result**, stated BEFORE the check runs |
+| a **test**    | an **outcome-shaped assertion**, not a mechanism-shaped one                            |
+| a **claim**   | a **named falsifying result**, stated BEFORE the check runs                            |
 
 Each row is evidenced below: row 1 by the `_SinkScan` receipt (§1), row 2 by
 `TestTheScannerSeesEachShape`'s 6-must-red / 7-must-not-fire split (§1), row 3 by
@@ -172,24 +172,36 @@ direction.
 
 ### Instances
 
-| #   | Instrument                                                            | What it printed                                     | Why it could not discriminate                                                                                                                                                                                            | Grade                                                             |
-| --- | --------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| I1  | `out=$(isort --check-only ...); echo "isort: CLEAN"`                  | `isort: CLEAN`                                      | The `echo` was unconditional — it never read `$out`. Printed CLEAN while two files were red. Caught on the next command.                                                                                                 | **[V]** mine, this session                                        |
-| I2  | `re.findall(r'^\s+\("', block)` to count parametrize cases            | `4 positive / 6 negative`                           | Regex counts LINES beginning with `("`; multi-line tuples start with `(` alone. True answer via `ast` + the live run: **6 / 7 / 13 passed**.                                                                             | **[V]** mine, ~10 min before writing this                         |
-| I3  | F3 sentinel: bare-hex placed in the INNER exception of a chained pair | downgrade probe stayed GREEN                        | The sinks scrub the WRAPPER; `str(wrapper)` never contains the inner message, so the scrubber was never handed the sentinel. The test pinned nothing. Fixed by moving the hex to the outer message; re-proved both ways. | **[V]** mine — `6a6e54541`, then applied correctly in `6a870a702` |
-| I4  | `git log --author="$(git config user.name)"` to count my own commits  | 20 commits                                          | All lanes commit under ONE git identity, so the filter cannot separate agents. Returned siblings' work as mine. I had already reported "14 commits" from memory; the verified count by subject is **12**.                | **[V]** mine, at session close                                    |
-| I5  | A scoped `grep` detector, already validated against ground truth      | **0 hits across all 9 packages**                    | A multi-line shell variable failed to word-split, so the sweep never ran. Zero-hits is byte-identical to a genuinely clean tree.                                                                                         | **[R]**                                                           |
-| I6  | `set --` for range vars, two lanes                                    | empty range                                         | Same shape: an empty range and a range with nothing in it are indistinguishable downstream.                                                                                                                              | **[R]** (×2)                                                      |
-| I7  | `grep -c load_dotenv <file>`                                          | an accurate count                                   | Accurate answer to a question nobody asked — the file loads `.env` via `install_cost_guard`. The inference drawn from the zero was wrong, and the recommended "fix" would have disarmed a working cost control.          | **[R]**                                                           |
-| I8  | A test suite read while the tree was being written                    | `1 failed` / `13 failed` / `319 passed` at ONE HEAD | Three reads, three answers, no code change between them — a moving tree read as branch state. Nearly shipped as a live RED in the PR body.                                                                               | **[R]**                                                           |
-| I9  | `pytest --color=yes ... \| grep -E "^1 failed"` over a mutation-results table | all 8 mutations reported MISSED, incl. one that demonstrably reds | **INVERTED DIRECTION — a false ALARM.** pytest's summary line is ANSI-colorized, so it begins `\x1b[31m\x1b[31m\x1b[1m1 failed`, and an anchored `^1 failed` cannot match. Reproduced: with color the grep counts **0** on a genuinely failing run; ANSI-stripped it counts **1**. Reads as "the new guard is worse than the old" when the guard was correct — would have sent an engineer to rewrite working code. | mechanism **[V]** (reproduced locally); the incident **[R]** |
+| #   | Instrument                                                                    | What it printed                                                   | Why it could not discriminate                                                                                                                                                                                                                                                                                                                                                                                       | Grade                                                             |
+| --- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| I1  | `out=$(isort --check-only ...); echo "isort: CLEAN"`                          | `isort: CLEAN`                                                    | The `echo` was unconditional — it never read `$out`. Printed CLEAN while two files were red. Caught on the next command.                                                                                                                                                                                                                                                                                            | **[V]** mine, this session                                        |
+| I2  | `re.findall(r'^\s+\("', block)` to count parametrize cases                    | `4 positive / 6 negative`                                         | Regex counts LINES beginning with `("`; multi-line tuples start with `(` alone. True answer via `ast` + the live run: **6 / 7 / 13 passed**.                                                                                                                                                                                                                                                                        | **[V]** mine, ~10 min before writing this                         |
+| I3  | F3 sentinel: bare-hex placed in the INNER exception of a chained pair         | downgrade probe stayed GREEN                                      | The sinks scrub the WRAPPER; `str(wrapper)` never contains the inner message, so the scrubber was never handed the sentinel. The test pinned nothing. Fixed by moving the hex to the outer message; re-proved both ways.                                                                                                                                                                                            | **[V]** mine — `6a6e54541`, then applied correctly in `6a870a702` |
+| I4  | `git log --author="$(git config user.name)"` to count my own commits          | 20 commits                                                        | All lanes commit under ONE git identity, so the filter cannot separate agents. Returned siblings' work as mine. I had already reported "14 commits" from memory; the verified count by subject is **12**.                                                                                                                                                                                                           | **[V]** mine, at session close                                    |
+| I5  | A scoped `grep` detector, already validated against ground truth              | **0 hits across all 9 packages**                                  | A multi-line shell variable failed to word-split, so the sweep never ran. Zero-hits is byte-identical to a genuinely clean tree.                                                                                                                                                                                                                                                                                    | **[R]**                                                           |
+| I6  | `set --` for range vars, two lanes                                            | empty range                                                       | Same shape: an empty range and a range with nothing in it are indistinguishable downstream.                                                                                                                                                                                                                                                                                                                         | **[R]** (×2)                                                      |
+| I7  | `grep -c load_dotenv <file>`                                                  | an accurate count                                                 | Accurate answer to a question nobody asked — the file loads `.env` via `install_cost_guard`. The inference drawn from the zero was wrong, and the recommended "fix" would have disarmed a working cost control.                                                                                                                                                                                                     | **[R]**                                                           |
+| I8  | A test suite read while the tree was being written                            | `1 failed` / `13 failed` / `319 passed` at ONE HEAD               | Three reads, three answers, no code change between them — a moving tree read as branch state. Nearly shipped as a live RED in the PR body.                                                                                                                                                                                                                                                                          | **[R]**                                                           |
+| I9  | `pytest --color=yes ... \| grep -E "^1 failed"` over a mutation-results table | all 8 mutations reported MISSED, incl. one that demonstrably reds | **INVERTED DIRECTION — a false ALARM.** pytest's summary line is ANSI-colorized, so it begins `\x1b[31m\x1b[31m\x1b[1m1 failed`, and an anchored `^1 failed` cannot match. Reproduced: with color the grep counts **0** on a genuinely failing run; ANSI-stripped it counts **1**. Reads as "the new guard is worse than the old" when the guard was correct — would have sent an engineer to rewrite working code. | mechanism **[V]** (reproduced locally); the incident **[R]**      |
 
-**Note the distribution:** four independent lanes, at least NINE instances, and
-in I1–I4 the agent committing the error was the one actively fixing this class.
-That is the strongest available argument that this is not a discipline problem
-solved by care. I9 additionally shows the class is not direction-specific: the
-same root cause (a matcher that cannot see what it claims to check) produced a
-false ALARM rather than a false clear, and cost the same.
+| I10 | `grep -nE "<pattern>" "$F" \| head -10; echo "exit: $?"` | `exit: 0`, read as "no match, file clean" | **The pipeline's `$?` is the LAST command's status — `head`, not `grep` — and `head` exits 0 on empty input.** So `exit: 0` was returned identically whether the pattern matched, did not match, or the file did not exist. The zero-lines-of-output WAS sound evidence; the exit code appended to "confirm" it was not, and it is the part a reader would have quoted. Re-run with a positive control (`grep -c instrument` → 18, proving the grep reads the file) before trusting the negative. | **[V]** ORCHESTRATOR's, while checking whether a refuted premise had contaminated this file |
+
+**Note the distribution:** four independent lanes plus the orchestrator, at least
+TEN instances, and in I1–I4 and I10 the agent committing the error was the one
+actively fixing this class — I10 occurring while checking this very document for
+contamination. That is the strongest available argument that this is not a
+discipline problem solved by care. I9 additionally shows the class is not
+direction-specific: the same root cause (a matcher that cannot see what it claims
+to check) produced a false ALARM rather than a false clear, and cost the same.
+
+**I10 is worth separating from I1 despite the surface similarity.** I1 was an
+`echo` that never read its input — a missing conditional, visible on inspection.
+I10 _did_ read a status; it read the **wrong one**, because a pipeline reports its
+last stage. The check looked rigorous, produced a plausible value, and was
+uncorrelated with the question. That failure survives code review in a way I1
+does not, which makes it the more dangerous of the two and the reason the
+operational form below has to be a SECOND INSTRUMENT rather than a more careful
+first one.
 
 ### The defense that emerged, and its receipt
 
@@ -244,7 +256,7 @@ handle so a retry could act on it. The lane then wrote:
       test_stdio_disconnect_does_not_orphan_the_subprocess.py:119
         async def test_a_second_disconnect_retries_the_termination
 
-...because *"retain the handle so a retry can act"* IMPLIES a retry that works,
+...because _"retain the handle so a retry can act"_ IMPLIES a retry that works,
 and the cheapest way to check an implication is to assert it.
 
 **The test failed for a reason the lane had not predicted.** Not the handle at
