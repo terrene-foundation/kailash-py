@@ -1,4 +1,8 @@
-# fix(forest): credential-leak sweep, rate-limit fail-opens, and the silent-degradation family
+# fix(forest): credential-leak classes, rate-limit fail-opens, and the silent-degradation family
+
+<!-- Title says "classes", not "sweep", deliberately: the traceback re-leak class is
+     closed, the kailash-kaizen package is not. A reader who sees only the subject line
+     must not infer a completed package sweep. See Known not fixed. -->
 
 Replaces `pr-body-draft.md`, which **must not be opened as written** — it asserts
 "Convergence was reached" (it was not), carries counts from an earlier HEAD, cites a
@@ -46,13 +50,19 @@ re-measured.**
 
 Impact first. Each item is a real user-visible or operator-visible defect, not a cleanup.
 
-**Credentials stopped leaking into logs and error messages.** A provider exception —
-a bad API key, a rate-limit rejection, a DSN with an embedded password — could carry the
-credential itself into a user-facing error field, a WARN log, or a traceback. The sweep
-routes provider errors through a scrubber at every surface that renders them, across
-kaizen, kaizen-agents and MCP, and adds pattern coverage for shapes that previously
-slipped: non-HTTP connection strings (`postgres://`, `redis://`, `mongodb://`, `mysql://`),
-Slack tokens, and bare JWTs. Verified behaviourally, not by reading the regexes.
+**Specific classes of credential leak into logs and error messages are closed.** A
+provider exception — a bad API key, a rate-limit rejection, a DSN with an embedded
+password — could carry the credential itself into a user-facing error field, a WARN log,
+or a traceback. Closed here: the `exc_info` / `logger.exception` traceback re-leak class
+in kaizen (24 sites — `logging` renders the exception via the traceback's final line,
+defeating a scrubber applied only to the message), the enumerated sinks named in the
+individual commits, and the kaizen-agents and MCP sites. Pattern coverage is widened for
+shapes that previously slipped: non-HTTP connection strings (`postgres://`, `redis://`,
+`mongodb://`, `mysql://`), Slack tokens, and bare JWTs. Verified behaviourally, not by
+reading the regexes.
+
+**This is class-scoped, not package-scoped.** Read the entry under Known not fixed
+before concluding anything about the kailash-kaizen package as a whole.
 
 **Rate limiting works behind a proxy.** `trusted_proxy_cidrs` was accepted, documented,
 validated — and had no effect on any of the four rate limiters, which all keyed on the
@@ -148,8 +158,32 @@ changes execution semantics for every existing tool body. Neither ships here. Th
 degradation is now announced once per cache, naming the remedy available today: declare
 the tool `async def` (async tools take a different path and were never affected).
 
-**The credential-sink sweep is mid-flight.** The ~30-site surface is being worked in
-another lane and part of it is still uncommitted; see Status.
+**The kailash-kaizen credential surface is NOT swept.** An AST scan of
+`packages/kailash-kaizen/` measures **397 bare sinks across 109 files** — places where a
+caught exception reaches a log record or a return value unscrubbed.
+
+**This is not a claim of 397 leaks.** Each site still needs the local-vs-remote triage
+that kaizen-agents received; an unknown subset are genuine credential channels and the
+rest will be benign local errors. The claim is narrower and firmer: **the package is not
+clean**, and any commit body on this branch that framed the surface as "closed" was
+scoped to a _class_, not to the package. Concretely, this branch closed the
+`exc_info`/`logger.exception` class in kaizen and left the raw-`{e}` class there almost
+entirely open.
+
+The asymmetry has a structural cause worth knowing: kaizen-agents has an AST scanner
+guarding it and sits at 191 wrapped sites; kailash-kaizen has no scanner and sits at 397
+unwrapped. That is why every gap found in this round's reviews was in kaizen and none in
+kaizen-agents — the scanner is the difference, not the diligence.
+
+**No systematic sweep of RETURN surfaces has been done anywhere.** Every sweep this
+session was log-shaped. `skill_tool.py` is the worked example: its log line was scrubbed
+while three _return_ surfaces stayed raw — including a `NativeToolResult` that reaches
+the **model** and enters the transcript. That is a wider and more persistent audience
+than a framework log, and it was invisible to a log-shaped lens. Fixed at that site; the
+class is unswept.
+
+**The credential-sink sweep is mid-flight.** The ~30-site kaizen-agents surface is being
+worked in another lane and part of it is still uncommitted; see Status.
 
 **Stale tests against long-renamed APIs.** Five failure clusters in the kaizen tree are
 **git-proven pre-existing** — `git diff --quiet origin/main...HEAD` reports UNCHANGED for
@@ -231,3 +265,8 @@ The highest-value things to check, in order:
 2. **The `Nexus.register()` breaking change** — is rejecting previously-accepted names the right call for your consumers?
 3. **The four `Fixes` trailers** — each was verified against its issue's acceptance criteria, but they are durable claims and worth a second read.
 4. **The sync-tool caching decision** — the measurement is in the commit body of `0523ad633`; the architectural options are named there rather than chosen.
+5. **What "credential leak fixed" does and does not cover.** The closed work is
+   class-scoped. `packages/kailash-kaizen/` measures 397 bare sinks across 109 files and
+   is not swept, and no systematic sweep of RETURN surfaces has been done anywhere —
+   every sweep this session was log-shaped, which is why a `NativeToolResult` reaching
+   the model went unnoticed until a return-shaped lens was pointed at it.
