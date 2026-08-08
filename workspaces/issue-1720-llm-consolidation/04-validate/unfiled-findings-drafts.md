@@ -1,4 +1,22 @@
-# Four unfiled findings — issue drafts (session I)
+# Findings — ALL FILED 2026-08-08, co-owner approved
+
+**STATUS: FILED. This file is now a drafting record, not a queue.**
+
+| draft                                   | filed as  | disposition                                                                                                                                                                                                                                                      |
+| --------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — MCPChannel shutdown wedge           | **#2008** | FIXED on this branch (`a50fb78c6`); filed because it is PRE-EXISTING and production-side — first shipped `v0.8.6` 2025-07-22, every 2.x release through `v2.62.0`. Users on released versions are affected with no public record. PR should carry `Fixes #2008`. |
+| 2 — discovery authz fail-open           | **#2009** | NOT fixed, deliberately. Filed as the `zero-tolerance.md` Rule 1b tracking receipt that distinguishes a reasoned deferral from a silent dismissal.                                                                                                               |
+| 3 — stale `BaseAgent(description=)` E2E | **#2010** | NOT fixed — git-proven pre-existing; cannot be verified RED→GREEN on a host without a provider.                                                                                                                                                                  |
+| 4 — repo-root log write                 | **#2011** | NOT fixed — voids the run-fingerprint protocol and dirties CI checkouts.                                                                                                                                                                                         |
+| 5 — 390 un-triaged exception sinks      | **#2012** | NOT fixed, deliberately. The originating lane recommended AGAINST sweeping it on this branch and I accepted; it needs its own budget and per-site local-vs-remote triage.                                                                                        |
+
+**The five-line hold was worth it on #2008.** It was drafted early and deliberately held pending the branch-caused-vs-pre-existing verdict. Had it been filed on the evidence available then, its affected-versions statement would have been a guess. The verdict (production-side, pre-existing, dated by pickaxe to exactly two commits in history) turned it from a changelog note into the most consequential of the five.
+
+**#2012's number moved between drafting and filing — 397/109 → 390/107 — and the delta is the check.** It moved by exactly the 7 sites in 2 files that `934d5f8ae` fixed. A measurement that shifts by precisely what changed is one you can trust; one that had not moved would have meant the scanner could not see its own author's fix.
+
+---
+
+# Original drafts (session I) — retained as the record
 
 Evidence re-derived from `launch-ledger-sessionH.md`; each claim below is quoted from that
 record, not reconstructed. Filing is a shared-state action and is HELD for co-owner approval.
