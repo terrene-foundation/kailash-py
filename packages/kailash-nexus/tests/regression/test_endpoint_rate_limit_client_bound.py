@@ -22,9 +22,7 @@ fail-open side effect rather than the property under test. The synthetic
 requests exercise the real wrapper, including the real cleanup path.
 """
 
-import gc
-import statistics
-import time
+from collections import OrderedDict
 from typing import MutableMapping
 
 import pytest
@@ -46,6 +44,70 @@ def _request_counts_of(wrapper) -> MutableMapping:
         # limiter switching its container (defaultdict -> OrderedDict).
         if isinstance(value, dict):
             return value
+    raise AssertionError(
+        "could not locate request_counts in the wrapper closure; the limiter's "
+        "internal structure changed and this test needs updating"
+    )
+
+
+#: Ceiling on map entries the eviction path may visit per request at the cap.
+#: The amortised implementation visits 0; the scan-and-sort regression visits
+#: one per entry (10,000 at the cap). Anything CONSTANT passes, anything
+#: PROPORTIONAL to map size fails. The gap is five orders of magnitude, so the
+#: exact constant is not load-bearing -- 2 leaves room for an implementation
+#: that peeks a neighbour or two without admitting a pass.
+_MAX_ENTRIES_VISITED_PER_REQUEST = 2
+
+
+class _TraversalCountingMap(OrderedDict):
+    """``OrderedDict`` that counts entries yielded by traversal.
+
+    O(1) map operations -- ``get``, ``__setitem__``, ``__delitem__``,
+    ``move_to_end``, ``popitem``, ``len`` -- do NOT go through ``__iter__``
+    and are therefore not counted. Anything that WALKS the map (``for k in
+    m``, ``.items()``, ``.keys()``, ``.values()``, ``max(m, ...)``,
+    ``sorted(m)``) yields through the counting generator, so the tally IS the
+    number of entries the caller examined.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entries_visited = 0
+
+    def _counted(self, iterator):
+        for item in iterator:
+            self.entries_visited += 1
+            yield item
+
+    def __iter__(self):
+        return self._counted(super().__iter__())
+
+    def keys(self):
+        return self._counted(super().keys())
+
+    def values(self):
+        return self._counted(super().values())
+
+    def items(self):
+        return self._counted(super().items())
+
+
+def _install_traversal_counter(wrapper) -> _TraversalCountingMap:
+    """Swap the wrapper's ``request_counts`` for a traversal-counting map.
+
+    Writes the closure cell in place (CPython 3.7+ permits this), so the code
+    under test is the REAL wrapper running its REAL eviction -- only the
+    container is instrumented.
+    """
+    for cell in wrapper.__closure__ or ():
+        try:
+            value = cell.cell_contents
+        except ValueError:  # pragma: no cover - empty cell
+            continue
+        if isinstance(value, dict):
+            counting = _TraversalCountingMap(value)
+            cell.cell_contents = counting
+            return counting
     raise AssertionError(
         "could not locate request_counts in the wrapper closure; the limiter's "
         "internal structure changed and this test needs updating"
@@ -124,33 +186,45 @@ async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
     the event loop for the whole process, every endpoint. Rotating source
     addresses (trivial over IPv6) is all it takes to hold it there.
 
-    The bound is expressed as a SELF-NORMALIZING RATIO of two measurements
-    taken in the same run on the same machine, not as an absolute wall-clock
-    threshold: an absolute threshold has to be set loose enough for the
-    slowest CI runner, which is exactly loose enough to hide the regression,
-    and it ratchets upward every time it flakes.
+    Instrument: entries VISITED, not microseconds
+    ---------------------------------------------
+    This measures the property directly -- how many map entries the eviction
+    path walks per request -- by swapping ``request_counts`` for an
+    ``OrderedDict`` subclass that counts elements yielded by iteration.
 
-    The garbage collector is held off across BOTH measurement windows, and
-    only across those. A full map keeps ~10k live container objects, so a
-    generational pass costs far more at the cap than below it -- real, but a
-    cost of the BOUND itself, not of the eviction path this test is about.
-    Leaving it in measured a property nobody is asserting: the ratio came out
-    at 1x running the file alone and 389x under the full suite, with the same
-    fixed code. Suspending it symmetrically is what makes the two windows
-    comparable.
+    The amortised implementation touches the map only through ``get`` /
+    ``__setitem__`` / ``move_to_end`` / ``popitem(last=False)``, none of which
+    traverse it: **0 entries visited per request.** The un-amortised one takes
+    ``max()`` over every entry's buckets and then ``sorted()`` over all of
+    them, to delete exactly one: **one visit per entry per request**, which at
+    a 10,000-entry cap is 10,000.
 
-    Each phase is the MEDIAN of several short windows rather than one long
-    one. On a loaded machine a single OS preemption lands in exactly one
-    window; against a sub-millisecond baseline that one stall is enough to
-    invent a ratio out of nothing, and this test did flake that way once
-    under concurrent suites. The median discards it. It cannot hide a real
-    regression, because the un-amortised eviction is slow in EVERY window,
-    which is what makes the median the right summary rather than a wider
-    threshold -- a wider threshold buys the same stability by giving up the
-    resolution the test exists for.
+    That is a five-orders-of-magnitude separation with nothing in between, and
+    it is a pure function of the algorithm -- unaffected by machine load, CPU
+    frequency, GC, log level, or how many sibling suites share the host.
+
+    This replaces a wall-clock ratio (at-cap us/request over below-cap
+    us/request, bounded at 25x). That ratio was the right SHAPE -- self
+    normalizing, per ``rules/testing.md`` -- but its denominator was ~4 us, so
+    a single scheduler preemption on a box running ~10 concurrent unrelated
+    suites moved it enough to fail: observed 28.1x while passing 3/3 in
+    isolation and passing in two full-suite runs of the same code. Raising 25
+    was BLOCKED (``rules/testing.md`` -- a threshold bump is how an O(n^2)
+    regression gets buried); smoothing it further would only have suppressed
+    the noise. Counting removes it.
 
     Falsifying result: with the un-amortised eviction restored, this
-    instrument measures 5858x (9700.3 us vs 1.7 us per request).
+    instrument measures **10,001.0 entries visited per request** -- verified,
+    not predicted, by patching the eviction back to the scan-and-sort form in
+    a scratch worktree and running this exact test against it::
+
+        AssertionError: the eviction path visits 10001.0 map entries per
+        request at the cap (limit 2; ...)
+        assert 10001.0 <= 2
+
+    (10,000 for the pass plus the one entry the in-flight client added.) The
+    bound below sits 5,000x under that, so the verdict does not depend on
+    where in the gap the constant is placed.
     """
     app = Nexus(
         api_port=8253,
@@ -170,56 +244,32 @@ async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
         for i in range(start, stop):
             await probe(request=_synthetic_request(_ip(i)))
 
-    windows = 5
-    window_size = 200
-    measured = windows * window_size
-
-    async def measure(start: int) -> float:
-        """Median per-request seconds over ``windows`` windows of new clients.
-
-        The GC is held off inside the windows only -- see the docstring.
-        """
-        per_request = []
-        for w in range(windows):
-            first = start + w * window_size
-            gc.collect()
-            was_enabled = gc.isenabled()
-            gc.disable()
-            try:
-                started = time.perf_counter()
-                await drive(first, first + window_size)
-                per_request.append((time.perf_counter() - started) / window_size)
-            finally:
-                if was_enabled:
-                    gc.enable()
-        return statistics.median(per_request)
-
     try:
-        counts = _request_counts_of(probe)
+        counts = _install_traversal_counter(probe)
 
-        # Phase 1 -- comfortably below the cap. Warm first so the measured
-        # windows exclude first-call import/JIT effects.
-        await drive(0, 1000)
-        below_cap = await measure(1000)
-
-        # Phase 2 -- fill exactly to the cap, then measure the same number of
-        # NEW clients, each of which now triggers the eviction path.
-        await drive(1000 + measured, _MAX_RATE_LIMIT_TRACKED_CLIENTS)
+        # Fill exactly to the cap. Every request past this point evicts.
+        await drive(0, _MAX_RATE_LIMIT_TRACKED_CLIENTS)
         assert len(counts) == _MAX_RATE_LIMIT_TRACKED_CLIENTS, (
             "expected the map to be exactly full before measuring the "
             f"at-cap cost; it holds {len(counts)}"
         )
 
-        at_cap = await measure(_MAX_RATE_LIMIT_TRACKED_CLIENTS)
+        # Measure ONLY the at-cap window: each of these is a brand-new client
+        # arriving at a full map, so each one takes the eviction path.
+        measured = 500
+        counts.entries_visited = 0
+        await drive(_MAX_RATE_LIMIT_TRACKED_CLIENTS, _MAX_RATE_LIMIT_TRACKED_CLIENTS + measured)
+        per_request = counts.entries_visited / measured
 
-        ratio = at_cap / below_cap
-        assert ratio <= 25, (
-            f"per-request cost at the cap is {ratio:.0f}x the below-cap cost "
-            f"({at_cap * 1e6:.1f} us vs {below_cap * 1e6:.1f} us per request, "
-            f"median of {windows} windows of {window_size}). Eviction is not "
-            "amortised: every new client pays a full pass over the map. This "
-            "runs synchronously inside an async handler, so it blocks the "
-            "event loop for the entire process."
+        assert per_request <= _MAX_ENTRIES_VISITED_PER_REQUEST, (
+            f"the eviction path visits {per_request:.1f} map entries per "
+            f"request at the cap (limit {_MAX_ENTRIES_VISITED_PER_REQUEST}; "
+            f"the amortised implementation visits 0, and a full pass over a "
+            f"{_MAX_RATE_LIMIT_TRACKED_CLIENTS}-entry map visits "
+            f"{_MAX_RATE_LIMIT_TRACKED_CLIENTS}). Eviction is not amortised: "
+            "every new client pays a pass proportional to the map. This runs "
+            "synchronously inside an async handler with no await point, so it "
+            "blocks the event loop for the entire process."
         )
     finally:
         if app._running:
