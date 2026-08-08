@@ -103,6 +103,16 @@ non-functional on Redis and now says so loudly instead of silently returning not
 **Metrics are scrapeable.** Histogram percentiles were emitted in a form no Prometheus
 scraper reads.
 
+**The monitoring tests can now fail.** Three assertions across two E2E files reported
+success when `GET /metrics` returned **404** — the branch fixes the _verification_, not
+the product, but it is listed here because it changes what this PR's own green means.
+`enable_monitoring()` registers the route unconditionally, so a 404 means monitoring did
+not wire up; the genuine unavailability case (the optional `[metrics]` extra absent) is
+now an `importorskip`, so a 404 for any other reason fails hard. Before this, the suite
+could not distinguish "monitoring works" from "the endpoint does not exist" — the two
+outcomes those tests were written to tell apart. A reviewer weighing the Verification
+numbers is entitled to know three of them could not previously fail.
+
 **The monitoring stop endpoint no longer reports "stopped" without stopping.**
 `POST /api/v1/monitoring/stop` called `task.cancel()`, discarded the return, awaited and
 inspected nothing, and returned `{"status": "stopped"}` regardless — `cancel()` only
