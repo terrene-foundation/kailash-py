@@ -193,6 +193,32 @@ EMITTERS = [
 ]
 
 
+_OUTPUT_SCHEMA_XFAIL_REASON = (
+    "#1998 residual: output_schema= never reaches FastMCP registration; arming "
+    "FastMCP result validation is a behaviour change no security finding calls for"
+)
+
+# The outputSchema anti-vacuity CONTROL, per emitter. An emitter that advertises
+# NO outputSchema for ANY tool cannot satisfy the control today, so its case is
+# xfail-STRICT rather than skipped: a skip stays green-and-silent forever and
+# nobody re-verifies, whereas a strict xfail XPASSes — and therefore FAILS — the
+# moment ``output_schema=`` reaches that transport's registration, forcing the
+# marker off and the control back into enforcement. Derived from EMITTERS so a
+# NEW discovery surface added there is carried here automatically.
+_OUTPUT_SCHEMA_CONTROL_EMITTERS = [
+    pytest.param(
+        param.values[0],
+        id=param.id,
+        marks=(
+            ()
+            if getattr(param.values[0], "advertises_output_schema", True)
+            else pytest.mark.xfail(strict=True, reason=_OUTPUT_SCHEMA_XFAIL_REASON)
+        ),
+    )
+    for param in EMITTERS
+]
+
+
 # ---------------------------------------------------------------------------
 # Gated-tool argument-surface suppression, per emitter
 # ---------------------------------------------------------------------------
@@ -380,27 +406,64 @@ async def test_gated_tool_output_schema_not_disclosed(emit):
         "a discovery surface disclosed a permission-gated tool's result shape: "
         f"{tools['admin_purge']!r}"
     )
+    # The anti-vacuity CONTROL for this assertion — an UNGATED tool's
+    # outputSchema IS still advertised, so the suppression above cannot pass by
+    # dropping outputSchema everywhere — is asserted by the sibling test below,
+    # NOT here. It is a separate test precisely so the emitter that cannot
+    # satisfy it today can be marked xfail-strict WITHOUT that marker also
+    # swallowing a regression of the suppression assertion above, which stays
+    # strictly enforced on every emitter.
 
-    if not getattr(emit, "advertises_output_schema", True):
-        # The default transport advertises NO outputSchema for ANY tool: the
-        # decorator's ``output_schema=`` is stored in ``_tool_registry`` and
-        # never reaches FastMCP's registration, so FastMCP has nothing to
-        # publish. The gated assertion above therefore holds vacuously HERE
-        # (nothing is advertised, so nothing leaks) — stated rather than hidden.
-        # This is a FUNCTIONAL gap, not a disclosure one: clients on the
-        # default transport cannot validate structuredContent against a
-        # declared schema. Deliberately NOT fixed alongside #1998 — supplying
-        # an output schema to FastMCP also arms its result validation, which
-        # would change whether existing tool results are accepted, and that is
-        # a behaviour change no security finding calls for.
-        pytest.skip(
-            "default transport advertises no outputSchema for any tool "
-            "(output_schema= never reaches the FastMCP registration); the "
-            "ungated CONTROL has nothing to assert on this emitter"
-        )
 
-    # CONTROL: an ungated tool's outputSchema IS still advertised, so the
-    # assertion above cannot pass by dropping outputSchema everywhere.
+@pytest.mark.regression
+@pytest.mark.asyncio
+@pytest.mark.parametrize("emit", _OUTPUT_SCHEMA_CONTROL_EMITTERS)
+async def test_ungated_tool_output_schema_is_advertised(emit):
+    """CONTROL for ``test_gated_tool_output_schema_not_disclosed``.
+
+    That test asserts a gated tool's ``outputSchema`` is absent. Absence is
+    equally consistent with "the suppression works" and with "this emitter
+    advertises no outputSchema for anything" — so on its own it cannot
+    discriminate. This test pins the other half: an UNGATED tool's declared
+    outputSchema survives to the wire. Both green ⇒ the suppression keys on
+    ``required_permission``.
+
+    On the DEFAULT transport it does not hold: the decorator's
+    ``output_schema=`` is stored in ``_tool_registry`` and never reaches
+    FastMCP's registration, so FastMCP has nothing to publish for ANY tool and
+    the sibling suppression assertion holds VACUOUSLY there. That is a
+    FUNCTIONAL gap, not a disclosure one — clients on the default transport
+    cannot validate structuredContent against a declared schema — and it is
+    recorded as an xfail-STRICT case (see ``_OUTPUT_SCHEMA_CONTROL_EMITTERS``)
+    so it self-clears the moment the registration is wired.
+    """
+    server = MCPServer(
+        "regression-ungated-out",
+        auth_provider=APIKeyAuth(keys={"admin-key": {"permissions": ["admin.write"]}}),
+    )
+
+    @server.tool(
+        required_permission="admin.write",
+        output_schema={
+            "type": "object",
+            "properties": {"purged_rows": {"type": "integer"}},
+        },
+    )
+    def admin_purge(scope: str) -> dict:
+        """Purge records."""
+        return {"purged_rows": 0}
+
+    @server.tool(
+        output_schema={
+            "type": "object",
+            "properties": {"hits": {"type": "integer"}},
+        }
+    )
+    def public_count() -> dict:
+        """Count records."""
+        return {"hits": 0}
+
+    tools = await emit(server)
     assert tools["public_count"].get("outputSchema") == {
         "type": "object",
         "properties": {"hits": {"type": "integer"}},

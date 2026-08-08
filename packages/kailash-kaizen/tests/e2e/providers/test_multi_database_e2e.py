@@ -500,37 +500,10 @@ async def test_database_transaction_boundaries(
     print("=" * 70)
 
 
-# ============================================================================
-# Test Summary
-# ============================================================================
-
-
-def test_multi_database_summary():
-    """
-    Generate multi-database summary report.
-
-    Validates:
-    - Both backends tested
-    - Performance metrics documented
-    - Concurrent access validated
-    - Production readiness confirmed
-    """
-    logger.info("=" * 80)
-    logger.info("MULTI-DATABASE E2E TEST SUMMARY")
-    logger.info("=" * 80)
-    logger.info("✅ PostgreSQL vs SQLite persistence validated")
-    logger.info("✅ Performance comparison completed")
-    logger.info("✅ Concurrent access patterns tested")
-    logger.info("✅ Transaction boundaries validated")
-    logger.info("")
-    logger.info("Supported Backends:")
-    logger.info("  1. PostgreSQL (production, connection pooling)")
-    logger.info("  2. SQLite (development, file-based)")
-    logger.info("")
-    logger.info("Performance Targets:")
-    logger.info("  - Cold tier: <100ms per operation")
-    logger.info("  - Bulk operations: <500ms for 50 turns")
-    logger.info("  - Concurrent writes: No data corruption")
-    logger.info("=" * 80)
-    logger.info("PRODUCTION READY: Both backends validated")
-    logger.info("=" * 80)
+# NOTE: a ``test_multi_database_summary`` banner used to live here. It carried
+# ZERO assertions and logged "PRODUCTION READY: Both backends validated" before
+# reporting PASSED, so anyone grepping for that phrase found a green test
+# attesting to a verdict nothing in the function had measured. A summary banner
+# is not a test; the per-backend assertions above are the only evidence this
+# file produces. Do not reintroduce it — not here, and not as a fixture
+# teardown that re-emits the same unmeasured verdict.

@@ -553,23 +553,73 @@ class TestKeyExtractionEdgeCases:
 
     @pytest.mark.asyncio
     async def test_vars_requires_explicit_access(self, key_manager):
-        """vars() requires explicit __dict__ access to see internal state."""
+        """Reaching the key REQUIRES explicit private-attribute traversal.
+
+        ``InMemoryKeyManager``'s own docstring states the bound this test
+        pins: key material is protected from ``repr()``, ``str()`` and
+        serialization, and IS reachable by direct attribute access
+        (``instance._keys``) — deliberately, so the class can function.
+
+        The previous version of this test found the key in ``vars()`` and
+        recorded ``pass`` under "Document this as known behavior". It asserted
+        nothing, so it passed whether the manager exposed the key on a PUBLIC
+        attribute, in ``repr()``, through ``pickle``, or not at all — the one
+        test in a file titled "Key Extraction Resistance" that located an
+        extraction path and measured nothing about it. Documenting an exposure
+        is not the same as bounding it; this asserts the bound.
+        """
         private_key, _ = await key_manager.generate_keypair("agent-001")
 
-        # vars() on instance gives __dict__
-        try:
-            instance_vars = vars(key_manager)
-            # Internal _keys is there but requires knowledge of internal structure
-            # This is acceptable - security through obscurity is not relied upon
-            # but casual inspection shouldn't reveal keys
-            vars_str = str(instance_vars)
+        state = vars(key_manager)
+        assert (
+            state is key_manager.__dict__
+        ), "vars() returned something other than __dict__ — a second, softer state surface"
 
-            # Note: This WILL contain the key since _keys is in __dict__
-            # This documents that direct __dict__ access CAN expose keys
-            # This is expected - you need to protect the object itself
-            if private_key in vars_str:
-                # Document this as known behavior
-                pass  # Direct __dict__ access exposes internals
-        except TypeError:
-            # Some objects don't support vars()
-            pass
+        # ANTI-VACUITY CONTROL. Everything below asserts the key is ABSENT from
+        # some surface, and absence is trivially true of a manager that never
+        # held the key. Establish first that it IS retained here, so the
+        # containment assertions are measuring containment and not emptiness.
+        #
+        # If this ever fails because the manager stopped keeping raw key
+        # material in __dict__, that is a HARDENING, not a regression: rewrite
+        # this test to pin the new containment. Do not delete it.
+        assert private_key in str(state), (
+            "the key is not in the manager's __dict__ at all; the containment "
+            "assertions below would hold vacuously"
+        )
+
+        # 1. No surface reachable WITHOUT explicit __dict__ traversal carries it.
+        for label, surface in (
+            ("str()", str(key_manager)),
+            ("repr()", repr(key_manager)),
+            ("dir()", str(dir(key_manager))),
+        ):
+            assert private_key not in surface, (
+                f"{label} on the key manager exposed private key material; "
+                "reaching the key must require explicit __dict__ access"
+            )
+
+        # 2. Serialization is refused outright, so __dict__ cannot be reached
+        #    indirectly by pickling the object.
+        import pickle
+
+        with pytest.raises(TypeError):
+            pickle.dumps(key_manager)
+
+        # 3. Every attribute holding the key is PRIVATE. A public attribute
+        #    would put the key one ordinary attribute read away, which is not
+        #    "explicit __dict__ access" by any reading.
+        holders = [name for name, value in state.items() if private_key in str(value)]
+        assert holders, "control above passed but no single attribute holds the key"
+        assert all(name.startswith("_") for name in holders), (
+            "key material is reachable through a PUBLIC attribute of the key "
+            f"manager: {[n for n in holders if not n.startswith('_')]}"
+        )
+
+        for name in dir(key_manager):
+            if name.startswith("_"):
+                continue
+            assert private_key not in str(getattr(key_manager, name, None)), (
+                f"public attribute {name!r} on the key manager exposed private "
+                "key material"
+            )

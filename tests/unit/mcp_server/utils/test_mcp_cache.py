@@ -1,8 +1,16 @@
 """Unit tests for MCP cache functionality.
 
 Tests for the caching utilities in kailash_mcp.utils.cache.
-NO MOCKING of external dependencies - This is a unit test file (Tier 1)
-for isolated component testing.
+This is a unit test file (Tier 1) for isolated component testing, where
+mocking is permitted per rules/testing.md § 3-Tier Testing.
+
+It previously lived under ``tests/integration/mcp_server/utils/`` while
+mocking the Redis client with ``MagicMock`` — a Tier-2 tree forbids mocking
+outright, so the file was in the wrong tier, not merely mislabelled: its own
+docstring already said Tier 1. Moved here rather than re-pointed at a real
+Redis, because every test in it exercises in-process cache logic and none of
+them needs a server. A test that genuinely needs Redis belongs in
+``tests/integration/`` against the real thing.
 """
 
 import asyncio
@@ -493,13 +501,42 @@ class TestUnifiedCache:
         result = cache.get("key1")
         assert result is None
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "UnifiedCache.clear() is a no-op on the Redis backend "
+            "(`if self.is_redis: pass` in kailash_mcp/utils/cache.py), so a "
+            "Redis-backed cache is never actually cleared. clear() is sync "
+            "while the Redis client is awaited everywhere else, so closing "
+            "this needs an async clear on the public surface, not a local "
+            "patch"
+        ),
+    )
     def test_clear_redis_backend(self):
-        """Test clear operation with Redis backend."""
+        """clear() MUST actually clear the Redis backend.
+
+        The previous version built the mock, called ``cache.clear()`` under
+        "# Should not raise exception", and asserted NOTHING — so it passed
+        both when clear() worked and when it silently did nothing, which is
+        what it does. Its own sibling ``test_clear_memory_backend`` three lines
+        up shows the effect assertion that was available all along.
+
+        xfail-STRICT, not skip: the contract is real, the implementation does
+        not honour it yet, and an XPASS here is the signal that it now does.
+        The anti-vacuity control that this cache is genuinely Redis-backed is
+        ``test_stats_redis_backend`` below, which asserts
+        ``stats()["backend"] == "redis"`` — kept OUT of this test so the xfail
+        marker cannot swallow a regression in it.
+        """
         mock_redis = MagicMock()
         cache = UnifiedCache(name="test_cache", redis_client=mock_redis)
 
-        # Should not raise exception
         cache.clear()
+
+        assert mock_redis.flushdb.called or mock_redis.delete.called, (
+            "clear() returned without issuing any clear command to the Redis "
+            f"client; calls seen: {mock_redis.mock_calls!r}"
+        )
 
     def test_stats_memory_backend(self):
         """Test stats operation with memory backend."""
@@ -907,20 +944,36 @@ class TestGlobalCacheManager:
         assert len(stats) >= 1
 
     def test_clear_all_caches_global(self):
-        """Test clearing all global caches."""
+        """clear_all_caches() MUST drop the entries, forcing recomputation.
 
-        # Create some cached data
+        The previous version called ``clear_all_caches()`` under "# Should work
+        without errors" and closed with ``assert True`` — which passes whether
+        the caches were cleared, partially cleared, or not touched at all.
+        """
+        calls = []
+
         @cached_query("test_clear", ttl=300, enabled=True)
         def test_func(x):
+            calls.append(x)
             return x * 2
 
-        test_func(5)
+        assert test_func(5) == 10
+        assert test_func(5) == 10
+        # CONTROL: the decorator really is caching. Without this, the
+        # post-clear recomputation below is equally consistent with "the clear
+        # worked" and "nothing was ever cached".
+        assert len(calls) == 1, (
+            "the cached_query decorator did not cache; the clear assertion "
+            f"below would hold vacuously. calls={calls!r}"
+        )
 
-        # Clear all caches
         clear_all_caches()
 
-        # Should work without errors
-        assert True
+        assert test_func(5) == 10
+        assert len(calls) == 2, (
+            "clear_all_caches() returned but the entry was still served from "
+            f"cache — the function was not recomputed. calls={calls!r}"
+        )
 
     def test_global_cache_manager_singleton(self):
         """Test that global cache manager is a singleton."""
