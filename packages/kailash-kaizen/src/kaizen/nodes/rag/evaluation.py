@@ -36,8 +36,9 @@ from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 from kaizen.core._provider_env import detect_provider_from_env
+
+from ..ai.llm_agent import LLMAgentNode  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

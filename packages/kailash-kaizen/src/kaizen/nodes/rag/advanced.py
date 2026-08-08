@@ -26,6 +26,8 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 from ..ai.llm_agent import LLMAgentNode
 
 # Side-effect import: registers DenseRetrievalNode / SparseRetrievalNode with
@@ -33,8 +35,6 @@ from ..ai.llm_agent import LLMAgentNode
 # string name at WorkflowBuilder.build() time, so the registration MUST have
 # run first regardless of rag-package import order.
 from . import similarity as _similarity  # noqa: F401
-
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
 

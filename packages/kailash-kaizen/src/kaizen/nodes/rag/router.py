@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
-from ..ai.llm_agent import LLMAgentNode
-
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+from ..ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
 
