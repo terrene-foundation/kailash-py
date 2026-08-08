@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 
 import pytest
+from tests.utils.docker_config import get_jaeger_config
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -43,10 +44,21 @@ def openai_api_key():
 
 
 @pytest.fixture
-def jaeger_endpoint():
-    """Fixture providing Jaeger endpoint from environment."""
-    endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4317")
-    return endpoint
+def jaeger_config():
+    """Jaeger host + port for the OTLP exporter.
+
+    Was ``jaeger_config``, returning a URL ("http://localhost:4317") that
+    was passed as ``enable_observability(jaeger_config=...)`` -- a keyword
+    that signature does not accept. It takes ``jaeger_host`` and
+    ``jaeger_port``, and TracingManager builds the endpoint as
+    ``f"{jaeger_host}:{jaeger_port}"``, so a scheme-carrying URL could not
+    have been passed through as the host either.
+
+    Returns the same dict shape as the sibling suites (test_jaeger_ui.py,
+    test_tracing_integration.py) already use, so there is one Jaeger config
+    contract in this tree rather than two.
+    """
+    return get_jaeger_config()
 
 
 @pytest.fixture
@@ -64,7 +76,7 @@ class TestNetworkTimeoutObservability:
 
     @pytest.mark.asyncio
     async def test_network_timeout_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 1: Observability captures network timeouts.
@@ -95,7 +107,8 @@ class TestNetworkTimeoutObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="timeout-test-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="timeout-test-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -139,7 +152,7 @@ class TestRateLimitObservability:
 
     @pytest.mark.asyncio
     async def test_rate_limit_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 2: Observability captures rate limit errors.
@@ -167,7 +180,8 @@ class TestRateLimitObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="rate-limit-test-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="rate-limit-test-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -228,7 +242,7 @@ class TestProviderFailureObservability:
 
     @pytest.mark.asyncio
     async def test_provider_failure_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 3: Observability handles provider failures gracefully.
@@ -258,7 +272,8 @@ class TestProviderFailureObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="provider-failure-test-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="provider-failure-test-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -299,7 +314,8 @@ class TestProviderFailureObservability:
 
         fallback_agent = BaseAgent(config=valid_config, signature=QASignature())
         fallback_obs = fallback_agent.enable_observability(
-            service_name="provider-fallback-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="provider-fallback-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         fallback_obs.audit.storage = custom_storage
 

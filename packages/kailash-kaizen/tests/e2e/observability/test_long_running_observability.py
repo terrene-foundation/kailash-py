@@ -23,6 +23,7 @@ from pathlib import Path
 
 import psutil
 import pytest
+from tests.utils.docker_config import get_jaeger_config
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -45,10 +46,21 @@ def openai_api_key():
 
 
 @pytest.fixture
-def jaeger_endpoint():
-    """Fixture providing Jaeger endpoint from environment."""
-    endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4317")
-    return endpoint
+def jaeger_config():
+    """Jaeger host + port for the OTLP exporter.
+
+    Was ``jaeger_config``, returning a URL ("http://localhost:4317") that
+    was passed as ``enable_observability(jaeger_config=...)`` -- a keyword
+    that signature does not accept. It takes ``jaeger_host`` and
+    ``jaeger_port``, and TracingManager builds the endpoint as
+    ``f"{jaeger_host}:{jaeger_port}"``, so a scheme-carrying URL could not
+    have been passed through as the host either.
+
+    Returns the same dict shape as the sibling suites (test_jaeger_ui.py,
+    test_tracing_integration.py) already use, so there is one Jaeger config
+    contract in this tree rather than two.
+    """
+    return get_jaeger_config()
 
 
 @pytest.fixture
@@ -68,7 +80,7 @@ class TestContinuousObservability:
 
     @pytest.mark.asyncio
     async def test_1_hour_continuous_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 1: 1-hour continuous operation with observability.
@@ -100,7 +112,8 @@ class TestContinuousObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="continuous-agent-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="continuous-agent-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -201,7 +214,7 @@ class TestHighVolumeMetrics:
     """E2E tests for high-volume metric collection."""
 
     @pytest.mark.asyncio
-    async def test_high_volume_metrics(self, jaeger_endpoint, temp_audit_dir):
+    async def test_high_volume_metrics(self, jaeger_config, temp_audit_dir):
         """
         E2E Test 2: High-volume metric collection (10,000 observations).
 
