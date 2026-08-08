@@ -17,6 +17,99 @@ findings would be an instance of its own topic.
 
 ---
 
+## §0 THE RULE ALREADY EXISTS — read this before §1
+
+Everything in §1 and §2 was written before anyone checked whether the property
+being re-derived was already codified. It is. **This changes what the file is
+for, so it goes first.**
+
+`.claude/rules/instrument-discipline.md` — `priority: 0`, `scope: baseline`,
+`cli_delivery: baseline`. Title: *"A Check That Cannot Discriminate Is Not
+Evidence"*. Its governing question, verbatim at `:11`:
+
+> **Would this instrument produce a DIFFERENT result if the proposition were
+> false?**
+
+That is the same property §1 arrives at from nine observed failures, stated
+first. Its MUST-1 (`:17`) is *"Name The Falsifying Result Before Citing Any
+Check As Evidence"*; MUST-2 (`:32`) extends it to green tests and non-reddening
+mutations. **[V]** — read from the file, not relayed. The orchestrator supplied
+the quote and explicitly flagged it as relayed; I re-read the frontmatter and
+body rather than accept it, which is the [R]→[V] transition this file's grading
+exists to force.
+
+**The rule is loaded in EVERY session in this repo** (one of 14 baseline-scope
+rules). Every agent who committed an instance in §1 had it in context. **[V]**
+
+### So the finding is not what §1 thought it was
+
+| what §1 reads as | what it actually is |
+| --- | --- |
+| a property worth codifying | a property **already codified at baseline priority** |
+| a knowledge gap | an **enforcement gap** — the rule was loaded and violated anyway |
+| ~9 mistakes | **a violation RATE under an active rule**, and the rate is the datum |
+
+Nine or ten instances, four independent lanes, one session, at least four
+committed by agents *actively working on this exact class*. Not one of them was
+prevented by a baseline rule that states the test in its first line. **That is
+evidence the rule could not previously produce about itself**, and it is the
+session's actual contribution.
+
+This file cites the rule **zero** times before this section. Verified with a
+positive control first, because a zero from a grep is exactly the shape §1 is
+about: `grep -ci instrument` returns **18** (so the grep reads the file),
+`grep -ci instrument-discipline` returns **0**, `grep -c '.claude/rules/'`
+returns **0**. **[V]**
+
+### The rule's own Detection block says why it did not fire
+
+Quoted verbatim from `:61`:
+
+> **Probes: STAGED, and NOTHING EXECUTES THEM.** [...] the Phase-1 gate-review
+> above is this rule's **ONLY ACTIVE coverage**
+
+and, on the deferred half:
+
+> Phase 2 deferred — no hook detector (**a regex detector would itself instance
+> this class**)
+
+**[V]**. Two things follow, and the second is the sharper.
+
+1. The rule's only live enforcement is human/agent gate-review at `/codify` and
+   `/redteam` — i.e. AFTER the work. Nine in-session violations is direct
+   evidence about what that leaves uncovered.
+2. **The parenthetical is empirically confirmed by this session.** The rule
+   predicted that a regex detector would instance the class; I5 (a `grep`
+   defeated by shell word-splitting, returning 0 across 9 packages) and I9 (a
+   `grep -E "^1 failed"` defeated by ANSI colour codes) are two independent
+   confirmations, in opposite directions. The rule anticipated the failure mode
+   of its own missing detector, and this session produced the instances.
+
+### What the session adds that the rule does not carry: the operational form
+
+The rule states the TEST. It does not say how to SATISFY it. Every instance in
+§1 is an agent who could have quoted the rule and still shipped a
+non-discriminating check, because knowing the question does not tell you what to
+build. That gap is where this session's evidence is useful:
+
+| instrument | what makes it able to discriminate |
+| --- | --- |
+| a **sweep** | a **positive control** — show it finds the shape before trusting a zero |
+| a **scanner** | **negative controls** — cases that must NOT fire, or "flags everything" passes equally |
+| a **test** | an **outcome-shaped assertion**, not a mechanism-shaped one |
+| a **claim** | a **named falsifying result**, stated BEFORE the check runs |
+
+Each row is evidenced below: row 1 by the `_SinkScan` receipt (§1), row 2 by
+`TestTheScannerSeesEachShape`'s 6-must-red / 7-must-not-fire split (§1), row 3 by
+`4772d0c48` (§1, constructive counterpart), row 4 by the I1–I4 failures, each of
+which had no falsifying result named before it ran.
+
+**No rule text is proposed here, per the drafting constraint.** The disposition
+this file supports is: the rule stands as written; the gap is in enforcement and
+in operational guidance, and the gate decides whether either warrants a change.
+
+---
+
 ## §1 The non-discriminating instrument
 
 **The class — stated in its general form, because the narrow form is wrong.**
@@ -268,10 +361,16 @@ look wrote a test that could only agree with them. S1 through S4 are the
 first failure; `4772d0c48`'s second lock-out — found by a test that failed
 for an unpredicted reason — is the second one being avoided.
 
-One property unifies every finding in this file, and it is the thing worth
-carrying if nothing else is: **an instrument is only evidence if its result
-could have come out the other way.** Applied to a sweep it means a positive
+One property unifies every finding in this file. It is **not** this session's
+discovery — see §0: it is `instrument-discipline.md`'s governing question,
+baseline priority, loaded in every session here, and every agent in §1 had it
+in context while violating it. The session re-derived it the expensive way:
+**an instrument is only evidence if its result could have come out the other
+way.** Applied to a sweep it means a positive
 control; to a scanner, negative controls; to a test, an outcome-shaped
 assertion; to a claim, a named falsifying result. Nine instruments in §1
 lacked that property in one direction or the other, across four lanes, and
-four of them were authored by the agent actively fixing the class.
+four of them were authored by the agent actively fixing the class — under a
+loaded baseline rule that states the test in its first line. **That is the
+finding: not that the property is true, but that stating it at baseline
+priority did not make it hold.**
