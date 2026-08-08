@@ -613,10 +613,30 @@ class TestOutboundDelivery:
             max_retries=3,
         )
         delays = []
-        original_sleep = asyncio.sleep
+
+        # ``patch`` replaces the sleep on the MODULE, so an unfiltered tracker
+        # sees every coroutine that sleeps inside nexus.transports.webhook --
+        # including a delivery from an unrelated transport running concurrently
+        # elsewhere in the suite. A default-constructed WebhookTransport has
+        # base_delay=1.0, so its first retry contributes exactly 1.0 and fails
+        # an assertion about a transport configured with max_delay=0.05.
+        #
+        # Observed in a full-suite run (`assert 1.0 <= 0.05`) while passing
+        # alone, and reproduced deterministically by awaiting a default
+        # transport's delivery concurrently: the tracker captured
+        # [0.05, 0.05, 1.0, 2.0, 4.0, 8.0] -- only the first two of which are
+        # this transport's. webhook.py has exactly one sleep site and it is
+        # correctly capped, so this transport CANNOT emit 1.0; the value was
+        # never evidence about the code under test.
+        #
+        # ``deliver`` is awaited directly below, so its sleeps run on THIS
+        # task; a foreign delivery runs on its own. Filtering by task is what
+        # binds the measurement to the transport under test.
+        own_task = asyncio.current_task()
 
         async def track_sleep(duration):
-            delays.append(duration)
+            if asyncio.current_task() is own_task:
+                delays.append(duration)
             # Do not actually sleep in tests
 
         async def mock_send(url, body, headers):
@@ -630,9 +650,19 @@ class TestOutboundDelivery:
                 send_func=mock_send,
             )
 
+        # Non-vacuity gate: `for d in []` passes, so an empty capture would
+        # make every assertion below trivially true. max_retries=3 against an
+        # always-500 send_func must produce at least one backoff sleep.
+        assert delays, (
+            "no backoff delays were captured -- the patch target or the retry "
+            "loop changed, and the cap assertion below would pass vacuously"
+        )
+
         # All delays should be capped at max_delay
         for d in delays:
-            assert d <= 0.05
+            assert d <= 0.05, (
+                f"backoff delay {d} exceeds max_delay=0.05; captured {delays}"
+            )
 
 
 # ---------------------------------------------------------------------------
