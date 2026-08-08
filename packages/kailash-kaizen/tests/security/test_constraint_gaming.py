@@ -965,6 +965,44 @@ class TestMetadataInjectionBlocked:
         # Should still validate normally based on known fields
         assert result.valid is True  # cost_limit is tightened
 
+    def test_metadata_injection_cannot_authorize_a_loosened_constraint(
+        self, validator: ConstraintValidator
+    ):
+        """The DISCRIMINATING vector for the test above.
+
+        That test feeds a child whose ``cost_limit`` is TIGHTENED (500 < 1000),
+        so ``valid is True`` is the expected answer whether the injected
+        ``_bypass_all`` / ``admin_override`` keys were ignored OR obeyed. It
+        cannot tell the two apart, which is the one thing an injection test
+        exists to do.
+
+        Here the child LOOSENS the limit (9999 > 1000) while carrying the same
+        injected keys. Now the two hypotheses give OPPOSITE answers: if the
+        injected fields are ignored, the loosening is caught and ``valid`` is
+        False; if any of them is honoured as a bypass, the loosening is waved
+        through and ``valid`` is True.
+        """
+        parent = {"cost_limit": 1000}
+        child = {
+            "cost_limit": 9999,  # LOOSENED — must be rejected on its own merits
+            "_bypass_all": True,
+            "__override__": {"cost_limit": 1},
+            "admin_override": True,
+        }
+
+        result = validator.validate_inheritance(parent, child)
+
+        assert result.valid is False, (
+            "a loosened cost_limit was accepted while the child carried "
+            "_bypass_all/admin_override/__override__ — the validator is "
+            f"honouring an injected metadata key as an authorization bypass: "
+            f"{result!r}"
+        )
+        assert ConstraintViolation.COST_LOOSENED in result.violations, (
+            "the constraint was rejected, but not for the loosening — check "
+            f"the injected keys are not causing an unrelated failure: {result.violations!r}"
+        )
+
     def test_metadata_injection_blocked_constraint_envelope_untampered(
         self, validator: ConstraintValidator
     ):

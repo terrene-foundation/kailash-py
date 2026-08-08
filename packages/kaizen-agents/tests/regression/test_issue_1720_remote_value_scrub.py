@@ -224,17 +224,22 @@ class TestFloatAndIntEmbedTheirOperand:
 
         A site that classifies `float(llm_output)` as LOCAL leaks the operand.
         """
-        try:
+        # pytest.raises, matching the two sibling tests above rather than a
+        # bare try/except: with the assertions inside an except handler, the
+        # day float() stops raising on this input the handler never runs and
+        # this test reports PASSED having checked neither preset.
+        with pytest.raises(ValueError) as excinfo:
             float(secret)
-        except ValueError as exc:
-            assert secret in scrub_local_error(exc), (
-                "premise check: if the conservative preset caught this, the "
-                "LOCAL classification would have been harmless"
-            )
-            assert secret not in scrub_remote_error(exc), (
-                "the REMOTE preset must claim the embedded operand — it is the "
-                "only preset with the prefix-less rules ON"
-            )
+
+        exc = excinfo.value
+        assert secret in scrub_local_error(exc), (
+            "premise check: if the conservative preset caught this, the "
+            "LOCAL classification would have been harmless"
+        )
+        assert secret not in scrub_remote_error(exc), (
+            "the REMOTE preset must claim the embedded operand — it is the "
+            "only preset with the prefix-less rules ON"
+        )
 
 
 @pytest.mark.regression
@@ -464,9 +469,9 @@ class TestProbedOperandEchoVerdicts:
         """
         with pytest.raises(ValueError) as excinfo:
             datetime.datetime.strptime("2020", f"{fmt_prefix}{secret}")
-        assert secret in str(excinfo.value), (
-            f"the {branch} branch no longer echoes the format operand"
-        )
+        assert secret in str(
+            excinfo.value
+        ), f"the {branch} branch no longer echoes the format operand"
         assert secret not in scrub_remote_error(excinfo.value)
 
     @pytest.mark.parametrize("secret", PREFIXLESS_SHAPES)

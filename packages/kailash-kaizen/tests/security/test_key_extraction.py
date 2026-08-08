@@ -288,31 +288,73 @@ class TestPrivateKeyCleanup:
         assert private_key is None
 
 
-class TestSecureStorageEncryption:
+class TestStorageBackendKeyResidency:
     """
-    Test 4: Verify stored keys are not plaintext.
+    Test 4: Where each key-manager backend leaves private key material.
 
-    For InMemoryKeyManager, keys are stored in memory (inherently
-    not encrypted at rest). This test documents the behavior and
-    what production implementations (like AWSKMSKeyManager) should do.
+    Renamed from ``TestSecureStorageEncryption``, whose docstring claimed
+    "Verify stored keys are not plaintext" while its only test asserted the
+    OPPOSITE — that ``InMemoryKeyManager`` retains the key verbatim. The name
+    promised an encryption-at-rest guarantee no test in this class checks and
+    no backend here provides; a reader scanning class names would have taken
+    plaintext-at-rest as covered.
+
+    What this class actually verifies is RESIDENCY: the dev backend keeps key
+    material in process memory (deliberate — see ``InMemoryKeyManager``'s own
+    SECURITY WARNING), the KMS backend keeps none locally, and nothing in the
+    package silently selects the former on a caller's behalf.
     """
 
     @pytest.mark.asyncio
-    async def test_inmemory_stores_keys_in_memory(self, key_manager):
-        """
-        InMemoryKeyManager stores keys in memory (expected behavior).
+    async def test_inmemory_retains_key_material_verbatim(self, key_manager):
+        """The dev backend retains the key in plaintext — deliberately.
 
-        This is documented behavior for development/testing.
-        Production should use HSM/KMS backends.
+        This pins a WEAKNESS, not a guarantee, so it is paired with
+        ``test_no_production_key_manager_selector_exists`` below: retaining
+        plaintext is only acceptable while nothing can hand a caller this
+        backend without them naming it.
         """
         private_key, public_key = await key_manager.generate_keypair("agent-001")
 
-        # InMemoryKeyManager stores the actual key - documented behavior
         stored_key = key_manager._keys.get("agent-001")
-        assert stored_key == private_key
+        assert stored_key == private_key, (
+            "InMemoryKeyManager no longer retains the raw key. If it was "
+            "hardened, this test and the residency contract above must be "
+            "rewritten — do not simply delete the assertion."
+        )
 
-        # This is intentional for dev/test but NOT for production
-        # Production should use AWSKMSKeyManager or similar
+    def test_no_production_key_manager_selector_exists(self):
+        """No factory may hand a caller the plaintext backend implicitly.
+
+        The companion guard for the test above. The residency weakness it
+        pins is contained by ONE property: every caller names its backend
+        explicitly, because the package ships no factory, no config key and
+        no environment variable that resolves a ``KeyManagerInterface``. So
+        ``InMemoryKeyManager`` can only be reached by typing its name.
+
+        This is a structural-invariant test in the
+        ``cross-sdk-inspection.md`` Rule 3a sense: it pins the API shape that
+        makes the bug class impossible, so that ADDING a selector fails here
+        loudly and forces whoever adds it to decide — explicitly — whether it
+        refuses the plaintext backend outside development.
+        """
+        import kailash.trust.key_manager as km
+
+        selector_names = [
+            name
+            for name in dir(km)
+            if callable(getattr(km, name, None))
+            and not isinstance(getattr(km, name), type)
+            and "key_manager" in name.lower()
+        ]
+        assert selector_names == [], (
+            "kailash.trust.key_manager grew a key-manager factory "
+            f"({selector_names}). A selector CAN hand a caller "
+            "InMemoryKeyManager without them naming it, which makes its "
+            "plaintext-at-rest residency a production exposure rather than an "
+            "opt-in dev affordance. Add a test asserting the selector refuses "
+            "InMemoryKeyManager outside development, then update this guard."
+        )
 
     @pytest.mark.skipif(
         not BOTO3_AVAILABLE,
@@ -330,8 +372,16 @@ class TestSecureStorageEncryption:
         endpoint, which fails with NoRegionError on any machine that has no AWS
         region configured. Client construction is offline and credential-free
         (botocore resolves credentials lazily at request time), so this test
-        exercises the real constructor with no AWS account, network, or
-        credentials — no skip needed.
+        needs no AWS account, network, or credentials.
+
+        The ONE thing it does need is boto3 itself: with no ``kms_client``
+        passed, the constructor raises ``ImportError`` when ``BOTO3_AVAILABLE``
+        is False (``key_manager.py``, the ``if not BOTO3_AVAILABLE`` branch of
+        ``AWSKMSKeyManager.__init__``). Hence the skipif — an earlier revision
+        of this docstring said "no skip needed" while carrying that very
+        marker, which read as one of the two being wrong. Both are correct and
+        they are about different things: no CREDENTIALS are needed, the boto3
+        IMPORT is.
         """
         kms_manager = AWSKMSKeyManager(region_name="us-east-1")
 
@@ -433,6 +483,14 @@ class TestPrivateKeyNotLoggedOnError:
 class TestKeyRedactedInExceptionMessages:
     """
     Test 6: Verify exception messages redact key material.
+
+    Every test here drives an operation EXPECTED to raise, then inspects the
+    message. They all previously used a bare ``try/except`` with the
+    assertions inside the handler and no ``else``/``fail`` — so the day any of
+    these operations stops raising, the handler never runs, no assertion
+    executes, and the test reports PASSED while checking nothing. The redaction
+    contract would go unverified silently. ``pytest.raises`` makes the raise
+    itself part of the contract, so that failure mode becomes loud.
     """
 
     def test_value_error_from_invalid_key_does_not_expose_valid_keys(
@@ -441,15 +499,14 @@ class TestKeyRedactedInExceptionMessages:
         """ValueError from invalid key doesn't expose other valid keys."""
         private_key = trust_crypto["private_key"]
 
-        try:
-            # Use invalid key that will raise ValueError
+        with pytest.raises(ValueError) as excinfo:
             sign("payload", "invalid-key-format")
-        except ValueError as e:
-            error_msg = str(e)
-            # Error should not contain valid private key
-            assert private_key not in error_msg
-            # Should mention the key is invalid
-            assert "invalid" in error_msg.lower() or "key" in error_msg.lower()
+
+        error_msg = str(excinfo.value)
+        # Error should not contain valid private key
+        assert private_key not in error_msg
+        # Should mention the key is invalid
+        assert "invalid" in error_msg.lower() or "key" in error_msg.lower()
 
     @pytest.mark.asyncio
     async def test_key_not_found_error_does_not_expose_existing_keys(self, key_manager):
@@ -458,14 +515,14 @@ class TestKeyRedactedInExceptionMessages:
         private_key, _ = await key_manager.generate_keypair("existing-key")
 
         # Try to use a different key that doesn't exist
-        try:
+        with pytest.raises(KeyManagerError) as excinfo:
             await key_manager.sign("test", "nonexistent-key")
-        except KeyManagerError as e:
-            error_msg = str(e)
-            # Should not expose the existing key
-            assert private_key not in error_msg
-            # Should mention the key was not found
-            assert "not found" in error_msg.lower() or "nonexistent" in error_msg
+
+        error_msg = str(excinfo.value)
+        # Should not expose the existing key
+        assert private_key not in error_msg
+        # Should mention the key was not found
+        assert "not found" in error_msg.lower() or "nonexistent" in error_msg
 
     @pytest.mark.asyncio
     async def test_duplicate_key_error_does_not_expose_existing_key(self, key_manager):
@@ -474,17 +531,14 @@ class TestKeyRedactedInExceptionMessages:
         private_key, _ = await key_manager.generate_keypair("my-key")
 
         # Try to generate with same ID
-        try:
+        with pytest.raises(KeyManagerError) as excinfo:
             await key_manager.generate_keypair("my-key")
-        except KeyManagerError as e:
-            error_msg = str(e)
-            # Should not expose the existing private key
-            assert private_key not in error_msg
-            # Should mention key already exists
-            assert (
-                "already exists" in error_msg.lower()
-                or "duplicate" in error_msg.lower()
-            )
+
+        error_msg = str(excinfo.value)
+        # Should not expose the existing private key
+        assert private_key not in error_msg
+        # Should mention key already exists
+        assert "already exists" in error_msg.lower() or "duplicate" in error_msg.lower()
 
     @pytest.mark.asyncio
     async def test_revoked_key_error_does_not_expose_key(self, key_manager):
@@ -492,14 +546,14 @@ class TestKeyRedactedInExceptionMessages:
         private_key, _ = await key_manager.generate_keypair("agent-001")
         await key_manager.revoke_key("agent-001")
 
-        try:
+        with pytest.raises(KeyManagerError) as excinfo:
             await key_manager.sign("test", "agent-001")
-        except KeyManagerError as e:
-            error_msg = str(e)
-            # Should not expose the private key
-            assert private_key not in error_msg
-            # Should mention revocation
-            assert "revoked" in error_msg.lower()
+
+        error_msg = str(excinfo.value)
+        # Should not expose the private key
+        assert private_key not in error_msg
+        # Should mention revocation
+        assert "revoked" in error_msg.lower()
 
     def test_exception_traceback_does_not_expose_key(self, trust_crypto):
         """Exception traceback doesn't expose key through local variables."""
@@ -507,16 +561,16 @@ class TestKeyRedactedInExceptionMessages:
 
         private_key = trust_crypto["private_key"]
 
-        try:
+        with pytest.raises(ValueError):
             # Intentionally cause an error during signing
             sign("payload", "bad-key")
-        except ValueError:
-            # Get full traceback
-            tb_str = traceback.format_exc()
 
-            # The valid private key should not appear in traceback
-            # (it's not involved in this operation)
-            assert private_key not in tb_str
+        # Get full traceback
+        tb_str = traceback.format_exc()
+
+        # The valid private key should not appear in traceback
+        # (it's not involved in this operation)
+        assert private_key not in tb_str
 
 
 class TestKeyExtractionEdgeCases:
