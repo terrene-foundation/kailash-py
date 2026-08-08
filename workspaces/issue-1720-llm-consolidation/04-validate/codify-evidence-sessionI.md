@@ -19,14 +19,31 @@ findings would be an instance of its own topic.
 
 ## §1 The non-discriminating instrument
 
-**The class.** A check whose output is the SAME whether or not the thing it
-looks for is present. It is not "a bug in the check" — the check runs, exits 0,
-and prints a plausible value. It is that the result carries no information about
-the question, while having the grammar of an answer.
+**The class — stated in its general form, because the narrow form is wrong.**
+
+An earlier draft of this section defined the class as _"instruments that produce
+falsely reassuring results"_. That definition is too narrow and was corrected by
+a later instance that inverts the direction (I9 below — the orchestrator's
+seventh by its own tally, the ninth row here). The class is:
+
+> **Instruments that produce results uncorrelated with the thing they claim to
+> measure.**
+
+Both directions cost. The **false-clear** direction (a defect passes) is the
+more dangerous. The **false-alarm** direction (a correct artifact is reported
+broken) costs as much in wasted work and is the case a reader is least likely to
+guard against — because a red result _feels like the instrument working_. In I9
+the output would have sent an engineer to rewrite a guard that was already
+correct.
+
+It is not "a bug in the check". The check runs, exits 0, and prints a plausible
+value. The failure is that the result carries no information about the question
+while having the grammar of an answer.
 
 **The discriminating question, which is the whole defense in one line:**
 _what would this command have printed if the proposition were false?_
-If the answer is "the same thing", the result is not evidence.
+If the answer is "the same thing", the result is not evidence — in EITHER
+direction.
 
 ### Instances
 
@@ -40,11 +57,14 @@ If the answer is "the same thing", the result is not evidence.
 | I6  | `set --` for range vars, two lanes                                    | empty range                                         | Same shape: an empty range and a range with nothing in it are indistinguishable downstream.                                                                                                                              | **[R]** (×2)                                                      |
 | I7  | `grep -c load_dotenv <file>`                                          | an accurate count                                   | Accurate answer to a question nobody asked — the file loads `.env` via `install_cost_guard`. The inference drawn from the zero was wrong, and the recommended "fix" would have disarmed a working cost control.          | **[R]**                                                           |
 | I8  | A test suite read while the tree was being written                    | `1 failed` / `13 failed` / `319 passed` at ONE HEAD | Three reads, three answers, no code change between them — a moving tree read as branch state. Nearly shipped as a live RED in the PR body.                                                                               | **[R]**                                                           |
+| I9  | `pytest --color=yes ... \| grep -E "^1 failed"` over a mutation-results table | all 8 mutations reported MISSED, incl. one that demonstrably reds | **INVERTED DIRECTION — a false ALARM.** pytest's summary line is ANSI-colorized, so it begins `\x1b[31m\x1b[31m\x1b[1m1 failed`, and an anchored `^1 failed` cannot match. Reproduced: with color the grep counts **0** on a genuinely failing run; ANSI-stripped it counts **1**. Reads as "the new guard is worse than the old" when the guard was correct — would have sent an engineer to rewrite working code. | mechanism **[V]** (reproduced locally); the incident **[R]** |
 
-**Note the distribution:** four independent lanes, at least eight instances, and
+**Note the distribution:** four independent lanes, at least NINE instances, and
 in I1–I4 the agent committing the error was the one actively fixing this class.
 That is the strongest available argument that this is not a discipline problem
-solved by care.
+solved by care. I9 additionally shows the class is not direction-specific: the
+same root cause (a matcher that cannot see what it claims to check) produced a
+false ALARM rather than a false clear, and cost the same.
 
 ### The defense that emerged, and its receipt
 
@@ -77,6 +97,64 @@ negative half the suite passes equally against a scanner that flags
 everything — which is a different way of being uninformative, and would have
 driven someone to add exclusions until the scanner was decorative. **[V]**
 
+### The constructive counterpart: what makes an instrument able to discriminate
+
+Everything above is negative — instruments that could not discriminate. This is
+the positive form, and it is the single most transferable thing in this file.
+
+> **Write the assertion for the property you actually want, not the mechanism
+> you plan to change.**
+
+**Why it is not a style preference.** An assertion aimed at the MECHANISM can
+only confirm your model of the bug — it passes exactly when the change you
+already decided to make is present. An assertion aimed at the OUTCOME can
+CONTRADICT that model. Only the second can surface a defect you did not already
+know about.
+
+**Evidence — `4772d0c48`, "a failed subprocess termination reported the
+transport disconnected".** The orphaned-subprocess fix retained the process
+handle so a retry could act on it. The lane then wrote:
+
+    packages/kailash-mcp/tests/regression/
+      test_stdio_disconnect_does_not_orphan_the_subprocess.py:119
+        async def test_a_second_disconnect_retries_the_termination
+
+...because *"retain the handle so a retry can act"* IMPLIES a retry that works,
+and the cheapest way to check an implication is to assert it.
+
+**The test failed for a reason the lane had not predicted.** Not the handle at
+all — an early return on a `_connected` flag that was cleared before termination.
+Visible in the diff:
+
+```
+-        if not self._connected:
++        if not self._connected and self.process is None:
+```
+
+The lane's own line:
+
+> Had I tested "the handle is not None", it would have passed and the orphan
+> would have stayed permanent behind a green test.
+
+That mechanism-shaped assertion would have been GREEN, CORRECT about the handle,
+and WRONG about the outcome — a non-discriminating instrument authored in good
+faith, which is precisely the §1 class arriving through the front door.
+
+**Provenance split, and it matters here.** The ARTIFACT is **[V]** — I verified
+the commit `4772d0c48`, the test name at `:119`, and the `_connected` early-return
+in its diff. The PROCESS NARRATIVE (that the lane did not reason its way to the
+second defect, and that the failure was unpredicted) is **[R]** — that is the
+lane's account of its own reasoning and is not recoverable from the artifact.
+I record the split because the narrative is the part a `/codify` gate would most
+want, and it is the part I cannot stand behind.
+
+**Relation to §1.** This is the anti-vacuity control one level up. The negative
+controls in `TestTheScannerSeesEachShape` stop an instrument degrading into
+flagging everything; outcome-shaped assertions stop an instrument from only ever
+confirming what its author already believed. Same property — the result must be
+able to come out the other way — applied to the scanner and to the test
+respectively.
+
 ---
 
 ## §2 The sibling left behind
@@ -104,14 +182,14 @@ what the file looked like to a reviewer at that moment.)
 
 ### Instances
 
-| #   | The fix that landed                                                                                     | The sibling left                                                                                                    | Mechanism                                                                                             | Grade                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| S1  | `98e83dfbe` coerced 4 rate-limit write surfaces                                                         | the 5th, `HTTPTransport.__init__`, wrote raw; guarded only by an `Optional[int]` ANNOTATION, which does not execute | the 5th surface is in a different file from the other four                                            | **[V]** fixed `1df4df166`                                                   |
-| S2  | the #1970 sweep applied drop-`exc_info` reasoning at 8 sites in `kailash-kaizen`                        | **11** sites in `kaizen-agents`, all with correctly-scrubbed messages                                               | the scrub made them LOOK done; only the traceback still leaked                                        | **[V]** fixed `689f9ebd8`                                                   |
-| S3  | `90899764a` fixed the hook EXECUTION sink in `hooks/manager.py`                                         | hook INSTANTIATION (`:420`) and hook FILE LOADING (`:423`) in the SAME FILE, ~120 lines below (lines as at `90899764a`)                       | the sweep's grep keyed on `exc_info\|logger.exception`; both are raw `{e}` with neither               | **[V]** fixed `934d5f8ae`                                                   |
-| S4  | `20f507bb0` scrubbed the LOG line in `skill_tool.py`'s load-failure handler                             | THREE RETURN surfaces in the same handler: `SkillCompleteEvent`, `SkillResult`, and the `NativeToolResult` message  | every sweep this session was log-shaped; returns were never in scope                                  | **[V]** fixed `934d5f8ae`                                                   |
-| S5  | the finalizer-deadlock class (`rules/patterns.md` § Async Resource Cleanup) swept in DataFlow and Nexus | `MCPChannel.__del__` still called `close()` → `runtime.release()` → `logger.debug`                                  | per that commit's own body; I verified the commit and its reasoning, NOT the DataFlow/Nexus precedent | **[V]** commit `e13339c02` exists and states this; the precedent is **[R]** |
-| S6  | an `assert True`-on-404 fixed in one file                                                               | its twin one file over                                                                                              | —                                                                                                     | **[R]**                                                                     |
+| #   | The fix that landed                                                                                     | The sibling left                                                                                                        | Mechanism                                                                                             | Grade                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| S1  | `98e83dfbe` coerced 4 rate-limit write surfaces                                                         | the 5th, `HTTPTransport.__init__`, wrote raw; guarded only by an `Optional[int]` ANNOTATION, which does not execute     | the 5th surface is in a different file from the other four                                            | **[V]** fixed `1df4df166`                                                   |
+| S2  | the #1970 sweep applied drop-`exc_info` reasoning at 8 sites in `kailash-kaizen`                        | **11** sites in `kaizen-agents`, all with correctly-scrubbed messages                                                   | the scrub made them LOOK done; only the traceback still leaked                                        | **[V]** fixed `689f9ebd8`                                                   |
+| S3  | `90899764a` fixed the hook EXECUTION sink in `hooks/manager.py`                                         | hook INSTANTIATION (`:420`) and hook FILE LOADING (`:423`) in the SAME FILE, ~120 lines below (lines as at `90899764a`) | the sweep's grep keyed on `exc_info\|logger.exception`; both are raw `{e}` with neither               | **[V]** fixed `934d5f8ae`                                                   |
+| S4  | `20f507bb0` scrubbed the LOG line in `skill_tool.py`'s load-failure handler                             | THREE RETURN surfaces in the same handler: `SkillCompleteEvent`, `SkillResult`, and the `NativeToolResult` message      | every sweep this session was log-shaped; returns were never in scope                                  | **[V]** fixed `934d5f8ae`                                                   |
+| S5  | the finalizer-deadlock class (`rules/patterns.md` § Async Resource Cleanup) swept in DataFlow and Nexus | `MCPChannel.__del__` still called `close()` → `runtime.release()` → `logger.debug`                                      | per that commit's own body; I verified the commit and its reasoning, NOT the DataFlow/Nexus precedent | **[V]** commit `e13339c02` exists and states this; the precedent is **[R]** |
+| S6  | an `assert True`-on-404 fixed in one file                                                               | its twin one file over                                                                                                  | —                                                                                                     | **[R]**                                                                     |
 
 ### The inverse-asymmetry sub-finding (S4), which generalises furthest
 
@@ -182,3 +260,18 @@ survived a sweep keyed on the wrong token, S4 survived because no instrument
 looked at return surfaces at all. The remediation is likewise shared — a
 shape-keyed detector WITH negative controls, since a detector without them
 degrades into flagging everything and is then disabled by exclusions.
+
+The constructive counterpart in §1 closes the loop from the other side. A
+shape-keyed detector stops a sibling surviving because nobody LOOKED there;
+an outcome-shaped assertion stops one surviving because the person who DID
+look wrote a test that could only agree with them. S1 through S4 are the
+first failure; `4772d0c48`'s second lock-out — found by a test that failed
+for an unpredicted reason — is the second one being avoided.
+
+One property unifies every finding in this file, and it is the thing worth
+carrying if nothing else is: **an instrument is only evidence if its result
+could have come out the other way.** Applied to a sweep it means a positive
+control; to a scanner, negative controls; to a test, an outcome-shaped
+assertion; to a claim, a named falsifying result. Nine instruments in §1
+lacked that property in one direction or the other, across four lanes, and
+four of them were authored by the agent actively fixing the class.
