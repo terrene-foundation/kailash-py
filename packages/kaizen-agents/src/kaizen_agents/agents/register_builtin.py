@@ -12,6 +12,8 @@ Part of ADR-020: Unified Agent API Architecture
 
 import logging
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 # Import autonomous agents
 from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
 from kaizen_agents.agents.autonomous.claude_code import ClaudeCodeAgent
@@ -100,7 +102,9 @@ def register_builtin_agents():
             "dependencies are missing: %s. Install with: pip install "
             "'kailash-kaizen[rag]' (provides numpy). All other builtin agents "
             "remain available.",
-            exc,
+            # Sibling of the same [rag]-extra ImportError sink in
+            # agents/nodes.py; same reasoning, routed in lockstep.
+            scrub_local_error(exc),
         )
     else:
         register_agent(

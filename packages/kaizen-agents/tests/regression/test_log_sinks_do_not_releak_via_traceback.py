@@ -38,6 +38,22 @@ pytestmark = pytest.mark.regression
 _SENTINEL = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-kzagents"
 _LEAKY_DSN = f"postgresql://svc:{_SENTINEL}@db.example.invalid:5432/prod"
 
+#: A SECOND sentinel, and it pins something the first one cannot.
+#:
+#: ``_SENTINEL`` above lives in URL userinfo, and the URL-userinfo rules run
+#: under BOTH presets. So every assertion in this file stays GREEN if someone
+#: swaps the sinks from ``scrub_remote_error`` to ``scrub_local_error`` -- while
+#: that swap turns OFF ``redact_opaque_tokens``, the only rule family that can
+#: claim a credential carrying no vendor prefix. The commit that introduced
+#: these fixes argues at length that the REMOTE preset is correct for a
+#: provider surface; nothing pinned it.
+#:
+#: This is a bare 32-hex run: the Azure OpenAI ``api-key`` shape. Measured --
+#: ``scrub_remote_error`` redacts it, ``scrub_local_error`` passes it through
+#: verbatim. Any sink in this file that downgrades preset now reds here instead
+#: of staying quietly green. Synthetic; not a key, just the shape of one.
+_HEX_SENTINEL = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+
 
 def _chained_exception() -> Exception:
     """A wrapper whose ``__cause__`` carries the credential.
@@ -48,9 +64,17 @@ def _chained_exception() -> Exception:
     """
     try:
         try:
+            # INNER — the URL-userinfo credential. Reaches a log record ONLY via
+            # the traceback, because the wrapper's own message does not repeat
+            # it. That is what makes it the traceback-releak probe.
             raise ConnectionError(f"could not connect: {_LEAKY_DSN}")
         except ConnectionError as inner:
-            raise RuntimeError("operation failed") from inner
+            # OUTER — the bare-hex credential, in the message the SINK ACTUALLY
+            # SCRUBS. Placement is load-bearing and was got wrong once: with the
+            # hex in the INNER exception, a preset downgrade did not red,
+            # because `str(wrapper)` never contains it and the scrubber is only
+            # ever handed the wrapper. Measured both ways before landing.
+            raise RuntimeError(f"operation failed (api-key {_HEX_SENTINEL})") from inner
     except RuntimeError as wrapper:
         return wrapper
 
@@ -137,6 +161,11 @@ class TestConditionTriggerFailSafeSink:
             "ConditionTrigger evaluation failed" in capture.text
         ), "the fail-safe sink never fired; this test would pass vacuously"
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )
 
 
 class TestPathwayManagerHookSink:
@@ -165,6 +194,11 @@ class TestPathwayManagerHookSink:
         # The handler NAME is deliberately retained: it is the diagnostic.
         assert "failing_hook" in capture.text
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )
 
 
 class TestPrintRunnerSink:
@@ -198,6 +232,11 @@ class TestPrintRunnerSink:
             "PrintRunner failed" in capture.text
         ), "the sink never fired; this test would pass vacuously"
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )
         # The RETURN was already scrubbed before this fix; the log line was not.
         # Asserting both keeps the pair from drifting apart again.
         assert _SENTINEL not in (result.error_message or "")
@@ -213,8 +252,8 @@ class TestEmergencyCheckpointSink:
 
     @pytest.mark.asyncio
     async def test_checkpoint_failure_does_not_render_the_raw_cause(self, capture):
-        from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
         from kaizen_agents.agents.autonomous.base import (  # noqa: F401
+            BaseAutonomousAgent,
             InterruptMode,
         )
 
@@ -252,3 +291,8 @@ class TestEmergencyCheckpointSink:
             "Failed to save emergency checkpoint" in capture.text
         ), "the checkpoint sink never fired; this test would pass vacuously"
         assert _SENTINEL not in capture.text, capture.text
+        assert _HEX_SENTINEL not in capture.text, (
+            "the bare-hex shape survived: this sink is on the LOCAL preset, "
+            "which turns off the only rule that claims a prefix-less key.\n"
+            + capture.text
+        )

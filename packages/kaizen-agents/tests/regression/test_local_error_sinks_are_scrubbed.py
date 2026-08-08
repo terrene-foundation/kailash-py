@@ -74,6 +74,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -130,15 +131,68 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
 #:                              already-scrubbed return was still bare)
 #:   delegate/mcp.py       +1 (already swept; the reader-error sink was the
 #:                              only bare one left in that module)
-EXPECTED_FILES = 53
-EXPECTED_SITES = 185
+#:
+#: 53 -> 57 files, 185 -> 191 sites: teaching ``_SinkScan`` shapes 2 and 3 (see
+#: its docstring) surfaced SIX bare sinks in FOUR files that no previous pass --
+#: neither the #1970 sweep nor a `grep exc_info|logger.exception` -- could see,
+#: because all six are the lazy ``%s``-argument form. Found by the upgraded
+#: scanner on its first run against real source, which is the whole point of
+#: the upgrade:
+#:   agents/nodes.py           +1 ([rag]-extra ImportError)
+#:   agents/register_builtin.py +1 (its sibling)
+#:   delegate/hooks.py         +1 (hook-spawn OSError)
+#:   delegate/session.py       +3 (session load / scan / fork-update)
+#: All six are LOCAL (in-process ImportError / OSError / JSONDecodeError), so
+#: they route through the conservative preset, which preserves the path that IS
+#: their diagnostic.
+EXPECTED_FILES = 57
+EXPECTED_SITES = 191
+
+
+#: Standard ``logging.Logger`` emit methods. Matched on the ATTRIBUTE name, so
+#: ``logger.error``, ``self.logger.error`` and
+#: ``logging.getLogger(__name__).error`` are all recognised without having to
+#: model how each module happens to bind its logger.
+_LOG_METHODS = frozenset(
+    {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
+)
 
 
 class _SinkScan(ast.NodeVisitor):
-    """Find string-context uses of one handler's bound exception name.
+    """Find uses of one handler's bound exception name that reach a log record.
 
     ``wrapped`` are the uses already routed through one of :data:`HELPERS`; ``bare``
     are the ones that would put the raw exception text into a message.
+
+    THREE SHAPES, AND THE SCANNER ORIGINALLY SAW ONLY ONE
+    ----------------------------------------------------
+    This class advertises (docstring tier 1, above) that it reds when a NEW
+    unscrubbed sink is added. For its first version that was only true of the
+    ``str(e)`` / ``repr(e)`` / f-string ``{e}`` shape, and the gap was not
+    theoretical: it is why the #1970 sweep left ELEVEN traceback sinks and FIVE
+    bare-argument sinks in this package for a later session to find. An
+    instrument that cannot see a defect class reports the same green whether or
+    not that class is present, which makes its green uninformative for it.
+
+    1. **String context** — ``str(e)``, ``repr(e)``, f-string ``{e}``. Original.
+    2. **Bare argument** — ``logger.error("failed: %s", e)``. The exception is
+       handed to the logger as a lazy ``%s`` arg, so no ``str()`` call and no
+       ``FormattedValue`` node ever appears in the tree; ``logger.error`` is an
+       ``ast.Attribute``, which no branch matched, and there is no
+       ``visit_Name``. This is the exact shape of the five bare sinks in
+       ``delegate/`` fixed in 689f9ebd8.
+    3. **Traceback** — ``exc_info=True`` or ``logger.exception(...)``. Not a
+       node the scanner inspected at all. ``logging`` renders ``exc_info`` by
+       walking the exception chain, so a scrubbed MESSAGE beside a retained
+       traceback still prints the raw exception and its ``__cause__`` on the
+       traceback's final line. Every one of the eleven CLASS-2 sinks fixed in
+       689f9ebd8 had a correctly-scrubbed message and was invisible here.
+
+    Shapes 2 and 3 are deliberately narrow: shape 2 fires only for a bare
+    ``Name`` passed to a LOGGING call, so ``type(e)``, ``isinstance(e, X)``,
+    ``raise e`` and ``SomeResult.from_exception(e)`` are untouched; shape 3
+    fires only inside an except handler, which is the only place a traceback can
+    carry the caught exception.
     """
 
     def __init__(self, name: str) -> None:
@@ -163,8 +217,45 @@ class _SinkScan(ast.NodeVisitor):
             and self._is_our_name(node.args[0])
         )
 
+    @staticmethod
+    def _is_logging_call(func: ast.AST) -> bool:
+        """``<anything>.<log-method>(...)`` — matched on the attribute only."""
+        return isinstance(func, ast.Attribute) and func.attr in _LOG_METHODS
+
+    def _flag_traceback_and_bare_args(self, node: ast.Call) -> None:
+        """Record shapes 2 and 3 on a logging call (see the class docstring).
+
+        Does NOT return early: the caller still descends, so a
+        ``scrub_remote_error(e)`` sitting in the SAME call is still counted as
+        wrapped. Flagging and short-circuiting here would silently drop that
+        site from the wrapped tally and move the pinned counts.
+        """
+        # Shape 3a — ``logger.exception`` ALWAYS sets exc_info.
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "exception":
+            self.bare.append(node.lineno)
+            return
+        for kw in node.keywords:
+            # Shape 3b — an explicit truthy ``exc_info``. ``exc_info=False`` /
+            # ``exc_info=None`` are the documented ways to turn it off, so they
+            # are not sinks.
+            if kw.arg == "exc_info" and not (
+                isinstance(kw.value, ast.Constant) and not kw.value.value
+            ):
+                self.bare.append(node.lineno)
+                return
+        # Shape 2 — the exception handed over as a lazy ``%s`` argument. args[0]
+        # is the format string; anything after it is interpolated into the
+        # record exactly as ``str(e)`` would be.
+        for arg in node.args[1:]:
+            if self._is_our_name(arg):
+                self.bare.append(arg.lineno)
+                return
+
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
+        if self._is_logging_call(func):
+            self._flag_traceback_and_bare_args(node)
+            # fall through to generic_visit -- see the docstring above.
         if (
             isinstance(func, ast.Name)
             and func.id in HELPERS
@@ -243,6 +334,82 @@ def _module_name(path: Path) -> str:
 # ---------------------------------------------------------------------------
 # Tier 1 — coverage. No bare sink anywhere in the package.
 # ---------------------------------------------------------------------------
+class TestTheScannerSeesEachShape:
+    """The coverage instrument is itself covered.
+
+    Tier 1 claims to red when a NEW unscrubbed sink appears. That claim is only
+    worth what the scanner can SEE, and for its first version the answer was
+    "one shape of three" -- which is why eleven traceback sinks and five
+    bare-argument sinks survived the #1970 sweep and a `grep exc_info` both.
+
+    So each shape is planted here as a fixture and asserted to red, and each
+    near-miss that must NOT red is planted beside it. Without the negative
+    controls this class would pass just as well against a scanner that flags
+    everything, which would be a different way of being uninformative.
+    """
+
+    @staticmethod
+    def _scan(src: str) -> list[int]:
+        tree = ast.parse(textwrap.dedent(src))
+        bare: list[int] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler) or not node.name:
+                continue
+            scan = _SinkScan(node.name)
+            for stmt in node.body:
+                scan.visit(stmt)
+            bare.extend(scan.bare)
+        return bare
+
+    @pytest.mark.parametrize(
+        "label, body",
+        [
+            # Shape 1 — string context. The original detector.
+            ("str", '    logger.error("failed: " + str(exc))'),
+            ("f-string", '    logger.error(f"failed: {exc}")'),
+            ("repr", '    logger.error("failed: " + repr(exc))'),
+            # Shape 2 — the lazy %s argument. The five delegate/ sinks.
+            ("bare-%s-arg", '    logger.error("failed: %s", exc)'),
+            # Shape 3 — the traceback. All eleven CLASS-2 sinks.
+            (
+                "logger.exception",
+                '    logger.exception("failed: %s", scrub_local_error(exc))',
+            ),
+            (
+                "exc_info=True",
+                '    logger.error("f: %s", scrub_local_error(exc), exc_info=True)',
+            ),
+        ],
+    )
+    def test_each_leaking_shape_is_flagged(self, label: str, body: str) -> None:
+        src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
+        assert self._scan(src), f"scanner is blind to the {label!r} shape"
+
+    @pytest.mark.parametrize(
+        "label, body",
+        [
+            ("scrubbed-%s-arg", '    logger.error("f: %s", scrub_local_error(exc))'),
+            ("scrubbed-remote", '    logger.error("f: %s", scrub_remote_error(exc))'),
+            # exc_info=False / None are the documented ways to turn it OFF.
+            (
+                "exc_info=False",
+                '    logger.error("f: %s", scrub_local_error(exc), exc_info=False)',
+            ),
+            # Uses that never reach a log record as text.
+            ("type-name", '    logger.error("f: %s", type(exc).__name__)'),
+            ("isinstance", "    _ = isinstance(exc, OSError)"),
+            ("re-raise", "    raise exc"),
+            # A bare Name handed to a NON-logging call is out of scope: it does
+            # not become a log record, and flagging it would make the scanner
+            # noisy enough that someone would add exclusions.
+            ("non-log-call", "    _ = Result.from_exception(exc)"),
+        ],
+    )
+    def test_each_safe_shape_is_not_flagged(self, label: str, body: str) -> None:
+        src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
+        assert not self._scan(src), f"scanner false-positives on {label!r}"
+
+
 class TestNoBareExceptionTextSinkRemains:
     @pytest.mark.parametrize(
         "path",

@@ -57,6 +57,7 @@ See Also:
 import logging
 from typing import TYPE_CHECKING, Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.agents.multi_modal.multi_modal_agent import MultiModalAgent
 from kaizen_agents.agents.multi_modal.transcription_agent import TranscriptionAgent
 
@@ -262,7 +263,12 @@ except ImportError as _rag_exc:  # numpy (kailash-kaizen[rag]) not installed
         "RAGResearchAgent Studio node not registered — its optional "
         "dependencies are missing: %s. Install with: pip install "
         "'kailash-kaizen[rag]' (provides numpy).",
-        _rag_exc,
+        # Conservative preset: an ImportError message is module names and
+        # paths, so this is a measured no-op on the text -- but routing it
+        # keeps the sink OFF the scanner's bare list without a
+        # hand-maintained exclusion, which is what stops the exclusion list
+        # from becoming the place defects hide.
+        scrub_local_error(_rag_exc),
     )
 else:
     KAIZEN_AGENTS["RAGResearchAgent"] = {

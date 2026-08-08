@@ -40,6 +40,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -327,7 +329,13 @@ class HookManager:
             )
 
         except OSError as exc:
-            logger.error("Failed to spawn hook %s: %s", script.name, exc)
+            # A spawn OSError carries the path it failed on, which the
+            # conservative preset deliberately PRESERVES -- that path is the
+            # diagnostic. What it still claims is a literal-anchored
+            # credential, e.g. a token in a hook script argv.
+            logger.error(
+                "Failed to spawn hook %s: %s", script.name, scrub_local_error(exc)
+            )
             return HookResult(
                 event=event,
                 script=script,

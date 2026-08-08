@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 if TYPE_CHECKING:
     from kaizen_agents.delegate.config.loader import KzConfig
     from kaizen_agents.delegate.loop import Conversation, UsageTracker
@@ -144,7 +146,7 @@ class SessionManager:
             data = json.loads(path.read_text(encoding="utf-8"))
             return data
         except (json.JSONDecodeError, OSError) as exc:
-            logger.error("Failed to load session %s: %s", name, exc)
+            logger.error("Failed to load session %s: %s", name, scrub_local_error(exc))
             return None
 
     # ------------------------------------------------------------------
@@ -174,7 +176,11 @@ class SessionManager:
                     }
                 )
             except (json.JSONDecodeError, OSError) as exc:
-                logger.warning("Skipping unreadable session file %s: %s", path, exc)
+                logger.warning(
+                    "Skipping unreadable session file %s: %s",
+                    path,
+                    scrub_local_error(exc),
+                )
 
         sessions.sort(key=lambda s: s["timestamp"], reverse=True)
         return sessions
@@ -212,7 +218,9 @@ class SessionManager:
             data["timestamp"] = datetime.now(UTC).isoformat()
             _secure_write(dest_path, json.dumps(data, indent=2, default=str))
         except (json.JSONDecodeError, OSError) as exc:
-            logger.error("Failed to update forked session metadata: %s", exc)
+            logger.error(
+                "Failed to update forked session metadata: %s", scrub_local_error(exc)
+            )
 
         logger.info("Session forked: %s -> %s", source_name, new_name)
         return dest_path
