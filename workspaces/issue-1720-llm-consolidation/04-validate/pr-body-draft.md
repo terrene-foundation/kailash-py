@@ -1,5 +1,16 @@
 # PR body draft — `fix/issue-1720-forest-drain`
 
+> **SUPERSEDED by `pr-body-v2.md`. MUST NOT be opened as written.**
+>
+> Its § Verification asserts "Convergence was reached by rotated-lens redteam rounds" —
+> a convergence that was never reached. It also gates on a "round 3" that has since been
+> superseded, carries counts from an earlier HEAD, and lists an incomplete set of filed
+> issues.
+>
+> Kept, not deleted: this is the record of what was nearly published, and the claim it
+> makes is the reason the replacement leads with "NOT converged. Do not merge on the
+> strength of this description alone."
+
 > DRAFT. Do not open the PR until (a) round 3 reaches convergence, and (b) the push
 > succeeds. Numbers below are orchestrator-verified; re-derive before opening — several
 > will have moved.
