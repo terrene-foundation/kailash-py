@@ -562,7 +562,13 @@ text = 'Kailash Nexus provides a zero-configuration platform for workflow orches
 # Simple keyword extraction
 import re
 words = re.findall(r'\\b\\w{4,}\\b', text.lower())
-keywords = list(set(words))[:5]
+# sorted(), not list(set(...)): set iteration order depends on
+# PYTHONHASHSEED, so list(set(words))[:5] picked an arbitrary 5 of the 11
+# unique words -- a different 5 in every process. Only 5 of the 11 are
+# words the assertion below accepts, so the test failed whenever the
+# random subset missed all of them: measured 2/200 hash seeds (~1%),
+# matching C(6,5)/C(11,5). It looked like load-sensitivity and was not.
+keywords = sorted(set(words))[:5]
 result = {'keywords': keywords}
 """
             },
@@ -592,14 +598,19 @@ result = {'keywords': keywords}
                 json={"parameters": {}},  # Empty parameters since we use hardcoded data
             )
             summary_result = summary_response.json()
-            if "outputs" in summary_result:
-                summary_data = (
-                    summary_result.get("outputs", {})
-                    .get("summarize", {})
-                    .get("result", {})
-                )
-                summary = summary_data.get("summary", "")
-                assert "Kailash Nexus" in summary
+            # assert, not `if`: a conditional here silently skips every
+            # assertion in the block when the response shape changes, so the
+            # test would report success having checked nothing.
+            assert "outputs" in summary_result, (
+                f"summarize-text response has no 'outputs' key: {summary_result}"
+            )
+            summary_data = (
+                summary_result.get("outputs", {})
+                .get("summarize", {})
+                .get("result", {})
+            )
+            summary = summary_data.get("summary", "")
+            assert "Kailash Nexus" in summary
 
             # Extract keywords
             keywords_response = requests.post(
@@ -607,20 +618,22 @@ result = {'keywords': keywords}
                 json={"parameters": {}},  # Empty parameters since we use hardcoded data
             )
             keywords_result = keywords_response.json()
-            if "outputs" in keywords_result:
-                keywords_data = (
-                    keywords_result.get("outputs", {})
-                    .get("extract", {})
-                    .get("result", {})
-                )
-                keywords = keywords_data.get("keywords", [])
-                assert len(keywords) > 0
-                # Check for "kailash" or any meaningful keyword
-                assert any(
-                    word
-                    in ["kailash", "nexus", "platform", "workflow", "orchestration"]
-                    for word in keywords
-                )
+            assert "outputs" in keywords_result, (
+                f"extract-keywords response has no 'outputs' key: {keywords_result}"
+            )
+            keywords_data = (
+                keywords_result.get("outputs", {})
+                .get("extract", {})
+                .get("result", {})
+            )
+            keywords = keywords_data.get("keywords", [])
+            assert len(keywords) > 0
+            # Check for "kailash" or any meaningful keyword
+            assert any(
+                word
+                in ["kailash", "nexus", "platform", "workflow", "orchestration"]
+                for word in keywords
+            )
 
         finally:
             n.stop()
