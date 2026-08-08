@@ -62,6 +62,12 @@ from kailash.visualization.reports import ReportFormat, WorkflowPerformanceRepor
 
 logger = logging.getLogger(__name__)
 
+# How long the stop endpoint waits for the metrics broadcast task to actually
+# finish before refusing to report it stopped. Bounded because this runs inside
+# an HTTP handler; long enough that an ordinary iteration of the broadcast loop
+# can reach its next cancellation point.
+_BROADCAST_STOP_TIMEOUT_S = 5.0
+
 
 # Pydantic models for API requests/responses
 if FASTAPI_AVAILABLE:
@@ -318,12 +324,58 @@ class DashboardAPIServer:
             try:
                 self.dashboard.stop_monitoring()
 
-                # Stop WebSocket broadcasting
+                # Stop WebSocket broadcasting.
+                #
+                # ``cancel()`` only REQUESTS cancellation -- it returns without
+                # establishing that the task stopped. The previous form
+                # discarded that, nulled the handle, and returned
+                # ``{"status": "stopped"}`` regardless, so a caller proceeded
+                # on a broadcast task that could still be pushing frames. A
+                # status field is a stronger claim than a log line: an
+                # orchestrator acts on it.
+                #
+                # Nulling the handle was the worse half. ``stop_monitoring()``
+                # above already clears ``dashboard._monitoring``, which is
+                # this task's own ``while`` condition (see
+                # ``_broadcast_metrics``), so once the handle is dropped the
+                # task is both unreachable and unobservable: a retry has
+                # nothing to act on, and ``start_monitoring``'s
+                # ``if not self._broadcast_task`` would spawn a SECOND
+                # broadcast task alongside a wedged first.
                 if self._broadcast_task:
-                    self._broadcast_task.cancel()
+                    task = self._broadcast_task
+                    task.cancel()
+                    # ``asyncio.wait`` reports completion without re-raising
+                    # the CancelledError the task ends with, so this observes
+                    # the outcome without swallowing a cancellation aimed at
+                    # THIS handler (which ``await task`` inside a try/except
+                    # CancelledError would).
+                    await asyncio.wait({task}, timeout=_BROADCAST_STOP_TIMEOUT_S)
+                    if not task.done():
+                        # Retain the handle: it is the only thing that can
+                        # observe or retry this task.
+                        self.logger.warning(
+                            "Broadcast task did not stop within %ss; retaining "
+                            "handle so a retry can act on it",
+                            _BROADCAST_STOP_TIMEOUT_S,
+                        )
+                        raise HTTPException(
+                            status_code=500,
+                            detail=(
+                                "Monitoring stopped, but the metrics broadcast "
+                                f"task did not stop within "
+                                f"{_BROADCAST_STOP_TIMEOUT_S}s and may still be "
+                                "pushing to WebSocket clients. Retry the stop "
+                                "request."
+                            ),
+                        )
                     self._broadcast_task = None
 
                 return {"status": "stopped"}
+            except HTTPException:
+                # Already carries the precise reason; re-wrapping below would
+                # replace it with str(exc) and lose the detail.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to stop monitoring: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
