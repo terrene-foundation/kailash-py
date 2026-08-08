@@ -1,0 +1,184 @@
+# Codify evidence — session I (2026-08-08)
+
+Draft input for a future human-gated `/codify`. **Evidence only.** No proposed
+rule text: that is the gate's job.
+
+## Provenance and how to read this
+
+Two grades of claim, marked per row. This distinction is load-bearing — the
+whole subject of §1 is instruments that report confidently about things they
+cannot see, and a document that laundered relayed reports into first-hand
+findings would be an instance of its own topic.
+
+- **[V]** — verified by me in this repo at the cited `path:line` / SHA.
+- **[R]** — RELAYED by the orchestrator from another lane, NOT independently
+  verified by me. Recorded because the pattern is the point and the sample size
+  matters; each still needs its own citation before it is cited as fact.
+
+---
+
+## §1 The non-discriminating instrument
+
+**The class.** A check whose output is the SAME whether or not the thing it
+looks for is present. It is not "a bug in the check" — the check runs, exits 0,
+and prints a plausible value. It is that the result carries no information about
+the question, while having the grammar of an answer.
+
+**The discriminating question, which is the whole defense in one line:**
+_what would this command have printed if the proposition were false?_
+If the answer is "the same thing", the result is not evidence.
+
+### Instances
+
+| #   | Instrument                                                            | What it printed                                     | Why it could not discriminate                                                                                                                                                                                            | Grade                                                             |
+| --- | --------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| I1  | `out=$(isort --check-only ...); echo "isort: CLEAN"`                  | `isort: CLEAN`                                      | The `echo` was unconditional — it never read `$out`. Printed CLEAN while two files were red. Caught on the next command.                                                                                                 | **[V]** mine, this session                                        |
+| I2  | `re.findall(r'^\s+\("', block)` to count parametrize cases            | `4 positive / 6 negative`                           | Regex counts LINES beginning with `("`; multi-line tuples start with `(` alone. True answer via `ast` + the live run: **6 / 7 / 13 passed**.                                                                             | **[V]** mine, ~10 min before writing this                         |
+| I3  | F3 sentinel: bare-hex placed in the INNER exception of a chained pair | downgrade probe stayed GREEN                        | The sinks scrub the WRAPPER; `str(wrapper)` never contains the inner message, so the scrubber was never handed the sentinel. The test pinned nothing. Fixed by moving the hex to the outer message; re-proved both ways. | **[V]** mine — `6a6e54541`, then applied correctly in `6a870a702` |
+| I4  | `git log --author="$(git config user.name)"` to count my own commits  | 20 commits                                          | All lanes commit under ONE git identity, so the filter cannot separate agents. Returned siblings' work as mine. I had already reported "14 commits" from memory; the verified count by subject is **12**.                | **[V]** mine, at session close                                    |
+| I5  | A scoped `grep` detector, already validated against ground truth      | **0 hits across all 9 packages**                    | A multi-line shell variable failed to word-split, so the sweep never ran. Zero-hits is byte-identical to a genuinely clean tree.                                                                                         | **[R]**                                                           |
+| I6  | `set --` for range vars, two lanes                                    | empty range                                         | Same shape: an empty range and a range with nothing in it are indistinguishable downstream.                                                                                                                              | **[R]** (×2)                                                      |
+| I7  | `grep -c load_dotenv <file>`                                          | an accurate count                                   | Accurate answer to a question nobody asked — the file loads `.env` via `install_cost_guard`. The inference drawn from the zero was wrong, and the recommended "fix" would have disarmed a working cost control.          | **[R]**                                                           |
+| I8  | A test suite read while the tree was being written                    | `1 failed` / `13 failed` / `319 passed` at ONE HEAD | Three reads, three answers, no code change between them — a moving tree read as branch state. Nearly shipped as a live RED in the PR body.                                                                               | **[R]**                                                           |
+
+**Note the distribution:** four independent lanes, at least eight instances, and
+in I1–I4 the agent committing the error was the one actively fixing this class.
+That is the strongest available argument that this is not a discipline problem
+solved by care.
+
+### The defense that emerged, and its receipt
+
+**Pair every negative sweep with a positive control: demonstrate the instrument
+CAN find the thing before trusting its silence.**
+
+Receipt — the defense found a real defect within an hour of adoption:
+
+- Instrument: `_SinkScan`, an AST pass over `kaizen_agents/`
+  (`packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py`).
+- Before: it recognised only `str(e)` / `repr(e)` / f-string `{e}`. It was blind
+  to (a) `exc_info=True` / `logger.exception` entirely and (b) the lazy
+  `%s`-argument form `logger.error("...: %s", e)`. Those are exactly the two
+  shapes that had just been fixed by hand in `689f9ebd8`.
+- The file's own docstring (tier 1) advertised that it reds when a new
+  unscrubbed sink is added. For two of three shapes that claim was false.
+- After teaching it both shapes (`6a6e54541`), **first run against real source
+  found 6 previously-invisible bare sinks in 4 files** — `agents/nodes.py`,
+  `agents/register_builtin.py`, `delegate/hooks.py`, `delegate/session.py`.
+  Pin moved 53→57 files / 185→191 sites (`test_local_error_sinks_are_scrubbed.py:148-149`).
+- Those six had survived TWO prior sweeps of the same package plus a
+  `grep exc_info|logger.exception`. All six are the `%s`-arg form, which that
+  grep structurally cannot match. **[V]**
+
+**The negative half is not optional.** `TestTheScannerSeesEachShape`
+(`:337`) pins **6 shapes that MUST red** and **7 that MUST NOT**
+(`type(e).__name__`, `isinstance`, `raise e`, `Result.from_exception(e)`,
+`exc_info=False`, and both scrubbed forms). 13 cases, all passing. Without the
+negative half the suite passes equally against a scanner that flags
+everything — which is a different way of being uninformative, and would have
+driven someone to add exclusions until the scanner was decorative. **[V]**
+
+---
+
+## §2 The sibling left behind
+
+**The class.** A fix lands where someone was looking. The same defect one call
+site, one branch, one surface, or one package over is untouched — not by
+judgement, but because the instrument that found the first one could not see the
+second.
+
+**The diagnosis, which I want carried verbatim because it names the reason these
+survive review:**
+
+> **Half-swept is the worst state to leave a file in, because the import reads
+> as evidence the file was handled.**
+
+A reviewer opening `hooks/manager.py` sees `from kaizen.utils.credential_scrub
+import scrub_remote_error` at `:18` and a scrubbed sink at `:297`, and stops.
+The raw `{e}` at `:420` was ~120 lines below the fold, behind a correct-looking
+import.
+
+(Line numbers as they stood AT `90899764a`, the commit that created the
+half-swept state. Post-fix at `934d5f8ae` those two sinks are `:434` and `:445`
+and are no longer raw. Citing the pre-fix numbers because the claim is about
+what the file looked like to a reviewer at that moment.)
+
+### Instances
+
+| #   | The fix that landed                                                                                     | The sibling left                                                                                                    | Mechanism                                                                                             | Grade                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| S1  | `98e83dfbe` coerced 4 rate-limit write surfaces                                                         | the 5th, `HTTPTransport.__init__`, wrote raw; guarded only by an `Optional[int]` ANNOTATION, which does not execute | the 5th surface is in a different file from the other four                                            | **[V]** fixed `1df4df166`                                                   |
+| S2  | the #1970 sweep applied drop-`exc_info` reasoning at 8 sites in `kailash-kaizen`                        | **11** sites in `kaizen-agents`, all with correctly-scrubbed messages                                               | the scrub made them LOOK done; only the traceback still leaked                                        | **[V]** fixed `689f9ebd8`                                                   |
+| S3  | `90899764a` fixed the hook EXECUTION sink in `hooks/manager.py`                                         | hook INSTANTIATION (`:420`) and hook FILE LOADING (`:423`) in the SAME FILE, ~120 lines below (lines as at `90899764a`)                       | the sweep's grep keyed on `exc_info\|logger.exception`; both are raw `{e}` with neither               | **[V]** fixed `934d5f8ae`                                                   |
+| S4  | `20f507bb0` scrubbed the LOG line in `skill_tool.py`'s load-failure handler                             | THREE RETURN surfaces in the same handler: `SkillCompleteEvent`, `SkillResult`, and the `NativeToolResult` message  | every sweep this session was log-shaped; returns were never in scope                                  | **[V]** fixed `934d5f8ae`                                                   |
+| S5  | the finalizer-deadlock class (`rules/patterns.md` § Async Resource Cleanup) swept in DataFlow and Nexus | `MCPChannel.__del__` still called `close()` → `runtime.release()` → `logger.debug`                                  | per that commit's own body; I verified the commit and its reasoning, NOT the DataFlow/Nexus precedent | **[V]** commit `e13339c02` exists and states this; the precedent is **[R]** |
+| S6  | an `assert True`-on-404 fixed in one file                                                               | its twin one file over                                                                                              | —                                                                                                     | **[R]**                                                                     |
+
+### The inverse-asymmetry sub-finding (S4), which generalises furthest
+
+S4 is the mirror of the shape found earlier in `delegate/print_mode.py`, where
+the RETURN was scrubbed and the LOG was not. Both directions occur, and the S4
+direction is worse:
+
+> A `NativeToolResult` reaches the MODEL and enters the transcript — an audience
+> strictly wider than a framework log, and one that persists and is not rotated.
+
+Evidence, `934d5f8ae` on `tools/native/skill_tool.py`:
+
+```
++            safe_error = scrub_remote_error(e)
+-                error_message=str(e),          → +  error_message=safe_error,   (SkillCompleteEvent)
+-                error_message=str(e),          → +  error_message=safe_error,   (SkillResult)
+-   f"Failed to load skill '{skill_name}': {e}" → +  f"... {safe_error}"          (NativeToolResult)
+```
+
+**`_SinkScan` does not distinguish sink-from-return.** It flagged these three
+only incidentally, because the exception name happened to appear in string
+context inside the handler. A scanner ported to other packages should classify
+the two, because they need different verdicts: a filesystem path in a log is a
+diagnostic worth keeping; the same path in a tool result is disclosure. **[V]**
+
+### The structural remediation, demonstrated not proposed
+
+Key on the **shape**, not the **instance**. `_SinkScan` finds any occurrence of
+the shape in any file, including files nobody has looked at — which is what
+found the 6 in §1. A hand-sweep finds only what the sweeper's query matched, and
+each of S1–S4 is a hand-sweep's blind spot.
+
+The measured asymmetry that makes the argument:
+
+| Package          | Has an AST scanner? | Sites                         |
+| ---------------- | ------------------- | ----------------------------- |
+| `kaizen-agents`  | yes                 | 191 wrapped, **0 bare**       |
+| `kailash-kaizen` | no                  | **390 bare across 107 files** |
+
+Every gap the adversarial reviewer and the orchestrator found this round was in
+`kailash-kaizen`; none in `kaizen-agents`. **The scanner is the difference, not
+the diligence.** **[V]** — measured by running `_SinkScan` over
+`packages/kailash-kaizen/src`; filed as **#2012**.
+
+Actionable split for whoever takes #2012: **28 of the 390 sites sit in 8 files
+that ALREADY import a scrubber** for their other sinks — the half-swept
+category, and by the diagnosis above the highest-risk subset. The other 362 sites
+in 99 files were never touched by any sweep. **[V]**
+
+### One caveat on the count, recorded so it is not re-derived
+
+390/107 is an UN-TRIAGED surface, not a defect count. Each site still needs the
+where-can-this-exception-be-RAISED (local vs remote) classification that
+`kaizen-agents` received; only the remote-raised subset is a credential channel.
+The rest are local `OSError`/`ImportError`/`JSONDecodeError` whose path and
+module text ARE the diagnostic and must be preserved — a blanket sweep would
+trade a leak for a blind spot, which is the failure mode that halted the first
+attempt at this in `kaizen-agents` (see that file's docstring, "WHAT LANDED, AND
+WHY IT IS NOT THE SWEEP THAT WAS HALTED"). **[V]**
+
+---
+
+## Cross-reference between the two sections
+
+They are the same mechanism at different scopes. §2's siblings survive _because_
+of §1's instruments: S3 survived a grep that could not match its shape, S2
+survived a sweep keyed on the wrong token, S4 survived because no instrument
+looked at return surfaces at all. The remediation is likewise shared — a
+shape-keyed detector WITH negative controls, since a detector without them
+degrades into flagging everything and is then disabled by exclusions.
