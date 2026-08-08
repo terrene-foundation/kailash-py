@@ -779,16 +779,31 @@ class MCPChannel(Channel):
             self.runtime = None
 
     def __del__(self, _warnings=warnings):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately.
+        #
+        # ``rules/patterns.md`` § "Async Resource Cleanup" BLOCKS calling
+        # ``close()`` (or anything that can emit a log line) from ``__del__``:
+        # a finalizer can fire from inside Python's logging machinery during
+        # GC, while that same thread holds the root logging lock. Re-entering
+        # logging then deadlocks the process.
+        #
+        # ``close()`` reaches logging on this exact path:
+        #   close() -> runtime.release() -> LocalRuntime.close()
+        #     -> logger.debug("Explicit close() called ...")
+        #     -> _cleanup_event_loop() -> logger.debug/logger.warning
+        #        + loop.run_until_complete(...) + a lazy AsyncSQLDatabaseNode
+        #        import (import lock) before loop.close()
+        #
+        # Same bug class as the 2026-04-16 "DataFlow unit suite hangs"
+        # incident (fixed for DataFlow in #1000) and its Nexus sibling; this
+        # channel was the third, un-swept site. Real cleanup stays the
+        # caller's job via ``close()`` or ``stop()``.
         if getattr(self, "runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
                 ResourceWarning,
                 source=self,
             )
-            try:
-                self.close()
-            except Exception:
-                pass
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform comprehensive health check."""
