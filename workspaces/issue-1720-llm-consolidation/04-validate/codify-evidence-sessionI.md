@@ -41,6 +41,38 @@ exists to force.
 **The rule is loaded in EVERY session in this repo** (one of 14 baseline-scope
 rules). Every agent who committed an instance in §1 had it in context. **[V]**
 
+### And it was not merely loaded — it was CITED, by clause, in the same branch
+
+A first draft of this section said the agents "could have quoted the rule". That
+understates it, and the stronger version is measurable. This branch's own prior
+session ledgers cite `instrument-discipline.md` by name and by MUST-clause:
+
+| ledger | citations | by MUST-clause |
+| --- | --- | --- |
+| `launch-ledger-sessionF.md` | 3 | 1 |
+| `launch-ledger-sessionG.md` | 2 | 1 |
+| `launch-ledger-sessionH.md` | 2 | 2 |
+| `launch-ledger-sessionI.md` | 3 | 1 |
+
+Used correctly, as the governing rule, e.g. sessionG: *"the harder direction to
+find them and both are `instrument-discipline.md` MUST-1"*; sessionH: *"a fix
+whose RED→GREEN could not be established — `instrument-discipline.md` MUST-2"*.
+**[V]** — counted with a negative control (`grep -c nonexistent-rule` → 0 in the
+same files, confirming the counts are real matches rather than a broken pattern).
+
+**This removes the most comfortable explanation.** The violations are not what
+happens when a rule is unknown, unread, or buried. They happened in sessions that
+were actively invoking the rule by clause number, in the same documents that
+record the violations. Three prior sessions of this branch reasoned with it
+explicitly, and it did not prevent the nine instances in §1 — several of which
+occurred in those very sessions.
+
+That is the strongest form of the enforcement-gap claim available, and it is
+stronger than the version this section originally carried. A rule can be
+baseline-priority, loaded, quoted by clause, and correctly understood, and still
+not bind — because *understanding a test is not the same as having a second
+instrument to run it with*.
+
 ### So the finding is not what §1 thought it was
 
 | what §1 reads as | what it actually is |
