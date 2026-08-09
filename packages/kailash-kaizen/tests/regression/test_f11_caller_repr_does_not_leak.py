@@ -352,8 +352,11 @@ class _FailingExecutor:
     the real ``kaizen...isolation`` logger either way.
     """
 
+    def __init__(self, message: str = "isolation unavailable") -> None:
+        self._message = message
+
     async def execute_isolated(self, handler, context, timeout):
-        raise RuntimeError("isolation unavailable")
+        raise RuntimeError(self._message)
 
 
 class TestIsolatedHookManagerSinks:
@@ -378,6 +381,28 @@ class TestIsolatedHookManagerSinks:
         assert "isolation failed" in capture.text, "sink never fired; vacuous"
         assert _SENTINEL not in capture.text, capture.text
         assert "_StructuralHandler" in capture.text, capture.text
+
+    @pytest.mark.asyncio
+    async def test_isolation_failure_scrubs_the_exception_text(self, capture):
+        """isolation.py:437 also rendered the EXCEPTION raw, beside the repr.
+
+        The same sink interpolates ``{e}``, and that exception comes from
+        ``executor.execute_isolated`` -- which runs the caller's hook. This
+        module imported no scrubber at all, so it was un-swept for the
+        exception-text half of the same leak class.
+        """
+        manager = IsolatedHookManager(enable_isolation=True)
+        manager.executor = _FailingExecutor(
+            message=f"connect failed: {_LEAKY_URL}"
+        )
+
+        result = await manager._execute_hook(
+            _StructuralHandler("no-credential-here"), _context(), timeout=5.0
+        )
+
+        assert result.success is False
+        assert "isolation failed" in capture.text, "sink never fired; vacuous"
+        assert _SENTINEL not in capture.text, capture.text
 
     def test_execute_isolated_name_is_derived_without_repr(self):
         """isolation.py:211 -- the name that reaches the RETURNED HookResult.

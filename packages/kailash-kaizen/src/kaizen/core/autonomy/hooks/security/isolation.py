@@ -16,6 +16,8 @@ import sys
 import time
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 from ..manager import HookEvent, HookManager, HookPriority, safe_handler_name
 from ..protocol import HookHandler
 from ..types import HookContext, HookResult
@@ -239,8 +241,13 @@ class IsolatedHookExecutor:
                 queue.put(("success", result))
 
             except Exception as e:
-                # Send error to parent process
-                error_msg = f"Hook error: {str(e)}"
+                # Send error to parent process. ``handler.handle`` is
+                # CALLER-SUPPLIED code, so ``e`` is whatever it raised -- an
+                # HTTP client, a DB driver, an SDK -- and this string crosses
+                # the process boundary into BOTH a parent log line and the
+                # returned ``HookResult.error``. Scrubbed here, at the point it
+                # is built, so neither consumer can re-leak it.
+                error_msg = f"Hook error: {scrub_remote_error(e)}"
                 queue.put(("error", error_msg))
 
         # Start isolated process
@@ -304,7 +311,11 @@ class IsolatedHookExecutor:
                 )
 
         except Exception as e:
-            logger.error(f"SECURITY: Failed to retrieve hook result: {e}")
+            # The queue payload was produced by the child from caller-supplied
+            # hook code, so a deserialization failure can render it.
+            logger.error(
+                "SECURITY: Failed to retrieve hook result: %s", scrub_remote_error(e)
+            )
             return HookResult(
                 success=False, error=f"Failed to retrieve result: {e}", duration_ms=0.0
             )
@@ -436,10 +447,16 @@ class IsolatedHookManager(HookManager):
             return result
 
         except Exception as e:
-            # Isolation failed - log error and fall back to normal execution
+            # Isolation failed - log error and fall back to normal execution.
+            # ``e`` comes from ``execute_isolated``, which runs CALLER-SUPPLIED
+            # hook code, so it is the same credential surface as the handler
+            # repr on this line. This module imported no scrubber at all before
+            # the F11 sweep, leaving it un-swept for the exception half.
             logger.error(
-                f"SECURITY: Hook isolation failed for {handler_name}, "
-                f"falling back to normal execution: {e}"
+                "SECURITY: Hook isolation failed for %s, "
+                "falling back to normal execution: %s",
+                handler_name,
+                scrub_remote_error(e),
             )
 
             # Fall back to parent implementation
