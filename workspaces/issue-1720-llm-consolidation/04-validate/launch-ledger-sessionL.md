@@ -195,3 +195,56 @@ INFERENCE from a docstring, not measured.
 fixes now would move the surface under them and make their verdicts stale
 (`completion-criterion.md` MUST-3). The fixes are prepared and will land as ONE combined change
 after r10 reports, followed by a single fresh round — rather than a sixth point-patch mid-review.
+
+---
+
+## Wave 3 — round 10: NOT CLEAN, and the defect was in MY fix
+
+`r10-security` delivered (after the same message-delivery failure `r9-correctness` had — it
+needed an explicit "you MUST call SendMessage" prompt). No Bash, so all findings were inference
+with named probes. **I ran every probe.**
+
+| finding | probe result |
+| ------- | ------------ |
+| **F1 (HIGH)** raw sibling `type(exc).__name__` at 9 sinks | **CONFIRMED** — newline reached the record through the raw field while the helper's field rendered sanitized, 4 chars apart; 5000-char name unbounded |
+| **F3** no totality guard on `safe_exception_frames` | **CONFIRMED** — shadowed `__cause__` property raised straight through the caller's `except` |
+| **F5** CPython pseudo-identifiers mangled + `?`-form forgeable | **CONFIRMED** — `!listcomp!` → `?listcomp?` |
+| **F6** walked-back claim live at 4 caller sites | **CONFIRMED** — grep returned all four |
+| **F2** lying `__len__` str subclass defeats the bound | **REFUTED** — `re.sub` returns a plain `str` copy for a subclass; bound held at 131 |
+| **F4** the `__getattr__` pin is satisfiable without the payload | route DOES fire; assertions rewritten to key on the payload's own bytes |
+
+**F1 is mine.** Round 9 hardened the HELPER; nine call sites logged the same identifier RAW as a
+sibling `%s` in the SAME log call. BOUNDED and STRUCTURALLY INERT were both defeated *in the record
+the fix hardened*. Fifth consecutive round where a fix carried the class it was written to close —
+and the pattern is now legible: each fix hardened the layer it was looking at, and the next round
+found the same class one layer over.
+
+**A correction the lens made on itself, worth keeping:** it first recommended DELETING the raw type
+field as redundant, then withdrew that after the r9-correctness finding — the chain keeps the
+INNERMOST links, so on a chain longer than the cap the caught exception's type is evicted and that
+field is the only place it appears. Sanitize in place, never delete.
+
+**F3 is worse than reported.** Writing its pin took pytest itself down with an `INTERNALERROR`:
+`TracebackException` re-reads `__cause__` while formatting the failure, re-entering the shadowed
+property and aborting the session. The pin now reduces the outcome to a string before any assert.
+
+Landed `deac19f1b`: `safe_type_name()` at 14 sites across 7 modules, a totality wrapper, an
+exact-match CPython pseudo-identifier passthrough, and the 4 corrected claims.
+Verified: 33 pins, **1667** root regression, 379 scanner. Fail-first at `2448f4ec2`: 10 failed / 5
+passed (the 5 are deliberately non-discriminating guards).
+
+### A third instrument failure of my own — caught at commit review
+
+The scripted sink rewrite used `read_text()`/`write_text()`, which silently converted
+`visualization/api.py` from **CRLF to LF** — 914 lines of unrelated whitespace churn buried inside
+a security commit, where the real change is 7 insertions / 5 deletions. Caught by reading the
+`--stat` (1830 lines for a file I touched once), diagnosed with `--ignore-cr-at-eol`, restored, and
+amended before push. A 914-line whitespace diff inside a security fix is exactly what makes review
+unreliable.
+
+### Status
+
+**Merge gate NOT met.** Streak zero; the surface moved again at `deac19f1b`. A round 11 against
+that SHA is owed. Scoped out with reasons: `base_async.py:304` (exception message embedding `{e}` —
+runtime-hot-path shard), F7 (truncation keeps prefix), F8 (per-identifier bound ≠ per-record bound,
+~52 KB worst case), F1-of-r9c (render does not name the caught type — design call, deferred).
