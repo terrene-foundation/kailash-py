@@ -209,7 +209,19 @@ class APIChannel(Channel):
             raise
 
     async def stop(self) -> None:
-        """Stop the API channel server."""
+        """Stop the API channel server.
+
+        Returns only once the server task has actually finished; the channel is
+        then ``STOPPED``.
+
+        If THIS coroutine is cancelled while it waits -- a shutdown deadline
+        expiring, a supervising task group tearing down -- the
+        ``CancelledError`` propagates to the caller rather than being absorbed.
+        The channel is left ``STOPPING``, which is the truthful record: the
+        server task was not established as stopped and ``_cleanup`` has not
+        run. Call ``stop()`` again to finish; the retained task handle is what
+        makes that retry possible.
+        """
         if self.status == ChannelStatus.STOPPED:
             return
 
@@ -231,13 +243,40 @@ class APIChannel(Channel):
             if self._server:
                 self._server.should_exit = True
 
-            # Cancel the server task
+            # Cancel the server task and establish that it stopped.
+            #
+            # ``await self._server_task`` inside ``except CancelledError: pass``
+            # cannot tell two different events apart, because both arrive at
+            # that await as the same exception type:
+            #
+            #   1. the server task ending in the cancellation we just
+            #      requested -- expected, and the reason the handler exists;
+            #   2. THIS coroutine being cancelled by somebody else while it
+            #      waits -- a shutdown deadline, a task group tearing down.
+            #
+            # Case 2 was therefore swallowed and the caller received a clean
+            # ``STOPPED`` for a stop that never finished. Worse, ``await task``
+            # makes the server task the awaited future, so cancelling the
+            # caller only re-requested cancellation of a task that already
+            # ignored it -- nothing reached this frame and the caller could be
+            # stranded indefinitely.
+            #
+            # ``asyncio.wait`` observes the task's completion without re-raising
+            # what the task ended with, and parks on its own future, so only a
+            # cancellation aimed at THIS coroutine surfaces here -- and it
+            # propagates. Same shape as the monitoring-stop fix in
+            # ``kailash/visualization/api.py`` (bb8a3f966).
             if self._server_task and not self._server_task.done():
-                self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    pass
+                task = self._server_task
+                task.cancel()
+                await asyncio.wait({task})
+                # A task that died of a REAL error still surfaces, exactly as
+                # it did when this awaited the task directly; observing
+                # completion must not turn a crash into a silent clean stop.
+                if not task.cancelled():
+                    server_error = task.exception()
+                    if server_error is not None:
+                        raise server_error
 
             await self._cleanup()
             self.status = ChannelStatus.STOPPED
@@ -245,6 +284,11 @@ class APIChannel(Channel):
             logger.info(f"API channel {self.name} stopped")
 
         except Exception as e:
+            # Deliberately ``Exception``, not ``BaseException``:
+            # ``CancelledError`` must pass through untouched so a caller
+            # cancelled mid-stop is not reclassified as a channel ERROR. The
+            # channel stays ``STOPPING``, which says the stop began and did not
+            # finish.
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping API channel {self.name}: {e}")
             raise
