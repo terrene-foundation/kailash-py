@@ -28,7 +28,9 @@ so. It is shippable as that. It is NOT "the leak class is closed" and MUST NOT b
 
 ## In-flight state
 
-**NONE.** All six shards closed; six worktrees remain at
+**NONE.** All six shards closed and **all six reported** — `w1-scrubber`'s arrived only after
+an explicit QUERY (work was on disk, report was not; one query returned it in full — do not
+re-dispatch, query). Six worktrees remain at
 `/Users/esperie/repos/kailash/build/.kailash-py-wt/` (39 shard commits total, all committed,
 all trees clean). Nothing is running. No PRs open.
 

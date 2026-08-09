@@ -804,7 +804,74 @@ imports that never depended on the optional-fastapi block; moved, no `noqa`). An
 `cli_channel.py:853-854`'s `except Exception: pass` in `__del__` alone — correctly, that is
 `zero-tolerance` Rule 3's explicit finalizer carve-out — flagging it so it is not read as a miss.
 
-### `w1-scrubber` — WORK COMPLETE ON DISK, REPORT NEVER DELIVERED
+### `w1-scrubber` — REPORT DELIVERED ON QUERY. All 3 CONFIRMED + a 4th sibling.
+
+**The query worked, exactly as the standing note predicts** — the work was on disk, the
+report was not, and one query returned it in full. Do not re-dispatch; query.
+
+**Defect 1 — `secret_key` was NOT redundant. Verified INDEPENDENTLY by me** against the
+reconstructed pre-F10 vocabulary:
+
+```
+secret_key= -> NO MATCH   secret-key= -> NO MATCH
+secretkey=  -> NO MATCH   passphrase= -> NO MATCH      secret= -> 'secret='
+```
+
+**Mechanism:** the key-name sub-pattern ends in a MANDATORY separator `["']?\s*[=:]`. On
+`secret_key=` the `secret` alternative matches its six chars, meets `_`, and the whole match
+fails — at EVERY offset, because nothing in the alternation matches a bare `key`. Both leaked
+in FULL under BOTH presets. Fix adds two literal alternatives, **no character class widened**
+(the tempting `secret[\w-]*` is the exact shape the file's own commentary rejects as
+quadratic). Linearity re-measured: 8× input → 8.0–8.2× CPU across seven vectors.
+
+It also added a **mechanism test that reconstructs the pre-F10 vocabulary and asserts NO
+MATCH** — so if a future edit ever makes the new alternatives genuinely redundant, the test
+says so rather than leaving it to argument.
+
+**Defect 2 — CONFIRMED, and the sweep found a WORSE path in the same code.** A consumer that
+`break`s out of `async for … in stream()` raises **`GeneratorExit`, NOT `CancelledError`** —
+so the cancel handler never fired and `finally` dropped the handle having **neither killed
+nor reaped**. That leaves the CLI subprocess **RUNNING**, not merely a zombie: a zombie costs
+a pid entry, this costs a live process, and an early `break` is the ordinary way to stop
+consuming a stream. Fixed by moving kill-and-reap into `finally` (total cover); a reap that
+is itself cancelled is logged, not swallowed.
+
+**4th site, OUT OF PARTITION, isolated for revertability:** `kaizen_agents/delegate/hooks.py:321`
+— `HookManager._run_single`'s timeout handler calls `proc.kill()` and returns with `proc` a
+local, so nothing can ever reap it. One zombie per hook timeout on a manager firing six
+lifecycle events per tool call. Placed in its OWN commit (`57661325e`) **so it can be
+reverted alone** if a sibling holds the file. That is the right handling of an out-of-partition
+find.
+
+**Defect 3 — CONFIRMED, and MY GRADING WAS TOO CONSERVATIVE.** I recorded it as "mechanism
+proven, trigger NOT demonstrated" and told the shard not to overstate it. **It demonstrated an
+actual leak:** a module raising `ImportError(f"…{dsn}")` at import time put
+`postgresql://svcuser:…@db.internal:5432/app` in the log verbatim. So the finding was
+STRONGER than I graded it, and the correction runs in the direction I did not anticipate.
+
+**Preset chosen on a MEASUREMENT, not a default** — the strongest reasoning in the report.
+`scrub_remote_error` would have blanked a POSIX path (40+ contiguous `[A-Za-z0-9/+]`, exactly
+its opaque-shape rule) to `[REDACTED].py` — removing the credential AND the entire reason for
+keeping the traceback. Conservative preset removes the DSN, leaves paths intact. Named
+in-file residual: a prefix-less credential (bare AWS secret, bare 32-hex key) in an
+ImportError message still survives.
+
+**SEVENTH and EIGHTH instrument self-corrections, both caught by its own RED:**
+(a) its first Defect-2 probe used `sleep 30`, which emits nothing — the stream never yielded,
+`break` never ran, and it measured the NORMAL path; it failed its own liveness guard.
+(b) `logger.warning(msg, exc_info=True)` does **NOT** put the traceback in the message — it
+hangs off `record.exc_info`, so a leak check reading only `getMessage()` **passes vacuously
+on unscrubbed code**. It corrected the collector to render both channels and added a paired
+falsifier proving the payload does leak unscrubbed. Only then was the RED real.
+
+**Baseline attribution done properly, not asserted.** All 10 kaizen failures attributed
+against a pre-session baseline (`66a786e16^` in a temp worktree) **because `zero-tolerance`
+Rule 1c makes "pre-existing" unprovable by assertion**: 5 × Redis-refused (no Redis on host),
+4 × identical at baseline, 1 × import-perf 2860.6ms baseline vs 2876.0ms (0.5% apart, both
+over a 2500ms ceiling; its `__init__` imports sit inside the `except ImportError` branch and
+do not execute on a normal import).
+
+### `w1-scrubber` — superseded header, retained so the query lesson is not lost
 
 Four commits, tree clean: `66a786e16` (secret_key/passphrase), `11a7cb31a` + `57661325e`
 (claude_code reaping + a SECOND `HookManager` site not in its brief), `920f5d98e` (defect 3's
