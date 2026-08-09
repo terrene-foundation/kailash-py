@@ -27,7 +27,7 @@ from typing import (
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_message
+from kailash.utils.secure_logging import safe_callable_name
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from nexus.background import BackgroundService
@@ -2435,28 +2435,36 @@ Check the documentation or explore available resources.
                 #     dsn='…') is not a module, class, method, or function`.
                 #     The exception's own message embeds the repr.
                 #
-                # The message is NOT dropped, because the rest of it is the
-                # diagnostic: for the common failure -- a forward reference to
-                # a name not importable at registration -- it names the symbol
-                # that would not resolve, which is what an operator needs in
-                # order to fix the handler. `safe_exception_message` removes
-                # exactly `repr(handler)` (the one bounded, known payload) and
-                # leaves the rest intact.
+                # RETAIN A SCALAR, NEVER A RENDERING. The exception's MESSAGE
+                # is a rendering, so it is not retained at all -- not even
+                # filtered. What the operator actually needs from the common
+                # failure (a forward reference to a name not importable at
+                # registration) is the SYMBOL that would not resolve, and
+                # `NameError.name` carries exactly that as a bare identifier:
+                # `NoSuchTypeAnywhere`, never the sentence quoting it. The
+                # partial refusal is a TypeError with no `.name`, so there is
+                # no scalar to retain and none is invented -- the type name
+                # plus the handler's safe name is the whole diagnostic there.
                 #
                 # The WARN's purpose is unchanged: a security control whose
                 # verification did not run must not look identical to one that
                 # passed.
+                unresolved_symbol = getattr(exc, "name", None)
+                exc_detail = (
+                    f"{type(exc).__name__}: {unresolved_symbol}"
+                    if isinstance(unresolved_symbol, str) and unresolved_symbol
+                    else type(exc).__name__
+                )
                 logger.warning(
                     "nexus.endpoint.rate_limit_unverifiable: could not resolve "
-                    "the annotations of handler %r for %s %s (%s: %s), so "
+                    "the annotations of handler %r for %s %s (%s), so "
                     "whether rate limiting engages could NOT be verified at "
                     "registration. If the handler declares no `request: "
                     "Request` parameter, rate_limit=%s has no effect.",
                     safe_callable_name(handler),
                     "/".join(methods),
                     path,
-                    type(exc).__name__,
-                    safe_exception_message(exc, handler),
+                    exc_detail,
                     effective_rate_limit,
                 )
                 return True

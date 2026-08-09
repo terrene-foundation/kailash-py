@@ -774,8 +774,16 @@ class DistributedRuntime(BaseRuntime):
                     "processing": tq.processing_length(),
                 }
             except Exception as exc:
+                # `exc` comes from the task-queue BACKEND, so its message is a
+                # provider rendering: a Redis connection failure names the URL
+                # it could not reach, credentials included. `%s` of it put that
+                # straight into the record. Retain scalars only -- the queue
+                # name, the exception TYPE, and the frame locations.
                 logger.warning(
-                    "get_queue_status: failed to read queue %r: %s", name, exc
+                    "get_queue_status: failed to read queue %r: %s (at %s)",
+                    name,
+                    type(exc).__name__,
+                    safe_exception_frames(exc),
                 )
                 per_queue[name] = {"pending": -1, "processing": -1}
         return {

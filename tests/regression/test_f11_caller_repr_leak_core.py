@@ -281,47 +281,89 @@ class TestSafeCallableName:
         assert safe_callable_name(_Anon()) == "_Anon"
 
 
-class TestSafeExceptionMessage:
-    """Removing the object's repr WITHOUT removing the rest of the message."""
+class TestNoModuleHelperRendersAnObject:
+    """The helpers must never call ``repr`` on the object they describe.
 
-    def test_embedded_repr_is_replaced_but_the_rest_survives(self):
-        from kailash.utils.secure_logging import safe_exception_message
+    A scrubbed repr is NOT an acceptable form of this fix: it is a porous
+    filter over unbounded input, where the type name is a construction that
+    cannot carry a payload at all. Pinned so a later "improvement" cannot
+    reintroduce a repr-then-scrub shape without failing here.
+    """
 
-        handler = functools.partial(_raising_handler, dsn=_LEAKY_DSN)
-        # The shape typing.get_type_hints actually raises.
-        exc = TypeError(f"{handler!r} is not a module, class, method, or function.")
+    def test_secure_logging_helpers_do_not_call_repr_on_their_subject(self):
+        """Assert on the AST, not on the source text.
 
-        message = safe_exception_message(exc, handler)
-
-        assert _SENTINEL not in message, message
-        assert "is not a module, class, method, or function" in message, message
-        assert "_raising_handler" in message, message
-
-    def test_a_message_that_never_quoted_the_object_is_untouched(self):
-        """The common case: an unresolved forward reference.
-
-        Its message names the SYMBOL that would not resolve, which is the
-        diagnostic an operator needs and contains no caller payload.
+        A substring scan would trip over the docstrings, which legitimately
+        DISCUSS ``repr()`` in explaining why they do not call it. Walking for
+        a ``repr(...)`` Call node asserts the real property and ignores every
+        mention in prose.
         """
-        from kailash.utils.secure_logging import safe_exception_message
+        import ast
+        import inspect as _inspect
+        import textwrap
 
-        exc = NameError("name 'NoSuchTypeAnywhere' is not defined")
-        assert (
-            safe_exception_message(exc, _raising_handler)
-            == "name 'NoSuchTypeAnywhere' is not defined"
-        )
+        from kailash.utils import secure_logging
 
-    def test_a_broken_repr_does_not_break_the_log_call(self):
-        from kailash.utils.secure_logging import safe_exception_message
+        for helper in (
+            secure_logging.safe_callable_name,
+            secure_logging.safe_exception_frames,
+        ):
+            tree = ast.parse(textwrap.dedent(_inspect.getsource(helper)))
+            calls = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "repr"
+            ]
+            assert not calls, (
+                f"{helper.__name__} calls repr() on line "
+                f"{[c.lineno for c in calls]}; a scrubbed repr is a porous "
+                "filter over unbounded input, where a type name cannot carry "
+                "a payload by construction"
+            )
 
-        class _BrokenRepr:
-            def __repr__(self) -> str:
-                raise ValueError("repr is broken")
 
-        assert (
-            safe_exception_message(TypeError("plain message"), _BrokenRepr())
-            == "plain message"
-        )
+class TestQueueStatusBackendError:
+    """``DistributedRuntime.get_queue_status`` -- a BACKEND exception.
+
+    Surfaced by sweeping the partition for ``%r`` / ``!r`` / ``repr()`` rather
+    than for the ``getattr(..., repr(...))`` idiom alone. The exception here
+    comes from the task-queue backend, so a Redis connection failure names the
+    URL it could not reach -- credentials included -- and ``%s`` of it put that
+    straight into the record.
+    """
+
+    def test_backend_exception_message_does_not_reach_the_log(self, caplog):
+        from kailash.runtime.distributed import DistributedRuntime
+
+        caplog.set_level(logging.WARNING, logger="kailash.runtime.distributed")
+
+        class _ExplodingQueue:
+            def queue_length(self):
+                raise ConnectionError(f"Error connecting to {_LEAKY_DSN}")
+
+            def processing_length(self):
+                return 0
+
+        runtime = DistributedRuntime.__new__(DistributedRuntime)
+        runtime._queues = {"default": _ExplodingQueue()}
+        runtime._queue = _ExplodingQueue()
+
+        try:
+            runtime.get_queue_status()
+        except ConnectionError:
+            # The trailing top-level `self._queue` read is OUTSIDE the guarded
+            # per-queue loop, so it propagates. The WARN under test has already
+            # fired by then, which is what this asserts on.
+            pass
+
+        blob = rendered(caplog)
+        assert "get_queue_status" in blob, blob
+        assert _SENTINEL not in blob, blob
+        # Scalars retained: the queue name and the exception TYPE.
+        assert "default" in blob, blob
+        assert "ConnectionError" in blob, blob
 
 
 class TestSafeExceptionFrames:

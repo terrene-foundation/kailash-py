@@ -82,40 +82,6 @@ def safe_callable_name(obj: Any) -> str:
         return f"partial({type_name})" if unwrapped else type_name
 
 
-def safe_exception_message(exc: BaseException, *objects: Any) -> str:
-    """``str(exc)`` with each object's ``repr`` replaced by its safe name.
-
-    Some exception messages QUOTE the object that caused them. The canonical
-    case is ``typing.get_type_hints``, which refuses a non-function with
-    ``TypeError: <repr> is not a module, class, method, or function`` -- so a
-    ``functools.partial`` holding a connection string puts that string into the
-    message even though the caller never logged the object itself. Dropping the
-    whole message is not an acceptable answer where the rest of it is the
-    diagnostic (an unresolved annotation name, say, which an operator needs in
-    order to fix the handler).
-
-    The payload here is bounded and known: it is exactly ``repr(obj)``. So this
-    removes exactly that, and leaves the rest of the message intact.
-
-    Only use this where the object whose repr might be embedded is KNOWN and
-    passed in. It is not a general-purpose scrubber, and it makes no claim
-    about caller data reaching a message by some other route.
-    """
-    message = str(exc)
-    for obj in objects:
-        try:
-            rendered = repr(obj)
-        except Exception:
-            # A broken __repr__ must not break the log call it is being
-            # scrubbed out of. This is a justified no-op, not a swallowed
-            # failure: if repr(obj) raises here it also raised when the
-            # exception message was built, so it cannot be IN `message`.
-            continue
-        if rendered and rendered in message:
-            message = message.replace(rendered, safe_callable_name(obj))
-    return message
-
-
 def _relative_frame_path(filename: str) -> str:
     """Render a traceback filename workspace-relative.
 
