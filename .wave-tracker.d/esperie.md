@@ -578,7 +578,14 @@ ORDERING requirement, surfaced to the co-owner, not as a reason to weaken the pi
 
 `nexus/core.py:2535` (`rate_limit_inert`) + `:2861` (`use_middleware` sync-function
 `TypeError` rendering a full partial repr) — my earlier "line 2429 ONLY" boundary lifted for
-these two specifically. Plus `src/kailash/nodes/base_async.py:260`, the downstream re-leak,
+these two specifically. Plus the `base_async.py` downstream re-leak — **the sink is
+`src/kailash/nodes/base_async.py:279`** (`self.logger.error(f"Node {self.id} execution
+failed: {e}", exc_info=True)`), **NOT `:260`**, which this row said twice and which is
+`outputs = await self.async_run(**validated_inputs)` — the HAPPY PATH. Verified: `:277` is
+the `except Exception as e:`, `:279` is the sink. `:260` was a traceback FRAME in the
+evidence, and I carried a line number out of a report instead of out of the code — the same
+class of error as citing a SHA before it existed. `w2-core-repr` flagged it TWICE before it
+was corrected here; a brief aimed at `:260` sends the next reader to edit the happy path,
 whose closure signal is the `TestKnownDownstreamReleak` pin failing.
 
 ### CODIFY-WORTHY — the retain-rule SHARPENED, and a three-instrument lesson
