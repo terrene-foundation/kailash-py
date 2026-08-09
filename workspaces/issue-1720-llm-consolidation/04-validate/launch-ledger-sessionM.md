@@ -140,3 +140,34 @@ Advisory, NOT merge-required (`required_status_checks.contexts` is `[]`). The PR
 Delta vs main by rule+path: exactly **ONE** branch-introduced security alert — `py/weak-sensitive-data-hashing` HIGH at `dataflow/adapters/dialect.py:193`. W1-cq pulled the SARIF flow (`security_definer.py:572 → dialect.py:209 → 183 → 193`): the tainted value is `_password_column`, set by `.password_column("password_hash")` — a **column NAME**, not a credential. `_identifier_fingerprint` is private, 18 call sites, every one an identifier-validator argument inside an error/log message. **Verified false positive.** Rewriting it to placate the heuristic would reintroduce a real defect: its docstring records why SHA-256 over `hash()` (PYTHONHASHSEED randomisation breaks cross-process log correlation).
 
 ### Final CI — head `dc2f246d2`: 38 pass / 1 fail (advisory CodeQL) / 12 skipped.
+
+---
+
+## Security round — COMPLETED BY THE ORCHESTRATOR, not by a review agent
+
+**Three review dispatches returned NO verdict** (`M-sec`, `M-sec2` = `security-reviewer`; `M-rev` = `reviewer`) — all went idle without reporting. Every `general-purpose`/specialist agent dispatched this session (`W1-df`, `W1-ml`, `W1-cq`, `W1-tenant` = 4/4) reported in full. The discriminating difference is tool inventory: the silent three are the READ-ONLY types (no `Bash`) that were handed a 1358-line scratchpad to read; this is the `agents.md` § "Verify Specialist Tool Inventory Before Delegation" failure shape, one layer over — a read-only reviewer given a task whose evidence needs execution.
+
+Per `agents.md` § Redteam Reviewer Dispatch, an empty return is ZERO evidence and MUST be re-run rather than counted clean. Re-run directly, with executable probes rather than a fourth dispatch.
+
+### Results
+
+| area | verdict | evidence |
+| ---- | ------- | -------- |
+| `_GlobalScopeSentinel(str)` — the round-11 CRITICAL vector | **CLEAN** | tenant named `__global__` stays namespaced; hostile `str` subclass (`__eq__`/`__hash__`/`__str__` overridden) does NOT escape to global; `__class__` reassignment blocked by CPython; deepcopy/pickle preserve the sentinel. The 2 paths that DO reach global require constructing an arbitrary object as `tenant_id` — a capability already subsuming `GLOBAL_SCOPE`. **No escalation.** |
+| `file:` scheme — new capability? | **NONE** | `sqlite:////etc/passwd`, `sqlite:///../../../etc/passwd`, `?mode=rwc` were ALL accepted BEFORE this change. `gopher://` still raises — fail-closed intact. |
+| `file:` scheme — **case-sensitivity parity** | **DEFECT FOUND + FIXED** | engine used case-SENSITIVE `startswith("file:")` while its scheme table and the parser are case-INSENSITIVE: `SQLITE:` validated but `FILE:` did not, diverging from the parser that had just classified it SQLite — the exact divergence the branch's own parity comment claims to prevent. Fixed in `1c849f953`. Failed CLOSED, so no security consequence. |
+| `clear()` wipe-all reachability | **FIX HOLDS** | `""`/`"   "`/`"\t"` → ValueError; `0`/`False` → TypeError. Only `None`/no-arg/`GLOBAL_SCOPE` reach wipe-all. |
+| one-time WARN scoping | **CLEAN** | per-PROCESS dedup (module flag), but the per-INSTANCE acknowledgement is correctly isolated — instance C's `clear_tenant_context()` does NOT silence instance D's accidental omission (D still warns). |
+| `describe_exception_origin` message-leak | **CLEAN** | proven with a hostile exception whose `args` property AND `__str__` both raise `AssertionError` — NEITHER fired, so the helper genuinely never reads them. Credentials in the underlying error do not transit. |
+| tenant-API callers that now raise | **NONE** | 0 external callers, 0 cross-imports; instrument shown to discriminate (same grep = 11 hits INSIDE `enterprise.py`). DataFlow's identically-named `_validate_tenant_id`/`set_tenant_context` are an independent class. |
+
+### Residuals — recorded, NOT fixed, NOT security-blocking
+
+1. **`clear(GLOBAL_SCOPE)` wipes ALL tiers for ALL tenants.** Consistent with `clear(None)` and an explicit opt-in, but a caller could reasonably read it as "clear only the global namespace". Worth a docstring line.
+2. **`clear("real-tenant")` returns `False` and clears NOTHING** ("tenant-specific clear not fully implemented"). A caller who does not check the return believes erasure happened — a right-to-erasure / data-retention concern. **PRE-EXISTING**, not introduced here.
+3. **`describe_exception_origin` echoes a module's `__name__` verbatim.** A dynamically-generated module whose name embedded a secret would surface it. Module names are author-chosen, not user input — theoretical, but "leaks nothing" needs that caveat.
+4. **One-time WARN is per-process**, so in a many-instance process only the FIRST accidental omission warns. Diagnostic-value reduction, not a bypass.
+
+**Scope of this claim, stated precisely:** these are the results of targeted probes against the areas I enumerated. They are NOT equivalent to an independent adversarial review, and none of the three dispatched reviewers contributed a verdict. A genuinely independent security lens on this diff remains OUTSTANDING.
+
+### Final CI — head `1c849f953`: 32 pass / 1 fail (advisory CodeQL) / 8 skipped.
