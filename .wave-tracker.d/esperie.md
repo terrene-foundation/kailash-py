@@ -654,6 +654,42 @@ genuinely has none.
 the Redis URL it could not reach, credentials included. Not the caller-repr shape, same
 credential-into-logs class. Fixed in-shard.
 
+### THE INSTRUMENT LESSON — FINAL FORM. The most codify-worthy output of this wave.
+
+Converged over three revisions, each by a different party correcting the last. **The final
+form is `w2-core-repr`'s**, and it is better than either of the two readings I offered it.
+
+**Unified statement:** _the instrument did not reach the thing it claimed to observe._
+All four failures this session are that, and it is `instrument-discipline` MUST-1's own
+question — would this have produced a different result had the proposition been false? All
+four answer NO, for different mechanical reasons.
+
+**The three sub-modes MUST be kept underneath it, because they have DIFFERENT REMEDIES:**
+
+| mode            | instance                                          | remedy                          |
+| --------------- | ------------------------------------------------- | ------------------------------- |
+| **under-reach** | dunder-only grep — never reached the live sites   | widen the pattern               |
+| **mis-reach**   | my comment-matching grep — reached PROSE not code | parse STRUCTURE, not text (AST) |
+| **mis-reach**   | substring helper pin — reached its own docstrings | parse STRUCTURE, not text (AST) |
+| **non-reach**   | `@contextmanager` probe — body never executed     | prove the code EXECUTED         |
+
+**Why the sub-modes cannot be collapsed** (the load-bearing part): _"A detector built only
+from the unified statement would not know which of the three to implement."_ The unified form
+diagnoses; only the sub-mode prescribes.
+
+**And the cheap operational reflex that covers all three** (`w1-sinks`): **before citing any
+check as evidence of ABSENCE, plant one instance of what you claim is gone and confirm the
+command finds it.** Ten seconds. A single plant-control discriminates under-reach AND
+mis-reach at once; non-reach additionally needs the "did the body run" check. Note the control
+must survive the FILTER, not merely the command — a comment-excluding grep still left a live
+false positive inside a docstring.
+
+**Provenance, because the convergence is itself the evidence:** I framed it narrow-vs-broad;
+`w1-sinks` corrected the root to "no plant-control"; `w2-core-repr` corrected the frame to
+reach-failure with three remedy-bearing sub-modes — after first stating a count that was wrong
+under both readings I offered, then saying so plainly rather than retro-fitting the better
+reading. **Four independent instances, three corrections, no party got it right alone.**
+
 ### THE FOUR SPELLINGS — the single most important output for a future detector
 
 Each spelling was invisible to the detector built for the previous one. **Any detector built
