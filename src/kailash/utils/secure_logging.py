@@ -38,6 +38,13 @@ from typing import Any, Dict, List, Optional, Pattern, Set, Union
 
 from kailash.utils.url_credentials import is_sensitive_query_key
 
+# Module-level logger. Added with the totality-wrapper telemetry below: this
+# module had NO module-scope logger, only an instance one on the mixin, so a
+# bare ``logger.debug`` in the wrapper raised NameError -- inside the very
+# handler whose contract is that it never raises. Caught by driving the wrapper
+# before commit, not by review.
+_LOGGER = logging.getLogger(__name__)
+
 # A partial wrapping a partial is flattened by CPython, so one unwrap is the
 # normal case; the bound keeps a hand-built chain from spinning.
 _MAX_PARTIAL_UNWRAP = 10
@@ -73,13 +80,26 @@ _MAX_CHAIN_LINKS = 10
 # of caller-chosen text cannot.
 _MAX_IDENTIFIER_CHARS = 120
 
+# Hard ceiling on the caller-supplied ``limit``. Without it the per-identifier
+# bound does not bound the RECORD: a caller passing a large limit against a
+# RecursionError traceback (~1000 frames) renders megabytes. Every in-tree call
+# site uses <= 20, so this clamps a latent API-contract gap, not a live path.
+# With it, the worst case is 10 links x 50 frames x ~270 chars ~= 139 KB; with
+# the DEFAULT limit of 20 it is ~56 KB.
+_MAX_FRAME_LIMIT = 50
+
 # Everything OUTSIDE this set is replaced before an identifier is rendered.
 # Deliberately excludes the characters this module uses structurally --
 # ``<`` ``>`` ``@`` ``:`` and space -- so that a rendered record's own grammar
 # (" <- " between links, "@" before frames, ">" between frames, ":" inside
 # path:lineno:name, and every "<...>" marker) CANNOT be forged from caller data.
 # Newline is excluded for the same reason: it forges an entire extra log line.
-_UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/]")
+# ``\`` is included because it is the WINDOWS path separator and is NOT
+# structural to this module's grammar (the delimiters are " <- ", "@", ">", ":",
+# "<", ">" and newline). Excluding it mangled every Windows frame path --
+# ``svc\db\connect.py`` -> ``svc?db?connect.py`` -- degrading the diagnostic this
+# helper exists to preserve, on a platform the module already reasons about.
+_UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/\\]")
 
 # CPython's fixed pseudo-identifier literals for frame names and synthetic
 # filenames. Passed through byte-intact on an EXACT match so the frames most
@@ -101,7 +121,7 @@ _CPYTHON_PSEUDO_IDENTIFIERS = frozenset(
 )
 
 
-def _safe_identifier(value: object) -> str:
+def _safe_identifier(value: object, *, allow_pseudo: bool = False) -> str:
     """Bound and neutralize one attacker-influenceable identifier.
 
     Three properties, each measured by a regression pin rather than asserted:
@@ -110,9 +130,16 @@ def _safe_identifier(value: object) -> str:
        truncation marker, so no identifier can drive log volume.
     2. **Structurally inert.** No output character can close or open any
        delimiter this module renders, so a record's grammar always reflects the
-       walk that produced it and never caller-supplied text. In particular a
-       ``<...>`` marker in a record is always OURS, because ``<`` and ``>`` can
-       never survive from input.
+       walk that produced it and never caller-supplied text.
+
+       ONE STATED EXCEPTION, because an earlier revision of this line said
+       ``<`` and ``>`` "can never survive from input" and that absolute is not
+       what the code does: with ``allow_pseudo=True`` (the two FRAME sites only)
+       an EXACT match against :data:`_CPYTHON_PSEUDO_IDENTIFIERS` passes through
+       intact. So a ``<...>`` sequence in a record is ours OR a known interpreter
+       literal -- never arbitrary caller text. At every other call site,
+       including all three that render CLASS names, ``<`` and ``>`` are stripped
+       unconditionally.
     3. **Total.** Never raises. A logging call site must not fail on the thing
        it is describing, so a non-string or an object whose ``__str__`` raises
        degrades to a marker rather than propagating.
@@ -121,7 +148,33 @@ def _safe_identifier(value: object) -> str:
     purpose. Bounding and de-fanging is the contract; secrecy is not.
     """
     try:
-        text = value if isinstance(value, str) else str(value)
+        raw = value if isinstance(value, str) else str(value)
+        # NORMALIZE TO A PLAIN ``str`` BEFORE ANY PREDICATE RUNS. This is the
+        # load-bearing line of the whole function.
+        #
+        # ``isinstance(value, str)`` admits a SUBCLASS, and every predicate below
+        # -- ``not text``, ``text in <frozenset>``, ``len(cleaned)`` -- dispatches
+        # to a method the subclass can override. The frozenset membership test in
+        # particular is NOT byte-equality: it is ``__hash__`` then ``__eq__``,
+        # both overridable. MEASURED, before this line existed:
+        #
+        #     class Sneak(str):
+        #         def __hash__(self): return hash("<module>")
+        #         def __eq__(self, other): return True
+        #
+        # returned 5043 characters containing a newline, " <- " and "@" straight
+        # through the allowlist branch -- bypassing the charset filter AND the
+        # length bound at once, and defeating every property this module claims.
+        # Reachable through all three entry points: ``type.__name__`` preserves
+        # the subclass on round-trip (measured), and ``func.__name__`` /
+        # ``__qualname__`` accept one by assignment.
+        #
+        # ``str.__str__`` returns a plain ``str`` for a subclass instance, so
+        # after this line every predicate is the builtin. ``str(value)`` alone is
+        # NOT sufficient -- ``__str__`` is overridable and may itself return a
+        # subclass, which is why the result is re-normalized on type identity
+        # rather than on ``isinstance``.
+        text = raw if type(raw) is str else str.__str__(raw)
     except Exception:
         return "<unrepresentable>"
     if not text:
@@ -138,7 +191,13 @@ def _safe_identifier(value: object) -> str:
     # render as a genuine frame label would. That is a cosmetic confusion (an
     # exception claiming to be a comprehension frame), NOT a grammar forgery --
     # it cannot open or close a delimiter, invent a chain link, or inject a line.
-    if text in _CPYTHON_PSEUDO_IDENTIFIERS:
+    # ``allow_pseudo`` is OFF by default and set only at the two FRAME sites.
+    # The allowlist is documented as covering frame names and synthetic
+    # filenames, but the same function also renders CLASS names -- so
+    # ungated, a class named ``<module>`` rendered as ``<module>``, exactly
+    # where a genuine module-frame label renders (measured). That widened the
+    # allowlist past its stated purpose for free.
+    if allow_pseudo and text in _CPYTHON_PSEUDO_IDENTIFIERS:
         return text
     cleaned = _UNSAFE_IDENTIFIER_CHARS.sub("?", text)
     # ``len`` on a str SUBCLASS is overridable, so the bound below could in
@@ -334,8 +393,29 @@ def safe_exception_frames(
     try:
         return _safe_exception_frames_impl(exc, limit=limit, follow_chain=follow_chain)
     except Exception:
-        # No detail from the failure is rendered: it originates in
+        # No detail from the failure is RENDERED: it may originate in
         # attacker-shadowed descriptors, so its own text is caller-controlled.
+        #
+        # But it IS reported, at DEBUG, because the previous form swallowed it
+        # entirely -- and the comment there asserted the cause was a hostile
+        # descriptor when the ``except`` actually catches ANY Exception from the
+        # whole impl. This function has already shipped THREE instances of one
+        # arithmetic bug; a fourth would have degraded every record to
+        # ``<frames-unavailable>`` with no log line, no counter, and no way for an
+        # operator to tell our own defect from an attack. That is the
+        # ``zero-tolerance.md`` Rule 3 swallow shape. The catch is right; the
+        # silence was not.
+        try:
+            _LOGGER.debug(
+                "safe_exception_frames.unavailable",
+                exc_info=True,
+                extra={"helper": "safe_exception_frames"},
+            )
+        except Exception:
+            # Telemetry must NEVER be able to break totality. A handler that
+            # raises while reporting that a handler raised is the same defect
+            # one layer up, and this module has already shipped that shape once.
+            pass
         return "<frames-unavailable>"
 
 
@@ -482,12 +562,23 @@ def _safe_exception_frames_impl(
         # Note ``raise X from Y`` ALSO sets __suppress_context__=True, so the
         # flag cannot be tested first -- an explicit __cause__ always wins, and
         # the flag only decides whether an IMPLICIT __context__ may be followed.
-        if walker.__cause__ is not None:
-            walker = walker.__cause__
-        elif walker.__suppress_context__:
+        # READ THROUGH ``BaseException``'S OWN DESCRIPTORS, never off the
+        # instance. A subclass can shadow ``__cause__`` / ``__context__`` /
+        # ``__suppress_context__`` with a class attribute or property that either
+        # RAISES (round 10) or LIES (measured here): a plain
+        # ``__suppress_context__ = False`` class attribute sits earlier in the MRO
+        # than BaseException's member descriptor and wins the instance read, so
+        # ``raise X from None`` suppression was defeated and the suppressed link
+        # rendered. The totality wrapper cannot help against a shadow that lies
+        # rather than raises. Reading the descriptor unconditionally returns the
+        # real C-struct value and collapses both attack shapes into one defence.
+        cause = BaseException.__cause__.__get__(walker)
+        if cause is not None:
+            walker = cause
+        elif BaseException.__suppress_context__.__get__(walker):
             walker = None
         else:
-            walker = walker.__context__
+            walker = BaseException.__context__.__get__(walker)
 
     # ``max(0, ...)`` on the CAP, not just on the result: a NEGATIVE cap
     # made this over-count (a 12-link chain announced 13 dropped). Third
@@ -525,7 +616,8 @@ def _safe_exception_frames_impl(
         )
         # ``<= 0`` means NO frames, not "all frames". The old ``if limit > 0``
         # skipped the slice, so a caller asking for zero got everything.
-        frames = frames[-limit:] if limit > 0 else []
+        effective_limit = min(limit, _MAX_FRAME_LIMIT)
+        frames = frames[-effective_limit:] if effective_limit > 0 else []
         # Every component below is caller-influenceable and is de-fanged before
         # it is joined: a class name, a frame name and a template BASENAME can
         # all carry caller text (measured -- see the module header). Unfiltered,
@@ -535,8 +627,8 @@ def _safe_exception_frames_impl(
         # line (measured constructible via type("A\nERROR ...", (Exception,), {})).
         # ``lineno`` is an int from the traceback machinery, never caller text.
         rendered_frames = ">".join(
-            f"{_safe_identifier(_relative_frame_path(frame.filename))}"
-            f":{frame.lineno}:{_safe_identifier(frame.name)}"
+            f"{_safe_identifier(_relative_frame_path(frame.filename), allow_pseudo=True)}"
+            f":{frame.lineno}:{_safe_identifier(frame.name, allow_pseudo=True)}"
             for frame in frames
         )
         descriptions.append(

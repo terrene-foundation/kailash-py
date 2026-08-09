@@ -83,44 +83,66 @@ class TestSinkSideTypeNameIsSanitized:
         assert isinstance(safe_type_name(Hostile()), str)
 
     def test_no_helper_sink_still_logs_a_raw_type_name(self):
-        """Mechanical sweep: the nine sites stay closed.
+        """Mechanical sweep over DISCOVERED sink files, not a hardcoded list.
 
-        A behavioural pin cannot see a NEW sink added later, so this asserts the
-        absolute state of the tree rather than the diff -- the `agents.md`
-        mechanical-sweep shape. `base_async.py:304` is the one known exclusion:
-        it is an exception MESSAGE (not a log record) and separately embeds the
-        full `{e}`, which belongs to the runtime-hot-path shard, not here.
+        The first version of this pin hardcoded seven paths, matched only six
+        variable names, skipped a missing file with `continue`, and excused a
+        site by CONTENT substring. It could not fail for the right reason in four
+        distinct ways: a NEW sink file was never scanned, a RENAMED one passed
+        silently, any other variable name (`exception`, `exc_obj`) was invisible,
+        and a future raw sink on any line containing the excused substring was
+        excused too.
+
+        So the sink set is DISCOVERED: any module importing one of these helpers
+        is a sink by definition, which means a new sink file is covered the day
+        it is written. The pattern is variable-name-agnostic. The exclusion is
+        keyed on `file:line` content, not a substring that could excuse unrelated
+        lines. And the walk asserts it actually visited files, so a moved tree
+        cannot pass vacuously -- the failure mode that made the old version
+        unable to red.
         """
         import pathlib
         import re
 
         root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash"
-        sink_files = [
-            "channels/base.py",
-            "nodes/base_async.py",
-            "runtime/distributed.py",
-            "runtime/durable.py",
-            "runtime/scheduler.py",
-            "utils/lifespan.py",
-            "visualization/api.py",
-        ]
-        pattern = re.compile(
-            r"type\((exc|e|error|err|task_error|previous_error)\)\.__name__"
+        helper_use = re.compile(r"safe_exception_frames|safe_type_name")
+        # Exception-ish variable names, NOT every `type(x).__name__`: a
+        # type-error message about a wrong-typed ARGUMENT ("expected int,
+        # got %s") is a different class and widening to it would flag every
+        # such message in the tree. Deliberately broader than the six names
+        # the first version matched -- `last_exc` was invisible to those and
+        # two live log sinks in scheduler.py were missed as a result.
+        raw_type_name = re.compile(
+            r"type\(\s*\w*(exc|err|error)\w*\s*\)\.__name__|type\(\s*e\s*\)\.__name__",
+            re.IGNORECASE,
         )
-        offenders = []
-        for rel in sink_files:
-            path = root / rel
-            if not path.exists():
-                continue
-            for number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), start=1
-            ):
-                if pattern.search(line):
-                    if rel == "nodes/base_async.py" and "execution failed" in line:
-                        continue  # documented exclusion above
-                    offenders.append(f"{rel}:{number}")
 
-        assert not offenders, f"raw type-name sinks reappeared: {offenders}"
+        # Excused by EXACT text, not by file or substring: an exception MESSAGE
+        # (not a log record) that separately embeds the full `{e}` -- owned by
+        # the runtime-hot-path shard.
+        excused = {"f\"Node '{self.id}' execution failed: {type(e).__name__}: {e}\""}
+
+        scanned, offenders = 0, []
+        for path in sorted(root.rglob("*.py")):
+            if path.name == "secure_logging.py":
+                continue  # the helper module itself defines the sanitizer
+            text = path.read_text(encoding="utf-8")
+            if not helper_use.search(text):
+                continue  # not a sink
+            scanned += 1
+            for number, line in enumerate(text.splitlines(), start=1):
+                if raw_type_name.search(line) and line.strip() not in excused:
+                    offenders.append(
+                        f"{path.relative_to(root)}:{number}: {line.strip()[:70]}"
+                    )
+
+        # Without this the sweep passes vacuously on a moved or renamed tree.
+        assert (
+            scanned >= 7
+        ), f"sweep visited only {scanned} sink files — is the tree intact?"
+        assert (
+            not offenders
+        ), "raw type-name sinks in helper-using modules:\n" + "\n".join(offenders)
 
 
 class TestEverySanitizationSiteIsPinned:
@@ -233,6 +255,36 @@ class TestHelperTotality:
             except Exception as leak:
                 outcome = f"RAISED:{type(leak).__name__}"
 
+        # The walk now reads __cause__ through BaseException's OWN descriptor, so
+        # the shadow never runs: the helper neither raises NOR degrades. It
+        # renders normally. Asserting <frames-unavailable> here would pin the
+        # WEAKER behaviour and would red the day the descriptor read landed --
+        # which is exactly what it did.
+        assert not outcome.startswith("RAISED:"), outcome
+        assert outcome != "<frames-unavailable>", outcome
+        assert "E@" in outcome, outcome
+
+    def test_a_shadowed_traceback_still_reaches_the_totality_guard(self):
+        """__traceback__ is still read off the instance, so the guard still matters.
+
+        The descriptor-read fix covers __cause__/__context__/__suppress_context__.
+        `current.__traceback__` is read directly by the frame walk, so a shadow
+        that RAISES there is the remaining vector -- and the totality wrapper is
+        what keeps it from replacing the caller's handled exception.
+        """
+
+        def raiser(self):
+            raise RuntimeError("gotcha")
+
+        exc_type = type("T", (Exception,), {"__traceback__": property(raiser)})
+        try:
+            raise exc_type("boom")
+        except Exception as exc:
+            try:
+                outcome = safe_exception_frames(exc)
+            except Exception as leak:
+                outcome = f"RAISED:{type(leak).__name__}"
+
         assert outcome == "<frames-unavailable>", outcome
 
     def test_the_normal_path_is_unaffected(self):
@@ -252,8 +304,26 @@ class TestCPythonPseudoIdentifiers:
         "literal",
         ["<module>", "<lambda>", "<listcomp>", "<genexpr>", "<string>"],
     )
-    def test_cpython_literals_survive_intact(self, literal):
-        assert sl._safe_identifier(literal) == literal
+    def test_cpython_literals_survive_intact_at_FRAME_sites(self, literal):
+        """Only with ``allow_pseudo=True`` -- the two frame sites."""
+        assert sl._safe_identifier(literal, allow_pseudo=True) == literal
+
+    @pytest.mark.parametrize(
+        "literal",
+        ["<module>", "<lambda>", "<listcomp>", "<genexpr>", "<string>"],
+    )
+    def test_cpython_literals_are_MANGLED_everywhere_else(self, literal):
+        """The allowlist is scoped to frame sites; class names do not get it.
+
+        Ungated, a class named ``<module>`` rendered as ``<module>`` -- exactly
+        where a genuine module-frame label renders. The allowlist is documented
+        as covering frame names and synthetic filenames, so routing class names
+        through it widened it past its stated purpose for free.
+        """
+        rendered = sl._safe_identifier(literal)
+
+        assert rendered != literal
+        assert "<" not in rendered and ">" not in rendered
 
     def test_a_near_miss_does_not_survive(self):
         """Exact-match is what keeps the passthrough safe.
@@ -296,7 +366,13 @@ class TestCPythonPseudoIdentifiers:
         in a record is always OURS". Every string below is one of OUR markers or
         a delimiter-forging payload, and none is a CPython literal.
         """
-        rendered = sl._safe_identifier(forged)
+        # allow_pseudo=True ON PURPOSE: this must exercise the branch that
+        # actually consults the allowlist. Gating the allowlist behind
+        # `allow_pseudo` (the M1 fix) silently moved this pin onto the DEFAULT
+        # path, where the branch never runs -- so it passed under a widened
+        # allowlist and stopped discriminating. A fix that disarms its own pin is
+        # the same shape as the defects this file exists to catch.
+        rendered = sl._safe_identifier(forged, allow_pseudo=True)
 
         assert rendered != forged, "attacker-supplied <...> passed through intact"
         assert "<" not in rendered and ">" not in rendered

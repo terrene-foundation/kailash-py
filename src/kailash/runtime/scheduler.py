@@ -1375,7 +1375,7 @@ class WorkflowScheduler:
                         max_attempts,
                         run_id,
                         schedule_id,
-                        type(last_exc).__name__,
+                        safe_type_name(last_exc),
                         backoff_seconds,
                     )
                     await asyncio.sleep(backoff_seconds)
@@ -1406,7 +1406,7 @@ class WorkflowScheduler:
                 schedule_id,
                 max_attempts,
                 max_attempts,
-                type(last_exc).__name__,
+                safe_type_name(last_exc),
             )
         logger.exception(
             "Scheduled execution failed (final): run_id=%s schedule_id=%s",
