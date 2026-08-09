@@ -18,6 +18,70 @@ from .tiers import HotMemoryTier, TierManager
 logger = logging.getLogger(__name__)
 
 
+class _GlobalScopeSentinel(str):
+    """Marker type for an explicit request for the un-namespaced global scope.
+
+    Subclasses ``str`` so it satisfies the ``Optional[str]`` tenant_id
+    annotation everywhere, while remaining distinguishable from a tenant
+    literally named ``"__global__"`` via ``isinstance``.
+    """
+
+    __slots__ = ()
+
+
+#: Explicit, deliberate request for the shared global (un-namespaced) scope.
+#: Pass as ``tenant_id=GLOBAL_SCOPE`` to opt out of tenant namespacing without
+#: triggering the accidental-omission warning.
+GLOBAL_SCOPE = _GlobalScopeSentinel("__global__")
+
+# One-time (per-process) warning state for accidental global-scope usage.
+_GLOBAL_SCOPE_WARN_LOCK = threading.Lock()
+_GLOBAL_SCOPE_WARN_EMITTED = False
+
+_GLOBAL_SCOPE_WARNING = (
+    "EnterpriseMemorySystem: multi_tenant_enabled=True but a memory operation ran "
+    "with NO tenant scope, so the key was stored in the SHARED GLOBAL namespace — "
+    "tenant isolation is NOT applied for this call. Every caller that omits "
+    "tenant_id shares that one namespace and can read each other's entries. "
+    "To scope the operation, pass tenant_id=<tenant> to get/put/delete/exists, or "
+    "call set_tenant_context(<tenant>) once. To use the global scope deliberately "
+    "and silence this warning, pass tenant_id=GLOBAL_SCOPE or call "
+    "clear_tenant_context(). This warning is emitted once per process."
+)
+
+
+def _warn_global_scope_once() -> None:
+    """Emit the accidental-global-scope warning at most once per process."""
+    global _GLOBAL_SCOPE_WARN_EMITTED
+    with _GLOBAL_SCOPE_WARN_LOCK:
+        if _GLOBAL_SCOPE_WARN_EMITTED:
+            return
+        _GLOBAL_SCOPE_WARN_EMITTED = True
+    logger.warning(_GLOBAL_SCOPE_WARNING)
+
+
+def _validate_tenant_id(tenant_id: Any) -> None:
+    """Validate an EXPLICITLY supplied tenant identifier.
+
+    Absence (``None``) is handled by the caller — this only runs for a value the
+    caller actually passed, so an empty/blank string is a caller error rather
+    than a request for global scope.
+    """
+    if isinstance(tenant_id, _GlobalScopeSentinel):
+        return
+    if not isinstance(tenant_id, str):
+        raise TypeError(
+            "tenant_id must be a str or GLOBAL_SCOPE, got "
+            f"{type(tenant_id).__name__}; pass tenant_id=None (or GLOBAL_SCOPE) "
+            "to use the global scope"
+        )
+    if not tenant_id.strip():
+        raise ValueError(
+            "tenant_id must be a non-empty, non-blank string; pass tenant_id=None "
+            "(or tenant_id=GLOBAL_SCOPE) to use the global scope explicitly"
+        )
+
+
 @dataclass
 class MemorySystemConfig:
     """Configuration for the enterprise memory system"""
@@ -188,6 +252,10 @@ class EnterpriseMemorySystem:
         # Multi-tenancy support
         self._tenant_contexts: Dict[str, Dict[str, Any]] = {}
         self._current_tenant: Optional[str] = None
+        # True once the caller has DECLARED global scope (clear_tenant_context()
+        # or an explicit GLOBAL_SCOPE context) — suppresses the
+        # accidental-omission warning in _build_tenant_key.
+        self._global_scope_acknowledged: bool = False
         self._lock = threading.RLock()
 
         logger.info("EnterpriseMemorySystem initialized with config: %s", self.config)
@@ -340,13 +408,38 @@ class EnterpriseMemorySystem:
             return False
 
     async def clear(self, tenant_id: Optional[str] = None) -> bool:
-        """Clear all data (optionally for specific tenant)"""
+        """Clear all data (optionally for specific tenant).
+
+        Omitting ``tenant_id`` clears EVERY tier for EVERY tenant. A blank
+        ``tenant_id`` is a caller error and raises rather than silently
+        widening to that global wipe.
+
+        Raises:
+            ValueError: If ``tenant_id`` is an empty or blank string.
+            TypeError: If ``tenant_id`` is not a string.
+        """
+        # `is not None`, not truthiness: a blank tenant_id must never fall
+        # through to the global wipe branch.
+        if tenant_id is not None:
+            _validate_tenant_id(tenant_id)
+
         try:
-            if tenant_id:
+            if tenant_id is not None and not isinstance(
+                tenant_id, _GlobalScopeSentinel
+            ):
                 # Clear tenant-specific data (implementation would need key scanning)
                 logger.warning("Tenant-specific clear not fully implemented yet")
                 return False
             else:
+                if (
+                    self.config.multi_tenant_enabled
+                    and self._current_tenant is not None
+                ):
+                    logger.warning(
+                        "EnterpriseMemorySystem.clear() called without a tenant_id "
+                        "while a tenant context is set; this clears ALL tiers for "
+                        "ALL tenants, not just the current context."
+                    )
                 # Clear all tiers
                 results = await asyncio.gather(
                     self.hot_tier.clear(),
@@ -406,22 +499,78 @@ class EnterpriseMemorySystem:
             return {}
 
     def set_tenant_context(self, tenant_id: str):
-        """Set current tenant context for multi-tenancy"""
+        """Set current tenant context for multi-tenancy.
+
+        Args:
+            tenant_id: Non-empty tenant identifier, or ``GLOBAL_SCOPE`` to
+                deliberately operate in the shared global namespace.
+
+        Raises:
+            ValueError: If ``tenant_id`` is an empty or blank string.
+            TypeError: If ``tenant_id`` is not a string.
+        """
+        _validate_tenant_id(tenant_id)
         self._current_tenant = tenant_id
+        self._global_scope_acknowledged = isinstance(tenant_id, _GlobalScopeSentinel)
 
     def clear_tenant_context(self):
-        """Clear current tenant context"""
+        """Clear current tenant context.
+
+        Clearing is an EXPLICIT request for the shared global namespace: after
+        this call, operations that omit ``tenant_id`` land in the global scope
+        without the accidental-omission warning.
+        """
         self._current_tenant = None
+        self._global_scope_acknowledged = True
 
     def _build_tenant_key(self, key: str, tenant_id: Optional[str] = None) -> str:
-        """Build tenant-aware key"""
+        """Build tenant-aware key.
+
+        Scope resolution, in order:
+
+        1. ``multi_tenant_enabled=False`` -> the key is returned unchanged
+           (tenant namespacing is off for the whole system).
+        2. An explicitly supplied ``tenant_id`` wins. It MUST be a non-blank
+           string (an empty/blank string is a caller error and raises) or
+           ``GLOBAL_SCOPE``.
+        3. Otherwise the tenant context set by :meth:`set_tenant_context` is
+           used, if any.
+        4. With neither, the key is returned UN-namespaced, in the shared
+           global namespace. This is a SUPPORTED state (see
+           :meth:`clear_tenant_context`), NOT an error — every caller that
+           omits a tenant shares that one namespace. Because it is also what an
+           accidental omission looks like, the first such call in a
+           multi-tenant-enabled process emits a one-time WARNING. Pass
+           ``tenant_id=GLOBAL_SCOPE`` or call :meth:`clear_tenant_context` to
+           declare the intent and silence it.
+
+        To get tenant scoping, the caller MUST either pass ``tenant_id`` on the
+        operation or call ``set_tenant_context(<tenant>)`` beforehand.
+
+        Raises:
+            ValueError: If an explicitly supplied ``tenant_id`` is blank.
+            TypeError: If an explicitly supplied ``tenant_id`` is not a string.
+        """
         if not self.config.multi_tenant_enabled:
             return key
 
-        effective_tenant = tenant_id or self._current_tenant
-        if effective_tenant:
-            return f"tenant:{effective_tenant}:{key}"
-        return key
+        # `is None` (not truthiness): an empty-string tenant is a caller error,
+        # distinct from an absent one, and must not silently widen scope.
+        if tenant_id is not None:
+            _validate_tenant_id(tenant_id)
+            effective_tenant: Optional[str] = tenant_id
+        else:
+            effective_tenant = self._current_tenant
+
+        if effective_tenant is None:
+            if not self._global_scope_acknowledged:
+                _warn_global_scope_once()
+            return key
+
+        if isinstance(effective_tenant, _GlobalScopeSentinel):
+            return key
+
+        return f"tenant:{effective_tenant}:{key}"
 
     async def optimize_tiers(self):
         """Run optimization to promote/demote data between tiers"""

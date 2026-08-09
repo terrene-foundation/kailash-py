@@ -13,6 +13,51 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — `EnterpriseMemorySystem` no longer widens tenant scope on a falsy tenant id (#2005)
+
+`_build_tenant_key` resolved its scope with `tenant_id or self._current_tenant`.
+Truthiness cannot distinguish an ABSENT tenant from a BLANK one, so `tenant_id=""`
+(or `0`) silently produced an **un-namespaced key in the shared global namespace**
+instead of being rejected. In a multi-tenant deployment every caller that passed a
+blank tenant landed in that one namespace together.
+
+This was never a cross-tenant leak — `get`, `put` and the sibling call sites all
+route through `_build_tenant_key` symmetrically, so reaching `tenant:X:` still
+required the effective tenant to BE `X`. The defect is a fail-OPEN default: scope
+degraded to global, silently.
+
+**No-tenant remains a supported state** (`clear_tenant_context()` has always
+implied it) and **the key format is unchanged**, so no stored key is stranded:
+
+- explicit tenant → `tenant:<id>:<key>` (as before)
+- no tenant → bare `<key>` (as before)
+
+What changed:
+
+- **A blank or non-string `tenant_id` is now a caller error**, raising `ValueError`
+  / `TypeError` rather than silently widening scope. Resolution uses `is None`, not
+  truthiness. **This is the one behavioural break**: a caller that previously passed
+  `""` and received global scope now gets an exception. Pass `tenant_id=None` — or
+  the new `GLOBAL_SCOPE` sentinel — to request global scope deliberately.
+- **`GLOBAL_SCOPE`** is a new sentinel for callers that want the shared namespace
+  explicitly and silently — `from kaizen.memory import GLOBAL_SCOPE` (also
+  importable from `kaizen.memory.enterprise`). It subclasses `str`, so it
+  satisfies the existing `Optional[str]` annotation everywhere while staying
+  distinguishable — via `isinstance`, not equality — from a tenant literally
+  named `"__global__"`.
+- **A one-time (per-process) `WARNING`** is emitted the first time a
+  `multi_tenant_enabled=True` system builds a key with no tenant scope, naming the
+  protection that is off and how to wire it. `clear_tenant_context()` and
+  `tenant_id=GLOBAL_SCOPE` declare the intent and suppress it.
+- **`clear()` no longer widens on a blank tenant id.** It used the same truthiness
+  test, so `clear(tenant_id="")` fell through to the branch that clears EVERY tier
+  for EVERY tenant. It now validates first and additionally warns when called with
+  no tenant while a tenant context is set.
+
+The tenant-namespace boundary is now pinned by tests in all four directions
+(no-tenant↔no-tenant, no-tenant vs tenant-scoped, tenant-scoped vs no-tenant, and
+tenant A vs tenant B) — the coverage #2005 correctly identified as missing.
+
 ## [2.46.0] — 2026-08-05 — Credential-sanitization hardening completed; A2A capability matching fixed (#1970, #1973, #1974, #1981)
 
 **Upgrade note: this release does NOT include the discovery-permission fail-open fix.** That fix lives in the separate `kaizen-agents` package (`UserFilteredAgentDiscovery`, not part of `kailash-kaizen`) and ships in `kaizen-agents` 0.13.0. `kaizen-agents` 0.12.0 declares `kailash-kaizen>=2.36.0` with no upper cap, so upgrading `kailash-kaizen` to 2.46.0 satisfies that floor and gives a dependency resolver no reason to also upgrade `kaizen-agents` — an environment can report `kailash-kaizen` upgraded while `kaizen-agents` silently stays on 0.12.0 with its fail-open permission checker still live. If your deployment uses `kaizen-agents`, upgrade it explicitly to `>=0.13.0` alongside this release; see the `kaizen-agents` CHANGELOG for the fix itself.
