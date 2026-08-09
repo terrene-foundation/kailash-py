@@ -36,9 +36,21 @@ would make the rule self-defeating. It verified behaviour-unchanged by line-offs
 byte-identical in offset) and named the bound: that method would not catch a change made and
 reverted inside the range.
 
-**CORRECTNESS LENS: round 5 CLEAN; round 6 dispatched against `b9f1e5ab7`, NOT YET RECEIVED.**
-Convergence needs its yes-consecutive too — a correctness-clean is not a security-clean and the
-reverse holds equally. Convergence needs TWO consecutive clean rounds on a
+**CORRECTNESS LENS: round 5 CLEAN, and it INDEPENDENTLY re-derived that production behaviour at
+`b024aedda` is byte-identical to `3f988bd22`** (three SHA ranges checked; the two later commits
+touch `.session-notes.d/` only), so its round-5 verdict carries to current HEAD. **It has NOT yet
+answered whether that counts as a SECOND consecutive round** — carry-forward says its earlier
+evidence is still valid, which is not the same claim as a fresh round finding nothing. Asked
+explicitly; do NOT count it as convergence until it answers. A correctness-clean is not a
+security-clean and the reverse holds equally.
+
+**Both round-4 correctness LOWs are CLOSED, and the L1 verification is worth reading before
+trusting any pin in this file.** It ran THREE targeted mutations, each isolating one assertion,
+reach confirmed before each result: (A) delete the retrieval block → reds on the status
+assertion, captured log empty; (B) log `%s` of the exception → reds on the type assertion; (C)
+keep the type AND append the message → reds on the disclosure assertion, log showing the DSN.
+**Mutation C is the realistic regression** — a type-only pin would have passed it. No assertion
+in that pin is dead weight. Convergence needs TWO consecutive clean rounds on a
 surface that does not move between them, from BOTH lenses — a correctness-clean is not
 security-clean (`agents.md`).
 
