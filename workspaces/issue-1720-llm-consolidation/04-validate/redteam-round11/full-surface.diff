@@ -1,0 +1,1396 @@
+diff --git a/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py b/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
+index 37c468f0c..1fb812938 100644
+--- a/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
++++ b/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
+@@ -865,7 +865,11 @@ class _SinkScan(ast.NodeVisitor):
+             if self._is_our_value(arg):
+                 self.bare.add(_key(arg))
+                 return
+-        # Shape 8 — the exception as a VALUE inside ``extra={...}``. A
++        # Shape 9 — the exception as a VALUE inside ``extra={...}``. A
++        # (Numbered 9, not 8: "Shape 8" was already taken by the repr()-of-a-
++        # NON-exception pass, and the nine cross-references at the negative
++        # controls and the pinned-count tables all denote THAT one. Two
++        # definitions under one label made every one of them ambiguous.)
+         # structured-logging formatter renders that value with ``str()`` exactly
+         # as a lazy ``%s`` argument would, so it is the same sink wearing a dict.
+         # ``extra={"error": str(e)}`` was already caught by the string-context
+@@ -894,12 +898,19 @@ class _SinkScan(ast.NodeVisitor):
+         # attribute chain inside ``extra`` should flag is a real question with
+         # its own answer; it is not this one, and answering it here by accident
+         # would have moved nine files on no evidence.
++        # NO early return: two bare values on two different lines are two
++        # separate sites, and returning after the first silently dropped the
++        # second -- contradicting this method's own docstring, which promises it
++        # "does NOT return early ... would silently drop that site".
++        #
++        # NO ``value is not None`` guard either: a None entry in ``.values``
++        # would mean ``**spread``, and CPython puts the None in ``.keys`` for
++        # that form, never in ``.values``. The guard could not fire.
+         for keyword in node.keywords:
+             if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
+                 for value in keyword.value.values:
+-                    if value is not None and self._is_our_name(value):
++                    if self._is_our_name(value):
+                         self.bare.add(_key(value))
+-                        return
+ 
+     def visit_Call(self, node: ast.Call) -> None:
+         func = node.func
+@@ -1080,6 +1091,17 @@ class TestTheScannerSeesEachShape:
+             ("attr-nested", '    logger.error("failed: %s", exc.response.text)'),
+             ("attr-cause", '    logger.error("failed: " + str(exc.__cause__))'),
+             ("attr-subscript", '    logger.error("failed: %s", exc.args[0])'),
++            # Shape 9 — the bare exception as a VALUE inside ``extra={...}``.
++            # This shape shipped with NO pin at all: removing the whole
++            # producer left the suite at 374 passed, while a planted input
++            # measurably changed the scanner's output ([4] -> []), so the
++            # mutation reached the code and reddened nothing. Vacuous by the
++            # MUST-2(b) standard, not merely unproven.
++            ("extra-dict-bare", '    logger.error("failed", extra={"error": exc})'),
++            (
++                "extra-dict-bare-second-key",
++                '    logger.error("failed", extra={"ok": 1, "error": exc})',
++            ),
+         ],
+     )
+     def test_each_leaking_shape_is_flagged(self, label: str, body: str) -> None:
+@@ -1376,6 +1398,61 @@ class TestTheScannerSeesEachShape:
+         """
+         assert not self._scan(src), f"scanner false-positives on {label!r}"
+ 
++    def test_extra_dict_counts_every_bare_value_not_just_the_first(self) -> None:
++        """Two bare values in one ``extra`` are TWO sites.
++
++        The producer returned after its first hit, so a second leak on a later
++        line was silently dropped -- contradicting the containing method's own
++        docstring ("does NOT return early ... would silently drop that site").
++        A count is the whole interface this scanner offers; undercounting it is
++        the failure mode, not a rounding error.
++        """
++        src = (
++            "try:\n"
++            "    pass\n"
++            "except Exception as exc:\n"
++            "    logger.error(\n"
++            '        "failed",\n'
++            "        extra={\n"
++            '            "first": exc,\n'
++            '            "second": exc,\n'
++            "        },\n"
++            "    )\n"
++        )
++
++        flagged = self._scan(src)
++
++        assert len(flagged) >= 2, f"undercounted extra-dict values: {flagged}"
++
++    @pytest.mark.parametrize(
++        "label, body",
++        [
++            (
++                "extra-dict-scrubbed",
++                '    logger.error("failed", extra={"error": scrub_remote_error(exc)})',
++            ),
++            (
++                "extra-dict-domain-attribute",
++                '    logger.error("failed", extra={"model": exc.model})',
++            ),
++        ],
++    )
++    def test_extra_dict_near_misses_are_not_flagged(
++        self, label: str, body: str
++    ) -> None:
++        """Shape 9's negative controls.
++
++        The second is load-bearing and deliberate: a87890fd6 narrowed this
++        producer to a BARE name precisely so structured domain fields
++        (``exc.model`` / ``exc.helper`` / ``exc.error`` on first-party
++        exceptions) do not flag -- reverting that narrowing was measured to move
++        9 files / 15 sites. Pinning it here means a future widening has to argue
++        with a test rather than discover those nine by accident.
++        """
++        src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
++
++        assert not self._scan(src), f"scanner false-positives on {label!r}"
++
+     def test_raise_of_a_class_is_not_an_exception_valued_name(self) -> None:
+         """``raise ValueError`` names a CLASS, not a parameter holding a value.
+ 
+diff --git a/src/kailash/channels/base.py b/src/kailash/channels/base.py
+index 161ce351a..d0d584c9f 100644
+--- a/src/kailash/channels/base.py
++++ b/src/kailash/channels/base.py
+@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
+ from enum import Enum
+ from typing import Any, Callable, Dict, List, Optional, Union
+ 
+-from kailash.utils.secure_logging import safe_exception_frames
++from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -325,7 +325,7 @@ class Channel(ABC):
+                     logger.warning(
+                         "Channel %s: event task failed during cleanup: %s at %s",
+                         self.name,
+-                        type(task_error).__name__,
++                        safe_type_name(task_error),
+                         safe_exception_frames(task_error, limit=3),
+                     )
+             if pending:
+diff --git a/src/kailash/nodes/base_async.py b/src/kailash/nodes/base_async.py
+index ccadebec2..8d0a21ce1 100644
+--- a/src/kailash/nodes/base_async.py
++++ b/src/kailash/nodes/base_async.py
+@@ -17,7 +17,7 @@ from kailash.nodes.mixins import (
+ )
+ from kailash.runtime.template_resolver import resolve_templates
+ from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+-from kailash.utils.secure_logging import safe_exception_frames
++from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+ 
+ 
+ class AsyncNode(
+@@ -292,7 +292,7 @@ class AsyncNode(
+             self.logger.error(
+                 "Node %s execution failed: %s (at %s)",
+                 self.id,
+-                type(e).__name__,
++                safe_type_name(e),
+                 safe_exception_frames(e),
+             )
+             # The RAISED message is deliberately left carrying `e`: it is the
+@@ -459,7 +459,7 @@ class AsyncNode(
+         await self.log_with_context(
+             "error",
+             f"Operation failed: {operation}",
+-            error_type=type(error).__name__,
++            error_type=safe_type_name(error),
+             error_message=str(error),
+             traceback=traceback.format_exc(),
+         )
+@@ -502,7 +502,7 @@ class AsyncNode(
+             log_data = extra.copy()
+ 
+         if error:
+-            log_data["error_type"] = type(error).__name__
++            log_data["error_type"] = safe_type_name(error)
+             log_data["error_message"] = str(error)
+ 
+         await asyncio.to_thread(self.logger.error, message, extra=log_data)
+diff --git a/src/kailash/runtime/distributed.py b/src/kailash/runtime/distributed.py
+index d65781992..94e638902 100644
+--- a/src/kailash/runtime/distributed.py
++++ b/src/kailash/runtime/distributed.py
+@@ -66,7 +66,7 @@ from kailash.sdk_exceptions import (
+     SoftTimeLimitExceeded,
+     WorkflowCancelledError,
+ )
+-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
++from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+ from kailash.workflow import Workflow
+ 
+ logger = logging.getLogger(__name__)
+@@ -782,7 +782,7 @@ class DistributedRuntime(BaseRuntime):
+                 logger.warning(
+                     "get_queue_status: failed to read queue %r: %s (at %s)",
+                     name,
+-                    type(exc).__name__,
++                    safe_type_name(exc),
+                     safe_exception_frames(exc),
+                 )
+                 per_queue[name] = {"pending": -1, "processing": -1}
+@@ -1175,8 +1175,10 @@ class Worker:
+                 # `repr(handler)` fallback: a `functools.partial` renders its
+                 # bound kwargs verbatim, and a callable object's
+                 # dataclass-generated `__repr__` renders every field including
+-                # a credential one. `safe_callable_name` emits only a
+-                # source-level identifier, which cannot carry a payload.
++                # a credential one. `safe_callable_name` emits a
++                # BOUNDED, structurally inert identifier. It is NOT payload-free
++                # -- a name is caller-settable and a short one survives intact --
++                # but it cannot forge the record's grammar or drive log volume.
+                 #
+                 # `exc_info` is DROPPED for the same reason: `exc` comes from
+                 # the caller's handler, so `logging` printing the chain's
+@@ -1189,7 +1191,7 @@ class Worker:
+                     "continuing (at %s)",
+                     self._worker_id,
+                     safe_callable_name(handler),
+-                    type(exc).__name__,
++                    safe_type_name(exc),
+                     event.task_id,
+                     safe_exception_frames(exc),
+                 )
+diff --git a/src/kailash/runtime/durable.py b/src/kailash/runtime/durable.py
+index 4af4ee768..24551fef4 100644
+--- a/src/kailash/runtime/durable.py
++++ b/src/kailash/runtime/durable.py
+@@ -58,7 +58,7 @@ from typing import (
+ )
+ 
+ from kailash.runtime._time_limits import _validate_limits
+-from kailash.utils.secure_logging import safe_callable_name
++from kailash.utils.secure_logging import safe_callable_name, safe_type_name
+ 
+ # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
+ # Default is None (auto-detect at build time: "both" with dispatcher,
+@@ -536,7 +536,7 @@ def _redact_value(
+             extra={
+                 "node_id_hash": _hash_short(node_id),
+                 "field_path_hash": _hash_short(field_path),
+-                "error_type": type(exc).__name__,
++                "error_type": safe_type_name(exc),
+             },
+         )
+         tag = "REDACT"
+@@ -789,7 +789,7 @@ def _hash_pk(value: Any) -> str:
+             "durable.redact.unhashable_pk_value",
+             extra={
+                 "value_type": type(value).__name__,
+-                "error_type": type(exc).__name__,
++                "error_type": safe_type_name(exc),
+             },
+         )
+         return "pk:unhashable"
+@@ -940,7 +940,7 @@ class NodeCompletionHookRegistry:
+                 # raw run_id is hashed via _hash_short to match every other WARN
+                 # emission in this file (see specs/core-runtime.md §4.7.1
+                 # hashing-symmetry contract).
+-                failed.append((safe_callable_name(cb), type(exc).__name__))
++                failed.append((safe_callable_name(cb), safe_type_name(exc)))
+                 run_id_hash = (
+                     _hash_short(event.run_id) if event.run_id is not None else "None"
+                 )
+@@ -948,7 +948,7 @@ class NodeCompletionHookRegistry:
+                     "durable.on_node_complete.subscriber_failed",
+                     extra={
+                         "callback": safe_callable_name(cb),
+-                        "error_type": type(exc).__name__,
++                        "error_type": safe_type_name(exc),
+                         "node_id_hash": _hash_short(event.node_id),
+                         "run_id_hash": run_id_hash,
+                     },
+diff --git a/src/kailash/runtime/scheduler.py b/src/kailash/runtime/scheduler.py
+index c421602d9..b77e6f48d 100644
+--- a/src/kailash/runtime/scheduler.py
++++ b/src/kailash/runtime/scheduler.py
+@@ -71,7 +71,7 @@ from kailash.runtime._time_limits import (
+ from kailash.runtime.cancellation import CancellationToken
+ from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
+ from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
+-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
++from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -1552,7 +1552,7 @@ class WorkflowScheduler:
+                 "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
+                 schedule_id,
+                 task_id_hash,
+-                type(exc).__name__,
++                safe_type_name(exc),
+             )
+             raise
+ 
+@@ -1666,8 +1666,10 @@ class WorkflowScheduler:
+                 # `repr(handler)` fallback: a `functools.partial` renders its
+                 # bound kwargs verbatim, and a callable object's
+                 # dataclass-generated `__repr__` renders every field including
+-                # a credential one. `safe_callable_name` emits only a
+-                # source-level identifier, which cannot carry a payload.
++                # a credential one. `safe_callable_name` emits a
++                # BOUNDED, structurally inert identifier. It is NOT payload-free
++                # -- a name is caller-settable and a short one survives intact --
++                # but it cannot forge the record's grammar or drive log volume.
+                 #
+                 # `exc_info` is DROPPED for the same reason: `exc` comes from
+                 # the caller's handler, so `logging` printing the chain's
+@@ -1679,7 +1681,7 @@ class WorkflowScheduler:
+                     "WorkflowScheduler lifecycle handler %r raised %s for "
+                     "schedule %s; continuing (at %s)",
+                     safe_callable_name(handler),
+-                    type(exc).__name__,
++                    safe_type_name(exc),
+                     event.schedule_id,
+                     safe_exception_frames(exc),
+                 )
+diff --git a/src/kailash/utils/lifespan.py b/src/kailash/utils/lifespan.py
+index fbd747089..ebf0297ec 100644
+--- a/src/kailash/utils/lifespan.py
++++ b/src/kailash/utils/lifespan.py
+@@ -49,7 +49,7 @@ import inspect
+ import logging
+ from typing import TYPE_CHECKING
+ 
+-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
++from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+ 
+ if TYPE_CHECKING:
+     from fastapi import FastAPI
+@@ -84,8 +84,10 @@ async def _drive_handlers(
+         # `router.on_startup`), so anything without `__name__` used to reach a
+         # `repr(handler)` fallback. `functools.partial` is not an exotic case
+         # here -- it is the shape the docstring below explicitly anticipates,
+-        # and it renders its bound kwargs verbatim. `safe_callable_name` emits
+-        # only a source-level identifier, which cannot carry a payload.
++        # and it renders its bound kwargs verbatim. `safe_callable_name` emits a
++        # BOUNDED, structurally inert identifier. It is NOT payload-free -- a
++        # name is caller-settable and a short one survives intact -- but it
++        # cannot forge the record's grammar or drive log volume.
+         handler_name = safe_callable_name(handler)
+         try:
+             # Match the existing workflow_server.py pattern at lines 234-237:
+@@ -118,7 +120,7 @@ async def _drive_handlers(
+                 extra={
+                     "handler": handler_name,
+                     "phase": phase,
+-                    "exc_type": type(exc).__name__,
++                    "exc_type": safe_type_name(exc),
+                     "exc_frames": safe_exception_frames(exc),
+                 },
+             )
+diff --git a/src/kailash/utils/secure_logging.py b/src/kailash/utils/secure_logging.py
+index 3fd59789b..a5fcb09da 100644
+--- a/src/kailash/utils/secure_logging.py
++++ b/src/kailash/utils/secure_logging.py
+@@ -3,12 +3,28 @@
+ This module provides mixins and utilities for automatically detecting and
+ masking PII, credentials, and other sensitive information in logs.
+ 
+-It also provides two helpers that make a log line safe BY CONSTRUCTION rather
+-than by pattern-matching -- :func:`safe_callable_name` and
++It also provides two helpers that narrow a log line BY CONSTRUCTION rather than
++by pattern-matching -- :func:`safe_callable_name` and
+ :func:`safe_exception_frames`. Prefer those wherever the object being logged is
+ CALLER-SUPPLIED: the masking below is best-effort over an open-ended payload,
+-while those two emit only source-level identifiers that cannot carry a payload
+-at all.
++while those two emit only source-level identifiers.
++
++WHAT THAT DOES AND DOES NOT PROMISE. An earlier version of this header claimed
++those identifiers "cannot carry a payload at all". That is FALSE and was
++measured false -- a class name is mintable via
++``type(f"ServerError_{data}", (Exception,), {})``, a function ``__name__`` is
++plainly assignable, and ``__qualname__`` can resolve through a caller-controlled
++``__getattr__`` returning any string whatsoever. Measured: a ``__getattr__``
++returning ``"postgres://svc:hunter2@h/db"`` was emitted verbatim, and a
++5000-character ``__qualname__`` came back at full length.
++
++What IS true is narrower and is enforced here rather than asserted: every such
++identifier is passed through :func:`_safe_identifier` before it reaches a
++record, which BOUNDS its length and confines it to a conservative character set.
++That removes the unbounded-length and record-forgery channels. It does NOT make
++the identifier payload-free -- a short attacker-chosen name still survives, by
++design, because it is often the only diagnostic there is. Treat these helpers as
++"structurally inert and bounded", never as "cannot carry data".
+ """
+ 
+ import functools
+@@ -51,6 +67,115 @@ _HOME_DIR = os.path.expanduser("~")
+ # the one that matters.
+ _MAX_CHAIN_LINKS = 10
+ 
++# Ceiling on any single attacker-influenceable identifier (class name, function
++# name, frame name, frame path) entering a record. Long enough that a real
++# qualname or vendored path survives intact; short enough that 5000 characters
++# of caller-chosen text cannot.
++_MAX_IDENTIFIER_CHARS = 120
++
++# Everything OUTSIDE this set is replaced before an identifier is rendered.
++# Deliberately excludes the characters this module uses structurally --
++# ``<`` ``>`` ``@`` ``:`` and space -- so that a rendered record's own grammar
++# (" <- " between links, "@" before frames, ">" between frames, ":" inside
++# path:lineno:name, and every "<...>" marker) CANNOT be forged from caller data.
++# Newline is excluded for the same reason: it forges an entire extra log line.
++_UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/]")
++
++# CPython's fixed pseudo-identifier literals for frame names and synthetic
++# filenames. Passed through byte-intact on an EXACT match so the frames most
++# useful for locating a comprehension, lambda, module-scope or import failure
++# stay readable. A closed set, never a pattern -- see _safe_identifier.
++_CPYTHON_PSEUDO_IDENTIFIERS = frozenset(
++    {
++        "<module>",
++        "<lambda>",
++        "<listcomp>",
++        "<dictcomp>",
++        "<setcomp>",
++        "<genexpr>",
++        "<string>",
++        "<stdin>",
++        "<frozen importlib._bootstrap>",
++        "<frozen importlib._bootstrap_external>",
++    }
++)
++
++
++def _safe_identifier(value: object) -> str:
++    """Bound and neutralize one attacker-influenceable identifier.
++
++    Three properties, each measured by a regression pin rather than asserted:
++
++    1. **Bounded.** Output never exceeds ``_MAX_IDENTIFIER_CHARS`` plus a fixed
++       truncation marker, so no identifier can drive log volume.
++    2. **Structurally inert.** No output character can close or open any
++       delimiter this module renders, so a record's grammar always reflects the
++       walk that produced it and never caller-supplied text. In particular a
++       ``<...>`` marker in a record is always OURS, because ``<`` and ``>`` can
++       never survive from input.
++    3. **Total.** Never raises. A logging call site must not fail on the thing
++       it is describing, so a non-string or an object whose ``__str__`` raises
++       degrades to a marker rather than propagating.
++
++    NOT a redaction step: a short attacker-chosen identifier survives on
++    purpose. Bounding and de-fanging is the contract; secrecy is not.
++    """
++    try:
++        text = value if isinstance(value, str) else str(value)
++    except Exception:
++        return "<unrepresentable>"
++    if not text:
++        return "<empty>"
++    # CPython's own pseudo-identifiers pass through INTACT on an exact match.
++    # Without this they mangle to "?module?" / "?listcomp?" -- which destroys the
++    # frames most used to locate a comprehension or import failure, AND leaves a
++    # "?...?" form that is itself forgeable (a class named "!listcomp!" renders
++    # identically). Exact-match is what makes this safe to re-admit <> for:
++    # nothing an attacker supplies reaches this branch unless it is byte-equal to
++    # a fixed CPython literal.
++    #
++    # RESIDUAL, stated: a class named EXACTLY "<listcomp>" also matches and will
++    # render as a genuine frame label would. That is a cosmetic confusion (an
++    # exception claiming to be a comprehension frame), NOT a grammar forgery --
++    # it cannot open or close a delimiter, invent a chain link, or inject a line.
++    if text in _CPYTHON_PSEUDO_IDENTIFIERS:
++        return text
++    cleaned = _UNSAFE_IDENTIFIER_CHARS.sub("?", text)
++    # ``len`` on a str SUBCLASS is overridable, so the bound below could in
++    # principle be decided by attacker code. Measured: it cannot -- ``re.sub``
++    # returns a plain ``str`` copy for a subclass input (the zero-match identity
++    # optimization applies to exact ``str`` only), so ``cleaned`` is always a
++    # real ``str`` by this line and ``len`` is the builtin. Pinned by
++    # ``test_a_lying_len_str_subclass_cannot_defeat_the_bound``.
++    if len(cleaned) > _MAX_IDENTIFIER_CHARS:
++        # Marker uses <> precisely because input cannot contain them.
++        return f"{cleaned[:_MAX_IDENTIFIER_CHARS]}<truncated>"
++    return cleaned
++
++
++def safe_type_name(obj: object) -> str:
++    """Bounded, structurally inert name of an object's TYPE, for a log field.
++
++    THE SINK-SIDE HALF of :func:`safe_exception_frames`. Hardening the helper
++    alone was not enough: nine call sites logged ``type(exc).__name__`` RAW as a
++    sibling ``%s`` in the SAME log call, so the sanitized field and an
++    unsanitized copy of the same identifier landed four characters apart.
++    Measured, a class named ``"A\\nERROR fake-log-line"`` put a real newline into
++    the record through the raw field while the helper's field rendered
++    ``A?ERROR?fake-log-line``, and a 5000-character class name arrived in full.
++
++    The type name is NOT redundant with the chain render and MUST NOT be dropped
++    to "fix" this: the chain keeps the INNERMOST links, so on a chain longer than
++    :data:`_MAX_CHAIN_LINKS` the caught exception's own type is evicted and this
++    field is the only place it appears.
++    """
++    try:
++        return _safe_identifier(type(obj).__name__)
++    except Exception:
++        # Total for the same reason safe_callable_name is: this is called from
++        # inside ``except`` blocks, where raising REPLACES the handled exception.
++        return "<unrepresentable>"
++
+ 
+ def safe_callable_name(obj: Any) -> str:
+     """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
+@@ -80,8 +205,21 @@ def safe_callable_name(obj: Any) -> str:
+        from the cache one. ``partial.func`` is the wrapped function; the
+        payload lives in ``partial.args`` / ``partial.keywords``, which are
+        never read here.
+-    3. Otherwise ``type(obj).__name__`` -- a class name, which is a
+-       source-level identifier and cannot carry a caller payload.
++    3. Otherwise ``type(obj).__name__`` -- a class name.
++
++    WHAT THE RETURNED NAME IS AND IS NOT. An earlier version of item 3 said a
++    class name "cannot carry a caller payload". That is FALSE and was measured
++    false: ``type("K_hunter2", (), {})`` mints one carrying arbitrary text, and
++    item 1 fires FIRST and is worse -- ``__name__`` is plainly assignable and
++    ``__qualname__`` can resolve through a caller-controlled ``__getattr__``
++    returning any string (measured: ``"postgres://svc:hunter2@h/db"`` returned
++    verbatim; a 5000-character name returned at full length).
++
++    Every return below therefore passes through :func:`_safe_identifier`, which
++    BOUNDS the length and strips the characters this module renders
++    structurally. A short caller-chosen name still survives, by design -- it is
++    frequently the only diagnostic available. Read the result as "bounded and
++    structurally inert", never as "payload-free".
+ 
+     Returns a string for every object that misbehaves; it does not raise on
+     account of the object, because a logging call site must not fail on the
+@@ -117,7 +255,8 @@ def safe_callable_name(obj: Any) -> str:
+                 # A non-str __name__ is possible on an exotic object; only a real
+                 # string is usable, and only a non-empty one is a diagnostic.
+                 if isinstance(name, str) and name:
+-                    return f"partial({name})" if unwrapped else name
++                    safe = _safe_identifier(name)
++                    return f"partial({safe})" if unwrapped else safe
+             if (
+                 isinstance(target, functools.partial)
+                 and unwrapped < _MAX_PARTIAL_UNWRAP
+@@ -125,14 +264,14 @@ def safe_callable_name(obj: Any) -> str:
+                 target = target.func
+                 unwrapped += 1
+                 continue
+-            type_name = type(target).__name__
++            type_name = _safe_identifier(type(target).__name__)
+             return f"partial({type_name})" if unwrapped else type_name
+     except Exception:
+         # Fall back to the ONE read that cannot be intercepted by the object:
+         # its type's name. Reached only when the object actively resisted
+         # description, so the lost precision is the object's own doing.
+         try:
+-            return type(obj).__name__
++            return _safe_identifier(type(obj).__name__)
+         except Exception:
+             return "<unrepresentable>"
+ 
+@@ -171,6 +310,40 @@ def safe_exception_frames(
+     *,
+     limit: int = _DEFAULT_FRAME_LIMIT,
+     follow_chain: bool = True,
++) -> str:
++    """Total wrapper over :func:`_safe_exception_frames_impl`.
++
++    TOTALITY IS THE CONTRACT, for the same reason :func:`safe_callable_name`
++    argues for its own guard: this helper is called from INSIDE ``except``
++    blocks, so an exception raised here REPLACES the exception being handled --
++    the caller's error disappears and is replaced by a failure in the logging
++    helper. ``safe_callable_name`` was given that guard in round 1; its sibling
++    was not, and round 10 measured the gap.
++
++    Every read the walk performs -- ``__cause__``, ``__context__``,
++    ``__traceback__`` -- is a getset descriptor on ``BaseException`` that a
++    SUBCLASS can shadow with a property, and the threat model already grants the
++    attacker the exception class. Measured: a class defining
++    ``__cause__ = property(raiser)`` made this helper raise ``RuntimeError``
++    straight through its caller's ``except`` block.
++
++    ``BaseException`` (not ``Exception``) is deliberately NOT caught here --
++    ``KeyboardInterrupt`` / ``SystemExit`` / ``CancelledError`` must propagate,
++    matching :func:`safe_callable_name`.
++    """
++    try:
++        return _safe_exception_frames_impl(exc, limit=limit, follow_chain=follow_chain)
++    except Exception:
++        # No detail from the failure is rendered: it originates in
++        # attacker-shadowed descriptors, so its own text is caller-controlled.
++        return "<frames-unavailable>"
++
++
++def _safe_exception_frames_impl(
++    exc: BaseException,
++    *,
++    limit: int = _DEFAULT_FRAME_LIMIT,
++    follow_chain: bool = True,
+ ) -> str:
+     """Render WHERE an exception failed, without rendering WHAT it said.
+ 
+@@ -203,7 +376,12 @@ def safe_exception_frames(
+       An earlier revision of this paragraph said only the basename survives
+       because :func:`_relative_frame_path` "falls back to the basename". That is
+       true on only THREE branches -- ``relpath`` raised, a leading ``".."``, or
+-      cwd at/above the home directory. On the COMMON branch (the file resolves
++      cwd STRICTLY ABOVE the home directory. (Strictly: the guard is
++      ``commonpath([cwd, _HOME_DIR]) == cwd and cwd != _HOME_DIR``, so cwd ==
++      home takes the COMMON branch and keeps directories. An earlier revision of
++      this line said "at/above", which is measurably wrong at exactly that one
++      value -- the same overstatement class this paragraph was written to fix.)
++      On the COMMON branch (the file resolves
+       under cwd) it returns the relative path with directories intact, which
+       this repo's own negative control asserts. So the safe statement is
+       narrower: an ABSOLUTE path outside cwd collapses to its basename; a path
+@@ -230,9 +408,22 @@ def safe_exception_frames(
+             ``raise X from prev`` drove 5000 links to a single 175,000-character
+             log record -- the log-spam mode ``observability.md`` forbids, on an
+             error path an attacker can drive. **The INNERMOST links are kept**,
+-            so the root cause always survives truncation and cannot be evicted
+-            by an attacker who adds wrapping layers; the dropped OUTER count is
+-            rendered at the head of the string.
++            so a root cause cannot be evicted by an attacker who adds WRAPPING
++            (outer) layers; the dropped OUTER count is rendered at the head of
++            the string.
++
++            THE CONVERSE IS NOT PROMISED, and an earlier revision of this line
++            wrongly said "always survives truncation". Keeping a fixed window at
++            one END is symmetric: whatever sits at the OTHER end is evictable by
++            lengthening the retained end. ``__context__`` is chained implicitly
++            whenever an exception is raised while another is handled, so an
++            in-handler retry recursion grows the chain INWARD and pushes the
++            failure that actually propagated out past the cap. Measured: 15
++            in-handler retries under a final ``KeyError`` rendered
++            ``<+7 outer links dropped>`` and the ``KeyError`` was absent.
++            For a WRAPPER chain -- the diagnostic case this helper serves --
++            innermost is the right end; for a RETRY-storm chain it is not, and
++            the comment beside the implementation says so too.
+ 
+     Returns a string like
+     ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
+@@ -253,8 +444,18 @@ def safe_exception_frames(
+     # the cap and left ten generic wrappers behind. Keeping the innermost links
+     # removes that lever entirely.
+     #
+-    # The walk is pointer-follows only and costs nothing; the O(chain x limit)
+-    # work is the RENDER, which still happens at most _MAX_CHAIN_LINKS times.
++    # COST, STATED ACCURATELY. An earlier revision of this comment said the
++    # walk "costs nothing". It does not: the pre-cap walk below is O(total
++    # chain length) in time AND in auxiliary memory (one `seen` slot + one
++    # `links` slot per link), in a quantity an attacker influences -- where the
++    # superseded truncate-during-walk did at most _MAX_CHAIN_LINKS iterations.
++    # What IS bounded, and is the half that matters for the 175,000-character
++    # record this cap exists to prevent, is the RENDER: it still happens at most
++    # _MAX_CHAIN_LINKS times, so the emitted record stays bounded regardless of
++    # chain length. The residual is a constant-factor overhead on objects the
++    # chain already allocated before this function was called -- real, but not a
++    # new unbounded allocation and not a DoS. A deque(maxlen=...) plus a counter
++    # would bound the walk too, at the cost of the exact dropped-count.
+     #
+     # Honest trade, not a free win: for a RETRY-storm chain the outermost link
+     # is the most RECENT attempt and the innermost the oldest, so "innermost"
+@@ -269,10 +470,40 @@ def safe_exception_frames(
+         links.append(walker)
+         if not follow_chain:
+             break
+-        walker = walker.__cause__ or walker.__context__
+-
+-    dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
+-    kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
++        # HONOR ``__suppress_context__``. ``raise X from None`` is the
++        # documented "do not disclose what I was handling" idiom, and it sets
++        # __cause__=None AND __suppress_context__=True. The superseded
++        # ``__cause__ or __context__`` fell through to __context__ in exactly
++        # that case, so a helper whose entire job is disclosure control emitted
++        # the one link the author had explicitly suppressed. Measured: a
++        # ``raise ValueError("public") from None`` over a
++        # ``KeyError("SUPPRESSED_SECRET")`` rendered the KeyError.
++        #
++        # Note ``raise X from Y`` ALSO sets __suppress_context__=True, so the
++        # flag cannot be tested first -- an explicit __cause__ always wins, and
++        # the flag only decides whether an IMPLICIT __context__ may be followed.
++        if walker.__cause__ is not None:
++            walker = walker.__cause__
++        elif walker.__suppress_context__:
++            walker = None
++        else:
++            walker = walker.__context__
++
++    # ``max(0, ...)`` on the CAP, not just on the result: a NEGATIVE cap
++    # made this over-count (a 12-link chain announced 13 dropped). Third
++    # instance of one arithmetic bug in this function -- N3's ``limit``, the
++    # zero-cap ``kept`` slice, and now ``dropped`` -- which is why it is
++    # pinned rather than dismissed as unreachable.
++    dropped = max(0, len(links) - max(0, _MAX_CHAIN_LINKS))
++    # ``<= 0`` means NO links, not "all links" -- the same arithmetic the frame
++    # slice below gets wrong when written as a truthiness test. ``links[-0:]``
++    # is ``links[0:]``, i.e. the WHOLE chain, so a zero cap would render every
++    # link while announcing that all of them were dropped (measured: cap 0 ->
++    # 12 links rendered). This is the N3 bug class in the sibling slice.
++    if _MAX_CHAIN_LINKS <= 0:
++        kept: List[BaseException] = []
++    else:
++        kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
+ 
+     descriptions: List[str] = []
+     if dropped:
+@@ -295,12 +526,22 @@ def safe_exception_frames(
+         # ``<= 0`` means NO frames, not "all frames". The old ``if limit > 0``
+         # skipped the slice, so a caller asking for zero got everything.
+         frames = frames[-limit:] if limit > 0 else []
++        # Every component below is caller-influenceable and is de-fanged before
++        # it is joined: a class name, a frame name and a template BASENAME can
++        # all carry caller text (measured -- see the module header). Unfiltered,
++        # any of them could forge this record's own grammar: a name containing
++        # " <- " invents a chain link, one containing "@" or ">" invents a frame
++        # boundary, and one containing a NEWLINE forges an entire extra log
++        # line (measured constructible via type("A\nERROR ...", (Exception,), {})).
++        # ``lineno`` is an int from the traceback machinery, never caller text.
+         rendered_frames = ">".join(
+-            f"{_relative_frame_path(frame.filename)}:{frame.lineno}:{frame.name}"
++            f"{_safe_identifier(_relative_frame_path(frame.filename))}"
++            f":{frame.lineno}:{_safe_identifier(frame.name)}"
+             for frame in frames
+         )
+         descriptions.append(
+-            f"{type(current).__name__}@{rendered_frames or '<no-frames>'}"
++            f"{_safe_identifier(type(current).__name__)}"
++            f"@{rendered_frames or '<no-frames>'}"
+         )
+ 
+     return " <- ".join(descriptions)
+diff --git a/src/kailash/visualization/api.py b/src/kailash/visualization/api.py
+index 7072b4949..bd8201e5c 100644
+--- a/src/kailash/visualization/api.py
++++ b/src/kailash/visualization/api.py
+@@ -36,7 +36,7 @@ from pydantic import BaseModel
+ 
+ from kailash.tracking.manager import TaskManager
+ from kailash.tracking.models import TaskStatus
+-from kailash.utils.secure_logging import safe_exception_frames
++from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+ from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
+ from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
+ 
+@@ -384,13 +384,15 @@ class DashboardAPIServer:
+                             # `Authorization: Basic` header.
+                             # So masking here would be a porous filter over
+                             # unbounded input, whereas the type plus the frame
+-                            # list cannot carry a payload at all and is the
+-                            # whole diagnostic an operator needs to find the
+-                            # task. Stronger by construction, not by coverage.
++                            # list are BOUNDED and structurally inert (both go
++                            # through _safe_identifier) and are the whole
++                            # diagnostic an operator needs to find the task.
++                            # NOT payload-free: a caller-chosen class name
++                            # survives, bounded and de-fanged, by design.
+                             self.logger.warning(
+                                 "Previous metrics broadcast task ended with an "
+                                 "error; starting a replacement: %s at %s",
+-                                type(previous_error).__name__,
++                                safe_type_name(previous_error),
+                                 safe_exception_frames(previous_error, limit=3),
+                             )
+                     self._broadcast_task = asyncio.create_task(
+diff --git a/tests/regression/test_redteam_round10_sink_side_sanitization.py b/tests/regression/test_redteam_round10_sink_side_sanitization.py
+new file mode 100644
+index 000000000..5b5f1f981
+--- /dev/null
++++ b/tests/regression/test_redteam_round10_sink_side_sanitization.py
+@@ -0,0 +1,320 @@
++"""Round-10 redteam pins: the SINK side, and the helper's totality.
++
++Round 9 hardened `safe_exception_frames` / `safe_callable_name`. Round 10's
++adversarial security lens found that hardening the HELPER left the SINK open:
++nine call sites logged `type(exc).__name__` RAW as a sibling `%s` in the SAME
++log call, so a sanitized field and an unsanitized copy of the same identifier
++landed four characters apart in one record.
++
++Measured before the fix, which is the whole point of this module:
++
++    'Channel c: event task failed during cleanup: A\\nERROR fake-log-line
++     at A?ERROR?fake-log-line@...'
++                              ^ helper field, sanitized
++     ^ sink field, raw -- real newline in the record
++
++That is the fifth consecutive round in which a fix carried a defect of the class
++it was written to close. The pattern is worth naming: each fix hardened the layer
++it was looking at, and the next round found the same class one layer over.
++"""
++
++import pytest
++
++import kailash.utils.secure_logging as sl
++from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
++
++try:
++    from kailash.utils.secure_logging import safe_type_name
++except ImportError:  # pragma: no cover - only on a tree predating the fix
++    # Deliberate: a module-level import of the new symbol would make this file
++    # fail COLLECTION against a pre-fix tree, and an ImportError is zero
++    # evidence about the behaviour these pins measure. The shim reproduces the
++    # PRE-FIX sink (a raw `type(obj).__name__`) so every test below reds on the
++    # BEHAVIOUR it names, which is what makes the fail-first run readable.
++    def safe_type_name(obj: object) -> str:
++        return type(obj).__name__
++
++
++class TestSinkSideTypeNameIsSanitized:
++    """F1: `safe_type_name` closes the raw sibling-field channel."""
++
++    def test_newline_cannot_reach_a_record_through_the_type_field(self):
++        exc_type = type("A\nERROR fake-log-line", (Exception,), {})
++        try:
++            raise exc_type("boom")
++        except Exception as exc:
++            # The exact caller shape from channels/base.py.
++            record = "Channel %s: event task failed during cleanup: %s at %s" % (
++                "c",
++                safe_type_name(exc),
++                safe_exception_frames(exc, limit=3),
++            )
++
++        assert "\n" not in record
++        assert "\r" not in record
++
++    def test_type_field_is_bounded(self):
++        exc_type = type("Z" * 5000, (Exception,), {})
++        try:
++            raise exc_type("boom")
++        except Exception as exc:
++            rendered = safe_type_name(exc)
++
++        assert len(rendered) <= sl._MAX_IDENTIFIER_CHARS + len("<truncated>")
++
++    def test_type_field_cannot_forge_the_record_grammar(self):
++        exc_type = type("Evil <- FORGED@a.py:1:f", (Exception,), {})
++        try:
++            raise exc_type("boom")
++        except Exception as exc:
++            rendered = safe_type_name(exc)
++
++        assert " <- " not in rendered
++        assert "@" not in rendered
++
++    def test_safe_type_name_never_raises(self):
++        class Hostile:
++            @property
++            def __class__(self):
++                raise RuntimeError("no type for you")
++
++        # Called from inside except blocks -- raising would REPLACE the handled
++        # exception, which is the failure this totality guard exists to prevent.
++        assert isinstance(safe_type_name(Hostile()), str)
++
++    def test_no_helper_sink_still_logs_a_raw_type_name(self):
++        """Mechanical sweep: the nine sites stay closed.
++
++        A behavioural pin cannot see a NEW sink added later, so this asserts the
++        absolute state of the tree rather than the diff -- the `agents.md`
++        mechanical-sweep shape. `base_async.py:304` is the one known exclusion:
++        it is an exception MESSAGE (not a log record) and separately embeds the
++        full `{e}`, which belongs to the runtime-hot-path shard, not here.
++        """
++        import pathlib
++        import re
++
++        root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash"
++        sink_files = [
++            "channels/base.py",
++            "nodes/base_async.py",
++            "runtime/distributed.py",
++            "runtime/durable.py",
++            "runtime/scheduler.py",
++            "utils/lifespan.py",
++            "visualization/api.py",
++        ]
++        pattern = re.compile(
++            r"type\((exc|e|error|err|task_error|previous_error)\)\.__name__"
++        )
++        offenders = []
++        for rel in sink_files:
++            path = root / rel
++            if not path.exists():
++                continue
++            for number, line in enumerate(
++                path.read_text(encoding="utf-8").splitlines(), start=1
++            ):
++                if pattern.search(line):
++                    if rel == "nodes/base_async.py" and "execution failed" in line:
++                        continue  # documented exclusion above
++                    offenders.append(f"{rel}:{number}")
++
++        assert not offenders, f"raw type-name sinks reappeared: {offenders}"
++
++
++class TestEverySanitizationSiteIsPinned:
++    """MED: only the CLASS-NAME site was pinned; the other two were not.
++
++    Measured with a mutation matrix: de-sanitizing `frame.name` or
++    `_relative_frame_path(frame.filename)` left the whole suite GREEN (33 passed
++    both times) while the reachability check confirmed the mutation was present
++    in the file. Per `instrument-discipline.md` MUST-2(b) that is a proven pin
++    gap, not an inert mutation -- the record demonstrably changed:
++
++        de-sanitized frame name -> '...:evil@FORGED <- x'
++        de-sanitized frame path -> '...tpl/evil@FORGED <- x.html...'
++
++    Both forge ` <- ` and `@` into the record. The code was correct; the GUARD
++    was absent, in the one module where five consecutive rounds have each broken
++    the previous round's fix.
++    """
++
++    HOSTILE = "evil@FORGED <- x"
++
++    def test_a_hostile_frame_NAME_cannot_forge_the_record(self):
++        import types
++
++        def _raiser():
++            raise ValueError("boom")
++
++        # co_name is attacker-reachable through exec/compile with a
++        # data-derived identifier -- the vector the module docstring names.
++        hostile_fn = types.FunctionType(
++            _raiser.__code__.replace(co_name=self.HOSTILE), {}, self.HOSTILE
++        )
++        with pytest.raises(ValueError) as caught:
++            hostile_fn()
++        rendered = safe_exception_frames(caught.value, limit=1)
++
++        assert " <- " not in rendered
++        assert rendered.count("@") == 1  # exactly the real type@frames anchor
++
++    def test_a_hostile_frame_PATH_cannot_forge_the_record(self):
++        # Jinja2 compiles a template with the TEMPLATE NAME as the filename, so
++        # a caller-supplied template name lands in frame.filename verbatim.
++        namespace: dict = {}
++        exec(
++            compile(
++                "def g():\n    raise ValueError('boom')\n",
++                f"tpl/{self.HOSTILE}.html",
++                "exec",
++            ),
++            namespace,
++        )
++        with pytest.raises(ValueError) as caught:
++            namespace["g"]()
++        rendered = safe_exception_frames(caught.value, limit=1)
++
++        assert " <- " not in rendered
++        assert rendered.count("@") == 1
++
++
++class TestChainCapArithmeticIsTotal:
++    """LOW: the zero-cap guard fixed `kept` and left `dropped` unguarded.
++
++    `dropped = max(0, len(links) - _MAX_CHAIN_LINKS)` over-counts for a NEGATIVE
++    cap: a 12-link chain announced 13 dropped. Same arithmetic class as N3 and
++    the zero-cap slice, two lines apart -- the third instance of one bug in this
++    function, which is the reason to pin it rather than call it unreachable.
++    """
++
++    def test_a_negative_cap_does_not_over_count_dropped(self, monkeypatch):
++        monkeypatch.setattr(sl, "_MAX_CHAIN_LINKS", -1)
++
++        exc = ValueError("root")
++        for index in range(11):
++            try:
++                raise RuntimeError(f"wrapper-{index}") from exc
++            except Exception as wrapped:
++                exc = wrapped
++
++        rendered = safe_exception_frames(exc)
++
++        # 12 links exist; a negative cap keeps none and may drop at most 12.
++        assert "<+13" not in rendered
++        assert "<+12 outer links dropped" in rendered
++
++
++class TestHelperTotality:
++    """F3: the walk reads descriptors a subclass can shadow."""
++
++    def test_a_shadowed_cause_descriptor_does_not_escape(self):
++        """The outcome is reduced to a plain string BEFORE any assert.
++
++        Necessary, not stylistic: on a pre-fix tree the helper raises, and
++        pytest's own failure rendering builds a `TracebackException`, which
++        re-reads `__cause__` on the propagating exception -- re-entering the
++        shadowed property and taking the RUNNER down with an INTERNALERROR that
++        aborts the whole session. Measured while writing this pin. Catching here
++        and comparing a string keeps the fail-first run readable, and is itself
++        evidence of how far this vector reaches.
++        """
++
++        def raiser(self):
++            raise RuntimeError("gotcha")
++
++        exc_type = type("E", (Exception,), {"__cause__": property(raiser)})
++        try:
++            raise exc_type("boom")
++        except Exception as exc:
++            try:
++                outcome = safe_exception_frames(exc)
++            except Exception as leak:
++                outcome = f"RAISED:{type(leak).__name__}"
++
++        assert outcome == "<frames-unavailable>", outcome
++
++    def test_the_normal_path_is_unaffected(self):
++        try:
++            raise ValueError("normal")
++        except Exception as exc:
++            rendered = safe_exception_frames(exc, limit=1)
++
++        assert "ValueError@" in rendered
++        assert rendered != "<frames-unavailable>"
++
++
++class TestCPythonPseudoIdentifiers:
++    """F5: keep the diagnostic without re-opening a forgery channel."""
++
++    @pytest.mark.parametrize(
++        "literal",
++        ["<module>", "<lambda>", "<listcomp>", "<genexpr>", "<string>"],
++    )
++    def test_cpython_literals_survive_intact(self, literal):
++        assert sl._safe_identifier(literal) == literal
++
++    def test_a_near_miss_does_not_survive(self):
++        """Exact-match is what keeps the passthrough safe.
++
++        `!listcomp!` previously rendered `?listcomp?` -- byte-identical to what a
++        GENUINE listcomp frame degraded to, so our own label was forgeable. It
++        must not now render as `<listcomp>` either.
++        """
++        rendered = sl._safe_identifier("!listcomp!")
++
++        assert rendered != "<listcomp>"
++        assert "<" not in rendered and ">" not in rendered
++
++
++class TestBoundHoldsAgainstALyingLength:
++    """F2: REFUTED by measurement, pinned so it stays refuted.
++
++    `isinstance(value, str)` admits a SUBCLASS, and `len` is overridable, so a
++    lying `__len__` could in principle decide the truncation branch. It cannot:
++    `re.sub` returns a plain `str` copy for a subclass input, so `cleaned` is a
++    real `str` and `len` is the builtin. This pins the property, not the reason —
++    if a future refactor drops the `sub` for an all-safe fast path, this reds.
++    """
++
++    def test_a_lying_len_str_subclass_cannot_defeat_the_bound(self):
++        class Lying(str):
++            def __len__(self):
++                return 5
++
++        def target():
++            pass
++
++        target.__qualname__ = Lying("A" * 5000)
++        target.__name__ = Lying("A" * 5000)
++
++        rendered = safe_callable_name(target)
++
++        assert len(rendered) <= sl._MAX_IDENTIFIER_CHARS + len("<truncated>")
++
++
++class TestGetattrRouteIsGenuinelyExercised:
++    """F4: the round-9 pin's assertions were satisfiable without the payload.
++
++    The lens flagged that `"@" not in rendered` and `"/" in rendered or "?" in
++    rendered` both hold for the CLASS's own qualname, so the test would pass even
++    if `__getattr__` never fired. Measured: the route DOES fire
++    (`'__qualname__' in Hostile.__dict__` is False). Pinning it decisively —
++    assert the payload's own characters, so only the payload path can satisfy it.
++    """
++
++    def test_the_payload_itself_is_what_gets_sanitized(self):
++        class Hostile:
++            def __getattr__(self, name):
++                if name in ("__qualname__", "__name__"):
++                    return "postgres://svc:hunter2@h/db"
++                raise AttributeError(name)
++
++        rendered = safe_callable_name(Hostile())
++
++        # Only the payload route can produce this: the class's own qualname
++        # contains neither "hunter2" nor a mangled "://".
++        assert "hunter2" in rendered, f"payload route did not fire: {rendered!r}"
++        assert "@" not in rendered
++        assert "://" not in rendered
+diff --git a/tests/regression/test_redteam_round9_identifier_sanitization.py b/tests/regression/test_redteam_round9_identifier_sanitization.py
+new file mode 100644
+index 000000000..ed14b3bf9
+--- /dev/null
++++ b/tests/regression/test_redteam_round9_identifier_sanitization.py
+@@ -0,0 +1,302 @@
++"""Round-9 redteam pins: identifier sanitization in secure_logging.
++
++Round 9 returned NOT CLEAN with six findings against the three commits that no
++lens had reviewed (`a17c95e76`, `7d14e0b7e`, `a87890fd6`). The security lens had
++no Bash, so every finding arrived as INFERENCE with a named falsifying probe.
++This module is those probes, run and pinned.
++
++WHY ONE MODULE FOR SIX FINDINGS. Rounds 6, 7, 8 and 9 each found a defect in the
++PREVIOUS round's fix, and the reason is that each fix was a point patch on ONE
++instance of a single class: an attacker-influenceable string reaching a log
++record unsanitized and unbounded. The fix under test is therefore a chokepoint
++(`_safe_identifier`) rather than another point patch, and these pins assert the
++CLASS property at the boundary, not four separate symptoms.
++
++WHAT THE CONTRACT IS, STATED HONESTLY. `_safe_identifier` does NOT promise
++secrecy. A short caller-chosen name still reaches the record on purpose -- it is
++frequently the only diagnostic available. It promises exactly two things, and
++these tests pin those two and nothing more:
++
++  BOUNDED         -- no identifier can drive log volume.
++  STRUCTURALLY INERT -- no identifier can forge the record's own grammar.
++
++A test asserting "the payload is absent" would be pinning a promise the code
++deliberately does not make, and would red the moment someone logged a class name.
++"""
++
++import pytest
++
++import kailash.utils.secure_logging as sl
++from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
++
++# Resolved defensively ON PURPOSE. Importing this constant at module level would
++# make the whole module fail COLLECTION against a tree that predates the fix --
++# an ImportError, which is zero evidence about the behaviour these pins exist to
++# measure. With a fallback the module imports anywhere and each test reds on the
++# BEHAVIOUR it names, which is what makes the fail-first run readable.
++_MAX_IDENTIFIER_CHARS = getattr(sl, "_MAX_IDENTIFIER_CHARS", 120)
++
++
++def _raise_and_render(exc_type, message="boom", **kwargs):
++    """Raise, catch, render -- so the exception carries a real traceback."""
++    try:
++        raise exc_type(message)
++    except Exception as exc:
++        return safe_exception_frames(exc, **kwargs)
++
++
++class TestIdentifiersAreBounded:
++    """F1: an identifier cannot drive log volume."""
++
++    def test_oversized_qualname_is_truncated(self):
++        def target():
++            pass
++
++        target.__qualname__ = "X" * 5000
++        target.__name__ = "X" * 5000
++
++        rendered = safe_callable_name(target)
++
++        # Measured pre-fix: 5000. The bound is the whole point.
++        assert len(rendered) <= _MAX_IDENTIFIER_CHARS + len("<truncated>")
++        assert rendered.endswith("<truncated>")
++
++    def test_oversized_class_name_is_truncated_in_a_chain_render(self):
++        exc_type = type("Y" * 5000, (Exception,), {})
++
++        rendered = _raise_and_render(exc_type)
++
++        assert len(rendered) < 5000
++        assert "<truncated>" in rendered
++
++
++class TestIdentifiersCannotForgeTheRecordGrammar:
++    """F4: no identifier can invent this module's own delimiters.
++
++    The rendered grammar is `" <- "` between chain links, `"@"` before frames,
++    `">"` between frames, `":"` inside path:lineno:name, and `"<...>"` markers.
++    A caller-supplied name containing any of those could invent a link, a frame,
++    or -- via a newline -- an entire additional log line.
++    """
++
++    @pytest.mark.parametrize(
++        "hostile_name, forged_token",
++        [
++            ("Evil <- FORGED@a.py:1:f", " <- "),
++            ("Evil<+9999 outer links dropped, cap reached>", "<+9999"),
++            ("Evil>frame.py:1:g", ">"),
++            ("Evil@frames", "@"),
++        ],
++        ids=["chain-separator", "cap-marker", "frame-separator", "frame-anchor"],
++    )
++    def test_delimiters_cannot_be_minted_from_a_class_name(
++        self, hostile_name, forged_token
++    ):
++        exc_type = type(hostile_name, (Exception,), {})
++
++        rendered = _raise_and_render(exc_type)
++
++        # Exactly one link was raised, so exactly one real "@" and no " <- ".
++        assert " <- " not in rendered
++        assert rendered.count("@") == 1
++        assert forged_token not in rendered.split("@", 1)[0]
++
++    def test_a_newline_cannot_forge_an_extra_log_line(self):
++        # `type()` rejects a NUL in a class name but NOT a newline, so this is
++        # constructible. Measured pre-fix: one newline reached the record.
++        exc_type = type("Evil\nERROR fake-log-line", (Exception,), {})
++
++        rendered = _raise_and_render(exc_type)
++
++        assert "\n" not in rendered
++        assert "\r" not in rendered
++
++    def test_a_truncation_marker_in_a_record_is_always_ours(self):
++        """`<` and `>` never survive input, so any `<...>` is emitted by us."""
++        exc_type = type("Evil<truncated>", (Exception,), {})
++
++        rendered = _raise_and_render(exc_type)
++
++        assert "<truncated>" not in rendered.split("@", 1)[0]
++
++
++class TestSafeCallableNameSanitizesEveryReturnPath:
++    """F1: all four resolution branches route through the chokepoint."""
++
++    def test_qualname_via_caller_controlled_getattr_is_sanitized(self):
++        class Hostile:
++            def __getattr__(self, name):
++                if name in ("__qualname__", "__name__"):
++                    return "postgres://svc:hunter2@h/db"
++                raise AttributeError(name)
++
++        rendered = safe_callable_name(Hostile())
++
++        # NOT asserting the payload is gone -- it is not, by design. Asserting
++        # it cannot carry the delimiters that would forge a record.
++        assert "@" not in rendered
++        assert "/" in rendered or "?" in rendered
++
++    def test_type_name_branch_is_sanitized(self):
++        hostile = type("K@evil <- forged", (), {})()
++
++        rendered = safe_callable_name(hostile)
++
++        assert "@" not in rendered
++        assert " <- " not in rendered
++
++    def test_partial_branch_is_sanitized(self):
++        import functools
++
++        def target():
++            pass
++
++        target.__qualname__ = "evil@name"
++        target.__name__ = "evil@name"
++
++        rendered = safe_callable_name(functools.partial(target))
++
++        assert rendered.startswith("partial(")
++        assert "@" not in rendered
++
++    def test_never_raises_on_a_hostile_object(self):
++        class Exploding:
++            def __getattr__(self, name):
++                raise RuntimeError("working outside of request context")
++
++        # A logging call site must not fail on the thing it describes.
++        assert isinstance(safe_callable_name(Exploding()), str)
++
++
++class TestChainCapArithmetic:
++    """F5: a zero cap means NO links, not every link."""
++
++    def test_zero_cap_renders_no_links(self, monkeypatch):
++        # `links[-0:]` is `links[0:]` -- the whole list. Measured pre-fix with
++        # a cap of 0: 12 links rendered while announcing all were dropped.
++        # This is the N3 bug class (`limit=0` rendered EVERY frame) recurring in
++        # the sibling slice 22 lines away.
++        monkeypatch.setattr(sl, "_MAX_CHAIN_LINKS", 0)
++
++        exc = ValueError("innermost")
++        for index in range(10):
++            try:
++                raise RuntimeError(f"wrapper-{index}") from exc
++            except Exception as wrapped:
++                exc = wrapped
++
++        rendered = safe_exception_frames(exc)
++
++        assert " <- " not in rendered
++
++
++class TestSuppressedContextIsNotDisclosed:
++    """`raise X from None` is the documented "do not disclose this" idiom.
++
++    The walk was `__cause__ or __context__`, which falls through to
++    `__context__` in exactly the case where the author set
++    `__suppress_context__` to say it must not be shown. A helper whose entire
++    job is disclosure control was emitting the one link it had been told to
++    suppress. Measured pre-fix: a `raise ValueError("public") from None` over a
++    `KeyError("SUPPRESSED_SECRET")` rendered the KeyError.
++    """
++
++    def test_from_none_suppresses_the_implicit_context(self):
++        try:
++            try:
++                raise KeyError("SUPPRESSED_SECRET")
++            except Exception:
++                raise ValueError("public") from None
++        except Exception as exc:
++            assert exc.__suppress_context__ is True
++            assert exc.__context__ is not None  # present, but suppressed
++            rendered = safe_exception_frames(exc)
++
++        assert "KeyError" not in rendered
++        assert "ValueError" in rendered
++
++    def test_explicit_from_cause_is_still_followed(self):
++        """`raise X from Y` ALSO sets __suppress_context__ -- do not over-fix.
++
++        Testing the flag BEFORE `__cause__` would truncate every explicitly
++        chained exception to one link, which is the failure mode opposite to the
++        one being fixed and would have looked like a pass.
++        """
++        try:
++            try:
++                raise KeyError("real-root")
++            except Exception as root:
++                raise ValueError("wrapper") from root
++        except Exception as exc:
++            assert exc.__suppress_context__ is True  # set by `from root` too
++            rendered = safe_exception_frames(exc)
++
++        assert "KeyError" in rendered
++        assert "ValueError" in rendered
++
++    def test_ordinary_implicit_context_is_still_followed(self):
++        try:
++            try:
++                raise KeyError("implicit-root")
++            except Exception:
++                raise ValueError("wrapper")
++        except Exception as exc:
++            assert exc.__suppress_context__ is False
++            rendered = safe_exception_frames(exc)
++
++        assert "KeyError" in rendered
++
++
++class TestChainCapDocstringMatchesBehaviour:
++    """F2: the docstring's absolute claim was false; pin what is TRUE.
++
++    The claim "the root cause always survives truncation" does not hold. The cap
++    keeps a fixed window at the INNERMOST end, which is symmetric: an attacker
++    who lengthens the chain at that end evicts the other. `__context__` is
++    chained implicitly whenever an exception is raised while another is handled,
++    so an in-handler retry recursion grows the chain inward.
++
++    This pins the REAL behaviour so the docstring cannot drift back to the
++    absolute. If someone later bounds the walk from the other end, this reds and
++    the docstring must be re-read -- which is the correct place for that
++    conversation.
++    """
++
++    def test_outermost_failure_is_evicted_by_inner_context_chaining(self):
++        def retry(depth):
++            try:
++                raise ValueError(f"attempt-{depth}")
++            except Exception:
++                if depth:
++                    return retry(depth - 1)
++                raise
++
++        # pytest.raises rather than a bare try/except: if the construction ever
++        # stops raising, this fails loudly instead of leaving `rendered` unbound
++        # and erroring somewhere less legible.
++        with pytest.raises(KeyError) as caught:
++            try:
++                retry(sl._MAX_CHAIN_LINKS + 5)
++            except Exception:
++                raise KeyError("REAL_FAILURE")
++
++        rendered = safe_exception_frames(caught.value, limit=1)
++
++        # The failure that actually propagated is NOT in the record.
++        assert "KeyError" not in rendered
++        # ...and the loss is announced rather than silent.
++        assert "outer links dropped" in rendered
++
++    def test_wrapper_chain_keeps_the_root_cause(self):
++        """The half the docstring CAN promise: outer wrappers cannot evict."""
++        exc = ValueError("ROOT_CAUSE")
++        for index in range(sl._MAX_CHAIN_LINKS * 3):
++            try:
++                raise RuntimeError(f"wrapper-{index}") from exc
++            except Exception as wrapped:
++                exc = wrapped
++
++        rendered = safe_exception_frames(exc, limit=1)
++
++        assert "ValueError" in rendered
++        assert "outer links dropped" in rendered

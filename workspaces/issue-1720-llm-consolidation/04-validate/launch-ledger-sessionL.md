@@ -309,3 +309,60 @@ several sessions.
 **Merge gate NOT met.** Streak zero; surface moved again at `bd2f610c8`.
 Tree-wide root `tests/` is ALIVE but starved — 46s CPU in 50min wall (~1.5%), output still
 header-only. Both tree-wide task outputs are EMPTY (30 and 5 bytes): **zero evidence, not a pass.**
+
+---
+
+## Wave 5 — ROUND 11, mutation-first (user-approved)
+
+| track | agent | status |
+| ----- | ----- | ------ |
+| r11 mutation-first correctness | `r11-mutation` | in-flight |
+| r11 adversarial security | `r11-security` | in-flight |
+| orchestrator mutation matrix | me | **DONE** |
+
+### The orchestrator matrix — 18 behaviours enumerated, each mutated independently
+
+First complete matrix over this surface in eleven rounds. **17 red on the first pass; ONE did not.**
+
+```
+pseudo_allowlist_widened          36 passed     <- REDS NOTHING
+```
+
+Widening the CPython pseudo-identifier membership test from exact-match to
+`text.startswith("<") and text.endswith(">")` — the most natural "simplification" of that branch —
+passed the ENTIRE suite.
+
+**Proven a real pin gap under `instrument-discipline.md` MUST-2(b), not assumed.** The mutated file
+was loaded DIRECTLY BY PATH (no ambiguity about which module ran), the mutation confirmed present in
+the loaded source, and behaviour measurably changed:
+
+```
+'<+9999 outer links dropped, cap reached>'  -> PASSES THROUGH INTACT
+'<truncated>'                               -> PASSES THROUGH INTACT
+'<evil <- FORGED@a.py:1:f>'                 -> PASSES THROUGH INTACT
+```
+
+That is the module's load-bearing claim — *"a `<...>` marker in a record is always OURS"* — silently
+defeated. The allowlist re-admits `<` and `>`, so EXACT membership is the only thing holding it, and
+nothing tested that. `test_a_near_miss_does_not_survive` could not catch it (`!listcomp!` does not
+start with `<`, so it satisfies a widened predicate too).
+
+Closed in `2931bc4ca`. **Matrix re-run with the pin in place: 18 of 18 RED, none reds nothing.**
+
+### A fourth instrument failure of mine, caught mid-probe
+
+A bare `python -c` inside a worktree resolves `kailash` through the EDITABLE INSTALL to the **MAIN
+repo**, not the worktree — so a mutation probe run that way silently measures UNMUTATED code. My
+first reachability probe did exactly that and printed "sanitized" for all three payloads, which
+would have dismissed a real finding. Caught by printing the resolved path. **pytest resolves
+correctly** (the root conftest inserts the worktree's `src`), which is why every fail-first run this
+session was sound. Every probe now proves its resolution before reading a result.
+
+### Verified
+
+```
+42 pins · 1676 root regression (12 skipped) · 379 scanner
+mutation matrix: 18/18 red
+```
+
+Merge gate still pending the two r11 agent verdicts.
