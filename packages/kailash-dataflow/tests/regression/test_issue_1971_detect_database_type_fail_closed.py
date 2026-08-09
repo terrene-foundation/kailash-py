@@ -483,3 +483,85 @@ def test_staging_database_name_leaves_in_budget_names_unchanged():
         )
         == "staging_app_production"
     )
+
+
+# ---------------------------------------------------------------------------
+# Every INDEPENDENT scheme classifier agrees on the SQLite file: URI form.
+#
+# The original file:-scheme fix landed in ConnectionParser.detect_database_type
+# and the DataFlow engine's URL validator, and claimed to "restore
+# enforcement-surface parity". It did not: AdapterFactory.detect_database_type
+# is a THIRD, independent scheme ladder (it borrows
+# ConnectionParser.parse_connection_string to split the URL, then dispatches on
+# the scheme itself), and it still raised.
+#
+# The failure was live and user-facing, and the two classifiers disagreed
+# INSIDE ONE FUNCTION two lines apart:
+#   utils/connection.py:116  ConnectionParser.detect_database_type -> "sqlite"
+#   utils/connection.py:125  factory.create_adapter -> detect_database_type
+#                            -> UnsupportedDatabaseError: Unsupported database
+#                               type: file
+# CI never caught it because a bare DataFlow(":memory:") resolves to
+# sqlite:///:memory: before reaching either classifier — the gap only opens for
+# a user who supplies the file: form directly to reach SQLite's URI-only
+# options (mode=ro, cache=shared, immutable=1).
+#
+# This test enumerates the classifiers rather than asserting one, so a FOURTH
+# independent ladder added later fails here instead of being found by review.
+# ---------------------------------------------------------------------------
+
+
+def _independent_scheme_classifiers():
+    """(name, callable) for every classifier that maps a URL to a db-type.
+
+    Each entry is an INDEPENDENT implementation — surfaces that merely delegate
+    to ConnectionParser are deliberately excluded, since they cannot diverge.
+    """
+    from dataflow.adapters.factory import AdapterFactory
+
+    return [
+        (
+            "ConnectionParser.detect_database_type",
+            ConnectionParser.detect_database_type,
+        ),
+        ("AdapterFactory.detect_database_type", AdapterFactory().detect_database_type),
+    ]
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "file:df_mem_10c4a8?mode=memory&cache=shared",
+        "file:userdb1?mode=memory&cache=shared",
+        "file:/tmp/app.db?mode=ro",
+    ],
+)
+def test_every_independent_classifier_maps_the_file_uri_form_to_sqlite(uri):
+    """All independent classifiers MUST agree the file: form is SQLite."""
+    verdicts = {}
+    for name, fn in _independent_scheme_classifiers():
+        try:
+            verdicts[name] = fn(uri)
+        except Exception as exc:  # noqa: BLE001 - the divergence IS the finding
+            verdicts[name] = f"RAISED {type(exc).__name__}"
+
+    disagreeing = {n: v for n, v in verdicts.items() if v != "sqlite"}
+    assert not disagreeing, (
+        f"independent scheme classifiers disagree on {uri!r}: {verdicts}. "
+        "Every independent classifier must learn each legitimate SQLite form; "
+        "one that does not turns a valid URL into a runtime failure at "
+        "whichever surface happens to be consulted second."
+    )
+
+
+@pytest.mark.regression
+def test_independent_classifiers_still_reject_a_genuinely_unknown_scheme():
+    """The fail-closed posture survives: no classifier guesses an engine."""
+    for name, fn in _independent_scheme_classifiers():
+        with pytest.raises(Exception) as excinfo:
+            fn("gopher://evil/x")
+        assert "gopher" in str(excinfo.value).lower(), (
+            f"{name} must name the rejected scheme so the failure is actionable; "
+            f"got: {excinfo.value!r}"
+        )

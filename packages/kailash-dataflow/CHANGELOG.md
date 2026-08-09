@@ -19,14 +19,42 @@ shared-cache database the DDL, CRUD and model-registry paths all open — so
 `DataFlow(":memory:")` broke on the shared-cache path, taking the model registry
 (`registry.initialize()` returning `False`) and registry pool disposal with it.
 
-`file:` is now an EXPLICIT allowlist entry mapping to SQLite, in both
-`ConnectionParser.detect_database_type` and the `DataFlow` engine's URL validator.
-This restores **enforcement-surface parity**: six sibling surfaces already
-recognised the `file:` form and opened it with `uri=True`
-(`sync_ddl_executor._get_sqlite_connection`, `adapters/sqlite.py`,
+`file:` is now an EXPLICIT allowlist entry mapping to SQLite in all THREE
+independent classifiers: `ConnectionParser.detect_database_type`, the `DataFlow`
+engine's URL validator, and `AdapterFactory.detect_database_type`.
+
+Six consuming surfaces already recognised the `file:` form and opened it with
+`uri=True` (`sync_ddl_executor._get_sqlite_connection`, `adapters/sqlite.py`,
 `migration_connection_manager`, `migration_test_framework`, and core
-`nodes/data/sql.py` + `nodes/data/async_sql.py`) — only the central detector they
-all consult had never learned it.
+`nodes/data/sql.py` + `nodes/data/async_sql.py`).
+
+**Correcting this entry's own first draft**, which claimed the fix "restores
+enforcement-surface parity" because "only the central detector they all consult
+had never learned it". That was wrong on both counts, and a review caught it:
+`AdapterFactory.detect_database_type` is a THIRD independent scheme ladder — it
+borrows `ConnectionParser.parse_connection_string` to split the URL, then
+dispatches on the scheme itself — so it did not inherit the fix. The two
+classifiers then disagreed INSIDE ONE FUNCTION, two lines apart:
+
+```
+utils/connection.py:116   ConnectionParser.detect_database_type -> "sqlite"
+utils/connection.py:125   factory.create_adapter -> detect_database_type
+                          -> UnsupportedDatabaseError: Unsupported database type: file
+```
+
+So a user supplying the `file:` form directly — to reach SQLite's URI-only
+options (`mode=ro`, `cache=shared`, `immutable=1`) — still failed at connection
+time after the first fix. CI could not see it: a bare `DataFlow(":memory:")`
+resolves to `sqlite:///:memory:` before either classifier runs, so the gap was
+user-facing only.
+
+A regression test now ENUMERATES the independent classifiers rather than
+asserting any one of them, so a fourth ladder added later fails the suite
+instead of being found by review.
+
+**The fail-closed posture is unchanged throughout.** Every genuinely unknown
+scheme still raises at every classifier — pinned by a companion test asserting
+each one rejects `gopher://` and names the rejected scheme.
 
 **The fail-closed posture is unchanged.** This is a positive allowlist entry, not a
 permissive fallback: every genuinely unknown scheme still raises rather than

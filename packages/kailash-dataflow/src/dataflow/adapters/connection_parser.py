@@ -43,14 +43,27 @@ _SCHEME_TO_DATABASE_TYPE = {
     # DataFlow supports uses ``file:``, and every genuinely-unknown scheme
     # still raises below.
     #
-    # This entry restores enforcement-surface parity
-    # (``rules/security.md`` § Enforcement-Surface Parity). Six sibling
-    # surfaces already recognise the ``file:`` form and open it with
-    # ``uri=True`` — ``sync_ddl_executor._get_sqlite_connection``,
+    # Six CONSUMING surfaces already recognise the ``file:`` form and open it
+    # with ``uri=True`` — ``sync_ddl_executor._get_sqlite_connection``,
     # ``adapters/sqlite.py``, ``migration_connection_manager``,
     # ``migration_test_framework``, core ``nodes/data/sql.py`` and
-    # ``nodes/data/async_sql.py``. Only this detector, the single source of
-    # truth they all consult, had never learned it.
+    # ``nodes/data/async_sql.py``.
+    #
+    # This detector is NOT the single source of truth they all consult — an
+    # earlier draft of this comment said it was, and that was wrong. There are
+    # THREE independent classifiers, and each had to learn ``file:`` separately:
+    # this one, ``DataFlow._is_valid_database_url``, and
+    # ``AdapterFactory.detect_database_type`` (which borrows
+    # ``parse_connection_string`` to split the URL but then dispatches on the
+    # scheme itself). Fixing only this one left
+    # ``ConnectionManager.initialize_pool`` classifying a ``file:`` URL as
+    # sqlite at connection.py:116 and RAISING ``UnsupportedDatabaseError`` two
+    # lines later at :125 — same function, opposite answers.
+    #
+    # ``rules/security.md`` § Enforcement-Surface Parity is the governing rule:
+    # every INDEPENDENT validation surface must learn a new dimension in the
+    # same change. The regression test enumerates the classifiers rather than
+    # asserting one, so a fourth ladder fails the suite instead of shipping.
     "sqlite": "sqlite",
     "file": "sqlite",
     # MongoDB
