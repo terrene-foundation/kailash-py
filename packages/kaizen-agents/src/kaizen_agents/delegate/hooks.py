@@ -164,7 +164,15 @@ class HookManager:
                 continue
 
             stem = path.stem  # e.g. "pre-tool-use" or "pre-tool-use-validate"
-            prefix = _normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)
+            # Was `_normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)`.
+            # That `and` was dead ceremony that only produced a type warning:
+            # `str.split()` NEVER returns a falsy list for ANY input (even
+            # `"".split("-")` is `['']`), so the left operand was always truthy
+            # and the expression always evaluated to `stem`. Verified across
+            # every stem shape this loop can reach before simplifying; the
+            # declared type was `list[str] | str` while the runtime value was
+            # invariably `str`.
+            prefix = _normalise_event_prefix(stem)
 
             # Match against known events
             # We match the longest prefix that is a valid event

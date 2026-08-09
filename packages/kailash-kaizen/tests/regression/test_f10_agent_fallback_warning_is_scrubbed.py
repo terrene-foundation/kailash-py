@@ -71,6 +71,11 @@ def _render(caplog: pytest.LogCaptureFixture) -> str:
     return "\n".join(parts)
 
 
+# A static checker reports this function as "not accessed": pytest resolves
+# fixtures by NAME through the test's parameter list, which is a binding the
+# checker cannot connect to this definition. It IS used — by
+# `test_the_fallback_warning_does_not_leak_the_import_error_credential` — and
+# deleting it on the checker's word would empty that test.
 @pytest.fixture
 def _kaizen_agents_that_fails_to_import(monkeypatch: pytest.MonkeyPatch):
     """Make `from kaizen_agents import Agent` raise, carrying a credential.
@@ -82,7 +87,11 @@ def _kaizen_agents_that_fails_to_import(monkeypatch: pytest.MonkeyPatch):
     """
     module = types.ModuleType("kaizen_agents")
 
-    def _raise(name: str):
+    # `_name` is unused BY DESIGN: PEP 562 calls a module `__getattr__` with
+    # the attribute name, so the parameter is required by the protocol even
+    # though this stub fails for every attribute. Underscore-prefixed to say
+    # so rather than deleted, which would break the call.
+    def _raise(_name: str):
         raise ImportError(f"backend unavailable: could not reach {_DSN}")
 
     module.__getattr__ = _raise  # type: ignore[method-assign]
@@ -105,7 +114,12 @@ def test_the_fallback_warning_does_not_leak_the_import_error_credential(
 ) -> None:
     """Claim 2: the message is scrubbed before it reaches a handler."""
     with caplog.at_level(logging.WARNING, logger="kaizen"):
-        resolved = kaizen.__getattr__("Agent")
+        # `getattr`, NOT a direct `kaizen.__getattr__(...)` call: the fixture
+        # deletes the cached `Agent`, so ordinary attribute lookup misses and
+        # falls through to the PEP 562 hook — which is the path a real consumer
+        # takes. Calling the dunder directly would reach the same code while
+        # testing an access shape nobody uses.
+        resolved = getattr(kaizen, "Agent")
 
     assert resolved is not None, "the fallback did not resolve an Agent at all"
 
@@ -160,13 +174,33 @@ def test_frame_locals_are_not_rendered_into_a_traceback() -> None:
     """
 
     def _raiser() -> None:
-        credential_in_a_local = _SECRET  # noqa: F841 - the point of the test
+        # THE PAYLOAD, and it must be a live frame LOCAL at raise time — that
+        # is the whole construct under test, so it is deliberately never
+        # interpolated into the message. The `assert` below is what keeps the
+        # binding read rather than dead: a checker flagging it "not accessed"
+        # is right about the letter and wrong about the intent, and deleting
+        # it would silently empty the test.
+        credential_in_a_local = _SECRET
+        assert credential_in_a_local, "the payload local must be truthy and live"
         raise ImportError("no operand echoed here")
 
+    # `rendered` is bound ONLY in the except branch, so if `_raiser` ever stops
+    # raising, the assertions below hit `UnboundLocalError`. Verified by
+    # execution rather than reasoned about: a non-raising variant FAILS with
+    # `UnboundLocalError: cannot access local variable 'rendered'` — it does
+    # NOT pass vacuously. `else: pytest.fail(...)` is used anyway so the
+    # failure names the cause instead of making the next reader decode an
+    # UnboundLocalError, and so the binding is unconditional on every path
+    # that reaches the assertions.
     try:
         _raiser()
     except ImportError:
         rendered = traceback.format_exc()
+    else:
+        pytest.fail(
+            "the probe did not raise, so no traceback was rendered and the "
+            "frame-locals claim below is untested"
+        )
 
     assert "no operand echoed here" in rendered, "the probe did not capture it"
     assert _SECRET not in rendered, (

@@ -607,6 +607,13 @@ class TestNewRulesAreLinear:
                 gc.enable()
         return large_best / max(small_best, 1e-9)
 
+    # BOTH tests below declare the FULL five-name parameter set even though
+    # each reads only a subset — `test_the_probe_reaches_the_rule` uses
+    # `enters`, `test_anchor_dense_input_is_linear` uses `matches` and
+    # `scrub`. That is pytest's contract, not dead code: a parametrized test
+    # MUST accept every name in the `parametrize` tuple or collection fails
+    # with "uses no argument". A checker reporting the unread ones as unused
+    # is correct about the letter; dropping them breaks collection.
     @pytest.mark.parametrize("unit,label,enters,matches,scrub", _UNITS)
     def test_the_probe_reaches_the_rule(
         self, unit: str, label: str, enters: str, matches: bool, scrub

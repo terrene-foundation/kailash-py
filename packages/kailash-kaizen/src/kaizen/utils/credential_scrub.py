@@ -1067,6 +1067,11 @@ def scrub_credentials(
     # backreference-bearing replacements below rebuild ``\1`` from
     # ``match.group(1)`` instead, keeping the scheme prefix exactly as the
     # template did.
+    # ``_match`` is REQUIRED and deliberately UNUSED: ``re.sub`` calls its
+    # replacement with the match object, and this replacement is a CONSTANT by
+    # design — ignoring the match is exactly what makes the placeholder
+    # non-expanding. Underscore-prefixed to record that, not an oversight;
+    # removing the parameter breaks the ``re.sub`` callable contract.
     def _literal(_match: re.Match) -> str:
         return placeholder
 
@@ -1108,6 +1113,8 @@ def scrub_credentials(
     # function.
     if redact_paths:
         # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
+        # ``_m`` is the same deliberate non-use as ``_literal`` above: the
+        # replacement is constant, so the match object is ignored on purpose.
         sanitized = _AZURE_OPENAI_ENDPOINT.sub(
             lambda _m: f"https://{placeholder}.openai.azure.com", sanitized
         )
