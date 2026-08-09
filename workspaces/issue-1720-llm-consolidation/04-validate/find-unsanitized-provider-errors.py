@@ -51,7 +51,41 @@ PROVIDER_CALL_HINTS = (
     "acall",
     "stream",
 )
-SANITIZER = "sanitize_provider_error"
+# The scrubber VOCABULARY, not a single name.
+#
+# This was `SANITIZER = "sanitize_provider_error"` — one name — while the branch
+# standardised most call sites onto `scrub_remote_error` (342 vs 257 repo-wide).
+# The scanner therefore flagged handlers that ARE scrubbed, including sites
+# `689f9ebd8` itself fixed (`a2a.py:2309/2318/...`, `approval_manager.py:148/160`).
+#
+# That mattered more than the false-positive rate suggests. Combined with the
+# already-known false NEGATIVES (it cannot see a value that is not the bound
+# exception name), the scanner was wrong in BOTH directions: green on defective
+# sites, red on fixed ones. `high_count` could not reach zero by fixing code, so
+# anyone driving it to zero either never converges or learns to dismiss the
+# instrument — which is worse than having no instrument.
+#
+# INCLUSION RULE: a name belongs here only if it takes an error VALUE/MESSAGE and
+# returns a scrubbed STRING. Adding a name that does not scrub would create a
+# false NEGATIVE, and a false "swept" is the exact defect this scanner exists to
+# catch. Omitting a real scrubber only costs a false positive, which is the safe
+# direction — so when unsure, leave it out.
+#
+# Deliberately EXCLUDED, with reasons (do not add without re-deriving):
+#   scrub_provider_secrets    — (environ: dict) -> list[str]; strips env vars,
+#                               never touches error text. Wrong shape entirely.
+#   sanitize_validation_error — (policy, model_name, ...); policy-driven
+#                               validation redaction, not a general error scrub.
+#                               Excluded on the safe side; revisit with evidence.
+SANITIZERS = frozenset(
+    {
+        "sanitize_provider_error",
+        "scrub_remote_error",
+        "scrub_local_error",
+        "scrub_credentials",
+        "sanitize_db_error",
+    }
+)
 
 
 def _renders_exc(node: ast.AST, name: str) -> bool:
@@ -67,7 +101,7 @@ def _is_sanitized(handler: ast.ExceptHandler) -> bool:
         if isinstance(sub, ast.Call):
             fn = sub.func
             nm = getattr(fn, "id", None) or getattr(fn, "attr", None)
-            if nm == SANITIZER:
+            if nm in SANITIZERS:
                 return True
     return False
 
