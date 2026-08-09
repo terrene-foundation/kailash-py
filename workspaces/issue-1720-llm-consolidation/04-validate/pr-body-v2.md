@@ -49,13 +49,58 @@ commit read 7 bare / 194 wrapped pre-fix, reconciling exactly with the +7 above.
 **585 shard regression tests pass** across the four trees (kaizen-agents 397, kailash-kaizen
 139, nexus 18, core 31; zero failures).
 
-**STILL OWED BEFORE MERGE — the tree-wide suite runs.** They have NOT been run on the
-integrated branch. The host carried a load average of 218 on 16 cores (~13.6×
-oversubscription, 0% idle) with concurrent sessions running, and at that contention a
-timeout-class failure is indistinguishable from a real one, so the round would be spent
-separating flake from finding. Collection is clean (root 20148, kaizen 15163, ml 2594, align
-485 — ZERO collection errors), which is structural evidence and is NOT a pass claim. The
-tree-wide run on a quiet host is a merge gate.
+### The integration redteam found three defects IN THIS BRANCH'S OWN WORK
+
+Two lenses ran on the merged tree — correctness and adversarial-security — because a
+correctness-CLEAN verdict is not a security-clean one. Both found defects the per-shard
+reviews structurally could not: each shard's review saw only its own diff.
+
+- **`safe_callable_name` could raise, contradicting its own docstring.**
+  `getattr(x, attr, default)` suppresses ONLY `AttributeError`, and `isinstance` reads a
+  caller-controlled `__class__`, so a lazy proxy (a `LocalProxy` outside a request context,
+  an unbound client) escaped. It is called INSIDE `except` blocks at `runtime/scheduler.py`
+  and `runtime/distributed.py`, where the escape REPLACES the exception being handled, and
+  BEFORE the `try` in `utils/lifespan.py`, defeating that function's documented per-handler
+  isolation. Guarded with `Exception` — deliberately NOT `BaseException`, because swallowing
+  a `CancelledError` in a logging helper re-opens at the logging layer exactly what the F13
+  work closed at the channel layer.
+- **This diff ADDED a new raw-exception log sink** at `visualization/api.py` — `%s` of a
+  caught exception, in the tree this body declares never swept, which is precisely why no
+  scanner caught it. Now logs the type and frames; the message is the part that carries a
+  DSN.
+- **The F13 fix skipped cleanup it used to run.** Letting the caller-aimed `CancelledError`
+  propagate was right; skipping `_cleanup` on the way out was not. `_cleanup` cancels
+  `_running_task` — a DIFFERENT task from the awaited one — so a task-group teardown, the
+  dominant trigger, orphaned a pending task and stranded the CLI runtime reference.
+
+A fourth, outside shard scope, was fixed under the same-class rule rather than filed:
+`dataflow/fabric/nexus_adapter.py` still carried the `getattr(fn, "__name__", repr(fn))`
+idiom on a CALLER-registered handler.
+
+Each fix ships with a regression test **confirmed to RED against the pre-fix code first**,
+verified in an isolated worktree at the parent commit. The first draft of the two F13 tests
+was itself wrong in an instructive way — `asyncio.shield` does not make a task ignore
+cancellation, so `stop()` completed before the test could cancel it and the test failed
+"DID NOT RAISE" whether or not the defect was present. Red for the wrong reason is not
+evidence, and that draft was replaced rather than accepted.
+
+### Suite state
+
+**Tree-wide, on the integrated branch:** nexus **2650 passed, 14 skipped** (baseline
+2632/14; the +18 are this branch's own new nexus regressions) and kailash-mcp **670 passed,
+1 xfailed** — both clean and complete. Root `tests/`, kaizen and kaizen-agents tree-wide
+runs were still executing when this was written and are **NOT reported here**; treat them as
+owed, not passed.
+
+**Shard regression: 585 + 7** across the four trees, zero failures.
+
+Collection is clean everywhere (root 20148, kaizen 15163, ml 2594, align 485 — ZERO
+collection errors). That is structural evidence and is NOT a pass claim.
+
+A correction to an earlier reading in this body's own drafting: the four trees resolve
+`timeout=None`, so the `timeout = 10` in root `pytest.ini` and `timeout = 120` in kaizen's
+sit in sections pytest never reads. Under load these runs are SLOW, not flaky — which is
+what made the two tree-wide runs above readable at a load average of 218.
 
 The adversarial round on `689f9ebd8` raised 9 findings, 2 HIGH. Verified in the code at
 the time of writing, not taken from a status report:
