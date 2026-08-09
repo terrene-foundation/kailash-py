@@ -36,10 +36,38 @@ transferred round 5's by an identity argument. A transfer is not a second sample
 consecutive-clean count is ONE.** I had counted a carry-forward as a round; that is the exact
 distinction I had written down as not-to-be-rounded-up, and I rounded it up anyway.
 
-It then ran the owed round with a ROTATED instrument (the MCP `stop()` thread half — round 4
-changed that file by 82 lines and no round had ever probed the server-thread reclaim) and
-returned **NOT CLEAN**: M9 and M10 below. Counter does NOT reset (no surface change) but does
-NOT advance either. **One clean round is needed after M9/M10 are dispositioned.**
+It then ran the owed round with a ROTATED instrument (the MCP `stop()` thread half) and
+returned **NOT CLEAN**: M9 and M10 below. Round 7 rotated again — onto `safe_exception_frames`
+itself — and returned NOT CLEAN with three more (N1-N3, all now FIXED, see below).
+
+**THE STREAK IS ZERO, NOT ONE.** Round 5 clean, round 6 found M9/M10, round 7 found N1-N3. A
+streak is consecutive clean rounds ENDING NOW. Round 5 is the last clean round but is no longer
+part of a live one. **This is the accounting that matters and it is easy to get wrong in the
+optimistic direction — I already did once.**
+
+Two rounds running, a rotated instrument on a frozen surface found something. That is not a bad
+surface; it is a surface never sampled in those directions. **Convergence is further off than
+the round count suggests.**
+
+### Round 7 — `safe_exception_frames`, and why it was the right rotation target
+
+The helper THIS BRANCH introduced, live in **8 production sinks**, whose entire job is
+disclosure control — and no round had adversarially probed it until the seventh. All three
+findings FIXED in `2e5357127`, each pinned, two verified red at parent:
+
+- **N1 — the docstring's central claim was MEASURABLY FALSE.** It promised every retained
+  element "cannot carry a runtime payload." Three of four can: a **class name** minted via
+  `type(f"ServerError_{data}", (Exception,), {})`; a **function name** via `exec`/`compile` with
+  a data-derived identifier; and the file **BASENAME** — **Jinja2 compiles a template with the
+  template NAME as the filename**. Only the line number is inert. The DIRECTORY half stays safe
+  and is now pinned by a negative control, since that is where a path-borne credential sits.
+  **This is the third recurrence of one shape on this branch: code sound, CLAIM false.**
+- **N2 — the exception chain was UNBOUNDED.** `seen` stops a cycle; nothing stopped a long
+  acyclic one. A retry loop doing `raise X from prev` produced 5000 links / **175,022 chars in
+  ONE log record** — the log-spam mode `observability.md` forbids, on an attacker-drivable error
+  path. Capped at 10 with VISIBLE truncation (a silently-trimmed chain reads as a short chain).
+- **N3 — `limit=0` rendered EVERY frame.** `if limit > 0` skipped the slice, so a bound asked
+  for nothing returned everything. `<= 0` now retains none.
 
 **SECURITY LENS. Rounds 1-4 NOT CLEAN; round 5 CLEAN (`3f988bd22`); round 6
 CLEAN with every severity band empty (`b9f1e5ab7`), and it stated EXPLICITLY that round 6 is
