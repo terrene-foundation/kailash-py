@@ -208,13 +208,20 @@ class TestStopRunsCleanupEvenWhenTheCallerIsCancelled:
             await stopper
 
         await asyncio.sleep(0.05)
-        assert running_task.cancelled() or running_task.done(), (
+        orphaned = not (running_task.cancelled() or running_task.done())
+        # Tear down BEFORE asserting. On the pre-fix code ``_running_task`` is
+        # precisely what is left pending, and leaving it pending hangs loop
+        # teardown -- which would make the fail-first run UN-RUNNABLE rather
+        # than RED, and an un-runnable check is zero evidence either way.
+        running_task.cancel()
+        await asyncio.gather(running_task, return_exceptions=True)
+        await self._kill(server_task, release)
+
+        assert not orphaned, (
             "_running_task was left pending after a cancelled stop(); "
             "_cleanup did not run, so the task is orphaned"
         )
         assert channel.status is ChannelStatus.STOPPING
-
-        await self._kill(server_task, release)
 
     @pytest.mark.asyncio
     async def test_cli_channel_releases_runtime_on_cancelled_stop(self) -> None:
@@ -237,11 +244,12 @@ class TestStopRunsCleanupEvenWhenTheCallerIsCancelled:
             await stopper
 
         await asyncio.sleep(0.05)
-        assert (
-            running_task.cancelled() or running_task.done()
-        ), "_running_task was left pending after a cancelled stop()"
-        assert (
-            getattr(channel, "runtime", None) is None
-        ), "close() did not run, so the runtime reference is stranded"
-
+        orphaned = not (running_task.cancelled() or running_task.done())
+        stranded = getattr(channel, "runtime", None) is not None
+        # Tear down before asserting -- see the sibling test above.
+        running_task.cancel()
+        await asyncio.gather(running_task, return_exceptions=True)
         await self._kill(main_task, release)
+
+        assert not orphaned, "_running_task was left pending after a cancelled stop()"
+        assert not stranded, "close() did not run, so the runtime reference is stranded"
