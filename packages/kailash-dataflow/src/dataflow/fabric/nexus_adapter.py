@@ -54,7 +54,6 @@ from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
-
 from kailash.utils.secure_logging import safe_callable_name
 
 logger = logging.getLogger(__name__)

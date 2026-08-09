@@ -174,7 +174,13 @@ def _safe_identifier(value: object, *, allow_pseudo: bool = False) -> str:
         # NOT sufficient -- ``__str__`` is overridable and may itself return a
         # subclass, which is why the result is re-normalized on type identity
         # rather than on ``isinstance``.
-        text = raw if type(raw) is str else str.__str__(raw)
+        # noqa: E721 is CORRECT here and MUST NOT be "fixed" to isinstance().
+        # E721 says "do not compare types, use isinstance()" -- but isinstance()
+        # admitting subclasses IS the vulnerability this line closes. Swapping it
+        # reintroduces the CRITICAL verbatim: a str subclass with a lying
+        # __eq__/__hash__ walks the allowlist and returns 5043 unsanitized
+        # characters. Exact type identity is the entire point.
+        text = raw if type(raw) is str else str.__str__(raw)  # noqa: E721
     except Exception:
         return "<unrepresentable>"
     if not text:

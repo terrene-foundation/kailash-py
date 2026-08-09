@@ -60,9 +60,8 @@ import ast
 import textwrap
 from pathlib import Path
 
-import pytest
-
 import kaizen
+import pytest
 
 pytestmark = pytest.mark.regression
 

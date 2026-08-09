@@ -71,7 +71,11 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
 from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -978,7 +982,6 @@ class WorkflowScheduler:
             >>> scheduler.update_cron(sid, "0 */2 * * *")  # every 2 hours
         """
         from apscheduler.triggers.cron import CronTrigger
-
         from kailash.sdk_exceptions import ScheduleNotFound
 
         if schedule_id not in self._schedules:

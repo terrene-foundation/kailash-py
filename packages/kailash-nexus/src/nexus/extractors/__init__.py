@@ -37,10 +37,9 @@ resolution of the extractor types.
 
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from kailash.utils.secure_logging import safe_callable_name
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
-
-from kailash.utils.secure_logging import safe_callable_name
 
 from .overrides import DependencyOverrideMap, DependencyOverrideRuntimeMutationError
 

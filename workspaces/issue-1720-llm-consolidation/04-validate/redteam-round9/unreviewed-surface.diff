@@ -41,7 +41,7 @@ index e86539e7d..37c468f0c 100644
 +                    if value is not None and self._is_our_name(value):
 +                        self.bare.add(_key(value))
 +                        return
- 
+
      def visit_Call(self, node: ast.Call) -> None:
          func = node.func
 diff --git a/src/kailash/utils/secure_logging.py b/src/kailash/utils/secure_logging.py
@@ -65,8 +65,8 @@ index fe316a92c..3fd59789b 100644
 +# `test_root_cause_survives_the_chain_cap`; if you rework the walk, that test is
 +# the one that matters.
  _MAX_CHAIN_LINKS = 10
- 
- 
+
+
 @@ -191,11 +197,17 @@ def safe_exception_frames(
        that mint an exception class per server error name do exactly this.
      * **function name** -- ``exec``/``compile`` with a data-derived identifier
@@ -87,7 +87,7 @@ index fe316a92c..3fd59789b 100644
 +      this repo's own negative control asserts. So the safe statement is
 +      narrower: an ABSOLUTE path outside cwd collapses to its basename; a path
 +      under cwd does not.
- 
+
      This is a far narrower channel than the exception MESSAGE it replaces -- a
      message carries attacker data by default, whereas these carry it only when
 @@ -217,17 +229,59 @@ def safe_exception_frames(
@@ -99,7 +99,7 @@ index fe316a92c..3fd59789b 100644
 +            so the root cause always survives truncation and cannot be evicted
 +            by an attacker who adds wrapping layers; the dropped OUTER count is
 +            rendered at the head of the string.
- 
+
      Returns a string like
      ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
      """
@@ -138,7 +138,7 @@ index fe316a92c..3fd59789b 100644
 +        if not follow_chain:
 +            break
 +        walker = walker.__cause__ or walker.__context__
- 
+
 -    while current is not None and id(current) not in seen:
 -        seen.add(id(current))
 +    dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
@@ -169,9 +169,9 @@ index fe316a92c..3fd59789b 100644
 -            # the cap must not destroy while bounding the record.
 -            descriptions.append(f"<+{_MAX_CHAIN_LINKS}-link cap reached>")
 -            break
- 
+
      return " <- ".join(descriptions)
- 
+
 diff --git a/tests/regression/test_redteam_2026_08_09_integration_findings.py b/tests/regression/test_redteam_2026_08_09_integration_findings.py
 index fd5c3bb1c..d5efc208e 100644
 --- a/tests/regression/test_redteam_2026_08_09_integration_findings.py
@@ -179,7 +179,7 @@ index fd5c3bb1c..d5efc208e 100644
 @@ -642,6 +642,42 @@ class TestSafeExceptionFramesIsBounded:
          # one, and the reader cannot tell a 2-link failure from a retry storm.
          assert "cap reached" in rendered
- 
+
 +    def test_root_cause_survives_the_chain_cap(self) -> None:
 +        """The cap must evict the OUTER wrappers, not the original failure.
 +

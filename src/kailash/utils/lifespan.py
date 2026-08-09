@@ -49,7 +49,11 @@ import inspect
 import logging
 from typing import TYPE_CHECKING
 
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI

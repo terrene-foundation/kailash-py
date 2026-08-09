@@ -5,7 +5,7 @@ index 3fd59789b..66bc596f0 100644
 @@ -3,12 +3,28 @@
  This module provides mixins and utilities for automatically detecting and
  masking PII, credentials, and other sensitive information in logs.
- 
+
 -It also provides two helpers that make a log line safe BY CONSTRUCTION rather
 -than by pattern-matching -- :func:`safe_callable_name` and
 +It also provides two helpers that narrow a log line BY CONSTRUCTION rather than
@@ -33,12 +33,12 @@ index 3fd59789b..66bc596f0 100644
 +design, because it is often the only diagnostic there is. Treat these helpers as
 +"structurally inert and bounded", never as "cannot carry data".
  """
- 
+
  import functools
 @@ -51,6 +67,52 @@ _HOME_DIR = os.path.expanduser("~")
  # the one that matters.
  _MAX_CHAIN_LINKS = 10
- 
+
 +# Ceiling on any single attacker-influenceable identifier (class name, function
 +# name, frame name, frame path) entering a record. Long enough that a real
 +# qualname or vendored path survives intact; short enough that 5000 characters
@@ -85,7 +85,7 @@ index 3fd59789b..66bc596f0 100644
 +        return f"{cleaned[:_MAX_IDENTIFIER_CHARS]}<truncated>"
 +    return cleaned
 +
- 
+
  def safe_callable_name(obj: Any) -> str:
      """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
 @@ -80,8 +142,21 @@ def safe_callable_name(obj: Any) -> str:
@@ -109,7 +109,7 @@ index 3fd59789b..66bc596f0 100644
 +    structurally. A short caller-chosen name still survives, by design -- it is
 +    frequently the only diagnostic available. Read the result as "bounded and
 +    structurally inert", never as "payload-free".
- 
+
      Returns a string for every object that misbehaves; it does not raise on
      account of the object, because a logging call site must not fail on the
 @@ -117,7 +192,8 @@ def safe_callable_name(obj: Any) -> str:
@@ -138,7 +138,7 @@ index 3fd59789b..66bc596f0 100644
 +            return _safe_identifier(type(obj).__name__)
          except Exception:
              return "<unrepresentable>"
- 
+
 @@ -230,9 +306,22 @@ def safe_exception_frames(
              ``raise X from prev`` drove 5000 links to a single 175,000-character
              log record -- the log-spam mode ``observability.md`` forbids, on an
@@ -162,7 +162,7 @@ index 3fd59789b..66bc596f0 100644
 +            For a WRAPPER chain -- the diagnostic case this helper serves --
 +            innermost is the right end; for a RETRY-storm chain it is not, and
 +            the comment beside the implementation says so too.
- 
+
      Returns a string like
      ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
 @@ -253,8 +342,18 @@ def safe_exception_frames(
@@ -188,7 +188,7 @@ index 3fd59789b..66bc596f0 100644
      # is the most RECENT attempt and the innermost the oldest, so "innermost"
 @@ -272,7 +371,15 @@ def safe_exception_frames(
          walker = walker.__cause__ or walker.__context__
- 
+
      dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
 -    kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
 +    # ``<= 0`` means NO links, not "all links" -- the same arithmetic the frame
@@ -200,7 +200,7 @@ index 3fd59789b..66bc596f0 100644
 +        kept: List[BaseException] = []
 +    else:
 +        kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
- 
+
      descriptions: List[str] = []
      if dropped:
 @@ -295,12 +402,22 @@ def safe_exception_frames(
@@ -226,7 +226,7 @@ index 3fd59789b..66bc596f0 100644
 +            f"{_safe_identifier(type(current).__name__)}"
 +            f"@{rendered_frames or '<no-frames>'}"
          )
- 
+
      return " <- ".join(descriptions)
 diff --git a/tests/regression/test_redteam_round9_identifier_sanitization.py b/tests/regression/test_redteam_round9_identifier_sanitization.py
 new file mode 100644

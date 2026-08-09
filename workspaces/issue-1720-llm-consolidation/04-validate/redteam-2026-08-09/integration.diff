@@ -3,11 +3,11 @@ index fa462b07c..e458ffe52 100644
 --- a/packages/kailash-kaizen/src/kaizen/__init__.py
 +++ b/packages/kailash-kaizen/src/kaizen/__init__.py
 @@ -51,20 +51,61 @@ def __getattr__(name: str) -> object:
- 
+
              if _ilu.find_spec("kaizen_agents") is not None:
                  import logging as _logging
 +                import traceback as _traceback
- 
+
 -                # ``exc_info`` DELIBERATELY KEPT (audited 2026-08-08 against the
 -                # credential-leak sweep). What raises here is an ImportError
 -                # from the `kaizen_agents` import: its message and traceback
@@ -80,15 +80,15 @@ index c9c465788..e35d18b11 100644
 @@ -5,6 +5,7 @@ Manages the lifecycle of hooks, including registration, execution, error handlin
  and performance tracking.
  """
- 
+
 +import functools
  import importlib.util
  import logging
  import sys
 @@ -22,6 +23,66 @@ from .types import HookContext, HookEvent, HookPriority, HookResult
- 
+
  logger = logging.getLogger(__name__)
- 
+
 +# Bound on how far ``safe_handler_name`` will unwrap a partial chain. Deep
 +# nesting is pathological, not idiomatic; the bound keeps the helper O(1) and
 +# terminating on any custom ``partial`` subclass without changing the result
@@ -149,13 +149,13 @@ index c9c465788..e35d18b11 100644
 +    base = qualname if isinstance(qualname, str) else type(inner).__name__
 +    return f"partial({base})" if unwrapped else base
 +
- 
+
  class FunctionHookAdapter(BaseHook):
      """Adapter to use plain async functions as hooks"""
 @@ -86,7 +147,7 @@ class HookManager:
          # Sort hooks by priority (stable sort preserves registration order within priority)
          self._hooks[event_type].sort(key=lambda x: x[0].value)
- 
+
 -        handler_name = getattr(handler, "name", repr(handler))
 +        handler_name = getattr(handler, "name", safe_handler_name(handler))
          logger.info(
@@ -163,12 +163,12 @@ index c9c465788..e35d18b11 100644
          )
 @@ -181,7 +242,7 @@ class HookManager:
              removed = original_count - len(self._hooks[event_type])
- 
+
              if removed > 0:
 -                handler_name = getattr(handler, "name", repr(handler))
 +                handler_name = getattr(handler, "name", safe_handler_name(handler))
                  logger.info(f"Unregistered hook for {event_type.value}: {handler_name}")
- 
+
              return removed
 @@ -264,7 +325,11 @@ class HookManager:
          Returns:
@@ -180,7 +180,7 @@ index c9c465788..e35d18b11 100644
 +        # becomes a dict KEY returned verbatim by the public ``get_stats()``.
 +        # It must not be able to carry caller state; see ``safe_handler_name``.
 +        handler_name = getattr(handler, "name", safe_handler_name(handler))
- 
+
          try:
              # Execute with timeout
 @@ -453,4 +518,5 @@ class HookManager:
@@ -196,14 +196,14 @@ index 0fd0cb846..8da5555aa 100644
 @@ -16,7 +16,9 @@ import sys
  import time
  from typing import Any
- 
+
 -from ..manager import HookEvent, HookManager, HookPriority
 +from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
 +
 +from ..manager import HookEvent, HookManager, HookPriority, safe_handler_name
  from ..protocol import HookHandler
  from ..types import HookContext, HookResult
- 
+
 @@ -123,7 +125,20 @@ class ResourceLimits:
                  "Resource limits cannot be applied."
              )
@@ -224,8 +224,8 @@ index 0fd0cb846..8da5555aa 100644
 +                "SECURITY: Failed to apply resource limits: %s", scrub_local_error(e)
 +            )
              raise
- 
- 
+
+
 @@ -208,7 +223,10 @@ class IsolatedHookExecutor:
          - Timeout prevents infinite loops
          - Graceful failure handling prevents agent crashes
@@ -235,12 +235,12 @@ index 0fd0cb846..8da5555aa 100644
 +        # ``HookResult.error`` on the timeout and crash paths, so it must not be
 +        # able to carry caller state; see ``safe_handler_name``.
 +        handler_name = getattr(handler, "name", safe_handler_name(handler))
- 
+
          # Create queue for inter-process communication
          queue: multiprocessing.Queue = multiprocessing.Queue()
 @@ -236,8 +254,13 @@ class IsolatedHookExecutor:
                  queue.put(("success", result))
- 
+
              except Exception as e:
 -                # Send error to parent process
 -                error_msg = f"Hook error: {str(e)}"
@@ -252,11 +252,11 @@ index 0fd0cb846..8da5555aa 100644
 +                # is built, so neither consumer can re-leak it.
 +                error_msg = f"Hook error: {scrub_remote_error(e)}"
                  queue.put(("error", error_msg))
- 
+
          # Start isolated process
 @@ -301,7 +324,11 @@ class IsolatedHookExecutor:
                  )
- 
+
          except Exception as e:
 -            logger.error(f"SECURITY: Failed to retrieve hook result: {e}")
 +            # The queue payload was produced by the child from caller-supplied
@@ -273,12 +273,12 @@ index 0fd0cb846..8da5555aa 100644
          """
 -        handler_name = getattr(handler, "name", repr(handler))
 +        handler_name = getattr(handler, "name", safe_handler_name(handler))
- 
+
          # Check if isolation is enabled
          if not self.enable_isolation:
 @@ -433,10 +460,16 @@ class IsolatedHookManager(HookManager):
              return result
- 
+
          except Exception as e:
 -            # Isolation failed - log error and fall back to normal execution
 +            # Isolation failed - log error and fall back to normal execution.
@@ -294,7 +294,7 @@ index 0fd0cb846..8da5555aa 100644
 +                handler_name,
 +                scrub_remote_error(e),
              )
- 
+
              # Fall back to parent implementation
 diff --git a/packages/kailash-kaizen/src/kaizen/core/autonomy/hooks/security/rate_limiting.py b/packages/kailash-kaizen/src/kaizen/core/autonomy/hooks/security/rate_limiting.py
 index e3f065c04..d1af6eba4 100644
@@ -303,14 +303,14 @@ index e3f065c04..d1af6eba4 100644
 @@ -11,7 +11,7 @@ import time
  from collections import defaultdict
  from typing import Any, Awaitable, Callable
- 
+
 -from ..manager import HookManager
 +from ..manager import HookManager, safe_handler_name
  from ..protocol import HookHandler
  from ..types import HookEvent, HookPriority
- 
+
 @@ -115,7 +115,7 @@ class RateLimitedHookManager(HookManager):
- 
+
          # Log successful registration for audit trail
          if self.enable_audit_logging:
 -            handler_name = getattr(handler, "name", repr(handler))
@@ -319,7 +319,7 @@ index e3f065c04..d1af6eba4 100644
                  f"Rate limit check passed: principal={principal_id}, "
                  f"handler={handler_name}, "
 @@ -150,7 +150,11 @@ class RateLimitedHookManager(HookManager):
- 
+
              # Audit log CRITICAL violation
              if self.enable_audit_logging:
 -                handler_name = getattr(handler, "name", repr(handler))
@@ -336,9 +336,9 @@ index 1fbde47d2..9aeab691c 100644
 --- a/packages/kailash-kaizen/src/kaizen/l3/event_hooks.py
 +++ b/packages/kailash-kaizen/src/kaizen/l3/event_hooks.py
 @@ -19,6 +19,7 @@ prevent unbounded memory growth from leaked subscriptions.
- 
+
  from __future__ import annotations
- 
+
 +import functools
  import logging
  import threading
@@ -346,7 +346,7 @@ index 1fbde47d2..9aeab691c 100644
 @@ -36,6 +37,42 @@ logger = logging.getLogger(__name__)
  _MAX_LISTENERS_PER_KEY = 1000
  _WILDCARD_KEY = "__all__"
- 
+
 +# Bound on how far ``_safe_listener_name`` will unwrap a partial chain. Deep
 +# nesting is pathological, not idiomatic; the bound keeps the helper O(1) and
 +# terminating on any custom ``partial`` subclass.
@@ -383,7 +383,7 @@ index 1fbde47d2..9aeab691c 100644
 +    base = qualname if isinstance(qualname, str) else type(inner).__name__
 +    return f"partial({base})" if unwrapped else base
 +
- 
+
  class L3EventBus:
      """Central event bus for L3 governance events.
 @@ -111,13 +148,36 @@ class L3EventBus:
@@ -434,7 +434,7 @@ index 2f30fafe7..ba3b44da2 100644
 --- a/packages/kailash-kaizen/src/kaizen/utils/credential_scrub.py
 +++ b/packages/kailash-kaizen/src/kaizen/utils/credential_scrub.py
 @@ -151,8 +151,49 @@ _AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
- 
+
  #: Key names that ANNOUNCE their value as a secret. Shared by the two
  #: ``key=value`` rules below so the vocabulary cannot drift between them.
 +#:
@@ -495,7 +495,7 @@ index 2f30fafe7..ba3b44da2 100644
 +    # removing the parameter breaks the ``re.sub`` callable contract.
      def _literal(_match: re.Match) -> str:
          return placeholder
- 
+
 @@ -1067,6 +1113,8 @@ def scrub_credentials(
      # function.
      if redact_paths:
@@ -1971,13 +1971,13 @@ index c8112fa08..8e9415fb1 100644
 +++ b/packages/kailash-kaizen/tests/regression/test_issue_1720_basic_auth_and_credential_keyvalue.py
 @@ -23,18 +23,25 @@ the log. A test that only exercised `scrub_remote_error` would pass on a
  from __future__ import annotations
- 
+
  import gc
 +import re
  import time
- 
+
  import pytest
- 
+
  from kaizen.utils.credential_scrub import (
 -    DEFAULT_PLACEHOLDER,
 +    _CREDENTIAL_KEY_NAMES,
@@ -1987,7 +1987,7 @@ index c8112fa08..8e9415fb1 100644
      scrub_local_error,
      scrub_remote_error,
  )
- 
+
 +#: `_CREDENTIAL_KEY_NAMES` is a pattern STRING (shared by the two key=value
 +#: rules so their vocabulary cannot drift); compiled here so the tests below
 +#: can assert against the key half in isolation.
@@ -1995,7 +1995,7 @@ index c8112fa08..8e9415fb1 100644
 +
  # A base64 of "user:password" — reversible, not a digest.
  _BASIC_VALUE = "dXNlcjpwYXNzd29yZA=="
- 
+
 @@ -65,6 +72,36 @@ _KEYVALUE_CASES = [
      pytest.param(
          "private_key=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="private_key"
@@ -2035,8 +2035,8 @@ index c8112fa08..8e9415fb1 100644
          'password: "hunter2longenough"', "hunter2longenough", id="colon-quoted"
 @@ -126,6 +163,85 @@ class TestCredentialAnnouncingKeyValueIsRedactedOnBothPresets:
          )
- 
- 
+
+
 +@pytest.mark.regression
 +class TestSecretKeyAndPassphraseAreNotCoveredByTheirPrefixes:
 +    """F10. WHY THE TWO NEW ALTERNATIVES ARE NOT REDUNDANT.
@@ -2179,7 +2179,7 @@ index c8112fa08..8e9415fb1 100644
 @@ -448,6 +607,13 @@ class TestNewRulesAreLinear:
                  gc.enable()
          return large_best / max(small_best, 1e-9)
- 
+
 +    # BOTH tests below declare the FULL five-name parameter set even though
 +    # each reads only a subset — `test_the_probe_reaches_the_rule` uses
 +    # `enters`, `test_anchor_dense_input_is_linear` uses `matches` and
@@ -2207,7 +2207,7 @@ index b0bbb9162..500e5284f 100644
 @@ -110,11 +111,14 @@ _REPO_ROOT: Path = Path(__file__).resolve().parents[4]
  #: reason to pass — every anchor assertion below applies to it unconditionally.
  _KAIZEN_SRC: Path = _REPO_ROOT / "packages" / "kailash-kaizen" / "src" / "kaizen"
- 
+
 -#: The sibling package that consumes it. 51 of its modules import
 -#: ``scrub_local_error`` and one imports ``scrub_credentials`` directly, so a
 -#: call-site invariant that stopped at the package boundary would miss the
@@ -2222,12 +2222,12 @@ index b0bbb9162..500e5284f 100644
 +#: and are deliberately NOT restated here: a copy of that pair in this file
 +#: went stale twice. READ-ONLY: this suite parses that tree, never writes it.
  _AGENTS_SRC: Path = _REPO_ROOT / "packages" / "kaizen-agents" / "src" / "kaizen_agents"
- 
+
  #: Directory names that are never production source.
 @@ -346,6 +350,26 @@ def test_no_production_call_site_weakens_the_scrub() -> None:
          "the invariant holds."
      )
- 
+
 +    # THE SAME RECEIPT FOR THE SECOND TREE. It was missing: `agents_sites` was
 +    # bound and never read, so only the kaizen walk had to prove it reached
 +    # anything — while `agents_findings` was still folded into the verdict
@@ -2252,7 +2252,7 @@ index b0bbb9162..500e5284f 100644
      assert not findings, (
          _FAILURE_PREAMBLE + "\n".join(f.render() for f in findings) + _FAILURE_EPILOGUE
 @@ -378,16 +402,36 @@ def test_walk_reaches_the_known_scrub_consumers() -> None:
- 
+
      if _AGENTS_SRC.is_dir():
          _, agents_sites = _scan(_AGENTS_SRC)
 -        # 51 modules import `scrub_local_error` and one imports
@@ -2292,8 +2292,8 @@ index b0bbb9162..500e5284f 100644
 +            "than trusting a number quoted here. A count this far below it is "
 +            "an enumeration failure, not a real count."
          )
- 
- 
+
+
 diff --git a/packages/kailash-nexus/pyproject.toml b/packages/kailash-nexus/pyproject.toml
 index 4431c2430..26b498a78 100644
 --- a/packages/kailash-nexus/pyproject.toml
@@ -2317,7 +2317,7 @@ index c1666a8df..9baacdf09 100644
 --- a/packages/kailash-nexus/src/nexus/core.py
 +++ b/packages/kailash-nexus/src/nexus/core.py
 @@ -27,6 +27,7 @@ from typing import (
- 
+
  from kailash.runtime import AsyncLocalRuntime
  from kailash.servers.gateway import create_gateway
 +from kailash.utils.secure_logging import safe_callable_name
@@ -2392,7 +2392,7 @@ index c1666a8df..9baacdf09 100644
 +                    # execution, not inferred.
 +                    safe_callable_name(func),
                  )
- 
+
              # Simple in-memory rate limiter (per client IP).
 @@ -2832,7 +2872,13 @@ Check the documentation or explore available resources.
          # loop and surface as a "coroutine expected" error at request time.
@@ -2416,16 +2416,16 @@ index 54157b8eb..2a9b36a13 100644
 @@ -40,6 +40,8 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
  from starlette.datastructures import UploadFile
  from starlette.requests import Request
- 
+
 +from kailash.utils.secure_logging import safe_callable_name
 +
  from .overrides import DependencyOverrideMap, DependencyOverrideRuntimeMutationError
- 
+
  __all__ = [
 @@ -83,9 +85,26 @@ class Depends:
              )
          self.dependency = dependency
- 
+
 -    def __repr__(self) -> str:  # pragma: no cover - debug aid
 -        name = getattr(self.dependency, "__qualname__", repr(self.dependency))
 -        return f"Depends({name})"
@@ -2449,8 +2449,8 @@ index 54157b8eb..2a9b36a13 100644
 +        # the resolution that makes the repr useful: a partial still reports
 +        # the wrapped function's own name rather than a bare "partial".
 +        return f"Depends({safe_callable_name(self.dependency)})"
- 
- 
+
+
  # Multipart is a typed alias for a list of uploaded files. The HTTP-transport
 diff --git a/packages/kailash-nexus/src/nexus/extractors/overrides.py b/packages/kailash-nexus/src/nexus/extractors/overrides.py
 index a11c6df19..174e803a4 100644
@@ -2459,15 +2459,15 @@ index a11c6df19..174e803a4 100644
 @@ -43,6 +43,7 @@ from contextlib import contextmanager
  from typing import Callable, Dict, Iterator, Optional
  from uuid import uuid4
- 
+
 +from kailash.utils.secure_logging import safe_callable_name
  from nexus.context import get_current_request
- 
+
  __all__ = [
 @@ -199,10 +200,17 @@ class DependencyOverrideMap:
          if request is None:
              return
- 
+
 +        # `real` is the caller's DEPENDENCY callable, so the `repr` fallback
 +        # this used to carry rendered bound kwargs verbatim:
 +        # `DependencyOverrideMap.set(functools.partial(<function get_db>,
@@ -2492,7 +2492,7 @@ index 511d96007..3434f2516 100644
 @@ -49,6 +49,7 @@ from typing import (
      get_type_hints,
  )
- 
+
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
  from nexus.context import get_current_request
  from nexus.extractors import (
@@ -2532,8 +2532,8 @@ index 511d96007..3434f2516 100644
                      },
                  )
 @@ -539,21 +553,49 @@ async def _bytes_from_request(request: Optional[Request]) -> Bytes:
- 
- 
+
+
  def _log_resolver_failure(func: Callable, depends: Depends, exc: Exception) -> None:
 -    """Log the full server-side context of a resolver dependency failure.
 -
@@ -2590,7 +2590,7 @@ index 511d96007..3434f2516 100644
 +            "exc_frames": safe_exception_frames(exc),
          },
      )
- 
+
 diff --git a/packages/kailash-nexus/tests/regression/test_f11_caller_repr_leak_nexus.py b/packages/kailash-nexus/tests/regression/test_f11_caller_repr_leak_nexus.py
 new file mode 100644
 index 000000000..336c05895
@@ -3197,7 +3197,7 @@ index 6de4307f5..67e308e5e 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/delegate/hooks.py
 @@ -164,7 +164,15 @@ class HookManager:
                  continue
- 
+
              stem = path.stem  # e.g. "pre-tool-use" or "pre-tool-use-validate"
 -            prefix = _normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)
 +            # Was `_normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)`.
@@ -3209,11 +3209,11 @@ index 6de4307f5..67e308e5e 100644
 +            # declared type was `list[str] | str` while the runtime value was
 +            # invariably `str`.
 +            prefix = _normalise_event_prefix(stem)
- 
+
              # Match against known events
              # We match the longest prefix that is a valid event
 @@ -316,10 +324,17 @@ class HookManager:
- 
+
          except TimeoutError:
              logger.error("Hook %s timed out after %.1fs", script.name, self._timeout)
 -            # Attempt to kill the process
@@ -3270,7 +3270,7 @@ index bed30fb28..b384605ee 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/delegate/mcp.py
 @@ -112,11 +112,33 @@ class McpClient:
          cmd = [self._config.command] + self._config.args
- 
+
          # Security: log MCP server being started (command comes from config,
 -        # which could be project-level .kz/config.toml in a cloned repo)
 +        # which could be project-level .kz/config.toml in a cloned repo).
@@ -3303,7 +3303,7 @@ index bed30fb28..b384605ee 100644
 +            self._config.command,
 +            len(self._config.args),
          )
- 
+
          try:
 diff --git a/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/blackboard.py b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/blackboard.py
 index 0c8eb93ed..850846d18 100644
@@ -3311,7 +3311,7 @@ index 0c8eb93ed..850846d18 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/blackboard.py
 @@ -271,6 +271,18 @@ class BlackboardPipeline(Pipeline):
                  import traceback
- 
+
                  return {
 +                    # The `error` key was scrubbed and the `traceback` key
 +                    # beside it was not -- so the exception this dict is
@@ -3341,11 +3341,11 @@ index 0c8eb93ed..850846d18 100644
 +                        "".join(traceback.format_exception(e))
 +                    ),
                  }
- 
+
      def _execute_controller(
 @@ -317,9 +335,17 @@ class BlackboardPipeline(Pipeline):
                  import traceback
- 
+
                  return {
 +                    # Sibling of the specialist guard above, and the more
 +                    # exposed of the two: `run` copies this dict's `error` onto
@@ -3367,7 +3367,7 @@ index 36e8288f9..2865a9f0a 100644
 --- a/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/ensemble.py
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/ensemble.py
 @@ -254,6 +254,19 @@ class EnsemblePipeline(Pipeline):
- 
+
                      perspectives.append(
                          {
 +                            # Same asymmetry the other three patterns carried:
@@ -3400,10 +3400,10 @@ index 36e8288f9..2865a9f0a 100644
 +                            ),
                          }
                      )
- 
+
 @@ -310,9 +329,17 @@ class EnsemblePipeline(Pipeline):
                  import traceback
- 
+
                  return {
 +                    # `self.synthesizer.run` is another provider dispatch, so
 +                    # this guard is the sibling of the per-agent one above and
@@ -3419,13 +3419,13 @@ index 36e8288f9..2865a9f0a 100644
 +                    ),
                      "perspectives": perspectives,  # Include original perspectives
                  }
- 
+
 diff --git a/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/meta_controller.py b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/meta_controller.py
 index 4b9effa79..dec5323c3 100644
 --- a/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/meta_controller.py
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/meta_controller.py
 @@ -34,6 +34,7 @@ from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent
  from kaizen.llm.reasoning import ReasoningDegradedError
 +from kaizen.utils.credential_scrub import scrub_remote_error
@@ -3434,7 +3434,7 @@ index 4b9effa79..dec5323c3 100644
      resolve_reasoning_config,
 @@ -240,10 +241,33 @@ class MetaControllerPipeline(Pipeline):
              import traceback
- 
+
              return {
 -                "error": str(error),
 +                # The only one of the four patterns where BOTH keys leaked,
@@ -3466,7 +3466,7 @@ index 4b9effa79..dec5323c3 100644
 +                    "".join(traceback.format_exception(error))
 +                ),
              }
- 
+
      def run(self, **inputs) -> dict[str, Any]:
 diff --git a/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/parallel.py b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/parallel.py
 index 85ae980f8..faf72e359 100644
@@ -3474,7 +3474,7 @@ index 85ae980f8..faf72e359 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/parallel.py
 @@ -140,12 +140,44 @@ class ParallelPipeline(Pipeline):
                  import traceback
- 
+
                  return {
 +                    # SANITIZED, both keys. This dict is RETURNED TO THE
 +                    # CALLER, so it is the same disclosure surface a log record
@@ -3516,12 +3516,12 @@ index 85ae980f8..faf72e359 100644
 +                        "".join(traceback.format_exception(e))
 +                    ),
                  }
- 
+
      def _execute_parallel_sync(self, inputs: dict[str, Any]) -> list[dict[str, Any]]:
 @@ -251,11 +283,37 @@ class ParallelPipeline(Pipeline):
                  if isinstance(result, Exception):
                      import traceback
- 
+
 +                    # TWO defects here, and the second hid the first.
 +                    #
 +                    # 1. `str(result)` was wholly unscrubbed. `result` is an
@@ -3604,7 +3604,7 @@ index 6c95f9ab2..bc9c13f8a 100644
 @@ -395,15 +395,69 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
              # Wait for completion
              await process.wait()
- 
+
 -        except asyncio.CancelledError:
 -            if self._current_process:
 -                self._current_process.kill()
@@ -3631,7 +3631,7 @@ index 6c95f9ab2..bc9c13f8a 100644
 +            await self._kill_and_reap_current_process()
              self._current_session_id = None
              self._current_process = None
- 
+
 +    async def _kill_and_reap_current_process(self) -> None:
 +        """SIGKILL the tracked child AND collect its exit status.
 +
@@ -4275,13 +4275,13 @@ index 4792f73ef..e86539e7d 100644
 --- a/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
 +++ b/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
 @@ -74,6 +74,7 @@ from __future__ import annotations
- 
+
  import ast
  import importlib
 +import re
  import textwrap
  from pathlib import Path
- 
+
 @@ -145,8 +146,59 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
  #: All six are LOCAL (in-process ImportError / OSError / JSONDecodeError), so
  #: they route through the conservative preset, which preserves the path that IS
@@ -4341,13 +4341,13 @@ index 4792f73ef..e86539e7d 100644
 +#: not see it, which is the shape every blind spot in this file has taken.
 +EXPECTED_FILES = 58
 +EXPECTED_SITES = 201
- 
- 
+
+
  #: Standard ``logging.Logger`` emit methods. Matched on the ATTRIBUTE name, so
 @@ -157,48 +209,584 @@ _LOG_METHODS = frozenset(
      {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
  )
- 
+
 +#: ``traceback`` entry points that render a caught exception — its message, and
 +#: every message in its ``__cause__`` / ``__context__`` chain — as text. There
 +#: is no safe use of one of these in a value that leaves the process: the
@@ -4428,10 +4428,10 @@ index 4792f73ef..e86539e7d 100644
 +    return name in ("Exception", "BaseException") or name.endswith(
 +        ("Error", "Exception", "Exit", "Interrupt")
 +    )
- 
+
 -class _SinkScan(ast.NodeVisitor):
 -    """Find uses of one handler's bound exception name that reach a log record.
- 
+
 -    ``wrapped`` are the uses already routed through one of :data:`HELPERS`; ``bare``
 -    are the ones that would put the raw exception text into a message.
 +def _annotation_is_exception(node: ast.AST | None) -> bool:
@@ -4493,7 +4493,7 @@ index 4792f73ef..e86539e7d 100644
 +
 +def _exception_regions(tree: ast.AST) -> list[tuple[str, list[ast.stmt]]]:
 +    """``(name, body)`` for every region in which ``name`` holds an exception.
- 
+
 -    THREE SHAPES, AND THE SCANNER ORIGINALLY SAW ONLY ONE
 +    THREE PRODUCERS, AND THE SCANNER ORIGINALLY KNEW ONE
      ----------------------------------------------------
@@ -4895,7 +4895,7 @@ index 4792f73ef..e86539e7d 100644
 +    live leaks sat in files it had marked covered. An instrument that cannot see
 +    a defect class reports the same green whether or not that class is present,
 +    which makes its green uninformative for it.
- 
+
      1. **String context** — ``str(e)``, ``repr(e)``, f-string ``{e}``. Original.
      2. **Bare argument** — ``logger.error("failed: %s", e)``. The exception is
         handed to the logger as a lazy ``%s`` arg, so no ``str()`` call and no
@@ -4948,20 +4948,20 @@ index 4792f73ef..e86539e7d 100644
 +    a NON-logging call is not a sink — but no cleverer heuristic is added just to
 +    make the count tidier.
      """
- 
+
      def __init__(self, name: str) -> None:
          self.name = name
 -        self.bare: list[int] = []
 -        self.wrapped: list[int] = []
 +        self.bare: set[tuple[int, int]] = set()
 +        self.wrapped: set[tuple[int, int]] = set()
- 
+
      def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
          # An inner handler rebinding the same name owns its own uses.
 @@ -208,15 +796,41 @@ class _SinkScan(ast.NodeVisitor):
      def _is_our_name(self, node: ast.AST) -> bool:
          return isinstance(node, ast.Name) and node.id == self.name
- 
+
 -    def _is_str_of_our_name(self, node: ast.AST) -> bool:
 +    def _is_our_value(self, node: ast.AST) -> bool:
 +        """Our exception, or a text-bearing attribute/index chain rooted at it.
@@ -4996,7 +4996,7 @@ index 4792f73ef..e86539e7d 100644
 -            and self._is_our_name(node.args[0])
 +            and self._is_our_value(node.args[0])
          )
- 
+
 +    def _is_scrubbable(self, node: ast.AST) -> bool:
 +        return self._is_our_value(node) or self._is_render_of_our_value(node)
 +
@@ -5030,7 +5030,7 @@ index 4792f73ef..e86539e7d 100644
 +            if self._is_our_value(arg):
 +                self.bare.add(_key(arg))
                  return
- 
+
      def visit_Call(self, node: ast.Call) -> None:
 @@ -260,18 +875,15 @@ class _SinkScan(ast.NodeVisitor):
              isinstance(func, ast.Name)
@@ -5090,7 +5090,7 @@ index 4792f73ef..e86539e7d 100644
 +                self.bare.add(_key(node))
 +                return
          self.generic_visit(node)
- 
+
      def visit_FormattedValue(self, node: ast.FormattedValue) -> None:
 -        if self._is_our_name(node.value):
 -            self.bare.append(node.value.lineno)
@@ -5098,8 +5098,8 @@ index 4792f73ef..e86539e7d 100644
 +            self.bare.add(_key(node.value))
              return
          self.generic_visit(node)
- 
- 
+
+
 +def _scan_tree(tree: ast.AST) -> tuple[list[int], list[int]]:
 +    """Return ``(bare_linenos, wrapped_linenos)`` for one parsed module.
 +
@@ -5142,11 +5142,11 @@ index 4792f73ef..e86539e7d 100644
 -        wrapped.extend(scan.wrapped)
 -    return bare, wrapped
 +    return _scan_tree(tree)
- 
- 
+
+
  def _source_files() -> list[Path]:
 @@ -350,16 +1004,15 @@ class TestTheScannerSeesEachShape:
- 
+
      @staticmethod
      def _scan(src: str) -> list[int]:
 -        tree = ast.parse(textwrap.dedent(src))
@@ -5168,7 +5168,7 @@ index 4792f73ef..e86539e7d 100644
 +        reporting green for shapes 6 and 7 forever.
 +        """
 +        return _scan_tree(ast.parse(textwrap.dedent(src)))[0]
- 
+
      @pytest.mark.parametrize(
          "label, body",
 @@ -379,12 +1032,165 @@ class TestTheScannerSeesEachShape:
@@ -5193,7 +5193,7 @@ index 4792f73ef..e86539e7d 100644
      def test_each_leaking_shape_is_flagged(self, label: str, body: str) -> None:
          src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
          assert self._scan(src), f"scanner is blind to the {label!r} shape"
- 
+
 +    @pytest.mark.parametrize(
 +        "label, src",
 +        [
@@ -5377,7 +5377,7 @@ index 4792f73ef..e86539e7d 100644
      def test_each_safe_shape_is_not_flagged(self, label: str, body: str) -> None:
          src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
          assert not self._scan(src), f"scanner false-positives on {label!r}"
- 
+
 +    def test_a_non_exception_isinstance_narrowing_is_not_a_region(self) -> None:
 +        """``isinstance(x, dict)`` must not make ``x`` an exception.
 +
@@ -5488,7 +5488,7 @@ index 4792f73ef..e86539e7d 100644
 +        )
 +        assert not self._scan(src)
 +
- 
+
  class TestNoBareExceptionTextSinkRemains:
      @pytest.mark.parametrize(
 diff --git a/packages/kaizen-agents/tests/regression/test_pattern_error_returns_are_scrubbed.py b/packages/kaizen-agents/tests/regression/test_pattern_error_returns_are_scrubbed.py
@@ -5889,7 +5889,7 @@ index 991081e89..e9277702f 100644
 +++ b/src/kailash/channels/api_channel.py
 @@ -209,7 +209,19 @@ class APIChannel(Channel):
              raise
- 
+
      async def stop(self) -> None:
 -        """Stop the API channel server."""
 +        """Stop the API channel server.
@@ -5907,11 +5907,11 @@ index 991081e89..e9277702f 100644
 +        """
          if self.status == ChannelStatus.STOPPED:
              return
- 
+
 @@ -231,13 +243,40 @@ class APIChannel(Channel):
              if self._server:
                  self._server.should_exit = True
- 
+
 -            # Cancel the server task
 +            # Cancel the server task and establish that it stopped.
 +            #
@@ -5952,12 +5952,12 @@ index 991081e89..e9277702f 100644
 +                    server_error = task.exception()
 +                    if server_error is not None:
 +                        raise server_error
- 
+
              await self._cleanup()
              self.status = ChannelStatus.STOPPED
 @@ -245,6 +284,11 @@ class APIChannel(Channel):
              logger.info(f"API channel {self.name} stopped")
- 
+
          except Exception as e:
 +            # Deliberately ``Exception``, not ``BaseException``:
 +            # ``CancelledError`` must pass through untouched so a caller
@@ -5973,7 +5973,7 @@ index 3b77e1b66..e27376934 100644
 +++ b/src/kailash/channels/cli_channel.py
 @@ -289,7 +289,19 @@ class CLIChannel(Channel):
              raise
- 
+
      async def stop(self) -> None:
 -        """Stop the CLI channel."""
 +        """Stop the CLI channel.
@@ -5991,11 +5991,11 @@ index 3b77e1b66..e27376934 100644
 +        """
          if self.status == ChannelStatus.STOPPED:
              return
- 
+
 @@ -308,13 +320,40 @@ class CLIChannel(Channel):
                  )
              )
- 
+
 -            # Cancel main task
 +            # Cancel the main task and establish that it stopped.
 +            #
@@ -6036,9 +6036,9 @@ index 3b77e1b66..e27376934 100644
 +                    loop_error = task.exception()
 +                    if loop_error is not None:
 +                        raise loop_error
- 
+
              await self._cleanup()
- 
+
 diff --git a/src/kailash/nodes/base_async.py b/src/kailash/nodes/base_async.py
 index 7451be394..ccadebec2 100644
 --- a/src/kailash/nodes/base_async.py
@@ -6048,8 +6048,8 @@ index 7451be394..ccadebec2 100644
  from kailash.runtime.template_resolver import resolve_templates
  from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 +from kailash.utils.secure_logging import safe_exception_frames
- 
- 
+
+
  class AsyncNode(
 @@ -275,8 +276,30 @@ class AsyncNode(
              # Re-raise execution errors as-is
@@ -6094,7 +6094,7 @@ index 963410459..d65781992 100644
  )
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
  from kailash.workflow import Workflow
- 
+
  logger = logging.getLogger(__name__)
 @@ -773,8 +774,16 @@ class DistributedRuntime(BaseRuntime):
                      "processing": tq.processing_length(),
@@ -6144,7 +6144,7 @@ index 963410459..d65781992 100644
 -                    exc_info=True,
 +                    safe_exception_frames(exc),
                  )
- 
+
      @staticmethod
 diff --git a/src/kailash/runtime/durable.py b/src/kailash/runtime/durable.py
 index a7b237926..4af4ee768 100644
@@ -6152,10 +6152,10 @@ index a7b237926..4af4ee768 100644
 +++ b/src/kailash/runtime/durable.py
 @@ -58,6 +58,7 @@ from typing import (
  )
- 
+
  from kailash.runtime._time_limits import _validate_limits
 +from kailash.utils.secure_logging import safe_callable_name
- 
+
  # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
  # Default is None (auto-detect at build time: "both" with dispatcher,
 @@ -912,7 +913,7 @@ class NodeCompletionHookRegistry:
@@ -6186,8 +6186,8 @@ index a7b237926..4af4ee768 100644
                          "run_id_hash": run_id_hash,
 @@ -964,12 +965,24 @@ class NodeCompletionHookRegistry:
              )
- 
- 
+
+
 -def _callback_name(cb: NodeCompletionCallback) -> str:
 -    """Best-effort label for a callback in WARN logs."""
 -    name = getattr(cb, "__qualname__", None) or getattr(cb, "__name__", None)
@@ -6212,8 +6212,8 @@ index a7b237926..4af4ee768 100644
 +# explicit branch, invisible to a sweep for the `getattr(x, "...", repr(x))`
 +# idiom, to one for `%r`/`!r`, and to one for a raw `%s` of an exception. It
 +# survived three widenings of the search for exactly this class.
- 
- 
+
+
  # ---------------------------------------------------------------------------
 diff --git a/src/kailash/runtime/scheduler.py b/src/kailash/runtime/scheduler.py
 index 66bc15001..c421602d9 100644
@@ -6224,9 +6224,9 @@ index 66bc15001..c421602d9 100644
  from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
  from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
- 
+
  logger = logging.getLogger(__name__)
- 
+
 @@ -1660,13 +1661,27 @@ class WorkflowScheduler:
              try:
                  handler(event)
@@ -6256,7 +6256,7 @@ index 66bc15001..c421602d9 100644
 -                    exc_info=True,
 +                    safe_exception_frames(exc),
                  )
- 
+
      def _on_job_lifecycle_event(self, event: Any) -> None:
 diff --git a/src/kailash/utils/lifespan.py b/src/kailash/utils/lifespan.py
 index 3197afae2..fbd747089 100644
@@ -6265,15 +6265,15 @@ index 3197afae2..fbd747089 100644
 @@ -49,6 +49,8 @@ import inspect
  import logging
  from typing import TYPE_CHECKING
- 
+
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 +
  if TYPE_CHECKING:
      from fastapi import FastAPI
- 
+
 @@ -78,9 +80,13 @@ async def _drive_handlers(
      first_error: BaseException | None = None
- 
+
      for handler in list(handlers):
 -        handler_name = getattr(handler, "__qualname__", None) or getattr(
 -            handler, "__name__", repr(handler)
@@ -6329,7 +6329,7 @@ index 654ce5271..6f7bfe730 100644
 --- a/src/kailash/utils/secure_logging.py
 +++ b/src/kailash/utils/secure_logging.py
 @@ -2,16 +2,157 @@
- 
+
  This module provides mixins and utilities for automatically detecting and
  masking PII, credentials, and other sensitive information in logs.
 +
@@ -6340,7 +6340,7 @@ index 654ce5271..6f7bfe730 100644
 +while those two emit only source-level identifiers that cannot carry a payload
 +at all.
  """
- 
+
 +import functools
  import json
  import logging
@@ -6349,9 +6349,9 @@ index 654ce5271..6f7bfe730 100644
 +import traceback
  from functools import wraps
  from typing import Any, Dict, List, Optional, Pattern, Set, Union
- 
+
  from kailash.utils.url_credentials import is_sensitive_query_key
- 
+
 +# A partial wrapping a partial is flattened by CPython, so one unwrap is the
 +# normal case; the bound keeps a hand-built chain from spinning.
 +_MAX_PARTIAL_UNWRAP = 10
@@ -6483,7 +6483,7 @@ index 654ce5271..6f7bfe730 100644
 +
 +    return " <- ".join(descriptions)
 +
- 
+
  class SecureLoggingPatterns:
      """Patterns for detecting sensitive data."""
 diff --git a/src/kailash/visualization/api.py b/src/kailash/visualization/api.py
@@ -6491,9 +6491,9 @@ index cc70a5406..2e97def2d 100644
 --- a/src/kailash/visualization/api.py
 +++ b/src/kailash/visualization/api.py
 @@ -34,6 +34,11 @@ from typing import Any, Optional
- 
+
  from pydantic import BaseModel
- 
+
 +from kailash.tracking.manager import TaskManager
 +from kailash.tracking.models import TaskStatus
 +from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
@@ -6505,17 +6505,17 @@ index cc70a5406..2e97def2d 100644
 @@ -55,11 +60,6 @@ BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
  CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
  FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
- 
+
 -from kailash.tracking.manager import TaskManager
 -from kailash.tracking.models import TaskStatus
 -from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 -from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 -
  logger = logging.getLogger(__name__)
- 
+
  # How long the stop endpoint waits for the metrics broadcast task to actually
 @@ -296,8 +296,53 @@ class DashboardAPIServer:
- 
+
          @self.app.post("/api/v1/monitoring/start")
          async def start_monitoring(request: RunRequest):
 -            """Start real-time monitoring for a run."""
@@ -6572,7 +6572,7 @@ index cc70a5406..2e97def2d 100644
 @@ -307,13 +352,32 @@ class DashboardAPIServer:
                  # Start monitoring
                  self.dashboard.start_monitoring(request.run_id)
- 
+
 -                # Start WebSocket broadcasting if not already running
 -                if not self._broadcast_task:
 +                # Start WebSocket broadcasting unless it is already running.
@@ -6595,7 +6595,7 @@ index cc70a5406..2e97def2d 100644
                      self._broadcast_task = asyncio.create_task(
                          self._broadcast_metrics()
                      )
- 
+
                  return {"status": "started", "run_id": request.run_id}
 +            except HTTPException:
 +                # Already carries the precise reason; the handler below would

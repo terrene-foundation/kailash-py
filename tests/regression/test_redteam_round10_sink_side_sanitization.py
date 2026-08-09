@@ -18,9 +18,8 @@ it was written to close. The pattern is worth naming: each fix hardened the laye
 it was looking at, and the next round found the same class one layer over.
 """
 
-import pytest
-
 import kailash.utils.secure_logging as sl
+import pytest
 from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 
 try:
@@ -111,9 +110,13 @@ class TestSinkSideTypeNameIsSanitized:
         root = pathlib.Path(__file__).resolve().parents[2] / "src" / "kailash"
         helper_use = re.compile(r"safe_exception_frames|safe_type_name")
         # Exception-ish variable names, NOT every `type(x).__name__`: a
-        # type-error message about a wrong-typed ARGUMENT ("expected int,
+        # TypeError message about a wrong-typed ARGUMENT ("expected int,
         # got %s") is a different class and widening to it would flag every
-        # such message in the tree. Deliberately broader than the six names
+        # such message in the tree.
+        # (Phrasing note: the pygrep hook `python-use-type-annotations` matches
+        # a comment-hash followed by the word it guards, with no trailing
+        # punctuation required -- so this says "TypeError message" rather than
+        # spelling that phrase out. Quoting the literal here tripped the hook.) Deliberately broader than the six names
         # the first version matched -- `last_exc` was invisible to those and
         # two live log sinks in scheduler.py were missed as a result.
         raw_type_name = re.compile(

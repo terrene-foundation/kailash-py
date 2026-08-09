@@ -24,9 +24,8 @@ A test asserting "the payload is absent" would be pinning a promise the code
 deliberately does not make, and would red the moment someone logged a class name.
 """
 
-import pytest
-
 import kailash.utils.secure_logging as sl
+import pytest
 from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 
 # Resolved defensively ON PURPOSE. Importing this constant at module level would

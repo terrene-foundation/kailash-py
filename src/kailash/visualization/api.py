@@ -32,13 +32,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from pydantic import BaseModel
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
+from pydantic import BaseModel
 
 # FastAPI is optional - import via importlib to avoid pyright errors on absent modules
 _fastapi: Any = None

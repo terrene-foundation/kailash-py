@@ -66,7 +66,11 @@ from kailash.sdk_exceptions import (
     SoftTimeLimitExceeded,
     WorkflowCancelledError,
 )
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -248,7 +252,6 @@ class TaskQueue:
         """Lazily create and return a Redis client."""
         if self._client is None:
             import redis as redis_lib
-
             from kailash.utils.validation import validate_redis_url
 
             validate_redis_url(self._redis_url)
@@ -1078,7 +1081,6 @@ class Worker:
         """Get the Redis client for heartbeat operations."""
         if self._redis_client is None:
             import redis as redis_lib
-
             from kailash.utils.validation import validate_redis_url
 
             validate_redis_url(self._redis_url)

@@ -604,9 +604,7 @@ class MCPChannel(Channel):
                 # Execute workflow
                 workflow = self._workflow_registry.get(registration.workflow_name)
                 if workflow and self.runtime is not None:
-                    from kailash.workflow.input_envelope import (
-                        bind_parameter_envelope,
-                    )
+                    from kailash.workflow.input_envelope import bind_parameter_envelope
 
                     # MCP tools/call arguments are the caller's workflow
                     # arguments -- the same role the `parameters` envelope

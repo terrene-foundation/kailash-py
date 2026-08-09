@@ -31,7 +31,6 @@ import asyncio
 import logging
 
 import pytest
-
 from kailash.channels.api_channel import APIChannel
 from kailash.channels.base import ChannelConfig, ChannelStatus, ChannelType
 from kailash.channels.cli_channel import CLIChannel
@@ -619,10 +618,7 @@ class TestSafeExceptionFramesIsBounded:
         175,000-character log record — the log-spam mode `observability.md`
         forbids, on an error path an attacker can drive.
         """
-        from kailash.utils.secure_logging import (
-            _MAX_CHAIN_LINKS,
-            safe_exception_frames,
-        )
+        from kailash.utils.secure_logging import _MAX_CHAIN_LINKS, safe_exception_frames
 
         exc: BaseException = ValueError("root")
         for i in range(200):
@@ -656,10 +652,7 @@ class TestSafeExceptionFramesIsBounded:
         middleware stack wrapping per layer — evicted the original failure and
         left generic wrappers behind. Keeping the innermost links removes it.
         """
-        from kailash.utils.secure_logging import (
-            _MAX_CHAIN_LINKS,
-            safe_exception_frames,
-        )
+        from kailash.utils.secure_logging import _MAX_CHAIN_LINKS, safe_exception_frames
 
         exc: BaseException = KeyError("ROOT_CAUSE_SENTINEL")
         for i in range(_MAX_CHAIN_LINKS * 3):

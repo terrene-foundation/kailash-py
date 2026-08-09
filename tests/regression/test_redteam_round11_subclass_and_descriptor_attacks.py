@@ -28,9 +28,8 @@ could not reach.
 
 import logging
 
-import pytest
-
 import kailash.utils.secure_logging as sl
+import pytest
 from kailash.utils.secure_logging import (
     safe_callable_name,
     safe_exception_frames,

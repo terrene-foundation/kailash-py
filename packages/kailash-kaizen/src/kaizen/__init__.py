@@ -126,9 +126,7 @@ except ImportError:
 from kaizen.core.agents import (  # Legacy agent for internal use; noqa: F401 - Re-exported for backward compatibility
     Agent as CoreAgent,
 )
-from kaizen.core.agents import (
-    AgentManager,
-)
+from kaizen.core.agents import AgentManager
 from kaizen.core.config import KaizenConfig, _global_config_manager
 
 # PERFORMANCE OPTIMIZED: Core framework exports for <100ms import

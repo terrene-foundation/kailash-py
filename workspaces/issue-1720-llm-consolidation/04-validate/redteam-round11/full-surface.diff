@@ -34,7 +34,7 @@ index 37c468f0c..1fb812938 100644
 +                    if self._is_our_name(value):
                          self.bare.add(_key(value))
 -                        return
- 
+
      def visit_Call(self, node: ast.Call) -> None:
          func = node.func
 @@ -1080,6 +1091,17 @@ class TestTheScannerSeesEachShape:
@@ -58,7 +58,7 @@ index 37c468f0c..1fb812938 100644
 @@ -1376,6 +1398,61 @@ class TestTheScannerSeesEachShape:
          """
          assert not self._scan(src), f"scanner false-positives on {label!r}"
- 
+
 +    def test_extra_dict_counts_every_bare_value_not_just_the_first(self) -> None:
 +        """Two bare values in one ``extra`` are TWO sites.
 +
@@ -116,7 +116,7 @@ index 37c468f0c..1fb812938 100644
 +
      def test_raise_of_a_class_is_not_an_exception_valued_name(self) -> None:
          """``raise ValueError`` names a CLASS, not a parameter holding a value.
- 
+
 diff --git a/src/kailash/channels/base.py b/src/kailash/channels/base.py
 index 161ce351a..d0d584c9f 100644
 --- a/src/kailash/channels/base.py
@@ -124,12 +124,12 @@ index 161ce351a..d0d584c9f 100644
 @@ -7,7 +7,7 @@ from dataclasses import dataclass, field
  from enum import Enum
  from typing import Any, Callable, Dict, List, Optional, Union
- 
+
 -from kailash.utils.secure_logging import safe_exception_frames
 +from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
- 
+
  logger = logging.getLogger(__name__)
- 
+
 @@ -325,7 +325,7 @@ class Channel(ABC):
                      logger.warning(
                          "Channel %s: event task failed during cleanup: %s at %s",
@@ -149,8 +149,8 @@ index ccadebec2..8d0a21ce1 100644
  from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 -from kailash.utils.secure_logging import safe_exception_frames
 +from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
- 
- 
+
+
  class AsyncNode(
 @@ -292,7 +292,7 @@ class AsyncNode(
              self.logger.error(
@@ -172,12 +172,12 @@ index ccadebec2..8d0a21ce1 100644
          )
 @@ -502,7 +502,7 @@ class AsyncNode(
              log_data = extra.copy()
- 
+
          if error:
 -            log_data["error_type"] = type(error).__name__
 +            log_data["error_type"] = safe_type_name(error)
              log_data["error_message"] = str(error)
- 
+
          await asyncio.to_thread(self.logger.error, message, extra=log_data)
 diff --git a/src/kailash/runtime/distributed.py b/src/kailash/runtime/distributed.py
 index d65781992..94e638902 100644
@@ -190,7 +190,7 @@ index d65781992..94e638902 100644
 -from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
  from kailash.workflow import Workflow
- 
+
  logger = logging.getLogger(__name__)
 @@ -782,7 +782,7 @@ class DistributedRuntime(BaseRuntime):
                  logger.warning(
@@ -229,11 +229,11 @@ index 4af4ee768..24551fef4 100644
 +++ b/src/kailash/runtime/durable.py
 @@ -58,7 +58,7 @@ from typing import (
  )
- 
+
  from kailash.runtime._time_limits import _validate_limits
 -from kailash.utils.secure_logging import safe_callable_name
 +from kailash.utils.secure_logging import safe_callable_name, safe_type_name
- 
+
  # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
  # Default is None (auto-detect at build time: "both" with dispatcher,
 @@ -536,7 +536,7 @@ def _redact_value(
@@ -282,9 +282,9 @@ index c421602d9..b77e6f48d 100644
  from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
 -from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
- 
+
  logger = logging.getLogger(__name__)
- 
+
 @@ -1552,7 +1552,7 @@ class WorkflowScheduler:
                  "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
                  schedule_id,
@@ -293,7 +293,7 @@ index c421602d9..b77e6f48d 100644
 +                safe_type_name(exc),
              )
              raise
- 
+
 @@ -1666,8 +1666,10 @@ class WorkflowScheduler:
                  # `repr(handler)` fallback: a `functools.partial` renders its
                  # bound kwargs verbatim, and a callable object's
@@ -323,10 +323,10 @@ index fbd747089..ebf0297ec 100644
 @@ -49,7 +49,7 @@ import inspect
  import logging
  from typing import TYPE_CHECKING
- 
+
 -from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 +from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
- 
+
  if TYPE_CHECKING:
      from fastapi import FastAPI
 @@ -84,8 +84,10 @@ async def _drive_handlers(
@@ -358,7 +358,7 @@ index 3fd59789b..a5fcb09da 100644
 @@ -3,12 +3,28 @@
  This module provides mixins and utilities for automatically detecting and
  masking PII, credentials, and other sensitive information in logs.
- 
+
 -It also provides two helpers that make a log line safe BY CONSTRUCTION rather
 -than by pattern-matching -- :func:`safe_callable_name` and
 +It also provides two helpers that narrow a log line BY CONSTRUCTION rather than
@@ -386,12 +386,12 @@ index 3fd59789b..a5fcb09da 100644
 +design, because it is often the only diagnostic there is. Treat these helpers as
 +"structurally inert and bounded", never as "cannot carry data".
  """
- 
+
  import functools
 @@ -51,6 +67,115 @@ _HOME_DIR = os.path.expanduser("~")
  # the one that matters.
  _MAX_CHAIN_LINKS = 10
- 
+
 +# Ceiling on any single attacker-influenceable identifier (class name, function
 +# name, frame name, frame path) entering a record. Long enough that a real
 +# qualname or vendored path survives intact; short enough that 5000 characters
@@ -501,7 +501,7 @@ index 3fd59789b..a5fcb09da 100644
 +        # inside ``except`` blocks, where raising REPLACES the handled exception.
 +        return "<unrepresentable>"
 +
- 
+
  def safe_callable_name(obj: Any) -> str:
      """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
 @@ -80,8 +205,21 @@ def safe_callable_name(obj: Any) -> str:
@@ -525,7 +525,7 @@ index 3fd59789b..a5fcb09da 100644
 +    structurally. A short caller-chosen name still survives, by design -- it is
 +    frequently the only diagnostic available. Read the result as "bounded and
 +    structurally inert", never as "payload-free".
- 
+
      Returns a string for every object that misbehaves; it does not raise on
      account of the object, because a logging call site must not fail on the
 @@ -117,7 +255,8 @@ def safe_callable_name(obj: Any) -> str:
@@ -554,7 +554,7 @@ index 3fd59789b..a5fcb09da 100644
 +            return _safe_identifier(type(obj).__name__)
          except Exception:
              return "<unrepresentable>"
- 
+
 @@ -171,6 +310,40 @@ def safe_exception_frames(
      *,
      limit: int = _DEFAULT_FRAME_LIMIT,
@@ -595,7 +595,7 @@ index 3fd59789b..a5fcb09da 100644
 +    follow_chain: bool = True,
  ) -> str:
      """Render WHERE an exception failed, without rendering WHAT it said.
- 
+
 @@ -203,7 +376,12 @@ def safe_exception_frames(
        An earlier revision of this paragraph said only the basename survives
        because :func:`_relative_frame_path` "falls back to the basename". That is
@@ -633,7 +633,7 @@ index 3fd59789b..a5fcb09da 100644
 +            For a WRAPPER chain -- the diagnostic case this helper serves --
 +            innermost is the right end; for a RETRY-storm chain it is not, and
 +            the comment beside the implementation says so too.
- 
+
      Returns a string like
      ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
 @@ -253,8 +444,18 @@ def safe_exception_frames(
@@ -699,7 +699,7 @@ index 3fd59789b..a5fcb09da 100644
 +        kept: List[BaseException] = []
 +    else:
 +        kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
- 
+
      descriptions: List[str] = []
      if dropped:
 @@ -295,12 +526,22 @@ def safe_exception_frames(
@@ -725,21 +725,21 @@ index 3fd59789b..a5fcb09da 100644
 +            f"{_safe_identifier(type(current).__name__)}"
 +            f"@{rendered_frames or '<no-frames>'}"
          )
- 
+
      return " <- ".join(descriptions)
 diff --git a/src/kailash/visualization/api.py b/src/kailash/visualization/api.py
 index 7072b4949..bd8201e5c 100644
 --- a/src/kailash/visualization/api.py
 +++ b/src/kailash/visualization/api.py
 @@ -36,7 +36,7 @@ from pydantic import BaseModel
- 
+
  from kailash.tracking.manager import TaskManager
  from kailash.tracking.models import TaskStatus
 -from kailash.utils.secure_logging import safe_exception_frames
 +from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
  from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
  from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
- 
+
 @@ -384,13 +384,15 @@ class DashboardAPIServer:
                              # `Authorization: Basic` header.
                              # So masking here would be a porous filter over
