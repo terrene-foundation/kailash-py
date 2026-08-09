@@ -26,9 +26,15 @@ casually.
 
 ## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
 
-**Rounds 1-4 NOT CLEAN. Round 5 CLEAN (security lens) — the FIRST clean round on an
-UNCHANGED surface. Round 6 dispatched for the second.** Convergence needs TWO consecutive
-clean rounds on a surface that does not move between them.
+**Rounds 1-4 NOT CLEAN. Round 5 CLEAN from BOTH lenses on the SAME SHA (`3f988bd22`) — the
+first clean round on an UNCHANGED surface, and the first from both. Round 6 dispatched to both
+against `b9f1e5ab7` for the second.** Convergence needs TWO consecutive clean rounds on a
+surface that does not move between them, from BOTH lenses — a correctness-clean is not
+security-clean (`agents.md`).
+
+Both round-6 briefs ask each lens to state EXPLICITLY whether it counts round 6 as consecutive
+with round 5, given HEAD moved by a docs-and-test-only commit in between. If either says the
+counter reset, run a seventh rather than claim the convergence.
 
 **Why four rounds did not converge, stated precisely: the counter never failed, it was never
 given an unchanged surface.** `completion-criterion.md` MUST-3 resets on a CHANGE to the
@@ -43,11 +49,18 @@ below as residuals PENDING ACCEPTANCE, not as closed.
 
 Neither is blocking; neither is self-accepting; I cannot accept them on my own behalf.
 
-- **LOW-7** — `cli_channel`/`mcp_channel` order `_cleanup()` → `cleanup_ran = True` →
+- **LOW-7 (= the correctness lens's L3 — BOTH lenses found this independently, by different
+  routes)** — `cli_channel`/`mcp_channel` order `_cleanup()` → `cleanup_ran = True` →
   `close()`. If `close()` raises, the `finally`'s guarded close-retry is skipped because the
-  flag is already True. Backstop exists (`__del__` calls `close()` in a try/except and emits a
-  ResourceWarning). Shape if revisited: a separate `close_ran` flag. **Revisit trigger:** any
-  future edit to a channel `stop()`.
+  flag is already True. MEASURED, not reasoned: new guard → `close() count = 1, no WARN`; old
+  guard → `count = 2, WARN fired`; runtime stranded under BOTH for a persistent failure, so
+  only a TRANSIENT `release()` failure would have been rescued. **Non-blocking because the
+  caller is told loudly** — `stop()` raises and the status is ERROR. This is a correct loud
+  failure that lost a retry, NOT the false-success family every prior round found; that
+  distinction is what makes it triage-able. Round 4's guard change was still the right trade:
+  it removed a real double-`_cleanup` on a far more common path. Backstop: `__del__` calls
+  `close()` in a try/except with a ResourceWarning. Shape if revisited: a separate `close_ran`
+  flag. **Revisit trigger:** any future edit to a channel `stop()`.
 - **LOW-8** — `complete = False` conflates "event task died of an error" (task is GONE) with
   "event task still live", and both surface as `STOPPING`, whose documented meaning elsewhere
   is "still running, stop it again." Self-converges on the second `stop()` and errs toward
