@@ -145,6 +145,24 @@ jobs:
           # from PyPI would miss the module the integration tests import.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dl,dev,stats]" --python .venv/bin/python
+          # kailash-ml declares `kailash-dataflow>=2.11.3`, so the line above
+          # resolves dataflow from PyPI. Paired with the root `kailash`
+          # installed editable from this tree, that is an IMPOSSIBLE combination
+          # the monorepo never ships: the feature-store materialise path runs
+          # DataFlow Express `upsert`, which calls
+          # `kailash.db.dialect._validate_identifier`. That helper gained a
+          # REQUIRED keyword-only `max_length` (per-dialect identifier budgets,
+          # #1971 — a 100-char identifier accepted here is truncated by
+          # PostgreSQL at 63 and silently ALIASES two models onto one table).
+          # PyPI dataflow 2.19.1 still calls it positionally
+          # (`dataflow/core/nodes.py:3620`), so every materialise raised
+          # `TypeError: _validate_identifier() missing 1 required keyword-only
+          # argument: 'max_length'`.
+          #
+          # Install dataflow editable so this job tests the LOCKSTEP pairing
+          # that actually ships — the same discipline already applied to the
+          # root package and to kailash-align above, at the bridge boundary.
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
           # kailash-ml integration tests import `kailash_align` via
           # test_rl_align_cross_sdk_wiring.py (cross-SDK RL protocol wiring).
           # Install kailash-align editable so the test collects cleanly.
