@@ -30,6 +30,13 @@ _MAX_PARTIAL_UNWRAP = 10
 # produce thousands of identical frames; the innermost ones locate the fault.
 _DEFAULT_FRAME_LIMIT = 20
 
+# Resolved once at import: a cwd at or above this is not a workspace root, and
+# rendering paths relative to it discloses the home-directory layout
+# _relative_frame_path exists to hide. Read at call time it would be the same
+# value on every call anyway, and resolving it here keeps that function free of
+# a second environment read.
+_HOME_DIR = os.path.expanduser("~")
+
 
 def safe_callable_name(obj: Any) -> str:
     """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
@@ -125,11 +132,23 @@ def _relative_frame_path(filename: str) -> str:
     ``../../..`` chain that hints at the same layout.
     """
     try:
-        relative = os.path.relpath(filename, os.getcwd())
+        cwd = os.getcwd()
+        relative = os.path.relpath(filename, cwd)
     except (ValueError, OSError):
         return os.path.basename(filename)
     if relative.startswith(".."):
         return os.path.basename(filename)
+    # A cwd sitting AT OR ABOVE the home directory -- "/" under a systemd unit
+    # with no WorkingDirectory, or "/home" -- makes every rendering beneath it
+    # disclose the exact layout this function exists to hide, and does it
+    # WITHOUT ever producing a leading "..", so the guard above never fires.
+    # Such a cwd is not a workspace root, so decline to render against it.
+    try:
+        if os.path.commonpath([cwd, _HOME_DIR]) == cwd and cwd != _HOME_DIR:
+            return os.path.basename(filename)
+    except ValueError:
+        # Different drives on Windows: no common path, nothing to disclose.
+        pass
     return relative
 
 
@@ -171,7 +190,16 @@ def safe_exception_frames(
 
     while current is not None and id(current) not in seen:
         seen.add(id(current))
-        frames = traceback.extract_tb(current.__traceback__)
+        # ``extract_tb`` defaults to ``lookup_lines=True``, so it reads the
+        # SOURCE for every frame -- before the slice below throws all but the
+        # innermost few away. The docstring above anticipates "thousands of
+        # identical frames" from deep recursion; unguarded, that is thousands of
+        # linecache reads on an error path an attacker can drive to
+        # RecursionError. ``.line`` is never read here (only filename, lineno
+        # and name), so the lookup buys nothing at any depth.
+        frames = traceback.StackSummary.extract(
+            traceback.walk_tb(current.__traceback__), lookup_lines=False
+        )
         if limit > 0:
             frames = frames[-limit:]
         rendered_frames = ">".join(

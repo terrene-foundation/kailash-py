@@ -306,7 +306,24 @@ class APIChannel(Channel):
             # ``_running_task`` still live. Cancelling it is synchronous, so the
             # cancel lands even when the subsequent await is itself cancelled.
             if self.status is not ChannelStatus.STOPPED:
-                await self._cleanup()
+                try:
+                    await self._cleanup()
+                except Exception:
+                    # ``_cleanup`` swallows only ``CancelledError`` (base.py),
+                    # so a ``_running_task`` that died of a REAL error re-raises
+                    # here -- out of the ``finally`` -- and REPLACES the
+                    # CancelledError this method exists to let through,
+                    # demoting it to ``__context__``. That is the swallowed-
+                    # cancellation defect F13 closed, reintroduced one layer
+                    # down inside its own fix. ``Exception``, not
+                    # ``BaseException``: a CancelledError raised by
+                    # ``_cleanup``'s own await IS the caller's cancellation
+                    # continuing and must replace nothing.
+                    logger.warning(
+                        "API channel %s: cleanup failed during an interrupted "
+                        "stop; the original cancellation is preserved",
+                        self.name,
+                    )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a request through the API channel.

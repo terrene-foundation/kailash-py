@@ -253,3 +253,252 @@ class TestStopRunsCleanupEvenWhenTheCallerIsCancelled:
 
         assert not orphaned, "_running_task was left pending after a cancelled stop()"
         assert not stranded, "close() did not run, so the runtime reference is stranded"
+
+
+class TestCleanupFailureDoesNotReplaceTheCallerCancellation:
+    """Round 2 found the F13 defect reintroduced INSIDE its own fix.
+
+    ``_cleanup`` swallows only ``CancelledError``, so a ``_running_task`` that
+    died of a REAL error re-raises out of the ``finally`` and REPLACES the
+    propagating ``CancelledError`` -- demoting the caller's cancellation to
+    ``__context__``. That is precisely the swallowed-cancellation defect the
+    F13 work exists to close, one layer down. The CLI variant additionally
+    skipped ``close()``, stranding the runtime the block was added to release.
+    """
+
+    @pytest.mark.asyncio
+    async def test_api_channel_cleanup_error_does_not_mask_cancellation(self) -> None:
+        channel = APIChannel(
+            ChannelConfig(name="rt_api2", channel_type=ChannelType.API, port=18996)
+        )
+
+        release = asyncio.Event()
+
+        async def _ignores_cancel() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    if release.is_set():
+                        raise
+                    continue
+
+        server_task = asyncio.ensure_future(_ignores_cancel())
+        channel._server_task = server_task
+        channel.status = ChannelStatus.RUNNING
+
+        async def _exploding_cleanup() -> None:
+            raise RuntimeError("backing store gone")
+
+        channel._cleanup = _exploding_cleanup  # type: ignore[method-assign]
+
+        stopper = asyncio.ensure_future(channel.stop())
+        await asyncio.sleep(0.05)
+        assert not stopper.done()
+        stopper.cancel()
+
+        # The caller asked for cancellation; a failing cleanup must not convert
+        # that into RuntimeError.
+        with pytest.raises(asyncio.CancelledError):
+            await stopper
+
+        release.set()
+        server_task.cancel()
+        await asyncio.gather(server_task, return_exceptions=True)
+
+    @pytest.mark.asyncio
+    async def test_cli_channel_closes_runtime_even_when_cleanup_raises(self) -> None:
+        channel = CLIChannel(
+            ChannelConfig(name="rt_cli2", channel_type=ChannelType.CLI)
+        )
+
+        release = asyncio.Event()
+
+        async def _ignores_cancel() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    if release.is_set():
+                        raise
+                    continue
+
+        main_task = asyncio.ensure_future(_ignores_cancel())
+        channel._main_task = main_task
+        channel.status = ChannelStatus.RUNNING
+
+        async def _exploding_cleanup() -> None:
+            raise RuntimeError("backing store gone")
+
+        channel._cleanup = _exploding_cleanup  # type: ignore[method-assign]
+
+        stopper = asyncio.ensure_future(channel.stop())
+        await asyncio.sleep(0.05)
+        assert not stopper.done()
+        stopper.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await stopper
+
+        assert (
+            getattr(channel, "runtime", None) is None
+        ), "close() was skipped because _cleanup raised; the runtime is stranded"
+
+        release.set()
+        main_task.cancel()
+        await asyncio.gather(main_task, return_exceptions=True)
+
+
+class TestCleanupJoinCannotStrandTheCaller:
+    """The `finally` fix re-opened, one task over, what it set out to close.
+
+    ``_cleanup`` used ``await self._running_task``. Running that from
+    ``stop()``'s ``finally`` means a ``_running_task`` which IGNORES
+    cancellation never completes the join, so the ``finally`` never completes
+    and the caller who asked to be cancelled never regains control -- a strand,
+    which the F13 shard's own commit body calls WORSE than the swallow it
+    replaced. The existing pair varies the AWAITED task; this varies
+    ``_running_task``, which is the one nothing else covers.
+    """
+
+    @pytest.mark.asyncio
+    async def test_uncancellable_running_task_does_not_hold_the_caller(self) -> None:
+        channel = APIChannel(
+            ChannelConfig(name="rt_api3", channel_type=ChannelType.API, port=18995)
+        )
+
+        release = asyncio.Event()
+
+        async def _ignores_cancel() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    if release.is_set():
+                        raise
+                    continue
+
+        server_task = asyncio.ensure_future(_ignores_cancel())
+        running_task = asyncio.ensure_future(_ignores_cancel())
+        channel._server_task = server_task
+        channel._running_task = running_task
+        channel.status = ChannelStatus.RUNNING
+
+        stopper = asyncio.ensure_future(channel.stop())
+        await asyncio.sleep(0.05)
+        stopper.cancel()
+
+        # Bounded observation, never wait_for: this file's own lesson is that a
+        # hang must present as a readable result, not as a dead run.
+        done, pending = await asyncio.wait({stopper}, timeout=3.0)
+        stranded = bool(pending)
+
+        release.set()
+        for task in (server_task, running_task, stopper):
+            task.cancel()
+        await asyncio.gather(server_task, running_task, stopper, return_exceptions=True)
+
+        assert not stranded, (
+            "stop() never returned to a cancelled caller because _cleanup "
+            "joined an uncancellable _running_task without a bound"
+        )
+
+
+class TestSafeExceptionFramesDisclosesNeitherLayoutNorSource:
+    def test_cwd_above_home_does_not_render_the_home_layout(self) -> None:
+        """A cwd of "/" produces no leading "..", so the old guard never fired.
+
+        Not an exotic configuration: a systemd unit with no ``WorkingDirectory``
+        runs at "/". Under the old code every frame beneath the home directory
+        rendered as ``home/<user>/svc/db.py`` -- the exact layout the function
+        exists to hide.
+        """
+        import os
+
+        from kailash.utils import secure_logging
+
+        home = os.path.expanduser("~")
+        victim = os.path.join(home, "svc", "db.py")
+        user_component = os.path.basename(home)
+
+        previous = os.getcwd()
+        try:
+            os.chdir("/")
+            rendered = secure_logging._relative_frame_path(victim)
+        finally:
+            os.chdir(previous)
+
+        assert user_component not in rendered
+        assert rendered == "db.py"
+
+    def test_a_real_workspace_cwd_still_renders_relative(self) -> None:
+        """The negative half: the guard must not swallow the normal case.
+
+        Without this, a fix that returned the basename unconditionally would
+        pass the test above and destroy the diagnostic.
+        """
+        import os
+
+        from kailash.utils import secure_logging
+
+        target = os.path.join(os.getcwd(), "svc", "db.py")
+        assert secure_logging._relative_frame_path(target) == os.path.join(
+            "svc", "db.py"
+        )
+
+    def test_frames_carry_no_source_text_and_honour_the_limit(self) -> None:
+        from kailash.utils.secure_logging import safe_exception_frames
+
+        def deep(n: int):
+            if n:
+                return deep(n - 1)
+            raise ValueError("boom-with-a-secret-in-it")
+
+        try:
+            deep(60)
+        except ValueError as exc:
+            rendered = safe_exception_frames(exc, limit=3)
+
+        # The limit applies, and the message never appears -- only the type.
+        assert rendered.count(">") == 2, rendered
+        assert "boom-with-a-secret-in-it" not in rendered
+        assert rendered.startswith("ValueError@")
+
+    def test_source_is_never_read_for_frames_that_get_discarded(
+        self, monkeypatch
+    ) -> None:
+        """Pin the lookup, not just the output.
+
+        The sibling test above asserts no source text appears -- which was true
+        BEFORE this fix too, because the rendering never used ``.line``. It
+        therefore does not discriminate on the defect, which was that
+        ``extract_tb`` READ the source for every frame before the limit slice
+        threw them away. Thousands of frames from a deep recursion meant
+        thousands of linecache reads on a path an attacker can drive. Only
+        counting the reads tells the two states apart.
+        """
+        import linecache
+
+        from kailash.utils.secure_logging import safe_exception_frames
+
+        reads: list = []
+        real_getline = linecache.getline
+        monkeypatch.setattr(
+            linecache,
+            "getline",
+            lambda *a, **kw: (reads.append(a), real_getline(*a, **kw))[1],
+        )
+
+        def deep(n: int):
+            if n:
+                return deep(n - 1)
+            raise ValueError("boom")
+
+        try:
+            deep(200)
+        except ValueError as exc:
+            safe_exception_frames(exc, limit=3)
+
+        assert reads == [], (
+            f"{len(reads)} source lookups for a 200-frame traceback rendered "
+            "at limit=3; the frames are read before the slice discards them"
+        )

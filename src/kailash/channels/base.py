@@ -9,6 +9,16 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
+# How long ``_cleanup`` waits to CONFIRM that the task it just cancelled has
+# actually stopped. The cancel itself is synchronous and unconditional, so this
+# bounds only the observation. Deliberately short: ``_cleanup`` runs from
+# ``stop()``'s ``finally`` while a caller-aimed cancellation is propagating,
+# often under a shutdown deadline, so a long join here compounds the very
+# teardown it is trying not to obstruct. Long enough for a cooperative task to
+# unwind, short enough that a task which ignores cancellation cannot hold the
+# caller.
+_CLEANUP_JOIN_TIMEOUT = 1.0
+
 
 class ChannelType(Enum):
     """Supported channel types."""
@@ -252,13 +262,34 @@ class Channel(ABC):
             self._event_queue = asyncio.Queue(maxsize=self.config.event_buffer_size)
 
     async def _cleanup(self) -> None:
-        """Clean up channel resources."""
+        """Clean up channel resources.
+
+        THE JOIN IS BOUNDED AND DOES NOT RE-RAISE, for two reasons that both
+        surfaced when ``stop()`` began running this from a ``finally`` while a
+        caller-aimed ``CancelledError`` was propagating.
+
+        ``await self._running_task`` STRANDS the caller when that task ignores
+        cancellation -- the join never completes, so the ``finally`` never
+        completes, and the caller who asked to be cancelled never regains
+        control. That is a worse failure than the swallowed cancellation the
+        channel work set out to fix, and it re-opens one task over the exact
+        property ``test_stop_does_not_strand_a_caller_behind_an_unstoppable_task``
+        already pins for ``_server_task``.
+
+        ``await`` also RE-RAISES whatever the task died of. A real exception
+        escaping here replaces the in-flight ``CancelledError`` and demotes it
+        to ``__context__``, silently losing the cancellation -- the same defect
+        one layer down.
+
+        ``asyncio.wait`` fixes both: it observes completion without re-raising,
+        and it takes a timeout. ``cancel()`` above is SYNCHRONOUS and has
+        already landed, so the task is cancelled regardless of what the join
+        observes; only the CONFIRMATION is bounded, which is the right
+        semantics for a task that may never honour it.
+        """
         if self._running_task and not self._running_task.done():
             self._running_task.cancel()
-            try:
-                await self._running_task
-            except asyncio.CancelledError:
-                pass
+            await asyncio.wait({self._running_task}, timeout=_CLEANUP_JOIN_TIMEOUT)
 
         if self._event_queue:
             # Clear any remaining events

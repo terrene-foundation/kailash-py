@@ -383,8 +383,22 @@ class CLIChannel(Channel):
             # Cancelling is synchronous, so the cancel lands even when the
             # subsequent await is itself cancelled.
             if self.status is not ChannelStatus.STOPPED:
-                await self._cleanup()
-                self.close()
+                try:
+                    await self._cleanup()
+                except Exception:
+                    # See the sibling comment in api_channel: an unguarded
+                    # re-raise here REPLACES the propagating CancelledError.
+                    logger.warning(
+                        "CLI channel %s: cleanup failed during an interrupted "
+                        "stop; the original cancellation is preserved",
+                        self.name,
+                    )
+                finally:
+                    # MUST run even when ``_cleanup`` raised. Unguarded, a
+                    # raising ``_cleanup`` skipped this and stranded the
+                    # runtime reference -- defeating the stated goal of the
+                    # very block it sits in.
+                    self.close()
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a CLI request.

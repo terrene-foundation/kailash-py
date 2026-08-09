@@ -369,13 +369,21 @@ class DashboardAPIServer:
                             # ITSELF. ``_broadcast_metrics`` reaches the task
                             # manager and the dashboard's backing store, so
                             # what surfaces here can be a driver or transport
-                            # error whose text carries a DSN or a token. This
-                            # tree has no scrubber available to it -- the
-                            # string-scrubbing helper lives in an opt-in extra
-                            # of the slim core -- so the sink must not render
-                            # the message at all rather than render it and
-                            # hope. The type plus the frame list is the whole
-                            # diagnostic an operator needs to find the task.
+                            # error whose text carries a DSN or a token.
+                            #
+                            # A mask IS available to this tree --
+                            # ``kailash.utils.url_credentials.mask_error_text``
+                            # is plain core, already on this import path -- and
+                            # it is deliberately NOT used. Measured, it masks
+                            # URL userinfo and NOTHING else: a postgres:// or
+                            # redis:// DSN is masked, while an OpenAI key, a
+                            # bare JWT, a Slack token, a 32-char Mistral key
+                            # and a Basic-auth header all pass through intact.
+                            # So masking here would be a porous filter over
+                            # unbounded input, whereas the type plus the frame
+                            # list cannot carry a payload at all and is the
+                            # whole diagnostic an operator needs to find the
+                            # task. Stronger by construction, not by coverage.
                             self.logger.warning(
                                 "Previous metrics broadcast task ended with an "
                                 "error; starting a replacement: %s at %s",
