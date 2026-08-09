@@ -74,6 +74,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import re
 import textwrap
 from pathlib import Path
 
@@ -439,6 +440,174 @@ def _traceback_sites(
     return bare, wrapped
 
 
+#: One printf conversion specifier. Groups the mapping key and the conversion
+#: type, so ``%(handler)r`` and ``%-10.5r`` both resolve, and ``%%`` — a literal
+#: percent, NOT a conversion — can be told apart from a real one.
+_PRINTF_CONVERSION = re.compile(
+    r"%(?:\((?P<key>[^)]*)\))?"
+    r"[#0\- +]*(?:\*|\d+)?(?:\.(?:\*|\d+))?[hlL]?"
+    r"(?P<type>[diouxXeEfFgGcrsa%])"
+)
+
+
+def _repr_conversion_slots(fmt: str) -> tuple[list[int], set[str]]:
+    """``(positional indices, mapping keys)`` of the ``%r`` conversions in *fmt*.
+
+    ``%r`` renders its argument through ``repr()`` with no ``repr`` token and no
+    ``!r`` conversion anywhere in the tree, so it is invisible to a scan that
+    looks for either. It is also the form the executed proof used, which is the
+    argument for parsing the format string rather than pattern-matching the
+    call.
+
+    Only the conversions BEFORE a given ``%r`` advance the positional index, and
+    ``%%`` advances nothing, so the index returned is the true argument slot.
+    """
+    positional: list[int] = []
+    keys: set[str] = set()
+    slot = 0
+    for match in _PRINTF_CONVERSION.finditer(fmt):
+        kind = match.group("type")
+        if kind == "%":  # a literal percent consumes no argument
+            continue
+        key = match.group("key")
+        if key is not None:
+            if kind == "r":
+                keys.add(key)
+            continue  # mapping form: no positional slot to advance
+        if kind == "r":
+            positional.append(slot)
+        slot += 1
+    return positional, keys
+
+
+def _is_scrub_call(node: ast.expr) -> bool:
+    """``scrub_local_error(...)`` / ``scrub_remote_error(...)`` / the aggressive one.
+
+    Used ONLY by the ``%r`` pass, where it marks a value that is already
+    scrubbed TEXT rather than a live object. ``%r`` of a ``str`` merely adds
+    quotes; ``%r`` of an object renders its fields. That difference is why this
+    exemption does not contradict shape 8's refusal to excuse
+    ``scrub_remote_error(repr(handler))`` — there the object's fields are
+    rendered FIRST and the scrubber only filters the resulting text.
+    """
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _ALL_HELPERS
+    )
+
+
+def _invoked_names(scope: ast.AST) -> set[str]:
+    """Names INVOKED as callables anywhere in *scope*.
+
+    Structural evidence that a name holds a callable, which is the object class
+    the ``%r`` threat model is actually about — not a keyword list of plausible
+    names, which would be unsound in both directions.
+    """
+    return {
+        sub.func.id
+        for sub in ast.walk(scope)
+        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+    }
+
+
+def _percent_r_sinks(
+    node: ast.Call, exception_names: set[str], callable_names: set[str]
+) -> set[tuple[int, int]]:
+    """Shape 8c — ``logger.error("Listener %r ...", listener)``.
+
+    The third rendering form, and the one no token-level scan can see: there is
+    no ``repr(`` call and no ``!r`` conversion in the tree at all. The repr
+    happens inside ``logging``'s own interpolation, driven by two nodes that are
+    syntactically unrelated — a string constant and a positional argument.
+
+    Resolves the ``%r`` to its actual argument slot so the FLAG LANDS ON THE
+    LEAKING VALUE rather than on the call, which is what makes the report
+    actionable. Where the slot cannot be resolved — ``*args`` splat, or a format
+    string built at runtime — the call itself is flagged instead: unresolvable
+    is not the same as safe, and this pass exists because the unresolvable case
+    used to resolve to silence.
+
+    NARROWED TO CALLABLES, AND THE MEASUREMENT THAT FORCED IT
+    ---------------------------------------------------------
+    Unlike shape 8's explicit ``repr()``, this fires only when the argument is a
+    name INVOKED as a callable somewhere in the same scope. Un-narrowed it
+    flagged 28 sites in this package where 11 are real — a 61% false-positive
+    rate, every one of them ``%r`` used for its ordinary purpose of quoting a
+    STRING (``line[:200]``, ``query[:80]``, a config ``name``, a model id).
+
+    That rate is not a cosmetic problem. This scanner backs a gate that must sit
+    at zero bare sinks, so 17 spurious reds buy either 17 pointless edits or a
+    hand-maintained exclusion list — and an exclusion list is how a detector
+    ends up switched off, which is the same outcome as the blindness it
+    replaced.
+
+    The narrowing is not a convenience: ``repr`` only exposes what ``str`` would
+    not when the value is an OBJECT whose ``__repr__`` renders its fields. On a
+    string ``%r`` merely adds quotes, so there is no shape-8 delta to claim, and
+    plain ``%s`` interpolation is deliberately out of scope anyway.
+    ``journey/manager.py`` states the threat as a CALLABLE one exactly —
+    ``functools.partial(post, url="https://u:pw@host")`` renders its bound
+    kwargs — so keying on callable evidence tracks the actual class rather than
+    approximating it.
+
+    Held to a LOOSER bar than shape 8's ``repr()`` deliberately: an explicit
+    ``repr()`` is a deliberate act and rare (2 in this package), while ``%r`` is
+    idiomatic string-quoting and common (17). Different base rates, different
+    thresholds — stated here rather than applied silently.
+    """
+    flagged: set[tuple[int, int]] = set()
+    if not node.args:
+        return flagged
+    fmt = node.args[0]
+    if not (isinstance(fmt, ast.Constant) and isinstance(fmt.value, str)):
+        return flagged  # runtime-built format: no conversions to resolve
+    positional, keys = _repr_conversion_slots(fmt.value)
+    if not positional and not keys:
+        return flagged
+    rest = list(node.args[1:])
+
+    # ``logger.error(fmt, *args)`` — the slots are not statically knowable.
+    if any(isinstance(arg, ast.Starred) for arg in rest):
+        if callable_names:
+            flagged.add(_key(node))
+        return flagged
+
+    # ``logger.error(fmt, (a, b))`` passes ONE tuple holding every slot.
+    if len(rest) == 1 and isinstance(rest[0], ast.Tuple):
+        rest = list(rest[0].elts)
+
+    for index in positional:
+        if index < len(rest):
+            target = rest[index]
+            root = _root_name(target)
+            if (
+                root in callable_names
+                and root not in exception_names
+                and not _is_scrub_call(target)
+            ):
+                flagged.add(_key(target))
+        elif callable_names:
+            flagged.add(_key(node))  # arity mismatch: flag rather than assume
+
+    if keys:
+        mapping = rest[0] if len(rest) == 1 else None
+        if isinstance(mapping, ast.Dict):
+            for key_node, value in zip(mapping.keys, mapping.values, strict=False):
+                if (
+                    isinstance(key_node, ast.Constant)
+                    and key_node.value in keys
+                    and value is not None
+                    and _root_name(value) in callable_names
+                    and _root_name(value) not in exception_names
+                    and not _is_scrub_call(value)
+                ):
+                    flagged.add(_key(value))
+        elif callable_names:
+            flagged.add(_key(node))  # mapping not a literal: flag the call
+    return flagged
+
+
 def _repr_sinks(tree: ast.AST, exception_names: set[str]) -> set[tuple[int, int]]:
     """Shape 8 — ``repr()`` of a NON-exception object reaching a log record.
 
@@ -489,6 +658,25 @@ def _repr_sinks(tree: ast.AST, exception_names: set[str]) -> set[tuple[int, int]
     scrubbing an exception IS the accepted remediation for it.
     """
     flagged: set[tuple[int, int]] = set()
+    # Scope by scope, so the ``%r`` pass can ask whether THIS function invokes
+    # the name it is about to render. A nested function is visited under its own
+    # scope AND under each enclosing one; the union means "flagged if any
+    # enclosing scope carries the evidence", which is the permissive direction.
+    scopes: list[ast.AST] = [tree]
+    scopes += [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    for scope in scopes:
+        callable_names = _invoked_names(scope)
+        for node in ast.walk(scope):
+            if not (
+                isinstance(node, ast.Call) and _SinkScan._is_logging_call(node.func)
+            ):
+                continue
+            flagged |= _percent_r_sinks(node, exception_names, callable_names)
+
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and _SinkScan._is_logging_call(node.func)):
             continue
@@ -904,6 +1092,61 @@ class TestTheScannerSeesEachShape:
                 "def notify(listener):\n"
                 '    logger.warning("failed: %s", scrub_remote_error(repr(listener)))\n',
             ),
+            # Shape 8c — %r in the format string with the value as a separate
+            # positional argument. No `repr(` token, no !r conversion; the repr
+            # happens inside logging's own interpolation. This is the form the
+            # executed proof used (event_hooks.py:120). Each fixture invokes the
+            # name, which is the callable evidence _percent_r_sinks requires.
+            (
+                "percent-r-the-proven-shape",
+                "def emit(self, event):\n"
+                "    for listener in self._listeners:\n"
+                "        try:\n"
+                "            listener(event)\n"
+                "        except Exception as exc:\n"
+                "            logger.error(\n"
+                '                "Listener %r raised during event %s: %s",\n'
+                "                listener,\n"
+                "                event.event_type,\n"
+                "                scrub_remote_error(exc),\n"
+                "            )\n",
+            ),
+            (
+                "percent-r-in-a-later-slot",
+                "def emit(tag, handler):\n"
+                "    handler()\n"
+                '    logger.error("during %s handler %r failed", tag, handler)\n',
+            ),
+            (
+                "percent-r-after-a-literal-percent",
+                "def emit(handler):\n"
+                "    handler()\n"
+                '    logger.error("100%% done, handler %r", handler)\n',
+            ),
+            (
+                "percent-r-mapping-form",
+                "def emit(handler):\n"
+                "    handler()\n"
+                '    logger.error("handler %(h)r", {"h": handler})\n',
+            ),
+            (
+                "percent-r-with-width-and-precision",
+                "def emit(handler):\n"
+                "    handler()\n"
+                '    logger.error("handler %-10.5r", handler)\n',
+            ),
+            (
+                "percent-r-args-splat-unresolvable",
+                "def emit(handler, args):\n"
+                "    handler()\n"
+                '    logger.error("handler %r", *args)\n',
+            ),
+            (
+                "percent-r-single-tuple-argument",
+                "def emit(tag, handler):\n"
+                "    handler()\n"
+                '    logger.error("%s %r", (tag, handler))\n',
+            ),
         ],
     )
     def test_each_non_handler_shape_is_flagged(self, label: str, src: str) -> None:
@@ -1013,6 +1256,48 @@ class TestTheScannerSeesEachShape:
                 "scrubbed-repr-of-an-exception",
                 "try:\n    pass\nexcept Exception as exc:\n"
                 '    logger.error("f: %s", scrub_remote_error(repr(exc)))\n',
+            ),
+            # Shape 8c's negative controls. The first is the whole reason for
+            # the callable narrowing: %r quoting a STRING is idiomatic and
+            # common, and flagging it produced 17 false positives against 11
+            # real sites in this package. `line` is never invoked, so there is
+            # no evidence it is an object whose __repr__ renders fields.
+            (
+                "percent-r-quoting-a-string",
+                "def parse(line):\n"
+                "    try:\n"
+                "        return json.loads(line)\n"
+                "    except ValueError:\n"
+                '        logger.warning("failed to parse line: %r", line[:200])\n',
+            ),
+            (
+                "percent-r-quoting-a-config-name",
+                "def load(name, server_data):\n"
+                "    if not isinstance(server_data, dict):\n"
+                '        logger.warning("MCP server %r: invalid config", name)\n',
+            ),
+            (
+                "percent-s-is-out-of-scope",
+                'def emit(h):\n    h()\n    logger.error("%s", h)\n',
+            ),
+            (
+                "literal-percent-only",
+                'def emit(h, pct):\n    h()\n    logger.error("100%% done: %s", pct)\n',
+            ),
+            (
+                "percent-r-outside-any-log",
+                'def emit(handler):\n    handler()\n    return "handler %r" % handler\n',
+            ),
+            (
+                "percent-r-of-a-scrubbed-exception",
+                "try:\n    pass\nexcept Exception as exc:\n"
+                '    logger.error("boom %r", scrub_remote_error(exc))\n',
+            ),
+            (
+                "runtime-built-format-string",
+                "def emit(fmt, handler):\n"
+                "    handler()\n"
+                "    logger.error(fmt, handler)\n",
             ),
         ],
     )
