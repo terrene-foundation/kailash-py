@@ -11873,7 +11873,14 @@ class DataFlow(DataFlowEventMixin):
         # same set of legitimate SQLite forms. This is an EXPLICIT allowlist
         # entry, not a fallback — every other unrecognised scheme still falls
         # through to the fail-closed paths below.
-        if url.startswith("file:"):
+        # Case-INSENSITIVE: URI schemes are case-insensitive per RFC 3986 §3.1,
+        # the scheme table below is matched case-insensitively (``SQLITE:///x``
+        # validates), and ``ConnectionParser.detect_database_type`` lowercases
+        # before lookup — so a case-SENSITIVE test here would accept ``file:``
+        # while rejecting ``FILE:`` that the parser had just classified as
+        # SQLite, which is the exact surface DIVERGENCE the parity note above
+        # exists to prevent.
+        if url.lower().startswith("file:"):
             warn_sqlite_async_limitation(url)
             return True
 
