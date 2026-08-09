@@ -20,7 +20,8 @@ while its own proposition is false:
   ``packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py``.
   Its Tier 1 re-derives, per module, the set of ``except X`` handlers whose
   bound exception name reaches a string context and asserts none is bare
-  (pinned at 51 files / 180 sites so the parametrisation cannot silently
+  (pinned to an exact file/site pair — see ``EXPECTED_FILES`` /
+  ``EXPECTED_SITES`` in that file — so the parametrisation cannot silently
   shrink to zero and still report green); Tier 2 asserts the imported
   ``scrub_local_error`` IS the object in ``kaizen.utils.credential_scrub``, so
   no module drifts onto a local copy; Tier 3 checks per-module behaviour;
@@ -110,11 +111,14 @@ _REPO_ROOT: Path = Path(__file__).resolve().parents[4]
 #: reason to pass — every anchor assertion below applies to it unconditionally.
 _KAIZEN_SRC: Path = _REPO_ROOT / "packages" / "kailash-kaizen" / "src" / "kaizen"
 
-#: The sibling package that consumes it. 51 of its modules import
-#: ``scrub_local_error`` and one imports ``scrub_credentials`` directly, so a
-#: call-site invariant that stopped at the package boundary would miss the
-#: overwhelming majority of the call sites it exists to guard. READ-ONLY: this
-#: suite parses that tree, it never writes to it.
+#: The sibling package that consumes it. The overwhelming majority of guarded
+#: call sites live THERE rather than here — most of its modules import
+#: ``scrub_local_error``, and one imports ``scrub_credentials`` directly — so a
+#: call-site invariant that stopped at the package boundary would miss almost
+#: everything it exists to guard. The exact module/site counts are pinned in
+#: ``kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py``
+#: and are deliberately NOT restated here: a copy of that pair in this file
+#: went stale twice. READ-ONLY: this suite parses that tree, never writes it.
 _AGENTS_SRC: Path = _REPO_ROOT / "packages" / "kaizen-agents" / "src" / "kaizen_agents"
 
 #: Directory names that are never production source.
@@ -346,6 +350,26 @@ def test_no_production_call_site_weakens_the_scrub() -> None:
         "the invariant holds."
     )
 
+    # THE SAME RECEIPT FOR THE SECOND TREE. It was missing: `agents_sites` was
+    # bound and never read, so only the kaizen walk had to prove it reached
+    # anything — while `agents_findings` was still folded into the verdict
+    # below. A broken walk over the agents tree therefore contributed zero
+    # findings and the test reported green, which is precisely the failure the
+    # comment above says this receipt exists to prevent, on the tree that
+    # holds the overwhelming majority of the call sites.
+    #
+    # Conditional on the directory existing, matching the guard the sibling
+    # test uses: kaizen-agents is a separate distribution and may legitimately
+    # be absent, which is different from present-but-unreached.
+    if _AGENTS_SRC.is_dir():
+        assert agents_sites, (
+            f"{_AXIS} — as an INSTRUMENT failure, not a finding: "
+            f"{_AGENTS_SRC} EXISTS but the walk found ZERO calls to "
+            f"{sorted(_GUARDED_CALLEES)} in it. That tree holds most of the "
+            "guarded sinks, so an empty enumeration means the walk broke — "
+            "NOT that its call sites are clean."
+        )
+
     findings = kaizen_findings + agents_findings
     assert not findings, (
         _FAILURE_PREAMBLE + "\n".join(f.render() for f in findings) + _FAILURE_EPILOGUE
@@ -378,16 +402,36 @@ def test_walk_reaches_the_known_scrub_consumers() -> None:
 
     if _AGENTS_SRC.is_dir():
         _, agents_sites = _scan(_AGENTS_SRC)
-        # 51 modules import `scrub_local_error` and one imports
-        # `scrub_credentials`; the floor is deliberately far below that count
-        # so ordinary churn does not red the suite, while a walk that stopped
+        # DELIBERATELY NO COUNT IN THIS MESSAGE. It used to name a figure
+        # ("51 files / 180 sinks") copied from the pinning suite, and both
+        # halves had drifted: the pin was 57 / 191 by the time anyone read it
+        # again. Two numbers in two files that must agree is what produced the
+        # drift, so re-pinning to the current pair would only reset the clock.
+        #
+        # A cross-module import of the pinned constants would be the other way
+        # to get ONE source of truth, and it is rejected here for a concrete
+        # reason rather than taste: the two packages' `tests/conftest.py`
+        # collide when collected in a single pytest invocation
+        # (`ImportPathMismatchError: 'tests.conftest'`), so the import would
+        # resolve in some runs and not others — an instrument that fails for a
+        # reason unrelated to what it measures. It would also make this file
+        # depend on the sibling suite exporting those names.
+        #
+        # So the message NAMES the authoritative file and lets the reader look.
+        # That is strictly more useful anyway: someone hitting this assertion
+        # needs to know where the real count lives, and a pointer stays true.
+        #
+        # The floor is deliberately far below any plausible real count, so
+        # ordinary churn does not red the suite while a walk that stopped
         # reaching the tree still does.
         assert len(agents_sites) >= 20, (
             f"{_AXIS} — INSTRUMENT failure: kaizen-agents is present but the "
             f"walk found only {len(agents_sites)} guarded call sites there. "
-            "test_local_error_sinks_are_scrubbed.py pins that tree at 51 "
-            "files / 180 scrubbed sinks, so a count this low is an "
-            "enumeration failure, not a real count."
+            "The authoritative enumeration of that tree is "
+            "`kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py` "
+            "(`EXPECTED_FILES` / `EXPECTED_SITES`) — read it there rather "
+            "than trusting a number quoted here. A count this far below it is "
+            "an enumeration failure, not a real count."
         )
 
 

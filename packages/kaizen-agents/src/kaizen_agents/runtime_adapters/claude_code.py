@@ -395,14 +395,68 @@ class ClaudeCodeAdapter(BaseRuntimeAdapter):
             # Wait for completion
             await process.wait()
 
-        except asyncio.CancelledError:
-            if self._current_process:
-                self._current_process.kill()
-            raise
-
         finally:
+            # REAP ON EVERY EXIT PATH, not just the one that had a handler.
+            #
+            # This was `except asyncio.CancelledError: ...kill(); raise`, which
+            # was wrong twice over. It killed WITHOUT reaping — `kill()` only
+            # delivers SIGKILL, and the `finally` below then dropped the only
+            # handle that could ever collect the exit status, so every
+            # cancelled stream left a zombie. And it caught the wrong exception
+            # for the most common case: a consumer that `break`s out of
+            # `async for ... in stream()` closes the generator with
+            # GeneratorExit, NOT CancelledError, so that path fell straight
+            # through to the `finally` having neither killed nor reaped —
+            # leaving the CLI subprocess RUNNING with no reference held.
+            #
+            # Doing it in `finally` is what makes the cover total: normal
+            # completion (already reaped by the `await process.wait()` above,
+            # so this is a no-op), cancellation, an early `break`, and any
+            # other exception out of the loop body all land here.
+            await self._kill_and_reap_current_process()
             self._current_session_id = None
             self._current_process = None
+
+    async def _kill_and_reap_current_process(self) -> None:
+        """SIGKILL the tracked child AND collect its exit status.
+
+        `Process.kill()` only DELIVERS the signal. Until something waits on
+        the pid, the kernel keeps the exit status and the process-table entry
+        with it, so a kill without a wait leaves a zombie. Callers here then
+        drop `_current_process`, which is the only handle that could ever have
+        reaped it — one leaked pid per cancelled or abandoned stream, for the
+        lifetime of the host process.
+
+        This mirrors the timeout handler in :meth:`_run_claude_code`, which
+        already gets the pairing right (``process.kill()`` then
+        ``await process.wait()``). That in-file contrast is what identified
+        this defect.
+
+        A no-op when there is no child, or when the child has already been
+        reaped — so calling it on the normal completion path costs nothing.
+        """
+        process = self._current_process
+        if process is None or process.returncode is not None:
+            return
+
+        process.kill()
+        try:
+            await process.wait()
+        except asyncio.CancelledError:
+            # The reap ITSELF was cancelled — this method is called while
+            # unwinding, so a second cancellation can land inside the await.
+            # The exit status is now genuinely uncollected, which is the leak
+            # this method exists to prevent, so it is reported rather than
+            # swallowed. Deliberately NOT re-raised: the caller is already
+            # propagating its own CancelledError (or GeneratorExit) and
+            # replacing that with this one would lose the original unwind
+            # reason. Cancellation still reaches the caller either way.
+            logger.warning(
+                "Claude Code child pid %s was killed but its exit status could "
+                "not be collected: the reap was itself cancelled. The process "
+                "may remain as a zombie until this interpreter exits.",
+                process.pid,
+            )
 
     async def interrupt(
         self,
