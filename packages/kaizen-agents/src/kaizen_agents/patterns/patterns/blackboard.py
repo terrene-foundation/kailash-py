@@ -271,6 +271,18 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
+                    # The `error` key was scrubbed and the `traceback` key
+                    # beside it was not -- so the exception this dict is
+                    # careful not to render on one line was rendered IN FULL,
+                    # verbatim, on the next. The traceback's final line repeats
+                    # `str(e)` exactly, which is what the scrub above removed.
+                    #
+                    # Scrubbed rather than dropped: unlike the `exc_info=True`
+                    # log sinks 689f9ebd8 fixed by dropping, this traceback is
+                    # a string built here, so it can go through the same
+                    # scrubber and keep its frame trail. `specialist.run` is
+                    # arbitrary caller-supplied agent code holding its own
+                    # credentials, so REMOTE is the correct preset.
                     "error": scrub_remote_error(e),
                     "agent_id": (
                         specialist.agent_id
@@ -278,7 +290,13 @@ class BlackboardPipeline(Pipeline):
                         else "unknown"
                     ),
                     "status": "failed",
-                    "traceback": traceback.format_exc(),
+                    # From the exception object, not `format_exc()`'s ambient
+                    # `sys.exc_info()` -- see the note in
+                    # `parallel._execute_parallel_async`, where relying on
+                    # ambient state produced a traceback of no exception at all.
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                 }
 
     def _execute_controller(
@@ -317,9 +335,17 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
+                    # Sibling of the specialist guard above, and the more
+                    # exposed of the two: `run` copies this dict's `error` onto
+                    # the blackboard it returns, so the controller's failure
+                    # travels further than the specialist's. The `traceback`
+                    # key was raw for the same reason it was raw there -- being
+                    # next to a scrubbed key is what made the file look swept.
                     "error": scrub_remote_error(e),
                     "status": "controller_failed",
-                    "traceback": traceback.format_exc(),
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                     "is_complete": True,  # Stop iterating to avoid infinite loop
                     "next_needed_capability": None,
                 }

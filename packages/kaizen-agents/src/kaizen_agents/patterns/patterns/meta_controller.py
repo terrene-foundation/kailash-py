@@ -34,6 +34,7 @@ from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -240,10 +241,33 @@ class MetaControllerPipeline(Pipeline):
             import traceback
 
             return {
-                "error": str(error),
+                # The only one of the four patterns where BOTH keys leaked,
+                # and the reason is structural rather than an oversight: the
+                # exception arrives as a PARAMETER, so this function body
+                # contains no `except` clause at all. Every scanner that found
+                # the sibling patterns' sinks keys on an exception name bound
+                # by an `ast.ExceptHandler`, and there is none here to key on
+                # -- so `str(error)` was invisible to the tooling AND to the
+                # reviewer's eye, which had been trained by three files where
+                # the `error` key was already correct.
+                #
+                # `run` returns this dict directly to the caller, and
+                # `selected_agent.run` is the provider dispatch, so REMOTE is
+                # the correct preset (opaque-token redaction ON).
+                "error": scrub_remote_error(error),
                 "agent_id": agent.agent_id if hasattr(agent, "agent_id") else "unknown",
                 "status": "failed",
-                "traceback": traceback.format_exc(),
+                # Derived from the `error` PARAMETER rather than
+                # `format_exc()`. Ambient `sys.exc_info()` happens to be set
+                # today because the sole caller invokes this from inside its
+                # `except` block -- but that is the caller's property, not this
+                # function's, and the signature advertises no such requirement.
+                # A second caller outside a handler would silently get
+                # "NoneType: None", which is precisely what
+                # `parallel._execute_parallel_async` was already returning.
+                "traceback": scrub_remote_error(
+                    "".join(traceback.format_exception(error))
+                ),
             }
 
     def run(self, **inputs) -> dict[str, Any]:
