@@ -123,6 +123,89 @@ class TestSinkSideTypeNameIsSanitized:
         assert not offenders, f"raw type-name sinks reappeared: {offenders}"
 
 
+class TestEverySanitizationSiteIsPinned:
+    """MED: only the CLASS-NAME site was pinned; the other two were not.
+
+    Measured with a mutation matrix: de-sanitizing `frame.name` or
+    `_relative_frame_path(frame.filename)` left the whole suite GREEN (33 passed
+    both times) while the reachability check confirmed the mutation was present
+    in the file. Per `instrument-discipline.md` MUST-2(b) that is a proven pin
+    gap, not an inert mutation -- the record demonstrably changed:
+
+        de-sanitized frame name -> '...:evil@FORGED <- x'
+        de-sanitized frame path -> '...tpl/evil@FORGED <- x.html...'
+
+    Both forge ` <- ` and `@` into the record. The code was correct; the GUARD
+    was absent, in the one module where five consecutive rounds have each broken
+    the previous round's fix.
+    """
+
+    HOSTILE = "evil@FORGED <- x"
+
+    def test_a_hostile_frame_NAME_cannot_forge_the_record(self):
+        import types
+
+        def _raiser():
+            raise ValueError("boom")
+
+        # co_name is attacker-reachable through exec/compile with a
+        # data-derived identifier -- the vector the module docstring names.
+        hostile_fn = types.FunctionType(
+            _raiser.__code__.replace(co_name=self.HOSTILE), {}, self.HOSTILE
+        )
+        with pytest.raises(ValueError) as caught:
+            hostile_fn()
+        rendered = safe_exception_frames(caught.value, limit=1)
+
+        assert " <- " not in rendered
+        assert rendered.count("@") == 1  # exactly the real type@frames anchor
+
+    def test_a_hostile_frame_PATH_cannot_forge_the_record(self):
+        # Jinja2 compiles a template with the TEMPLATE NAME as the filename, so
+        # a caller-supplied template name lands in frame.filename verbatim.
+        namespace: dict = {}
+        exec(
+            compile(
+                "def g():\n    raise ValueError('boom')\n",
+                f"tpl/{self.HOSTILE}.html",
+                "exec",
+            ),
+            namespace,
+        )
+        with pytest.raises(ValueError) as caught:
+            namespace["g"]()
+        rendered = safe_exception_frames(caught.value, limit=1)
+
+        assert " <- " not in rendered
+        assert rendered.count("@") == 1
+
+
+class TestChainCapArithmeticIsTotal:
+    """LOW: the zero-cap guard fixed `kept` and left `dropped` unguarded.
+
+    `dropped = max(0, len(links) - _MAX_CHAIN_LINKS)` over-counts for a NEGATIVE
+    cap: a 12-link chain announced 13 dropped. Same arithmetic class as N3 and
+    the zero-cap slice, two lines apart -- the third instance of one bug in this
+    function, which is the reason to pin it rather than call it unreachable.
+    """
+
+    def test_a_negative_cap_does_not_over_count_dropped(self, monkeypatch):
+        monkeypatch.setattr(sl, "_MAX_CHAIN_LINKS", -1)
+
+        exc = ValueError("root")
+        for index in range(11):
+            try:
+                raise RuntimeError(f"wrapper-{index}") from exc
+            except Exception as wrapped:
+                exc = wrapped
+
+        rendered = safe_exception_frames(exc)
+
+        # 12 links exist; a negative cap keeps none and may drop at most 12.
+        assert "<+13" not in rendered
+        assert "<+12 outer links dropped" in rendered
+
+
 class TestHelperTotality:
     """F3: the walk reads descriptors a subclass can shadow."""
 

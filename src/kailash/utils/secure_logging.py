@@ -489,7 +489,12 @@ def _safe_exception_frames_impl(
         else:
             walker = walker.__context__
 
-    dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
+    # ``max(0, ...)`` on the CAP, not just on the result: a NEGATIVE cap
+    # made this over-count (a 12-link chain announced 13 dropped). Third
+    # instance of one arithmetic bug in this function -- N3's ``limit``, the
+    # zero-cap ``kept`` slice, and now ``dropped`` -- which is why it is
+    # pinned rather than dismissed as unreachable.
+    dropped = max(0, len(links) - max(0, _MAX_CHAIN_LINKS))
     # ``<= 0`` means NO links, not "all links" -- the same arithmetic the frame
     # slice below gets wrong when written as a truthiness test. ``links[-0:]``
     # is ``links[0:]``, i.e. the WHOLE chain, so a zero cap would render every
