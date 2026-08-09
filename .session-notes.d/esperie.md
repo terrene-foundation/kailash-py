@@ -167,6 +167,27 @@ the conversation, not a surprise.
 
 ## Residuals pending a named human's acceptance (`completion-criterion.md` MUST-6)
 
+- **Q1 — shape 8 misses MESSAGE-BEARING attribute chains inside `extra={...}`.** Confirmed
+  caught: `{"error": e}` (the reported gap), `str(e)`, `repr(e)`, `f"{e}"`, `str(e.args)`.
+  Confirmed MISSED: `e.args`, `e.args[0]`, `e.strerror`, `e.response.text` — the last being a
+  whole HTTP body. **Reachability in the swept tree is ZERO** (all 52 attribute references in
+  `kaizen_agents` are four first-party domain fields — `exc.model`/`error`/`helper`/
+  `correlation_id`; `ReasoningDegradedError.error` was traced and is built from candidate counts
+  and model names). Unswept trees: kaizen 4, nexus 2, `src/kailash` 6. **No stated number is
+  wrong.**
+
+  **Fix shape and the design tension, so the next session does not rediscover both:** the
+  reconciling predicate is `_is_our_value` — attribute chains MINUS `_SAFE_EXC_ATTRS` — which is
+  what the first cut used and what reddened nine files on `exc.helper`/`exc.model`. By the
+  scanner's OWN stated philosophy that redness is DESIGNED (`_SAFE_EXC_ATTRS` is "an ALLOWLIST,
+  deliberately… an attribute nobody anticipated must default to FLAGGED"), so the principled
+  close is to widen AND adjudicate those nine by adding the verified-safe fields to the
+  allowlist. **The catch, and why I did not do it at the end of a long session:**
+  `_SAFE_EXC_ATTRS` is GLOBAL, so allowlisting `error` would make `e.error` safe on EVERY
+  exception type, which is exactly how a real leak would hide. That wants a per-type allowlist
+  or a narrower key, and that is a design decision, not a patch. **Revisit trigger:** any new
+  `extra={}` sink in `kaizen_agents`. **Calendar backstop: 2026-09-08.**
+
 - **M9 — `stop()` reports STOPPED over a LIVE MCP server thread.** MEASURED: join-timed-out →
   `status=STOPPED, thread_alive=True`; no-stop-entrypoint → same. `cleaned` gates STOPPED on
   `_cleanup`, which covers `_running_task` + the event queue and **NOT the server thread**, so
