@@ -366,3 +366,54 @@ mutation matrix: 18/18 red
 ```
 
 Merge gate still pending the two r11 agent verdicts.
+
+### Round 11 SECURITY lens — NOT CLEAN, 1 CRITICAL. All seven probes CONFIRMED.
+
+| finding | measured |
+| ------- | -------- |
+| **C1 CRITICAL** str subclass with lying `__eq__`/`__hash__` | `LEN 5043`, newline ✓, `" <- "` ✓, `@` ✓ — **whole chokepoint bypassed** |
+| C1 reachability via `type.__name__` | `ROUNDTRIP-SUBCLASS: True` — the lens expected possibly-unreachable; it IS reachable |
+| **H1 HIGH** lying `__suppress_context__` | `LEAKED: True` — `raise X from None` suppression defeated |
+| **H2 HIGH** sink sweep cannot fail for the right reason | rewrite found **2 more live sinks** (`scheduler.py:1378/1409`) |
+| M1 allowlist scope-creep | class named `<module>` rendered `<module>` |
+| M3 Windows paths | `svc?db?connect.py` |
+| L2 lying `__len__` | real diagnostic suppressed to `<empty>` |
+
+All closed in `160cfc8de`. The root fix is **normalize to a plain `str` via `str.__str__` BEFORE any
+predicate runs** — `str(value)` alone is insufficient because `__str__` is overridable too, so the
+result is re-normalized on TYPE IDENTITY. H1 closed by reading the three walk attributes through
+`BaseException`'s own descriptors, which defeats a shadow that RAISES and one that LIES in one move.
+
+### TWO defects I introduced while fixing these — both caught by driving, not review
+
+1. **The M2 telemetry called a module-level `logger` that did not exist** — a `NameError` inside the
+   very handler whose contract is that it never raises. Found by driving the wrapper pre-commit.
+2. **The M1 gating silently DISARMED my own round-11 marker-forgery pin.** Gating the allowlist
+   behind `allow_pseudo` moved that pin onto the DEFAULT path where the branch never runs, so it
+   passed under a widened allowlist. A fix that disarms its own pin is exactly the class this file
+   exists to catch. Re-armed; the mutation now reds 6.
+
+### The methodological finding — this is the one worth codifying
+
+**My round-11 matrix reported 18/18 red and I read it as strong convergence. It was not.** A mutation
+matrix perturbs the IMPLEMENTATION while holding the INPUT fixed, so it is structurally blind to a
+defect whose vector is the TYPE of the input. The CRITICAL was found by READING.
+
+Mutation testing and adversarial reading are **not substitutes**: the matrix proves pins
+discriminate; reading finds the axis the matrix never varies. I recommended a mutation-first round
+on the grounds that reading had been less productive — that recommendation was wrong, and the
+evidence is that the worst finding of eleven rounds came from the instrument I deprioritized.
+
+Also recorded: my matrix classified a syntactically-broken mutation's **NO OUTPUT** as GREEN. Zero
+evidence is not a pass — the fourth instance of that trap this session, this time inside my own
+harness.
+
+### Verified
+
+```
+59 pins · 1693 root regression (12 skipped) · 379 scanner · 821 runtime/channels unit
+fail-first at 00a74b5cc: 11/11 round-11 pins red
+mutation matrix: 18 behaviours, all red (after re-arming the pin the M1 fix disarmed)
+```
+
+`r11-mutation` still in flight.
