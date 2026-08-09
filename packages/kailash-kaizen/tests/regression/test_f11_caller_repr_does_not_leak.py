@@ -569,6 +569,22 @@ def test_no_logger_format_string_uses_repr_conversion():
     ``"Listener %r ..."`` was the HIGH-1 site's shape: no ``repr()`` call
     appears in the source, the conversion happens inside ``logging``. An
     ``ast``-level ``repr``-call check alone would miss it entirely.
+
+    SCOPE IS DELIBERATE, NOT AN OVERSIGHT -- two limits, both chosen:
+
+    1. Only ``logger.*`` ARGUMENTS are inspected, not every ``!r`` in the file.
+       Widening it would red on ``subscribe``'s
+       ``f"event type {key!r}"`` in a ``ValueError``, which is CORRECT code:
+       ``key`` is a ``str``, so ``!r`` adds quotes rather than rendering an
+       object, and it is a bus key rather than caller object state. A guard
+       that reds on correct code gets scoped down or deleted by the first
+       person it blocks, leaving neither the tight net nor the loose one.
+
+    2. Only the SYNTACTIC form is caught. ``x = repr(obj)`` followed by
+       ``logger.error(..., x)`` on a later line passes both guards, because
+       detecting it needs assignment/dataflow tracking rather than syntactic
+       matching. That is a categorically different analysis and lives in the
+       tree scanner, not here.
     """
     import ast
 

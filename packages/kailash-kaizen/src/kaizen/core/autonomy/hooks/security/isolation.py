@@ -16,7 +16,7 @@ import sys
 import time
 from typing import Any
 
-from kaizen.utils.credential_scrub import scrub_remote_error
+from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
 
 from ..manager import HookEvent, HookManager, HookPriority, safe_handler_name
 from ..protocol import HookHandler
@@ -125,7 +125,20 @@ class ResourceLimits:
                 "Resource limits cannot be applied."
             )
         except OSError as e:
-            logger.error(f"SECURITY: Failed to apply resource limits: {e}")
+            # ``scrub_local_error``, not ``scrub_remote_error``: this OSError
+            # comes from ``resource.setrlimit``, an in-process OS call, so the
+            # conservative preset is right -- it keeps the shape-only rules OFF
+            # and preserves the errno text and any path, which ARE the
+            # diagnostic here.
+            #
+            # The credential risk today is nil (setrlimit takes ints, not
+            # caller strings). It is scrubbed anyway because the raw-exception-
+            # in-an-f-string SHAPE is one edit away from being a leak: the
+            # moment this block covers a limit derived from a caller-supplied
+            # value, the sink is already wrong and nothing would flag it.
+            logger.error(
+                "SECURITY: Failed to apply resource limits: %s", scrub_local_error(e)
+            )
             raise
 
 
