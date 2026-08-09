@@ -393,6 +393,90 @@ chain with NO redaction processor — the `689f9ebd8` class one layer up. It gre
 producers and found none live, so it is latent config that re-opens the class the moment
 anyone adds an `exc_info` call. Worth an issue; untouched.
 
+### `w2-kaizen-repr` — F11 kaizen half CLOSED. It corrected my severity in BOTH directions.
+
+Commits `8a4820a26` + `90c5bda79` + `e035ffe17`. RED `18 failed, 4 passed` / 45 sentinel
+occurrences → GREEN `24 passed`; no-regression `1138 passed` then `555 passed`, **both runs
+completing without hitting `--maxfail=10`**, so those are real totals, not aborts.
+
+**WIDER than I briefed — the leak is NOT conditional.** I framed the `getattr(handler,
+"name", repr(handler))` fallback as firing only for objects lacking `.name`. Verified
+first-hand why that understates it: `HookHandler` is a bare `@runtime_checkable` **Protocol**
+whose only member is `handle` (`protocol.py:13-14`). So `isinstance(handler, HookHandler)` is
+a STRUCTURAL check — any caller object with a `handle` method is NOT wrapped in
+`FunctionHookAdapter`, keeps its own `__repr__`, and has no `.name`. That is the NORMAL way
+to supply a hook, so the fallback is unconditionally reachable at all seven sites.
+
+**And NOT log-only — it is a RETURN-VALUE leak.** Verified: `manager.py:277/284/298` feed
+`handler_name` into `_update_stats`, and `get_stats()` (`:340`) returns a dict **keyed by
+it**, verbatim, on the public API. `isolation.py:211` puts it into the returned
+`HookResult.error`. Same shape as `d6030aefe`'s `JourneyHookResult.error`.
+
+**MY SUB-CLAIM CORRECTED (narrower, in one direction).** I said a `functools.partial` is a
+payload-carrying shape that reaches these sites. It cannot reach six of the seven —
+`FunctionHookAdapter.__init__` does `func.__name__`, which raises `AttributeError` on a
+partial, so registration fails first. It DOES reach `rate_limiting.py:153`, because
+`_check_rate_limit` runs BEFORE `super().register()`. Net: wider overall, not narrower.
+
+**It refused the resolution loss I offered to accept.** `type(p).__name__` is the constant
+`"partial"` for EVERY partial — on a bus allowing 1000 listeners per key, that destroys the
+diagnostic the field exists for. `safe_handler_name` instead unwraps the partial chain
+(bounded at 8), prefers `__qualname__` **when it is a string**, else `type(x).__name__`,
+prefixing `partial(...)`. **Safety argument verified first-hand rather than accepted:**
+
+```
+instance inherits __qualname__ from class? -> False     (dataclass → class name, never a field)
+partial has __name__/__qualname__?         -> False/False
+unwrapped p.func.__qualname__              -> real_fn   (carries NO bound kwarg)
+```
+
+A `__qualname__` is a SOURCE-level identifier fixed at `def`/`class` time, not runtime state
+— so unlike `repr` it cannot pick up a bound credential, and it is the SAME trust level as
+the `handler.name` these sites already log unscrubbed. Adds no new trust; reuses an accepted one.
+
+**Rule-1 finding it fixed in its own file:** `isolation.py` imported **no credential scrubber
+at all** — un-swept for the exception-text half. Three caller-derived surfaces scrubbed
+(`:239` — which crosses a PROCESS boundary into both a parent log line and the returned
+`HookResult.error` — plus `:307`, `:440`). Deliberately NOT scrubbed: `:126`, whose errors
+come from `resource.setrlimit`, an OS surface with no caller data — scrubbing there costs
+diagnostics for no protection. That restraint is correct and is the `zero-tolerance` Rule 3
+over-correction trap.
+
+Helper placement: `safe_handler_name` in `hooks/manager.py`, with a deliberate private
+`_safe_listener_name` twin in `l3/event_hooks.py` (making an L3 governance bus depend on the
+autonomy hook manager for naming would be bad layering) — and a test running BOTH over the
+same five cases asserting identical output, so they cannot drift. True unification belongs in
+`kaizen/utils/`, which is another shard's partition; correctly not touched.
+
+### F14 — NEW, HIGH: hook process isolation NEVER RUNS, and degrades SILENTLY
+
+Found by `w2-kaizen-repr`, out of its scope, **verified first-hand by me**:
+
+```
+$ python -c "import multiprocessing as mp; print(mp.get_start_method())"   ->  spawn
+isolation.py:217   def _run_hook():                 <-- nested closure
+isolation.py:244   multiprocessing.Process(target=_run_hook)
+```
+
+Under `spawn` — the DEFAULT on macOS and on Python 3.14 Linux — a nested closure is
+unpicklable, so `execute_isolated` raises `AttributeError: Can't get local object`.
+`IsolatedHookManager._execute_hook` catches it and **silently degrades to non-isolated
+execution**, announcing it only as a log line. So SECURITY FIX #5's process isolation has
+never run on any macOS host. `zero-tolerance` Rule 3 (silent fallback) **plus** a real
+security-posture failure.
+
+**Same class as #2013** (`enable_auth` inert): a documented security control that installs
+nothing. **Correctly NOT fixed in-shard** — the remedy (module-level worker; handler AND
+context must become picklable across the spawn boundary) exceeds one shard budget, so
+`autonomous-execution` MUST-4's bound makes it a genuine follow-up, not a warm-context
+fix-now. Needs filing.
+
+### Wave 3 — LAUNCHED
+
+| agent          | shard                                              | worktree                       | status    |
+| -------------- | -------------------------------------------------- | ------------------------------ | --------- |
+| `w3-lifecycle` | MEDIUM-1 (start-after-failed-stop) + MEDIUM-2 (×2) | `.kailash-py-wt/f13-lifecycle` | in-flight |
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
