@@ -280,8 +280,48 @@ strictly wider than a framework log, and one nobody rotates. A future shard port
 scanner must classify sink-vs-return rather than lump them: the two need opposite
 verdicts on the same text.
 
-**The credential-sink sweep is mid-flight.** The ~30-site kaizen-agents surface is being
-worked in another lane and part of it is still uncommitted; see Status.
+**~~The credential-sink sweep is mid-flight … part of it is still uncommitted.~~ WITHDRAWN —
+false on both halves, replaced with the measured per-tree state.** The tree carries no
+uncommitted sweep work, and the kaizen-agents surface is now at **0 bare sinks**. The claim
+also contradicted this body's own Status paragraph ("source tree was clean at both pins").
+
+**What is true, measured across all four trees:**
+
+| tree                      | files | bare sinks | scrubbed sinks | reading                     |
+| ------------------------- | ----: | ---------: | -------------: | --------------------------- |
+| `kaizen_agents`           |   181 |     **11** |        **191** | SWEPT; 11 residual          |
+| `packages/kailash-kaizen` |   479 |    **414** |             32 | barely started (32 of ~446) |
+| `src/kailash`             |   771 |   **1844** |          **0** | **never swept**             |
+| `packages/kailash-nexus`  |    96 |    **115** |          **0** | **never swept**             |
+
+So the leak-class work in this PR covered **one tree of four**. Two have never been touched.
+
+**Do not read 1959 against the 390 figure above as a 5× undercount — they are different
+measurements.** The 390 comes from a scanner whose denominator is only exceptions inside
+provider-shaped methods; the table counts every bare exception-text sink. What IS assertable:
+by any consistent definition the class spans **≥2373 bare sinks across the three unswept
+trees**, so whatever 390 measures, it is not the size of the class.
+
+**The remediation for the two unswept trees is currently ARCHITECTURALLY BLOCKED, and this is
+the gating decision — not a scanner.** `credential_scrub` lives in
+`packages/kailash-kaizen/src/kaizen/utils/`, and `kaizen` is an **opt-in extra** of the slim
+core (core's runtime deps are `jsonschema`, `pydantic`, `pyyaml`, `click`). Verified: **0
+files** in `src/kailash` and **0** in `nexus` import any scrub helper — they cannot, without
+one of (a) relocating the scrubber into core, (b) duplicating it, or (c) making kaizen a hard
+core dependency. (b) guarantees the drift a shared helper exists to prevent; (c) contradicts
+slim-core. **A scanner that flags 1844 sites whose only fix is unavailable would be an
+instrument nobody can drive to green — so it was deliberately NOT built.**
+
+**A partial precedent already exists in this PR:** `kailash/utils/secure_logging.py` puts
+`safe_callable_name` / `safe_exception_frames` in CORE, chosen precisely because reaching for
+kaizen's scrubber would invert the dependency. That settles the _identity_ half in core; the
+_string-scrubbing_ half is what remains unhoused.
+
+**Ordering, per the shard that measured it:** (1) decide where `credential_scrub` lives;
+(2) then triage per-sink by where the exception is RAISED — the kaizen-agents sweep was safe
+because it was triaged 162 remote / 18 local, and that judgment does not generalise from a
+count; (3) then gate. Porting the newer shape-detectors to `src/kailash` buys ~0.6% there
+(1833 of its 1844 are the original `f"{e}"` shape), so shapes are not the bottleneck.
 
 **Stale tests against long-renamed APIs.** Five failure clusters in the kaizen tree are
 **git-proven pre-existing** — `git diff --quiet origin/main...HEAD` reports UNCHANGED for
