@@ -95,3 +95,48 @@ fail-closed and a tenant-isolation shape resolves ON-LIST. **Scope verified disj
    `mcp-v0.5.1` from main so the tag matches the published artifact.
 4. Decision C: residuals P2/P3 could not be filed — no substantive content survives. Filing would
    mean inventing findings. Accept the loss; do NOT fabricate.
+
+---
+
+## Wave 1 — CLOSED. All four agents reported; findings reconciled.
+
+| track     | verdict | note |
+| --------- | ------- | ---- |
+| W1-df     | done    | `file:` allowlist entry + engine parity branch; verified by orchestrator under CI's exact invocation |
+| W1-ml     | done    | Root cause found, **outside its own scope** — correctly routed instead of forcing an in-scope fix |
+| W1-cq     | done    | CodeQL fully characterised; session-L claim REFUTED with evidence |
+| W1-tenant | done    | #2005 fixed; 22 tests with an honest red/green classification |
+
+### Corrections agents made to MY briefs (recorded — I was wrong)
+
+1. **W1-ml refuted my brief's premise.** I asserted the underlying `TypeError` was "DESTROYED … you cannot diagnose from CI output alone" and told it to add temporary instrumentation. FALSE: `materialiser.py:317` already did `raise ... from exc` and `logger.exception` at :303 logged the full traceback. One grep on the CI log recovered it. No instrumentation was ever needed. The wrapper discarded the message from the *summary line*, not from the log.
+2. **W1-ml found the real root cause is cross-package**, not in kailash-ml at all: CI installs `kailash==2.63.0` from branch source but `kailash-dataflow==2.19.1` from PyPI (log lines 293/428). All four ml `_validate_identifier` call sites already pass `max_length` — ml was clean, and no ml-side fix existed.
+3. **W1-tenant found a FIFTH tenant-sensitive path #2005 never enumerated** — `clear()` at HEAD `:342` bypasses `_build_tenant_key` entirely and had its own `if tenant_id:`. `clear(tenant_id="")` wiped ALL tiers for ALL tenants. Destructive instance of the same class.
+4. **My `test_ml_from_brief` attribution was wrong.** I told the user it was the documented invalid `OPENAI_API_KEY`. The observed evidence (an all-empty LLM result) does not discriminate between a bad credential and an unresolved provider — I asserted one cause without an instrument that could tell them apart. W1-ml identified a real structural defect behind it: `from_brief.py:736` builds `BaseAgentConfig` with no `llm_provider`. **Filed as #2022.**
+
+### Orchestrator-run security probes (because neither security agent returned a verdict)
+
+Both dispatched adversarial security reviewers (`M-sec`, `M-sec2`) went idle WITHOUT reporting. Per `agents.md` § Redteam Reviewer Dispatch an errored/empty return is ZERO evidence and MUST NOT count as a clean round — so **no clean adversarial security round is claimed for this change.** What IS claimed is the narrower set of targeted probes below, run directly:
+
+**Sentinel (`_GlobalScopeSentinel(str)`) — the round-11 CRITICAL vector, re-probed:**
+
+| probe | result |
+| ----- | ------ |
+| tenant literally named `__global__` | `tenant:__global__:k` — NOT collapsed (`isinstance`, not `==`) |
+| hostile `str` subclass (`__eq__`→True, `__hash__`, `__str__`) | namespaced, does NOT escape to global |
+| subclass of the sentinel | collapses to global |
+| `__class__` reassignment on a `str` | blocked by CPython (`TypeError`) |
+| deepcopy / pickle round-trip | preserves sentinel — intended |
+
+The two collapse cases both require the caller to construct an arbitrary Python object as `tenant_id` — a capability that already subsumes passing `GLOBAL_SCOPE` or the target tenant string directly. **No privilege escalation.** The load-bearing property (a tenant NAMED `__global__` is not confused for the sentinel) holds.
+
+**`file:` scheme — no new capability:**
+`sqlite:////etc/passwd`, `sqlite:///../../../etc/passwd` and `sqlite:///tmp/x.db?mode=rwc` were ALL already accepted before this change, so pointing SQLite at an arbitrary path is inherent to the pre-existing `sqlite:` scheme, not introduced by `file:`. `gopher://` still raises — fail-closed posture intact. Scheme matching is case-insensitive (`FILE:`/`File:` classify identically), consistent with the other schemes.
+
+### CodeQL — characterised, unchanged across both pushes
+
+Advisory, NOT merge-required (`required_status_checks.contexts` is `[]`). The PR's actual blocker is `REVIEW_REQUIRED` (1 approving review) + `required_conversation_resolution`; `enforce_admins: false`.
+
+Delta vs main by rule+path: exactly **ONE** branch-introduced security alert — `py/weak-sensitive-data-hashing` HIGH at `dataflow/adapters/dialect.py:193`. W1-cq pulled the SARIF flow (`security_definer.py:572 → dialect.py:209 → 183 → 193`): the tainted value is `_password_column`, set by `.password_column("password_hash")` — a **column NAME**, not a credential. `_identifier_fingerprint` is private, 18 call sites, every one an identifier-validator argument inside an error/log message. **Verified false positive.** Rewriting it to placate the heuristic would reintroduce a real defect: its docstring records why SHA-256 over `hash()` (PYTHONHASHSEED randomisation breaks cross-process log correlation).
+
+### Final CI — head `dc2f246d2`: 38 pass / 1 fail (advisory CodeQL) / 12 skipped.
