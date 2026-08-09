@@ -642,6 +642,42 @@ class TestSafeExceptionFramesIsBounded:
         # one, and the reader cannot tell a 2-link failure from a retry storm.
         assert "cap reached" in rendered
 
+    def test_root_cause_survives_the_chain_cap(self) -> None:
+        """The cap must evict the OUTER wrappers, not the original failure.
+
+        The first implementation truncated DURING the walk. ``__cause__`` walks
+        INWARD from the outermost exception, so that kept the ten outermost
+        WRAPPERS and discarded the root cause — the opposite of both the comment
+        beside it and the reason the cap exists. Measured at the time: a
+        ValueError root under 30 RuntimeError wrappers did not appear at all.
+
+        It was also an attacker's lever. Anything that adds >= _MAX_CHAIN_LINKS
+        wrapping layers above the root — a retry loop that re-wraps, a
+        middleware stack wrapping per layer — evicted the original failure and
+        left generic wrappers behind. Keeping the innermost links removes it.
+        """
+        from kailash.utils.secure_logging import (
+            _MAX_CHAIN_LINKS,
+            safe_exception_frames,
+        )
+
+        exc: BaseException = KeyError("ROOT_CAUSE_SENTINEL")
+        for i in range(_MAX_CHAIN_LINKS * 3):
+            try:
+                raise RuntimeError(f"wrapper-{i}") from exc
+            except RuntimeError as wrapped:
+                exc = wrapped
+
+        rendered = safe_exception_frames(exc, limit=1)
+
+        assert "KeyError" in rendered, (
+            "the root cause was evicted by the cap; truncation kept the outer "
+            f"wrappers instead of the original failure: {rendered[:160]}"
+        )
+        # The dropped COUNT is rendered, so 11 links and 5000 do not look alike.
+        assert "outer links dropped" in rendered
+        assert f"<+{_MAX_CHAIN_LINKS * 3 - _MAX_CHAIN_LINKS + 1} " in rendered
+
     def test_limit_zero_and_negative_retain_no_frames(self) -> None:
         """`limit=0` rendered EVERY frame — the opposite of a bound named limit."""
         from kailash.utils.secure_logging import safe_exception_frames
