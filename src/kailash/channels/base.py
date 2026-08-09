@@ -261,8 +261,12 @@ class Channel(ABC):
         if self.config.enable_event_routing:
             self._event_queue = asyncio.Queue(maxsize=self.config.event_buffer_size)
 
-    async def _cleanup(self) -> None:
-        """Clean up channel resources.
+    async def _cleanup(self) -> bool:
+        """Clean up channel resources. Returns whether cleanup COMPLETED.
+
+        The return value is load-bearing: a caller that promotes an incomplete
+        cleanup to ``STOPPED`` reports a clean stop over a live task, which is
+        the false-success family this channel work exists to close.
 
         THE JOIN IS BOUNDED AND DOES NOT RE-RAISE, for two reasons that both
         surfaced when ``stop()`` began running this from a ``finally`` while a
@@ -287,9 +291,29 @@ class Channel(ABC):
         observes; only the CONFIRMATION is bounded, which is the right
         semantics for a task that may never honour it.
         """
+        complete = True
         if self._running_task and not self._running_task.done():
             self._running_task.cancel()
-            await asyncio.wait({self._running_task}, timeout=_CLEANUP_JOIN_TIMEOUT)
+            _done, pending = await asyncio.wait(
+                {self._running_task}, timeout=_CLEANUP_JOIN_TIMEOUT
+            )
+            if pending:
+                # BOUNDING THE JOIN WITHOUT READING ITS RESULT WOULD TRADE A
+                # HANG FOR A LIE. `asyncio.wait` returns (done, pending) and
+                # nothing else distinguishes "the task stopped" from "the
+                # timeout elapsed and it is still running" -- so discarding the
+                # result lets cleanup log success and the caller record STOPPED
+                # over a live task. That is the false-success family this branch
+                # exists to close, and the sibling bounded join in
+                # `visualization/api.py` already shows the right shape: surface
+                # the timeout, refuse to claim success.
+                complete = False
+                logger.warning(
+                    "Channel %s: event task did not stop within %ss; cleanup is "
+                    "INCOMPLETE and the task is still live",
+                    self.name,
+                    _CLEANUP_JOIN_TIMEOUT,
+                )
 
         if self._event_queue:
             # Clear any remaining events
@@ -299,4 +323,6 @@ class Channel(ABC):
                 except asyncio.QueueEmpty:
                     break
 
-        logger.info(f"Cleaned up channel {self.name}")
+        if complete:
+            logger.info(f"Cleaned up channel {self.name}")
+        return complete

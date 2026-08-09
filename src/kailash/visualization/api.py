@@ -375,10 +375,13 @@ class DashboardAPIServer:
                             # ``kailash.utils.url_credentials.mask_error_text``
                             # is plain core, already on this import path -- and
                             # it is deliberately NOT used. Measured, it masks
-                            # URL userinfo and NOTHING else: a postgres:// or
-                            # redis:// DSN is masked, while an OpenAI key, a
-                            # bare JWT, a Slack token, a 32-char Mistral key
-                            # and a Basic-auth header all pass through intact.
+                            # TWO carriers and nothing else: URL userinfo (a
+                            # postgres:// or redis:// DSN) and sensitive QUERY
+                            # PARAMETERS (`?api_key=`, `?token=`, `?password=`).
+                            # A credential that arrives in neither carrier
+                            # passes through intact -- a BARE OpenAI key, a bare
+                            # JWT, a Slack token, a 32-char Mistral key, an
+                            # `Authorization: Basic` header.
                             # So masking here would be a porous filter over
                             # unbounded input, whereas the type plus the frame
                             # list cannot carry a payload at all and is the

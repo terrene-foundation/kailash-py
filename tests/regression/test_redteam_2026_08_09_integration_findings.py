@@ -403,6 +403,84 @@ class TestCleanupJoinCannotStrandTheCaller:
         )
 
 
+class TestIncompleteCleanupIsNotReportedAsStopped:
+    """Round 3: bounding the join traded a hang for a LIE.
+
+    ``asyncio.wait`` returns ``(done, pending)``. Discarding it left nothing to
+    distinguish "the task stopped" from "the timeout elapsed and it is still
+    running" -- so cleanup logged success and ``stop()`` recorded ``STOPPED``
+    over a live task. A hang is loud; a false status is silent, and a status
+    field is a return value an orchestrator acts on. The sibling bounded join in
+    ``visualization/api.py`` already refuses to claim success on timeout; this
+    pins the same property for the channel path.
+    """
+
+    @pytest.mark.asyncio
+    async def test_uncancellable_event_task_yields_stopping_not_stopped(self) -> None:
+        channel = APIChannel(
+            ChannelConfig(name="rt_api4", channel_type=ChannelType.API, port=18994)
+        )
+
+        release = asyncio.Event()
+
+        async def _ignores_cancel() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    if release.is_set():
+                        raise
+                    continue
+
+        running_task = asyncio.ensure_future(_ignores_cancel())
+        # LET IT ACTUALLY START. `ensure_future` only schedules; cancelling a
+        # task that has never been entered cancels it outright, so the
+        # ignore-cancellation handler never runs and the task dies on the first
+        # cancel -- the test would then pass against the defect it exists to
+        # catch. This yield is what makes the task genuinely uncancellable.
+        await asyncio.sleep(0.05)
+        assert not running_task.done()
+
+        channel._running_task = running_task
+        channel._server_task = None
+        channel.status = ChannelStatus.RUNNING
+
+        # Success path: nothing cancels stop(); it runs to completion and the
+        # only thing that can go wrong is the event task refusing to die.
+        await channel.stop()
+
+        status = channel.status
+        release.set()
+        running_task.cancel()
+        await asyncio.gather(running_task, return_exceptions=True)
+
+        assert status is not ChannelStatus.STOPPED, (
+            "stop() reported STOPPED while the event task was still live; the "
+            "bounded join's timeout was discarded instead of surfaced"
+        )
+        assert status is ChannelStatus.STOPPING
+
+    @pytest.mark.asyncio
+    async def test_complete_cleanup_still_reports_stopped(self) -> None:
+        """Negative control: the honest path must NOT be downgraded."""
+        channel = APIChannel(
+            ChannelConfig(name="rt_api5", channel_type=ChannelType.API, port=18993)
+        )
+
+        async def _cooperative() -> None:
+            await asyncio.Event().wait()
+
+        running_task = asyncio.ensure_future(_cooperative())
+        channel._running_task = running_task
+        channel._server_task = None
+        channel.status = ChannelStatus.RUNNING
+
+        await channel.stop()
+
+        assert channel.status is ChannelStatus.STOPPED
+        assert running_task.cancelled() or running_task.done()
+
+
 class TestSafeExceptionFramesDisclosesNeitherLayoutNorSource:
     def test_cwd_above_home_does_not_render_the_home_layout(self) -> None:
         """A cwd of "/" produces no leading "..", so the old guard never fired.

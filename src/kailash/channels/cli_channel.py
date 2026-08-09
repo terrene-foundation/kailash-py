@@ -363,11 +363,14 @@ class CLIChannel(Channel):
                     if loop_error is not None:
                         raise loop_error
 
-            await self._cleanup()
+            # STOPPED only when cleanup actually COMPLETED -- see the sibling
+            # comment in api_channel. An event task that ignored cancellation
+            # is still live, so STOPPING is the truthful record.
+            cleaned = await self._cleanup()
 
             self.close()
 
-            self.status = ChannelStatus.STOPPED
+            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
             logger.info(f"CLI channel {self.name} stopped")
 
@@ -398,7 +401,22 @@ class CLIChannel(Channel):
                     # raising ``_cleanup`` skipped this and stranded the
                     # runtime reference -- defeating the stated goal of the
                     # very block it sits in.
-                    self.close()
+                    #
+                    # And guarded in turn: ``close()`` calls
+                    # ``self.runtime.release()`` into another object, so it can
+                    # raise too -- and a raise from THIS ``finally`` replaces
+                    # the propagating CancelledError, which is the third
+                    # instance of that same shape in this method. Low
+                    # likelihood, identical consequence.
+                    try:
+                        self.close()
+                    except Exception:
+                        logger.warning(
+                            "CLI channel %s: releasing the runtime failed "
+                            "during an interrupted stop; the original "
+                            "cancellation is preserved",
+                            self.name,
+                        )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a CLI request.

@@ -49,16 +49,23 @@ Nothing else is running. No PRs open.
 But the premise "src/kailash has NO scrubber" is FALSE and must stop being repeated.
 
 Core ships `kailash.utils.url_credentials.mask_error_text` — plain core, not an extra, already
-on the import path. **Measured, it masks URL userinfo and NOTHING else:**
+on the import path. **Measured, it masks TWO carriers and nothing else** — URL userinfo AND
+sensitive query parameters. A credential arriving in neither passes through intact:
 
-| shape                          | mask_error_text |
-| ------------------------------ | --------------- |
-| `postgres://` / `redis://` DSN | MASKED          |
-| OpenAI `sk-…`                  | **leaks**       |
-| bare JWT                       | **leaks**       |
-| Slack `xoxb-…`                 | **leaks**       |
-| Mistral 32-alnum               | **leaks**       |
-| `Authorization: Basic …`       | **leaks**       |
+| shape                                  | mask_error_text |
+| -------------------------------------- | --------------- |
+| `postgres://` / `redis://` DSN         | MASKED          |
+| `?api_key=` / `?token=` / `?password=` | MASKED          |
+| BARE OpenAI `sk-…`                     | **leaks**       |
+| bare JWT                               | **leaks**       |
+| Slack `xoxb-…`                         | **leaks**       |
+| Mistral 32-alnum                       | **leaks**       |
+| `Authorization: Basic …`               | **leaks**       |
+
+**Correction to this file's own earlier drafting**, which said "URL userinfo and NOTHING else."
+Wrong: the six-shape probe behind it contained no query parameter, so the denominator was
+incomplete. The CONCLUSION is unchanged — a two-carrier mask over unbounded input is still
+porous — but the claim was not, and it had already been mirrored into a code comment.
 
 So the relocation is still needed for the vendor vocabulary — but **the DSN subset of the 1836
 `src/kailash` sites is addressable TODAY without Decision A.** That is new and it changes how

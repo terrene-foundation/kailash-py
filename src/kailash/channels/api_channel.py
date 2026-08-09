@@ -285,8 +285,12 @@ class APIChannel(Channel):
                     if server_error is not None:
                         raise server_error
 
-            await self._cleanup()
-            self.status = ChannelStatus.STOPPED
+            # STOPPED only when cleanup actually COMPLETED. An event task that
+            # ignored its cancellation is still live, and a status field is a
+            # return value an orchestrator acts on -- STOPPING is then the
+            # truthful record, exactly as it is on the cancelled path above.
+            cleaned = await self._cleanup()
+            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
             logger.info(f"API channel {self.name} stopped")
 
