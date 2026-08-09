@@ -171,3 +171,75 @@ Per `agents.md` § Redteam Reviewer Dispatch, an empty return is ZERO evidence a
 **Scope of this claim, stated precisely:** these are the results of targeted probes against the areas I enumerated. They are NOT equivalent to an independent adversarial review, and none of the three dispatched reviewers contributed a verdict. A genuinely independent security lens on this diff remains OUTSTANDING.
 
 ### Final CI — head `1c849f953`: 32 pass / 1 fail (advisory CodeQL) / 8 skipped.
+
+---
+
+## Correctness review (M-rev) — landed late, found a HIGH I missed
+
+`M-rev` reported after I had already closed out. It was worth the wait: it found a
+**live, user-facing defect** my own security round did not, and refuted a claim I had
+shipped into a **public CHANGELOG**.
+
+### The HIGH — a THIRD independent scheme classifier
+
+`AdapterFactory.detect_database_type` (`adapters/factory.py`) is an independent scheme
+ladder — it borrows `parse_connection_string` to split the URL, then dispatches on the
+scheme itself. It never inherited the `file:` fix. Verified end-to-end before acting:
+
+```
+ConnectionParser.detect_database_type('file:userdb1?mode=memory&cache=shared') -> 'sqlite'
+AdapterFactory.detect_database_type('file:userdb1?mode=memory&cache=shared')   -> RAISES
+```
+
+and the two disagree INSIDE ONE FUNCTION, two lines apart (`utils/connection.py:116`
+classifies, `:125` calls `create_adapter` → re-classifies → raises). Fixed in `8874fa575`
+with a regression test that ENUMERATES the classifiers, so a fourth ladder reds the suite.
+
+**Why my own parity probes missed it:** I probed the two surfaces I had CHANGED against
+each other and found them consistent. I never enumerated the surfaces that *exist*. A
+consistency check across a set I chose cannot discover a member I failed to include —
+the instrument could not have found this, which is exactly `instrument-discipline.md`
+MUST-1 turned on my own verification.
+
+### Claims of mine it REFUTED
+
+1. **"Restores enforcement-surface parity — only the central detector had never learned
+   it."** FALSE twice over: the detector is not a single source of truth, and the six
+   surfaces I named are CONSUMERS, not classifiers. Corrected in the public CHANGELOG,
+   the in-code comment, and the follow-up commit body.
+2. **`617d43212` cited "717 passed, 176 deselected" as its verification.** The run it
+   came from was `2 failed, 717 passed, 1 skipped, 176 deselected`. I omitted the two
+   pyright-version-skew failures because I had already attributed them — but a commit
+   body is a durable artifact, and dropping the failures makes a red run read green
+   (`instrument-discipline.md` MUST-2). The attribution was right; presenting the run as
+   clean was not. Corrected here, on the record, per `git.md` (follow-up, never amend).
+
+### Also folded in
+
+- **ml call-site wiring was unproven** — the only call-site assertion was a prefix that
+  passed with or without the helper. Now shape-pinned and discriminating (`815eabed7`).
+- **`GLOBAL_SCOPE` has two meanings, one destructive** — documented; `clear(GLOBAL_SCOPE)`
+  wipes all tenants, which my own `clear()` probe had observed but I had filed as a
+  residual rather than fixing the docs.
+
+### Confirmed by M-rev, independently
+
+Pyright skew attribution (mechanism, not assertion: no `.venv/bin/pyright` → PATH 1.1.411
+vs `pyproject.toml:175` pin 1.1.371; the 5 warnings sit at lines BEFORE the insertion
+point, so not session-caused) · the `max_length` skew on both sides, `:3620` byte-exact ·
+the ml commit being diagnosability-only · the 8/8 PyPI delta table · dataflow
+`tests/unit/` **3670 passed** and kaizen regression+unit **12540 passed**, neither of
+which I had run.
+
+### Still open, from M-rev — NOT actioned
+
+- **The editable-vs-PyPI pattern survives in five other CI steps** (`test-kailash-ml.yml`
+  :211/:247/:317/:392, `gpu-smoke.yml:117`, `test-kailash-align.yml`:109/:163/:198). None
+  currently exercises the dataflow path, so none is failing — but the CLASS is open. I
+  closed the instance, not the class.
+- **UNVERIFIED:** the combined ml `unit/ + integration/` run (CI's Coverage step) hangs
+  locally past 45 min holding SQLite files open, though each directory passes alone in
+  ~43s and CI does it in 507s. Local-harness issue, not a merge gate.
+- **UNVERIFIED:** 12 of the 22 kaizen tenant tests, past M-rev's maxfail cap.
+
+**M-rev verdict: MERGE-WITH-FIXES.** Both of its blocking items are now fixed.
