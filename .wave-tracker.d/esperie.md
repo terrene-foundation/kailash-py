@@ -90,6 +90,98 @@ leaks**. They go green when `w1-sinks` lands, at which point
 shard's report but NOT in the commit body — `git.md` § Discipline requires the body plus a
 follow-up todo. Follow-up commit requested (not an amend; the SHA is already cited here).
 
+### `w1-correctness` RETURNED — **REFUTED, a SECOND independent axis.** Pinned `b954ed66a`.
+
+It had Bash and ran the controls the session-I security lens could not. Two of that lens's
+NOT PROVENs are now proven; one NOT EXAMINED became a **confirmed live credential leak**.
+All headline claims re-verified first-hand by the orchestrator before acting.
+
+**HIGH-1 — a SHIPPING credential leak, proven by EXECUTION, not by reading.**
+`packages/kailash-kaizen/src/kaizen/l3/event_hooks.py:118-124` renders a caller-registered
+`listener` via `%r` on the same log line where it correctly scrubs the exception. A
+`functools.partial` and a callable object each carrying a synthetic key were registered and
+the real logger captured: `records emitted : 2  records leaking : 2`.
+
+**The comment above it refutes its own conclusion, in the same paragraph.** It says
+_"Listeners are caller-registered"_ and then _"none is exception-derived."_ Both true. But
+**"not exception-derived" is the WRONG SAFETY TEST** — the question is whether the value is
+CALLER-SUPPLIED, and a caller-registered listener is arbitrary user code that can hold
+credentials. `20f507bb0` wrote the premise that refutes it, one sentence apart. Byte-for-byte
+the class `d6030aefe` closed one package over IN THIS BRANCH, never swept here.
+
+**HIGH-2 — same class at ≥5 more sites** (`resolver.py:381`, `:552-555` ×2,
+`nexus/core.py:2429`, `runtime/distributed.py:1167`, `runtime/scheduler.py:1666`,
+`utils/lifespan.py:82`). Mechanism CONFIRMED by execution: a `partial` has neither
+`__name__` nor `__qualname__`, a dataclass has no `__qualname__` — so the `getattr` fallback
+fires for exactly the objects that carry payloads. Per-site reachability PLAUSIBLE, not
+confirmed; `w2-core-repr` owns settling it.
+
+**`distributed.py:1167` + `scheduler.py:1666` ALSO carry `exc_info=True`** — live
+counterexamples to `689f9ebd8`'s claim to have closed the exc_info re-leak class. Verified.
+
+**HIGH-3 — a SECOND instrument, blind on a DIFFERENT axis.**
+`04-validate/find-unsanitized-provider-errors.py` keys on `except … as <v>` handlers
+rendering `<v>`. In HIGH-1 the leaking value is the LISTENER — no binding exists to trace.
+Run against the tree just PROVEN to leak: `{"high": [], "high_count": 0}`. So: the security
+lens found the scanner marking files SWEPT **while carrying** the defect; this lens found a
+defect shape the scanner **cannot express at all**. `20f507bb0`'s "residual sweep returns
+exactly the three documented keeps and nothing else" inherits that blindness.
+
+**`bb8a3f966` HOLDS — proven, NOT vacuous.** Driven against the real pre-fix file
+(`git show bb8a3f966^:…`): pre-fix returned `{'status':'stopped'}` on a surviving task, so
+the test DISCRIMINATES. Session I's NOT EXAMINED is CLOSED.
+**MEDIUM-1 — but the false success MOVED one endpoint over.** Retaining the handle (correct
+per the commit's own reasoning) makes `start_monitoring`'s `if not self._broadcast_task`
+guard read the wedged task as already-running: `api.py:311-316` reports `started` while the
+only broadcast task is the one `stop` refused to certify as stopped. Same defect-contract
+class, unclosed. `SimpleDashboardAPI.stop_monitoring` (`api.py:747`) checked — NOT a sibling.
+
+**MEDIUM-2** — the cancellation-swallow `bb8a3f966` deliberately avoided is live at
+`channels/api_channel.py:236-240` + `channels/cli_channel.py:312-316`.
+
+**TEST TREES — a "green across five trees" claim is UNSUPPORTED.** nexus `2632 passed, 14
+skipped` CLEAN; mcp `670 passed, 1 xfailed` CLEAN. **kaizen ABORTED** — `pytest.ini:13` sets
+`--maxfail=10` (verified), so its `156 passed` is NOT tree coverage. Core + kaizen-agents
+INCOMPLETE (in flight at report time; an in-flight run is ZERO evidence). One kaizen failure
+is NOT environmental: `BaseAgent.__init__() got an unexpected keyword argument 'description'`
+— pre-existing (`origin/main` carries the identical signature; the branch touched neither
+file), already tracked as **#2010**, still owned under `zero-tolerance` Rule 1.
+
+**PROVEN CLEAN — a real regression hypothesis that did NOT hold.** `llm/routing/fallback.py`
+classifies on `str(error).lower()` against `"invalid api key"` / `"rate limit"`, so a
+scrubbed string would mis-route provider failures. Both call sites (`:399`, `:523`) pass the
+RAW exception; only the log/serialization path is sanitized. **No routing regression.**
+
+**Retained named fields — the seven could NOT be recovered.** No committed report enumerates
+them and the ledgers name overlapping sets, so the lens derived an acceptance surface
+independently (`completion-criterion` MUST-2) rather than guessing. `listener` repr REFUTED
+(HIGH-1); callback INDEX holds (an int cannot carry a payload); `event_type`/`agent_id` hold.
+Six more PLAUSIBLE-not-probed; `tool_name` is a HIGH-1 sibling IF any tool name is
+caller-supplied — **unsettled**. `interpretability/core.py` ×2 + the `__init__.py` exc_info
+keeps: **NOT EXAMINED.** That the seven are unrecoverable from the committed record is itself
+a finding — a receipt naming a count without naming its members cannot be audited.
+
+### Wave 1b — LAUNCHED (2 shards, base `40ba0518d`)
+
+| agent            | shard                                         | worktree                         | status    |
+| ---------------- | --------------------------------------------- | -------------------------------- | --------- |
+| `w2-kaizen-repr` | HIGH-1 + the 7 F11 autonomy-hook siblings     | `.kailash-py-wt/f11-kaizen-repr` | in-flight |
+| `w2-core-repr`   | HIGH-2 (7 sites) + the 2 live `exc_info=True` | `.kailash-py-wt/f11-core-repr`   | in-flight |
+
+Partitions disjoint from `w1-sinks` / `w1-scrubber`, which are still running. New test files
+namespaced `test_f11_*` so concurrent shards cannot collide on a filename.
+
+### STILL UNOWNED — do not let these read as covered
+
+- **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
+  swallow ×2) — no shard; need one.
+- **HIGH-3**: `find-unsanitized-provider-errors.py` still cannot express the class. Teaching
+  it is what makes any future "residual sweep is clean" claim mean something.
+- The six PLAUSIBLE retained fields, `tool_name`, and the NOT EXAMINED
+  `interpretability/core.py` ×2 + `__init__.py` exc_info keeps.
+- Core + kaizen-agents tree results (logs at `/tmp/w5corr/`) — re-poll for summary lines.
+- **#2010** `BaseAgent(description=)` — pre-existing, still owed under `zero-tolerance` R1.
+
 ### Ordering coupling — read before integrating
 
 `w1-scanner` and `w1-sinks` are coupled at VERIFICATION, not at implementation.
