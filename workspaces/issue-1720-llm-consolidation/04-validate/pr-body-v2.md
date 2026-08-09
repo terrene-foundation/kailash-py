@@ -24,7 +24,7 @@ The adversarial round on `689f9ebd8` raised 9 findings, 2 HIGH. Verified in the 
 the time of writing, not taken from a status report:
 
 - **F1** — a caller-supplied `repr()` reaching a log. **Closed AT THE SITE, and the
-  original receipt here was OVER-SCOPED — corrected at `34321615c`.** What is true and
+  original receipt here was OVER-SCOPED — corrected at `b981830df`.** What is true and
   re-verified: `d6030aefe` fixed `kaizen-agents/.../journey/manager.py:469,479`, which now
   use `type(handler).__name__`.
   What was FALSE: the claim that "`grep repr(handler)` returns nothing". It returns **22
