@@ -164,6 +164,51 @@ Neither is blocking; neither is self-accepting; I cannot accept them on my own b
   2026-09-08.** Note the coupling: the M7 pin asserts `status is STOPPING`, so fixing LOW-8
   REDS that test by design — budget for both together, not one.
 
+## THE SCRUB-PRESET SURFACE IS NOW ENUMERATED — the gap all six rounds flagged is CLOSED
+
+Every round ended "SAMPLED, not ENUMERATED." It has now been enumerated by AST walk (661 files,
+0 parse errors, 250 call sites), with a planted-and-reverted 5-positive/1-negative control
+proving the walk finds every call shape and counts no comment or docstring.
+
+|                             | `scrub_local_error` | `scrub_remote_error` |
+| --------------------------- | ------------------: | -------------------: |
+| `packages/kailash-kaizen`   |                   2 |                   35 |
+| `packages/kaizen-agents`    |                  17 |                  196 |
+| **TOTAL**                   |              **19** |              **231** |
+
+**THE PRIOR IS WRONG — do not carry it forward.** Earlier work triaged kaizen-agents as ~162
+remote / 18 local. Actual: **196 / 17** — the remote count was under by 34.
+
+**THE SECURITY-RELEVANT DIRECTION IS CLEAN: ZERO under-scrubbed sites.** All 19 local-preset
+sites were read individually, not sampled, and every one is a genuine local raise (imports,
+`resource.setrlimit`, `read_text`/`write_text`, `JSONDecodeError`, an in-process SDK
+`SplitError`, an OS spawn errno, and four effectively-dead handlers). This matters because
+under `scrub_local_error` bare Mistral / Groq / Cohere / xAI keys are redacted by NOTHING — so
+a single misclassified site would have been a live credential path. There are none.
+
+**7 OVER-SCRUBBED sites** (remote preset on a purely local raise) — classification mismatches,
+all inert in credential terms: `multi_modal_agent.py:157`, `api/agent.py:174,190`,
+`state_manager.py:464`, `tree_of_thoughts.py:577,590`, `autonomous/base.py:804`.
+
+**TWO AMBIGUOUS CLUSTERS WORTH ACTING ON:**
+
+- **A separate finding that outranks the preset question it came from.** The file-tool cluster's
+  SIBLING handlers interpolate the raw model-supplied `file_path` **UNSCRUBBED**:
+  `file_read.py:55,60,62` · `file_write.py:53,57` · `file_edit.py:62,72,74,82,88,101,107`.
+  **Changing the preset on the OSError branch would not change the exposure**, because these
+  branches emit the same operand in full regardless. Fix the siblings, not the preset.
+- **Three structurally IDENTICAL subprocess-spawn `OSError` sites split across both presets** —
+  `delegate/hooks.py:352` (local) vs `delegate/tools/bash_tool.py:98` (remote) vs
+  `delegate/mcp.py:158` (remote). The inconsistency IS the finding; only hooks.py carries an
+  in-code justification.
+
+**Bounds of the enumeration, stated:** it covers ONLY these two helper names (a site scrubbing
+via `scrub_credentials` directly, or not at all, is outside it); `src` only, not `tests/`;
+callee-leaf tracing is PARTIAL for broad `except Exception` sites; and it is STATIC — the four
+"effectively-dead" local handlers are a reading of their try bodies, not an execution trace.
+Raw data: `/tmp/scrubwalk/{pristine,ctx}.json` + the walker source (regenerate rather than trust
+if /tmp has been cleared).
+
 ## Read first
 
 1. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — every number
