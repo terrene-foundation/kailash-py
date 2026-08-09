@@ -739,6 +739,81 @@ deferring to a `block` on lines its diff never touched:
 detector that cannot reach its own success state trains operators to ignore it. Neither is a
 shard's to fix; both belong with the co-owner artifact findings.
 
+### `w3-lifecycle` — F13 CLOSED. Both defects CONFIRMED, neither refuted.
+
+`84d3dafcf` + `7c907625f`. RED→GREEN quoted per defect; 178 passed combined; pre-commit all
+Passed (explicitly including the Tier-1 suite; no bypass claimed).
+
+**Defect 1 — the contract needed THREE live states, not two.** It dispatches on the task
+rather than a flag: no handle → create; `done()` → replace; live + `cancelling() == 0` →
+reuse (truthful, a broadcaster IS live); live + `cancelling() >= 1` → **409, nothing
+mutated**. `Task.cancelling()` (≥3.11; repo pins `>=3.11`) is the discriminator between the
+two LIVE cases. Chosen over a `_broadcast_stop_failed` flag for two reasons worth keeping:
+it is **derived from the task so it cannot drift out of step with reality** the way two
+pieces of state can, and it required **ZERO edits to `stop_monitoring`** — so `bb8a3f966`
+is untouched. The handle is never cleared.
+
+**The ordering detail is load-bearing:** the check runs BEFORE any mutation, ahead of the
+config update and `dashboard.start_monitoring`. `dashboard._monitoring` is the wedged task's
+own `while` condition, so refusing AFTER re-arming it would both half-apply a rejected
+request AND hand the wedged task its loop condition back. It also had to add
+`except HTTPException: raise` — the pre-existing `except Exception` would have re-wrapped
+the 409 as a 500 carrying `str(e)`.
+
+**It found a SECOND false success in the same expression** (not in my brief): a task that
+raised, or whose loop condition went false, leaves a **truthy-but-dead** handle that only a
+SUCCESSFUL stop ever clears — so every later start reported `started` with nothing
+broadcasting. Same class, same `if`. Its RED is quoted. Self-heals: once the wedged task
+dies, the next start takes the `done()` branch.
+
+**Defect 2 — a second manifestation that RAISES the severity.** `await task` makes the
+supervised task the awaited future, so `stopper.cancel()` delivers to THAT TASK, not to the
+`stop()` frame. Against a task that ignores cancellation **the caller waits forever — it
+cannot even abandon the stop.** `asyncio.wait` parks on its own future, returning the
+caller's cancellation point. Both sites now re-raise `task.exception()` when the task did not
+end cancelled, so observing completion cannot turn a crash into a silent clean stop.
+
+**FIFTH instance of the reach-failure class — and the first caught IN-FLIGHT by its own
+author.** Its first Defect-2 instrument hit a 120s pytest-timeout instead of producing a
+verdict — **non-reach**. It rebuilt the instrument; it now reds as a crisp assertion in 12s.
+The lesson codified earlier this session, applied within the same session, unprompted.
+
+**Verified by me:** `_running_task` is assigned ONLY its `None` init at `base.py:99` and
+never anywhere in `src/` or `packages/` — so `base.py:256-261` IS a dead branch and its fix
+IS complete on its own walk. It checked this specifically because `_cleanup` is called
+immediately after the code it fixed in BOTH its files.
+
+### UNOWNED, from `w3-lifecycle` — two items needing an owner
+
+1. **THREE reachable siblings of Defect 2** (same `await task` inside
+   `except CancelledError: pass`): `channels/mcp_channel.py:334-338`,
+   `channels/event_router.py:133-137`, `channels/session.py:259-263`. A clean one-shard
+   follow-up. (`channels/base.py:256-261` is the dead branch above — excluded.)
+2. **FIVE genuinely failing tests, NOT environmental, NOT this branch's** —
+   `tests/integration/test_visualization_integration.py` calls `_draw_graph` /
+   `_get_node_colors` on `WorkflowVisualizer`. **Verified: `_draw_graph` does not exist at
+   HEAD** and the class is now mermaid/dot-based (`to_mermaid`, `to_dot`, `visualize`,
+   `save`). A matplotlib-era test suite against a rewritten class; source last touched
+   2026-03-25 (`9b3cb0136`), so `zero-tolerance` Rule 1c's SHA requirement is met.
+   **Restore the methods or retire the tests is an owner call**, correctly not made inside
+   someone else's module.
+
+Also: it fixed a **pre-existing red pre-commit gate** — 4 ruff `E402` in
+`visualization/api.py` that made pre-commit fail on ANY touch of the file (first-party
+imports that never depended on the optional-fastapi block; moved, no `noqa`). And it left
+`cli_channel.py:853-854`'s `except Exception: pass` in `__del__` alone — correctly, that is
+`zero-tolerance` Rule 3's explicit finalizer carve-out — flagging it so it is not read as a miss.
+
+### `w1-scrubber` — WORK COMPLETE ON DISK, REPORT NEVER DELIVERED
+
+Four commits, tree clean: `66a786e16` (secret_key/passphrase), `11a7cb31a` + `57661325e`
+(claude_code reaping + a SECOND `HookManager` site not in its brief), `920f5d98e` (defect 3's
+false rationale). **This is the known delivery failure — the work exists, the finding does
+not.** QUERIED, not re-dispatched. Open questions: whether `secret_key` was already covered
+by the bare `secret` alternative; CONFIRM/REFUTE on the reaping defect; the RED per fix
+(especially the test I flagged with a possibly-unbound assertion variable — if genuinely
+unbound, that assertion never executed); and whether `920f5d98e` scrubs rather than deletes.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
