@@ -9,7 +9,7 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain`. **279 commits unpushed, working tree clean** apart from
+`fix/issue-1720-forest-drain`. **282 commits unpushed, working tree clean** apart from
 `kaizen_implementation_test.log` (#2011's own artifact, left deliberately).
 
 **The six shard worktrees are MERGED.** That was session J's stated first act and it is done:
@@ -36,9 +36,10 @@ convergence without a clean round from BOTH lenses.
 
 ## In-flight state
 
-**Redteam round 3 dispatched to both lenses, results not yet received.** They were asked to
-verify the round-2 fixes (`c3cf5069c`) and to give an explicit CLEAN / NOT-CLEAN verdict.
-Nothing else is running. No PRs open.
+**Round 3 SECURITY lens reported: NOT CLEAN** (1 new MEDIUM + 2 LOW, all mine, all now fixed
+in `90c625444`). **Round 3 CORRECTNESS lens had not reported at session end.** Round 4 is owed:
+no round has yet come back clean, and the round-3 fixes are themselves unreviewed.
+No PRs open.
 
 **Tree-wide `tests/` + kaizen + kaizen-agents runs were still executing** at session end
 (`/tmp/treewide_rest.log`). They are OWED, not passed — do not cite them either way.
@@ -73,7 +74,7 @@ that shard should be scoped.
 
 ## Executed this session
 
-Integration + three redteam rounds. Nine commits. Full detail in the PR body; the load-bearing
+Integration + three redteam rounds. 33 commits this session. Full detail in the PR body; the load-bearing
 parts:
 
 - **A cross-shard defect the merge surfaced.** `f10-sinks` scrubbed via
