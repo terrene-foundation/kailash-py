@@ -2540,7 +2540,13 @@ Check the documentation or explore available resources.
                     effective_rate_limit,
                     "/".join(methods),
                     path,
-                    getattr(func, "__name__", repr(func)),
+                    # `func` is caller-supplied. This WARN fires when the
+                    # annotations DO resolve but declare no Request -- which a
+                    # configured callable object satisfies, and its
+                    # dataclass-generated `__repr__` renders every field
+                    # including a credential one. Confirmed reachable by
+                    # execution, not inferred.
+                    safe_callable_name(func),
                 )
 
             # Simple in-memory rate limiter (per client IP).
@@ -2866,7 +2872,13 @@ Check the documentation or explore available resources.
         # loop and surface as a "coroutine expected" error at request time.
         # inspect.iscoroutinefunction — see note on _wrap_with_guard.
         if not inspect.iscoroutinefunction(func):
-            func_name = getattr(func, "__name__", repr(func))
+            # `func` is caller-supplied, and this branch fires for exactly the
+            # shapes that lack `__name__`: a `functools.partial` wrapping a
+            # sync middleware renders its bound kwargs verbatim into the
+            # message below, which then rides the TypeError into whatever logs
+            # it. The name is interpolated TWICE here, so a repr would have
+            # been emitted twice.
+            func_name = safe_callable_name(func)
             raise TypeError(
                 f"use_middleware expects an async function, got sync "
                 f"function {func_name!r}. Define with "

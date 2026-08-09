@@ -74,15 +74,11 @@ def _render_record(record) -> str:
 def rendered(caplog, *loggers: str) -> str:
     """Render the records emitted by ``loggers`` (default: the ones under test).
 
-    Scoped BY LOGGER on purpose. A resolver failure propagates out as
-    ``NexusHandlerError(...) from exc``, and one sink further down the stack --
-    ``HandlerNode.execute_async`` in ``kailash/nodes/base_async.py`` -- logs
-    that chain with ``exc_info``, which re-renders the original cause's message
-    verbatim. That is the SAME leak class as the sinks under test but a
-    DIFFERENT site, in the core SDK's generic node-execution path rather than
-    in Nexus, and it is pinned separately by
-    ``TestKnownDownstreamReleak`` below so that scoping here cannot quietly
-    bury it.
+    Scoped BY LOGGER so a failure names the sink under test rather than any
+    sink in the stack. That scoping cannot hide a leak elsewhere:
+    ``TestNoSinkAnywhereLeaksTheCredential`` below captures at ROOT with no
+    filter and asserts the leaking-logger set is empty, so a sink outside these
+    two modules -- including one added far from this package -- still fails.
     """
     names = loggers or (_RESOLVER_LOGGER, _CORE_LOGGER)
     return "\n".join(
@@ -344,31 +340,85 @@ class TestRateLimitUnverifiableWarn:
 
 
 @pytest.mark.integration
-class TestKnownDownstreamReleak:
-    """Containment pin for a leak site OUTSIDE the resolver.
+class TestRateLimitInertWarn:
+    """``Nexus.endpoint`` -- the OTHER rate-limit WARN.
 
-    A resolver dependency failure leaves the resolver as
-    ``NexusHandlerError(...) from exc``. One sink further down the stack --
-    ``HandlerNode.execute_async``, ``kailash/nodes/base_async.py`` -- logs that
-    chain with ``exc_info``, and ``logging`` renders a chained exception by
-    printing each ``str()``. So the credential the resolver no longer emits
-    still reaches the log from the generic node-execution path.
-
-    That site is the SAME class as the ones fixed here but a DIFFERENT file, in
-    the core SDK rather than in Nexus. This test does not assert it is fixed;
-    it asserts the leak is CONFINED to exactly that one known logger, so:
-
-    * a NEW leaking sink makes this fail (the set grows), and
-    * fixing ``base_async`` ALSO makes this fail (the set empties), forcing
-      whoever fixes it to delete this pin rather than leave a stale claim.
-
-    Either way the finding cannot be silently lost, which scoping ``rendered``
-    by logger name would otherwise risk.
+    Distinct from the unverifiable one: this fires when the annotations DO
+    resolve but declare no ``Request``, so it is reached by a configured
+    callable object (whose ``get_type_hints`` returns its FIELD annotations)
+    rather than by a partial.
     """
 
-    _KNOWN_LEAKING_LOGGERS = {"HandlerNode"}
+    def test_callable_object_handler_does_not_reach_the_inert_warn(self, caplog):
+        caplog.set_level(logging.WARNING, logger=_CORE_LOGGER)
+        app = _app()
 
-    def test_releak_is_confined_to_the_known_downstream_sink(self, caplog):
+        @dataclass(frozen=True)
+        class _ConfiguredEndpoint:
+            endpoint: str
+            api_key: str
+
+            async def __call__(self, item_id: str) -> dict:
+                return {"ok": True}
+
+        handler = _ConfiguredEndpoint(
+            endpoint="https://api.example.invalid", api_key=_SENTINEL
+        )
+        app.endpoint("/inert", methods=["GET"], rate_limit=7)(handler)
+
+        blob = rendered(caplog)
+        assert "rate_limit_inert" in blob, blob
+        assert _SENTINEL not in blob, blob
+        # The operator still learns WHICH handler is unprotected.
+        assert "_ConfiguredEndpoint" in blob, blob
+
+
+@pytest.mark.integration
+class TestUseMiddlewareRejection:
+    """``Nexus.use_middleware`` -- the sync-function rejection message.
+
+    Not a log sink: the name is interpolated into a ``TypeError`` the caller
+    sees, and which rides into whatever logs the registration failure. It is
+    interpolated TWICE, so a repr was emitted twice.
+    """
+
+    def test_partial_middleware_does_not_reach_the_rejection_message(self):
+        app = _app()
+
+        def sync_middleware(request, call_next, *, dsn: str):
+            return None
+
+        handler = functools.partial(sync_middleware, dsn=_LEAKY_DSN)
+
+        with pytest.raises(TypeError) as excinfo:
+            app.use_middleware(handler)
+
+        message = str(excinfo.value)
+        assert _SENTINEL not in message, message
+        # The actionable diagnostic survives: WHICH function, and the fix.
+        assert "sync_middleware" in message, message
+        assert "async def" in message, message
+
+
+@pytest.mark.integration
+class TestNoSinkAnywhereLeaksTheCredential:
+    """WHOLE-STACK assertion: not one log sink renders the credential.
+
+    This replaces a containment pin that allowed exactly one logger --
+    ``HandlerNode`` (``kailash/nodes/base_async.py``), which logged the
+    propagated ``NexusHandlerError(...) from exc`` chain with ``exc_info``, so
+    ``logging`` printed each chained ``str()`` and re-emitted the credential
+    the resolver had just kept out of its own record. It was the last sink
+    still leaking after the resolver was fixed.
+
+    The pin did its job: closing that site made it FAIL rather than silently
+    pass, which is the whole reason it asserted set EQUALITY instead of
+    membership. It is now tightened to the empty set rather than widened, so
+    it keeps working as a tripwire for any NEW sink -- including one added far
+    from this package, since it captures at root with no logger filter.
+    """
+
+    def test_no_logger_in_the_whole_stack_renders_the_credential(self, caplog):
         caplog.set_level(logging.DEBUG)
         app = _app()
         dependency = functools.partial(_get_db, dsn=_LEAKY_DSN)
@@ -385,10 +435,43 @@ class TestKnownDownstreamReleak:
             for record in caplog.records
             if _SENTINEL in _render_record(record)
         }
-        assert leaking == self._KNOWN_LEAKING_LOGGERS, (
-            "the set of log sinks leaking a caller-supplied credential changed; "
-            f"expected {sorted(self._KNOWN_LEAKING_LOGGERS)}, got {sorted(leaking)}"
+        assert leaking == set(), (
+            "a log sink rendered a caller-supplied credential: " f"{sorted(leaking)}"
         )
+        # Anti-vacuity: the request must actually have reached the failing
+        # path, or every assertion above holds for a run that logged nothing.
+        assert any(
+            "resolver.dependency_failed" in record.getMessage()
+            for record in caplog.records
+        ), "the resolver failure path never fired; the assertion above is vacuous"
+
+    def test_the_diagnostic_survives_at_the_node_execution_sink(self, caplog):
+        """The node sink must still say WHICH node failed and WHERE.
+
+        Dropping ``exc_info`` closes the leak; dropping the diagnostic with it
+        would be trading one defect for another. The frames are the substitute,
+        so this pins that they are actually emitted.
+        """
+        caplog.set_level(logging.DEBUG)
+        app = _app()
+        dependency = functools.partial(_get_db, dsn=_LEAKY_DSN)
+
+        async def handler(db: str = Depends(dependency)) -> dict:
+            return {"db": db}
+
+        app.handler_extract("me", handler)
+        _client_for(app).post("/workflows/me/execute", json={"inputs": {}})
+
+        node_records = [
+            _render_record(r) for r in caplog.records if r.name == "HandlerNode"
+        ]
+        assert node_records, "the node-execution sink never fired"
+        blob = "\n".join(node_records)
+        assert "execution failed" in blob, blob
+        # The exception TYPE and the frame chain, both scalars.
+        assert "NexusHandlerError" in blob, blob
+        assert "_detect_pep563" in blob, blob
+        assert _SENTINEL not in blob, blob
 
     def test_the_client_response_never_carries_the_credential(self, caplog):
         """The split-visibility contract to the CLIENT holds regardless.

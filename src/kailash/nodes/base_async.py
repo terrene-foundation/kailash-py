@@ -17,6 +17,7 @@ from kailash.nodes.mixins import (
 )
 from kailash.runtime.template_resolver import resolve_templates
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.utils.secure_logging import safe_exception_frames
 
 
 class AsyncNode(
@@ -275,8 +276,30 @@ class AsyncNode(
             # Re-raise execution errors as-is
             raise
         except Exception as e:
-            # Wrap any other exception in NodeExecutionError
-            self.logger.error(f"Node {self.id} execution failed: {e}", exc_info=True)
+            # Wrap any other exception in NodeExecutionError.
+            #
+            # This LOG line renders neither `e` nor its traceback. `e` comes
+            # from `async_run` -- arbitrary node code: a DB driver, an HTTP
+            # client, an SDK -- so its message is caller-controlled, and
+            # `exc_info=True` made it worse by walking the whole `__cause__`
+            # chain. A resolver dependency failure arrives here already
+            # collapsed to "HTTP 500: internal error", but its CAUSE still
+            # carries the credential the resolver deliberately kept out of its
+            # own record, and the traceback re-rendered it one frame later.
+            # That made this the last sink still leaking after the resolver was
+            # fixed. Retain scalars only: the node id, the exception TYPE, and
+            # the frame locations.
+            self.logger.error(
+                "Node %s execution failed: %s (at %s)",
+                self.id,
+                type(e).__name__,
+                safe_exception_frames(e),
+            )
+            # The RAISED message is deliberately left carrying `e`: it is the
+            # exception contract callers catch and inspect, not a log sink, and
+            # the surfaces that face an untrusted party (the Nexus resolver's
+            # 500 envelope) already collapse it to a correlation id. Narrowing
+            # it here would be a separate, wider change to the error contract.
             raise NodeExecutionError(
                 f"Node '{self.id}' execution failed: {type(e).__name__}: {e}"
             ) from e
