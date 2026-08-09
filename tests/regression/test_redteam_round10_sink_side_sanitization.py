@@ -267,6 +267,40 @@ class TestCPythonPseudoIdentifiers:
         assert rendered != "<listcomp>"
         assert "<" not in rendered and ">" not in rendered
 
+    @pytest.mark.parametrize(
+        "forged",
+        [
+            "<+9999 outer links dropped, cap reached>",
+            "<truncated>",
+            "<no-frames>",
+            "<unrepresentable>",
+            "<frames-unavailable>",
+            "<evil <- FORGED@a.py:1:f>",
+        ],
+    )
+    def test_our_own_markers_cannot_be_forged_through_the_allowlist(self, forged):
+        """The allowlist re-admits `<` and `>` — EXACT membership is the only guard.
+
+        Found by a mutation matrix, not by reading: widening the membership test
+        to `text.startswith("<") and text.endswith(">")` -- the most natural
+        "simplification" of this branch -- left ALL 36 pins GREEN while
+        `<truncated>` and `<+9999 outer links dropped, cap reached>` passed
+        through INTACT. Reachability proven by loading the mutated file directly,
+        so this is a pin gap under `instrument-discipline.md` MUST-2(b), not an
+        inert mutation.
+
+        `test_a_near_miss_does_not_survive` could not catch it: `!listcomp!` does
+        not start with `<`, so it satisfies a widened predicate too.
+
+        This is the pin for the module's load-bearing claim -- "a `<...>` marker
+        in a record is always OURS". Every string below is one of OUR markers or
+        a delimiter-forging payload, and none is a CPython literal.
+        """
+        rendered = sl._safe_identifier(forged)
+
+        assert rendered != forged, "attacker-supplied <...> passed through intact"
+        assert "<" not in rendered and ">" not in rendered
+
 
 class TestBoundHoldsAgainstALyingLength:
     """F2: REFUTED by measurement, pinned so it stays refuted.
