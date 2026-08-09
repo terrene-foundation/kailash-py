@@ -764,7 +764,27 @@ class AgentLoop:
                 # Inject a synthetic error result so the conversation stays valid.
                 # The model sent tool_calls but needs matching tool results for
                 # every call — missing results cause API errors on the next turn.
-                logger.error("Unexpected error in parallel tool execution: %s", result)
+                #
+                # SANITIZED for the same reason the ``except``-bound sink in
+                # ``_run_single`` above is: this is the SAME tool exception,
+                # reached by a different path. ``gather(return_exceptions=True)``
+                # RETURNS it rather than raising it, so it never passes through
+                # an ``except`` clause and no scanner keyed on a handler-bound
+                # name can see it — which is how it survived the sweep that
+                # scrubbed its sibling thirteen lines up. A tool is arbitrary
+                # user code holding its own credentials, so the message it
+                # raises is exactly the unsafe surface.
+                #
+                # The lazy ``%s`` form is kept: ``scrub_remote_error`` returns a
+                # ``str``, so the interpolation stays deferred to the handler
+                # exactly as before. ``BaseException`` (not ``Exception``) is
+                # what the narrowing above admits, and the scrubber takes
+                # ``object`` — it renders with ``str()``, which is defined for
+                # every ``BaseException``.
+                logger.error(
+                    "Unexpected error in parallel tool execution: %s",
+                    scrub_remote_error(result),
+                )
                 tc = tool_calls[idx]
                 tc_id = tc["id"]
                 tc_name = tc["function"]["name"]

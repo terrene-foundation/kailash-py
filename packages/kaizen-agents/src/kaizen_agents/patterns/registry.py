@@ -707,8 +707,33 @@ class AgentRegistry:
                                 "event_type": getattr(
                                     event.event_type, "value", str(event.event_type)
                                 ),
+                                # The fallback is ``type(listener).__name__``,
+                                # NOT ``repr(listener)``. ``listener`` is
+                                # caller-supplied and typed as a bare
+                                # ``Callable``, so anything without a
+                                # ``__qualname__`` hit the old repr fallback --
+                                # and that is precisely the set of objects
+                                # carrying payloads:
+                                # ``functools.partial(post, token="ghp_...")``
+                                # renders its bound kwargs verbatim, and a
+                                # callable object's dataclass-generated
+                                # ``__repr__`` renders every field.
+                                #
+                                # NOT scrubbed, deliberately, and this is the
+                                # line where that distinction matters: the
+                                # ``error`` key below scrubs an EXCEPTION,
+                                # which is the accepted contract here, while
+                                # scrubbing a caller-supplied object's REPR is
+                                # not — the scrubber's coverage is porous (a
+                                # prefix-less 32-39 char key, ``token=``, a
+                                # %40-encoded ``@`` all survive it). A type
+                                # name cannot carry a payload by construction,
+                                # so it needs no scrub. Same disposition
+                                # ``journey/manager.py`` reached for its hook
+                                # handler; the diagnostic — WHICH listener
+                                # failed — survives either way.
                                 "listener": getattr(
-                                    listener, "__qualname__", repr(listener)
+                                    listener, "__qualname__", type(listener).__name__
                                 ),
                                 "error": scrub_remote_error(exc),
                             },

@@ -44,10 +44,12 @@ mocked).
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 
+from kaizen.core.base_agent import BaseAgent
 from kaizen.utils.credential_scrub import DEFAULT_PLACEHOLDER
 from kaizen_agents.patterns.patterns.blackboard import BlackboardPipeline
 from kaizen_agents.patterns.patterns.ensemble import EnsemblePipeline
@@ -72,21 +74,45 @@ def _boom() -> RuntimeError:
     return RuntimeError(f"provider auth failed: key={CREDENTIAL} dsn={DSN}")
 
 
-class RaisingAgent:
-    """A stub agent whose ``run`` raises a credential-bearing error."""
+@dataclass
+class _MockConfig:
+    """Minimal domain config; ``BaseAgent`` auto-converts it.
+
+    ``llm_provider="mock"`` per rules/testing.md — a unit test names the mock
+    provider explicitly rather than inheriting whatever the environment has.
+    """
+
+    llm_provider: str = "mock"
+    model: str = "mock-model"
+
+
+class RaisingAgent(BaseAgent):
+    """A REAL ``BaseAgent`` whose ``run`` raises a credential-bearing error.
+
+    Subclassing ``BaseAgent`` rather than duck-typing is deliberate, and it is
+    not about silencing a type checker. The pipelines declare
+    ``agents: list[BaseAgent]``, and a double that does not satisfy the
+    interface it stands in for can pass while the real call path would not --
+    the same vacuity class this whole file is about. Constructing the real
+    base class also means ``run`` goes through ``LoggingMixin``'s wrapper, as
+    it does in production, so the pipelines see the object they actually get.
+
+    ``mcp_servers=[]`` disables MCP auto-connect, which is what keeps this
+    Tier 1: no network, no subprocess, no provider.
+    """
 
     def __init__(self, agent_id: str = "raiser") -> None:
-        self.agent_id = agent_id
+        super().__init__(config=_MockConfig(), agent_id=agent_id, mcp_servers=[])
 
     def run(self, **inputs: Any) -> dict[str, Any]:
         raise _boom()
 
 
-class QuietAgent:
-    """A stub agent that succeeds, for the slots that must not fail."""
+class QuietAgent(BaseAgent):
+    """A REAL ``BaseAgent`` that succeeds, for the slots that must not fail."""
 
     def __init__(self, agent_id: str = "quiet", **result: Any) -> None:
-        self.agent_id = agent_id
+        super().__init__(config=_MockConfig(), agent_id=agent_id, mcp_servers=[])
         self._result = result or {"result": "ok"}
 
     def run(self, **inputs: Any) -> dict[str, Any]:
