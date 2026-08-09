@@ -45,6 +45,51 @@ File partitions are DISJOINT — no two shards touch the same file.
 I, PLUS the two items session I's security lens explicitly marked NOT EXAMINED (it had no
 Bash): `bb8a3f966` (monitoring stop) and four of seven retained named fields.
 
+### `w1-scanner` RETURNED — DONE, commit `bf164efc1`. Three corrections to MY brief.
+
+Four shapes taught (`format_exc` module-wide/name-independent; exception-as-VALUE via three
+region producers; `%`/`.format()`; exception ATTRIBUTES behind an allowlist so an
+unanticipated attribute defaults to FLAGGED). RED established per shape against the
+pre-change scanner extracted via `git show HEAD:` — **17/17 fixtures BLIND untaught,
+detected taught**. Zero false positives in the real package. Passes union by
+`(lineno, col_offset)`, not by line, so overlapping regions cannot double-count the pin.
+
+**CORRECTION 1 — my brief named the WRONG INSTRUMENT, and it would have manufactured a
+false negative.** I told the shard to expect the pinned `57/191` to MOVE and to treat a
+non-moving count as "the teaching did not take". Wrong: the pin counts **WRAPPED** sinks,
+which move when sites are **FIXED**, not when a shape is taught. Teaching moves the **BARE**
+count — observed `0 → 10` package-wide. Taken literally, my instruction would have sent the
+shard chasing a number that could not move. Recorded because the failure mode is this
+wave's own subject: I named a check that could not discriminate the hypothesis.
+
+**CORRECTION 2 — `parallel.py:251` is the `isinstance` guard; `str(result)` is at `:256`.**
+My brief was off by five and I passed that to `w1-sinks` too. No harm: it worked from source
+rather than my line numbers. Verified first-hand.
+
+**CORRECTION 3 — a TENTH live site, in NO partition.**
+`packages/kaizen-agents/src/kaizen_agents/delegate/loop.py:767` —
+`logger.error("Unexpected error in parallel tool execution: %s", result)`, where `result` is
+a `BaseException` from `gather(return_exceptions=True)`, narrowed at `:763`, logged raw.
+**Thirteen lines earlier `:754` scrubs correctly**, under a comment block explaining this
+exact defect class. The file already knows the rule, applies it on the `except`-bound path,
+drops it on the `gather`-value path — the same scrub-beside-leak shape as `parallel.py`, in
+a second file. Verified first-hand. **Routed to `w1-sinks` to fix IN-SHARD**
+(`autonomous-execution.md` MUST-4: same bug class, one-line + test, context already warm —
+filing it would cost 2–5× to reload).
+
+**PIN HANDLING AT INTEGRATION — do not skip this.** The shard left the pin at `57/191`,
+correct for its own tree (sibling fixes absent). Predicted post-fix: **58 files / 201 sites**
+(+10 sites; +1 file because `meta_controller.py` currently has ZERO wrapped sinks and joins
+the swept set). **RE-DERIVE — do not trust that arithmetic.** Its suite is `344 passed,
+5 failed`, and **all 5 failures are the coverage assertion correctly flagging the live
+leaks**. They go green when `w1-sinks` lands, at which point
+`test_the_sweep_covers_the_measured_surface` REDS until the pin is re-derived. A green
+5-failure→0 transition without a pin red means something is wrong.
+
+**Owed:** `bf164efc1` was committed with `core.hooksPath=/dev/null`, disclosed in the
+shard's report but NOT in the commit body — `git.md` § Discipline requires the body plus a
+follow-up todo. Follow-up commit requested (not an amend; the SHA is already cited here).
+
 ### Ordering coupling — read before integrating
 
 `w1-scanner` and `w1-sinks` are coupled at VERIFICATION, not at implementation.
