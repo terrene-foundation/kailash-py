@@ -94,8 +94,19 @@ three channels.**
 
 No PRs open.
 
-**Tree-wide `tests/` + kaizen + kaizen-agents runs were still executing** at session end
-(`/tmp/treewide_rest.log`). They are OWED, not passed — do not cite them either way.
+**Tree-wide `tests/` + kaizen + kaizen-agents: OWED, and do NOT retry them on a loaded host.**
+MEASURED at session end: the root `tests/` run had **32 seconds of CPU in 48 minutes of wall
+clock** — ~1% CPU at load 144 on 16 cores. It was not progressing meaningfully and was
+abandoned in place, not completed. Two consequences for whoever picks this up:
+
+- Do not read `/tmp/treewide_rest.log` as a result. It contains a header line and nothing else.
+- Starvation this severe can red tests that carry their OWN duration assertions, independently
+  of pytest-timeout (which does not apply — all four trees resolve `timeout=None`). So a run
+  under this load produces failures nobody can attribute. **Wait for a quiet host; the tree-wide
+  run is a merge gate and needs to be readable, not merely finished.**
+
+What IS tree-wide and green on the integrated branch: **nexus 2650 passed / 14 skipped** and
+**kailash-mcp 670 passed / 1 xfailed**, both run when load permitted.
 
 ## THE GATING DECISION — refined by a measurement, not overturned
 
