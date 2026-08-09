@@ -610,8 +610,30 @@ all within one hour, all on the same class:**
 
 The honest form in all three cases is an **AST walk**, which is what `w2-core-repr` shipped
 (`TestNoModuleHelperRendersAnObject` walks for a `repr()` Call node, ignoring docstrings).
-My own recovery needed a plant-control to prove the filter could still see a live site — the
-comment-excluding grep was only trustworthy once it had been shown to discriminate.
+
+**SHARPENED by `w1-sinks` — its framing supersedes mine.** I characterised the pair as
+narrow-vs-broad. That is DOWNSTREAM of the actual root: **neither grep had a PLANT-CONTROL.**
+A regex over source text has TWO independent failure axes — it can miss the real shape, and it
+can match prose _about_ the shape — and **one control fired against a deliberately planted
+instance discriminates BOTH at once.** Mine acquired a control on the second attempt and became
+trustworthy immediately; its own never had one, which is exactly why an empty result read as an
+ALL-CLEAR rather than as UNKNOWN.
+
+**And the control must survive the FILTER, not merely the command:** my comment-excluding grep
+still left a live false positive inside the helper's own DOCSTRING, because I excluded `#` but
+not docstrings. A plant-control catches that too.
+
+> **Operational form: before citing any grep as evidence of ABSENCE, plant one instance of what
+> you claim is gone and confirm the command finds it.** Ten seconds, and it converts "returned
+> nothing" into an actual measurement.
+
+That is `instrument-discipline` MUST-1 reduced to a reflex a tired operator will actually
+perform, and it is the single most reusable output of this wave.
+
+**INTEGRATION FLAG from `w1-sinks`:** `376b7a988` makes its test doubles subclass the REAL
+`BaseAgent`, so `run` now passes through `LoggingMixin`'s wrapper and emits an ADDITIONAL log
+record during those tests. That is correct — it is what production does — but if any sibling
+adds a package-wide assertion over emitted records, that is where the extra records originate.
 
 **Sequel: `safe_exception_message` DELETED, not deprecated.** It filtered exactly `repr(handler)`
 out of a retained message — exact, not porous, so not the scrubber failure mode. But it retained
