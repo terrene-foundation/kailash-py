@@ -28,6 +28,12 @@ class TestAutoMigrationSystemLockIntegration:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         # AutoMigrationSystem should accept dataflow_instance parameter
         migration_system = AutoMigrationSystem(
@@ -53,6 +59,12 @@ class TestAutoMigrationSystemLockIntegration:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",
@@ -96,6 +108,12 @@ class TestAutoMigrationSystemLockIntegration:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",
@@ -120,6 +138,12 @@ class TestAutoMigrationSystemLockIntegration:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",
@@ -161,6 +185,12 @@ class TestAutoMigrationSystemLockIntegration:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",
@@ -226,6 +256,12 @@ class TestConnectionAdapterInjection:
         )
         mock_dataflow.config.database.url = "sqlite:///:memory:"
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",
@@ -245,6 +281,12 @@ class TestConnectionAdapterInjection:
         )
         mock_dataflow.config.database.url = "sqlite:///test.db"
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///test.db", dataflow_instance=mock_dataflow
@@ -263,6 +305,12 @@ class TestConnectionAdapterInjection:
             "sqlite:///:memory:"
         )
         mock_dataflow.config.environment = "test"
+        # ConnectionManagerAdapter reads config.database.url and hands it to
+        # ConnectionParser.detect_database_type, which now FAILS CLOSED on a
+        # non-string (#1971). A bare Mock auto-creates this attribute, so the
+        # old lenient parser silently accepted a Mock as a DSN -- the fixture
+        # gap was always there, masked. Match the connection_string below.
+        mock_dataflow.config.database.url = "sqlite:///:memory:"
 
         migration_system = AutoMigrationSystem(
             connection_string="sqlite:///:memory:",

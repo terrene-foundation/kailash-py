@@ -216,7 +216,7 @@ class TestMigrationChecksumUnit:
         # This tests the logic but uses mocked migration system
         from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 
-        system = AutoMigrationSystem(Mock())
+        system = AutoMigrationSystem("sqlite:///:memory:")
 
         # Create migration operations that will generate same checksum
         shared_operations = [
@@ -255,7 +255,7 @@ class TestMigrationChecksumUnit:
         """Test checksum detection for new migrations."""
         from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 
-        system = AutoMigrationSystem(Mock())
+        system = AutoMigrationSystem("sqlite:///:memory:")
 
         # Create a new migration
         migration = Migration(
@@ -283,7 +283,7 @@ class TestMigrationChecksumUnit:
         """Test that failed migrations don't prevent re-application."""
         from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 
-        system = AutoMigrationSystem(Mock())
+        system = AutoMigrationSystem("sqlite:///:memory:")
 
         migration = Migration(
             version="20240101_120000",
