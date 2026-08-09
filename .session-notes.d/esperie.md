@@ -1,6 +1,6 @@
 ---
 owner: esperie
-last_reconciled_sha: 90c625444
+last_reconciled_sha: b9f1e5ab7
 migrated_from: .session-notes
 ---
 
@@ -23,6 +23,37 @@ open it as "the leak class is closed."
 **REDTEAM HAS NOT CONVERGED.** Round 1 NOT clean, round 2 NOT clean, round 3 IN FLIGHT at
 session end. Each round found something real IN THE PREVIOUS ROUND'S FIX. Do not claim
 convergence without a clean round from BOTH lenses.
+
+## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
+
+**Rounds 1-4 NOT CLEAN. Round 5 CLEAN (security lens) — the FIRST clean round on an
+UNCHANGED surface. Round 6 dispatched for the second.** Convergence needs TWO consecutive
+clean rounds on a surface that does not move between them.
+
+**Why four rounds did not converge, stated precisely: the counter never failed, it was never
+given an unchanged surface.** `completion-criterion.md` MUST-3 resets on a CHANGE to the
+surface, not on a finding — and the channel code changed every round because each round found
+something real in the previous round's fix. Round 5 was the first frozen one.
+
+**THE SURFACE IS FROZEN. Do not fix LOW-7 or LOW-8 without deciding to restart the count** —
+fixing either legitimately resets the counter and round 5 stops counting. Both are recorded
+below as residuals PENDING ACCEPTANCE, not as closed.
+
+## Residuals pending a named human's acceptance (`completion-criterion.md` MUST-6)
+
+Neither is blocking; neither is self-accepting; I cannot accept them on my own behalf.
+
+- **LOW-7** — `cli_channel`/`mcp_channel` order `_cleanup()` → `cleanup_ran = True` →
+  `close()`. If `close()` raises, the `finally`'s guarded close-retry is skipped because the
+  flag is already True. Backstop exists (`__del__` calls `close()` in a try/except and emits a
+  ResourceWarning). Shape if revisited: a separate `close_ran` flag. **Revisit trigger:** any
+  future edit to a channel `stop()`.
+- **LOW-8** — `complete = False` conflates "event task died of an error" (task is GONE) with
+  "event task still live", and both surface as `STOPPING`, whose documented meaning elsewhere
+  is "still running, stop it again." Self-converges on the second `stop()` and errs toward
+  under-claiming success — the fail-safe direction. Recorded in the `_cleanup` docstring
+  rather than fixed. Shape if revisited: a third state or a separate `task_failed` signal.
+  **Revisit trigger:** any consumer that branches on `STOPPING`.
 
 ## Read first
 
