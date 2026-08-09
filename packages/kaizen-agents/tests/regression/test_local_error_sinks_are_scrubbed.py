@@ -865,6 +865,25 @@ class _SinkScan(ast.NodeVisitor):
             if self._is_our_value(arg):
                 self.bare.add(_key(arg))
                 return
+        # Shape 8 — the exception as a VALUE inside ``extra={...}``. A
+        # structured-logging formatter renders that value with ``str()`` exactly
+        # as a lazy ``%s`` argument would, so it is the same sink wearing a dict.
+        # ``extra={"error": str(e)}`` was already caught by the string-context
+        # pass and ``extra={"tb": format_exc()}`` by the traceback pass; the BARE
+        # object slipped between them, because nothing inspected keyword dict
+        # VALUES.
+        #
+        # Found by a planted-shape sweep OF THIS SCANNER, not by a leak. A
+        # discriminating walk (control planted, control found) reports ZERO live
+        # instances in kaizen_agents, kailash-kaizen and src/kailash, so closing
+        # it moves no pinned count. It is closed as a LATENT gap: the day
+        # somebody writes it, the pin must not stay green over a real leak.
+        for keyword in node.keywords:
+            if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
+                for value in keyword.value.values:
+                    if value is not None and self._is_scrubbable(value):
+                        self.bare.add(_key(value))
+                        return
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
