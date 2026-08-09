@@ -272,6 +272,44 @@ pyright never flagged. I was reading diagnostics from a tree under active edit a
 them as findings against committed work. Same class as everything else here: an instrument
 that cannot distinguish the state it is measuring. Verify against the COMMITTED file.
 
+### F12 — NEW CLASS, orchestrator-found: 24 raw exceptions into HTTP RESPONSE BODIES
+
+Found while verifying MEDIUM-1's site; **neither lens reported it, because both were
+hunting log sinks.** `src/kailash/visualization/api.py:319` sits three lines below MEDIUM-1's
+guard:
+
+```python
+self.logger.error(f"Failed to start monitoring: {e}")
+raise HTTPException(status_code=500, detail=str(e))     # <-- into the RESPONSE BODY
+```
+
+24 sites repo-wide (excluding tests/build), verified by grep:
+
+| file                                                  | sites |
+| ----------------------------------------------------- | ----- |
+| `src/kailash/visualization/api.py`                    | 10    |
+| `src/kailash/middleware/communication/api_gateway.py` | 6     |
+| `src/kailash/gateway/api.py`                          | 3     |
+| `src/kailash/servers/durable_workflow_server.py`      | 1+    |
+
+**This is a MORE exposed surface than any leak found so far.** A log sink is internal; an
+HTTP 500 body is returned to whoever made the request, and on a gateway that can be an
+unauthenticated caller. The exception at these sites is whatever the workflow/DB/provider
+raised — the same class of object that carries DSNs and API keys everywhere else in this
+audit.
+
+**The branch ANTICIPATED this class but scoped it elsewhere.** The PR body already states:
+_"No systematic sweep of RETURN surfaces exists anywhere — captured as a second lens inside
+#2012. Every sweep this session was log-shaped ... not merely un-swept but
+un-instrumented."_ That is exactly right, and #2012 is scoped to the 390 `kailash-kaizen`
+sinks. **These 24 are in `src/kailash` CORE — outside #2012's stated scope**, so the
+existing tracking does NOT cover them.
+
+**NOT auto-fixed, NOT auto-filed — scope decision belongs to the co-owner.** It is a new
+class beyond this branch's remit, the wave is already at 4 concurrent editors, and a
+24-site sweep across three gateway surfaces is its own shard with its own security review.
+Surfaced for a filing/scheduling decision rather than absorbed silently.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
