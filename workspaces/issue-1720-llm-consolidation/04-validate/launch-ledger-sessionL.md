@@ -248,3 +248,64 @@ unreliable.
 that SHA is owed. Scoped out with reasons: `base_async.py:304` (exception message embedding `{e}` —
 runtime-hot-path shard), F7 (truncation keeps prefix), F8 (per-identifier bound ≠ per-record bound,
 ~52 KB worst case), F1-of-r9c (render does not name the caught type — design call, deferred).
+
+---
+
+## Wave 4 — round 10 CORRECTNESS lens (delivered late, same delivery bug)
+
+**Independently NOT CLEAN, and it converged on the SAME HIGH from a different route** (it drove the
+`lifespan` sink end-to-end; the security lens read the sinks statically). Already closed by
+`deac19f1b` before its report arrived. It also **verified my fail-first claim** (12 failed / 3
+passed) and found the 3 parent-passing pins each red under a mutation in their own subject area —
+so none is vacuous.
+
+**Its one apparent disagreement is not one.** It found NO vacuous pin in the round-9 file and
+questioned `2153aca5b`'s "proven-vacuous pin". Both are correct: that claim is about the
+**kaizen-agents SCANNER** file, a different file. Recorded so nobody re-litigates it.
+
+### What was still open, and is now closed (`bd2f610c8`)
+
+- **MED — a gap in MY OWN pins.** Only the class-name sanitization site was pinned; de-sanitizing
+  `frame.name` or `_relative_frame_path(frame.filename)` left the suite GREEN. **I re-ran both
+  against my 33-pin suite with the reach check confirming the wrapper was removed: 33 passed,
+  twice.** I had pinned one site and assumed the siblings rode along. Both now pinned, each
+  verified to red under its own mutation and only its own.
+- **LOW — negative-cap `dropped` over-counted** (12-link chain announced 13). Third instance of one
+  arithmetic bug in this function.
+
+### REFUTED, recorded so it is not re-investigated
+
+Its **P4** (`__context__` set to a non-exception) is a **probe artifact**: CPython rejects the
+assignment itself (`exception context must be None or derive from BaseException`), so the helper
+never sees it. P1–P3 were real and are closed by `deac19f1b`'s totality wrapper — re-measured, all
+three now return `<frames-unavailable>`.
+
+### The cross-package surface — MEASURED, and deliberately NOT fixed here
+
+The lens is right that the real surface is wider than the 8 sinks in my brief. Measured
+(production `src` only, `build/lib` excluded):
+
+| package | raw `type(<exc>).__name__` sites |
+| ------- | -------------------------------: |
+| `src/kailash` (tree-wide, 47 files) | 81 |
+| `packages/kailash-kaizen/src` | 60 |
+| `packages/kailash-dataflow/src` | 54 |
+| `packages/kailash-nexus/src` | 29 |
+| `packages/kaizen-agents/src` | 14 |
+
+**The 7 helper-sink files this fix scoped to now have exactly ONE residual** —
+`base_async.py:304`, the documented exception-message exclusion.
+
+**NOT scope creep into the rest, deliberately.** `type(e).__name__` is the ordinary Python idiom
+and is only a channel where an attacker controls the exception CLASS NAME (a class minted via
+`type(f"...{data}", ...)`). Triaging ~240 sites across four more packages for that property is its
+own shard, well past a single shard budget, and this branch is already 311 commits with a known
+"ONE TREE OF FOUR swept" framing. The number is recorded here so the follow-up starts from a
+measurement rather than "subset unknown" — which is the gap the sweep report has carried for
+several sessions.
+
+### Status
+
+**Merge gate NOT met.** Streak zero; surface moved again at `bd2f610c8`.
+Tree-wide root `tests/` is ALIVE but starved — 46s CPU in 50min wall (~1.5%), output still
+header-only. Both tree-wide task outputs are EMPTY (30 and 5 bytes): **zero evidence, not a pass.**
