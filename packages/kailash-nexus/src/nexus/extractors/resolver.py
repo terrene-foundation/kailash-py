@@ -49,6 +49,7 @@ from typing import (
     get_type_hints,
 )
 
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 from nexus.context import get_current_request
 from nexus.extractors import (
     Bytes,
@@ -121,7 +122,12 @@ def _relative_handler_location(func: Callable) -> str:
     try:
         source_file = inspect.getsourcefile(func) or inspect.getfile(func)
     except (TypeError, OSError):
-        return getattr(func, "__qualname__", repr(func))
+        # This branch fires for exactly the callables that have no source file
+        # — a `functools.partial`, a callable object — which are also the ones
+        # whose `repr` renders bound arguments or config fields. The returned
+        # string is interpolated into an `ExtractorPEP563Error` message, so a
+        # repr here would ride the exception into whatever logs it.
+        return safe_callable_name(func)
     try:
         _, line = inspect.getsourcelines(func)
     except (OSError, TypeError):
@@ -375,10 +381,18 @@ class ResolverChain:
                 # surface the canonical INTERNAL_ERROR envelope WITH a
                 # correlation id (spec §139) so the operator can look the
                 # failure up in the server log — never an opaque TypeError.
+                # `callable_` is the caller's DEPENDENCY callable. A hashable
+                # callable object (`@dataclass(frozen=True)` holding an
+                # endpoint + api_key — the idiomatic configured-dependency
+                # shape) survives the memoisation cache, gets introspected
+                # here, and reached this line with its full `__repr__` when it
+                # declared a required flat param. `safe_callable_name` reports
+                # its class name instead, which still identifies WHICH
+                # dependency was unsatisfiable.
                 logger.error(
                     "resolver.dependency_flat_param_unsatisfiable",
                     extra={
-                        "callable": getattr(callable_, "__qualname__", repr(callable_)),
+                        "callable": safe_callable_name(callable_),
                         "param": spec.name,
                     },
                 )
@@ -539,21 +553,49 @@ async def _bytes_from_request(request: Optional[Request]) -> Bytes:
 
 
 def _log_resolver_failure(func: Callable, depends: Depends, exc: Exception) -> None:
-    """Log the full server-side context of a resolver dependency failure.
+    """Log the server-side context of a resolver dependency failure.
 
-    Per the split-visibility contract (spec §138): exception type, full
-    traceback, handler name, dependency __qualname__. The client never sees any
-    of this — only the correlation id surfaced in the 500 envelope.
+    Per the split-visibility contract (spec §138) the client sees ONLY the
+    correlation id in the 500 envelope; the operator's audit trail lives here.
+    That contract names four things to record: exception type, failure
+    location, handler name, and the dependency's ``__qualname__``. All four are
+    still emitted. What is NOT emitted is any caller-supplied STRING, and both
+    of the previous sources of one are removed:
+
+    - The identity fields fell back to ``repr()`` when ``__qualname__`` was
+      absent, and on a dependency-injection surface the objects that lack it
+      are exactly the ones holding config.
+      ``Depends(functools.partial(get_db, dsn="postgres://svc:<credential>@…"))``
+      is the IDIOMATIC way to pre-bind a connection string, and a partial has
+      no ``__qualname__``; a callable object with a dataclass ``__repr__``
+      renders every field, credential ones included. Both are proven to reach
+      this line through a live HTTP request. ``safe_callable_name`` keeps the
+      resolution — a partial still reports the wrapped function's own name —
+      while emitting only source-level identifiers.
+    - ``exc_info=exc`` re-leaked the same payload independently of the identity
+      fields, by TWO routes. (1) The dependency's own exception: a driver error
+      reading ``could not connect to postgres://svc:<credential>@host/db``,
+      which ``logging`` prints verbatim when it walks the chain. (2) The
+      introspection refusal: ``get_type_hints`` rejects a ``functools.partial``
+      with ``TypeError: functools.partial(<function get_db>, dsn='…') is not a
+      module, class, method, or function`` — the refusal message embeds the
+      full repr — and ``_detect_pep563`` chains it via
+      ``raise ExtractorPEP563Error(...) from exc``, so it arrived as the
+      ``__cause__``. Route (2) means the identity fix ALONE would not have
+      closed this line.
+
+    ``safe_exception_frames`` replaces the traceback: it keeps every frame as
+    ``path:line:function`` plus each chained exception's TYPE, and drops only
+    the messages. The operator still learns where the failure came from; the
+    payload has no route into the record.
     """
     logger.error(
         "resolver.dependency_failed",
-        exc_info=exc,
         extra={
-            "handler": getattr(func, "__qualname__", repr(func)),
-            "dependency": getattr(
-                depends.dependency, "__qualname__", repr(depends.dependency)
-            ),
+            "handler": safe_callable_name(func),
+            "dependency": safe_callable_name(depends.dependency),
             "exc_type": type(exc).__name__,
+            "exc_frames": safe_exception_frames(exc),
         },
     )
 

@@ -27,6 +27,7 @@ from typing import (
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
+from kailash.utils.secure_logging import safe_callable_name
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from nexus.background import BackgroundService
@@ -2420,17 +2421,50 @@ Check the documentation or explore available resources.
                 # the inert-limit WARN stays silent -- but the failure itself
                 # is reported, because a security control whose verification
                 # did not run must not look identical to one that passed.
+                # TWO caller-supplied payloads used to reach this ONE record,
+                # so fixing either alone would still have shipped the other.
+                #
+                # (1) The identity fallback was `repr(handler)`, and `handler`
+                #     is caller-supplied. `functools.partial(dashboard,
+                #     dsn="postgres://svc:<credential>@host/db")` — pre-binding
+                #     config at registration — has no `__name__`, so its bound
+                #     kwargs rendered verbatim.
+                # (2) `exc` interpolated the SAME repr right back in: the
+                #     `get_type_hints` refusal that lands here reads
+                #     `TypeError: functools.partial(<function dashboard>,
+                #     dsn='…') is not a module, class, method, or function`.
+                #     The exception's own message embeds the repr.
+                #
+                # RETAIN A SCALAR, NEVER A RENDERING. The exception's MESSAGE
+                # is a rendering, so it is not retained at all -- not even
+                # filtered. What the operator actually needs from the common
+                # failure (a forward reference to a name not importable at
+                # registration) is the SYMBOL that would not resolve, and
+                # `NameError.name` carries exactly that as a bare identifier:
+                # `NoSuchTypeAnywhere`, never the sentence quoting it. The
+                # partial refusal is a TypeError with no `.name`, so there is
+                # no scalar to retain and none is invented -- the type name
+                # plus the handler's safe name is the whole diagnostic there.
+                #
+                # The WARN's purpose is unchanged: a security control whose
+                # verification did not run must not look identical to one that
+                # passed.
+                unresolved_symbol = getattr(exc, "name", None)
+                exc_detail = (
+                    f"{type(exc).__name__}: {unresolved_symbol}"
+                    if isinstance(unresolved_symbol, str) and unresolved_symbol
+                    else type(exc).__name__
+                )
                 logger.warning(
                     "nexus.endpoint.rate_limit_unverifiable: could not resolve "
-                    "the annotations of handler %r for %s %s (%s: %s), so "
+                    "the annotations of handler %r for %s %s (%s), so "
                     "whether rate limiting engages could NOT be verified at "
                     "registration. If the handler declares no `request: "
                     "Request` parameter, rate_limit=%s has no effect.",
-                    getattr(handler, "__name__", repr(handler)),
+                    safe_callable_name(handler),
                     "/".join(methods),
                     path,
-                    type(exc).__name__,
-                    exc,
+                    exc_detail,
                     effective_rate_limit,
                 )
                 return True
@@ -2506,7 +2540,13 @@ Check the documentation or explore available resources.
                     effective_rate_limit,
                     "/".join(methods),
                     path,
-                    getattr(func, "__name__", repr(func)),
+                    # `func` is caller-supplied. This WARN fires when the
+                    # annotations DO resolve but declare no Request -- which a
+                    # configured callable object satisfies, and its
+                    # dataclass-generated `__repr__` renders every field
+                    # including a credential one. Confirmed reachable by
+                    # execution, not inferred.
+                    safe_callable_name(func),
                 )
 
             # Simple in-memory rate limiter (per client IP).
@@ -2832,7 +2872,13 @@ Check the documentation or explore available resources.
         # loop and surface as a "coroutine expected" error at request time.
         # inspect.iscoroutinefunction — see note on _wrap_with_guard.
         if not inspect.iscoroutinefunction(func):
-            func_name = getattr(func, "__name__", repr(func))
+            # `func` is caller-supplied, and this branch fires for exactly the
+            # shapes that lack `__name__`: a `functools.partial` wrapping a
+            # sync middleware renders its bound kwargs verbatim into the
+            # message below, which then rides the TypeError into whatever logs
+            # it. The name is interpolated TWICE here, so a repr would have
+            # been emitted twice.
+            func_name = safe_callable_name(func)
             raise TypeError(
                 f"use_middleware expects an async function, got sync "
                 f"function {func_name!r}. Define with "
