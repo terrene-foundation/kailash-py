@@ -72,15 +72,19 @@ class TestSinkSideTypeNameIsSanitized:
         assert " <- " not in rendered
         assert "@" not in rendered
 
-    def test_safe_type_name_never_raises(self):
-        class Hostile:
-            @property
-            def __class__(self):
-                raise RuntimeError("no type for you")
-
-        # Called from inside except blocks -- raising would REPLACE the handled
-        # exception, which is the failure this totality guard exists to prevent.
-        assert isinstance(safe_type_name(Hostile()), str)
+    # REMOVED: `test_safe_type_name_never_raises` was VACUOUS and is deleted
+    # rather than left as reassurance.
+    #
+    # It built its hostile object with `@property def __class__`. `type(obj)`
+    # does NOT consult `__class__` -- it reads the real type slot -- so that
+    # object could never make the guarded expression raise, and the pin passed
+    # identically with the totality guard PRESENT or REMOVED. Proven by mutation
+    # + reachability, not assumed.
+    #
+    # The real pin lives in `test_redteam_round11b_unpinned_behaviours.py`
+    # (`test_safe_type_name_survives_a_raising_metaclass_name`), which uses a
+    # metaclass whose `__name__` raises -- a vector that genuinely reaches the
+    # guard, and which asserts the vector raises before relying on it.
 
     def test_no_helper_sink_still_logs_a_raw_type_name(self):
         """Mechanical sweep over DISCOVERED sink files, not a hardcoded list.
