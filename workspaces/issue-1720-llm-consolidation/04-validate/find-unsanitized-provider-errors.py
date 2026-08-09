@@ -182,6 +182,27 @@ def main(argv: list[str]) -> int:
     print(
         json.dumps(
             {
+                # Emitted with every run, deliberately, as the FIRST key.
+                #
+                # The scrubber-vocabulary fix corrected this tool's false
+                # POSITIVES only. Its false NEGATIVES are untouched: it keys on
+                # `except ... as <v>` and asks whether <v> is rendered, so it
+                # cannot see `traceback.format_exc()`, a `%r`/`!r` rendering of
+                # a caller-supplied object, an exception ATTRIBUTE, an
+                # exception arriving as a VALUE rather than a caught binding,
+                # or a `repr()` bound to a local and logged one line later.
+                # Every one of those shapes has been found LIVE in this repo.
+                #
+                # So `high_count == 0` does NOT mean the surface is clean, and
+                # the order in which this tool was repaired makes that MORE
+                # dangerous rather than less: fixing the direction that RED-ed
+                # while leaving the direction that GREEN-s lets the count reach
+                # zero sooner AND more wrongly than when it was broken both
+                # ways. A reader watching only this number will converge early.
+                "NOT_A_CONVERGENCE_GATE": (
+                    "false-negative axis UNFIXED; high_count==0 does not mean "
+                    "clean. Do not gate convergence on this number."
+                ),
                 "high": high,
                 "high_count": len(high),
                 "low_count": len(all_f) - len(high),

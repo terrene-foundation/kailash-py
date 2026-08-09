@@ -86,9 +86,15 @@ leaks**. They go green when `w1-sinks` lands, at which point
 `test_the_sweep_covers_the_measured_surface` REDS until the pin is re-derived. A green
 5-failure→0 transition without a pin red means something is wrong.
 
-**Owed:** `bf164efc1` was committed with `core.hooksPath=/dev/null`, disclosed in the
-shard's report but NOT in the commit body — `git.md` § Discipline requires the body plus a
-follow-up todo. Follow-up commit requested (not an amend; the SHA is already cited here).
+**~~Owed: a `git.md` hooks-bypass disclosure for `bf164efc1`.~~ WITHDRAWN — nothing was
+bypassed.** This row asked for a disclosure of a `core.hooksPath=/dev/null` commit. It is
+superseded by § "NO COMMIT IN THIS REPO IS HOOK-CHECKED" below: this repo's `core.hooksPath`
+points at a non-existent directory in another repo, so the flag was a **no-op and there was
+never a hook to bypass**. The obligation was owed for an event that did not occur.
+
+**Corrected here because it was corrected in ONE place and not this one** — the exact drift
+recorded against the F1 receipt earlier in this session (a claim restated in two places gets
+fixed in one). Caught by the shard whose work the stale row named.
 
 ### `w1-correctness` RETURNED — **REFUTED, a SECOND independent axis.** Pinned `b954ed66a`.
 
