@@ -3,12 +3,28 @@
 This module provides mixins and utilities for automatically detecting and
 masking PII, credentials, and other sensitive information in logs.
 
-It also provides two helpers that make a log line safe BY CONSTRUCTION rather
-than by pattern-matching -- :func:`safe_callable_name` and
+It also provides two helpers that narrow a log line BY CONSTRUCTION rather than
+by pattern-matching -- :func:`safe_callable_name` and
 :func:`safe_exception_frames`. Prefer those wherever the object being logged is
 CALLER-SUPPLIED: the masking below is best-effort over an open-ended payload,
-while those two emit only source-level identifiers that cannot carry a payload
-at all.
+while those two emit only source-level identifiers.
+
+WHAT THAT DOES AND DOES NOT PROMISE. An earlier version of this header claimed
+those identifiers "cannot carry a payload at all". That is FALSE and was
+measured false -- a class name is mintable via
+``type(f"ServerError_{data}", (Exception,), {})``, a function ``__name__`` is
+plainly assignable, and ``__qualname__`` can resolve through a caller-controlled
+``__getattr__`` returning any string whatsoever. Measured: a ``__getattr__``
+returning ``"postgres://svc:hunter2@h/db"`` was emitted verbatim, and a
+5000-character ``__qualname__`` came back at full length.
+
+What IS true is narrower and is enforced here rather than asserted: every such
+identifier is passed through :func:`_safe_identifier` before it reaches a
+record, which BOUNDS its length and confines it to a conservative character set.
+That removes the unbounded-length and record-forgery channels. It does NOT make
+the identifier payload-free -- a short attacker-chosen name still survives, by
+design, because it is often the only diagnostic there is. Treat these helpers as
+"structurally inert and bounded", never as "cannot carry data".
 """
 
 import functools
@@ -51,6 +67,52 @@ _HOME_DIR = os.path.expanduser("~")
 # the one that matters.
 _MAX_CHAIN_LINKS = 10
 
+# Ceiling on any single attacker-influenceable identifier (class name, function
+# name, frame name, frame path) entering a record. Long enough that a real
+# qualname or vendored path survives intact; short enough that 5000 characters
+# of caller-chosen text cannot.
+_MAX_IDENTIFIER_CHARS = 120
+
+# Everything OUTSIDE this set is replaced before an identifier is rendered.
+# Deliberately excludes the characters this module uses structurally --
+# ``<`` ``>`` ``@`` ``:`` and space -- so that a rendered record's own grammar
+# (" <- " between links, "@" before frames, ">" between frames, ":" inside
+# path:lineno:name, and every "<...>" marker) CANNOT be forged from caller data.
+# Newline is excluded for the same reason: it forges an entire extra log line.
+_UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/]")
+
+
+def _safe_identifier(value: object) -> str:
+    """Bound and neutralize one attacker-influenceable identifier.
+
+    Three properties, each measured by a regression pin rather than asserted:
+
+    1. **Bounded.** Output never exceeds ``_MAX_IDENTIFIER_CHARS`` plus a fixed
+       truncation marker, so no identifier can drive log volume.
+    2. **Structurally inert.** No output character can close or open any
+       delimiter this module renders, so a record's grammar always reflects the
+       walk that produced it and never caller-supplied text. In particular a
+       ``<...>`` marker in a record is always OURS, because ``<`` and ``>`` can
+       never survive from input.
+    3. **Total.** Never raises. A logging call site must not fail on the thing
+       it is describing, so a non-string or an object whose ``__str__`` raises
+       degrades to a marker rather than propagating.
+
+    NOT a redaction step: a short attacker-chosen identifier survives on
+    purpose. Bounding and de-fanging is the contract; secrecy is not.
+    """
+    try:
+        text = value if isinstance(value, str) else str(value)
+    except Exception:
+        return "<unrepresentable>"
+    if not text:
+        return "<empty>"
+    cleaned = _UNSAFE_IDENTIFIER_CHARS.sub("?", text)
+    if len(cleaned) > _MAX_IDENTIFIER_CHARS:
+        # Marker uses <> precisely because input cannot contain them.
+        return f"{cleaned[:_MAX_IDENTIFIER_CHARS]}<truncated>"
+    return cleaned
+
 
 def safe_callable_name(obj: Any) -> str:
     """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
@@ -80,8 +142,21 @@ def safe_callable_name(obj: Any) -> str:
        from the cache one. ``partial.func`` is the wrapped function; the
        payload lives in ``partial.args`` / ``partial.keywords``, which are
        never read here.
-    3. Otherwise ``type(obj).__name__`` -- a class name, which is a
-       source-level identifier and cannot carry a caller payload.
+    3. Otherwise ``type(obj).__name__`` -- a class name.
+
+    WHAT THE RETURNED NAME IS AND IS NOT. An earlier version of item 3 said a
+    class name "cannot carry a caller payload". That is FALSE and was measured
+    false: ``type("K_hunter2", (), {})`` mints one carrying arbitrary text, and
+    item 1 fires FIRST and is worse -- ``__name__`` is plainly assignable and
+    ``__qualname__`` can resolve through a caller-controlled ``__getattr__``
+    returning any string (measured: ``"postgres://svc:hunter2@h/db"`` returned
+    verbatim; a 5000-character name returned at full length).
+
+    Every return below therefore passes through :func:`_safe_identifier`, which
+    BOUNDS the length and strips the characters this module renders
+    structurally. A short caller-chosen name still survives, by design -- it is
+    frequently the only diagnostic available. Read the result as "bounded and
+    structurally inert", never as "payload-free".
 
     Returns a string for every object that misbehaves; it does not raise on
     account of the object, because a logging call site must not fail on the
@@ -117,7 +192,8 @@ def safe_callable_name(obj: Any) -> str:
                 # A non-str __name__ is possible on an exotic object; only a real
                 # string is usable, and only a non-empty one is a diagnostic.
                 if isinstance(name, str) and name:
-                    return f"partial({name})" if unwrapped else name
+                    safe = _safe_identifier(name)
+                    return f"partial({safe})" if unwrapped else safe
             if (
                 isinstance(target, functools.partial)
                 and unwrapped < _MAX_PARTIAL_UNWRAP
@@ -125,14 +201,14 @@ def safe_callable_name(obj: Any) -> str:
                 target = target.func
                 unwrapped += 1
                 continue
-            type_name = type(target).__name__
+            type_name = _safe_identifier(type(target).__name__)
             return f"partial({type_name})" if unwrapped else type_name
     except Exception:
         # Fall back to the ONE read that cannot be intercepted by the object:
         # its type's name. Reached only when the object actively resisted
         # description, so the lost precision is the object's own doing.
         try:
-            return type(obj).__name__
+            return _safe_identifier(type(obj).__name__)
         except Exception:
             return "<unrepresentable>"
 
@@ -230,9 +306,22 @@ def safe_exception_frames(
             ``raise X from prev`` drove 5000 links to a single 175,000-character
             log record -- the log-spam mode ``observability.md`` forbids, on an
             error path an attacker can drive. **The INNERMOST links are kept**,
-            so the root cause always survives truncation and cannot be evicted
-            by an attacker who adds wrapping layers; the dropped OUTER count is
-            rendered at the head of the string.
+            so a root cause cannot be evicted by an attacker who adds WRAPPING
+            (outer) layers; the dropped OUTER count is rendered at the head of
+            the string.
+
+            THE CONVERSE IS NOT PROMISED, and an earlier revision of this line
+            wrongly said "always survives truncation". Keeping a fixed window at
+            one END is symmetric: whatever sits at the OTHER end is evictable by
+            lengthening the retained end. ``__context__`` is chained implicitly
+            whenever an exception is raised while another is handled, so an
+            in-handler retry recursion grows the chain INWARD and pushes the
+            failure that actually propagated out past the cap. Measured: 15
+            in-handler retries under a final ``KeyError`` rendered
+            ``<+7 outer links dropped>`` and the ``KeyError`` was absent.
+            For a WRAPPER chain -- the diagnostic case this helper serves --
+            innermost is the right end; for a RETRY-storm chain it is not, and
+            the comment beside the implementation says so too.
 
     Returns a string like
     ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
@@ -253,8 +342,18 @@ def safe_exception_frames(
     # the cap and left ten generic wrappers behind. Keeping the innermost links
     # removes that lever entirely.
     #
-    # The walk is pointer-follows only and costs nothing; the O(chain x limit)
-    # work is the RENDER, which still happens at most _MAX_CHAIN_LINKS times.
+    # COST, STATED ACCURATELY. An earlier revision of this comment said the
+    # walk "costs nothing". It does not: the pre-cap walk below is O(total
+    # chain length) in time AND in auxiliary memory (one `seen` slot + one
+    # `links` slot per link), in a quantity an attacker influences -- where the
+    # superseded truncate-during-walk did at most _MAX_CHAIN_LINKS iterations.
+    # What IS bounded, and is the half that matters for the 175,000-character
+    # record this cap exists to prevent, is the RENDER: it still happens at most
+    # _MAX_CHAIN_LINKS times, so the emitted record stays bounded regardless of
+    # chain length. The residual is a constant-factor overhead on objects the
+    # chain already allocated before this function was called -- real, but not a
+    # new unbounded allocation and not a DoS. A deque(maxlen=...) plus a counter
+    # would bound the walk too, at the cost of the exact dropped-count.
     #
     # Honest trade, not a free win: for a RETRY-storm chain the outermost link
     # is the most RECENT attempt and the innermost the oldest, so "innermost"
@@ -272,7 +371,15 @@ def safe_exception_frames(
         walker = walker.__cause__ or walker.__context__
 
     dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
-    kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
+    # ``<= 0`` means NO links, not "all links" -- the same arithmetic the frame
+    # slice below gets wrong when written as a truthiness test. ``links[-0:]``
+    # is ``links[0:]``, i.e. the WHOLE chain, so a zero cap would render every
+    # link while announcing that all of them were dropped (measured: cap 0 ->
+    # 12 links rendered). This is the N3 bug class in the sibling slice.
+    if _MAX_CHAIN_LINKS <= 0:
+        kept: List[BaseException] = []
+    else:
+        kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
 
     descriptions: List[str] = []
     if dropped:
@@ -295,12 +402,22 @@ def safe_exception_frames(
         # ``<= 0`` means NO frames, not "all frames". The old ``if limit > 0``
         # skipped the slice, so a caller asking for zero got everything.
         frames = frames[-limit:] if limit > 0 else []
+        # Every component below is caller-influenceable and is de-fanged before
+        # it is joined: a class name, a frame name and a template BASENAME can
+        # all carry caller text (measured -- see the module header). Unfiltered,
+        # any of them could forge this record's own grammar: a name containing
+        # " <- " invents a chain link, one containing "@" or ">" invents a frame
+        # boundary, and one containing a NEWLINE forges an entire extra log
+        # line (measured constructible via type("A\nERROR ...", (Exception,), {})).
+        # ``lineno`` is an int from the traceback machinery, never caller text.
         rendered_frames = ">".join(
-            f"{_relative_frame_path(frame.filename)}:{frame.lineno}:{frame.name}"
+            f"{_safe_identifier(_relative_frame_path(frame.filename))}"
+            f":{frame.lineno}:{_safe_identifier(frame.name)}"
             for frame in frames
         )
         descriptions.append(
-            f"{type(current).__name__}@{rendered_frames or '<no-frames>'}"
+            f"{_safe_identifier(type(current).__name__)}"
+            f"@{rendered_frames or '<no-frames>'}"
         )
 
     return " <- ".join(descriptions)
