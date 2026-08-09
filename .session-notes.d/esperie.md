@@ -20,11 +20,15 @@ so. It is shippable as that. It is NOT "the leak class is closed" and MUST NOT b
 
 ## Read first
 
-1. `.wave-tracker.d/esperie.md` — **AUTHORITATIVE.** Every finding, every correction, the
-   four-spelling taxonomy, the instrument lesson's final form, and the unowned queue.
-2. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — amended four times
+1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-09b.md` — **THE DECISION
+   REPORT.** PCF-triaged queue, ETA in cycles, three decision points (A: where
+   `credential_scrub` lives; B: merge-now-or-hold; C: Sweep-N on the three deferred-quality
+   items), each with symmetric pros/cons + a recommendation. **Supersedes `sweep-2026-08-09.md`.**
+2. `.wave-tracker.d/esperie.md` — **AUTHORITATIVE on findings.** Every finding, every
+   correction (mine included), the four-spelling taxonomy, the instrument lesson's final form.
+3. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — amended four times
    this session; now carries the measured per-tree table and the architectural blocker.
-3. This file's **Gating decision** and **Traps** before touching anything.
+4. This file's **Gating decision** and **Traps** before touching anything.
 
 ## In-flight state
 
@@ -71,7 +75,22 @@ Six shards. Leak class closed in `kaizen-agents` (12 sites) and both repr halves
 (kaizen 8 + core/nexus 11+). F13 lifecycle closed. Two scanners repaired, a third built.
 PR body corrected four times. Full detail in the wave tracker — do not reconstruct it here.
 
-## Open questions for the human (ordered)
+## Open questions for the human (ordered) — full treatment in the sweep report
+
+**Three of these are formal DECISION POINTS** with symmetric pros/cons in
+`04-validate/sweep-2026-08-09b.md` §5: **A** = item 1 below, **B** = merge-now-or-hold,
+**C** = the Sweep-N dispositions on #2003 / #2005 / #1995. The list below is the index; the
+report is where the trade-offs are stated.
+
+**Sweep-N gate is OPEN on three deferred-quality items** (`value-prioritization.md` MUST-3):
+#2003 and #2005 are on their **THIRD** cycle — a fourth re-defer should trigger
+close-or-implement, not another defer. #1995 is 6d. **None may be closed as `not_planned`
+without a user gate in the same session** (MUST-4). Recommended: re-defer #2003/#2005 with
+fresh anchors, implement #1995 but only AFTER the merge (a 2,022-file formatting commit
+conflicts with all six worktrees).
+
+**#2011 is INCREMENTAL but UNLABELLED** — its artifact is the one dirty file in the tree.
+Label `deferred-quality` or fix it; it should not sit outside the tracked backlog.
 
 1. **Where `credential_scrub` lives** — above. Gates two packages.
 2. **Rotate the OpenAI key.** A shard printed a live key into its transcript via a wrong
