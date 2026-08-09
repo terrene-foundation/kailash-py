@@ -326,8 +326,28 @@ $ pytest packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scru
                                                   -> 319 passed
 ```
 
-Both pins had a clean source tree. The gap between them is accounted for in Status: the
-intervening commits touch nothing inside the four packages these suites cover.
+Both pins had a clean source tree.
+
+**These are `tests/regression` SUBSETS (plus one single file), NOT whole package trees — do
+not read them as tree coverage.** Whole-tree runs at `b954ed66a` by the clean round's
+correctness lens: `packages/kailash-nexus/tests` **2632 passed, 14 skipped** and
+`packages/kailash-mcp/tests` **670 passed, 1 xfailed** are genuinely clean and complete.
+`packages/kailash-kaizen/tests` is **NOT** — `packages/kailash-kaizen/pytest.ini:13` sets
+`--maxfail=10`, so a whole-tree run ABORTS at the tenth failure and its "156 passed" is an
+abort count, not coverage. Nine of those ten look infrastructure/live-LLM dependent
+(`docker-compose up failed`, `config/dev.env must exist`, `$OPENAI_API_KEY is unset`) —
+**that diagnosis was not confirmed per-failure and must not be assumed.** The tenth is NOT
+environmental: `test_full_integration_e2e.py::test_enterprise_workflow_integration` fails
+`TypeError: BaseAgent.__init__() got an unexpected keyword argument 'description'`, which is
+**#2010**, pre-existing (`origin/main` carries the identical signature and this branch
+touched neither file) and still owed under `zero-tolerance.md` Rule 1. The core `tests/` and
+`packages/kaizen-agents/tests` whole-tree runs were still IN FLIGHT when observed, and an
+in-flight run is zero evidence — those two are **NOT EXAMINED**, not passing.
+
+**The earlier "intervening commits touch nothing inside the four packages" justification is
+WITHDRAWN here as it is in Status** — HEAD has since moved 11 commits past `95b142320`, two
+of them nexus test commits. The numbers above stand on the re-runs cited, not on that
+inference, and a merge-time re-run is required.
 
 Collected-only counts, for scale (re-derived at `51a3e4eaa` — HEAD moved again during
 this pass, which is the condition, not an anomaly):
