@@ -170,11 +170,21 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
 #:                                                  narrowed gather() result)
 #:   delegate/loop.py                         767  (lazy ``%s`` of an isinstance-
 #:                                                  narrowed gather() result,
-#:                                                  five lines below a correctly
-#:                                                  scrubbed sibling sink)
-#: Once all ten are routed through a preset this pin becomes 58 / 201:
-#: +10 sites, and +1 file because ``meta_controller.py`` carried no scrubbed
-#: sink at all before. Re-derive rather than trust that arithmetic.
+#:                                                  thirteen lines below a
+#:                                                  correctly scrubbed sibling)
+#:   patterns/registry.py                     711  (``repr()`` of a CALLER-
+#:                                                  SUPPLIED listener inside a
+#:                                                  ``logger.warning`` extra,
+#:                                                  beside a scrubbed ``exc``)
+#: Ten of the eleven are routed through a preset when fixed, taking this pin to
+#: 58 / 201: +10 sites, and +1 file because ``meta_controller.py`` carried no
+#: scrubbed sink at all before.
+#:
+#: ``registry.py:711`` is the exception and MUST NOT be counted as an eleventh:
+#: its accepted remediation is ``type(listener).__name__``, NOT a scrub (see
+#: ``_repr_sinks``), so fixing it REMOVES a bare site without ADDING a wrapped
+#: one. A pin that lands on 202 means someone scrubbed the repr instead, which
+#: this file rejects. Re-derive rather than trust any of that arithmetic.
 EXPECTED_FILES = 57
 EXPECTED_SITES = 191
 
@@ -227,15 +237,29 @@ _SAFE_EXC_ATTRS = frozenset(
 )
 
 
-def _key(node: ast.AST) -> tuple[int, int]:
+def _key(node: ast.expr) -> tuple[int, int]:
     """Identity of one syntactic site.
 
     ``(lineno, col_offset)`` rather than ``lineno`` alone, because a site can
     now be reached by more than one pass — a name can be both except-bound and
     ``isinstance``-narrowed in the same function — and a site counted twice
     would inflate the pinned totals into meaninglessness.
+
+    Typed ``ast.expr`` rather than ``ast.AST``: position attributes are declared
+    on the expression/statement subclasses, not on the ``AST`` base, so the
+    wider annotation made every call site an unchecked attribute access. Every
+    caller does pass an expression, so narrowing documents the real contract
+    instead of suppressing the checker.
     """
     return (node.lineno, node.col_offset)
+
+
+def _root_name(node: ast.expr) -> str | None:
+    """The ``Name`` an attribute/subscript chain is rooted at, if any."""
+    current: ast.expr = node
+    while isinstance(current, (ast.Attribute, ast.Subscript)):
+        current = current.value
+    return current.id if isinstance(current, ast.Name) else None
 
 
 def _is_exception_like(node: ast.AST | None) -> bool:
@@ -357,7 +381,7 @@ def _exception_regions(tree: ast.AST) -> list[tuple[str, list[ast.stmt]]]:
     return regions
 
 
-def _is_traceback_call(node: ast.AST) -> bool:
+def _is_traceback_call(node: ast.expr) -> bool:
     """``traceback.format_exc()`` and its siblings, however the module is bound.
 
     Matched on the FUNCTION name alone — ``traceback.format_exc()``,
@@ -404,9 +428,85 @@ def _traceback_sites(
     bare = {
         _key(node)
         for node in ast.walk(tree)
-        if _is_traceback_call(node) and _key(node) not in accounted
+        # The ``isinstance`` is redundant at runtime — ``_is_traceback_call``
+        # already rejects a non-``Call`` — and is kept so the position access in
+        # ``_key`` is a CHECKED one rather than an unchecked attribute read on
+        # the ``AST`` base class, which is what ``ast.walk`` is typed to yield.
+        if isinstance(node, ast.Call)
+        and _is_traceback_call(node)
+        and _key(node) not in accounted
     }
     return bare, wrapped
+
+
+def _repr_sinks(tree: ast.AST, exception_names: set[str]) -> set[tuple[int, int]]:
+    """Shape 8 — ``repr()`` of a NON-exception object reaching a log record.
+
+    Every other shape here is keyed on an EXCEPTION. This one is not, and that
+    is the whole point: ``_SinkScan`` inspects one exception-valued name, so an
+    arbitrary object rendered into a log was outside its universe of discourse
+    however the name-tracking was tuned. The control that makes this a finding
+    rather than a guess is that the same probe DOES fire on the exception form —
+    ``repr(handler)`` scanned to ``[]`` while ``repr(e)`` scanned to ``[4]``.
+
+    WHY AN OBJECT'S ``repr`` IS A CREDENTIAL SURFACE
+    ------------------------------------------------
+    ``journey/manager.py`` already fixed one of these and wrote out the threat
+    model, which this pass exists to enforce everywhere else::
+
+        functools.partial(post, url="https://u:pw@host")
+
+    renders its bound kwargs verbatim, and a callable object's
+    dataclass-generated ``__repr__`` renders every field including a credential
+    one. Both are CALLER-SUPPLIED, so whether the repr carries a secret is not
+    decidable here.
+
+    THE CONDITIONALITY IS WHY IT IS FLAGGED, NOT WHY IT IS EXCUSED
+    --------------------------------------------------------------
+    The live shape is ``getattr(handler, "name", repr(handler))``. Python
+    evaluates that third argument EAGERLY, so the repr is computed on every
+    call, but it only REACHES the log when the attribute is missing. So this is
+    a conditional leak — and whether the attribute is present is a property of
+    objects the caller supplies, which no scan-time analysis can settle. Flagged
+    for exactly that reason: unprovable is not the same as absent, and this
+    scanner's defect was resolving the unprovable case to silence.
+
+    Matched on the SHAPE — a ``repr()`` call, or an ``!r`` conversion, anywhere
+    inside a logging call — never on the attribute literal, because the same
+    defect ships as both ``"name"`` and ``"__name__"``.
+
+    A SCRUBBED ``repr`` IS STILL FLAGGED, DELIBERATELY
+    ---------------------------------------------------
+    Everywhere else in this file, routing through a preset means covered. Not
+    here, and not by oversight: ``journey/manager.py`` rejected that remediation
+    explicitly, preferring ``type(handler).__name__`` because "the scrubber's
+    coverage is porous (a prefix-less 32-39 char key, ``token=``, a %40-encoded
+    ``@`` all survive it)", whereas a type name cannot carry a payload BY
+    CONSTRUCTION. Counting a scrubbed repr as covered would have this scanner
+    bless the fix that codebase already considered and rejected.
+
+    ``repr(e)`` on an exception is NOT claimed here — shape 1 owns it, and
+    scrubbing an exception IS the accepted remediation for it.
+    """
+    flagged: set[tuple[int, int]] = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and _SinkScan._is_logging_call(node.func)):
+            continue
+        for sub in ast.walk(node):
+            if (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Name)
+                and sub.func.id == "repr"
+                and len(sub.args) == 1
+            ):
+                if _root_name(sub.args[0]) in exception_names:
+                    continue  # shape 1 owns it; a scrubbed exception is covered
+                flagged.add(_key(sub))
+            elif isinstance(sub, ast.FormattedValue) and sub.conversion == ord("r"):
+                if _root_name(sub.value) in exception_names:
+                    continue
+                flagged.add(_key(sub))
+    return flagged
 
 
 class _SinkScan(ast.NodeVisitor):
@@ -614,20 +714,27 @@ class _SinkScan(ast.NodeVisitor):
 def _scan_tree(tree: ast.AST) -> tuple[list[int], list[int]]:
     """Return ``(bare_linenos, wrapped_linenos)`` for one parsed module.
 
-    Two passes whose results are UNIONED by site identity: the name-independent
-    traceback pass, and one :class:`_SinkScan` per region from
-    :func:`_exception_regions`. Regions legitimately overlap — a parameter can
-    also be ``isinstance``-narrowed inside the same function — so the union is
-    taken over :func:`_key` rather than over line numbers, which keeps a site
-    counted exactly once however many passes reach it.
+    THREE passes whose results are UNIONED by site identity: the
+    name-independent traceback pass, one :class:`_SinkScan` per region from
+    :func:`_exception_regions`, and the ``repr``-of-a-non-exception pass. Two of
+    the three are name-independent, which is the structural lesson of this
+    file — every blind shape it has had was a shape that could not be reached by
+    tracking one bound exception name, however well that tracking was done.
+
+    Regions legitimately overlap — a parameter can also be ``isinstance``-
+    narrowed inside the same function — so the union is taken over :func:`_key`
+    rather than over line numbers, which keeps a site counted exactly once
+    however many passes reach it.
     """
+    regions = _exception_regions(tree)
     bare, wrapped = _traceback_sites(tree)
-    for name, body in _exception_regions(tree):
+    for name, body in regions:
         scan = _SinkScan(name)
         for stmt in body:
             scan.visit(stmt)
         bare |= scan.bare
         wrapped |= scan.wrapped
+    bare |= _repr_sinks(tree, {name for name, _ in regions})
     return sorted(lineno for lineno, _ in bare), sorted(lineno for lineno, _ in wrapped)
 
 
@@ -766,6 +873,37 @@ class TestTheScannerSeesEachShape:
                 "        raise error\n"
                 '    return {"error": str(error)}\n',
             ),
+            # Shape 8 — repr() of a NON-exception object. Both live variants,
+            # which differ only in the attribute literal, plus the !r form.
+            (
+                "getattr-name-repr-fallback",
+                "def register(handler):\n"
+                '    name = getattr(handler, "name", repr(handler))\n'
+                '    logger.info("registered %s", getattr(handler, "name", repr(handler)))\n',
+            ),
+            (
+                "getattr-dunder-name-repr-fallback",
+                "def register(handler):\n"
+                '    logger.info("registered %s",'
+                ' getattr(handler, "__name__", repr(handler)))\n',
+            ),
+            (
+                "repr-inside-logging-extra",
+                "def notify(listener):\n"
+                '    logger.warning("failed", extra={"listener": repr(listener)})\n',
+            ),
+            (
+                "repr-conversion-in-fstring",
+                'def notify(listener):\n    logger.warning(f"failed for {listener!r}")\n',
+            ),
+            # The remediation this codebase ACCEPTED is type(x).__name__, not a
+            # scrubbed repr -- so a scrubbed repr must still flag. See
+            # _repr_sinks' docstring and journey/manager.py.
+            (
+                "scrubbed-repr-still-flagged",
+                "def notify(listener):\n"
+                '    logger.warning("failed: %s", scrub_remote_error(repr(listener)))\n',
+            ),
         ],
     )
     def test_each_non_handler_shape_is_flagged(self, label: str, src: str) -> None:
@@ -848,6 +986,44 @@ class TestTheScannerSeesEachShape:
             '            logger.error("got %s", result)\n'
         )
         assert not self._scan(src)
+
+    @pytest.mark.parametrize(
+        "label, src",
+        [
+            # repr() outside a log record is not a sink -- __repr__ methods,
+            # assertion messages and debug reprs are not credential surfaces.
+            (
+                "repr-in-dunder-repr",
+                "class R:\n"
+                "    def __repr__(self):\n"
+                '        return f"R(text={repr(self.preview)})"\n',
+            ),
+            ("repr-in-a-return-value", "def f(x):\n    return repr(x)\n"),
+            # The accepted remediation must NOT read as a sink, or the fix has
+            # nowhere to land.
+            (
+                "type-name-fallback",
+                "def register(handler):\n"
+                '    logger.info("registered %s",'
+                ' getattr(handler, "name", type(handler).__name__))\n',
+            ),
+            # repr OF AN EXCEPTION belongs to shape 1, where scrubbing IS the
+            # accepted remediation; shape 8 must not double-claim it.
+            (
+                "scrubbed-repr-of-an-exception",
+                "try:\n    pass\nexcept Exception as exc:\n"
+                '    logger.error("f: %s", scrub_remote_error(repr(exc)))\n',
+            ),
+        ],
+    )
+    def test_each_safe_repr_shape_is_not_flagged(self, label: str, src: str) -> None:
+        """Shape 8's negative controls.
+
+        Without these the ``repr`` pass would pass just as well while flagging
+        every ``repr`` in the package, and a detector that noisy is one someone
+        switches off — which is the same outcome as the blindness it replaced.
+        """
+        assert not self._scan(src), f"scanner false-positives on {label!r}"
 
     def test_raise_of_a_class_is_not_an_exception_valued_name(self) -> None:
         """``raise ValueError`` names a CLASS, not a parameter holding a value.
