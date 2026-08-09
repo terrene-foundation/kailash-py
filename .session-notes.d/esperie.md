@@ -9,7 +9,7 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain`. **282 commits unpushed, working tree clean** apart from
+`fix/issue-1720-forest-drain`. **286 commits unpushed, working tree clean** apart from
 `kaizen_implementation_test.log` (#2011's own artifact, left deliberately).
 
 **The six shard worktrees are MERGED.** That was session J's stated first act and it is done:
@@ -20,9 +20,9 @@ and can be removed once the PR lands.
 **The PR is still NOT open, and the framing is unchanged: ONE TREE OF FOUR swept.** Do not
 open it as "the leak class is closed."
 
-**REDTEAM HAS NOT CONVERGED.** Round 1 NOT clean, round 2 NOT clean, round 3 IN FLIGHT at
-session end. Each round found something real IN THE PREVIOUS ROUND'S FIX. Do not claim
-convergence without a clean round from BOTH lenses.
+**REDTEAM HAS NOT CONVERGED — but it is one clean round away.** See the convergence section
+directly below for the state and, more importantly, for the decision that must NOT be made
+casually.
 
 ## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
 
@@ -67,9 +67,18 @@ Neither is blocking; neither is self-accepting; I cannot accept them on my own b
 
 ## In-flight state
 
-**Round 3 SECURITY lens reported: NOT CLEAN** (1 new MEDIUM + 2 LOW, all mine, all now fixed
-in `90c625444`). **Round 3 CORRECTNESS lens had not reported at session end.** Round 4 is owed:
-no round has yet come back clean, and the round-3 fixes are themselves unreviewed.
+**Round 6 dispatched to the SECURITY lens against `b9f1e5ab7`; verdict not received at session
+end.** It is the candidate SECOND consecutive clean round. It was asked to confirm explicitly
+whether it counts as consecutive with round 5, given HEAD moved by a docstring-and-test-only
+commit in between (production behaviour verified unchanged: the whole `base.py` diff is 9 lines
+of docstring prose).
+
+**The CORRECTNESS lens returned CLEAN on round 4 with a SCOPE CAVEAT that still stands:** it
+reviewed `base.py` + `mcp_channel.py` + the test file, and explicitly NOT `api_channel.py` /
+`cli_channel.py`, which were modified after it captured. Its round-5 verdict against the
+committed state had not arrived at session end. **Do not read its round-4 CLEAN as covering all
+three channels.**
+
 No PRs open.
 
 **Tree-wide `tests/` + kaizen + kaizen-agents runs were still executing** at session end
@@ -105,7 +114,7 @@ that shard should be scoped.
 
 ## Executed this session
 
-Integration + three redteam rounds. 33 commits this session. Full detail in the PR body; the load-bearing
+Integration + five redteam rounds. 37 commits this session. Full detail in the PR body; the load-bearing
 parts:
 
 - **A cross-shard defect the merge surfaced.** `f10-sinks` scrubbed via
