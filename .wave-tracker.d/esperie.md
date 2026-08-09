@@ -310,6 +310,89 @@ class beyond this branch's remit, the wave is already at 4 concurrent editors, a
 24-site sweep across three gateway surfaces is its own shard with its own security review.
 Surfaced for a filing/scheduling decision rather than absorbed silently.
 
+### ⚠ CREDENTIAL EXPOSURE — session transcript only. ROTATE THE OpenAI KEY.
+
+`w1-sinks` ran a shell check whose fallback expansion was wrong
+(`${VAR:+YES}${VAR:-NO}` — the second expansion prints the VALUE when the var IS set),
+printing a live `OPENAI_API_KEY` from the repo `.env` into its session transcript in full.
+**It self-reported rather than burying it**, which is the behaviour to reinforce.
+
+**Containment VERIFIED first-hand by the orchestrator, not taken on report:**
+
+| check                                          | result                                 |
+| ---------------------------------------------- | -------------------------------------- |
+| real-key prefix in tracked files at HEAD       | **absent**                             |
+| commits touching that literal (`-S`, `--all`)  | **0**                                  |
+| present in any of the 5 worktree working trees | **none**                               |
+| `.env` tracked?                                | **no** — gitignored at `.gitignore:75` |
+
+(21 files DO contain `sk-proj-` — every one is a SYNTHETIC scrubber fixture. The
+discriminating check is the real prefix, which appears nowhere.)
+
+**Exposure is confined to the session transcript. Rotate anyway.** The prior session's
+notes record this key as already invalid (live 401), which is mitigating but NOT a reason
+to skip rotation: that note is 15 days old, and "401" is consistent with expired,
+rate-limited, or revoked — it does not establish the key is dead.
+
+### ⚠ NO COMMIT IN THIS REPO IS HOOK-CHECKED — every session commit went in unhooked
+
+Found by `w1-scanner` while discharging a `git.md` follow-up I had asked it for, and it
+**corrected its own fabricated reason to get there** (see below). Verified first-hand:
+
+```
+$ git config --get core.hooksPath
+/Users/esperie/repos/loom/kailash-py/.git/hooks     <-- a DIFFERENT repo
+$ [ -d that ] -> NO
+$ git commit --allow-empty     -> zero hook output, exit 0      (probe reverted)
+```
+
+`core.hooksPath` points at a hooks directory **in another repository that does not exist**,
+so git runs no hook at all. The setting lives in the COMMON git dir, so it binds the build
+checkout **and every worktree of it**. Consequently `-c core.hooksPath=/dev/null` was a
+**no-op — there was never a hook to bypass**, and the `git.md` disclosure I demanded was
+owed for an event that did not occur.
+
+**Every commit this session — all five shards' and all of mine — is unhooked.** This is
+operator-owned repo config, outside any shard's partition. NOT fixed here: repairing another
+operator's git config is not this session's to make. Surfaced for the co-owner.
+
+**And running the REAL gate immediately caught a live failure a bare-tool stand-in missed.**
+`w1-scanner`'s `305e689a6` claimed "black/ruff/pyright all pass"; bare `ruff check` did pass,
+but the repo's CONFIGURED ruff (via pre-commit) failed `UP038` ×4 on code it had just
+written. Fixed in `f630851dc`. That is the argument for running the gate rather than a close
+substitute, demonstrated on the shard that was auditing instruments.
+
+### `w1-sinks` — F10 CLOSED. 9 sites, RED established, one premise CONFIRMED.
+
+Commit `bcd446068`. RED `11 failed, 4 passed` → GREEN `15 passed`. `__file__` proof under
+`$WT` for both packages. **It refused to count the 4 pre-fix passes as evidence** — 3 are
+deliberate negative controls, 1 an already-safe path — which is the honest accounting.
+
+**My `parallel.py:258` claim CONFIRMED by measurement:** `format_exc() -> 'NoneType: None\n'`.
+It then applied derive-from-object at ALL 9 sites, including the 6 where `format_exc()` was
+already correct, because a reader cannot tell the two cases apart by looking and the two that
+were broken were broken in exactly that way. Output byte-identical where it was already right.
+
+**`format_exc()` is now EXTINCT in both packages' `src/`** — post-fix sweep, zero non-comment
+occurrences. No same-class residue.
+
+**It also predicted, then verified, that the sibling's pin does NOT move** (`319 passed`,
+57/191 unchanged) — because that scanner only counts sinks inside `ast.ExceptHandler` keyed
+on the bound name, and none of these shapes qualify. Two shards reasoning independently to
+the same structural conclusion is worth more than either assertion alone.
+
+**13 full-suite failures are NOT its work** — established with two discriminating checks:
+the failure stack contains no `patterns/` frame, and no failing file imports any of the four
+classes. Root cause: `.env` is gitignored so it does NOT exist in a worktree, and the root
+conftest auto-load has nothing to load. **Any agent running the full suite from a worktree
+will hit the same 13 and may misread them as regressions.**
+
+**Adjacent lead, latent not live:** `hooks/security/redaction.py:231` +
+`hooks/builtin/logging_hook.py:109` register `structlog.processors.format_exc_info` in a
+chain with NO redaction processor — the `689f9ebd8` class one layer up. It grepped for
+producers and found none live, so it is latent config that re-opens the class the moment
+anyone adds an `exc_info` call. Worth an issue; untouched.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
