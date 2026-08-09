@@ -33,7 +33,13 @@ dependencies = [
     # MySQL / SQLite / Mongo / Redis drivers move behind their per-DB
     # extras since their imports are function-local.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.51.0",  # #1741: core DatabaseConfig.credential_provider + connect hook
+    # 2.63.0 for kailash.utils.secure_logging.safe_callable_name: the fabric
+    # nexus adapter imports it at module scope to name a CALLER-registered
+    # handler without rendering its repr, so an older kailash makes the import
+    # fail at startup rather than degrade. ONE shared helper, not a per-package
+    # copy -- a security helper duplicated across packages is guaranteed to
+    # drift, which is the same reasoning the nexus pin carries.
+    "kailash>=2.63.0",  # safe_callable_name; #1741 credential_provider + connect hook
     "sqlalchemy>=2.0.0",   # decorators.py + multi_tenancy + model_registry
     "asyncpg>=0.28.0",     # migrations/* (17 files, module-scope) — PG canonical async driver
     "click>=8.0.0",        # CLI: dataflow.cli.{validate,analyze,generate,perf,commands}
