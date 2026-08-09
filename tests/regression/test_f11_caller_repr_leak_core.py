@@ -366,6 +366,78 @@ class TestQueueStatusBackendError:
         assert "ConnectionError" in blob, blob
 
 
+class TestDurableCallbackName:
+    """``durable.py`` -- the FOURTH spelling, and the second amplifier.
+
+    The leak was ``if name: return name; return repr(cb)`` -- an explicit
+    BRANCH, not a ``getattr(x, "...", repr(x))`` default, not ``%r``/``!r``,
+    not a raw ``%s`` of an exception. It survived three separate widenings of
+    the search for this exact class.
+
+    It also lived in a NAMED HELPER feeding three WARN sinks (plus a fourth via
+    the ``failed`` list), which is what made it an amplifier rather than a
+    single sink -- the same property as ``Depends.__repr__``. A sweep that
+    inspects sinks finds leaks; one that inspects helpers feeding sinks finds
+    the multipliers.
+
+    The helper was DELETED rather than repaired: it duplicated
+    ``safe_callable_name``, and that duplication was the defect.
+    """
+
+    def test_the_duplicate_helper_is_gone(self):
+        """A second private implementation of a security helper is the drift."""
+        from kailash.runtime import durable
+
+        assert not hasattr(durable, "_callback_name"), (
+            "_callback_name was re-introduced; it duplicated safe_callable_name "
+            "and its repr fallback is the leak this closed"
+        )
+
+    def test_partial_callback_bound_kwargs_do_not_reach_the_warn(self, caplog):
+        """Driven through the REAL dispatch loop, not the helper in isolation."""
+        from datetime import UTC, datetime
+
+        from kailash.runtime.durable import (
+            NodeCompletionEvent,
+            NodeCompletionHookRegistry,
+        )
+
+        caplog.set_level(logging.WARNING, logger="kailash.runtime.durable")
+
+        def on_complete(event, *, dsn: str) -> None:
+            raise RuntimeError("subscriber down")
+
+        callback = functools.partial(on_complete, dsn=_LEAKY_DSN)
+        assert not hasattr(callback, "__qualname__"), (
+            "precondition: a partial has no __qualname__, which is what sent it "
+            "down the branch under test"
+        )
+
+        registry = NodeCompletionHookRegistry()
+        registry.register(callback)
+
+        now = datetime.now(UTC)
+        event = NodeCompletionEvent(
+            run_id="run-1",
+            workflow_id="wf-1",
+            workflow_fingerprint="fp-1",
+            node_id="node-1",
+            node_type="PythonCodeNode",
+            outputs={},
+            started_at=now,
+            ended_at=now,
+            duration_ms=0,
+        )
+        asyncio.run(registry.dispatch_async(event))
+
+        blob = rendered(caplog)
+        assert "subscriber_failed" in blob, blob
+        assert _SENTINEL not in blob, blob
+        # The diagnostic gains resolution: the shared helper unwraps the partial
+        # to the wrapped function, which the deleted local helper did not do.
+        assert "on_complete" in blob, blob
+
+
 class TestSafeExceptionFrames:
     """Frame rendering keeps WHERE without keeping WHAT."""
 
