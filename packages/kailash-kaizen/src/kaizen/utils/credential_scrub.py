@@ -151,8 +151,49 @@ _AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
 
 #: Key names that ANNOUNCE their value as a secret. Shared by the two
 #: ``key=value`` rules below so the vocabulary cannot drift between them.
+#:
+#: EVERY ALTERNATIVE IS A COMPLETE KEY, because the sub-pattern ends in a
+#: MANDATORY separator (``["']?\s*[=:]``). That is why a prefix already in the
+#: list does NOT cover a longer key built on it, and it is the whole reason
+#: ``secret[-_]?key`` and ``passphrase`` had to be added rather than being
+#: redundant with the ``secret`` and ``passwd|password|pwd`` already here:
+#:
+#:   ``secret_key=<v>`` — the ``secret`` alternative matches its six
+#:   characters and then meets ``_``, which is neither ``=`` nor ``:``, so the
+#:   key-name match FAILS. It fails at every other start offset too, because
+#:   nothing in the alternation matches a bare ``key`` (``api[-_]?key``,
+#:   ``session[-_]?key`` and ``encryption[-_]?key`` each require their own
+#:   prefix). Verified empirically before this edit, not assumed: the compiled
+#:   sub-pattern returned NO MATCH on ``secret_key=``, ``secret-key=`` and
+#:   ``secretkey=``, and the value leaked IN FULL through BOTH presets.
+#:
+#:   ``passphrase=<v>`` — ``pass`` is not an alternative at all, and
+#:   ``passwd`` / ``password`` diverge at the fifth character (``w`` vs ``p``).
+#:   Also verified NO MATCH, also leaking through both presets.
+#:
+#: Both are ordinary spellings on this surface: ``SECRET_KEY`` is the Django /
+#: Flask signing key and a common env-var name, and ``passphrase`` is what a
+#: private key, a keystore and an SSH agent all call theirs — so both reach an
+#: error string through the same env-dump and config-repr shapes the rest of
+#: this vocabulary exists for.
+#:
+#: LONGER LITERAL FIRST (``secret[-_]?key`` ahead of ``secret``), matching the
+#: ``(?i:signature|sig)=`` rule's convention below. Python's alternation is
+#: leftmost-FIRST rather than longest-match, so it would also reach the right
+#: verdict by backtracking out of the shorter alternative; ordering it this way
+#: makes the intent legible instead of incidental.
+#:
+#: ADDED AS ALTERNATIVES, NOT AS A WIDENED CHARACTER CLASS, and that shape is
+#: forced by the same ReDoS argument ``_COMMA_BEARING_RUN`` records below. Each
+#: new alternative is a literal (plus one BOUNDED ``[-_]?``), so it costs O(1)
+#: per start offset and introduces no quantifier that can interact with the
+#: value part's runs. The tempting "just let the key run to the separator"
+#: form — e.g. ``secret[\w-]*`` — is exactly the widened class that argument
+#: rejects: it makes the key/separator boundary float and it would newly claim
+#: unrelated prose such as ``secret_scanning_enabled: false``.
 _CREDENTIAL_KEY_NAMES: Final[str] = (
-    r"[\"']?(?i:passwd|password|pwd|secret|api[-_]?key|apikey|"
+    r"[\"']?(?i:passwd|password|passphrase|pwd|secret[-_]?key|secret|"
+    r"api[-_]?key|apikey|"
     r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
     r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
     r"session[-_]?key|encryption[-_]?key)[\"']?\s*[=:]\s*[\"']?"

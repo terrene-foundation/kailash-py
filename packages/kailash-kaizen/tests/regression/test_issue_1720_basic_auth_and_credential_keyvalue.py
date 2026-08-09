@@ -23,17 +23,24 @@ the log. A test that only exercised `scrub_remote_error` would pass on a
 from __future__ import annotations
 
 import gc
+import re
 import time
 
 import pytest
 
 from kaizen.utils.credential_scrub import (
-    DEFAULT_PLACEHOLDER,
+    _CREDENTIAL_KEY_NAMES,
     _CREDENTIAL_KEYVALUE_TOKEN,
+    DEFAULT_PLACEHOLDER,
     scrub_credentials,
     scrub_local_error,
     scrub_remote_error,
 )
+
+#: `_CREDENTIAL_KEY_NAMES` is a pattern STRING (shared by the two key=value
+#: rules so their vocabulary cannot drift); compiled here so the tests below
+#: can assert against the key half in isolation.
+_CREDENTIAL_KEY_NAME_RE = re.compile(_CREDENTIAL_KEY_NAMES, re.ASCII)
 
 # A base64 of "user:password" — reversible, not a digest.
 _BASIC_VALUE = "dXNlcjpwYXNzd29yZA=="
@@ -64,6 +71,36 @@ _KEYVALUE_CASES = [
     ),
     pytest.param(
         "private_key=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="private_key"
+    ),
+    # VOCABULARY GAP (F10). `secret_key` and `passphrase` were absent from
+    # `_CREDENTIAL_KEY_NAMES`, so both leaked IN FULL on BOTH presets. See
+    # `TestSecretKeyAndPassphraseAreNotCoveredByTheirPrefixes` for why the
+    # already-present `secret` and `passwd|password|pwd` alternatives do NOT
+    # cover them.
+    pytest.param(
+        "secret_key=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="secret_key"
+    ),
+    pytest.param(
+        "secret-key=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="secret-key"
+    ),
+    pytest.param(
+        "secretkey=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="secretkey"
+    ),
+    pytest.param(
+        "passphrase=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="passphrase"
+    ),
+    # The key names are matched case-insensitively (`(?i:...)`), and an env-var
+    # dump — the shape these two most often appear in — is UPPERCASE.
+    pytest.param(
+        "SECRET_KEY=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="secret_key-upper"
+    ),
+    pytest.param(
+        "PASSPHRASE=abcdefghijklmnopqrst", "abcdefghijklmnopqrst", id="passphrase-upper"
+    ),
+    pytest.param(
+        "'secret_key': 'abcdefghijklmnopqrst'",
+        "abcdefghijklmnopqrst",
+        id="secret_key-dict-repr",
     ),
     # Separator + quoting variants a real repr / YAML / JSON dump produces.
     pytest.param(
@@ -127,6 +164,85 @@ class TestCredentialAnnouncingKeyValueIsRedactedOnBothPresets:
 
 
 @pytest.mark.regression
+class TestSecretKeyAndPassphraseAreNotCoveredByTheirPrefixes:
+    """F10. WHY THE TWO NEW ALTERNATIVES ARE NOT REDUNDANT.
+
+    `_CREDENTIAL_KEY_NAMES` already contained a bare `secret`, so
+    `secret[-_]?key` LOOKS like a duplicate a future reader would delete as
+    dead weight. It is not, and the reason is the key-name sub-pattern's
+    MANDATORY TRAILING SEPARATOR: every alternative must be followed by
+    `["']?\\s*[=:]`. On `secret_key=...` the `secret` alternative matches its
+    six characters and then meets `_`, which is neither `=` nor `:`, so the
+    whole key-name match FAILS — and it fails at every other offset too,
+    because nothing in the alternation matches a bare `key`.
+
+    Same mechanism for `passphrase`: `pass` is not an alternative, and
+    `passwd` / `password` / `pwd` all diverge at the fifth character.
+
+    These assert the MECHANISM against the compiled sub-pattern rather than
+    only the end-to-end scrub, so that if a future edit makes the bare
+    `secret` alternative genuinely subsume `secret_key` the redundancy becomes
+    visible here instead of being argued about.
+    """
+
+    @pytest.mark.parametrize(
+        "key",
+        ["secret_key", "secret-key", "secretkey", "passphrase", "SECRET_KEY"],
+    )
+    def test_the_key_name_subpattern_claims_the_whole_key(self, key: str) -> None:
+        match = _CREDENTIAL_KEY_NAME_RE.search(f"{key}=aB3xY9qq77zz12")
+        assert match is not None, (
+            f"the key-name sub-pattern does not match {key!r} at all, so "
+            "nothing announces the value as a secret and it leaks under BOTH "
+            "presets — this is the F10 gap"
+        )
+        assert match.group(0).lower().startswith(key.lower()), (
+            f"the key-name match {match.group(0)!r} does not span the whole "
+            f"key {key!r}; a partial key match means the alternation is "
+            "claiming a suffix and the value boundary is not where it appears"
+        )
+
+    def test_the_bare_secret_alternative_alone_would_not_have_covered_it(self) -> None:
+        """THE FALSIFYING CHECK for 'just use the existing `secret`'.
+
+        Reconstructs the pre-F10 vocabulary and shows it returns NO MATCH.
+        If a future edit makes this pass, the dedicated alternatives ARE
+        redundant and this test says so out loud.
+        """
+        pre_f10 = re.compile(
+            r"[\"']?(?i:passwd|password|pwd|secret|api[-_]?key|apikey|"
+            r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
+            r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
+            r"session[-_]?key|encryption[-_]?key)[\"']?\s*[=:]\s*[\"']?",
+            re.ASCII,
+        )
+        for key in ("secret_key", "secret-key", "secretkey", "passphrase"):
+            assert pre_f10.search(f"{key}=aB3xY9qq77zz12") is None, (
+                f"the PRE-F10 vocabulary already claimed {key!r}; if that is "
+                "now true the new alternatives are redundant and should be "
+                "removed rather than left as duplicated vocabulary"
+            )
+
+    @pytest.mark.parametrize(
+        "text,secret",
+        [
+            ("secret_key=aB3xY9qq77zz12", "aB3xY9qq77zz12"),
+            ("passphrase=aB3xY9qq77zz12", "aB3xY9qq77zz12"),
+        ],
+    )
+    def test_conservative_preset_is_the_load_bearing_half(
+        self, text: str, secret: str
+    ) -> None:
+        """Both keys must be claimed where the shape-only rules are OFF.
+
+        A rule that only fired under the REMOTE preset would leave these on
+        every one of the ~180 local-error sinks, which is the surface the gap
+        was actually leaking on.
+        """
+        assert secret not in scrub_local_error(text)
+
+
+@pytest.mark.regression
 class TestNoFalsePositivesOnOrdinaryText:
     """The new rules are literal-anchored, so credential-free prose is intact.
 
@@ -148,6 +264,19 @@ class TestNoFalsePositivesOnOrdinaryText:
             pytest.param("pwd=1", id="short-sentinel-value"),
             pytest.param("secret: null", id="null-value"),
             pytest.param("Connection timed out after 30s", id="unrelated"),
+            # F10 vocabulary gap: the two NEW key names must buy their coverage
+            # at the SAME zero-false-positive cost as the rest of the family.
+            # These are the prose shapes an agent reads to decide its retry —
+            # the ~180-sink diagnosability cost the value lookahead exists to
+            # avoid, now that two more keys can reach it.
+            pytest.param("passphrase: unavailable", id="passphrase-prose"),
+            pytest.param("secret_key: unavailable", id="secret-key-prose"),
+            pytest.param("the passphrase argument is required", id="passphrase-word"),
+            pytest.param(
+                "invalid value for 'secret_key': expected string",
+                id="secret-key-type-prose",
+            ),
+            pytest.param("passphrase=", id="passphrase-empty-value"),
         ],
     )
     def test_credential_free_text_is_unchanged(self, text: str) -> None:
@@ -366,6 +495,36 @@ class TestNewRulesAreLinear:
             False,
             scrub_credentials,
             id="kv-colon",
+        ),
+        # F10 — the two NEW key-name alternatives, each repeated as a dense
+        # anchor that never completes a match. Same construct and same
+        # `enters="none"` claim as the two units directly above: the payload
+        # exercises the key-name alternation's own split point (the mandatory
+        # `[=:]` separator, excluded from the surrounding `\s*` runs) without
+        # ever entering a value quantifier.
+        #
+        # `secret[-_]?key` is the only new alternative carrying a quantifier at
+        # all, and it is a BOUNDED `[-_]?` over a two-character class, so it
+        # adds O(1) work per start offset. The unit is here because the module
+        # contract requires a landing linearity probe per new pattern, not
+        # because the optional is suspected — and, per this class's own
+        # docstring, it is a FORWARD tripwire: it fires if a future edit gives
+        # the key half an exhaustible search.
+        pytest.param(
+            "secret_key=,",
+            "secret-key-anchor-run",
+            "none",
+            False,
+            scrub_credentials,
+            id="kv-secret-key",
+        ),
+        pytest.param(
+            "passphrase=,",
+            "passphrase-anchor-run",
+            "none",
+            False,
+            scrub_credentials,
+            id="kv-passphrase",
         ),
         # NEW — actually enters `(?:,+A+)+`: `ab` then `,cd` then `,ef`. The
         # trailing space terminates the run so the anchor repeats rather than
