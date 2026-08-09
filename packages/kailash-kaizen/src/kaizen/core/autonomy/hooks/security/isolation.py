@@ -16,7 +16,9 @@ import sys
 import time
 from typing import Any
 
-from ..manager import HookEvent, HookManager, HookPriority
+from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
+
+from ..manager import HookEvent, HookManager, HookPriority, safe_handler_name
 from ..protocol import HookHandler
 from ..types import HookContext, HookResult
 
@@ -123,7 +125,20 @@ class ResourceLimits:
                 "Resource limits cannot be applied."
             )
         except OSError as e:
-            logger.error(f"SECURITY: Failed to apply resource limits: {e}")
+            # ``scrub_local_error``, not ``scrub_remote_error``: this OSError
+            # comes from ``resource.setrlimit``, an in-process OS call, so the
+            # conservative preset is right -- it keeps the shape-only rules OFF
+            # and preserves the errno text and any path, which ARE the
+            # diagnostic here.
+            #
+            # The credential risk today is nil (setrlimit takes ints, not
+            # caller strings). It is scrubbed anyway because the raw-exception-
+            # in-an-f-string SHAPE is one edit away from being a leak: the
+            # moment this block covers a limit derived from a caller-supplied
+            # value, the sink is already wrong and nothing would flag it.
+            logger.error(
+                "SECURITY: Failed to apply resource limits: %s", scrub_local_error(e)
+            )
             raise
 
 
@@ -208,7 +223,10 @@ class IsolatedHookExecutor:
         - Timeout prevents infinite loops
         - Graceful failure handling prevents agent crashes
         """
-        handler_name = getattr(handler, "name", repr(handler))
+        # ``handler_name`` reaches three log lines below AND the returned
+        # ``HookResult.error`` on the timeout and crash paths, so it must not be
+        # able to carry caller state; see ``safe_handler_name``.
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
 
         # Create queue for inter-process communication
         queue: multiprocessing.Queue = multiprocessing.Queue()
@@ -236,8 +254,13 @@ class IsolatedHookExecutor:
                 queue.put(("success", result))
 
             except Exception as e:
-                # Send error to parent process
-                error_msg = f"Hook error: {str(e)}"
+                # Send error to parent process. ``handler.handle`` is
+                # CALLER-SUPPLIED code, so ``e`` is whatever it raised -- an
+                # HTTP client, a DB driver, an SDK -- and this string crosses
+                # the process boundary into BOTH a parent log line and the
+                # returned ``HookResult.error``. Scrubbed here, at the point it
+                # is built, so neither consumer can re-leak it.
+                error_msg = f"Hook error: {scrub_remote_error(e)}"
                 queue.put(("error", error_msg))
 
         # Start isolated process
@@ -301,7 +324,11 @@ class IsolatedHookExecutor:
                 )
 
         except Exception as e:
-            logger.error(f"SECURITY: Failed to retrieve hook result: {e}")
+            # The queue payload was produced by the child from caller-supplied
+            # hook code, so a deserialization failure can render it.
+            logger.error(
+                "SECURITY: Failed to retrieve hook result: %s", scrub_remote_error(e)
+            )
             return HookResult(
                 success=False, error=f"Failed to retrieve result: {e}", duration_ms=0.0
             )
@@ -415,7 +442,7 @@ class IsolatedHookManager(HookManager):
         - Falls back to normal execution if isolation fails
         - Maintains backward compatibility with non-isolated mode
         """
-        handler_name = getattr(handler, "name", repr(handler))
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
 
         # Check if isolation is enabled
         if not self.enable_isolation:
@@ -433,10 +460,16 @@ class IsolatedHookManager(HookManager):
             return result
 
         except Exception as e:
-            # Isolation failed - log error and fall back to normal execution
+            # Isolation failed - log error and fall back to normal execution.
+            # ``e`` comes from ``execute_isolated``, which runs CALLER-SUPPLIED
+            # hook code, so it is the same credential surface as the handler
+            # repr on this line. This module imported no scrubber at all before
+            # the F11 sweep, leaving it un-swept for the exception half.
             logger.error(
-                f"SECURITY: Hook isolation failed for {handler_name}, "
-                f"falling back to normal execution: {e}"
+                "SECURITY: Hook isolation failed for %s, "
+                "falling back to normal execution: %s",
+                handler_name,
+                scrub_remote_error(e),
             )
 
             # Fall back to parent implementation
