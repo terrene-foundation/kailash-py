@@ -23,8 +23,15 @@ wrapup. Convergence is NOT met and MUST NOT be recorded without reading those re
 
 ## In-flight state
 
-- The clean round's two lenses had not returned when this was written. Their reports, if
-  they arrived, are the convergence evidence. **Errored/empty/absent = ZERO evidence.**
+- **THE CLEAN ROUND IS NOT CLEAN. The security lens REFUTED the branch's security claim.**
+  Convergence is NOT met and the PR MUST NOT open until F10 below is closed. The
+  correctness lens had not returned at wrapup — see the wave tracker.
+- **F10 verified first-hand by the orchestrator** (the lens had no Bash): `parallel.py:143`
+  scrubs the message, `:147` returns `traceback.format_exc()` **in the same dict**. Seven
+  `format_exc()` sites across 4 files in `kaizen-agents/src/patterns/patterns/`. The
+  scrubbed line makes each file register as SWEPT — **counted as covered while carrying
+  the defect.** This is byte-for-byte the CLASS-2 defect `689f9ebd8` fixed for
+  `exc_info=True`, one shape over.
 - `kaizen_implementation_test.log` is untracked at the repo root — that is #2011's own
   artifact, left deliberately (deleting untracked files without confirmation is BLOCKED).
 
@@ -42,16 +49,17 @@ Resume: read the tracker BEFORE launching or re-launching anything.
 
 ## Outstanding ledger (forest)
 
-| ID  | Item                                           | Value-anchor (MUST-1 source)                                                  | Status                   |
-| --- | ---------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------ |
-| F1  | #1970 kaizen provider-error sanitize sweep     | journal DECISION — raw provider exception reaching a user surface             | queued (BUG)             |
-| F2  | #1971 DataFlow dialect identifier limit        | journal DECISION — wrong-dialect id selection, multi-database e2e             | queued (INVEST-NOW)      |
-| F3  | #1972 nexus 3 pre-existing failures            | journal DECISION — 2 are STALE tests; greening the product re-adds the defect | queued (INVEST-NOW)      |
-| F5  | #1974 error_sanitizer pattern gaps             | journal DECISION — same class as the leaks closed this session                | queued (BUG)             |
-| F6  | #1981 A2A scores 0.0 without structured output | journal DECISION — every real score 0.0 ⇒ ranking arbitrary                   | queued (BUG)             |
-| F7  | Clean round → convergence → PR → `/release`    | co-owner: "continue from last session" — the only gate left on the branch     | **in-flight**            |
-| F8  | #2013 `enable_auth` facade inert               | README:188 documents it as a production security feature; installs nothing    | queued (BUG) — own shard |
-| F9  | #2012 390 un-triaged exception sinks           | co-owner-approved filing; un-triaged surface, subset are live channels        | queued (BUG) — own shard |
+| ID  | Item                                                                             | Value-anchor (MUST-1 source)                                                  | Status                      |
+| --- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------- |
+| F1  | #1970 kaizen provider-error sanitize sweep                                       | journal DECISION — raw provider exception reaching a user surface             | queued (BUG)                |
+| F2  | #1971 DataFlow dialect identifier limit                                          | journal DECISION — wrong-dialect id selection, multi-database e2e             | queued (INVEST-NOW)         |
+| F3  | #1972 nexus 3 pre-existing failures                                              | journal DECISION — 2 are STALE tests; greening the product re-adds the defect | queued (INVEST-NOW)         |
+| F5  | #1974 error_sanitizer pattern gaps                                               | journal DECISION — same class as the leaks closed this session                | queued (BUG)                |
+| F6  | #1981 A2A scores 0.0 without structured output                                   | journal DECISION — every real score 0.0 ⇒ ranking arbitrary                   | queued (BUG)                |
+| F7  | Clean round → convergence → PR → `/release`                                      | co-owner: "continue from last session" — the only gate left on the branch     | **in-flight**               |
+| F8  | #2013 `enable_auth` facade inert                                                 | README:188 documents it as a production security feature; installs nothing    | queued (BUG) — own shard    |
+| F9  | #2012 390 un-triaged exception sinks                                             | co-owner-approved filing; un-triaged surface, subset are live channels        | queued (BUG) — own shard    |
+| F10 | Leak CLASS open — 7 raw `format_exc()` return surfaces + `_SinkScan` blind spots | adversarial round REFUTED the branch's security claim; verified first-hand    | **queued (BUG) — GATES F7** |
 
 Closed this session: none — F1/F2/F3/F5/F6 all carried forward unchanged; the branch's
 work closed defects that were never forest rows.

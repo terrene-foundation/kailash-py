@@ -13,12 +13,49 @@ Read this BEFORE spawning anything (`orchestration-launch-ledger.md` MUST-2;
 Dispatched against `b220704b5` after a FIRST attempt died on a session quota with
 neither lens delivering. Code surface is unchanged since; later commits are docs-only.
 
-| agent            | lens                                                 | mode      | status                  |
-| ---------------- | ---------------------------------------------------- | --------- | ----------------------- |
-| `w5-sec`         | adversarial security — REFUTE the leak-class closure | read-only | **in-flight at wrapup** |
-| `w5-correctness` | correctness + closure-parity; 5 test trees           | read-only | **in-flight at wrapup** |
+| agent            | lens                                                 | mode      | status                                  |
+| ---------------- | ---------------------------------------------------- | --------- | --------------------------------------- |
+| `w5-sec`         | adversarial security — REFUTE the leak-class closure | read-only | **RETURNED — REFUTED; round NOT clean** |
+| `w5-correctness` | correctness + closure-parity; 5 test trees           | read-only | **in-flight at wrapup**                 |
 
 Both READ-ONLY: no branch, no PR, no commit expected. Findings route to the orchestrator.
+
+### `w5-sec` VERDICT — the branch's security work does NOT hold (ledger row F10)
+
+**The round is NOT clean. Convergence is NOT met. Do NOT open the PR.** 2 of 6 REFUTED.
+
+**HIGH (a) — VERIFIED FIRST-HAND by the orchestrator** (the lens had no Bash). Seven
+`traceback.format_exc()` return surfaces in `kaizen-agents/src/patterns/patterns/`
+(`parallel.py`, `blackboard.py`, `ensemble.py`, `meta_controller.py`). At `parallel.py:143`
+the message is scrubbed; at `:147` the raw traceback is returned **in the same dict**.
+**The scrubbed line makes the file register SWEPT — counted as covered while carrying the
+defect.** Byte-for-byte the CLASS-2 defect `689f9ebd8` fixed for `exc_info=True`, one shape over.
+
+**HIGH (b)** — 2 wholly unscrubbed `str()` returns: `parallel.py:256` (exception from
+`gather(return_exceptions=True)`, never in an except handler) and `meta_controller.py:243`
+(exception arrives as a PARAMETER, so no `ExceptHandler` exists in the function at all).
+Both invisible to the scanner by construction.
+
+**MEDIUM (c)** `_SinkScan` blind to `%`-format, `.format()`, exception ATTRIBUTES
+(`e.args`, `e.response.text`), `format_exc()`, and any exception that is a VALUE not a
+caught binding. **(d)** `secret_key=` / `passphrase=` absent from `_CREDENTIAL_KEY_NAMES`
+— leak under BOTH presets. **(e)** `claude_code.py:398-401` kills without reaping then
+drops the handle; `:356` in the SAME file does it correctly, so the reading discriminates.
+
+**LOW (f)** the `kaizen/__init__.py` KEEP rests on a false premise about imports; no leak
+demonstrated, but the rationale needs rewriting to a checkable claim.
+
+**Method caveat, stated by the lens — honour it.** It had **NO Bash**: could not run the
+`git show` controls, could not execute `_SinkScan`, could not run the scrubber. It marked
+NOT PROVEN rather than HOLDS wherever it could not control a claim. **NOT EXAMINED:**
+`bb8a3f966` (monitoring stop) and four of seven retained named fields. **Someone with Bash
+owes those** — the next round must not treat them as covered.
+
+**Minimum to close F10:** scrub or drop every `format_exc()` return field; route
+`parallel.py:256` + `meta_controller.py:243` through `scrub_remote_error`; teach
+`_SinkScan` the `format_exc` shape and the non-except-bound exception value — then re-run
+it and **expect the pinned 57/191 counts to MOVE.** A count that does not move means the
+teaching did not take.
 
 **If they returned after this was written**, their reports ARE the convergence evidence —
 read them. **If they did not return, or returned errored/empty: that is ZERO evidence,
