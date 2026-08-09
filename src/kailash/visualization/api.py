@@ -34,6 +34,11 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from kailash.tracking.manager import TaskManager
+from kailash.tracking.models import TaskStatus
+from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
+from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
+
 # FastAPI is optional - import via importlib to avoid pyright errors on absent modules
 _fastapi: Any = None
 _fastapi_responses: Any = None
@@ -54,11 +59,6 @@ WebSocketDisconnect: Any = getattr(_fastapi, "WebSocketDisconnect", None)
 BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
 CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
 FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
-
-from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskStatus
-from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
-from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 
 logger = logging.getLogger(__name__)
 
@@ -296,8 +296,53 @@ class DashboardAPIServer:
 
         @self.app.post("/api/v1/monitoring/start")
         async def start_monitoring(request: RunRequest):
-            """Start real-time monitoring for a run."""
+            """Start real-time monitoring for a run.
+
+            Returns ``{"status": "started", ...}`` only when a metrics
+            broadcast task is actually running afterwards -- either one that
+            was already healthy, or a freshly created one.
+
+            Responds 409 instead when a previous stop request did not complete
+            and the broadcast task it could not stop is still alive. Nothing is
+            mutated in that case; retry ``POST /api/v1/monitoring/stop`` first.
+            """
             try:
+                # A retained handle does NOT mean a task is broadcasting.
+                #
+                # ``stop_monitoring`` below deliberately KEEPS the handle when
+                # the broadcast task refuses to stop -- it is the only thing
+                # that can observe or retry that task. So the old
+                # ``if not self._broadcast_task`` was false for a task nothing
+                # had certified as stopped: no task was created and the
+                # endpoint reported ``started`` over the very task the stop
+                # endpoint had just returned 500 about.
+                #
+                # ``cancelling()`` is the discriminator between the two live
+                # cases: a healthy broadcaster nobody has asked to stop reports
+                # 0, while a task a failed stop cancelled and could not kill
+                # reports >= 1. It is derived from the task itself, so it
+                # cannot drift out of step the way a parallel flag would.
+                #
+                # Checked BEFORE anything is mutated. ``dashboard._monitoring``
+                # is this task's own ``while`` condition (see
+                # ``_broadcast_metrics``), so re-arming it and only then
+                # refusing would leave a rejected request half-applied -- and
+                # would hand the wedged task its loop condition back.
+                existing = self._broadcast_task
+                if existing is not None and not existing.done():
+                    if existing.cancelling():
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                "A previous stop request did not complete: the "
+                                "metrics broadcast task was asked to stop and "
+                                "is still running, so it may still be pushing "
+                                "to WebSocket clients. Retry POST "
+                                "/api/v1/monitoring/stop before starting "
+                                "monitoring again."
+                            ),
+                        )
+
                 # Update config if provided
                 if request.config:
                     for key, value in request.config.items():
@@ -307,13 +352,32 @@ class DashboardAPIServer:
                 # Start monitoring
                 self.dashboard.start_monitoring(request.run_id)
 
-                # Start WebSocket broadcasting if not already running
-                if not self._broadcast_task:
+                # Start WebSocket broadcasting unless it is already running.
+                #
+                # ``done()`` matters as much as ``is None``: a broadcast task
+                # that raised, or whose loop condition went false, leaves a
+                # truthy-but-dead handle, and only a SUCCESSFUL stop ever
+                # clears it. Under the old truthiness test that handle blocked
+                # task creation permanently, so every later start reported
+                # ``started`` with nothing broadcasting at all.
+                if existing is None or existing.done():
+                    if existing is not None and not existing.cancelled():
+                        previous_error = existing.exception()
+                        if previous_error is not None:
+                            self.logger.warning(
+                                "Previous metrics broadcast task ended with an "
+                                "error; starting a replacement: %s",
+                                previous_error,
+                            )
                     self._broadcast_task = asyncio.create_task(
                         self._broadcast_metrics()
                     )
 
                 return {"status": "started", "run_id": request.run_id}
+            except HTTPException:
+                # Already carries the precise reason; the handler below would
+                # replace it with str(exc) and downgrade a 409 to a 500.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to start monitoring: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
