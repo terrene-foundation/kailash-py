@@ -171,6 +171,107 @@ a finding — a receipt naming a count without naming its members cannot be audi
 Partitions disjoint from `w1-sinks` / `w1-scrubber`, which are still running. New test files
 namespaced `test_f11_*` so concurrent shards cannot collide on a filename.
 
+### MY SCOPE ERROR — teaching `_SinkScan` does NOT make the #2012 claim true
+
+`w1-scanner` refused the corpus I gave it, correctly. Verified first-hand: the scanner
+enumerates `PKG = SRC / "kaizen_agents"` (`:86-87`). **All 11 F11 sites live in
+`kailash-kaizen`, `src/kailash`, and `nexus` — none under `PKG`.** It detects 0 of 11 and
+always will; the enumeration never opens those files. My brief asserted the opposite.
+
+**#2012 therefore needs its OWN scanners for THREE more trees**, and that shard carries a
+constraint that would otherwise defeat it silently: **7 of the 11 are not syntactically
+expressible.** The `kailash-kaizen` sites bind `repr()` to a local, then log the local —
+
+```python
+handler_name = getattr(handler, "name", repr(handler))
+logger.info(f"Registered hook ...: {handler_name} ...")
+```
+
+— which needs assignment/dataflow tracking, categorically different from every syntactic
+pass in the existing file. Measured `repr`-reaching-a-log: kaizen_agents 1, kailash-kaizen
+**0**, src/kailash 2, nexus 4.
+
+**A THIRD render form exists that neither shape 8 nor my brief covers:** `%r` in a format
+string with the value as a separate positional arg (`"Listener %r ...", listener`) — no
+`repr(` token, no `!r`. That is the form of the PROVEN leak (`event_hooks.py:120`) and of
+`resolver.py:381/552/554`. The class is `%r` OR `!r` OR `repr()` applied to a caller-supplied
+callable-valued argument. Propagated to both repr shards.
+
+### HIGH-4 / HIGH-5 — a SECOND proven leak, and the other scanner is broken BOTH ways
+
+**HIGH-4 — `delegate/mcp.py:116-120`, PROVEN, at INFO.** `logger.info("Starting MCP server
+%r: %s", name, " ".join(cmd))` where `cmd = [command] + config.args`. Driving the real
+`McpClient.start()` with the canonical MCP config shape (credential as a CLI arg — how
+`server-github` / `server-postgres` are actually configured) leaked
+`--token ghp_SYNTHETIC…`. **The comment above it reasons explicitly about the config being
+untrusted** ("could be project-level `.kz/config.toml` in a cloned repo") **and then logs it
+verbatim**; `env` two lines up is correctly withheld. The danger of EXECUTING untrusted
+config was reasoned about; the danger of PRINTING it was not. The file is in `689f9ebd8`'s
+own file list — open during that sweep, still missed. Routed to `w1-sinks`. **Not the repr
+class** — the value is a joined argument list, so it needs a different fix.
+
+**HIGH-5 — `find-unsanitized-provider-errors.py:54` pins `SANITIZER` to ONE name.** Verified:
+`SANITIZER = "sanitize_provider_error"`, while the branch standardised onto
+`scrub_remote_error` (repo-wide 342 vs 257; two-src-tree scoped 216 vs 130). It flags
+already-fixed handlers at ~27%, **including sites `689f9ebd8` itself fixed**
+(`a2a.py:2309/2318/2454/2463/2674/2683`, `approval_manager.py:148/160`).
+**That scanner is now broken in BOTH directions** — green on defective sites (session-I
+finding), red on fixed ones (this). `high_count` can never reach zero by fixing code, so
+anyone driving it to zero either never converges or learns to dismiss the instrument.
+Looks like a one-line fix (`SANITIZER` → a set). Raised with `w1-scanner`; may want its own shard.
+
+**Site 11 — `patterns/registry.py:711`** `getattr(listener, "__qualname__", repr(listener))`
+with `scrub_remote_error(exc)` on the NEXT line. Third scrub-beside-leak instance. Routed to
+`w1-sinks`.
+
+### THE REMEDIATION PRECEDENT — scrubbing a repr is NOT a fix (propagated mid-flight)
+
+`journey/manager.py:488` already litigated this and wrote out the threat model:
+`type(handler).__name__` is preferred over `scrub_remote_error(repr(handler))` because
+**"the scrubber's coverage is porous — a prefix-less 32-39 char key, `token=`, a
+%40-encoded `@` all survive it."** The type name cannot carry a payload BY CONSTRUCTION;
+the scrub is a porous filter over unbounded input.
+
+**The distinction that must be held:** scrubbing an EXCEPTION is the accepted contract here
+(and `w1-sinks`'s `parallel.py` traceback decision stands on it). Scrubbing a CALLER-SUPPLIED
+OBJECT's repr is not. Different inputs, different soundness argument. Sent to both repr shards
+before either committed a remediation.
+
+**Integration diagnostic:** the correct fix removes a BARE site without adding a WRAPPED one,
+so the predicted pin stays **58 files / 201 sites**. **A pin landing on 202 means someone
+scrubbed a repr** — a finding, not a rounding difference.
+
+### RETAINED FIELDS — adjudicated; 2 of the ledger's own 4 are DEFECTS
+
+The lens could not recover "the seven" from any committed artifact (no report enumerates
+them; three commits list overlapping sets of 6/4/3), so it derived the acceptance surface
+independently per `completion-criterion` MUST-2. **That the seven are unrecoverable from the
+committed record is itself a finding — a receipt naming a COUNT without naming its MEMBERS
+cannot be audited.** Against the ledger's own four:
+
+| field                  | verdict                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
+| server name / command  | **REFUTED — proven leak (HIGH-4)**                                      |
+| listener repr          | **REFUTED — proven leak (HIGH-1)**                                      |
+| handler name           | REFUTED → already FIXED by `d6030aefe`                                  |
+| tool name              | **basis WRONG** (`tc["function"]["name"]` is model/MCP-supplied, not    |
+|                        | "registry-supplied"), exploitation implausible — needs a hostile server |
+| trigger description    | **HOLDS** — basis honestly stated, caller-authored, comment says so     |
+| `execution_id`/`agent` | HOLDS, basis CORRECT — a Python class name cannot carry runtime data    |
+
+**A cheaper review rule than case-by-case judgment, and it is codify-worthy:** every field
+that proved defective renders an OBJECT or a JOINED ARGUMENT LIST; every field that holds is
+a SCALAR IDENTIFIER. **Retain scalars; never retain a rendering.**
+
+### MY INSTRUMENT ERROR — live diagnostics are not evidence about committed code
+
+I reported three Pyright findings against `w1-scanner`'s work. Only one was real. The
+`extend()` bug matched an **intermediate state between two of its edits** — already fixed
+before it committed — and the `_args`/`_kwargs` line was pre-existing `_`-convention code
+pyright never flagged. I was reading diagnostics from a tree under active edit and reporting
+them as findings against committed work. Same class as everything else here: an instrument
+that cannot distinguish the state it is measuring. Verify against the COMMITTED file.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
