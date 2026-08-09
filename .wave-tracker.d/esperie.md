@@ -871,6 +871,51 @@ Rule 1c makes "pre-existing" unprovable by assertion**: 5 × Redis-refused (no R
 over a 2500ms ceiling; its `__init__` imports sit inside the `except ImportError` branch and
 do not execute on a normal import).
 
+### MY OWN ERROR, session-wide: I enforced a Pyright scope this repo does not hold
+
+**Verified:** `pyrightconfig.json::include` is the `src` directories plus root `tests`.
+**`packages/*/tests` is NOT in it.** Every test-file diagnostic I raised — to `w1-scrubber`
+and at least three siblings — came from an ad-hoc scan **outside the repo's configured
+scope**, and I cited `zero-tolerance` Rule 1 ("warnings are errors") to hold shards to it.
+That rule governs the project's CONFIGURED checks; the project deliberately does not check
+those files. Several shards spent budget on findings this repo does not consider findings.
+
+Some yield was real anyway (a sibling's doubles now subclass the real `BaseAgent`, better
+regardless of who asked) — but the standard was mine, not the repo's, and I should have read
+the config before the first time, let alone the third.
+
+**Two more of mine, same family:** (a) I flagged `importlib is not defined` from a snapshot
+that **predated the shard's own fix** — the live-diagnostics-as-committed-state error I had
+already declared I'd stopped making. (b) I asserted a possibly-unbound `rendered` "would sit
+in the suite reading green forever." **The shard TESTED it instead of reasoning: it raises
+`UnboundLocalError` and fails LOUDLY.** My claim was not merely unverified, it was wrong — and
+wrong by reasoning about an instrument's failure mode from a static read without running it,
+which is this session's own subject.
+
+### NINTH instrument failure — in a test whose PURPOSE was preventing exactly it
+
+`test_no_production_call_site_weakens_the_scrub` asserted its enumeration receipt for
+`kaizen_sites` (`:345`) but **NOT** for `agents_sites` — a dead binding — while still folding
+`agents_findings` into the verdict. **A broken walk over the agents tree contributed zero
+findings and the test reported GREEN**, on the tree holding most of the guarded sinks.
+Verified by execution rather than argued: repointing `_AGENTS_SRC` at a real directory with
+no call sites **PASSES pre-fix, FAILS post-fix**. Pre-existing (`e9c18e2b8`, attributed
+against a baseline worktree per Rule 1c, not asserted). The tell was the dead binding — the
+same signal that surfaced all session.
+
+### DECISION — the hedged `~180` references STAY (8 sites, deliberately not re-numbered)
+
+They describe a historical sweep's **SCALE**, not a pin. Re-numbering them to `~191`
+recreates exactly the drift the de-numbering removed, in eight more places: a hedged `~180`
+describing past coverage stays true as the tree grows; an exact `191` starts rotting on
+contact. The stale **pin** (three copies, not the one I flagged) is de-numbered and now names
+the authoritative file + constants instead of restating their values.
+
+**The shard's reason for not IMPORTING those constants is better than my suggestion:** the
+two packages' test trees cannot be collected in one pytest invocation
+(`ImportPathMismatchError: 'tests.conftest'`), so the import would resolve in some runs and
+not others — **an instrument failing for a reason unrelated to what it measures.**
+
 ### `w1-scrubber` — superseded header, retained so the query lesson is not lost
 
 Four commits, tree clean: `66a786e16` (secret_key/passphrase), `11a7cb31a` + `57661325e`
