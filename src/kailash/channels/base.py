@@ -270,6 +270,15 @@ class Channel(ABC):
         cleanup to ``STOPPED`` reports a clean stop over a live task, which is
         the false-success family this channel work exists to close.
 
+        ``False`` denotes TWO different conditions and a caller retrying on the
+        resulting ``STOPPING`` behaves differently in each. The event task is
+        STILL LIVE (it ignored its cancellation) -- a retry re-cancels, waits
+        again, and returns ``STOPPING`` again until the task genuinely dies. Or
+        the event task DIED OF AN ERROR -- the task is gone, the error has been
+        logged, and a retry clears to ``STOPPED`` immediately without having
+        addressed the error. The WARN text distinguishes them; the bool does
+        not.
+
         THE JOIN IS BOUNDED AND DOES NOT RE-RAISE, for two reasons that both
         surfaced when ``stop()`` began running this from a ``finally`` while a
         caller-aimed ``CancelledError`` was propagating.

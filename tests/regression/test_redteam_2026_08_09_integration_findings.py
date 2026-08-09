@@ -459,8 +459,15 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
         # LET IT ACTUALLY START. `ensure_future` only schedules; cancelling a
         # task that has never been entered cancels it outright, so the
         # ignore-cancellation handler never runs and the task dies on the first
-        # cancel -- the test would then pass against the defect it exists to
-        # catch. This yield is what makes the task genuinely uncancellable.
+        # cancel.
+        #
+        # MEASURED, because the intuitive reading of this is WRONG: without the
+        # yield the test does not vacuously PASS, it fails BOTH ways. The task
+        # dies immediately, cleanup legitimately completes, STOPPED is the
+        # CORRECT status -- and the assertion calls that a defect. So the yield
+        # guards against a FALSE POSITIVE, not a vacuous pass, and
+        # `assert not running_task.done()` is what makes its removal detectable
+        # rather than merely wrong.
         await asyncio.sleep(0.05)
         assert not running_task.done()
 
@@ -528,6 +535,54 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
             "MCPChannel reported STOPPED while its event task was still live; "
             "the parity sweep reached two of three channels"
         )
+
+    @pytest.mark.asyncio
+    async def test_event_task_dying_of_a_real_error_is_surfaced_not_swallowed(
+        self, caplog
+    ) -> None:
+        """The OTHER way cleanup is incomplete, and the one nothing covered.
+
+        ``asyncio.wait`` does not re-raise -- that is why it replaced the
+        ``await`` that displaced the caller's cancellation -- so a task that
+        died of a real error was silently swallowed once ``done`` was
+        discarded. This pins the retrieval: the error surfaces as TYPE + FRAMES
+        (never the message, per the F10 discipline), and the status follows.
+        """
+        channel = APIChannel(
+            ChannelConfig(name="rt_api6", channel_type=ChannelType.API, port=18991)
+        )
+
+        secret = "postgres://svc:hunter2@db.internal:5432/x"
+
+        async def _dies_on_cancel() -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                raise ValueError(f"backing store gone: {secret}") from None
+
+        running_task = asyncio.ensure_future(_dies_on_cancel())
+        await asyncio.sleep(0.05)
+        assert not running_task.done()
+
+        channel._running_task = running_task
+        channel._server_task = None
+        channel.status = ChannelStatus.RUNNING
+
+        with caplog.at_level(logging.WARNING):
+            await channel.stop()
+
+        status = channel.status
+        rendered = caplog.text
+        await asyncio.gather(running_task, return_exceptions=True)
+
+        assert status is ChannelStatus.STOPPING, (
+            "the event task died of a real error, so cleanup did NOT complete; "
+            "STOPPED would report a clean stop over a failed teardown"
+        )
+        assert "ValueError" in rendered, "the task's error was swallowed"
+        # F10 discipline: the type and the frames, never the message.
+        assert secret not in rendered
+        assert "hunter2" not in rendered
 
     @pytest.mark.asyncio
     async def test_complete_cleanup_still_reports_stopped(self) -> None:
