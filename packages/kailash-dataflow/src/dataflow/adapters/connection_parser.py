@@ -35,8 +35,24 @@ _SCHEME_TO_DATABASE_TYPE = {
     # the pre-fix "postgresql" that ``AutoMigrationSystem`` guessed for it.
     "mysql": "mysql",
     "mariadb": "mysql",
-    # SQLite
+    # SQLite. ``file`` is SQLite's own URI-filename scheme
+    # (https://sqlite.org/uri.html) and is the form issue #1502 injects for a
+    # bare ``:memory:`` instance: ``file:df_mem_<id>?mode=memory&cache=shared``
+    # — the one shared-cache DB the DDL, CRUD and model-registry paths all
+    # open. It is an EXPLICIT allowlist entry, not a fallback: no other engine
+    # DataFlow supports uses ``file:``, and every genuinely-unknown scheme
+    # still raises below.
+    #
+    # This entry restores enforcement-surface parity
+    # (``rules/security.md`` § Enforcement-Surface Parity). Six sibling
+    # surfaces already recognise the ``file:`` form and open it with
+    # ``uri=True`` — ``sync_ddl_executor._get_sqlite_connection``,
+    # ``adapters/sqlite.py``, ``migration_connection_manager``,
+    # ``migration_test_framework``, core ``nodes/data/sql.py`` and
+    # ``nodes/data/async_sql.py``. Only this detector, the single source of
+    # truth they all consult, had never learned it.
     "sqlite": "sqlite",
+    "file": "sqlite",
     # MongoDB
     "mongodb": "mongodb",
 }

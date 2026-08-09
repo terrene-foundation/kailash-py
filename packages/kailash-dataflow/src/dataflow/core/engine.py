@@ -91,10 +91,10 @@ from .config import (
     MonitoringConfig,
     SecurityConfig,
 )
-from .events import DataFlowEventMixin
 from .credential_provider import (  # Issue #1741: single-connection token auth
     open_credentialed_connection,
 )
+from .events import DataFlowEventMixin
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -11855,6 +11855,25 @@ class DataFlow(DataFlowEventMixin):
                 "Using SQLite :memory: database for testing. Production requires PostgreSQL."
             )
             # Show detailed async limitation warning if in async context
+            warn_sqlite_async_limitation(url)
+            return True
+
+        # SQLite's own URI-filename form (https://sqlite.org/uri.html):
+        # ``file:<path-or-name>[?<params>]``. This is the shape issue #1502
+        # injects for a bare ``:memory:`` instance
+        # (``file:df_mem_<id>?mode=memory&cache=shared``) and the shape a user
+        # supplies directly to reach SQLite's URI-only options (``mode=ro``,
+        # ``cache=shared``, ``immutable=1``). It carries no ``://``, so the
+        # scheme table below never sees it and the bare-path heuristic that
+        # follows rejects it — this branch is checked first.
+        #
+        # Enforcement-surface parity with
+        # ``ConnectionParser.detect_database_type`` (``rules/security.md``
+        # § Enforcement-Surface Parity): both validators MUST recognise the
+        # same set of legitimate SQLite forms. This is an EXPLICIT allowlist
+        # entry, not a fallback — every other unrecognised scheme still falls
+        # through to the fail-closed paths below.
+        if url.startswith("file:"):
             warn_sqlite_async_limitation(url)
             return True
 

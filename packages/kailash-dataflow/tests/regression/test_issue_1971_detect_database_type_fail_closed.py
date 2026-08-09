@@ -65,16 +65,16 @@ import ast
 import pathlib
 
 import pytest
-
-from dataflow.adapters import connection_parser as connection_parser_module
-from dataflow.adapters.connection_parser import ConnectionParser
-from dataflow.adapters.exceptions import AdapterError
-from dataflow.migrations.staging_utilities import StagingUtilities
 from kailash.db.dialect import (
     MYSQL_MAX_IDENTIFIER_LENGTH,
     POSTGRES_MAX_IDENTIFIER_LENGTH,
     SQLITE_MAX_IDENTIFIER_LENGTH,
 )
+
+from dataflow.adapters import connection_parser as connection_parser_module
+from dataflow.adapters.connection_parser import ConnectionParser
+from dataflow.adapters.exceptions import AdapterError
+from dataflow.migrations.staging_utilities import StagingUtilities
 
 pytestmark = pytest.mark.regression
 
@@ -233,6 +233,133 @@ def test_mongodb_uris_still_detected():
         ConnectionParser.detect_database_type("mongodb+srv://u:p@cluster/d")
         == "mongodb"
     )
+
+
+# ---------------------------------------------------------------------------
+# Defect 1b: fail-CLOSED must not reject SQLite's own URI-filename form
+# ---------------------------------------------------------------------------
+#
+# The fail-closed rewrite above replaced a swallow-everything default with an
+# explicit allowlist — and the allowlist was built from DSN forms alone. It
+# never learned ``file:``, SQLite's documented URI-filename scheme
+# (https://sqlite.org/uri.html), which is the form issue #1502 injects for a
+# bare ``:memory:`` instance: ``file:df_mem_<id>?mode=memory&cache=shared``.
+#
+# Verbatim post-#1971 / pre-fix behaviour::
+#
+#     >>> ConnectionParser.detect_database_type(
+#     ...     "file:df_mem_10c4a8?mode=memory&cache=shared")
+#     AdapterError: Unsupported database scheme: file. ...
+#
+# So every DataFlow(":memory:") instance raised the moment any path consulted
+# the detector — ``SyncDDLExecutor.__init__`` on ``create_tables_async``, and
+# ``ModelRegistry.initialize()`` (which caught it and returned False, so the
+# registry table was never created). Six sibling surfaces
+# (``sync_ddl_executor._get_sqlite_connection``, ``adapters/sqlite.py``,
+# ``migration_connection_manager``, ``migration_test_framework``, core
+# ``nodes/data/sql.py`` and ``nodes/data/async_sql.py``) already opened this
+# exact form with ``uri=True``; only the single source of truth they consult
+# had never learned it — an enforcement-surface-parity gap
+# (``rules/security.md`` § Enforcement-Surface Parity).
+#
+# The fix is a POSITIVE allowlist entry, NOT a permissive fallback: the
+# fail-closed tests above still pass unchanged.
+
+SQLITE_URI_FORMS = [
+    # The exact shape DataFlow(":memory:") builds (engine.py `_memory_db_uri`).
+    "file:df_mem_10c4a8?mode=memory&cache=shared",
+    # A user-supplied shared-cache in-memory DB.
+    "file:memdb1?mode=memory&cache=shared",
+    # URI-only options that have no `sqlite:///` spelling.
+    "file:/var/lib/app.db?mode=ro",
+    "file:/var/lib/app.db?immutable=1",
+    # A plain relative/absolute URI filename.
+    "file:app.db",
+    "file:/var/lib/app.db",
+]
+
+
+@pytest.mark.parametrize("uri", SQLITE_URI_FORMS)
+def test_sqlite_file_uri_form_detects_as_sqlite(uri):
+    """SQLite's ``file:`` URI-filename form MUST resolve to sqlite.
+
+    Pre-fix every one of these raised ``AdapterError: Unsupported database
+    scheme: file``, which took out DataFlow(":memory:") entirely (#1502).
+    """
+    assert ConnectionParser.detect_database_type(uri) == "sqlite"
+
+
+@pytest.mark.parametrize("uri", SQLITE_URI_FORMS)
+def test_sqlite_file_uri_form_grants_the_sqlite_identifier_budget(uri):
+    """A ``file:`` URI opens a SQLite database, so it MUST get SQLite's budget.
+
+    Guards the #1971 chain from the other direction: the allowlist entry must
+    map to the engine that is actually opened, not merely to *some* engine
+    that stops the raise.
+    """
+    detected = ConnectionParser.detect_database_type(uri)
+    assert BUDGET_FOR[detected] == SQLITE_MAX_IDENTIFIER_LENGTH
+
+
+@pytest.mark.parametrize("uri", SQLITE_URI_FORMS)
+def test_engine_url_validator_accepts_the_sqlite_file_uri_form(uri):
+    """Enforcement-surface parity: ``DataFlow.__init__``'s gate agrees.
+
+    ``_is_valid_database_url`` is a SECOND, independent validator (engine.py),
+    consulted at ``DataFlow(database_url)`` before the detector is ever
+    reached. It matched on ``"://"``, which a ``file:`` URI does not carry, so
+    it fell through to a bare-path heuristic and rejected every form above —
+    ``DataFlow("file:/var/lib/app.db?mode=ro")`` raised
+    ``INVALID_DATABASE_URL``. Both validators MUST recognise the same set of
+    legitimate SQLite forms or the parity gap re-opens on the other surface.
+    """
+    from dataflow.core.engine import DataFlow
+
+    validator = DataFlow.__new__(DataFlow)
+    assert validator._is_valid_database_url(uri) is True
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "gibberish://u:p@h/d",
+        "oracle://u:p@h/d",
+        "cockroachdb://u:p@h/d",
+    ],
+)
+def test_engine_url_validator_still_rejects_unknown_schemes(url):
+    """The ``file:`` allowlist entry MUST NOT widen the validator.
+
+    Teeth for the fix itself: had ``file:`` been added as a permissive
+    fallback (accept-anything-unrecognised) rather than a positive allowlist
+    entry, this test would fail.
+    """
+    from dataflow.core.engine import DataFlow
+
+    validator = DataFlow.__new__(DataFlow)
+    assert validator._is_valid_database_url(url) is False
+
+
+def test_sqlite_file_uri_reaches_the_sync_ddl_executor():
+    """End-to-end: the surface that actually broke on the shared-cache URI.
+
+    ``SyncDDLExecutor.__init__`` calls ``_detect_db_type`` eagerly, so the
+    detector raise surfaced as a constructor failure on every
+    ``create_tables_async()`` for a bare ``:memory:`` instance. This asserts
+    the executor both constructs AND routes to the SQLite branch.
+    """
+    from dataflow.migrations.sync_ddl_executor import SyncDDLExecutor
+
+    executor = SyncDDLExecutor("file:df_mem_deadbeef?mode=memory&cache=shared")
+    assert executor._db_type == "sqlite"
+
+
+def test_sync_ddl_executor_still_fails_closed_on_unknown_scheme():
+    """The executor's fail-closed contract survives the allowlist addition."""
+    from dataflow.migrations.sync_ddl_executor import SyncDDLExecutor
+
+    with pytest.raises(AdapterError, match="Unsupported database scheme"):
+        SyncDDLExecutor("oracle://u:p@h/d")
 
 
 # ---------------------------------------------------------------------------

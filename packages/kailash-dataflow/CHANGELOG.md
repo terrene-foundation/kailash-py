@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Fixed — SQLite URI-filename (`file:`) connection strings are recognised again (#1502 regression)
+
+`ConnectionParser.detect_database_type` gained a fail-closed scheme allowlist in the
+#1971 work. The allowlist omitted `file:` — SQLite's own URI-filename scheme
+(<https://sqlite.org/uri.html>) — so every shared-cache in-memory connection string
+of the form `file:<name>?mode=memory&cache=shared` was rejected with:
+
+```
+AdapterError: Unsupported database scheme: file. Supported schemes: mariadb,
+mongodb, mysql, pgsql, postgres, postgresql, sqlite ...
+```
+
+That is the exact form #1502 injects for a bare `:memory:` instance — the one
+shared-cache database the DDL, CRUD and model-registry paths all open — so
+`DataFlow(":memory:")` broke on the shared-cache path, taking the model registry
+(`registry.initialize()` returning `False`) and registry pool disposal with it.
+
+`file:` is now an EXPLICIT allowlist entry mapping to SQLite, in both
+`ConnectionParser.detect_database_type` and the `DataFlow` engine's URL validator.
+This restores **enforcement-surface parity**: six sibling surfaces already
+recognised the `file:` form and opened it with `uri=True`
+(`sync_ddl_executor._get_sqlite_connection`, `adapters/sqlite.py`,
+`migration_connection_manager`, `migration_test_framework`, and core
+`nodes/data/sql.py` + `nodes/data/async_sql.py`) — only the central detector they
+all consult had never learned it.
+
+**The fail-closed posture is unchanged.** This is a positive allowlist entry, not a
+permissive fallback: every genuinely unknown scheme still raises rather than
+guessing an engine, because an incorrect engine emits SQL for the wrong database.
+
 ## [2.20.0] — 2026-08-05 — Generated identifiers fitted to the connection's dialect; database-type detection fails closed (#1971)
 
 ### Fixed — generated identifiers are fitted to the connection's dialect (#1971)
