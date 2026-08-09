@@ -44,7 +44,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from nexus import Nexus
-from nexus.extractors import Depends
+from nexus.extractors import DependencyOverrideRuntimeMutationError, Depends
 
 _SENTINEL = "SYNTHETIC-NOT-A-REAL-CREDENTIAL-f11"
 _LEAKY_DSN = f"postgres://svc:{_SENTINEL}@db.example.invalid:5432/app"
@@ -130,6 +130,106 @@ class _ConfiguredDep:
 def resolver_logs(caplog):
     caplog.set_level(logging.DEBUG, logger=_RESOLVER_LOGGER)
     return caplog
+
+
+class TestDependsRepr:
+    """``Depends.__repr__`` -- an AMPLIFIER, not a sink.
+
+    Every other site in this file is one sink: a log line, an exception
+    message, a returned field. This one emits nothing by itself -- it makes
+    every FUTURE consumer of a ``Depends`` emit. A debug log, an f-string in
+    someone else's error path, pytest assertion output on a failing test: none
+    is a site a sweep would think to visit, and all of them inherited the
+    credential from here.
+
+    It carried ``# pragma: no cover - debug aid``, which is exactly why nothing
+    exercised it. That marking is NOT a predictor either way -- see
+    ``TestDependencyOverrideMapRepr`` below, which carries the identical
+    marking and is clean.
+    """
+
+    def test_partial_dependency_bound_kwargs_do_not_reach_the_repr(self):
+        dependency = functools.partial(_get_db, dsn=_LEAKY_DSN)
+        rendered_repr = repr(Depends(dependency))
+
+        assert _SENTINEL not in rendered_repr, rendered_repr
+        # The diagnostic survives AND still resolves to the wrapped function --
+        # a bare "partial" could not tell the db dependency from the cache one.
+        assert "_get_db" in rendered_repr, rendered_repr
+        assert rendered_repr.startswith("Depends("), rendered_repr
+
+    def test_callable_object_fields_do_not_reach_the_repr(self):
+        dependency = _ConfiguredDep(
+            endpoint="https://db.example.invalid", api_key=_SENTINEL
+        )
+        rendered_repr = repr(Depends(dependency))
+
+        assert _SENTINEL not in rendered_repr, rendered_repr
+        assert "_ConfiguredDep" in rendered_repr, rendered_repr
+
+    def test_a_plain_function_dependency_is_unchanged(self):
+        """No behaviour change for the shape everything already used."""
+        assert repr(Depends(_get_db)) == "Depends(_get_db)"
+
+
+class TestDependencyOverrideMutationGuard:
+    """``DependencyOverrideMap._guard_runtime_mutation`` -- ``overrides.py``.
+
+    Not a log call: the name is interpolated into a
+    ``DependencyOverrideRuntimeMutationError`` that rides into whatever logs
+    the registration failure. This is the ``dependency_overrides`` map, i.e.
+    the DI surface where a pre-bound connection string is idiomatic.
+    """
+
+    @pytest.mark.parametrize("operation", ["set", "clear"], ids=["set", "clear"])
+    def test_partial_dependency_does_not_reach_the_guard_message(self, operation):
+        from nexus.context import _current_request, set_current_request
+        from nexus.extractors.overrides import DependencyOverrideMap
+
+        class _BoundRequest:
+            headers: dict = {}
+
+        dependency = functools.partial(_get_db, dsn=_LEAKY_DSN)
+        overrides = DependencyOverrideMap()
+        token = set_current_request(_BoundRequest())
+        try:
+            with pytest.raises(DependencyOverrideRuntimeMutationError) as excinfo:
+                if operation == "set":
+                    overrides.set(dependency, lambda: "mock")
+                else:
+                    overrides.clear(dependency)
+        finally:
+            _current_request.reset(token)
+
+        message = str(excinfo.value)
+        assert _SENTINEL not in message, message
+        # The operator still learns WHICH dependency was mutated, and how.
+        assert "_get_db" in message, message
+        assert operation in message, message
+
+
+class TestDependencyOverrideMapRepr:
+    """A REFUTATION, and it is load-bearing rather than a formality.
+
+    ``DependencyOverrideMap.__repr__`` carries the SAME
+    ``# pragma: no cover - debug aid`` marking as the ``Depends.__repr__``
+    that leaked, and is clean: it emits a count, never the callables. Pinned
+    so the marking is not later treated as a proxy for risk in either
+    direction -- and so a future "improvement" that renders the mapping for
+    debuggability has to fail this first.
+    """
+
+    def test_the_map_repr_emits_a_count_not_the_callables(self):
+        from nexus.extractors.overrides import DependencyOverrideMap
+
+        overrides = DependencyOverrideMap()
+        overrides._overrides[functools.partial(_get_db, dsn=_LEAKY_DSN)] = (
+            lambda: "mock"
+        )
+        rendered_repr = repr(overrides)
+
+        assert _SENTINEL not in rendered_repr, rendered_repr
+        assert rendered_repr == "DependencyOverrideMap(overrides=1)", rendered_repr
 
 
 @pytest.mark.integration
