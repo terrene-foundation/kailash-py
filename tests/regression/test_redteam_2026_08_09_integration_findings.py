@@ -605,6 +605,90 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
         assert running_task.cancelled() or running_task.done()
 
 
+class TestSafeExceptionFramesIsBounded:
+    """Round 7, rotated onto the helper THIS BRANCH introduced.
+
+    It is live in 8 production sinks and its whole job is disclosure control,
+    and no round had adversarially probed it until the seventh.
+    """
+
+    def test_chain_length_is_capped_and_says_so(self) -> None:
+        """`seen` stops a CYCLE; nothing stopped a long ACYCLIC chain.
+
+        A retry loop doing ``raise X from prev`` drove 5000 links into a single
+        175,000-character log record — the log-spam mode `observability.md`
+        forbids, on an error path an attacker can drive.
+        """
+        from kailash.utils.secure_logging import (
+            _MAX_CHAIN_LINKS,
+            safe_exception_frames,
+        )
+
+        exc: BaseException = ValueError("root")
+        for i in range(200):
+            try:
+                raise RuntimeError(f"wrap-{i}") from exc
+            except RuntimeError as wrapped:
+                exc = wrapped
+
+        rendered = safe_exception_frames(exc, limit=3)
+
+        assert rendered.count(" <- ") <= _MAX_CHAIN_LINKS, (
+            f"chain rendered {rendered.count(' <- ') + 1} links from a 200-deep "
+            "chain; the cap did not apply"
+        )
+        assert len(rendered) < 10_000, f"single log record is {len(rendered)} chars"
+        # Truncation must be VISIBLE — a silently-trimmed chain reads as a short
+        # one, and the reader cannot tell a 2-link failure from a retry storm.
+        assert "cap reached" in rendered
+
+    def test_limit_zero_and_negative_retain_no_frames(self) -> None:
+        """`limit=0` rendered EVERY frame — the opposite of a bound named limit."""
+        from kailash.utils.secure_logging import safe_exception_frames
+
+        def deep(n: int):
+            if n:
+                return deep(n - 1)
+            raise ValueError("boom")
+
+        try:
+            deep(40)
+        except ValueError as exc:
+            zero = safe_exception_frames(exc, limit=0, follow_chain=False)
+            negative = safe_exception_frames(exc, limit=-1, follow_chain=False)
+            bounded = safe_exception_frames(exc, limit=5, follow_chain=False)
+
+        # NOT `count(">")` — the `<no-frames>` placeholder contains one, so the
+        # frame SEPARATOR and the empty MARKER are the same character. Assert on
+        # the marker instead, which is what "no frames" actually renders as.
+        assert zero == "ValueError@<no-frames>", f"limit=0 rendered: {zero[:120]}"
+        assert (
+            negative == "ValueError@<no-frames>"
+        ), f"limit=-1 rendered: {negative[:120]}"
+        # The negative control: a real bound still renders exactly that many
+        # frames (5 frames -> 4 separators), so this cannot pass by rendering
+        # nothing at all.
+        assert "<no-frames>" not in bounded
+        assert bounded.count(">") == 4
+
+    def test_a_full_path_credential_still_does_not_survive(self) -> None:
+        """The directory half of the disclosure surface stays closed.
+
+        Round 7 established the BASENAME is attacker-influenceable (Jinja2
+        compiles a template with the template name as the filename). The
+        DIRECTORY portion must remain safe, because that is where a filesystem
+        path carrying a credential would sit.
+        """
+        import os
+
+        from kailash.utils.secure_logging import _relative_frame_path
+
+        leaky = os.path.join(os.sep, "srv", "postgres:hunter2@db", "app.py")
+        rendered = _relative_frame_path(leaky)
+        assert "hunter2" not in rendered
+        assert rendered == "app.py"
+
+
 class TestSafeExceptionFramesDisclosesNeitherLayoutNorSource:
     def test_cwd_above_home_does_not_render_the_home_layout(self) -> None:
         """A cwd of "/" produces no leading "..", so the old guard never fired.

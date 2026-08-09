@@ -37,6 +37,14 @@ _DEFAULT_FRAME_LIMIT = 20
 # a second environment read.
 _HOME_DIR = os.path.expanduser("~")
 
+# Exceptions described per chain in safe_exception_frames. The `seen` set stops
+# a CYCLE; nothing stopped a long ACYCLIC one, and a retry loop doing
+# `raise X from prev` produced 5000 links in a single 175,000-character log
+# record. Output is O(chain x limit), so the chain needs its own bound. The
+# innermost links carry the original failure, so truncation drops the OUTER
+# wrappers and says so rather than trimming silently.
+_MAX_CHAIN_LINKS = 10
+
 
 def safe_callable_name(obj: Any) -> str:
     """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
@@ -170,16 +178,46 @@ def safe_exception_frames(
     Dropping the traceback outright would close that leak but destroy the
     diagnostic: the operator loses the only record of where the failure came
     from. This keeps the frames -- ``path:line:function`` per frame, plus each
-    exception's TYPE -- and drops only the message. Every retained element is a
-    source-level identifier (a file path, a line number, a function name, a
-    class name), none of which can carry a runtime payload. Source text is NOT
-    included, so a frame cannot echo an interpolated value either.
+    exception's TYPE -- and drops only the message. Source text is NOT included,
+    so a frame cannot echo an interpolated value.
+
+    WHAT THIS DOES NOT PROMISE. An earlier version of this docstring claimed
+    every retained element "cannot carry a runtime payload." That is FALSE and
+    was measured false, so it is stated correctly here instead. The line number
+    is genuinely inert; the other three retained elements are ATTACKER-
+    INFLUENCEABLE in narrow, real cases:
+
+    * **class name** -- ``type(f"ServerError_{data}", (Exception,), {})``. SDKs
+      that mint an exception class per server error name do exactly this.
+    * **function name** -- ``exec``/``compile`` with a data-derived identifier
+      (generated RPC stubs, ORM-generated methods).
+    * **file BASENAME** -- ``compile(src, filename=<data>, ...)``. Jinja2
+      compiles a template with the TEMPLATE NAME as the filename, so a
+      data-derived template name reaches the frame. The DIRECTORY portion is
+      safe: :func:`_relative_frame_path` falls back to the basename rather than
+      emitting a path, so a credential in a full path does not survive.
+
+    This is a far narrower channel than the exception MESSAGE it replaces -- a
+    message carries attacker data by default, whereas these carry it only when
+    an identifier is minted from that data -- and the helper remains the right
+    default. But "narrower" is the honest claim and "cannot" was not, and a
+    security helper whose contract overstates itself invites a caller to trust
+    it somewhere it should not.
 
     Args:
         exc: The exception to describe.
-        limit: Innermost frames kept per exception in the chain.
+        limit: Innermost frames kept per exception. ``<= 0`` retains NO frames
+            (type only) -- it does NOT mean unlimited. An earlier version
+            skipped the slice entirely for 0 and negatives, so ``limit=0``
+            rendered EVERY frame, which is the opposite of what a bound named
+            ``limit`` should do.
         follow_chain: Also describe ``__cause__`` / ``__context__``. The cause
-            usually holds the real failure site, so this defaults on.
+            usually holds the real failure site, so this defaults on. The chain
+            is capped at :data:`_MAX_CHAIN_LINKS`: ``seen`` stops a CYCLE, but
+            nothing stopped a long ACYCLIC chain, and a retry loop doing
+            ``raise X from prev`` drove 5000 links to a single 175,000-character
+            log record -- the log-spam mode ``observability.md`` forbids, on an
+            error path an attacker can drive.
 
     Returns a string like
     ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
@@ -200,8 +238,9 @@ def safe_exception_frames(
         frames = traceback.StackSummary.extract(
             traceback.walk_tb(current.__traceback__), lookup_lines=False
         )
-        if limit > 0:
-            frames = frames[-limit:]
+        # ``<= 0`` means NO frames, not "all frames". The old ``if limit > 0``
+        # skipped the slice, so a caller asking for zero got everything.
+        frames = frames[-limit:] if limit > 0 else []
         rendered_frames = ">".join(
             f"{_relative_frame_path(frame.filename)}:{frame.lineno}:{frame.name}"
             for frame in frames
@@ -212,6 +251,13 @@ def safe_exception_frames(
         if not follow_chain:
             break
         current = current.__cause__ or current.__context__
+        if len(descriptions) >= _MAX_CHAIN_LINKS and current is not None:
+            # Say it was truncated. A silently-trimmed chain reads as a short
+            # chain, and the reader cannot tell a two-link failure from a
+            # five-thousand-link retry storm -- which is exactly the diagnostic
+            # the cap must not destroy while bounding the record.
+            descriptions.append(f"<+{_MAX_CHAIN_LINKS}-link cap reached>")
+            break
 
     return " <- ".join(descriptions)
 
