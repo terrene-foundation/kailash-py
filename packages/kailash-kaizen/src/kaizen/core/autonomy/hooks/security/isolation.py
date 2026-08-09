@@ -16,7 +16,7 @@ import sys
 import time
 from typing import Any
 
-from ..manager import HookEvent, HookManager, HookPriority
+from ..manager import HookEvent, HookManager, HookPriority, safe_handler_name
 from ..protocol import HookHandler
 from ..types import HookContext, HookResult
 
@@ -208,7 +208,10 @@ class IsolatedHookExecutor:
         - Timeout prevents infinite loops
         - Graceful failure handling prevents agent crashes
         """
-        handler_name = getattr(handler, "name", repr(handler))
+        # ``handler_name`` reaches three log lines below AND the returned
+        # ``HookResult.error`` on the timeout and crash paths, so it must not be
+        # able to carry caller state; see ``safe_handler_name``.
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
 
         # Create queue for inter-process communication
         queue: multiprocessing.Queue = multiprocessing.Queue()
@@ -415,7 +418,7 @@ class IsolatedHookManager(HookManager):
         - Falls back to normal execution if isolation fails
         - Maintains backward compatibility with non-isolated mode
         """
-        handler_name = getattr(handler, "name", repr(handler))
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
 
         # Check if isolation is enabled
         if not self.enable_isolation:
