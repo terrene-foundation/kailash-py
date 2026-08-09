@@ -281,6 +281,49 @@ class TestSafeCallableName:
         assert safe_callable_name(_Anon()) == "_Anon"
 
 
+class TestSafeExceptionMessage:
+    """Removing the object's repr WITHOUT removing the rest of the message."""
+
+    def test_embedded_repr_is_replaced_but_the_rest_survives(self):
+        from kailash.utils.secure_logging import safe_exception_message
+
+        handler = functools.partial(_raising_handler, dsn=_LEAKY_DSN)
+        # The shape typing.get_type_hints actually raises.
+        exc = TypeError(f"{handler!r} is not a module, class, method, or function.")
+
+        message = safe_exception_message(exc, handler)
+
+        assert _SENTINEL not in message, message
+        assert "is not a module, class, method, or function" in message, message
+        assert "_raising_handler" in message, message
+
+    def test_a_message_that_never_quoted_the_object_is_untouched(self):
+        """The common case: an unresolved forward reference.
+
+        Its message names the SYMBOL that would not resolve, which is the
+        diagnostic an operator needs and contains no caller payload.
+        """
+        from kailash.utils.secure_logging import safe_exception_message
+
+        exc = NameError("name 'NoSuchTypeAnywhere' is not defined")
+        assert (
+            safe_exception_message(exc, _raising_handler)
+            == "name 'NoSuchTypeAnywhere' is not defined"
+        )
+
+    def test_a_broken_repr_does_not_break_the_log_call(self):
+        from kailash.utils.secure_logging import safe_exception_message
+
+        class _BrokenRepr:
+            def __repr__(self) -> str:
+                raise ValueError("repr is broken")
+
+        assert (
+            safe_exception_message(TypeError("plain message"), _BrokenRepr())
+            == "plain message"
+        )
+
+
 class TestSafeExceptionFrames:
     """Frame rendering keeps WHERE without keeping WHAT."""
 

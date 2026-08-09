@@ -27,7 +27,7 @@ from typing import (
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
-from kailash.utils.secure_logging import safe_callable_name
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_message
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from nexus.background import BackgroundService
@@ -2433,16 +2433,22 @@ Check the documentation or explore available resources.
                 #     `get_type_hints` refusal that lands here reads
                 #     `TypeError: functools.partial(<function dashboard>,
                 #     dsn='…') is not a module, class, method, or function`.
-                #     The exception's own message embeds the repr, which is why
-                #     only `type(exc).__name__` is kept.
+                #     The exception's own message embeds the repr.
+                #
+                # The message is NOT dropped, because the rest of it is the
+                # diagnostic: for the common failure -- a forward reference to
+                # a name not importable at registration -- it names the symbol
+                # that would not resolve, which is what an operator needs in
+                # order to fix the handler. `safe_exception_message` removes
+                # exactly `repr(handler)` (the one bounded, known payload) and
+                # leaves the rest intact.
                 #
                 # The WARN's purpose is unchanged: a security control whose
                 # verification did not run must not look identical to one that
-                # passed, and the operator still learns WHICH handler and WHY
-                # (the exception type) it could not be verified.
+                # passed.
                 logger.warning(
                     "nexus.endpoint.rate_limit_unverifiable: could not resolve "
-                    "the annotations of handler %r for %s %s (%s), so "
+                    "the annotations of handler %r for %s %s (%s: %s), so "
                     "whether rate limiting engages could NOT be verified at "
                     "registration. If the handler declares no `request: "
                     "Request` parameter, rate_limit=%s has no effect.",
@@ -2450,6 +2456,7 @@ Check the documentation or explore available resources.
                     "/".join(methods),
                     path,
                     type(exc).__name__,
+                    safe_exception_message(exc, handler),
                     effective_rate_limit,
                 )
                 return True
