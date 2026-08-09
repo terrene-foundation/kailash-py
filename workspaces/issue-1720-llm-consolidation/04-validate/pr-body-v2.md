@@ -23,9 +23,29 @@ different things, and only the second is convergence.
 The adversarial round on `689f9ebd8` raised 9 findings, 2 HIGH. Verified in the code at
 the time of writing, not taken from a status report:
 
-- **F1** — a caller-supplied `repr()` reaching a log. Closed at `d6030aefe`;
-  `grep repr(handler)` returns nothing and `manager.py:469,479` now use
-  `type(handler).__name__`.
+- **F1** — a caller-supplied `repr()` reaching a log. **Closed AT THE SITE, and the
+  original receipt here was OVER-SCOPED — corrected at `34321615c`.** What is true and
+  re-verified: `d6030aefe` fixed `kaizen-agents/.../journey/manager.py:469,479`, which now
+  use `type(handler).__name__`.
+  What was FALSE: the claim that "`grep repr(handler)` returns nothing". It returns **22
+  hits at HEAD, of which 11 are live source sites and 7 are the same defect class F1
+  named** — a caller-supplied handler `repr` rendered into a log:
+  `kailash-kaizen/src/kaizen/core/autonomy/hooks/manager.py:89,184,267`,
+  `.../hooks/security/isolation.py:211,418`, `.../hooks/security/rate_limiting.py:118,153`,
+  plus `src/kailash/utils/lifespan.py:82`, `src/kailash/runtime/distributed.py:1167`,
+  `src/kailash/runtime/scheduler.py:1666`, `nexus/core.py:2429`.
+  **How the receipt went wrong is worth stating, because the shape recurs:** the fixed file
+  and the leaking file are BOTH named `manager.py`, in different packages. A grep scoped to
+  the file just fixed returns empty and reads as a package-wide all-clear.
+  These sites are **outside every boundary declared in this PR, and #2012 does NOT cover
+  them** — the scanner inspects only the bound EXCEPTION name inside an `except` block, so
+  a `repr()` of a non-exception value is invisible to it. Proven with a control:
+  `repr(handler)` inside a handler → `[]`; `repr(e)` inside a handler → `[4]` (the
+  instrument does fire, so the empty result discriminates). The leak is CONDITIONAL — these
+  are `getattr(handler, "name", repr(handler))`, so the `repr` reaches the log only when the
+  attribute is absent, which is a property of caller-supplied objects and not decidable at
+  scan time. Exploitability is referred to security review; the coverage-claim gap is not
+  conditional and is stated here.
 - **F2** — the sink scanner blind to `exc_info`/`logger.exception`. Closed; the scanner
   handles `logger.exception` (Shape 3a) and explicit truthy `exc_info` (Shape 3b).
 - **F3** — the preset choice unpinned. Closed by `test_remote_preset_claims_prefixless_credentials`
@@ -41,12 +61,22 @@ HEAD moved four times during the verification pass** (`57e277b49` → `b417a83f9
 `ce96848ae` → `95b142320`). Consequently:
 
 - **Git-derived counts** below were taken at **`95b142320`**.
-- **Suite results** were taken at **`b417a83f9`**. They still stand, and that is checked
-  rather than assumed: everything that landed between the two pins touches only
-  `src/kailash/visualization/api.py`, one root `tests/regression/` file, and a workspace
-  document — **nothing inside the four packages those suites cover** — and zero files in
-  those suites reference `visualization` (positive control: 43 files in the same tree
-  reference `kailash`, so the grep does find things).
+- **Suite results** were taken at **`b417a83f9`**, and the basis originally stated here —
+  "everything between the two pins touches nothing inside the four packages those suites
+  cover" — was **true of the range it named and is now STALE**. HEAD moved 11 commits past
+  `95b142320`, two of which are nexus test commits (`82480af19` →
+  `packages/kailash-nexus/tests/e2e/test_user_flows.py`; `4c5f7c5b2` →
+  `packages/kailash-nexus/tests/unit/transports/test_webhook.py`). The
+  "nothing inside the four packages" guarantee therefore no longer holds, and the
+  inference it supported is **withdrawn**.
+  **The numbers themselves survive on a fresh basis, not on that inference.** The suites
+  were RE-RUN at **`b220704b5`** by the correctness lens of the clean round: nexus
+  **2632 passed, 14 skipped** (exit 0); kaizen regression **1381 passed, 1 skipped,
+  22 xfailed** — identical to the values pinned at `b417a83f9`. Provenance: re-run by that
+  lens, not independently re-executed by the author of this line.
+  **A final re-run at merge time is REQUIRED**, on the same terms as the git counts below —
+  a suite result inherited across a moving HEAD is a claim about a tree that no longer
+  exists.
 - The source tree was clean at both pins. One untracked non-source file is present,
   `kaizen_implementation_test.log` — which is the artifact of **#2011** itself, left in
   place rather than deleted.

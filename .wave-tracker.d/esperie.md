@@ -101,6 +101,47 @@ explicitly bounded by capacity + throttle. Four concurrent is this session's obs
 ceiling; a session-limit death is account-scoped and kills the WHOLE wave at once, so a
 fifth agent risks four agents' in-flight work to save a short wait. Held for Wave 2.
 
+### F11 — NEW ledger row: 11 `repr(handler)` sites the scanner cannot see
+
+Raised by `w5-correctness` (session I's lens, delivered LATE into session J — matched
+against session I's ledger before reacting, per `orchestration-launch-ledger.md` MUST-3).
+Both its findings re-verified first-hand by the orchestrator before any action.
+
+**C1 (PR body, suite-results basis) — CONFIRMED, FIXED at `34321615c`.** Two nexus test
+commits landed after the range the body cited, so the "nothing inside the four packages"
+inference was stale. The NUMBERS survive (re-run identical at `b220704b5`); the REASONING
+did not. Withdrawn and replaced with the re-run + a required merge-time re-run.
+
+**C2 (F11) — CONFIRMED, OPEN.** `grep repr(handler)` returns 22 hits at HEAD, 11 live
+source sites, of which **7 are the same defect class F1 claimed closed**:
+
+```
+kailash-kaizen/src/kaizen/core/autonomy/hooks/manager.py:89,184,267
+kailash-kaizen/src/kaizen/core/autonomy/hooks/security/isolation.py:211,418
+kailash-kaizen/src/kaizen/core/autonomy/hooks/security/rate_limiting.py:118,153
+src/kailash/utils/lifespan.py:82 · runtime/distributed.py:1167
+runtime/scheduler.py:1666 · nexus/core.py:2429
+```
+
+**Why the original receipt read clean — the shape recurs, so note it.** The FIXED file and
+the LEAKING file are both named `manager.py`, in different packages. A grep scoped to the
+file just fixed returns empty and reads as a package-wide all-clear.
+
+**F11 is F10's class, one surface further out.** `_SinkScan` inspects only the bound
+EXCEPTION name inside an `except` block, so a `repr()` of a NON-exception value is
+invisible. The lens proved it with a control: `repr(handler)` → `[]`, `repr(e)` → `[4]`.
+So the PR body's "390 un-triaged sinks, tracked as #2012" does **not** cover these 11 —
+counted as outside-the-surface while carrying the defect, the same false-SWEPT mode as F10.
+
+**Routed, not queued:** shape 5 sent to `w1-scanner` mid-flight (it is already teaching
+this exact instrument; a second teaching pass would be waste). The 11 SITES are NOT in any
+current partition — they need their own shard, gated behind `w1-scanner` merging.
+
+**Severity is CONDITIONAL and must not be overstated:** `getattr(handler, "name",
+repr(handler))` evaluates the default eagerly but only USES it when the attribute is
+absent, so the leak fires only for handlers lacking `.name`. Exploitability referred to
+security review. The coverage-claim gap is NOT conditional.
+
 ### Session-I F10 verdict — PRESERVED, still the governing finding
 
 **The round was NOT clean. 2 of 6 REFUTED.** Convergence is NOT met and the PR MUST NOT
