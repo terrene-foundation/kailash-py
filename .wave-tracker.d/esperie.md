@@ -477,6 +477,34 @@ fix-now. Needs filing.
 | -------------- | -------------------------------------------------- | ------------------------------ | --------- |
 | `w3-lifecycle` | MEDIUM-1 (start-after-failed-stop) + MEDIUM-2 (×2) | `.kailash-py-wt/f13-lifecycle` | in-flight |
 
+### DECISION — the `!r` guard stays LOGGER-SCOPED. Do not "tighten" it later.
+
+`w2-kaizen-repr` offered to widen its `!r` guard from `logger.*` arguments to every
+`FormattedValue`, and honestly flagged that doing so would red on a benign line:
+`event_hooks.py:114` `f"event type {key!r}"` — `key` is a **str** (so `!r` adds quotes rather
+than rendering an object), it is a bus key not caller object state, and it goes to a
+`ValueError` not a sink. Out of class on all three counts.
+
+**Declined, and the reason is the HIGH-5 lesson applied forward.** The provider-error scanner
+became wrong in both directions and its count could never reach zero by fixing code; the real
+damage was not its false-positive rate but that **an instrument which cannot reach its own
+success state teaches its operator to dismiss it.** A guard that reds on a correct
+`ValueError` is on that path — the first person it blocks scopes it down or deletes it, and
+then neither net exists.
+
+**The gap is RECORDED, not closed badly.** A `!r` bound into a variable and logged later
+escapes the logger-scoped guard. That is the SAME structural limitation `w1-scanner` hit on
+the seven `kailash-kaizen` sites (`repr()` → local → log): both need assignment/dataflow
+tracking, categorically different from syntactic matching. A comment naming the limitation was
+requested so the scope reads as a decision, not an oversight.
+
+**Two caller-supplied SCALARS flagged by that shard — both retained, deliberately.**
+`rate_limiting`'s `principal_id` IS the audit record (a rate-limit security event that cannot
+name the principal is not an audit record). `manager.py`'s `hook_file` is a path under a
+caller-supplied `hooks_dir` — a path-disclosure surface, not a credential one. Both pass the
+scalar-vs-rendering heuristic, and `hook_file` sits at its EDGE: scalar, but caller-DERIVED
+rather than framework-derived. The heuristic is a cheap first filter, not a proof.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
