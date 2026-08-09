@@ -145,6 +145,36 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
 #: All six are LOCAL (in-process ImportError / OSError / JSONDecodeError), so
 #: they route through the conservative preset, which preserves the path that IS
 #: their diagnostic.
+#:
+#: Teaching ``_SinkScan`` shapes 4-7 (see its docstring) —
+#: ``traceback.format_exc()``, exception VALUES that were never except-bound,
+#: ``%``/``.format`` interpolation, and exception ATTRIBUTES — moved the BARE
+#: count from 0 to 10 while the scanner was reporting this package fully swept.
+#:
+#: THE PIN BELOW IS A *WRAPPED* COUNT, SO IT MOVES AT FIX TIME, NOT TEACH TIME.
+#: This matters when reading the teaching as landed or not: a newly-seen shape
+#: shows up first as a BARE site, and only becomes a swept site once it is
+#: routed through a preset. The teach-time evidence is therefore the bare count
+#: (0 -> 10, enumerated below); the pin moves one commit later, by +1 per fixed
+#: site and +1 file for each file that had no scrubbed sink before.
+#:
+#: The ten bare sites this teaching surfaced, none of which any previous pass
+#: could see:
+#:   patterns/patterns/blackboard.py     281, 322  (traceback.format_exc)
+#:   patterns/patterns/ensemble.py       264, 315  (traceback.format_exc)
+#:   patterns/patterns/parallel.py       148, 258  (traceback.format_exc)
+#:   patterns/patterns/meta_controller.py     246  (traceback.format_exc)
+#:   patterns/patterns/meta_controller.py     243  (str() of an ANNOTATED
+#:                                                  ``error: Exception`` param)
+#:   patterns/patterns/parallel.py            256  (str() of an isinstance-
+#:                                                  narrowed gather() result)
+#:   delegate/loop.py                         767  (lazy ``%s`` of an isinstance-
+#:                                                  narrowed gather() result,
+#:                                                  five lines below a correctly
+#:                                                  scrubbed sibling sink)
+#: Once all ten are routed through a preset this pin becomes 58 / 201:
+#: +10 sites, and +1 file because ``meta_controller.py`` carried no scrubbed
+#: sink at all before. Re-derive rather than trust that arithmetic.
 EXPECTED_FILES = 57
 EXPECTED_SITES = 191
 
@@ -157,48 +187,287 @@ _LOG_METHODS = frozenset(
     {"debug", "info", "warning", "warn", "error", "exception", "critical", "log"}
 )
 
+#: ``traceback`` entry points that render a caught exception — its message, and
+#: every message in its ``__cause__`` / ``__context__`` chain — as text. There
+#: is no safe use of one of these in a value that leaves the process: the
+#: rendering ALWAYS contains ``str(exc)`` on its final line. So these are
+#: flagged wherever they appear, with no name and no handler required, which is
+#: the only way to see the seven sites that sit in a returned dict rather than
+#: in a log record.
+_TRACEBACK_FUNCS = frozenset(
+    {
+        "format_exc",
+        "format_exception",
+        "format_exception_only",
+        "print_exc",
+        "print_exception",
+    }
+)
+
+#: Attribute chains on an exception that CANNOT carry message text. Everything
+#: NOT listed is flagged — ``args``, ``msg``, ``strerror``, ``filename``,
+#: ``stdout``, ``stderr``, ``response``, ``detail``, ``__cause__``,
+#: ``__context__`` each render environment- or provider-controlled text, and
+#: ``e.response.text`` is a whole HTTP body.
+#:
+#: An ALLOWLIST, deliberately, and not a denylist of the leaky ones: an
+#: attribute nobody anticipated must default to FLAGGED. This scanner's entire
+#: defect was that an unrecognised shape defaulted to silence, and a false
+#: positive costs one reviewer minute while a false "swept" costs a credential.
+_SAFE_EXC_ATTRS = frozenset(
+    {
+        "__class__",
+        "__name__",
+        "__qualname__",
+        "__module__",
+        "errno",
+        "winerror",
+        "returncode",
+    }
+)
+
+
+def _key(node: ast.AST) -> tuple[int, int]:
+    """Identity of one syntactic site.
+
+    ``(lineno, col_offset)`` rather than ``lineno`` alone, because a site can
+    now be reached by more than one pass — a name can be both except-bound and
+    ``isinstance``-narrowed in the same function — and a site counted twice
+    would inflate the pinned totals into meaninglessness.
+    """
+    return (node.lineno, node.col_offset)
+
+
+def _is_exception_like(node: ast.AST | None) -> bool:
+    """``Exception`` / ``BaseException`` / anything named like an error class.
+
+    Matched on the trailing identifier, so ``httpx.HTTPError`` and
+    ``asyncio.TimeoutError`` resolve without importing anything.
+    """
+    if isinstance(node, ast.Name):
+        name = node.id
+    elif isinstance(node, ast.Attribute):
+        name = node.attr
+    else:
+        return False
+    return name in ("Exception", "BaseException") or name.endswith(
+        ("Error", "Exception", "Exit", "Interrupt")
+    )
+
+
+def _annotation_is_exception(node: ast.AST | None) -> bool:
+    """``Exception``, ``Exception | None``, ``Optional[Exception]``, ``"Exception"``."""
+    if node is None:
+        return False
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _annotation_is_exception(node.left) or _annotation_is_exception(
+            node.right
+        )
+    if isinstance(node, ast.Subscript):  # Optional[X] / Union[X, Y]
+        sl = node.slice
+        elts = sl.elts if isinstance(sl, ast.Tuple) else [sl]
+        return any(_annotation_is_exception(e) for e in elts)
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        try:  # PEP 563 / quoted forward reference
+            return _annotation_is_exception(ast.parse(node.value, mode="eval").body)
+        except SyntaxError:
+            return False
+    return _is_exception_like(node)
+
+
+def _isinstance_narrowed_names(test: ast.AST) -> set[str]:
+    """Names an ``if`` test proves to hold an exception, for that branch.
+
+    ``if isinstance(result, Exception):`` is how an exception returned as a
+    VALUE — ``asyncio.gather(..., return_exceptions=True)`` is the canonical
+    producer — announces itself. There is no ``ExceptHandler`` anywhere in
+    scope, so the except-bound scan misses the whole class by construction.
+    """
+    names: set[str] = set()
+    if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And):
+        for value in test.values:
+            names |= _isinstance_narrowed_names(value)
+        return names
+    if (
+        isinstance(test, ast.Call)
+        and isinstance(test.func, ast.Name)
+        and test.func.id == "isinstance"
+        and len(test.args) == 2
+        and isinstance(test.args[0], ast.Name)
+    ):
+        cls = test.args[1]
+        candidates = cls.elts if isinstance(cls, (ast.Tuple, ast.List)) else [cls]
+        if candidates and all(_is_exception_like(c) for c in candidates):
+            names.add(test.args[0].id)
+    return names
+
+
+def _param_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.arg]:
+    a = fn.args
+    out = [*a.posonlyargs, *a.args, *a.kwonlyargs]
+    if a.vararg is not None:
+        out.append(a.vararg)
+    if a.kwarg is not None:
+        out.append(a.kwarg)
+    return out
+
+
+def _exception_regions(tree: ast.AST) -> list[tuple[str, list[ast.stmt]]]:
+    """``(name, body)`` for every region in which ``name`` holds an exception.
+
+    THREE PRODUCERS, AND THE SCANNER ORIGINALLY KNEW ONE
+    ----------------------------------------------------
+    The first version enumerated ``except ... as e`` handlers ONLY, so an
+    exception that arrives as a VALUE was outside its universe of discourse —
+    not missed by a weak heuristic, but unreachable, because the loop that built
+    the scan set filtered on ``isinstance(node, ast.ExceptHandler)``.
+
+    * ``except E as name`` — the original.
+    * ``if isinstance(name, ExcLike):`` — scoped to that branch's body, which is
+      exactly where a ``gather(return_exceptions=True)`` result is unpacked.
+    * a FUNCTION whose parameter holds an exception, evidenced either by an
+      exception-like ANNOTATION (``error: Exception``) or by a bare
+      ``raise <param>`` in its body — you cannot ``raise`` a non-exception, and
+      restricting to parameters keeps ``raise ValueError`` (a class, not a
+      value) out.
+    """
+    regions: list[tuple[str, list[ast.stmt]]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler) and node.name:
+            regions.append((node.name, node.body))
+        elif isinstance(node, ast.If):
+            for name in _isinstance_narrowed_names(node.test):
+                regions.append((name, node.body))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            params = {arg.arg for arg in _param_names(node)}
+            names = {
+                arg.arg
+                for arg in _param_names(node)
+                if _annotation_is_exception(arg.annotation)
+            }
+            names |= {
+                sub.exc.id
+                for sub in ast.walk(node)
+                if isinstance(sub, ast.Raise)
+                and isinstance(sub.exc, ast.Name)
+                and sub.exc.id in params
+            }
+            for name in names:
+                regions.append((name, node.body))
+    return regions
+
+
+def _is_traceback_call(node: ast.AST) -> bool:
+    """``traceback.format_exc()`` and its siblings, however the module is bound.
+
+    Matched on the FUNCTION name alone — ``traceback.format_exc()``,
+    ``tb.format_exc()`` and a ``from traceback import format_exc`` all count.
+    Not qualifying on the module binding is a deliberate over-reach: a
+    same-named helper of someone's own gets flagged, and that costs a comment,
+    whereas requiring the literal ``traceback.`` prefix would have re-introduced
+    a blind spot for the sake of a tidier count.
+    """
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    if isinstance(func, ast.Attribute):
+        return func.attr in _TRACEBACK_FUNCS
+    return isinstance(func, ast.Name) and func.id in _TRACEBACK_FUNCS
+
+
+_ALL_HELPERS = frozenset(HELPERS) | {AGGRESSIVE_HELPER}
+
+
+def _traceback_sites(
+    tree: ast.AST,
+) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+    """Shape 7 — ``(bare, wrapped)`` traceback renderings, name-independent.
+
+    Runs over the WHOLE module rather than over handler bodies, because seven of
+    the nine sites this pass exists for sit in a ``return {...}`` dict — five
+    inside a handler, two in a plain function body with no handler in sight.
+    Keying the scan on a bound name could never have reached the latter two.
+    """
+    accounted: set[tuple[int, int]] = set()
+    wrapped: set[tuple[int, int]] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _ALL_HELPERS
+            and len(node.args) == 1
+            and _is_traceback_call(node.args[0])
+        ):
+            accounted.add(_key(node.args[0]))
+            if node.func.id in HELPERS:
+                wrapped.add(_key(node))
+    bare = {
+        _key(node)
+        for node in ast.walk(tree)
+        if _is_traceback_call(node) and _key(node) not in accounted
+    }
+    return bare, wrapped
+
 
 class _SinkScan(ast.NodeVisitor):
-    """Find uses of one handler's bound exception name that reach a log record.
+    """Find uses of one exception-valued name that reach a rendered string.
 
-    ``wrapped`` are the uses already routed through one of :data:`HELPERS`; ``bare``
-    are the ones that would put the raw exception text into a message.
+    ``wrapped`` are the uses already routed through one of :data:`HELPERS`;
+    ``bare`` are the ones that would put the raw exception text into a message.
+    Both are sets of :func:`_key` site identities.
 
-    THREE SHAPES, AND THE SCANNER ORIGINALLY SAW ONLY ONE
-    ----------------------------------------------------
+    SEVEN SHAPES, AND THE SCANNER ORIGINALLY SAW ONE
+    ------------------------------------------------
     This class advertises (docstring tier 1, above) that it reds when a NEW
-    unscrubbed sink is added. For its first version that was only true of the
-    ``str(e)`` / ``repr(e)`` / f-string ``{e}`` shape, and the gap was not
-    theoretical: it is why the #1970 sweep left ELEVEN traceback sinks and FIVE
-    bare-argument sinks in this package for a later session to find. An
-    instrument that cannot see a defect class reports the same green whether or
-    not that class is present, which makes its green uninformative for it.
+    unscrubbed sink is added. That claim is worth exactly what the scanner can
+    SEE, and each time the answer has been "less than it advertised": the #1970
+    sweep left ELEVEN traceback sinks and FIVE bare-argument sinks behind, and
+    the pass that fixed those still reported this package fully swept while NINE
+    live leaks sat in files it had marked covered. An instrument that cannot see
+    a defect class reports the same green whether or not that class is present,
+    which makes its green uninformative for it.
 
     1. **String context** — ``str(e)``, ``repr(e)``, f-string ``{e}``. Original.
     2. **Bare argument** — ``logger.error("failed: %s", e)``. The exception is
        handed to the logger as a lazy ``%s`` arg, so no ``str()`` call and no
-       ``FormattedValue`` node ever appears in the tree; ``logger.error`` is an
-       ``ast.Attribute``, which no branch matched, and there is no
-       ``visit_Name``. This is the exact shape of the five bare sinks in
-       ``delegate/`` fixed in 689f9ebd8.
-    3. **Traceback** — ``exc_info=True`` or ``logger.exception(...)``. Not a
-       node the scanner inspected at all. ``logging`` renders ``exc_info`` by
-       walking the exception chain, so a scrubbed MESSAGE beside a retained
-       traceback still prints the raw exception and its ``__cause__`` on the
-       traceback's final line. Every one of the eleven CLASS-2 sinks fixed in
-       689f9ebd8 had a correctly-scrubbed message and was invisible here.
+       ``FormattedValue`` node ever appears in the tree.
+    3. **Logging traceback** — ``exc_info=True`` or ``logger.exception(...)``.
+       ``logging`` renders ``exc_info`` by walking the exception chain, so a
+       scrubbed MESSAGE beside a retained traceback still prints the raw
+       exception and its ``__cause__`` on the traceback's final line.
+    4. **``%`` interpolation** — ``"failed: %s" % e``, ``"%s/%s" % (tag, e)``,
+       ``"%(err)s" % {"err": e}``. Produces the same bytes as ``str(e)`` with no
+       ``str`` call and no ``JoinedStr`` node.
+    5. **``.format()``** — ``"failed: {}".format(e)``, ``"{err}".format(err=e)``.
+       Same, via an ``ast.Attribute`` call the scanner did not inspect.
+    6. **Exception ATTRIBUTES** — ``e.args``, ``e.strerror``, ``e.response.text``,
+       ``e.__cause__``. The exception itself never appears, so every branch
+       keyed on ``self.name`` being the whole argument missed them, and
+       ``e.response.text`` is an entire provider HTTP body — the single richest
+       credential source at any of these sinks. Discriminated by
+       :data:`_SAFE_EXC_ATTRS`, an allowlist, so an unanticipated attribute
+       fails toward FLAGGED.
+    7. **``traceback.format_exc()``** — see :func:`_traceback_sites`. Handled
+       outside this class because it needs no name at all.
 
-    Shapes 2 and 3 are deliberately narrow: shape 2 fires only for a bare
-    ``Name`` passed to a LOGGING call, so ``type(e)``, ``isinstance(e, X)``,
-    ``raise e`` and ``SomeResult.from_exception(e)`` are untouched; shape 3
-    fires only inside an except handler, which is the only place a traceback can
-    carry the caught exception.
+    WHERE THIS DELIBERATELY OVER-FLAGS
+    ----------------------------------
+    Shape 6 fires on ANY attribute outside the allowlist, and :func:`_is_traceback_call`
+    fires on ANY ``format_exc``-named callable. Both will occasionally flag a
+    site that is genuinely fine. That trade is taken on purpose and in one
+    direction only: a false positive is discharged by a reviewer in a minute,
+    while a false "swept" is the exact defect this class exists to fix and is
+    discharged by a credential in a log. Where a shape could be discriminated
+    cheaply and soundly it IS — ``exc_info=False`` is not a sink, ``e.errno`` is
+    not a sink, ``type(e).__name__`` is not a sink, and a bare ``Name`` handed to
+    a NON-logging call is not a sink — but no cleverer heuristic is added just to
+    make the count tidier.
     """
 
     def __init__(self, name: str) -> None:
         self.name = name
-        self.bare: list[int] = []
-        self.wrapped: list[int] = []
+        self.bare: set[tuple[int, int]] = set()
+        self.wrapped: set[tuple[int, int]] = set()
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         # An inner handler rebinding the same name owns its own uses.
@@ -208,14 +477,40 @@ class _SinkScan(ast.NodeVisitor):
     def _is_our_name(self, node: ast.AST) -> bool:
         return isinstance(node, ast.Name) and node.id == self.name
 
-    def _is_str_of_our_name(self, node: ast.AST) -> bool:
+    def _is_our_value(self, node: ast.AST) -> bool:
+        """Our exception, or a text-bearing attribute/index chain rooted at it.
+
+        ``e`` / ``e.args`` / ``e.args[0]`` / ``e.response.text`` are all our
+        value; ``e.errno`` and ``e.__class__.__name__`` are not, because every
+        attribute in those chains is in :data:`_SAFE_EXC_ATTRS`.
+        """
+        if self._is_our_name(node):
+            return True
+        if isinstance(node, ast.Subscript):
+            return self._is_our_value(node.value)
+        if isinstance(node, ast.Attribute):
+            chain: list[str] = []
+            current: ast.AST = node
+            while isinstance(current, ast.Attribute):
+                chain.append(current.attr)
+                current = current.value
+            if not self._is_our_name(current):
+                return False
+            return not all(attr in _SAFE_EXC_ATTRS for attr in chain)
+        return False
+
+    def _is_render_of_our_value(self, node: ast.AST) -> bool:
+        """``str(e)`` / ``repr(e)`` — so ``scrub(str(e))`` still counts wrapped."""
         return (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
-            and node.func.id == "str"
+            and node.func.id in ("str", "repr")
             and len(node.args) == 1
-            and self._is_our_name(node.args[0])
+            and self._is_our_value(node.args[0])
         )
+
+    def _is_scrubbable(self, node: ast.AST) -> bool:
+        return self._is_our_value(node) or self._is_render_of_our_value(node)
 
     @staticmethod
     def _is_logging_call(func: ast.AST) -> bool:
@@ -232,7 +527,7 @@ class _SinkScan(ast.NodeVisitor):
         """
         # Shape 3a — ``logger.exception`` ALWAYS sets exc_info.
         if isinstance(node.func, ast.Attribute) and node.func.attr == "exception":
-            self.bare.append(node.lineno)
+            self.bare.add(_key(node))
             return
         for kw in node.keywords:
             # Shape 3b — an explicit truthy ``exc_info``. ``exc_info=False`` /
@@ -241,14 +536,15 @@ class _SinkScan(ast.NodeVisitor):
             if kw.arg == "exc_info" and not (
                 isinstance(kw.value, ast.Constant) and not kw.value.value
             ):
-                self.bare.append(node.lineno)
+                self.bare.add(_key(node))
                 return
         # Shape 2 — the exception handed over as a lazy ``%s`` argument. args[0]
         # is the format string; anything after it is interpolated into the
-        # record exactly as ``str(e)`` would be.
+        # record exactly as ``str(e)`` would be. Shape 6 rides along here: an
+        # ATTRIBUTE passed the same way renders the same way.
         for arg in node.args[1:]:
-            if self._is_our_name(arg):
-                self.bare.append(arg.lineno)
+            if self._is_our_value(arg):
+                self.bare.add(_key(arg))
                 return
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -260,18 +556,15 @@ class _SinkScan(ast.NodeVisitor):
             isinstance(func, ast.Name)
             and func.id in HELPERS
             and len(node.args) == 1
-            and self._is_our_name(node.args[0])
+            and self._is_scrubbable(node.args[0])
         ):
-            self.wrapped.append(node.lineno)
+            self.wrapped.add(_key(node))
             return  # do not descend: the Name inside is accounted for
         if (
             isinstance(func, ast.Name)
             and func.id == AGGRESSIVE_HELPER
             and len(node.args) == 1
-            and (
-                self._is_our_name(node.args[0])
-                or self._is_str_of_our_name(node.args[0])
-            )
+            and self._is_scrubbable(node.args[0])
         ):
             # Scrubbed, but by the aggressive entry point. Counts as covered for
             # Tier 1; deliberately NOT counted as part of this sweep.
@@ -280,33 +573,68 @@ class _SinkScan(ast.NodeVisitor):
             isinstance(func, ast.Name)
             and func.id in ("str", "repr")
             and len(node.args) == 1
-            and self._is_our_name(node.args[0])
+            and self._is_our_value(node.args[0])
         ):
-            self.bare.append(node.lineno)
+            self.bare.add(_key(node))
             return
+        # Shape 5 — ``"...".format(e)`` / ``"{e}".format(e=e)``. Any ``.format``
+        # call is a candidate; it is our exception appearing among its arguments
+        # that makes it a sink, which is specific enough that an unrelated
+        # ``formatter.format(record)`` is untouched.
+        if isinstance(func, ast.Attribute) and func.attr in ("format", "format_map"):
+            rendered = [*node.args, *(kw.value for kw in node.keywords)]
+            if any(self._is_our_value(value) for value in rendered):
+                self.bare.add(_key(node))
+                return
+        self.generic_visit(node)
+
+    def visit_BinOp(self, node: ast.BinOp) -> None:
+        # Shape 4 — printf-style interpolation. The right operand is the value,
+        # a tuple of values, or a mapping for the ``%(name)s`` form.
+        if isinstance(node.op, ast.Mod):
+            right = node.right
+            if isinstance(right, ast.Dict):
+                operands: list[ast.AST] = [v for v in right.values if v is not None]
+            elif isinstance(right, (ast.Tuple, ast.List)):
+                operands = list(right.elts)
+            else:
+                operands = [right]
+            if any(self._is_our_value(value) for value in operands):
+                self.bare.add(_key(node))
+                return
         self.generic_visit(node)
 
     def visit_FormattedValue(self, node: ast.FormattedValue) -> None:
-        if self._is_our_name(node.value):
-            self.bare.append(node.value.lineno)
+        if self._is_our_value(node.value):
+            self.bare.add(_key(node.value))
             return
         self.generic_visit(node)
+
+
+def _scan_tree(tree: ast.AST) -> tuple[list[int], list[int]]:
+    """Return ``(bare_linenos, wrapped_linenos)`` for one parsed module.
+
+    Two passes whose results are UNIONED by site identity: the name-independent
+    traceback pass, and one :class:`_SinkScan` per region from
+    :func:`_exception_regions`. Regions legitimately overlap — a parameter can
+    also be ``isinstance``-narrowed inside the same function — so the union is
+    taken over :func:`_key` rather than over line numbers, which keeps a site
+    counted exactly once however many passes reach it.
+    """
+    bare, wrapped = _traceback_sites(tree)
+    for name, body in _exception_regions(tree):
+        scan = _SinkScan(name)
+        for stmt in body:
+            scan.visit(stmt)
+        bare |= scan.bare
+        wrapped |= scan.wrapped
+    return sorted(lineno for lineno, _ in bare), sorted(lineno for lineno, _ in wrapped)
 
 
 def _enumerate(path: Path) -> tuple[list[int], list[int]]:
     """Return ``(bare_linenos, wrapped_linenos)`` for one file."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    bare: list[int] = []
-    wrapped: list[int] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ExceptHandler) or not node.name:
-            continue
-        scan = _SinkScan(node.name)
-        for stmt in node.body:
-            scan.visit(stmt)
-        bare.extend(scan.bare)
-        wrapped.extend(scan.wrapped)
-    return bare, wrapped
+    return _scan_tree(tree)
 
 
 def _source_files() -> list[Path]:
@@ -350,16 +678,15 @@ class TestTheScannerSeesEachShape:
 
     @staticmethod
     def _scan(src: str) -> list[int]:
-        tree = ast.parse(textwrap.dedent(src))
-        bare: list[int] = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ExceptHandler) or not node.name:
-                continue
-            scan = _SinkScan(node.name)
-            for stmt in node.body:
-                scan.visit(stmt)
-            bare.extend(scan.bare)
-        return bare
+        """Scan a snippet through the SAME entry point real source goes through.
+
+        ``_scan_tree`` rather than a hand-rolled handler loop: the traceback and
+        non-except-bound passes live outside :class:`_SinkScan`, so a fixture
+        harness that only instantiated the visitor per handler would exercise a
+        scanner the package is never scanned with — and would have gone on
+        reporting green for shapes 6 and 7 forever.
+        """
+        return _scan_tree(ast.parse(textwrap.dedent(src)))[0]
 
     @pytest.mark.parametrize(
         "label, body",
@@ -379,10 +706,77 @@ class TestTheScannerSeesEachShape:
                 "exc_info=True",
                 '    logger.error("f: %s", scrub_local_error(exc), exc_info=True)',
             ),
+            # Shape 4 — printf-style interpolation, all three right-hand forms.
+            ("percent-scalar", '    logger.error("failed: %s" % exc)'),
+            ("percent-tuple", '    logger.error("%s: %s" % ("ctx", exc))'),
+            ("percent-mapping", '    logger.error("%(e)s" % {"e": exc})'),
+            # Shape 5 — str.format, positional and keyword.
+            ("format-positional", '    logger.error("failed: {}".format(exc))'),
+            ("format-keyword", '    logger.error("{e}".format(e=exc))'),
+            # Shape 6 — attributes, which never mention the exception itself.
+            ("attr-args", '    logger.error("failed: %s", exc.args)'),
+            ("attr-strerror", '    logger.error(f"failed: {exc.strerror}")'),
+            ("attr-nested", '    logger.error("failed: %s", exc.response.text)'),
+            ("attr-cause", '    logger.error("failed: " + str(exc.__cause__))'),
+            ("attr-subscript", '    logger.error("failed: %s", exc.args[0])'),
         ],
     )
     def test_each_leaking_shape_is_flagged(self, label: str, body: str) -> None:
         src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
+        assert self._scan(src), f"scanner is blind to the {label!r} shape"
+
+    @pytest.mark.parametrize(
+        "label, src",
+        [
+            # Shape 7 — a traceback rendering needs NO handler and no bound name.
+            # These are the seven `return {"traceback": ...}` sites in
+            # patterns/patterns/, five of which sit in a handler and two of which
+            # do not; keying the scan on a bound name could reach neither.
+            (
+                "format_exc-in-handler",
+                "try:\n    pass\nexcept Exception as exc:\n"
+                '    return {"error": scrub_remote_error(exc),'
+                ' "traceback": traceback.format_exc()}\n',
+            ),
+            (
+                "format_exc-no-handler",
+                "def handle(agent, error):\n"
+                '    return {"traceback": traceback.format_exc()}\n',
+            ),
+            ("format_exc-imported-bare", "def f():\n    return format_exc()\n"),
+            ("print_exc", "def f():\n    print_exc()\n"),
+            # Shape 2/6 without any handler — the exception arrives as a VALUE.
+            (
+                "isinstance-narrowed-gather-result",
+                "async def run(tasks):\n"
+                "    results = await asyncio.gather(*tasks, return_exceptions=True)\n"
+                "    for result in results:\n"
+                "        if isinstance(result, Exception):\n"
+                '            out.append({"error": str(result)})\n',
+            ),
+            (
+                "annotated-exception-parameter",
+                "def _handle(self, agent, error: Exception):\n"
+                '    return {"error": str(error)}\n',
+            ),
+            (
+                "unannotated-parameter-proved-by-raise",
+                "def _handle(self, error):\n"
+                "    if self.fail_fast:\n"
+                "        raise error\n"
+                '    return {"error": str(error)}\n',
+            ),
+        ],
+    )
+    def test_each_non_handler_shape_is_flagged(self, label: str, src: str) -> None:
+        """The shapes with no ``ExceptHandler`` anywhere in scope.
+
+        Separated from the parametrisation above because those all share a
+        ``try/except`` preamble, and a shape whose whole point is that it has no
+        handler cannot be expressed in it. That preamble is precisely how the
+        earlier fixture set managed to look thorough while covering only sites
+        the scanner could already reach.
+        """
         assert self._scan(src), f"scanner is blind to the {label!r} shape"
 
     @pytest.mark.parametrize(
@@ -403,11 +797,72 @@ class TestTheScannerSeesEachShape:
             # not become a log record, and flagging it would make the scanner
             # noisy enough that someone would add exclusions.
             ("non-log-call", "    _ = Result.from_exception(exc)"),
+            # Shape 6's allowlist — attributes that cannot carry message text.
+            ("attr-errno", '    logger.error("f: %s", exc.errno)'),
+            ("attr-returncode", '    logger.error("f: %s", exc.returncode)'),
+            ("attr-class-name", '    logger.error("f: %s", exc.__class__.__name__)'),
+            (
+                "attr-class-name-fstring",
+                '    logger.error(f"{exc.__class__.__name__}")',
+            ),
+            # Shapes 4/5/6 must all stay recognisable as SCRUBBED.
+            ("percent-scrubbed", '    logger.error("f: %s" % scrub_local_error(exc))'),
+            (
+                "format-scrubbed",
+                '    logger.error("f: {}".format(scrub_remote_error(exc)))',
+            ),
+            (
+                "attr-scrubbed",
+                '    logger.error("f: %s", scrub_remote_error(exc.args))',
+            ),
+            (
+                "scrub-of-str",
+                '    logger.error("f: %s", scrub_remote_error(str(exc)))',
+            ),
+            # Shape 7's negative control: a scrubbed traceback is not a sink.
+            (
+                "format_exc-scrubbed",
+                '    logger.error("f: %s", scrub_remote_error(traceback.format_exc()))',
+            ),
+            # Modulo on numbers must not be mistaken for interpolation.
+            ("arithmetic-modulo", "    _ = exc.errno % 2"),
+            # An unrelated .format call on a non-exception argument.
+            ("unrelated-format", '    logger.error("f: {}".format(agent_id))'),
         ],
     )
     def test_each_safe_shape_is_not_flagged(self, label: str, body: str) -> None:
         src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
         assert not self._scan(src), f"scanner false-positives on {label!r}"
+
+    def test_a_non_exception_isinstance_narrowing_is_not_a_region(self) -> None:
+        """``isinstance(x, dict)`` must not make ``x`` an exception.
+
+        Without this the narrowing rule would turn every ``isinstance`` branch
+        in the package into a scan region, and the resulting noise is exactly
+        what gets a detector switched off.
+        """
+        src = (
+            "def f(results):\n"
+            "    for result in results:\n"
+            "        if isinstance(result, dict):\n"
+            '            logger.error("got %s", result)\n'
+        )
+        assert not self._scan(src)
+
+    def test_raise_of_a_class_is_not_an_exception_valued_name(self) -> None:
+        """``raise ValueError`` names a CLASS, not a parameter holding a value.
+
+        The ``raise <param>`` producer is restricted to parameter names for this
+        reason; a bare class name in a ``raise`` must not enrol the module-level
+        symbol as a scannable exception value.
+        """
+        src = (
+            "def f(payload):\n"
+            "    if not payload:\n"
+            "        raise ValueError\n"
+            '    logger.error("got %s", ValueError)\n'
+        )
+        assert not self._scan(src)
 
 
 class TestNoBareExceptionTextSinkRemains:
