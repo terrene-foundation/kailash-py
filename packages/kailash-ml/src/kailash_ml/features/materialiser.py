@@ -54,6 +54,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from kailash_ml.errors import fingerprint_classified_value
+from kailash_ml.features._error_context import describe_exception_origin
 from kailash_ml.features._model_registration import DTYPE_TO_PYTYPE as _DTYPE_TO_PYTYPE
 from kailash_ml.features._model_registration import ensure_feature_model_registered
 from kailash_ml.features.cache_keys import (
@@ -311,8 +312,12 @@ class FeatureMaterialiser:
                     "latency_ms": latency_ms,
                 },
             )
+            # Class + originating module:line ONLY — never the underlying
+            # message (a driver error embeds the connection string / raw tenant
+            # / row values). See features/_error_context.py for why the dotted
+            # module name is the leak-free locator.
             raise FeatureStoreError(
-                reason=f"materialize failed: {type(exc).__name__}",
+                reason=f"materialize failed: {describe_exception_origin(exc)}",
                 tenant_fingerprint=tenant_fp,
             ) from exc
 

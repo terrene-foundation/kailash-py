@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+### Changed — wrapped feature-store errors now name the originating module and line
+
+`FeatureStore.get_features`, `FeatureMaterialiser.materialize` and `erase_tenant`
+wrap an unexpected underlying failure in a typed `FeatureStoreError` whose `reason`
+deliberately carries the exception CLASS ONLY, never the underlying message — a
+driver or adapter error routinely embeds the connection string, the raw tenant id
+and the offending row values, none of which may reach an error surface.
+
+The cost of that discipline was diagnosability: `"materialize failed: TypeError"`
+names the failure class but not where it came from, so a reader of a CI summary
+line could not distinguish an in-package bug from one in a downstream binding
+without the full traceback. (That is not hypothetical — it is precisely what made a
+cross-package signature skew expensive to diagnose in this cycle.)
+
+`reason` now reads `"materialize failed: TypeError at dataflow.core.nodes:3620"`.
+
+The new `features/_error_context.py::describe_exception_origin` adds the **dotted
+module name** and line of the innermost raising frame, and nothing else:
+
+- The exception's `str(exc)` / `args` are **never read**, so no driver-embedded
+  credential, raw tenant id, or row value can transit the helper.
+- The dotted module name is used rather than a filesystem path deliberately — a
+  path may embed the absolute install prefix (a home directory, a per-run pytest
+  tmpdir, a container layout), which is operator-correlatable. The module name is
+  the same identifier the package already publishes in its import surface.
+- Falls back to the bare class name when the exception carries no traceback or the
+  raising frame declares no module.
+
+The `tenant_fingerprint` convention on these errors is unchanged.
+
 ## [2.2.3] — 2026-08-05 — Identifier-length validation now uses a real dialect budget (#1971)
 
 Patch release. Internal call-site fix — no public API change.

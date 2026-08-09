@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 from kailash_ml.errors import FeatureStoreError, TenantRequiredError
+from kailash_ml.features._error_context import describe_exception_origin
 from kailash_ml.features._schema_feature_group import SchemaFeatureGroup
 from kailash_ml.features.cache_keys import (
     make_feature_cache_key,
@@ -267,8 +268,10 @@ class FeatureStore:
                     "latency_ms": latency_ms,
                 },
             )
+            # Class + originating module:line ONLY — never the underlying
+            # message (see features/_error_context.py).
             raise FeatureStoreError(
-                reason=f"get_features failed: {type(exc).__name__}",
+                reason=f"get_features failed: {describe_exception_origin(exc)}",
                 tenant_id=effective_tenant,
             ) from exc
 

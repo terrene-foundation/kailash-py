@@ -60,6 +60,7 @@ from kailash_ml.errors import (
     FeatureStoreError,
     fingerprint_classified_value,
 )
+from kailash_ml.features._error_context import describe_exception_origin
 from kailash_ml.features.cache_keys import (
     make_feature_group_wildcard,
     validate_tenant_id,
@@ -453,7 +454,9 @@ async def erase_tenant(
                 "latency_ms": latency_ms,
             },
         )
+        # Class + originating module:line ONLY — never the underlying message
+        # (see features/_error_context.py).
         raise FeatureStoreError(
-            reason=f"erase_tenant failed: {type(exc).__name__}",
+            reason=f"erase_tenant failed: {describe_exception_origin(exc)}",
             tenant_fingerprint=fingerprint,
         ) from exc
