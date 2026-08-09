@@ -280,12 +280,15 @@ if /tmp has been cleared).
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — every number
+1. **`workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-09c.md` — THE
+   DECISION REPORT. Read this FIRST.** PCF-triaged queue, ETA in cycles, four decision points
+   (A merge-now-or-hold, B where `credential_scrub` lives, C the fourth-cycle deferred-quality
+   threshold, D file-the-residuals), each with symmetric pros/cons + a recommendation.
+   **Supersedes `sweep-2026-08-09b.md`, and REVERSES its merge-now recommendation** — see
+   Decision A for why (measured fix-introduces-defect base rate, not general caution).
+2. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — every number
    RE-DERIVED post-integration this session. Carries the integration record, the redteam
    findings, and the four-tree table's current values.
-2. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-09b.md` — session J's
-   decision report. Decisions B and C still stand as written; **Decision A is REFINED below,
-   not superseded.**
 3. This file's **Traps** — three prior-session traps are now CORRECTED, not merely amended.
 
 ## In-flight state
