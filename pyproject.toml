@@ -211,6 +211,13 @@ dev = [
     # inside a function-local try/except (security.py:666), so it lives in
     # [dev] here rather than the slim core. Per #890 audit.
     "networkx>=2.7",
+    # requests is imported at MODULE SCOPE by tests/conftest.py:17, so EVERY
+    # pytest run needs it — but it was declared only in [server] and
+    # [http-client]. A job installing `.[trust,...,dev]` (trust-plane on
+    # windows) therefore died at conftest import with ModuleNotFoundError
+    # before collecting a single test. `dependencies.md` Declared = Imported:
+    # the test surface must declare what the test surface imports.
+    "requests>=2.32.3",
     # Sub-packages required for test collection (pact/mcp tests import these)
     "kailash-pact>=0.18.0",
     # Raised 0.4.3 -> 0.5.0 so dev/CI test collection exercises the patched
