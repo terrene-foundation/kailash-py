@@ -186,8 +186,19 @@ EXCLUDED_PARTS = {"build", "tests", "examples", "__pycache__"}
 #: ``_repr_sinks``), so fixing it REMOVES a bare site without ADDING a wrapped
 #: one. A pin that lands on 202 means someone scrubbed the repr instead, which
 #: this file rejects. Re-derive rather than trust any of that arithmetic.
-EXPECTED_FILES = 57
-EXPECTED_SITES = 191
+#:
+#: LANDED at 58 / 201 when the six F10/F11/F13 shard worktrees were integrated.
+#: Re-derived post-merge, not carried: ``registry.py:736`` resolves through
+#: ``type(listener).__name__``, so the 202 this file rejects did NOT occur.
+#:
+#: SEVEN of the 201 became visible only when ``_traceback_sites`` learned to
+#: account for a traceback call NESTED inside the scrubbed argument
+#: (``scrub("".join(format_exception(e)))``) rather than only when it IS that
+#: argument. Under the pre-integration scanner the same tree reads 194. Those
+#: seven sites were scrubbed in the source the whole time; the instrument could
+#: not see it, which is the shape every blind spot in this file has taken.
+EXPECTED_FILES = 58
+EXPECTED_SITES = 201
 
 
 #: Standard ``logging.Logger`` emit methods. Matched on the ATTRIBUTE name, so
@@ -416,16 +427,36 @@ def _traceback_sites(
     accounted: set[tuple[int, int]] = set()
     wrapped: set[tuple[int, int]] = set()
     for node in ast.walk(tree):
-        if (
+        if not (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
             and node.func.id in _ALL_HELPERS
             and len(node.args) == 1
-            and _is_traceback_call(node.args[0])
         ):
-            accounted.add(_key(node.args[0]))
-            if node.func.id in HELPERS:
-                wrapped.add(_key(node))
+            continue
+        # The traceback call is accounted wherever it sits INSIDE the scrubbed
+        # argument, not only when it IS that argument. The direct form
+        # ``scrub(format_exc())`` is preserved because ``ast.walk`` yields the
+        # argument itself first; the nested form
+        # ``scrub("".join(format_exception(e)))`` is the one that was missed.
+        # That nested spelling is not incidental -- it is the FIX for a separate
+        # defect (rendering from the exception OBJECT instead of ``format_exc``'s
+        # ambient ``sys.exc_info()``, which once produced a traceback of no
+        # exception at all), so the shape it produces is the shape the swept
+        # sites now have. Scoping the walk to the argument subtree is what keeps
+        # this sound: a traceback call OUTSIDE the helper call -- e.g.
+        # ``scrub(x) + format_exc()`` -- is not reached and stays bare.
+        nested_tracebacks = [
+            inner
+            for inner in ast.walk(node.args[0])
+            if isinstance(inner, ast.Call) and _is_traceback_call(inner)
+        ]
+        if not nested_tracebacks:
+            continue
+        for inner in nested_tracebacks:
+            accounted.add(_key(inner))
+        if node.func.id in HELPERS:
+            wrapped.add(_key(node))
     bare = {
         _key(node)
         for node in ast.walk(tree)
