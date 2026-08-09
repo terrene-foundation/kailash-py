@@ -814,6 +814,41 @@ by the bare `secret` alternative; CONFIRM/REFUTE on the reaping defect; the RED 
 (especially the test I flagged with a possibly-unbound assertion variable — if genuinely
 unbound, that assertion never executed); and whether `920f5d98e` scrubs rather than deletes.
 
+### `w2-core-repr` — CLOSED, six commits. The helper was DELETED, not repaired.
+
+`9c1e2b193` closes `durable.py`. **The duplication WAS the defect.** `_callback_name`
+duplicated `safe_callable_name` and differed in exactly one line — the security-relevant one.
+Swapping its fallback would have left a SECOND private implementation of a security helper in
+the tree, free to drift again by the same mechanism this class keeps re-emerging from.
+
+**Verified by me:** helper gone; the three sites (`:916`, `:943`, `:950`) now use the shared
+import at `:61`; **zero** remaining references anywhere in `src/` or `packages/`, so the
+deletion is safe and is not a public-API removal needing a deprecation cycle. The shared
+helper is also strictly better here — it unwraps a partial to the wrapped function's own
+name, which the deleted one never did, so the WARN **gains** resolution. A companion test
+asserts `_callback_name` no longer exists, so re-introducing the duplicate fails before its
+fallback can leak again.
+
+**SIXTH instance of the reach-failure class, caught PRE-EMPTIVELY.** Its first test draft
+invented a dispatch API (`DurableRuntimeMixin._dispatch_node_completion`). It checked against
+the code BEFORE running rather than after — confirmed by me: that name does not exist; the
+real surface is `NodeCompletionHookRegistry` (`:810`) + `dispatch_async`. Its own words:
+_"had I not checked, the test would have errored and I would have debugged the test instead
+of trusting the fix."_ That is non-reach caught before it could produce a verdict at all.
+
+**Its final sweep found ZERO hits across all four spellings — and it explicitly REFUSED to
+report the class closed.** Verbatim reasoning, which is the correct epistemics and should be
+quoted in codify: _"A lexical zero across four KNOWN spellings is exactly the instrument this
+session proved unreliable four times over — it cannot see a fifth spelling, and every previous
+widening found one. It bounds the manual pass; it does not answer the coverage question."_
+Scope: its two trees only; `kaizen`, `kaizen-agents`, `dataflow`, `ml`, `pact` unswept by it.
+
+**Stated-plainly non-verification:** the full `tests/integration/runtime` directory did NOT
+complete — exceeded its timeout twice on this contended host, and pytest buffers output so
+there was no partial to read. It ran the four files in it that touch its changed code
+(20 passed, 13 infra-gated) rather than claim the directory. **A quiet-host run is owed
+before merge.**
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
