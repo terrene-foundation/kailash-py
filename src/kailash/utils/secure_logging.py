@@ -81,6 +81,25 @@ _MAX_IDENTIFIER_CHARS = 120
 # Newline is excluded for the same reason: it forges an entire extra log line.
 _UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/]")
 
+# CPython's fixed pseudo-identifier literals for frame names and synthetic
+# filenames. Passed through byte-intact on an EXACT match so the frames most
+# useful for locating a comprehension, lambda, module-scope or import failure
+# stay readable. A closed set, never a pattern -- see _safe_identifier.
+_CPYTHON_PSEUDO_IDENTIFIERS = frozenset(
+    {
+        "<module>",
+        "<lambda>",
+        "<listcomp>",
+        "<dictcomp>",
+        "<setcomp>",
+        "<genexpr>",
+        "<string>",
+        "<stdin>",
+        "<frozen importlib._bootstrap>",
+        "<frozen importlib._bootstrap_external>",
+    }
+)
+
 
 def _safe_identifier(value: object) -> str:
     """Bound and neutralize one attacker-influenceable identifier.
@@ -107,11 +126,55 @@ def _safe_identifier(value: object) -> str:
         return "<unrepresentable>"
     if not text:
         return "<empty>"
+    # CPython's own pseudo-identifiers pass through INTACT on an exact match.
+    # Without this they mangle to "?module?" / "?listcomp?" -- which destroys the
+    # frames most used to locate a comprehension or import failure, AND leaves a
+    # "?...?" form that is itself forgeable (a class named "!listcomp!" renders
+    # identically). Exact-match is what makes this safe to re-admit <> for:
+    # nothing an attacker supplies reaches this branch unless it is byte-equal to
+    # a fixed CPython literal.
+    #
+    # RESIDUAL, stated: a class named EXACTLY "<listcomp>" also matches and will
+    # render as a genuine frame label would. That is a cosmetic confusion (an
+    # exception claiming to be a comprehension frame), NOT a grammar forgery --
+    # it cannot open or close a delimiter, invent a chain link, or inject a line.
+    if text in _CPYTHON_PSEUDO_IDENTIFIERS:
+        return text
     cleaned = _UNSAFE_IDENTIFIER_CHARS.sub("?", text)
+    # ``len`` on a str SUBCLASS is overridable, so the bound below could in
+    # principle be decided by attacker code. Measured: it cannot -- ``re.sub``
+    # returns a plain ``str`` copy for a subclass input (the zero-match identity
+    # optimization applies to exact ``str`` only), so ``cleaned`` is always a
+    # real ``str`` by this line and ``len`` is the builtin. Pinned by
+    # ``test_a_lying_len_str_subclass_cannot_defeat_the_bound``.
     if len(cleaned) > _MAX_IDENTIFIER_CHARS:
         # Marker uses <> precisely because input cannot contain them.
         return f"{cleaned[:_MAX_IDENTIFIER_CHARS]}<truncated>"
     return cleaned
+
+
+def safe_type_name(obj: object) -> str:
+    """Bounded, structurally inert name of an object's TYPE, for a log field.
+
+    THE SINK-SIDE HALF of :func:`safe_exception_frames`. Hardening the helper
+    alone was not enough: nine call sites logged ``type(exc).__name__`` RAW as a
+    sibling ``%s`` in the SAME log call, so the sanitized field and an
+    unsanitized copy of the same identifier landed four characters apart.
+    Measured, a class named ``"A\\nERROR fake-log-line"`` put a real newline into
+    the record through the raw field while the helper's field rendered
+    ``A?ERROR?fake-log-line``, and a 5000-character class name arrived in full.
+
+    The type name is NOT redundant with the chain render and MUST NOT be dropped
+    to "fix" this: the chain keeps the INNERMOST links, so on a chain longer than
+    :data:`_MAX_CHAIN_LINKS` the caught exception's own type is evicted and this
+    field is the only place it appears.
+    """
+    try:
+        return _safe_identifier(type(obj).__name__)
+    except Exception:
+        # Total for the same reason safe_callable_name is: this is called from
+        # inside ``except`` blocks, where raising REPLACES the handled exception.
+        return "<unrepresentable>"
 
 
 def safe_callable_name(obj: Any) -> str:
@@ -243,6 +306,40 @@ def _relative_frame_path(filename: str) -> str:
 
 
 def safe_exception_frames(
+    exc: BaseException,
+    *,
+    limit: int = _DEFAULT_FRAME_LIMIT,
+    follow_chain: bool = True,
+) -> str:
+    """Total wrapper over :func:`_safe_exception_frames_impl`.
+
+    TOTALITY IS THE CONTRACT, for the same reason :func:`safe_callable_name`
+    argues for its own guard: this helper is called from INSIDE ``except``
+    blocks, so an exception raised here REPLACES the exception being handled --
+    the caller's error disappears and is replaced by a failure in the logging
+    helper. ``safe_callable_name`` was given that guard in round 1; its sibling
+    was not, and round 10 measured the gap.
+
+    Every read the walk performs -- ``__cause__``, ``__context__``,
+    ``__traceback__`` -- is a getset descriptor on ``BaseException`` that a
+    SUBCLASS can shadow with a property, and the threat model already grants the
+    attacker the exception class. Measured: a class defining
+    ``__cause__ = property(raiser)`` made this helper raise ``RuntimeError``
+    straight through its caller's ``except`` block.
+
+    ``BaseException`` (not ``Exception``) is deliberately NOT caught here --
+    ``KeyboardInterrupt`` / ``SystemExit`` / ``CancelledError`` must propagate,
+    matching :func:`safe_callable_name`.
+    """
+    try:
+        return _safe_exception_frames_impl(exc, limit=limit, follow_chain=follow_chain)
+    except Exception:
+        # No detail from the failure is rendered: it originates in
+        # attacker-shadowed descriptors, so its own text is caller-controlled.
+        return "<frames-unavailable>"
+
+
+def _safe_exception_frames_impl(
     exc: BaseException,
     *,
     limit: int = _DEFAULT_FRAME_LIMIT,

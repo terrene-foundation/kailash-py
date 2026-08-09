@@ -17,7 +17,7 @@ from kailash.nodes.mixins import (
 )
 from kailash.runtime.template_resolver import resolve_templates
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
-from kailash.utils.secure_logging import safe_exception_frames
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 
 class AsyncNode(
@@ -292,7 +292,7 @@ class AsyncNode(
             self.logger.error(
                 "Node %s execution failed: %s (at %s)",
                 self.id,
-                type(e).__name__,
+                safe_type_name(e),
                 safe_exception_frames(e),
             )
             # The RAISED message is deliberately left carrying `e`: it is the
@@ -459,7 +459,7 @@ class AsyncNode(
         await self.log_with_context(
             "error",
             f"Operation failed: {operation}",
-            error_type=type(error).__name__,
+            error_type=safe_type_name(error),
             error_message=str(error),
             traceback=traceback.format_exc(),
         )
@@ -502,7 +502,7 @@ class AsyncNode(
             log_data = extra.copy()
 
         if error:
-            log_data["error_type"] = type(error).__name__
+            log_data["error_type"] = safe_type_name(error)
             log_data["error_message"] = str(error)
 
         await asyncio.to_thread(self.logger.error, message, extra=log_data)

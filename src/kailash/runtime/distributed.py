@@ -66,7 +66,7 @@ from kailash.sdk_exceptions import (
     SoftTimeLimitExceeded,
     WorkflowCancelledError,
 )
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -782,7 +782,7 @@ class DistributedRuntime(BaseRuntime):
                 logger.warning(
                     "get_queue_status: failed to read queue %r: %s (at %s)",
                     name,
-                    type(exc).__name__,
+                    safe_type_name(exc),
                     safe_exception_frames(exc),
                 )
                 per_queue[name] = {"pending": -1, "processing": -1}
@@ -1175,8 +1175,10 @@ class Worker:
                 # `repr(handler)` fallback: a `functools.partial` renders its
                 # bound kwargs verbatim, and a callable object's
                 # dataclass-generated `__repr__` renders every field including
-                # a credential one. `safe_callable_name` emits only a
-                # source-level identifier, which cannot carry a payload.
+                # a credential one. `safe_callable_name` emits a
+                # BOUNDED, structurally inert identifier. It is NOT payload-free
+                # -- a name is caller-settable and a short one survives intact --
+                # but it cannot forge the record's grammar or drive log volume.
                 #
                 # `exc_info` is DROPPED for the same reason: `exc` comes from
                 # the caller's handler, so `logging` printing the chain's
@@ -1189,7 +1191,7 @@ class Worker:
                     "continuing (at %s)",
                     self._worker_id,
                     safe_callable_name(handler),
-                    type(exc).__name__,
+                    safe_type_name(exc),
                     event.task_id,
                     safe_exception_frames(exc),
                 )

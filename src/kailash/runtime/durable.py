@@ -58,7 +58,7 @@ from typing import (
 )
 
 from kailash.runtime._time_limits import _validate_limits
-from kailash.utils.secure_logging import safe_callable_name
+from kailash.utils.secure_logging import safe_callable_name, safe_type_name
 
 # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
 # Default is None (auto-detect at build time: "both" with dispatcher,
@@ -536,7 +536,7 @@ def _redact_value(
             extra={
                 "node_id_hash": _hash_short(node_id),
                 "field_path_hash": _hash_short(field_path),
-                "error_type": type(exc).__name__,
+                "error_type": safe_type_name(exc),
             },
         )
         tag = "REDACT"
@@ -789,7 +789,7 @@ def _hash_pk(value: Any) -> str:
             "durable.redact.unhashable_pk_value",
             extra={
                 "value_type": type(value).__name__,
-                "error_type": type(exc).__name__,
+                "error_type": safe_type_name(exc),
             },
         )
         return "pk:unhashable"
@@ -940,7 +940,7 @@ class NodeCompletionHookRegistry:
                 # raw run_id is hashed via _hash_short to match every other WARN
                 # emission in this file (see specs/core-runtime.md §4.7.1
                 # hashing-symmetry contract).
-                failed.append((safe_callable_name(cb), type(exc).__name__))
+                failed.append((safe_callable_name(cb), safe_type_name(exc)))
                 run_id_hash = (
                     _hash_short(event.run_id) if event.run_id is not None else "None"
                 )
@@ -948,7 +948,7 @@ class NodeCompletionHookRegistry:
                     "durable.on_node_complete.subscriber_failed",
                     extra={
                         "callback": safe_callable_name(cb),
-                        "error_type": type(exc).__name__,
+                        "error_type": safe_type_name(exc),
                         "node_id_hash": _hash_short(event.node_id),
                         "run_id_hash": run_id_hash,
                     },

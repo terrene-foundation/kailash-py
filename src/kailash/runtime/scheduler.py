@@ -71,7 +71,7 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
 from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -1552,7 +1552,7 @@ class WorkflowScheduler:
                 "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
                 schedule_id,
                 task_id_hash,
-                type(exc).__name__,
+                safe_type_name(exc),
             )
             raise
 
@@ -1666,8 +1666,10 @@ class WorkflowScheduler:
                 # `repr(handler)` fallback: a `functools.partial` renders its
                 # bound kwargs verbatim, and a callable object's
                 # dataclass-generated `__repr__` renders every field including
-                # a credential one. `safe_callable_name` emits only a
-                # source-level identifier, which cannot carry a payload.
+                # a credential one. `safe_callable_name` emits a
+                # BOUNDED, structurally inert identifier. It is NOT payload-free
+                # -- a name is caller-settable and a short one survives intact --
+                # but it cannot forge the record's grammar or drive log volume.
                 #
                 # `exc_info` is DROPPED for the same reason: `exc` comes from
                 # the caller's handler, so `logging` printing the chain's
@@ -1679,7 +1681,7 @@ class WorkflowScheduler:
                     "WorkflowScheduler lifecycle handler %r raised %s for "
                     "schedule %s; continuing (at %s)",
                     safe_callable_name(handler),
-                    type(exc).__name__,
+                    safe_type_name(exc),
                     event.schedule_id,
                     safe_exception_frames(exc),
                 )

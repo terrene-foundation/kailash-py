@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from kailash.utils.secure_logging import safe_exception_frames
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +325,7 @@ class Channel(ABC):
                     logger.warning(
                         "Channel %s: event task failed during cleanup: %s at %s",
                         self.name,
-                        type(task_error).__name__,
+                        safe_type_name(task_error),
                         safe_exception_frames(task_error, limit=3),
                     )
             if pending:

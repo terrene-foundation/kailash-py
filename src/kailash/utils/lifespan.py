@@ -49,7 +49,7 @@ import inspect
 import logging
 from typing import TYPE_CHECKING
 
-from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames, safe_type_name
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -84,8 +84,10 @@ async def _drive_handlers(
         # `router.on_startup`), so anything without `__name__` used to reach a
         # `repr(handler)` fallback. `functools.partial` is not an exotic case
         # here -- it is the shape the docstring below explicitly anticipates,
-        # and it renders its bound kwargs verbatim. `safe_callable_name` emits
-        # only a source-level identifier, which cannot carry a payload.
+        # and it renders its bound kwargs verbatim. `safe_callable_name` emits a
+        # BOUNDED, structurally inert identifier. It is NOT payload-free -- a
+        # name is caller-settable and a short one survives intact -- but it
+        # cannot forge the record's grammar or drive log volume.
         handler_name = safe_callable_name(handler)
         try:
             # Match the existing workflow_server.py pattern at lines 234-237:
@@ -118,7 +120,7 @@ async def _drive_handlers(
                 extra={
                     "handler": handler_name,
                     "phase": phase,
-                    "exc_type": type(exc).__name__,
+                    "exc_type": safe_type_name(exc),
                     "exc_frames": safe_exception_frames(exc),
                 },
             )

@@ -36,7 +36,7 @@ from pydantic import BaseModel
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
-from kailash.utils.secure_logging import safe_exception_frames
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 
@@ -384,13 +384,15 @@ class DashboardAPIServer:
                             # `Authorization: Basic` header.
                             # So masking here would be a porous filter over
                             # unbounded input, whereas the type plus the frame
-                            # list cannot carry a payload at all and is the
-                            # whole diagnostic an operator needs to find the
-                            # task. Stronger by construction, not by coverage.
+                            # list are BOUNDED and structurally inert (both go
+                            # through _safe_identifier) and are the whole
+                            # diagnostic an operator needs to find the task.
+                            # NOT payload-free: a caller-chosen class name
+                            # survives, bounded and de-fanged, by design.
                             self.logger.warning(
                                 "Previous metrics broadcast task ended with an "
                                 "error; starting a replacement: %s at %s",
-                                type(previous_error).__name__,
+                                safe_type_name(previous_error),
                                 safe_exception_frames(previous_error, limit=3),
                             )
                     self._broadcast_task = asyncio.create_task(
