@@ -281,7 +281,9 @@ class TestHookManagerSinks:
         """
         manager = HookManager()
 
-        await manager._execute_hook(_StructuralHandler(_SENTINEL), _context(), timeout=5.0)
+        await manager._execute_hook(
+            _StructuralHandler(_SENTINEL), _context(), timeout=5.0
+        )
 
         stats = manager.get_stats()
         assert stats, "no stats recorded; the assertion below would be vacuous"
@@ -307,7 +309,9 @@ class TestRateLimitedManagerSinks:
         manager = RateLimitedHookManager(max_registrations_per_minute=5)
 
         manager.register(
-            HookEvent.PRE_AGENT_LOOP, _StructuralHandler(_SENTINEL), principal_id="user-1"
+            HookEvent.PRE_AGENT_LOOP,
+            _StructuralHandler(_SENTINEL),
+            principal_id="user-1",
         )
 
         assert "Rate limit check passed" in capture.text, "sink never fired; vacuous"
@@ -326,7 +330,9 @@ class TestRateLimitedManagerSinks:
         )
         manager = RateLimitedHookManager(max_registrations_per_minute=2)
         for _ in range(2):
-            manager.register(HookEvent.PRE_AGENT_LOOP, _NamedHook(), principal_id="user-1")
+            manager.register(
+                HookEvent.PRE_AGENT_LOOP, _NamedHook(), principal_id="user-1"
+            )
         capture.clear()
 
         leaky = functools.partial(_listener_that_raises, url=_LEAKY_URL)
@@ -392,9 +398,7 @@ class TestIsolatedHookManagerSinks:
         exception-text half of the same leak class.
         """
         manager = IsolatedHookManager(enable_isolation=True)
-        manager.executor = _FailingExecutor(
-            message=f"connect failed: {_LEAKY_URL}"
-        )
+        manager.executor = _FailingExecutor(message=f"connect failed: {_LEAKY_URL}")
 
         result = await manager._execute_hook(
             _StructuralHandler("no-credential-here"), _context(), timeout=5.0
@@ -554,7 +558,9 @@ def test_no_repr_call_remains_in_the_swept_files():
             and isinstance(node.func, ast.Name)
             and node.func.id == "repr"
         ]
-        assert not offenders, f"{path}: repr() call re-introduced at line(s) {offenders}"
+        assert (
+            not offenders
+        ), f"{path}: repr() call re-introduced at line(s) {offenders}"
 
 
 def test_no_logger_format_string_uses_repr_conversion():
@@ -569,7 +575,9 @@ def test_no_logger_format_string_uses_repr_conversion():
     for path in _swept_source_files():
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            if not isinstance(node, ast.Call) or not isinstance(
+                node.func, ast.Attribute
+            ):
                 continue
             if not (
                 isinstance(node.func.value, ast.Name) and node.func.value.id == "logger"
@@ -577,11 +585,12 @@ def test_no_logger_format_string_uses_repr_conversion():
                 continue
             for arg in node.args:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    assert "%r" not in arg.value, (
-                        f"{path}:{node.lineno}: log format uses %r: {arg.value!r}"
-                    )
+                    assert (
+                        "%r" not in arg.value
+                    ), f"{path}:{node.lineno}: log format uses %r: {arg.value!r}"
                 if isinstance(arg, ast.JoinedStr):
                     for value in arg.values:
                         assert not (
-                            isinstance(value, ast.FormattedValue) and value.conversion == 114
+                            isinstance(value, ast.FormattedValue)
+                            and value.conversion == 114
                         ), f"{path}:{node.lineno}: f-string log arg uses !r conversion"
