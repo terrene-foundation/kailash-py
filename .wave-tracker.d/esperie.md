@@ -511,6 +511,76 @@ caller-supplied `hooks_dir` — a path-disclosure surface, not a credential one.
 scalar-vs-rendering heuristic, and `hook_file` sits at its EDGE: scalar, but caller-DERIVED
 rather than framework-derived. The heuristic is a cheap first filter, not a proof.
 
+### `w2-core-repr` — F11 core/nexus half COMPLETE. Commits `318df97bc` + `a4ac02a17`.
+
+RED `22 failed` → GREEN `27 passed`. Regression: nexus `1991 passed`, core runtime/utils
+`1023 passed`, scheduler/utils `331 passed`, extractor/rate-limit/f11 `84 passed`. Pre-commit
+passed on both commits — **no bypass** (consistent with hooks being dead repo-wide).
+
+**ALL 8 SITES CONFIRMED BY EXECUTION**, driven through the REAL gateway (TestClient →
+middleware → HandlerNode → resolver), asserting on the REAL module logger. Reachability is
+now settled, not PLAUSIBLE — which is what the shard was asked to produce.
+
+**THE FINDING THAT MATTERS MOST — the identity fix ALONE would NOT have closed
+`resolver.py:550`.** `get_type_hints` refuses a partial with a `TypeError` whose message
+**embeds the full repr**, and `_detect_pep563` chains it via `raise ... from exc` — so the
+credential arrived as the `__cause__`, entirely independent of the field I flagged. Fixing
+only what my brief named would have shipped the site leaking AND reading as closed. Third
+time this wave a fix was narrower than the leak; **first time it was caught BEFORE landing.**
+Same shape at `nexus/core.py:2429`, which leaked TWICE in one `logger.warning` (`:2429` repr
+
+- `:2433` interpolated `exc` carrying the same repr) — the statement, not the line, is the unit.
+
+**MY SITE LIST CORRECTED (execution-only findings):** `Depends(partial)` does NOT reach
+`:381` — `_classify_parameters` raises first because `get_type_hints` refuses a partial, so it
+lands at `:554`. A plain `@dataclass` does not reach `:381` either: unhashable, dies at `:329`
+(`real in cache` → `TypeError`). `:381` needs a **HASHABLE** callable object (`frozen=True`,
+the idiomatic config-object shape). **And there were FOUR `exc_info` sites, not the two I
+named** — `resolver.py:550` + `lifespan.py:102` were also live.
+
+**`safe_exception_frames` — the construction argument, reusable.** Keeps
+`path:line:function` per frame + each chained exception's TYPE, drops messages, EXCLUDES
+source text so a frame cannot echo an interpolated value. Every retained element is a
+source-level identifier — the same argument that makes `__qualname__` safe. Dropping the
+traceback outright was refused because archived spec §140 pins it as "the operator's only
+audit trail". `scrub_remote_error` was correctly NOT reached for: it lives in kaizen, kaizen
+depends on kailash, so using it inverts the dependency. One shared helper in
+`kailash.utils.secure_logging`, not a per-package copy.
+
+**`TestKnownDownstreamReleak` — the best test design of this wave.** It pins the leaking-logger
+set to exactly `{"HandlerNode"}`, so a NEW leak fails it **and fixing `base_async` also fails
+it**, forcing the pin to be DELETED rather than left as a stale claim. A self-clearing
+tripwire, the property `testing.md` wants from strict-xfail.
+
+**Two stale citations, both verified by me:** `specs/nexus-fastapi-parity.md` does NOT exist
+in the live tree (only `workspaces/_archive/nexus-fastapi-parity-py/specs/`), and
+`observability.md` contains **zero** occurrences of "Rule 3a" (that string lives in
+`zero-tolerance.md` + `worktree-isolation.md`). Re-deriving §140 rather than trusting the
+docstring is `zero-tolerance` 3e done right; declining to guess the second citation's intended
+target is also right — a wrong citation replaced by a differently-wrong one is worse.
+
+### ⚠ RELEASE-ORDER CONSTRAINT — kailash 2.63.0 MUST publish before nexus's next release
+
+Verified: PyPI `kailash` latest is **2.62.0**; local `pyproject.toml` is **2.63.0,
+UNPUBLISHED**. The shard bumped `packages/kailash-nexus/pyproject.toml` to
+`kailash>=2.63.0` because nexus imports `safe_callable_name` / `safe_exception_frames` at
+module scope — an older kailash makes `import nexus` fail at startup.
+
+**NOT a defect and NOT to be reverted.** A floor that lies about a module-scope import is
+worse than a release-ordering constraint, and both alternatives are worse still: duplicating
+the helper into nexus guarantees the drift a shared helper exists to prevent, and hosting it
+in nexus is impossible because kailash's own `distributed`/`scheduler`/`lifespan` sites cannot
+depend on nexus. This repo's standing trap ("bumping to unreleased versions breaks release CI,
+which installs from PyPI before the new release publishes") is real and applies — as an
+ORDERING requirement, surfaced to the co-owner, not as a reason to weaken the pin.
+
+### Routed back to `w2-core-repr` (offered, warm context, helper already imported)
+
+`nexus/core.py:2535` (`rate_limit_inert`) + `:2861` (`use_middleware` sync-function
+`TypeError` rendering a full partial repr) — my earlier "line 2429 ONLY" boundary lifted for
+these two specifically. Plus `src/kailash/nodes/base_async.py:260`, the downstream re-leak,
+whose closure signal is the `TestKnownDownstreamReleak` pin failing.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
