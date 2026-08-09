@@ -1,6 +1,6 @@
 ---
 owner: esperie
-last_reconciled_sha: c3cf5069c
+last_reconciled_sha: 90c625444
 migrated_from: .session-notes
 ---
 
@@ -155,6 +155,26 @@ renders `NodeExecutionError`'s embedded `{e}` to a log line, an OTel span attrib
 audit event and the task store, on the DEFAULT config path (`:3413`, `:3416`, `:4295`, plus
 `:3426`/`:3436` and the `:4259`/`:4270`/`:4280` branches). `base_async.py:303-305` re-embeds it.
 The F10 fix moved that leak one frame rather than closing it. ~8 sinks in the runtime hot path.
+
+**CORRECTION to my own earlier disposition — this is NOT Decision-A-blocked, and neither are
+the scanner or the HTTP-body items.** I recorded all three as waiting on where `credential_scrub`
+lives. They are not:
+
+- **The two LOG sinks (`local.py:3416`, `:4295`) need no scrubber at all.** The fix is what
+  `base_async.py:292-297` already applies FOUR LINES ABOVE the leak — `type(e).__name__` +
+  `safe_exception_frames(e)` — and that helper is in core AND already imported by that very file.
+  Actionable today, no vendor vocabulary, no relocation.
+- **The `_tracer.end_span(error=e)` and the two persisted `str(e)` sites are a genuinely
+  separate judgment** — an audit trail may legitimately want the message. Hold those for a human.
+- **The scanner (`F9`-adjacent, no enumerator over `src/kailash` / `nexus`) depends on nothing**,
+  and would quantify this leak's blast radius instead of leaving it at "1836 sites, subset
+  unknown." Arguably it should PRECEDE Decision A rather than follow it.
+- **The HTTP-body sites (#2015) want a correlation id**, exactly as
+  `nexus/extractors/resolver.py:603-618` already does. No scrubber either.
+
+Deliberately NOT fixed this session: `local.py` is the runtime hot path, it is pre-existing, and
+adding it to a branch already three redteam rounds deep would ship it unreviewed by any round.
+It wants its own shard with its own review.
 
 ## Open asks for the human (all still pending)
 
