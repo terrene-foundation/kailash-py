@@ -878,10 +878,26 @@ class _SinkScan(ast.NodeVisitor):
         # instances in kaizen_agents, kailash-kaizen and src/kailash, so closing
         # it moves no pinned count. It is closed as a LATENT gap: the day
         # somebody writes it, the pin must not stay green over a real leak.
+        # DELIBERATELY ``_is_our_name`` AND NOT ``_is_scrubbable``. The first
+        # cut of this used the latter, which folds in Shape 6 — any ATTRIBUTE
+        # outside :data:`_SAFE_EXC_ATTRS`. Shape 6 over-flags on purpose, and
+        # that trade is sound where it already applies; importing it into a NEW
+        # surface is a different bargain and a bad one. It reddened nine files
+        # whose ``extra`` dicts carry STRUCTURED DIAGNOSTIC FIELDS on domain
+        # exceptions (``exc.helper``, ``exc.model``, ``exc.error`` on a
+        # ``ReasoningDegradedError``) — fields put there deliberately so a
+        # structured logger can index them, not raw exception text.
+        #
+        # The reported gap was the raw exception OBJECT as a dict value.
+        # ``str(e)``/``repr(e)`` there are already caught by the string-context
+        # pass, so the bare name is the whole of what was missing. Whether an
+        # attribute chain inside ``extra`` should flag is a real question with
+        # its own answer; it is not this one, and answering it here by accident
+        # would have moved nine files on no evidence.
         for keyword in node.keywords:
             if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
                 for value in keyword.value.values:
-                    if value is not None and self._is_scrubbable(value):
+                    if value is not None and self._is_our_name(value):
                         self.bare.add(_key(value))
                         return
 
