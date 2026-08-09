@@ -216,7 +216,11 @@ dev = [
     # Raised 0.4.3 -> 0.5.0 so dev/CI test collection exercises the patched
     # server (auth-bypass + cache-credential-leak + gated-tool-disclosure
     # fixes; see kailash-mcp CHANGELOG [0.5.0]), not a vulnerable one.
-    "kailash-mcp>=0.5.0",
+    # >=0.5.1: 0.5.0 shipped with an UNCAPPED `mcp[cli]>=1.23.0`, so a fresh
+    # resolve pulled upstream mcp 2.0.0 — which removed `mcp.client.websocket`
+    # (nine first-party import sites). 0.5.1 carries the `<2.0` cap. Floor is
+    # 0.5.1 rather than 0.5.0 so the cap is guaranteed, not incidental.
+    "kailash-mcp>=0.5.1",
     # psycopg2 is imported at module scope by 3 integration/e2e tests
     # (test_mcp_resource_flow, test_docker_infrastructure_validation,
     # test_mcp_subscriptions) — required for `pytest --collect-only`
