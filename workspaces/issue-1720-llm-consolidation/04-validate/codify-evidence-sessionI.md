@@ -418,3 +418,81 @@ four of them were authored by the agent actively fixing the class — under a
 loaded baseline rule that states the test in its first line. **That is the
 finding: not that the property is true, but that stating it at baseline
 priority did not make it hold.**
+
+---
+
+## §3 Version archaeology — four traps, each producing a confidently wrong release note
+
+**Provenance:** every trap below was hit first-hand by the nexus lane while dating three
+findings for release notes and issue bodies. Recorded here by the ORCHESTRATOR from that
+lane's reports because the lane hit its session quota before it could write this section
+— so the traps and their commands are **[R]** (relayed, not re-run by me), while the
+three-namespace outcome at the end is **[V]** (verifiable from the filed issues).
+
+**Why this section exists.** An affected-versions line is one of the few things a project
+publishes that a user acts on directly: they check their version against it and conclude
+they are safe or exposed. Each trap below yields a plausible, confident, WRONG such line.
+None is exotic; all four appeared while dating three findings in one session.
+
+### The four traps
+
+| # | Trap | What it produces | Grade |
+| - | ---- | ---------------- | ----- |
+| T1 | `git tag --contains <sha>` where a tag namespace is reused across sub-packages | **667 of 697 tags** returned, including a `v0.2.0` pointing at a commit dated **three months AFTER** the defect landed. Reads as "affected since the beginning of the project". | **[R]** |
+| T2 | Trusting a commit SUBJECT that names a release | The introducing commit's subject said "Release v0.8.5"; the `v0.8.5` **tag does not contain it**. First shipped in **v0.8.6**. Wrong by one release — and every user on v0.8.5 would have been told they were affected. | **[R]** |
+| T3 | `git log --follow -S '<string>'` | Returned `b553104c6`, **the monorepo refactor** — dating a *security* defect to a file move. `--follow` and `-S` do not compose reliably. | **[R]** |
+| T4 | Tag-NAME collision | `kailash-v2.1.0` → `d918b5a5c` (2026-03-24, **clean**) and `v2.1.0` → `a76453a94` (2026-03-26, **CONTAINS the defect**) are different commits two days apart. A user asking *"I'm on 2.1.0 — am I affected?"* can land on either and get **opposite answers**. | **[R]** |
+
+### The method that survives all four
+
+1. **Pickaxe the exact string over the owning file** — `git log -S '<exact string>' -- <path>`.
+   Expect a **small definite commit set**; the introduction and the fix is the ideal shape,
+   because it proves continuity with no gap rather than inferring it.
+2. **Where two independent strings exist, run both and require agreement.** Done for the
+   finalizer dating; it is why that 136-day figure is trustworthy rather than plausible.
+3. **Sort tags by COMMIT DATE, not by version string**, and read the clean→CONTAINS
+   boundary. This sidesteps T1 and T4 together.
+4. **Resolve T3 by enumerating every path ever bearing the filename** (here: exactly one)
+   and reading content at the add, rather than trusting `--follow`.
+5. **Publish the DATE and/or the SHA alongside the version**, not the version alone — T4
+   means a version string is not by itself an identifier.
+
+### The honest-bound practice
+
+One finding's history begins at the repo's own horizon: the file enters at `b553104c6`
+(2026-03-11) with no prior path, and `git ls-tree nexus-v1.4.1` contains no such file at
+all. The lane's statement is the model:
+
+> Versions before `nexus-v1.4.3` were built from source this repository never held.
+> **I am not claiming they were clean; they cannot be assessed from here.** Exposure is
+> ≥140 days and possibly longer.
+
+An affected-versions claim with a stated bound is usable. One that quietly stops at the
+repository's horizon and reads as complete is worse than no claim, because a reader cannot
+see where the evidence ended.
+
+### The outcome that justifies the whole section — **[V]**
+
+Three findings from one session landed in **three different version namespaces with three
+different spans**:
+
+| finding | namespace | first affected | span |
+| ------- | --------- | -------------- | ---- |
+| #2008 pooled-worker shutdown wedge | core | `v0.8.6` (2025-07-22) | ~382 days |
+| #2013 inert `enable_auth` facade | **nexus** | `nexus-v1.4.3` (2026-03-21) | ≥140 days (bounded) |
+| `__del__` finalizer (fixed `e13339c02`) | core | `v2.1.0` (2026-03-26) | 136 days |
+
+**Any single affected-versions line covering these would have been wrong about at least
+two of them** — and the errors would have been in the dangerous direction for #2013
+(understating a security exposure) and in the alarming direction for the finalizer
+(overstating it by ~250 days and the entire `v0.8.x`–`v2.0.x` range).
+
+### Relation to §1
+
+These are §1's class applied to `git` rather than to a test or a sweep: **an instrument
+returning a confident value uncorrelated with the question asked.** T1 returns tags, not
+affected releases. T2 returns a subject line, not a tag's contents. T3 returns a commit,
+not an introduction. T4 returns a commit, not *the* commit. The §1 defense transfers
+directly — a positive control here means **checking the boundary in both directions**
+(a tag that must be clean AND a tag that must contain), which is what the clean→CONTAINS
+read above actually is.
