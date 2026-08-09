@@ -26,7 +26,12 @@ casually.
 
 ## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
 
-**SECURITY LENS HAS CONVERGED. Rounds 1-4 NOT CLEAN; round 5 CLEAN (`3f988bd22`); round 6
+**REDTEAM HAS CONVERGED — BOTH LENSES, TWO CONSECUTIVE CLEAN ROUNDS, SAME SHA
+(`b9f1e5ab7`), EACH REASONED INDEPENDENTLY.** This is a stated-criterion stop, NOT a
+round-budget cap-stop; both lenses said so explicitly and the distinction matters when this is
+quoted. Detail below.
+
+**SECURITY LENS. Rounds 1-4 NOT CLEAN; round 5 CLEAN (`3f988bd22`); round 6
 CLEAN with every severity band empty (`b9f1e5ab7`), and it stated EXPLICITLY that round 6 is
 consecutive with round 5.** Its reasoning, which is worth keeping because it generalises: a
 docstring is not the configuration under test, and a new test is an INSTRUMENT — MUST-4 requires
@@ -36,7 +41,24 @@ would make the rule self-defeating. It verified behaviour-unchanged by line-offs
 byte-identical in offset) and named the bound: that method would not catch a change made and
 reverted inside the range.
 
-**CORRECTNESS LENS: round 5 CLEAN, and it INDEPENDENTLY re-derived that production behaviour at
+**CORRECTNESS LENS: rounds 5 and 6 CLEAN, consecutive YES — reached independently, explicitly
+NOT borrowed from the security lens.** Its own test for MUST-3 is the sharper formulation and is
+worth reusing: not "did any tracked file change?" but **"could any evidence from the previous
+round have been INVALIDATED?"** A docstring cannot void behavioural evidence because no
+executable path could behave differently; and a test is the INSTRUMENT, not the surface — MUST-4
+*mandates* instrument rotation, so if strengthening a pin reset the counter, MUST-3 and MUST-4
+would contradict each other and the mandated action would forbid convergence by construction.
+
+**It also independently reproduced the one fail-first only I had run.** Worktree at
+`e5ec724b6`, reach confirmed FIRST (`grep -c "for task in done"` → 0, so the defect was
+genuinely present), then the M7 pin red on its own message in 2.69s with no hang. My claim
+confirmed by a second party rather than trusted.
+
+**And it established the SHA algebra:** `git diff b9f1e5ab7..4a7f76092 -- src/ tests/` is EMPTY,
+so its verification performed at `4a7f76092` IS a verification of `b9f1e5ab7` — same bytes,
+different SHA. It verified through `b024aedda` and explicitly does NOT certify past it.
+
+It ALSO re-derived that production behaviour at
 `b024aedda` is byte-identical to `3f988bd22`** (three SHA ranges checked; the two later commits
 touch `.session-notes.d/` only), so its round-5 verdict carries to current HEAD. **It has NOT yet
 answered whether that counts as a SECOND consecutive round** — carry-forward says its earlier
@@ -106,7 +128,9 @@ Neither is blocking; neither is self-accepting; I cannot accept them on my own b
   is "still running, stop it again." Self-converges on the second `stop()` and errs toward
   under-claiming success — the fail-safe direction. Recorded in the `_cleanup` docstring
   rather than fixed. Shape if revisited: a third state or a separate `task_failed` signal.
-  **Revisit trigger:** any consumer that branches on `STOPPING`.
+  **Revisit trigger:** any consumer that branches on `STOPPING`. **Calendar backstop:
+  2026-09-08.** Note the coupling: the M7 pin asserts `status is STOPPING`, so fixing LOW-8
+  REDS that test by design — budget for both together, not one.
 
 ## Read first
 
