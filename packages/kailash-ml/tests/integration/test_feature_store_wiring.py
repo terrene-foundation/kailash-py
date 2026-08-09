@@ -398,6 +398,31 @@ async def test_assertion_09b_get_features_wraps_other_exceptions_as_feature_stor
     # Tenant context propagated for forensic correlation
     assert err.tenant_id == "acme"
     assert "get_features failed" in err.reason
+    # The CALL SITE must actually invoke describe_exception_origin — the prefix
+    # assertion above passes identically with or without it, so on its own it
+    # proves the helper exists, not that this path uses it (orphan-detection
+    # Rule 2: helper proven, wiring unproven). Pin the locator shape instead.
+    assert " at " in err.reason and ":" in err.reason.split(" at ", 1)[1], (
+        f"reason must carry the '<ExcType> at <module>:<line>' locator; "
+        f"got {err.reason!r}"
+    )
+    # The locator names the ORIGINATING module, which here is the dataflow
+    # binding rather than kailash_ml: the injected RuntimeError is wrapped into
+    # a FeatureSourceError by dataflow BEFORE it reaches this wrap, so the class
+    # at this site is FeatureSourceError and the module is dataflow's. That is
+    # precisely the diagnosability the locator buys — the reason now names which
+    # PACKAGE failed. Assert the SHAPE, not a hardcoded module path, which would
+    # pin a dataflow-internal location and break on any refactor there.
+    assert err.reason.split(" at ", 1)[1].split(":")[0].count(".") >= 1, (
+        f"locator must carry a DOTTED module name, not a bare name or a "
+        f"filesystem path; got {err.reason!r}"
+    )
+    # ...and the underlying message must NOT ride along. A driver error embeds
+    # the connection string, raw tenant and row values; the locator exists so
+    # the wrap stays diagnosable WITHOUT carrying any of that.
+    assert (
+        "injected backing-read failure" not in err.reason
+    ), f"underlying exception message leaked into reason: {err.reason!r}"
     # Original cause chained — operators can drill into the binding-layer
     # error without losing the FeatureStore context
     assert err.__cause__ is not None

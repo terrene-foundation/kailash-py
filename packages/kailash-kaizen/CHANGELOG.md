@@ -45,6 +45,22 @@ What changed:
   satisfies the existing `Optional[str]` annotation everywhere while staying
   distinguishable — via `isinstance`, not equality — from a tenant literally
   named `"__global__"`.
+
+  > **`GLOBAL_SCOPE` means two different things, and one of them is
+  > destructive.** On `get`/`put`/`delete`/`exists` it selects only the
+  > un-namespaced global entries. On **`clear()` it wipes every tier for every
+  > tenant** — the same as `clear()` with no argument — because `clear()` has
+  > never had a tenant-scoped implementation. `clear(GLOBAL_SCOPE)` is
+  > therefore NOT "clear the global namespace"; it is "clear everything".
+  > Deliberate and pinned by `test_global_scope_clear_wipes_all_tiers`, but
+  > called out here because reading the key-building sense above and applying
+  > it to `clear()` destroys all tenant data.
+  >
+  > Related, and also pre-existing: `clear("some-tenant")` returns `False` and
+  > clears **nothing** ("tenant-specific clear not fully implemented"). A caller
+  > that does not check the return value will believe an erasure happened when
+  > none did — relevant if you rely on it for a data-deletion obligation.
+
 - **A one-time (per-process) `WARNING`** is emitted the first time a
   `multi_tenant_enabled=True` system builds a key with no tenant scope, naming the
   protection that is off and how to wire it. `clear_tenant_context()` and
