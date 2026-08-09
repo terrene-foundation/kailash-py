@@ -313,6 +313,10 @@ class CLIChannel(Channel):
         if self.status == ChannelStatus.STOPPED:
             return
 
+        # See the sibling comment in api_channel: the guard below MUST key on
+        # whether cleanup already ran, not on `status is not STOPPED`, which a
+        # normal-return-but-incomplete stop now also satisfies.
+        cleanup_ran = False
         try:
             self.status = ChannelStatus.STOPPING
             self._running = False
@@ -367,12 +371,20 @@ class CLIChannel(Channel):
             # comment in api_channel. An event task that ignored cancellation
             # is still live, so STOPPING is the truthful record.
             cleaned = await self._cleanup()
+            cleanup_ran = True
 
             self.close()
 
             self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
-            logger.info(f"CLI channel {self.name} stopped")
+            if cleaned:
+                logger.info(f"CLI channel {self.name} stopped")
+            else:
+                logger.warning(
+                    "CLI channel %s stop did NOT complete; channel is STOPPING "
+                    "and can be stopped again",
+                    self.name,
+                )
 
         except Exception as e:
             self.status = ChannelStatus.ERROR
@@ -385,7 +397,7 @@ class CLIChannel(Channel):
             # ``_running_task`` live and the runtime still referenced.
             # Cancelling is synchronous, so the cancel lands even when the
             # subsequent await is itself cancelled.
-            if self.status is not ChannelStatus.STOPPED:
+            if not cleanup_ran:
                 try:
                     await self._cleanup()
                 except Exception:

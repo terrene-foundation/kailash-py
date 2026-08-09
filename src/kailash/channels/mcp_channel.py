@@ -316,6 +316,10 @@ class MCPChannel(Channel):
         if self.status == ChannelStatus.STOPPED:
             return
 
+        # See the sibling comment in api_channel: the finally guard keys on
+        # whether cleanup already ran, not on the status, which a
+        # normal-return-but-incomplete stop now also satisfies.
+        cleanup_ran = False
         try:
             self.status = ChannelStatus.STOPPING
 
@@ -330,13 +334,32 @@ class MCPChannel(Channel):
                 )
             )
 
-            # Stop server task
+            # Cancel the server task and establish that it stopped.
+            #
+            # This carried the pre-F13 shape -- `await self._server_task` inside
+            # `except CancelledError: pass` -- verbatim, long after api_channel
+            # and cli_channel replaced it. That shape cannot tell the server task
+            # ending in the cancellation we just requested from THIS coroutine
+            # being cancelled by somebody else while it waits, because both
+            # arrive at that await as the same exception type. So a caller-aimed
+            # cancellation was swallowed and the caller got a clean return for a
+            # stop that never finished; and `await task` makes the server task
+            # the awaited future, so cancelling the caller only re-requested
+            # cancellation of a task that had already ignored it.
+            #
+            # `asyncio.wait` observes completion without re-raising and parks on
+            # its own future, so only a cancellation aimed at THIS coroutine
+            # surfaces here -- and it propagates.
             if self._server_task and not self._server_task.done():
-                self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    pass
+                task = self._server_task
+                task.cancel()
+                await asyncio.wait({task})
+                # A task that died of a REAL error still surfaces; observing
+                # completion must not turn a crash into a silent clean stop.
+                if not task.cancelled():
+                    server_error = task.exception()
+                    if server_error is not None:
+                        raise server_error
 
             # Stop MCP server. This MUST precede joining the server thread --
             # the thread is parked inside the blocking ``run()`` loop and only
@@ -388,18 +411,59 @@ class MCPChannel(Channel):
                         thread.name,
                     )
 
-            await self._cleanup()
+            # STOPPED only when cleanup actually COMPLETED -- the same contract
+            # api_channel and cli_channel hold. `_cleanup` bounds its join on
+            # `_running_task`, so an event task that ignores cancellation
+            # returns False and is still live; recording STOPPED over it would
+            # hand an orchestrator a clean stop that did not happen. Fixing two
+            # of three channels and leaving this one on the unqualified
+            # assignment is the sibling-site gap the parity rule exists to stop.
+            cleaned = await self._cleanup()
+            cleanup_ran = True
 
             self.close()
 
-            self.status = ChannelStatus.STOPPED
+            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
-            logger.info(f"MCP channel {self.name} stopped")
+            if cleaned:
+                logger.info(f"MCP channel {self.name} stopped")
+            else:
+                logger.warning(
+                    "MCP channel %s stop did NOT complete; channel is STOPPING "
+                    "and can be stopped again",
+                    self.name,
+                )
 
         except Exception as e:
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping MCP channel {self.name}: {e}")
             raise
+        finally:
+            # The third instance of the orphaned-cleanup gap, and the one that
+            # had no guard at all: this method awaits in four places, so a
+            # caller-aimed cancellation at any of them left `_running_task`
+            # live with `_cleanup` never run. api_channel and cli_channel both
+            # carry this block; MCP did not, which is the other half of the
+            # parity sweep the comment above claims.
+            if not cleanup_ran:
+                try:
+                    await self._cleanup()
+                except Exception:
+                    logger.warning(
+                        "MCP channel %s: cleanup failed during an interrupted "
+                        "stop; the original cancellation is preserved",
+                        self.name,
+                    )
+                finally:
+                    try:
+                        self.close()
+                    except Exception:
+                        logger.warning(
+                            "MCP channel %s: close() failed during an "
+                            "interrupted stop; the original cancellation is "
+                            "preserved",
+                            self.name,
+                        )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle an MCP request.

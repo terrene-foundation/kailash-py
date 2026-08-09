@@ -297,14 +297,28 @@ class TestCleanupFailureDoesNotReplaceTheCallerCancellation:
         assert not stopper.done()
         stopper.cancel()
 
-        # The caller asked for cancellation; a failing cleanup must not convert
-        # that into RuntimeError.
-        with pytest.raises(asyncio.CancelledError):
+        # CAPTURE -> TEAR DOWN -> ASSERT. Asserting first means a FAILING run
+        # never reaches the teardown below, and the uncancellable task then
+        # hangs loop teardown -- so the test dies by SIGKILL with no report
+        # instead of failing readably. An un-runnable check is zero evidence in
+        # either direction. This is the same ordering defect the strand pins
+        # already fixed; it survived here because this class was written first.
+        outcome: BaseException | None = None
+        try:
             await stopper
+        except BaseException as exc:  # noqa: BLE001 - the outcome IS the assertion
+            outcome = exc
 
         release.set()
         server_task.cancel()
         await asyncio.gather(server_task, return_exceptions=True)
+
+        # The caller asked for cancellation; a failing cleanup must not convert
+        # that into RuntimeError.
+        assert isinstance(outcome, asyncio.CancelledError), (
+            f"stop() raised {type(outcome).__name__ if outcome else 'nothing'}; "
+            "a failing _cleanup replaced the caller's cancellation"
+        )
 
     @pytest.mark.asyncio
     async def test_cli_channel_closes_runtime_even_when_cleanup_raises(self) -> None:
@@ -336,16 +350,25 @@ class TestCleanupFailureDoesNotReplaceTheCallerCancellation:
         await asyncio.sleep(0.05)
         assert not stopper.done()
         stopper.cancel()
-        with pytest.raises(asyncio.CancelledError):
+        # CAPTURE -> TEAR DOWN -> ASSERT; see the sibling test above.
+        outcome: BaseException | None = None
+        try:
             await stopper
-
-        assert (
-            getattr(channel, "runtime", None) is None
-        ), "close() was skipped because _cleanup raised; the runtime is stranded"
+        except BaseException as exc:  # noqa: BLE001 - the outcome IS the assertion
+            outcome = exc
+        stranded = getattr(channel, "runtime", None) is not None
 
         release.set()
         main_task.cancel()
         await asyncio.gather(main_task, return_exceptions=True)
+
+        assert isinstance(outcome, asyncio.CancelledError), (
+            f"stop() raised {type(outcome).__name__ if outcome else 'nothing'}; "
+            "a failing _cleanup replaced the caller's cancellation"
+        )
+        assert (
+            not stranded
+        ), "close() was skipped because _cleanup raised; the runtime is stranded"
 
 
 class TestCleanupJoinCannotStrandTheCaller:
@@ -459,6 +482,52 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
             "bounded join's timeout was discarded instead of surfaced"
         )
         assert status is ChannelStatus.STOPPING
+
+    @pytest.mark.asyncio
+    async def test_mcp_channel_also_declines_to_report_stopped(self) -> None:
+        """The THIRD channel. Two of three is how this defect got here.
+
+        `MCPChannel` inherits the same bounded join, and was left on the
+        unqualified `status = STOPPED` when the other two were fixed. Pinning
+        only the channels that were in the lens is what let the sibling gap
+        survive the sweep in the first place.
+        """
+        from kailash.channels.mcp_channel import MCPChannel
+
+        channel = MCPChannel(
+            ChannelConfig(name="rt_mcp", channel_type=ChannelType.MCP, port=18992)
+        )
+
+        release = asyncio.Event()
+
+        async def _ignores_cancel() -> None:
+            while True:
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    if release.is_set():
+                        raise
+                    continue
+
+        running_task = asyncio.ensure_future(_ignores_cancel())
+        await asyncio.sleep(0.05)
+        assert not running_task.done()
+
+        channel._running_task = running_task
+        channel._server_task = None
+        channel.status = ChannelStatus.RUNNING
+
+        await channel.stop()
+
+        status = channel.status
+        release.set()
+        running_task.cancel()
+        await asyncio.gather(running_task, return_exceptions=True)
+
+        assert status is not ChannelStatus.STOPPED, (
+            "MCPChannel reported STOPPED while its event task was still live; "
+            "the parity sweep reached two of three channels"
+        )
 
     @pytest.mark.asyncio
     async def test_complete_cleanup_still_reports_stopped(self) -> None:

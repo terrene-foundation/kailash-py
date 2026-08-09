@@ -232,6 +232,13 @@ class APIChannel(Channel):
         if self.status == ChannelStatus.STOPPED:
             return
 
+        # Tracks whether the try-path already ran cleanup. The guard below CANNOT
+        # key on `status is not STOPPED`: once the status became conditional, a
+        # normal return with incomplete cleanup leaves STOPPING, which satisfies
+        # that test and runs `_cleanup` a SECOND time -- re-cancelling, burning
+        # another bounded join, and emitting a duplicate WARN on a path that did
+        # not leave the frame early at all.
+        cleanup_ran = False
         try:
             self.status = ChannelStatus.STOPPING
 
@@ -290,9 +297,20 @@ class APIChannel(Channel):
             # return value an orchestrator acts on -- STOPPING is then the
             # truthful record, exactly as it is on the cancelled path above.
             cleaned = await self._cleanup()
+            cleanup_ran = True
             self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
-            logger.info(f"API channel {self.name} stopped")
+            if cleaned:
+                logger.info(f"API channel {self.name} stopped")
+            else:
+                # The status says STOPPING; the log must not say "stopped".
+                # Gating the inner cleanup log and leaving this one one line
+                # away would be the same over-claiming shape, unfixed.
+                logger.warning(
+                    "API channel %s stop did NOT complete; channel is STOPPING "
+                    "and can be stopped again",
+                    self.name,
+                )
 
         except Exception as e:
             # Deliberately ``Exception``, not ``BaseException``:
@@ -309,7 +327,7 @@ class APIChannel(Channel):
             # ``CancelledError``, or an error re-raised as ERROR -- with
             # ``_running_task`` still live. Cancelling it is synchronous, so the
             # cancel lands even when the subsequent await is itself cancelled.
-            if self.status is not ChannelStatus.STOPPED:
+            if not cleanup_ran:
                 try:
                     await self._cleanup()
                 except Exception:

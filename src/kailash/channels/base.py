@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from kailash.utils.secure_logging import safe_exception_frames
+
 logger = logging.getLogger(__name__)
 
 # How long ``_cleanup`` waits to CONFIRM that the task it just cancelled has
@@ -294,9 +296,29 @@ class Channel(ABC):
         complete = True
         if self._running_task and not self._running_task.done():
             self._running_task.cancel()
-            _done, pending = await asyncio.wait(
+            done, pending = await asyncio.wait(
                 {self._running_task}, timeout=_CLEANUP_JOIN_TIMEOUT
             )
+            # THE TASK'S OWN ERROR STILL HAS TO SURFACE. `asyncio.wait` does not
+            # re-raise -- which is why it replaced the `await` that displaced
+            # the caller's CancelledError -- but discarding `done` trades that
+            # defect for the opposite one: a `_running_task` that died of a real
+            # error is now silently swallowed, and Python additionally emits an
+            # unstructured "Task exception was never retrieved" at GC. Retrieve
+            # it and log it. Cancellation is the EXPECTED outcome here and is
+            # not an error, so it is excluded.
+            for task in done:
+                if task.cancelled():
+                    continue
+                task_error = task.exception()
+                if task_error is not None:
+                    complete = False
+                    logger.warning(
+                        "Channel %s: event task failed during cleanup: %s at %s",
+                        self.name,
+                        type(task_error).__name__,
+                        safe_exception_frames(task_error, limit=3),
+                    )
             if pending:
                 # BOUNDING THE JOIN WITHOUT READING ITS RESULT WOULD TRADE A
                 # HANG FOR A LIE. `asyncio.wait` returns (done, pending) and
