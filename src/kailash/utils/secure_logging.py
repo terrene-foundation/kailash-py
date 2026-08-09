@@ -279,7 +279,12 @@ def safe_exception_frames(
       An earlier revision of this paragraph said only the basename survives
       because :func:`_relative_frame_path` "falls back to the basename". That is
       true on only THREE branches -- ``relpath`` raised, a leading ``".."``, or
-      cwd at/above the home directory. On the COMMON branch (the file resolves
+      cwd STRICTLY ABOVE the home directory. (Strictly: the guard is
+      ``commonpath([cwd, _HOME_DIR]) == cwd and cwd != _HOME_DIR``, so cwd ==
+      home takes the COMMON branch and keeps directories. An earlier revision of
+      this line said "at/above", which is measurably wrong at exactly that one
+      value -- the same overstatement class this paragraph was written to fix.)
+      On the COMMON branch (the file resolves
       under cwd) it returns the relative path with directories intact, which
       this repo's own negative control asserts. So the safe statement is
       narrower: an ABSOLUTE path outside cwd collapses to its basename; a path
@@ -368,7 +373,24 @@ def safe_exception_frames(
         links.append(walker)
         if not follow_chain:
             break
-        walker = walker.__cause__ or walker.__context__
+        # HONOR ``__suppress_context__``. ``raise X from None`` is the
+        # documented "do not disclose what I was handling" idiom, and it sets
+        # __cause__=None AND __suppress_context__=True. The superseded
+        # ``__cause__ or __context__`` fell through to __context__ in exactly
+        # that case, so a helper whose entire job is disclosure control emitted
+        # the one link the author had explicitly suppressed. Measured: a
+        # ``raise ValueError("public") from None`` over a
+        # ``KeyError("SUPPRESSED_SECRET")`` rendered the KeyError.
+        #
+        # Note ``raise X from Y`` ALSO sets __suppress_context__=True, so the
+        # flag cannot be tested first -- an explicit __cause__ always wins, and
+        # the flag only decides whether an IMPLICIT __context__ may be followed.
+        if walker.__cause__ is not None:
+            walker = walker.__cause__
+        elif walker.__suppress_context__:
+            walker = None
+        else:
+            walker = walker.__context__
 
     dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
     # ``<= 0`` means NO links, not "all links" -- the same arithmetic the frame

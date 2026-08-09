@@ -865,7 +865,11 @@ class _SinkScan(ast.NodeVisitor):
             if self._is_our_value(arg):
                 self.bare.add(_key(arg))
                 return
-        # Shape 8 — the exception as a VALUE inside ``extra={...}``. A
+        # Shape 9 — the exception as a VALUE inside ``extra={...}``. A
+        # (Numbered 9, not 8: "Shape 8" was already taken by the repr()-of-a-
+        # NON-exception pass, and the nine cross-references at the negative
+        # controls and the pinned-count tables all denote THAT one. Two
+        # definitions under one label made every one of them ambiguous.)
         # structured-logging formatter renders that value with ``str()`` exactly
         # as a lazy ``%s`` argument would, so it is the same sink wearing a dict.
         # ``extra={"error": str(e)}`` was already caught by the string-context
@@ -894,12 +898,19 @@ class _SinkScan(ast.NodeVisitor):
         # attribute chain inside ``extra`` should flag is a real question with
         # its own answer; it is not this one, and answering it here by accident
         # would have moved nine files on no evidence.
+        # NO early return: two bare values on two different lines are two
+        # separate sites, and returning after the first silently dropped the
+        # second -- contradicting this method's own docstring, which promises it
+        # "does NOT return early ... would silently drop that site".
+        #
+        # NO ``value is not None`` guard either: a None entry in ``.values``
+        # would mean ``**spread``, and CPython puts the None in ``.keys`` for
+        # that form, never in ``.values``. The guard could not fire.
         for keyword in node.keywords:
             if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
                 for value in keyword.value.values:
-                    if value is not None and self._is_our_name(value):
+                    if self._is_our_name(value):
                         self.bare.add(_key(value))
-                        return
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
@@ -1080,6 +1091,17 @@ class TestTheScannerSeesEachShape:
             ("attr-nested", '    logger.error("failed: %s", exc.response.text)'),
             ("attr-cause", '    logger.error("failed: " + str(exc.__cause__))'),
             ("attr-subscript", '    logger.error("failed: %s", exc.args[0])'),
+            # Shape 9 — the bare exception as a VALUE inside ``extra={...}``.
+            # This shape shipped with NO pin at all: removing the whole
+            # producer left the suite at 374 passed, while a planted input
+            # measurably changed the scanner's output ([4] -> []), so the
+            # mutation reached the code and reddened nothing. Vacuous by the
+            # MUST-2(b) standard, not merely unproven.
+            ("extra-dict-bare", '    logger.error("failed", extra={"error": exc})'),
+            (
+                "extra-dict-bare-second-key",
+                '    logger.error("failed", extra={"ok": 1, "error": exc})',
+            ),
         ],
     )
     def test_each_leaking_shape_is_flagged(self, label: str, body: str) -> None:
@@ -1374,6 +1396,61 @@ class TestTheScannerSeesEachShape:
         every ``repr`` in the package, and a detector that noisy is one someone
         switches off — which is the same outcome as the blindness it replaced.
         """
+        assert not self._scan(src), f"scanner false-positives on {label!r}"
+
+    def test_extra_dict_counts_every_bare_value_not_just_the_first(self) -> None:
+        """Two bare values in one ``extra`` are TWO sites.
+
+        The producer returned after its first hit, so a second leak on a later
+        line was silently dropped -- contradicting the containing method's own
+        docstring ("does NOT return early ... would silently drop that site").
+        A count is the whole interface this scanner offers; undercounting it is
+        the failure mode, not a rounding error.
+        """
+        src = (
+            "try:\n"
+            "    pass\n"
+            "except Exception as exc:\n"
+            "    logger.error(\n"
+            '        "failed",\n'
+            "        extra={\n"
+            '            "first": exc,\n'
+            '            "second": exc,\n'
+            "        },\n"
+            "    )\n"
+        )
+
+        flagged = self._scan(src)
+
+        assert len(flagged) >= 2, f"undercounted extra-dict values: {flagged}"
+
+    @pytest.mark.parametrize(
+        "label, body",
+        [
+            (
+                "extra-dict-scrubbed",
+                '    logger.error("failed", extra={"error": scrub_remote_error(exc)})',
+            ),
+            (
+                "extra-dict-domain-attribute",
+                '    logger.error("failed", extra={"model": exc.model})',
+            ),
+        ],
+    )
+    def test_extra_dict_near_misses_are_not_flagged(
+        self, label: str, body: str
+    ) -> None:
+        """Shape 9's negative controls.
+
+        The second is load-bearing and deliberate: a87890fd6 narrowed this
+        producer to a BARE name precisely so structured domain fields
+        (``exc.model`` / ``exc.helper`` / ``exc.error`` on first-party
+        exceptions) do not flag -- reverting that narrowing was measured to move
+        9 files / 15 sites. Pinning it here means a future widening has to argue
+        with a test rather than discover those nine by accident.
+        """
+        src = f"try:\n    pass\nexcept Exception as exc:\n{body}\n"
+
         assert not self._scan(src), f"scanner false-positives on {label!r}"
 
     def test_raise_of_a_class_is_not_an_exception_valued_name(self) -> None:

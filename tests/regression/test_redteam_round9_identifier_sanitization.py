@@ -190,6 +190,63 @@ class TestChainCapArithmetic:
         assert " <- " not in rendered
 
 
+class TestSuppressedContextIsNotDisclosed:
+    """`raise X from None` is the documented "do not disclose this" idiom.
+
+    The walk was `__cause__ or __context__`, which falls through to
+    `__context__` in exactly the case where the author set
+    `__suppress_context__` to say it must not be shown. A helper whose entire
+    job is disclosure control was emitting the one link it had been told to
+    suppress. Measured pre-fix: a `raise ValueError("public") from None` over a
+    `KeyError("SUPPRESSED_SECRET")` rendered the KeyError.
+    """
+
+    def test_from_none_suppresses_the_implicit_context(self):
+        try:
+            try:
+                raise KeyError("SUPPRESSED_SECRET")
+            except Exception:
+                raise ValueError("public") from None
+        except Exception as exc:
+            assert exc.__suppress_context__ is True
+            assert exc.__context__ is not None  # present, but suppressed
+            rendered = safe_exception_frames(exc)
+
+        assert "KeyError" not in rendered
+        assert "ValueError" in rendered
+
+    def test_explicit_from_cause_is_still_followed(self):
+        """`raise X from Y` ALSO sets __suppress_context__ -- do not over-fix.
+
+        Testing the flag BEFORE `__cause__` would truncate every explicitly
+        chained exception to one link, which is the failure mode opposite to the
+        one being fixed and would have looked like a pass.
+        """
+        try:
+            try:
+                raise KeyError("real-root")
+            except Exception as root:
+                raise ValueError("wrapper") from root
+        except Exception as exc:
+            assert exc.__suppress_context__ is True  # set by `from root` too
+            rendered = safe_exception_frames(exc)
+
+        assert "KeyError" in rendered
+        assert "ValueError" in rendered
+
+    def test_ordinary_implicit_context_is_still_followed(self):
+        try:
+            try:
+                raise KeyError("implicit-root")
+            except Exception:
+                raise ValueError("wrapper")
+        except Exception as exc:
+            assert exc.__suppress_context__ is False
+            rendered = safe_exception_frames(exc)
+
+        assert "KeyError" in rendered
+
+
 class TestChainCapDocstringMatchesBehaviour:
     """F2: the docstring's absolute claim was false; pin what is TRUE.
 
