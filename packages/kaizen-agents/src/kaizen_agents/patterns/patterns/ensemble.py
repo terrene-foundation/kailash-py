@@ -254,6 +254,19 @@ class EnsemblePipeline(Pipeline):
 
                     perspectives.append(
                         {
+                            # Same asymmetry the other three patterns carried:
+                            # the `error` key was scrubbed while the
+                            # `traceback` key in the same dict rendered the
+                            # exception in full, final line included. This
+                            # perspective dict is handed to the SYNTHESIZER and
+                            # then returned to the caller, so an unscrubbed
+                            # traceback here also becomes model input.
+                            #
+                            # Scrubbed rather than dropped: the traceback is a
+                            # string built here (unlike the `exc_info=True` log
+                            # sinks 689f9ebd8 had to drop), so the same
+                            # scrubber keeps the frame trail and removes the
+                            # credential.
                             "error": scrub_remote_error(e),
                             "agent_id": (
                                 agent.agent_id
@@ -261,7 +274,13 @@ class EnsemblePipeline(Pipeline):
                                 else "unknown"
                             ),
                             "status": "failed",
-                            "traceback": traceback.format_exc(),
+                            # From the exception object rather than
+                            # `format_exc()`'s ambient `sys.exc_info()`; see
+                            # `parallel._execute_parallel_async`, where the
+                            # ambient form rendered no exception at all.
+                            "traceback": scrub_remote_error(
+                                "".join(traceback.format_exception(e))
+                            ),
                         }
                     )
 
@@ -310,9 +329,17 @@ class EnsemblePipeline(Pipeline):
                 import traceback
 
                 return {
+                    # `self.synthesizer.run` is another provider dispatch, so
+                    # this guard is the sibling of the per-agent one above and
+                    # gets the same treatment. It is also the pattern's TOP
+                    # LEVEL return -- `run` hands this dict straight back --
+                    # which is what makes the raw traceback here the most
+                    # directly caller-visible of the nine.
                     "error": scrub_remote_error(e),
                     "status": "synthesis_failed",
-                    "traceback": traceback.format_exc(),
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                     "perspectives": perspectives,  # Include original perspectives
                 }
 
