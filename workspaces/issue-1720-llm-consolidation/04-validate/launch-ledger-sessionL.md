@@ -35,14 +35,18 @@ Every claim re-verified against HEAD before any durable write
 (`verify-claims-before-write.md` MUST-2: cross-boundary reconstructions presumed false). One did
 not survive:
 
-- **#2013 — session-note claim REFUTED.** It recorded "`app.enable_auth()` is a complete no-op,
-  `hasattr(gw, "enable_auth")` is False". Both halves are wrong: `APIGateway` assigns
-  `self.enable_auth` as a **bool attribute** (`api_gateway.py:163`), so `hasattr` is **True** and
-  `gw.enable_auth()` raises `TypeError` into a swallowing `except`; and `use_plugin("auth")` runs
-  **unconditionally**, doing real work. The actual defect is one layer deeper —
-  `plugins.py:103` guards on `set_auth_manager`, and **`def set_auth_manager` exists nowhere in
-  the tree** (grep exit 1) — so a real `MiddlewareAuthManager` is built and attached to nothing.
-  The note's version would have shipped a false claim to a PUBLIC issue.
+- **#2013 — SUPERSEDED BY MY OWN LATER MEASUREMENT. See Wave 2 § "A durable public claim I got
+  wrong".** What I wrote here first, and posted publicly, was: "`hasattr(gw, "enable_auth")` is
+  **True** because `APIGateway` assigns `self.enable_auth` as a bool attribute
+  (`api_gateway.py:163`), so `gw.enable_auth()` raises `TypeError` into a swallowing `except`."
+  **That is WRONG and is left visible here rather than edited away.** `create_gateway` never
+  returns `APIGateway`; measured across all three server types, `hasattr` is **False** on every
+  path, so the branch is DEAD CODE — no `TypeError`, no error log. The session-K note was RIGHT on
+  that point and I was wrong; I inferred the gateway type instead of resolving it.
+  **What survives, and is the load-bearing half:** `use_plugin("auth")` runs **unconditionally**
+  (so "complete no-op" is still wrong), and `plugins.py:103` guards on `set_auth_manager`, which
+  **exists nowhere in the tree** (grep exit 1) — a real `MiddlewareAuthManager` is built and
+  attached to nothing. `_auth_enabled`/`_auth_manager` are write-only.
 - **#2014 — CONFIRMED.** Logs `SECURITY: Hook isolation failed…` (`isolation.py:468-473`) then
   falls back to `super()._execute_hook` — fail-open, loudly. `test_process_isolation` has exactly
   ONE assertion (`:237 assert isinstance(results, list)`), true on both branches ⇒ not coverage.
@@ -88,15 +92,15 @@ Dispatch, NOT a clean round. Re-dispatched as `r10-correctness`.
 The security lens had no Bash, so all six findings were INFERENCE with named falsifying probes.
 **I ran the probes.** Five reproduced as measured fact; one was refuted as written:
 
-| finding | probe result |
-| ------- | ------------ |
-| F1 `__getattr__` → `__qualname__` | `'postgres://svc:hunter2@h/db'` emitted **verbatim** |
-| F1 5000-char `__qualname__` | returned at **full length** — unbounded |
-| F1 `property` for `__qualname__` | **REFUTED as written** — `TypeError` at class creation |
-| F2 `__context__` inner-chaining | `KeyError("REAL_FAILURE")` **evicted**; docstring absolute false |
-| F4 newline in class name | constructible; **1 newline** injected — forged log line |
-| F4 `" <- "` / `<+N ...>` in class name | **forged** the record grammar |
-| F5 `_MAX_CHAIN_LINKS = 0` | **12 links rendered** — N3 class recurs |
+| finding                                | probe result                                                     |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| F1 `__getattr__` → `__qualname__`      | `'postgres://svc:hunter2@h/db'` emitted **verbatim**             |
+| F1 5000-char `__qualname__`            | returned at **full length** — unbounded                          |
+| F1 `property` for `__qualname__`       | **REFUTED as written** — `TypeError` at class creation           |
+| F2 `__context__` inner-chaining        | `KeyError("REAL_FAILURE")` **evicted**; docstring absolute false |
+| F4 newline in class name               | constructible; **1 newline** injected — forged log line          |
+| F4 `" <- "` / `<+N ...>` in class name | **forged** the record grammar                                    |
+| F5 `_MAX_CHAIN_LINKS = 0`              | **12 links rendered** — N3 class recurs                          |
 
 ### The meta-finding that changed the fix shape
 
