@@ -26,9 +26,19 @@ casually.
 
 ## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
 
-**Rounds 1-4 NOT CLEAN. Round 5 CLEAN from BOTH lenses on the SAME SHA (`3f988bd22`) — the
-first clean round on an UNCHANGED surface, and the first from both. Round 6 dispatched to both
-against `b9f1e5ab7` for the second.** Convergence needs TWO consecutive clean rounds on a
+**SECURITY LENS HAS CONVERGED. Rounds 1-4 NOT CLEAN; round 5 CLEAN (`3f988bd22`); round 6
+CLEAN with every severity band empty (`b9f1e5ab7`), and it stated EXPLICITLY that round 6 is
+consecutive with round 5.** Its reasoning, which is worth keeping because it generalises: a
+docstring is not the configuration under test, and a new test is an INSTRUMENT — MUST-4 requires
+the instrument to ROTATE between rounds, so counting a strengthened pin as a surface mutation
+would make the rule self-defeating. It verified behaviour-unchanged by line-offset comparison
+(uniform +9 across every executable statement in `_cleanup`; the three `stop()` implementations
+byte-identical in offset) and named the bound: that method would not catch a change made and
+reverted inside the range.
+
+**CORRECTNESS LENS: round 5 CLEAN; round 6 dispatched against `b9f1e5ab7`, NOT YET RECEIVED.**
+Convergence needs its yes-consecutive too — a correctness-clean is not a security-clean and the
+reverse holds equally. Convergence needs TWO consecutive clean rounds on a
 surface that does not move between them, from BOTH lenses — a correctness-clean is not
 security-clean (`agents.md`).
 
@@ -44,6 +54,24 @@ something real in the previous round's fix. Round 5 was the first frozen one.
 **THE SURFACE IS FROZEN. Do not fix LOW-7 or LOW-8 without deciding to restart the count** —
 fixing either legitimately resets the counter and round 5 stops counting. Both are recorded
 below as residuals PENDING ACCEPTANCE, not as closed.
+
+## THE SCOPE BOUND ON THE SECURITY CLEAN — carry this verbatim, it is the lens's own
+
+- **No Bash in ANY of the six rounds. Every security verdict is source-reading.** It never
+  executed a test, a scrubber, or a probe. It did not run the F13 pins or the M7 pin and takes
+  the red-at-parent evidence on trust.
+- It read `tests/regression/test_redteam_2026_08_09_integration_findings.py` at lines 1-181 and
+  536-600 only; **most of the file is unread**, so it cannot independently confirm the F13 pins
+  red against pre-fix code.
+- **The kaizen / kaizen-agents per-site preset choices (`scrub_local_error` vs
+  `scrub_remote_error`) were SAMPLED, never ENUMERATED, in any round.** The CLEAN is scoped to
+  the frozen channel surface and does NOT extend there. It is the largest surface no round has
+  examined, and the convergence must not be read as covering it.
+
+Also recorded, because it decides where a future argument happens: the new M7 pin asserts
+`status is ChannelStatus.STOPPING`, which **pins LOW-8's current behaviour as the contract**. A
+future attempt to distinguish died-from-live will RED that test. That is the correct place for
+the conversation, not a surprise.
 
 ## Residuals pending a named human's acceptance (`completion-criterion.md` MUST-6)
 
