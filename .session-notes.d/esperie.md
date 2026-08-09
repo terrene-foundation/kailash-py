@@ -26,10 +26,20 @@ casually.
 
 ## Redteam convergence state — READ THIS BEFORE RUNNING ANOTHER ROUND
 
-**REDTEAM HAS CONVERGED — BOTH LENSES, TWO CONSECUTIVE CLEAN ROUNDS, SAME SHA
-(`b9f1e5ab7`), EACH REASONED INDEPENDENTLY.** This is a stated-criterion stop, NOT a
-round-budget cap-stop; both lenses said so explicitly and the distinction matters when this is
-quoted. Detail below.
+**REDTEAM HAS *NOT* CONVERGED. An earlier revision of this file said it had — that was wrong
+and is retracted here rather than quietly edited away.**
+
+The security half holds: rounds 5 + 6 CLEAN, consecutive YES. The correctness half does not.
+That lens CORRECTED ITSELF: what it produced in two turns was residual-verification and
+claim-checking, **not a fresh adversarial pass** — it generated no new behavioural sample and
+transferred round 5's by an identity argument. A transfer is not a second sample. **Its
+consecutive-clean count is ONE.** I had counted a carry-forward as a round; that is the exact
+distinction I had written down as not-to-be-rounded-up, and I rounded it up anyway.
+
+It then ran the owed round with a ROTATED instrument (the MCP `stop()` thread half — round 4
+changed that file by 82 lines and no round had ever probed the server-thread reclaim) and
+returned **NOT CLEAN**: M9 and M10 below. Counter does NOT reset (no surface change) but does
+NOT advance either. **One clean round is needed after M9/M10 are dispositioned.**
 
 **SECURITY LENS. Rounds 1-4 NOT CLEAN; round 5 CLEAN (`3f988bd22`); round 6
 CLEAN with every severity band empty (`b9f1e5ab7`), and it stated EXPLICITLY that round 6 is
@@ -108,6 +118,28 @@ future attempt to distinguish died-from-live will RED that test. That is the cor
 the conversation, not a surprise.
 
 ## Residuals pending a named human's acceptance (`completion-criterion.md` MUST-6)
+
+- **M9 — `stop()` reports STOPPED over a LIVE MCP server thread.** MEASURED: join-timed-out →
+  `status=STOPPED, thread_alive=True`; no-stop-entrypoint → same. `cleaned` gates STOPPED on
+  `_cleanup`, which covers `_running_task` + the event queue and **NOT the server thread**, so
+  both paths WARN accurately and then record STOPPED anyway. **This is the branch's own central
+  thesis** — a status field is a return value an orchestrator acts on — with the log knowing and
+  the status not, on the one resource the bool does not cover. **PRE-EXISTING**, independently
+  confirmed at base `2807e761a:395`; round 4 made the inconsistency SHARPER (two of three
+  resources gated) without introducing it. Non-blocking: loudly WARNed, and the thread is a
+  DAEMON that cannot hold the process at exit — Python cannot kill a thread, so STOPPED is
+  defensible, just inconsistent. **Revisit trigger:** any change to MCP shutdown or to what
+  `cleaned` covers. **Calendar backstop: 2026-09-08.**
+- **M10 — the MCP thread join BLOCKS THE ENTIRE EVENT LOOP.** MEASURED: `stop()` took 1.01s with
+  **0 heartbeat ticks** during it (expect ~20 if the loop were free). `thread.join(timeout=...)`
+  is synchronous, and the shipped `_MCP_SERVER_JOIN_TIMEOUT = 5.0` means a **5-second full
+  event-loop freeze** at shutdown — stalling sibling channels' stops and the shutdown deadline
+  itself. It sits ~60 lines from the comment justifying `_CLEANUP_JOIN_TIMEOUT = 1.0` on
+  precisely this reasoning. **PRE-EXISTING** (`2807e761a:366`), never touched by this branch.
+  **Fix shape is ONE LINE: `await asyncio.to_thread(thread.join, timeout)`.** My recommendation:
+  do NOT defer this indefinitely — it belongs in the same follow-up shard as #2013/#2014/#2015,
+  not on a third re-defer cycle. **Revisit trigger:** any MCP shutdown change. **Calendar
+  backstop: 2026-09-08.**
 
 Neither is blocking; neither is self-accepting; I cannot accept them on my own behalf.
 
