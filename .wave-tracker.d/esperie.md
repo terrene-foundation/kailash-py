@@ -581,6 +581,50 @@ ORDERING requirement, surfaced to the co-owner, not as a reason to weaken the pi
 these two specifically. Plus `src/kailash/nodes/base_async.py:260`, the downstream re-leak,
 whose closure signal is the `TestKnownDownstreamReleak` pin failing.
 
+### CODIFY-WORTHY — the retain-rule SHARPENED, and a three-instrument lesson
+
+**The rule, corrected.** "Retain scalars, never retain a rendering" was derived from four
+defective fields and works as a cheap first filter, but `w2-core-repr` found where it fails:
+`safe_exception_frames` is a JOINED LIST — the shape the rule forbids — yet it joins
+`path:line:function` + exception TYPEs, every element fixed at `def`/`class` time.
+
+The property that made the four defective fields dangerous was never their ARITY. It was that
+they rendered **runtime-derived** state (bound kwargs, dataclass fields, a joined `argv`, an
+exception message). The sharper form:
+
+> **Retain SOURCE-LEVEL identifiers; never retain RUNTIME-DERIVED state — regardless of arity.**
+
+A joined list of code locations PASSES. A single scalar that is caller-derived does NOT — which
+makes `hook_file` (a path under a caller-supplied dir, flagged by `w2-kaizen-repr`) the CLOSER
+call under the sharp rule, not the safer one. Same construction argument as `__qualname__`,
+now verified independently by three shards.
+
+**Three instruments, three ways of being wrong about a file that discusses its own subject —
+all within one hour, all on the same class:**
+
+| instrument                        | failure                                                           |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `w1-sinks`' `repr` grep           | too NARROW — required a dunder, missed 7 plain-`"name"` sites     |
+| MY verification grep              | too BROAD — matched the fix's own explanatory COMMENTS as defects |
+| `w2-core-repr`'s first helper pin | substring scan — failed on its OWN docstrings                     |
+
+The honest form in all three cases is an **AST walk**, which is what `w2-core-repr` shipped
+(`TestNoModuleHelperRendersAnObject` walks for a `repr()` Call node, ignoring docstrings).
+My own recovery needed a plant-control to prove the filter could still see a live site — the
+comment-excluding grep was only trustworthy once it had been shown to discriminate.
+
+**Sequel: `safe_exception_message` DELETED, not deprecated.** It filtered exactly `repr(handler)`
+out of a retained message — exact, not porous, so not the scrubber failure mode. But it retained
+a RENDERING, and **a repr-then-filter helper sitting in a security module is an invitation to the
+generalisation that was explicitly forbidden**. The diagnostic turned out to be available as a
+SCALAR (`NameError.name` is the bare identifier and survives the re-raise), so nothing is
+filtered — it is simply not retained. No scalar was invented for the `TypeError` path, which
+genuinely has none.
+
+**New site from the `%r` correction:** `distributed.py:778` — a task-queue backend failure logged
+the Redis URL it could not reach, credentials included. Not the caller-repr shape, same
+credential-into-logs class. Fixed in-shard.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
