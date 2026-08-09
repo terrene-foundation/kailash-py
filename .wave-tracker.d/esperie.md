@@ -654,6 +654,55 @@ genuinely has none.
 the Redis URL it could not reach, credentials included. Not the caller-repr shape, same
 credential-into-logs class. Fixed in-shard.
 
+### THE FOUR SPELLINGS — the single most important output for a future detector
+
+Each spelling was invisible to the detector built for the previous one. **Any detector built
+from this wave MUST cover all four**, or it repeats the false-SWEPT failure with a new blind spot:
+
+| #   | spelling                                  | found via                          |
+| --- | ----------------------------------------- | ---------------------------------- |
+| 1   | `getattr(x, "__name__", repr(x))`         | the original brief                 |
+| 2   | `%r` / `!r` in a format string            | the correctness lens's correction  |
+| 3   | raw `%s` / `{e}` of a caller-supplied exc | `distributed.py:778`, `base_async` |
+| 4   | `if name: … else: return repr(x)`         | a widened `repr(<callable>)` sweep |
+
+**Shape 4 is the one that will be missed, and it is structurally the worst.** It lives in a
+**NAMED HELPER** rather than at a sink — which is exactly what produces AMPLIFIERS. Both
+amplifiers found this session are that shape or adjacent to it:
+
+- `Depends.__repr__` — anything that reprs a `Depends` emits (debug log, error message,
+  pytest assertion output). Emits nothing itself; makes every future consumer emit.
+- `_callback_name` (`durable.py:967-972`) — feeds `:915`, `:942`, `:949`, and `:942` pushes
+  into a `failed` list a FOURTH warn emits. Verified: shapes 1 and 2 both return **0** on it.
+
+**Consequence for the detector's QUERY:** one that inspects SINKS finds leaks; one that
+inspects HELPERS FEEDING SINKS finds the multipliers. Different queries; the second is
+higher-yield and nobody has run it.
+
+**MANUAL WIDENING IS CLOSED — a decision, not an omission.** Every widening produced another
+site. That is not a sweep converging, it is a sweep reporting that the instrument is wrong.
+Three more rounds would burn budget and still leave the class's closure UNKNOWN — the exact
+state this wave exists to eliminate. The remaining coverage question belongs to a detector
+built against all four spellings, in its own shard, measured PER TREE (thresholds do not
+transfer — the `%r` burst went 11→28 with a 61% false-positive rate on one tree).
+
+### ARTIFACT DEFECTS — two hooks with the false-positive shape this session kept diagnosing
+
+Reported by `w2-core-repr`, which correctly proceeded per the hooks' own terms rather than
+deferring to a `block` on lines its diff never touched:
+
+- **`framework-first`** fired `block` on `from starlette` in `extractors/__init__.py` — **on
+  PRE-EXISTING context lines swept in as anchors, not on the diff** (`git show HEAD:`
+  confirms). Its remediation demands the file "be rewritten using Nexus", which is incoherent
+  where the file IS Nexus's own implementation and the docstring documents those imports as
+  deliberate re-exports. **It will fire on every future edit to any Nexus internal.**
+- **`observability`** flagged a `__repr__` and a guard method as "endpoint handlers with no
+  logger call" — same class.
+
+**This is the failure mode this session repaired twice in scanners, now in the hook layer:** a
+detector that cannot reach its own success state trains operators to ignore it. Neither is a
+shard's to fix; both belong with the co-owner artifact findings.
+
 ### STILL UNOWNED — do not let these read as covered
 
 - **MEDIUM-1** (visualization `start` after a failed `stop`) + **MEDIUM-2** (cancellation
