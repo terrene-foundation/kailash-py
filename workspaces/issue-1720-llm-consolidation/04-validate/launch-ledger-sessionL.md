@@ -152,3 +152,46 @@ The guarded branch is DEAD CODE; there is no `TypeError` and no error log. The s
 right on that point and I was wrong. Correction posted as a follow-up comment rather than an edit,
 so the record shows what was claimed and what the measurement returned. The load-bearing finding
 (`set_auth_manager` exists nowhere → the auth manager is attached to nothing) is unaffected.
+
+### Round 9 CORRECTNESS lens — also NOT CLEAN (8 findings), delivered late
+
+It self-reported a delivery failure (three reports emitted as plain text, never received). The work
+was genuinely run — its RAN-SIGNAL carries real commands and output. **Round 9 is therefore NOT
+CLEAN from BOTH lenses.** It explicitly did NOT disagree with the security lens: it also found
+defects in `a17c95e76`'s chain-cap code.
+
+**Substantive findings I re-verified myself (all CONFIRMED):**
+
+| # | finding | my measurement |
+| - | ------- | -------------- |
+| F5 | `__suppress_context__` ignored — `raise X from None` | `__suppress_context__=True`, render still emits `KeyError@…` — **leaks the suppressed context** |
+| F1 | chain cap drops the CAUGHT exception's type | `HTTPGatewayError` **absent**; render is `<+23 outer links dropped> <- RuntimeError… <- KeyError` |
+| F6 | docstring branch condition wrong | code `cwd != _HOME_DIR` (strictly above) vs docstring "at/above" |
+
+**F2 — a PROVEN-VACUOUS test, and the proof is properly constructed.** The shape-8 block added by
+`7d14e0b7e`/`a87890fd6` is entirely unpinned: mutation (remove the block) → 374 passed BOTH ways,
+AND reachability shown (`HEAD -> ([4], [])` vs `PARENT -> ([], [])`), so the mutation reaches the
+code and changes behaviour yet reds nothing. That satisfies `instrument-discipline.md` MUST-2(b) —
+genuinely vacuous, not an inert mutation. The commit's own stated goal ("the day somebody writes
+it, the pin must not stay green over a real leak") is unenforced.
+
+Also: F3 duplicate "Shape 8" label (nine cross-references now resolve to two definitions), F7 early
+`return` undercounts (contradicts the containing method's own docstring), F8 dead guard
+(`value is not None` can never fire on `ast.Dict.values`), F4 the blanket exclusion also spares the
+leaky class and `extra=dict(error=e)` was never closed by either commit.
+
+**It also caught a real limit in MY greens:** `test_f11_caller_repr_leak_core.py` uses 2-link
+chains, far under the cap, so it never reaches the eviction path — it is green and BLIND to F1.
+The tree-wide green is blind the same way. Noted rather than argued.
+
+**Its scope bound, carried:** correctness lens only, NO security scoring — per `agents.md` its
+verdict is zero evidence about this trust-bearing surface's security posture. Its F4 residual
+(safety of the nine sites resting on `ReasoningDegradedError.error` being pre-sanitised) is
+INFERENCE from a docstring, not measured.
+
+### Sequencing decision — holding commits until r10 returns
+
+`r10-security` + `r10-correctness` are mid-review against `613d8a197`. Committing the r9-correctness
+fixes now would move the surface under them and make their verdicts stale
+(`completion-criterion.md` MUST-3). The fixes are prepared and will land as ONE combined change
+after r10 reports, followed by a single fresh round — rather than a sixth point-patch mid-review.
