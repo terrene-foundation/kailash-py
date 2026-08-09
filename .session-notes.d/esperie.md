@@ -9,7 +9,7 @@ migrated_from: .session-notes
 ## Where we are
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain`. **237 commits unpushed, working tree clean** apart from
+`fix/issue-1720-forest-drain`. **240+ commits unpushed, working tree clean** apart from
 `kaizen_implementation_test.log` (#2011's own artifact, left deliberately).
 
 **The PR is NOT open, and should not open on the current framing.** Session I's clean round
@@ -22,7 +22,7 @@ so. It is shippable as that. It is NOT "the leak class is closed" and MUST NOT b
 
 1. `.wave-tracker.d/esperie.md` — **AUTHORITATIVE.** Every finding, every correction, the
    four-spelling taxonomy, the instrument lesson's final form, and the unowned queue.
-2. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — amended three times
+2. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — amended four times
    this session; now carries the measured per-tree table and the architectural blocker.
 3. This file's **Gating decision** and **Traps** before touching anything.
 
@@ -82,9 +82,12 @@ PR body corrected four times. Full detail in the wave tracker — do not reconst
 3. **`core.hooksPath`** points at a non-existent directory in ANOTHER repo, so **no commit in
    this repo is hook-checked** — this session's included. Operator-owned config. Worth fixing
    before the shard CODE merges, not just the doc commits.
-4. **File F14 + F12.** F14: hook process isolation never runs under `spawn` (macOS default) —
-   a documented security control that silently degrades, same class as #2013. F12: 24 raw
-   exceptions into HTTP response bodies in `src/kailash` core — outside #2012's scope.
+4. ~~File F14 + F12~~ — **DONE, both OPEN.** **#2014** — hook process isolation never runs
+   under `spawn` (macOS / py3.14-Linux default) and silently degrades to non-isolated
+   execution; same class as #2013. **#2015** — 24 sites returning a raw exception in an HTTP
+   response body; enumerated per-file, with the `detail=str(e)` count stated as a FLOOR
+   (an f-string spelling exists and is uncounted) and the 4 template hits called out
+   separately because users copy them.
 5. **kailash 2.63.0 must publish BEFORE nexus's next release** — nexus now pins `>=2.63.0`
    for a module-scope import; PyPI has 2.62.0.
 6. **The four-spelling detector** (after #1) — and it MUST include the helper-query.
@@ -121,5 +124,7 @@ PR body corrected four times. Full detail in the wave tracker — do not reconst
 
 `F1/F2/F3/F5/F6` (#1970/#1971/#1972/#1974/#1981) are **this branch's own delivered work**,
 not queue — they read OPEN only because the PR has not merged. `F7` (PR + release) is
-BLOCKED on the gating decision above. `F8` (#2013) / `F9` (#2012) / `F12` / `F14` remain
-genuinely open. Detail + value-anchors: the wave tracker.
+BLOCKED on the gating decision above. Genuinely open and now all issue-backed:
+**`F8` #2013** (`enable_auth` inert on the HTTP surface), **`F9` #2012** (390 un-triaged
+kaizen sinks), **`F14` #2014** (isolation never runs under `spawn`), **`F12` #2015** (24 raw
+exceptions into HTTP bodies). Detail + value-anchors: the wave tracker.

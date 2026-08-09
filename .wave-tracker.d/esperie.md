@@ -278,7 +278,7 @@ pyright never flagged. I was reading diagnostics from a tree under active edit a
 them as findings against committed work. Same class as everything else here: an instrument
 that cannot distinguish the state it is measuring. Verify against the COMMITTED file.
 
-### F12 — NEW CLASS, orchestrator-found: 24 raw exceptions into HTTP RESPONSE BODIES
+### F12 — FILED AS #2015. 24 raw exceptions into HTTP RESPONSE BODIES
 
 Found while verifying MEDIUM-1's site; **neither lens reported it, because both were
 hunting log sinks.** `src/kailash/visualization/api.py:319` sits three lines below MEDIUM-1's
@@ -454,7 +454,7 @@ autonomy hook manager for naming would be bad layering) — and a test running B
 same five cases asserting identical output, so they cannot drift. True unification belongs in
 `kaizen/utils/`, which is another shard's partition; correctly not touched.
 
-### F14 — NEW, HIGH: hook process isolation NEVER RUNS, and degrades SILENTLY
+### F14 — FILED AS #2014. Hook process isolation NEVER RUNS, and degrades SILENTLY
 
 Found by `w2-kaizen-repr`, out of its scope, **verified first-hand by me**:
 
