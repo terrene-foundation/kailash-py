@@ -257,7 +257,7 @@ def _key(node: ast.expr) -> tuple[int, int]:
 def _root_name(node: ast.expr) -> str | None:
     """The ``Name`` an attribute/subscript chain is rooted at, if any."""
     current: ast.expr = node
-    while isinstance(current, (ast.Attribute, ast.Subscript)):
+    while isinstance(current, ast.Attribute | ast.Subscript):
         current = current.value
     return current.id if isinstance(current, ast.Name) else None
 
@@ -320,7 +320,7 @@ def _isinstance_narrowed_names(test: ast.AST) -> set[str]:
         and isinstance(test.args[0], ast.Name)
     ):
         cls = test.args[1]
-        candidates = cls.elts if isinstance(cls, (ast.Tuple, ast.List)) else [cls]
+        candidates = cls.elts if isinstance(cls, ast.Tuple | ast.List) else [cls]
         if candidates and all(_is_exception_like(c) for c in candidates):
             names.add(test.args[0].id)
     return names
@@ -362,7 +362,7 @@ def _exception_regions(tree: ast.AST) -> list[tuple[str, list[ast.stmt]]]:
         elif isinstance(node, ast.If):
             for name in _isinstance_narrowed_names(node.test):
                 regions.append((name, node.body))
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             params = {arg.arg for arg in _param_names(node)}
             names = {
                 arg.arg
@@ -695,7 +695,7 @@ class _SinkScan(ast.NodeVisitor):
             right = node.right
             if isinstance(right, ast.Dict):
                 operands: list[ast.AST] = [v for v in right.values if v is not None]
-            elif isinstance(right, (ast.Tuple, ast.List)):
+            elif isinstance(right, ast.Tuple | ast.List):
                 operands = list(right.elts)
             else:
                 operands = [right]
