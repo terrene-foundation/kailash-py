@@ -41,7 +41,15 @@ dependencies = [
     #   redundancy (already-installed entries are no-ops).
     # ─────────────────────────────────────────────────────────────
     "kailash>=2.56.0",  # mask_error_text (transports.py) is new in core 2.56.0
-    "mcp[cli]>=1.23.0",
+    # Capped <2.0 to match the root package's ALREADY-DELIBERATE cap
+    # (kailash-py pyproject.toml: `mcp = ["mcp[cli]>=1.23.0,<2.0"]`).
+    # mcp 2.0.0 REMOVED `mcp.client.websocket`, which this package imports
+    # at client.py:497/805/1256 and which 9 first-party modules rely on.
+    # Uncapped here, a fresh CI resolve picks 2.0.0 and every websocket
+    # import dies with ModuleNotFoundError. This is a DIRECT dependency
+    # (not a transitive), so a cap against a known-breaking major is the
+    # sanctioned shape per `dependencies.md`, not a speculative pin.
+    "mcp[cli]>=1.23.0,<2.0",
     "aiohttp>=3.12.4",
     "websockets>=12.0",
 ]
