@@ -66,6 +66,7 @@ from kailash.sdk_exceptions import (
     SoftTimeLimitExceeded,
     WorkflowCancelledError,
 )
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -1161,13 +1162,28 @@ class Worker:
                 if inspect.isawaitable(result):
                     await result
             except Exception as exc:
+                # `handler` is CALLER-SUPPLIED and typed as a CALLABLE, not as
+                # a function, so anything without `__name__` used to reach a
+                # `repr(handler)` fallback: a `functools.partial` renders its
+                # bound kwargs verbatim, and a callable object's
+                # dataclass-generated `__repr__` renders every field including
+                # a credential one. `safe_callable_name` emits only a
+                # source-level identifier, which cannot carry a payload.
+                #
+                # `exc_info` is DROPPED for the same reason: `exc` comes from
+                # the caller's handler, so `logging` printing the chain's
+                # `str()` re-leaks a driver error naming its DSN even though
+                # the message above deliberately carries only the type name.
+                # That is the class 689f9ebd8 closed at eighteen kaizen sinks.
+                # The frames keep WHERE it failed without keeping WHAT it said.
                 logger.warning(
-                    "Worker '%s' lifecycle handler %r raised %s for task %s; continuing",
+                    "Worker '%s' lifecycle handler %r raised %s for task %s; "
+                    "continuing (at %s)",
                     self._worker_id,
-                    getattr(handler, "__name__", repr(handler)),
+                    safe_callable_name(handler),
                     type(exc).__name__,
                     event.task_id,
-                    exc_info=True,
+                    safe_exception_frames(exc),
                 )
 
     @staticmethod

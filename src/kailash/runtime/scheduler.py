@@ -71,6 +71,7 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
 from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
+from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 
 logger = logging.getLogger(__name__)
 
@@ -1660,13 +1661,27 @@ class WorkflowScheduler:
             try:
                 handler(event)
             except Exception as exc:
+                # `handler` is CALLER-SUPPLIED and typed as a CALLABLE, not as
+                # a function, so anything without `__name__` used to reach a
+                # `repr(handler)` fallback: a `functools.partial` renders its
+                # bound kwargs verbatim, and a callable object's
+                # dataclass-generated `__repr__` renders every field including
+                # a credential one. `safe_callable_name` emits only a
+                # source-level identifier, which cannot carry a payload.
+                #
+                # `exc_info` is DROPPED for the same reason: `exc` comes from
+                # the caller's handler, so `logging` printing the chain's
+                # `str()` re-leaks a driver error naming its DSN even though
+                # the message above deliberately carries only the type name.
+                # That is the class 689f9ebd8 closed at eighteen kaizen sinks.
+                # The frames keep WHERE it failed without keeping WHAT it said.
                 logger.warning(
                     "WorkflowScheduler lifecycle handler %r raised %s for "
-                    "schedule %s; continuing",
-                    getattr(handler, "__name__", repr(handler)),
+                    "schedule %s; continuing (at %s)",
+                    safe_callable_name(handler),
                     type(exc).__name__,
                     event.schedule_id,
-                    exc_info=True,
+                    safe_exception_frames(exc),
                 )
 
     def _on_job_lifecycle_event(self, event: Any) -> None:

@@ -2,15 +2,156 @@
 
 This module provides mixins and utilities for automatically detecting and
 masking PII, credentials, and other sensitive information in logs.
+
+It also provides two helpers that make a log line safe BY CONSTRUCTION rather
+than by pattern-matching -- :func:`safe_callable_name` and
+:func:`safe_exception_frames`. Prefer those wherever the object being logged is
+CALLER-SUPPLIED: the masking below is best-effort over an open-ended payload,
+while those two emit only source-level identifiers that cannot carry a payload
+at all.
 """
 
+import functools
 import json
 import logging
+import os
 import re
+import traceback
 from functools import wraps
 from typing import Any, Dict, List, Optional, Pattern, Set, Union
 
 from kailash.utils.url_credentials import is_sensitive_query_key
+
+# A partial wrapping a partial is flattened by CPython, so one unwrap is the
+# normal case; the bound keeps a hand-built chain from spinning.
+_MAX_PARTIAL_UNWRAP = 10
+
+# Frames kept per exception in safe_exception_frames. Deep recursive failures
+# produce thousands of identical frames; the innermost ones locate the fault.
+_DEFAULT_FRAME_LIMIT = 20
+
+
+def safe_callable_name(obj: Any) -> str:
+    """Name a CALLER-SUPPLIED callable for a log line without rendering its repr.
+
+    The idiom this replaces is ``getattr(fn, "__name__", repr(fn))``. Python
+    evaluates a ``getattr`` default eagerly but only USES it when the attribute
+    is absent -- and the callables that lack ``__name__`` are exactly the ones
+    that carry payloads:
+
+    * ``functools.partial(connect, dsn="postgres://svc:<credential>@host/db")``
+      renders its bound arguments verbatim.
+    * a callable object with a dataclass-generated ``__repr__`` renders EVERY
+      field, including a credential one, without the call or the exception
+      mentioning it.
+
+    A plain ``def`` function has ``__name__``, so the fallback never fires for
+    one -- which is why the idiom reads as safe and is not.
+
+    Resolution order:
+
+    1. ``__qualname__`` / ``__name__`` when present -- unchanged behaviour for
+       every plain function and method.
+    2. For a ``functools.partial``, the WRAPPED function's own name, rendered
+       ``partial(<name>)``. ``type(obj).__name__`` alone would be ``"partial"``
+       for every partial ever passed, which on a dependency-injection surface
+       is not a diagnostic at all -- it cannot tell the database dependency
+       from the cache one. ``partial.func`` is the wrapped function; the
+       payload lives in ``partial.args`` / ``partial.keywords``, which are
+       never read here.
+    3. Otherwise ``type(obj).__name__`` -- a class name, which is a
+       source-level identifier and cannot carry a caller payload.
+
+    Returns a string in every case; it never raises, because a logging call
+    site must not fail on the object it is trying to describe.
+    """
+    target = obj
+    unwrapped = 0
+    while True:
+        for attribute in ("__qualname__", "__name__"):
+            name = getattr(target, attribute, None)
+            # A non-str __name__ is possible on an exotic object; only a real
+            # string is usable, and only a non-empty one is a diagnostic.
+            if isinstance(name, str) and name:
+                return f"partial({name})" if unwrapped else name
+        if isinstance(target, functools.partial) and unwrapped < _MAX_PARTIAL_UNWRAP:
+            target = target.func
+            unwrapped += 1
+            continue
+        type_name = type(target).__name__
+        return f"partial({type_name})" if unwrapped else type_name
+
+
+def _relative_frame_path(filename: str) -> str:
+    """Render a traceback filename workspace-relative.
+
+    Absolute paths disclose the operator's home-directory layout to whatever
+    ships the logs. Falls back to the basename when the file lives outside the
+    working directory (or on another Windows drive) rather than emitting a
+    ``../../..`` chain that hints at the same layout.
+    """
+    try:
+        relative = os.path.relpath(filename, os.getcwd())
+    except (ValueError, OSError):
+        return os.path.basename(filename)
+    if relative.startswith(".."):
+        return os.path.basename(filename)
+    return relative
+
+
+def safe_exception_frames(
+    exc: BaseException,
+    *,
+    limit: int = _DEFAULT_FRAME_LIMIT,
+    follow_chain: bool = True,
+) -> str:
+    """Render WHERE an exception failed, without rendering WHAT it said.
+
+    This is the replacement for ``exc_info=True`` on a log line whose exception
+    is CALLER-SUPPLIED. ``logging`` renders ``exc_info`` by walking the whole
+    exception chain and printing each exception's ``str()``, so a driver error
+    reading ``could not connect to postgres://svc:<credential>@host/db`` lands
+    in the record verbatim -- re-entering through the traceback even when the
+    log message itself was built to carry nothing.
+
+    Dropping the traceback outright would close that leak but destroy the
+    diagnostic: the operator loses the only record of where the failure came
+    from. This keeps the frames -- ``path:line:function`` per frame, plus each
+    exception's TYPE -- and drops only the message. Every retained element is a
+    source-level identifier (a file path, a line number, a function name, a
+    class name), none of which can carry a runtime payload. Source text is NOT
+    included, so a frame cannot echo an interpolated value either.
+
+    Args:
+        exc: The exception to describe.
+        limit: Innermost frames kept per exception in the chain.
+        follow_chain: Also describe ``__cause__`` / ``__context__``. The cause
+            usually holds the real failure site, so this defaults on.
+
+    Returns a string like
+    ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
+    """
+    descriptions: List[str] = []
+    seen: Set[int] = set()
+    current: Optional[BaseException] = exc
+
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        frames = traceback.extract_tb(current.__traceback__)
+        if limit > 0:
+            frames = frames[-limit:]
+        rendered_frames = ">".join(
+            f"{_relative_frame_path(frame.filename)}:{frame.lineno}:{frame.name}"
+            for frame in frames
+        )
+        descriptions.append(
+            f"{type(current).__name__}@{rendered_frames or '<no-frames>'}"
+        )
+        if not follow_chain:
+            break
+        current = current.__cause__ or current.__context__
+
+    return " <- ".join(descriptions)
 
 
 class SecureLoggingPatterns:

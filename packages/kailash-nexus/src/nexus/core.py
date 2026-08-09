@@ -27,6 +27,7 @@ from typing import (
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
+from kailash.utils.secure_logging import safe_callable_name
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from nexus.background import BackgroundService
@@ -2420,17 +2421,35 @@ Check the documentation or explore available resources.
                 # the inert-limit WARN stays silent -- but the failure itself
                 # is reported, because a security control whose verification
                 # did not run must not look identical to one that passed.
+                # TWO caller-supplied payloads used to reach this ONE record,
+                # so fixing either alone would still have shipped the other.
+                #
+                # (1) The identity fallback was `repr(handler)`, and `handler`
+                #     is caller-supplied. `functools.partial(dashboard,
+                #     dsn="postgres://svc:<credential>@host/db")` — pre-binding
+                #     config at registration — has no `__name__`, so its bound
+                #     kwargs rendered verbatim.
+                # (2) `exc` interpolated the SAME repr right back in: the
+                #     `get_type_hints` refusal that lands here reads
+                #     `TypeError: functools.partial(<function dashboard>,
+                #     dsn='…') is not a module, class, method, or function`.
+                #     The exception's own message embeds the repr, which is why
+                #     only `type(exc).__name__` is kept.
+                #
+                # The WARN's purpose is unchanged: a security control whose
+                # verification did not run must not look identical to one that
+                # passed, and the operator still learns WHICH handler and WHY
+                # (the exception type) it could not be verified.
                 logger.warning(
                     "nexus.endpoint.rate_limit_unverifiable: could not resolve "
-                    "the annotations of handler %r for %s %s (%s: %s), so "
+                    "the annotations of handler %r for %s %s (%s), so "
                     "whether rate limiting engages could NOT be verified at "
                     "registration. If the handler declares no `request: "
                     "Request` parameter, rate_limit=%s has no effect.",
-                    getattr(handler, "__name__", repr(handler)),
+                    safe_callable_name(handler),
                     "/".join(methods),
                     path,
                     type(exc).__name__,
-                    exc,
                     effective_rate_limit,
                 )
                 return True
