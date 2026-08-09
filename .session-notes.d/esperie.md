@@ -1,149 +1,162 @@
 ---
 owner: esperie
-last_reconciled_sha: 3a9bfde51
+last_reconciled_sha: c3cf5069c
 migrated_from: .session-notes
 ---
 
-# Session Notes — 2026-08-09 (session J)
+# Session Notes — 2026-08-09 (session K)
 
 ## Where we are
 
 Workspace `issue-1720-llm-consolidation`, phase 05-codify, branch
-`fix/issue-1720-forest-drain`. **240+ commits unpushed, working tree clean** apart from
+`fix/issue-1720-forest-drain`. **279 commits unpushed, working tree clean** apart from
 `kaizen_implementation_test.log` (#2011's own artifact, left deliberately).
 
-**The PR is NOT open, and should not open on the current framing.** Session I's clean round
-REFUTED the branch; this session closed what it found, then two lenses refuted it again on
-new axes. What the branch now honestly is: **a scoped fix that swept ONE TREE OF FOUR**, with
-the remaining ~1,959 sites architecturally BLOCKED. Both the PR body and the wave tracker say
-so. It is shippable as that. It is NOT "the leak class is closed" and MUST NOT be framed so.
+**The six shard worktrees are MERGED.** That was session J's stated first act and it is done:
+23 shard commits + 6 merge commits, 43 files, file sets verified DISJOINT before merging, all
+six tips confirmed ancestors of HEAD. The six worktrees at `.kailash-py-wt/` are now redundant
+and can be removed once the PR lands.
+
+**The PR is still NOT open, and the framing is unchanged: ONE TREE OF FOUR swept.** Do not
+open it as "the leak class is closed."
+
+**REDTEAM HAS NOT CONVERGED.** Round 1 NOT clean, round 2 NOT clean, round 3 IN FLIGHT at
+session end. Each round found something real IN THE PREVIOUS ROUND'S FIX. Do not claim
+convergence without a clean round from BOTH lenses.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-09b.md` — **THE DECISION
-   REPORT.** PCF-triaged queue, ETA in cycles, three decision points (A: where
-   `credential_scrub` lives; B: merge-now-or-hold; C: Sweep-N on the three deferred-quality
-   items), each with symmetric pros/cons + a recommendation. **Supersedes `sweep-2026-08-09.md`.**
-2. `.wave-tracker.d/esperie.md` — **AUTHORITATIVE on findings.** Every finding, every
-   correction (mine included), the four-spelling taxonomy, the instrument lesson's final form.
-3. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — amended four times
-   this session; now carries the measured per-tree table and the architectural blocker.
-4. This file's **Gating decision** and **Traps** before touching anything.
+1. `workspaces/issue-1720-llm-consolidation/04-validate/pr-body-v2.md` — every number
+   RE-DERIVED post-integration this session. Carries the integration record, the redteam
+   findings, and the four-tree table's current values.
+2. `workspaces/issue-1720-llm-consolidation/04-validate/sweep-2026-08-09b.md` — session J's
+   decision report. Decisions B and C still stand as written; **Decision A is REFINED below,
+   not superseded.**
+3. This file's **Traps** — three prior-session traps are now CORRECTED, not merely amended.
 
 ## In-flight state
 
-**NONE.** All six shards closed and **all six reported** — `w1-scrubber`'s arrived only after
-an explicit QUERY (work was on disk, report was not; one query returned it in full — do not
-re-dispatch, query). Six worktrees remain at
-`/Users/esperie/repos/kailash/build/.kailash-py-wt/` (39 shard commits total, all committed,
-all trees clean). Nothing is running. No PRs open.
+**Redteam round 3 dispatched to both lenses, results not yet received.** They were asked to
+verify the round-2 fixes (`c3cf5069c`) and to give an explicit CLEAN / NOT-CLEAN verdict.
+Nothing else is running. No PRs open.
 
-| worktree          | branch                | shard commits |
-| ----------------- | --------------------- | ------------- |
-| `f10-sinks`       | `fix/f10-sinks`       | 2             |
-| `f10-scanner`     | `fix/f10-scanner`     | 4             |
-| `f10-scrubber`    | `fix/f10-scrubber`    | 4             |
-| `f11-kaizen-repr` | `fix/f11-kaizen-repr` | 4             |
-| `f11-core-repr`   | `fix/f11-core-repr`   | 6             |
-| `f13-lifecycle`   | `fix/f13-lifecycle`   | 2             |
+**Tree-wide `tests/` + kaizen + kaizen-agents runs were still executing** at session end
+(`/tmp/treewide_rest.log`). They are OWED, not passed — do not cite them either way.
 
-**These are NOT merged into the branch.** Integration is the next session's first act, and
-the pin must be RE-DERIVED at that point (predicted 58 files / 201 sites; **202 means someone
-scrubbed a repr** — a finding, not a rounding difference).
+## THE GATING DECISION — refined by a measurement, not overturned
 
-## THE GATING DECISION — nothing downstream moves without it
+**Decision A (where `credential_scrub` lives) still resolves to: relocate to `kailash.utils`.**
+But the premise "src/kailash has NO scrubber" is FALSE and must stop being repeated.
 
-**Where does `credential_scrub` live?** It is in `packages/kailash-kaizen/src/kaizen/utils/`,
-and kaizen is an **opt-in extra** of the slim core (core runtime deps: `jsonschema`,
-`pydantic`, `pyyaml`, `click`). Verified: **0 files** in `src/kailash` and **0** in `nexus`
-import any scrub helper — they cannot. Options: relocate to core, duplicate (guarantees the
-drift a shared helper prevents), or make kaizen a hard core dependency (contradicts
-slim-core).
+Core ships `kailash.utils.url_credentials.mask_error_text` — plain core, not an extra, already
+on the import path. **Measured, it masks URL userinfo and NOTHING else:**
 
-**Recommendation: relocate to `kailash.utils`,** beside `secure_logging.py` which this branch
-already added there for exactly this reason — the identity helpers went to core precisely to
-avoid inverting the dependency. That settles the identity half; the string-scrubbing half is
-what remains unhoused.
+| shape                          | mask_error_text |
+| ------------------------------ | --------------- |
+| `postgres://` / `redis://` DSN | MASKED          |
+| OpenAI `sk-…`                  | **leaks**       |
+| bare JWT                       | **leaks**       |
+| Slack `xoxb-…`                 | **leaks**       |
+| Mistral 32-alnum               | **leaks**       |
+| `Authorization: Basic …`       | **leaks**       |
 
-**Do NOT build the #2012 detector before this is answered.** A scanner over `src/kailash`
-opens at 1844 findings whose only remedy is unavailable — an instrument nobody can drive to
-green, which this session proved twice teaches operators to ignore it.
+So the relocation is still needed for the vendor vocabulary — but **the DSN subset of the 1836
+`src/kailash` sites is addressable TODAY without Decision A.** That is new and it changes how
+that shard should be scoped.
 
 ## Executed this session
 
-Six shards. Leak class closed in `kaizen-agents` (12 sites) and both repr halves
-(kaizen 8 + core/nexus 11+). F13 lifecycle closed. Two scanners repaired, a third built.
-PR body corrected four times. Full detail in the wave tracker — do not reconstruct it here.
+Integration + three redteam rounds. Nine commits. Full detail in the PR body; the load-bearing
+parts:
 
-## Open questions for the human (ordered) — full treatment in the sweep report
+- **A cross-shard defect the merge surfaced.** `f10-sinks` scrubbed via
+  `scrub_remote_error("".join(format_exception(e)))`; `f10-scanner`, built in parallel from the
+  same base, only accounted a traceback as scrubbed when it WAS the helper's argument. The four
+  just-fixed files reported as leaking. Fixed the INSTRUMENT (argument-subtree walk), not the
+  source.
+- **Pin re-derived: 58 files / 201 sites** — the value the scanner file's own header predicted.
+  The 202 it rejects did NOT occur (`registry.py:736` uses `type(listener).__name__`). An
+  independent measurement read 7 bare / 194 wrapped pre-fix, reconciling exactly.
+- **Round 1 found 3 defects in this branch's own work** — `safe_callable_name` could raise
+  (called INSIDE `except` blocks, where it replaces the handled exception); a NEW raw-exception
+  sink added by this diff in `visualization/api.py`; and the F13 fix skipping `_cleanup`.
+  Plus a same-class site outside shard scope in `dataflow/fabric/nexus_adapter.py`.
+- **Round 2 found that MY round-1 fix re-opened the F13 defect one task over.**
+  `finally: await self._cleanup()` STRANDS the caller when `_running_task` ignores cancellation,
+  and `_cleanup`'s `await` also RE-RAISES, replacing the propagating `CancelledError`. Both had
+  one root cause; fixed in `Channel._cleanup` with a bounded `asyncio.wait` — which neither
+  re-raises nor hangs. All three channels inherit it.
 
-**Three of these are formal DECISION POINTS** with symmetric pros/cons in
-`04-validate/sweep-2026-08-09b.md` §5: **A** = item 1 below, **B** = merge-now-or-hold,
-**C** = the Sweep-N dispositions on #2003 / #2005 / #1995. The list below is the index; the
-report is where the trade-offs are stated.
+## Traps — THREE PRIOR ENTRIES ARE NOW CORRECTED
 
-**Sweep-N gate is OPEN on three deferred-quality items** (`value-prioritization.md` MUST-3):
-#2003 and #2005 are on their **THIRD** cycle — a fourth re-defer should trigger
-close-or-implement, not another defer. #1995 is 6d. **None may be closed as `not_planned`
-without a user gate in the same session** (MUST-4). Recommended: re-defer #2003/#2005 with
-fresh anchors, implement #1995 but only AFTER the merge (a 2,022-file formatting commit
-conflicts with all six worktrees).
-
-**#2011 is INCREMENTAL but UNLABELLED** — its artifact is the one dirty file in the tree.
-Label `deferred-quality` or fix it; it should not sit outside the tracked backlog.
-
-1. **Where `credential_scrub` lives** — above. Gates two packages.
-2. **Rotate the OpenAI key.** A shard printed a live key into its transcript via a wrong
-   shell fallback expansion and self-reported it. Containment VERIFIED: absent from every
-   tracked file, 0 commits in any branch, absent from all worktrees, `.env` gitignored and
-   untracked. Transcript-only. The "already invalid" note is 15 days old and a 401 is equally
-   consistent with expired / rate-limited / revoked.
-3. **`core.hooksPath`** points at a non-existent directory in ANOTHER repo, so **no commit in
-   this repo is hook-checked** — this session's included. Operator-owned config. Worth fixing
-   before the shard CODE merges, not just the doc commits.
-4. ~~File F14 + F12~~ — **DONE, both OPEN.** **#2014** — hook process isolation never runs
-   under `spawn` (macOS / py3.14-Linux default) and silently degrades to non-isolated
-   execution; same class as #2013. **#2015** — 24 sites returning a raw exception in an HTTP
-   response body; enumerated per-file, with the `detail=str(e)` count stated as a FLOOR
-   (an f-string spelling exists and is uncounted) and the 4 template hits called out
-   separately because users copy them.
-5. **kailash 2.63.0 must publish BEFORE nexus's next release** — nexus now pins `>=2.63.0`
-   for a module-scope import; PyPI has 2.62.0.
-6. **The four-spelling detector** (after #1) — and it MUST include the helper-query.
-7. **Two false-positive hooks** — `framework-first` blocking on unchanged context lines and
-   demanding Nexus internals "be rewritten using Nexus"; `observability` reading a `__repr__`
-   as an endpoint handler.
-8. **Three reachable cancellation siblings** (`mcp_channel.py:334`, `event_router.py:133`,
-   `session.py:259`) + **five stale visualization tests** calling `_draw_graph`, which does
-   not exist at HEAD.
-9. **Quiet-host run of `tests/integration/runtime`** — never completed under contention.
-
-## Traps
-
-- **`core.hooksPath` is dead** (above). A `-c core.hooksPath=/dev/null` flag here is a
-  **no-op** — do not disclose one as a bypass; it documents an event that did not occur.
-- **`.env` is gitignored, so it does NOT exist in a worktree.** The root conftest auto-load
-  has nothing to load, producing ~13 integration/e2e failures with `$OPENAI_API_KEY is unset`.
-  **Environmental, established with two discriminating checks — not regressions.**
-- **This host was running 4–5 concurrent pytest suites from other sessions.** Root `tests/`
-  and `kaizen-agents` whole trees are **NOT EXAMINED**, not passing. Postgres:5432,
-  Redis:6379/6380 all DOWN.
-- **`packages/kailash-kaizen/pytest.ini:13` sets `--maxfail=10`** — a whole-tree run ABORTS
-  and its "N passed" is an abort count, NOT coverage.
-- **BEFORE citing any grep as evidence of ABSENCE, plant one instance and confirm the command
-  finds it.** Six instrument failures this session; this reflex catches most of them. The
-  control must survive the FILTER, not just the command.
-- **Files that FIX this leak class now DISCUSS it at length** — a grep matches the
-  explanation as if it were the defect. Use an AST walk.
-- **`.venv/bin/python -m pytest`** always; an errored run is zero evidence, not a failure.
-  `pkill -f pytest` is BLOCKED — shared host.
-- Clear `__pycache__` before kaizen runs. READ THE SUMMARY LINE, never the exit code.
+- **CORRECTED — the `$OPENAI_API_KEY is unset` failures are NOT the missing-`.env`-in-worktrees
+  story.** `.env` exists and IS loaded (model names resolve). Root `conftest.py`'s
+  `install_cost_guard` DELIBERATELY scrubs provider secrets and monkeypatches `load_dotenv` so
+  later calls self-scrub. By design unless `KAIZEN_ALLOW_REAL_LLM=1`.
+- **CORRECTED — no tree has an effective pytest timeout.** All four resolve `timeout=None`. The
+  `timeout = 10` in root `pytest.ini` and `timeout = 120` in kaizen's sit in sections pytest
+  never reads. Under load the suites are SLOW, not flaky. **Verify the RESOLVED value, never the
+  ini text** — this is the same class as the `--maxfail` walk-back.
+- **CORRECTED — Postgres 5432 is UP.** The prior "all services DOWN" is wrong. Redis 6379/6380
+  and PG 5433 are down (the docker test-env binds 5433/6380); 5432 is a separate native
+  Postgres, protocol-probed.
+- **`--maxfail=10` is kaizen-ONLY and still live** (`packages/kailash-kaizen/pytest.ini`).
+  Confirmed by resolving the value, and swept across all 8 suites — every other tree is 0.
+- **NEVER park work in `git stash` while agents are reading the tree.** A reviewer sampled during
+  a stash window, read a transient state as permanent loss, and nearly "restored" over live work.
+  Worse, a stash-run-pop sequence in ONE bash call lost its pop to a 10-minute timeout. **Use an
+  isolated worktree at the parent commit for fail-first verification** (`git worktree add
+--detach <path> <sha>`), and commit before verifying.
+- **A test that reds is not evidence it reds for the RIGHT reason.** Two of mine did not:
+  `asyncio.shield` does not make a task ignore cancellation (so `stop()` finished before the test
+  could cancel it → "DID NOT RAISE" either way), and a frames test pinned a property that was
+  already true. Read the failure MESSAGE, not the fail count.
+- **An EMPTY command result is zero evidence.** Two runs this session returned nothing and had to
+  be re-run raw; one was a real timeout, one a non-matching filter.
+- `framework-first` hook false-positives on UNCHANGED context lines — it fired on a pre-existing
+  `from fastapi import` in a file whose own docstring is "Adapter … to Nexus / FastAPI handlers".
+  Still open question #7.
+- Clear `__pycache__` before kaizen runs. Trees run SEPARATELY (duplicate conftest basenames) —
+  combining kaizen-agents and kailash-kaizen in one invocation ERRORS, which is zero evidence.
 
 ## Forest ledger
 
-`F1/F2/F3/F5/F6` (#1970/#1971/#1972/#1974/#1981) are **this branch's own delivered work**,
-not queue — they read OPEN only because the PR has not merged. `F7` (PR + release) is
-BLOCKED on the gating decision above. Genuinely open and now all issue-backed:
-**`F8` #2013** (`enable_auth` inert on the HTTP surface), **`F9` #2012** (390 un-triaged
-kaizen sinks), **`F14` #2014** (isolation never runs under `spawn`), **`F12` #2015** (24 raw
-exceptions into HTTP bodies). Detail + value-anchors: the wave tracker.
+`F1/F2/F3/F5/F6` (#1970/#1971/#1972/#1974/#1981) remain this branch's own delivered work.
+Genuinely open and issue-backed: **`F8` #2013**, **`F9` #2012**, **`F14` #2014**, **`F12` #2015**.
+
+**Issue-text corrections that MUST land before those shards start** (verified against HEAD):
+
+- **#2013 is UNDERSTATED and NOT small — take it out of the shared lane.** `app.enable_auth()` is
+  ALSO a complete no-op (`hasattr(gw, "enable_auth")` is False; no such method exists anywhere in
+  `src/kailash/`). `_auth_enabled`/`_auth_manager` are write-only in production. A real auth path
+  (`NexusAuthPlugin`) exists and the flag never reaches it. Needs a JWT-secret-source decision;
+  precedent `api_gateway.py:175-183` raising `RuntimeError`.
+- **#2014's "silently degrades" is REFUTED.** It logs `SECURITY: Hook isolation failed…` at
+  `isolation.py:468-473`. It fails OPEN, LOUDLY. The fix is fail-CLOSED, not adding a warning.
+  Its existing `test_process_isolation` asserts only `isinstance(results, list)` — true on both
+  paths, so it is NOT coverage.
+- **#2015's floor is 26, not 24.** Two more production f-string sites:
+  `durable_workflow_server.py:476-481` and `auth_manager.py:225-228` (the AUTH path — highest
+  severity). Counting trap: `templates/.../middleware/errors.py:155` is `str(exc.detail)`, NOT a
+  leak — a shard reporting 25 has double-counted.
+- **#1997 is wider than filed.** Probed: under `scrub_local_error` (the conservative preset ~180
+  kaizen-agents sites use) Mistral, Groq, Cohere AND xAI keys are redacted by NOTHING. A 32-char
+  Mistral key leaks under BOTH presets.
+
+**NOT issue-backed and should be** — the highest-value open item: `src/kailash/runtime/local.py`
+renders `NodeExecutionError`'s embedded `{e}` to a log line, an OTel span attribute, a persisted
+audit event and the task store, on the DEFAULT config path (`:3413`, `:3416`, `:4295`, plus
+`:3426`/`:3436` and the `:4259`/`:4270`/`:4280` branches). `base_async.py:303-305` re-embeds it.
+The F10 fix moved that leak one frame rather than closing it. ~8 sinks in the runtime hot path.
+
+## Open asks for the human (all still pending)
+
+1. **Push + open the PR** — 279 commits. BUILD repo, so this was deliberately not done.
+2. **Three `gh` writes** — label #2011 `deferred-quality`; fresh re-defer anchors on #2003/#2005
+   (both on their THIRD cycle; a fourth should force close-or-implement); post the #2013/#2014/
+   #2015 corrections above.
+3. **Rotate the OpenAI key** — carried from session J, still open.
+4. **`core.hooksPath` points at a non-existent directory in another repo**, so NO commit in this
+   repo is hook-checked — including this session's nine.
+5. **kailash 2.63.0 must publish before BOTH nexus and dataflow** — dataflow's floor moved this
+   session (module-scope `safe_callable_name` import). PyPI has 2.62.0.
