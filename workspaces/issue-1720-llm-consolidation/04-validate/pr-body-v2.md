@@ -20,6 +20,43 @@ correction cycles on carried claims (`verify-claims-before-write.md` MUST-1/2).
 **The three gating security findings are CLOSED. The clean round has NOT run.** Those are
 different things, and only the second is convergence.
 
+### Integration record — six shard worktrees merged at `8ea48617b`
+
+The six parallel shards (`f10-sinks`, `f10-scanner`, `f10-scrubber`, `f11-kaizen-repr`,
+`f11-core-repr`, `f13-lifecycle`) are now merged: 23 shard commits + 6 merge commits, 43
+files, file sets verified fully DISJOINT before merging, all six tips confirmed ancestors of
+HEAD. (A prior handoff recorded 22 shard commits; the real count is 23 — `f10-scrubber`
+carries 5.)
+
+**Integration surfaced one real cross-shard defect, which is the class parallel sharding
+exists to trade for and the reason this step is a gate rather than a formality.** `f10-sinks`
+scrubbed the pattern-file traceback sinks as
+`scrub_remote_error("".join(format_exception(e)))` — rendering from the exception OBJECT
+deliberately, because `format_exc()`'s ambient `sys.exc_info()` had once produced a traceback
+of no exception at all. `f10-scanner`, written in parallel from the same base, accounted a
+traceback as scrubbed only when it WAS the helper's argument, never nested inside one. The
+four files that had just been fixed therefore reported as leaking. The source was right and
+the instrument was wrong, so the instrument changed (`_traceback_sites` now walks the
+helper's argument subtree; `scrub(x) + format_exc()` still correctly reads BARE). Validated
+in BOTH polarities before the pin moved — nested and direct wrapped forms read clean;
+bare-nested, bare-direct and scrub-outside all still red.
+
+**Pin re-derived, not carried: 58 files / 201 sites**, the value this file's own header
+predicted, and the 202 it explicitly rejects did NOT occur (`registry.py:736` resolves the
+caller repr through `type(listener).__name__`). An independent measurement at the merge
+commit read 7 bare / 194 wrapped pre-fix, reconciling exactly with the +7 above.
+
+**585 shard regression tests pass** across the four trees (kaizen-agents 397, kailash-kaizen
+139, nexus 18, core 31; zero failures).
+
+**STILL OWED BEFORE MERGE — the tree-wide suite runs.** They have NOT been run on the
+integrated branch. The host carried a load average of 218 on 16 cores (~13.6×
+oversubscription, 0% idle) with concurrent sessions running, and at that contention a
+timeout-class failure is indistinguishable from a real one, so the round would be spent
+separating flake from finding. Collection is clean (root 20148, kaizen 15163, ml 2594, align
+485 — ZERO collection errors), which is structural evidence and is NOT a pass claim. The
+tree-wide run on a quiet host is a merge gate.
+
 The adversarial round on `689f9ebd8` raised 9 findings, 2 HIGH. Verified in the code at
 the time of writing, not taken from a status report:
 
@@ -287,19 +324,31 @@ also contradicted this body's own Status paragraph ("source tree was clean at bo
 
 **What is true, measured across all four trees:**
 
+Re-derived POST-INTEGRATION at `8ea48617b` with the fixed scanner (the pre-merge readings
+this table previously carried — 11/191, 414/32, 1844/0, 115/0 — were confirmed exact at
+`2807e761a` by an independent measurement, and are superseded here):
+
 | tree                      | files | bare sinks | scrubbed sinks | reading                     |
 | ------------------------- | ----: | ---------: | -------------: | --------------------------- |
-| `kaizen_agents`           |   181 |     **11** |        **191** | SWEPT; 11 residual          |
-| `packages/kailash-kaizen` |   479 |    **414** |             32 | barely started (32 of ~446) |
-| `src/kailash`             |   771 |   **1844** |          **0** | **never swept**             |
-| `packages/kailash-nexus`  |    96 |    **115** |          **0** | **never swept**             |
+| `kaizen_agents`           |   181 |      **0** |        **201** | SWEPT; no residual          |
+| `packages/kailash-kaizen` |   479 |    **409** |             37 | barely started (37 of ~446) |
+| `src/kailash`             |   771 |   **1836** |          **0** | **never swept**             |
+| `packages/kailash-nexus`  |    96 |    **108** |          **0** | **never swept**             |
 
 So the leak-class work in this PR covered **one tree of four**. Two have never been touched.
+The three unswept trees moved only incidentally (kaizen −5 bare, core −8, nexus −7) where the
+F11 repr work happened to cross them; none was swept.
 
-**Do not read 1959 against the 390 figure above as a 5× undercount — they are different
+**The `kaizen_agents` 0 is a MEASURED zero, not an unrun instrument.** Planting one bare and
+one wrapped sink moved the totals by exactly +1/+1 and reddened the gated test by name and
+line; the same plant moved `src/kailash` and `nexus` WRAPPED from 0→1, which is what makes
+those two zeros readable as "no scrubber reaches this tree" rather than "the scanner did not
+run here."
+
+**Do not read 1944 against the 390 figure above as a 5× undercount — they are different
 measurements.** The 390 comes from a scanner whose denominator is only exceptions inside
 provider-shaped methods; the table counts every bare exception-text sink. What IS assertable:
-by any consistent definition the class spans **≥2373 bare sinks across the three unswept
+by any consistent definition the class spans **2353 bare sinks across the three unswept
 trees**, so whatever 390 measures, it is not the size of the class.
 
 **The remediation for the two unswept trees is currently ARCHITECTURALLY BLOCKED, and this is
@@ -309,7 +358,7 @@ core (core's runtime deps are `jsonschema`, `pydantic`, `pyyaml`, `click`). Veri
 files** in `src/kailash` and **0** in `nexus` import any scrub helper — they cannot, without
 one of (a) relocating the scrubber into core, (b) duplicating it, or (c) making kaizen a hard
 core dependency. (b) guarantees the drift a shared helper exists to prevent; (c) contradicts
-slim-core. **A scanner that flags 1844 sites whose only fix is unavailable would be an
+slim-core. **A scanner that flags 1836 sites whose only fix is unavailable would be an
 instrument nobody can drive to green — so it was deliberately NOT built.**
 
 **A partial precedent already exists in this PR:** `kailash/utils/secure_logging.py` puts
@@ -321,7 +370,8 @@ _string-scrubbing_ half is what remains unhoused.
 (2) then triage per-sink by where the exception is RAISED — the kaizen-agents sweep was safe
 because it was triaged 162 remote / 18 local, and that judgment does not generalise from a
 count; (3) then gate. Porting the newer shape-detectors to `src/kailash` buys ~0.6% there
-(1833 of its 1844 are the original `f"{e}"` shape), so shapes are not the bottleneck.
+(the overwhelming majority of its 1836 are the original `f"{e}"` shape — re-derive the
+exact split before acting on it), so shapes are not the bottleneck.
 
 **Stale tests against long-renamed APIs.** Five failure clusters in the kaizen tree are
 **git-proven pre-existing** — `git diff --quiet origin/main...HEAD` reports UNCHANGED for
@@ -345,16 +395,23 @@ All commands run at the moment of writing. **Trees are run separately** — root
 and the package trees cannot be collected together (duplicate conftest basenames), and
 `kailash-kaizen` and `kaizen-agents` likewise.
 
-**Git-derived counts, at `95b142320`:**
+**Git-derived counts, RE-DERIVED POST-INTEGRATION at `8ea48617b`** (superseding the
+`95b142320` readings this section previously carried — those were taken before the six
+shard worktrees were merged and are now stale in every figure):
 
 ```
-$ git rev-list --left-right --count origin/main...95b142320   # 6 behind, 202 ahead
-$ git diff --shortstat origin/main...95b142320
-  376 files changed, 62260 insertions(+), 2924 deletions(-)
-$ git diff --name-only origin/main...95b142320 -- '*test*' | wc -l      # 122
-$ git log origin/main..95b142320 --pretty=%s | grep -oE '^[a-z]+' | sort | uniq -c
-  78 fix · 62 docs · 30 test · 21 chore · 4 style · 2 feat · 1 perf · 1 build
+$ git rev-list --left-right --count origin/main...8ea48617b   # 6 behind, 273 ahead
+$ git diff --shortstat origin/main...8ea48617b
+  401 files changed, 70175 insertions(+), 3050 deletions(-)
+$ git diff --name-only origin/main...8ea48617b -- '*test*' | wc -l      # 134
+$ git log origin/main..8ea48617b --pretty=%s | grep -oE '^[a-z]+' | sort | uniq -c
+  102 fix · 99 docs · 33 test · 21 chore · 6 merge · 5 style · 2 feat · 1 perf · 1 build
 ```
+
+**The 6 behind are dependabot Actions bumps** (`actions/checkout` 4→7, `setup-node` 4→7,
+`stale` 10→11) touching ONLY `.github/workflows/coc-hook-registration.yml` and
+`project-automation.yml`. Verified zero overlap with this branch's 43 integrated files, so
+there is no stale-base merge hazard for any shard code.
 
 **Suites executed at `b417a83f9`** (observed results, not collected counts):
 
