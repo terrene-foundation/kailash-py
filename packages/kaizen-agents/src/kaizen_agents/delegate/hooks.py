@@ -316,10 +316,17 @@ class HookManager:
 
         except TimeoutError:
             logger.error("Hook %s timed out after %.1fs", script.name, self._timeout)
-            # Attempt to kill the process
+            # Kill the process AND reap it. `kill()` only DELIVERS SIGKILL;
+            # until something waits on the pid the kernel keeps the exit
+            # status, and `proc` is a local that is gone the moment this
+            # returns — so a kill without a wait leaks one zombie per hook
+            # timeout, in a manager that fires on six lifecycle events.
+            # Same pairing as `delegate/mcp.py` and `ClaudeCodeAdapter`.
             try:
                 proc.kill()  # type: ignore[possibly-undefined]
+                await proc.wait()  # type: ignore[possibly-undefined]
             except ProcessLookupError:
+                # Already exited and reaped between the timeout and the kill.
                 pass
             return HookResult(
                 event=event,
