@@ -218,9 +218,16 @@ class APIChannel(Channel):
         expiring, a supervising task group tearing down -- the
         ``CancelledError`` propagates to the caller rather than being absorbed.
         The channel is left ``STOPPING``, which is the truthful record: the
-        server task was not established as stopped and ``_cleanup`` has not
-        run. Call ``stop()`` again to finish; the retained task handle is what
-        makes that retry possible.
+        server task was not established as stopped. Call ``stop()`` again to
+        finish; the retained task handle is what makes that retry possible.
+
+        ``_cleanup`` runs on EVERY exit path including that one, because it
+        cancels ``_running_task`` -- a DIFFERENT task from ``_server_task`` --
+        and the dominant real trigger for the cancelled path is a task group or
+        ``asyncio.timeout`` tearing down, where nobody calls ``stop()`` a second
+        time. Skipping it there orphans a pending task ("Task was destroyed but
+        it is pending") and keeps the runtime reference alive, which is a
+        LEAK introduced in the act of fixing the swallowed cancellation.
         """
         if self.status == ChannelStatus.STOPPED:
             return
@@ -292,6 +299,14 @@ class APIChannel(Channel):
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping API channel {self.name}: {e}")
             raise
+        finally:
+            # The success path already ran ``_cleanup`` above and reached
+            # ``STOPPED``; anything else left this frame early -- a propagating
+            # ``CancelledError``, or an error re-raised as ERROR -- with
+            # ``_running_task`` still live. Cancelling it is synchronous, so the
+            # cancel lands even when the subsequent await is itself cancelled.
+            if self.status is not ChannelStatus.STOPPED:
+                await self._cleanup()
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a request through the API channel.

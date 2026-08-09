@@ -62,24 +62,58 @@ def safe_callable_name(obj: Any) -> str:
     3. Otherwise ``type(obj).__name__`` -- a class name, which is a
        source-level identifier and cannot carry a caller payload.
 
-    Returns a string in every case; it never raises, because a logging call
-    site must not fail on the object it is trying to describe.
+    Returns a string for every object that misbehaves; it does not raise on
+    account of the object, because a logging call site must not fail on the
+    thing it is trying to describe.
+
+    THE ATTRIBUTE READS BELOW CAN RAISE, WHICH IS WHY THEY ARE GUARDED.
+    ``getattr(x, attr, default)`` swallows ONLY ``AttributeError`` -- anything
+    else the descriptor raises propagates -- and ``isinstance`` consults
+    ``__class__``, which is equally caller-controlled. A lazy proxy is the
+    ordinary case, not an exotic one: a Werkzeug/Flask ``LocalProxy`` raises
+    ``RuntimeError("Working outside of request context")``, a Django
+    ``SimpleLazyObject`` raises whatever its setup function raises, and an
+    unbound client raises ``ConnectionError``. Unguarded, that escapes into
+    callers which invoke this INSIDE an ``except`` block (``runtime/scheduler``,
+    ``runtime/distributed``, the nexus resolver), where it would REPLACE the
+    exception being handled -- turning a logging helper into a defect that
+    destroys the diagnostic it exists to produce -- and into
+    ``utils/lifespan``, which calls it BEFORE its ``try`` and documents that one
+    handler raising must not prevent the next from running.
+
+    ``Exception``, deliberately NOT ``BaseException``: ``KeyboardInterrupt``,
+    ``SystemExit`` and ``CancelledError`` are the program being stopped, not the
+    object misbehaving, and swallowing a cancellation here would re-open at the
+    logging layer exactly the defect the channel-lifecycle work closed at the
+    channel layer.
     """
     target = obj
     unwrapped = 0
-    while True:
-        for attribute in ("__qualname__", "__name__"):
-            name = getattr(target, attribute, None)
-            # A non-str __name__ is possible on an exotic object; only a real
-            # string is usable, and only a non-empty one is a diagnostic.
-            if isinstance(name, str) and name:
-                return f"partial({name})" if unwrapped else name
-        if isinstance(target, functools.partial) and unwrapped < _MAX_PARTIAL_UNWRAP:
-            target = target.func
-            unwrapped += 1
-            continue
-        type_name = type(target).__name__
-        return f"partial({type_name})" if unwrapped else type_name
+    try:
+        while True:
+            for attribute in ("__qualname__", "__name__"):
+                name = getattr(target, attribute, None)
+                # A non-str __name__ is possible on an exotic object; only a real
+                # string is usable, and only a non-empty one is a diagnostic.
+                if isinstance(name, str) and name:
+                    return f"partial({name})" if unwrapped else name
+            if (
+                isinstance(target, functools.partial)
+                and unwrapped < _MAX_PARTIAL_UNWRAP
+            ):
+                target = target.func
+                unwrapped += 1
+                continue
+            type_name = type(target).__name__
+            return f"partial({type_name})" if unwrapped else type_name
+    except Exception:
+        # Fall back to the ONE read that cannot be intercepted by the object:
+        # its type's name. Reached only when the object actively resisted
+        # description, so the lost precision is the object's own doing.
+        try:
+            return type(obj).__name__
+        except Exception:
+            return "<unrepresentable>"
 
 
 def _relative_frame_path(filename: str) -> str:

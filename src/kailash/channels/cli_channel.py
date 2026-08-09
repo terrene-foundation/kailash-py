@@ -298,9 +298,17 @@ class CLIChannel(Channel):
         expiring, a supervising task group tearing down -- the
         ``CancelledError`` propagates to the caller rather than being absorbed.
         The channel is left ``STOPPING``, which is the truthful record: the CLI
-        loop was not established as stopped, ``_cleanup`` has not run, and the
-        runtime reference is still held. Call ``stop()`` again to finish (or
+        loop was not established as stopped. Call ``stop()`` again to finish (or
         ``close()`` to release the runtime alone).
+
+        ``_cleanup`` and ``close`` run on EVERY exit path including that one.
+        ``_cleanup`` cancels ``_running_task`` -- a DIFFERENT task from
+        ``_main_task`` -- and ``close`` releases the runtime reference; the
+        dominant real trigger for the cancelled path is a task group or
+        ``asyncio.timeout`` tearing down, where nobody calls ``stop()`` a second
+        time. Skipping them there orphans a pending task AND strands the
+        runtime, which is a LEAK introduced in the act of fixing the swallowed
+        cancellation.
         """
         if self.status == ChannelStatus.STOPPED:
             return
@@ -367,6 +375,16 @@ class CLIChannel(Channel):
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping CLI channel {self.name}: {e}")
             raise
+        finally:
+            # The success path already ran both above and reached ``STOPPED``;
+            # anything else left this frame early -- a propagating
+            # ``CancelledError``, or an error re-raised as ERROR -- with
+            # ``_running_task`` live and the runtime still referenced.
+            # Cancelling is synchronous, so the cancel lands even when the
+            # subsequent await is itself cancelled.
+            if self.status is not ChannelStatus.STOPPED:
+                await self._cleanup()
+                self.close()
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a CLI request.

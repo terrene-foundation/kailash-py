@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
+from kailash.utils.secure_logging import safe_exception_frames
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 
@@ -364,10 +365,22 @@ class DashboardAPIServer:
                     if existing is not None and not existing.cancelled():
                         previous_error = existing.exception()
                         if previous_error is not None:
+                            # TYPE AND ORIGIN FRAMES, NEVER THE EXCEPTION
+                            # ITSELF. ``_broadcast_metrics`` reaches the task
+                            # manager and the dashboard's backing store, so
+                            # what surfaces here can be a driver or transport
+                            # error whose text carries a DSN or a token. This
+                            # tree has no scrubber available to it -- the
+                            # string-scrubbing helper lives in an opt-in extra
+                            # of the slim core -- so the sink must not render
+                            # the message at all rather than render it and
+                            # hope. The type plus the frame list is the whole
+                            # diagnostic an operator needs to find the task.
                             self.logger.warning(
                                 "Previous metrics broadcast task ended with an "
-                                "error; starting a replacement: %s",
-                                previous_error,
+                                "error; starting a replacement: %s at %s",
+                                type(previous_error).__name__,
+                                safe_exception_frames(previous_error, limit=3),
                             )
                     self._broadcast_task = asyncio.create_task(
                         self._broadcast_metrics()
