@@ -7,7 +7,7 @@ Provides MCP client/server, authentication, service discovery, transports,
 and the Kailash Platform MCP Server for AI assistant introspection.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 # Advanced Features
 from kailash_mcp.advanced.features import (

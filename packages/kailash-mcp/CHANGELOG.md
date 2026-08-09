@@ -4,6 +4,19 @@ All notable changes to the Kailash MCP package will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-08-09 — Cap mcp<2.0 (packaging only)
+
+### Fixed
+
+- **Capped the `mcp[cli]` dependency at `<2.0`.** Upstream `mcp` released 2.0.0, which REMOVED
+  `mcp.client.websocket` — imported by this package at `client.py:497/805/1256` and by eight other
+  first-party modules. With the floor uncapped, a fresh resolve landed on 2.0.0 and every websocket
+  import failed with `ModuleNotFoundError`. The root `kailash` package already capped it at `<2.0`
+  deliberately; this propagates that same cap to the one place it was missing. `mcp` is a DIRECT
+  import here, so the cap is the sanctioned shape rather than a speculative pin.
+
+**No code change.** 0.5.1 is packaging metadata only; the 0.5.0 security fixes are unchanged.
+
 ## [0.5.0] — 2026-08-05 — No-credential auth bypass closed; credential-cache and tool-schema disclosure hardening (#1998, #1999)
 
 ### Security
