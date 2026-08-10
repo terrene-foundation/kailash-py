@@ -276,6 +276,47 @@ def test_production_env_autoenables_and_therefore_demands_credentials(
 
 
 # ---------------------------------------------------------------------------
+# Production detection -- the sibling fail-open found while fixing #2013
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["production", "prod", "PROD", " production "])
+def test_production_env_spellings_all_auto_enable_auth(env_serialized, value):
+    """`NEXUS_ENV=prod` took the DEVELOPMENT branch and shipped an open API.
+
+    Three hardening sites keyed off `== "production"`: auth auto-enable, the
+    CORS defaults, and the CORS wildcard rejection. All three now share one
+    predicate, so a spelling cannot be handled at one site and missed at the
+    others.
+    """
+    env_serialized.setenv("NEXUS_ENV", value)
+    env_serialized.setenv("NEXUS_JWT_SECRET", _GOOD_SECRET)
+
+    app = _make_nexus()
+
+    assert app._enable_auth is True
+    assert _client(app).get(_PROTECTED_PATH).status_code == 401
+
+
+def test_production_alias_also_rejects_wildcard_cors(env_serialized):
+    """The CORS sibling site must recognise the same spellings as auth."""
+    env_serialized.setenv("NEXUS_ENV", "prod")
+    env_serialized.setenv("NEXUS_JWT_SECRET", _GOOD_SECRET)
+
+    with pytest.raises(ValueError, match="not allowed in production"):
+        _make_nexus(cors_origins=["*"])
+
+
+def test_development_is_still_development(env_serialized):
+    """Control: the widened match must not sweep dev environments in."""
+    env_serialized.setenv("NEXUS_ENV", "development")
+
+    app = _make_nexus()
+
+    assert app._enable_auth is False
+
+
+# ---------------------------------------------------------------------------
 # Structural guard against reintroducing the dead probes (secondary assertion)
 # ---------------------------------------------------------------------------
 

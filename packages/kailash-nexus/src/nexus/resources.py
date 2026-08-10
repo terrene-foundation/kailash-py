@@ -9,9 +9,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from kailash_mcp import MCPServer
-
 from kailash.workflow import Workflow
+from kailash_mcp import MCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -156,31 +155,37 @@ class NexusResourceManager:
         if hasattr(workflow, "metadata"):
             info["metadata"] = workflow.metadata
 
-        # Extract nodes
-        if hasattr(workflow, "_nodes"):
-            for node_id, node in workflow._nodes.items():
-                node_info = {
+        # Extract nodes.
+        #
+        # `Workflow` exposes `nodes` / `connections`, NOT `_nodes` /
+        # `_connections`, and a node is a `NodeInstance` carrying `node_type` +
+        # `config` rather than `_config`. The previous probes named the private
+        # spellings, so every `hasattr` resolved False and this method returned
+        # empty node and connection lists for every workflow -- the same
+        # dead-guard silent fallback as #2013, here on the MCP resource surface
+        # that AI agents read to discover what a workflow does.
+        for node_id, node in (getattr(workflow, "nodes", None) or {}).items():
+            info["nodes"].append(
+                {
                     "id": node_id,
-                    "type": node.__class__.__name__,
-                    "parameters": {},
+                    "type": getattr(node, "node_type", type(node).__name__),
+                    "parameters": getattr(node, "config", None) or {},
                 }
+            )
 
-                # Get node parameters
-                if hasattr(node, "_config"):
-                    node_info["parameters"] = node._config
-
-                info["nodes"].append(node_info)
-
-        # Extract connections
-        if hasattr(workflow, "_connections"):
-            for conn in workflow._connections:
-                conn_info = {
-                    "source": conn.get("source"),
-                    "output": conn.get("output"),
-                    "target": conn.get("target"),
-                    "input": conn.get("input"),
+        # Extract connections. `Connection` is a pydantic model with
+        # source_node/source_output/target_node/target_input -- the old
+        # `conn.get("source")` would have raised AttributeError had the guard
+        # above ever admitted it.
+        for conn in getattr(workflow, "connections", None) or []:
+            info["connections"].append(
+                {
+                    "source": getattr(conn, "source_node", None),
+                    "output": getattr(conn, "source_output", None),
+                    "target": getattr(conn, "target_node", None),
+                    "input": getattr(conn, "target_input", None),
                 }
-                info["connections"].append(conn_info)
+            )
 
         # Add schema information
         info["schema"] = {

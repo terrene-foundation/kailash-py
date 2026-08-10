@@ -87,6 +87,27 @@ class _Unset:
 
 _UNSET = _Unset()
 
+#: ``NEXUS_ENV`` values that mean "this is production, harden everything".
+#: ``prod`` is at least as common as the long spelling in real deployments;
+#: matching only ``production`` sent it down the DEVELOPMENT branch at three
+#: separate hardening sites (auth auto-enable, CORS defaults, CORS wildcard
+#: rejection), each failing OPEN.
+_PRODUCTION_ENV_VALUES = frozenset({"production", "prod"})
+
+
+def _is_production_env() -> bool:
+    """Whether ``NEXUS_ENV`` names a production deployment.
+
+    ONE helper for every production-hardening decision. Three call sites
+    previously inlined ``os.getenv("NEXUS_ENV", "development").lower() ==
+    "production"``; a shared predicate is what keeps a new spelling from
+    landing at one site and silently skipping the others
+    (``rules/security.md`` § Enforcement-Surface Parity).
+    """
+    return os.getenv("NEXUS_ENV", "development").lower().strip() in (
+        _PRODUCTION_ENV_VALUES
+    )
+
 
 def _coerce_rate_limit(value: Any, source: str) -> Optional[int]:
     """Normalise a configured rate limit, rejecting misconfiguration loudly.
@@ -564,10 +585,13 @@ class Nexus:
         self._extractor_middleware_installed = False
 
         # P0-1: Environment-aware authentication (SECURITY)
-        nexus_env = os.getenv("NEXUS_ENV", "development").lower()
-
-        # Auto-enable auth in production unless explicitly disabled
-        if nexus_env == "production":
+        # Auto-enable auth in production unless explicitly disabled.
+        #
+        # `_is_production_env()` matches `prod` as well as `production`.
+        # Matching only the long spelling meant the extremely common
+        # `NEXUS_ENV=prod` silently took the DEVELOPMENT branch and shipped an
+        # unauthenticated API -- the same class of failure as #2013.
+        if _is_production_env():
             if enable_auth is False:
                 # Explicit override - warn but respect user choice
                 logger.critical(
@@ -1286,7 +1310,13 @@ class Nexus:
             # repo or its dependencies, so both guards were permanently False
             # and every route stayed open while the platform reported auth as
             # enabled. See nexus/auth_bootstrap.py for the full analysis.
-            if self._enable_auth:
+            # getattr, not attribute access: this method also runs on
+            # instances built via `Nexus.__new__()` without `__init__` (the
+            # HTTPTransport bootstrap at the top of this method exists for
+            # exactly that path), where `_enable_auth` was never assigned.
+            # Defaulting to False there matches `__init__`'s development
+            # default -- an un-initialised instance never asked for auth.
+            if getattr(self, "_enable_auth", False):
                 install_auth_middleware(self)
 
             # Apply full CORS middleware with all options
@@ -3509,9 +3539,7 @@ Check the documentation or explore available resources.
         Returns:
             CORS configuration dict with sensible defaults based on NEXUS_ENV.
         """
-        nexus_env = os.getenv("NEXUS_ENV", "development").lower()
-
-        if nexus_env == "production":
+        if _is_production_env():
             # Production: No origins allowed by default - must be explicit
             return {
                 "allow_origins": [],
@@ -3570,9 +3598,7 @@ Check the documentation or explore available resources.
         Raises:
             ValueError: If configuration is insecure for production.
         """
-        nexus_env = os.getenv("NEXUS_ENV", "development").lower()
-
-        if nexus_env == "production" and "*" in origins:
+        if _is_production_env() and "*" in origins:
             raise ValueError(
                 "CORS allow_origins=['*'] is not allowed in production. "
                 "Specify explicit origins: cors_origins=['https://app.example.com']"

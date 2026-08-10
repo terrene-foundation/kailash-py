@@ -50,20 +50,31 @@ class TestPluginSystem:
         assert "authentication" in plugin.description.lower()
 
     def test_auth_plugin_apply(self):
-        """Test applying auth plugin to nexus."""
+        """Applying the auth plugin must actually protect the API.
+
+        This used to drive a `Mock()` nexus and assert a boolean flag. A Mock
+        satisfies EVERY `hasattr` and accepts EVERY call, so the assertion
+        passed identically whether the plugin installed authentication or --
+        as it did for real gateways -- silently installed nothing (#2013).
+        The test is now behavioural against a real Nexus.
+        """
+        from starlette.testclient import TestClient
+
+        from nexus import Nexus
         from nexus.plugins import AuthPlugin
 
-        plugin = AuthPlugin()
-        mock_nexus = Mock()
-        mock_gateway = Mock()
-        mock_http_transport = Mock()
-        mock_http_transport.gateway = mock_gateway
-        mock_nexus._http_transport = mock_http_transport
+        # Control on a SEPARATE instance: issuing the request here would start
+        # the app, and Starlette freezes its middleware stack at startup.
+        control = Nexus(auto_discovery=False, enable_durability=False, api_port=0)
+        assert (
+            TestClient(control._http_transport.app).get("/workflows").status_code != 401
+        )
 
-        plugin.apply(mock_nexus)
+        app = Nexus(auto_discovery=False, enable_durability=False, api_port=0)
+        AuthPlugin().apply(app)
 
-        # Should set auth enabled flag
-        assert mock_nexus._auth_enabled is True
+        assert app._auth_enabled is True
+        assert TestClient(app._http_transport.app).get("/workflows").status_code == 401
 
     def test_monitoring_plugin_initialization(self):
         """Test MonitoringPlugin initialization."""
@@ -166,22 +177,22 @@ class TestPluginSystem:
 
     def test_plugin_apply_through_registry(self):
         """Test applying plugins through registry."""
+        from starlette.testclient import TestClient
+
+        from nexus import Nexus
         from nexus.plugins import PluginRegistry
 
         registry = PluginRegistry()
-        mock_nexus = Mock()
-        mock_gateway = Mock()
-        mock_http_transport = Mock()
-        mock_http_transport.gateway = mock_gateway
-        mock_nexus._http_transport = mock_http_transport
+        app = Nexus(auto_discovery=False, enable_durability=False, api_port=0)
 
-        # Apply auth plugin
-        registry.apply("auth", mock_nexus)
-        assert mock_nexus._auth_enabled is True
+        # Apply auth plugin -- assert the CONTROL, not a flag. A Mock nexus
+        # would accept any call and pass regardless of what got installed.
+        registry.apply("auth", app)
+        assert TestClient(app._http_transport.app).get("/workflows").status_code == 401
 
         # Apply non-existent plugin
         with pytest.raises(ValueError, match="not found"):
-            registry.apply("non_existent", mock_nexus)
+            registry.apply("non_existent", app)
 
     def test_plugin_loader(self):
         """Test loading external plugins."""
