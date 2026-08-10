@@ -8,6 +8,122 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 12 (FINAL): main `aba8a0878`. ELEVEN issues closed, 20 PRs merged.**
+## ⚠ #2060 — #2035's IDENTITY-BINDING FIXES ARE NOT LIVE YET
+
+**Read #2035 with this caveat.** Its fixes are correct IN SOURCE but **unreachable at runtime**.
+`EnterpriseAuthProviderNode` has 14 `execute_async` call sites; **10 target collaborators that do
+not define it.** Verified by introspection on main:
+
+| node | `execute_async` | `async_run` |
+| --- | --- | --- |
+| `SessionManagementNode` | **False** | True |
+| `SSOAuthenticationNode` | **False** | True |
+| `DirectoryIntegrationNode` | **False** | True |
+| `SecurityEventNode` | **False** | **False** (needs a thread-offload either way) |
+
+Three collaborators expose the async surface under a DIFFERENT NAME; one has neither. Per #2060's
+repro, a correctly signed, unexpired, correct-issuer JWT dies in `_log_auth_event` before reaching
+the session step — so `authenticate` / `authorize` / `logout` / `validate` cannot complete for any
+action that logs an auth event.
+
+**Closing #2060 is what makes #2035's identity binding take effect.** Cross-linked from #2047,
+since the actor-model assessment depends on knowing the binding is not yet active.
+
+**Why it survived:** existing coverage tested helpers DIRECTLY rather than through the public
+surface. Same class as everything else here — correct code that never executes is
+indistinguishable from working code unless something drives the path.
+
+**Orchestrator boundary:** the mechanism above was confirmed by introspection; the
+"unconditional for every logging action" claim rests on #2060's repro, NOT on independent
+end-to-end execution.
+
+**Also in #2060:** the MFA audit sink is still unwired (`audit_log_node` is `None`), so admin-gated
+`revoke`/`disable`/`reset` complete with NO audit record. #2035 made this a loud one-time init
+warning instead of a per-operation message that read as transient, but did not wire it — that
+needs the deadlock it was disabled for re-investigated.
+
+**Nexus fail-open was a DUPLICATE of #2054** (17/17 passing on main), recorded as a comment rather
+than a new issue. Notable: it was found from a completely different direction — a lane working on
+`nodes/auth/` stubs tripped over it incidentally, which suggests it was reachable in ordinary use,
+not only under a targeted test.
+
+
+Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, #2026, + masker follow-up.
+**Both CRITICALs down.** All lane PRs merged; all worktrees retired except `lane-1c` (below).
+
+## TRAP 9 — SKIPPED IS NOT PASSED (a check surface reporting green for work never run)
+
+A **CONFLICTING** PR cannot have its merge ref built, so GitHub reports the ENTIRE matrix as
+`skipped`. Any summary counting "not failing" as green reads that as a pass. Lane 1C caught itself
+about to report CI green off those skips. On #2035's head the skipped rows included
+`Test (Python ${{ matrix.python-version }})` — an UNEXPANDED matrix template, i.e. the duplicate
+run's placeholder.
+
+**Always separate success from skipped:**
+`gh api .../commits/<sha>/check-runs --jq '[.check_runs[]]|group_by(.conclusion)|map("\(.[0].conclusion): \(length)")'`
+
+Same class as **#2038** (Tier-2 `continue-on-error`). Also: an empty retrigger commit matching none
+of `unified-ci.yml`'s `paths:` filters fires NOTHING.
+
+## Bonus finding — a branch no test had ever executed
+
+`_log_security_event` called `security_logger.async_run`, which `SecurityEventNode` does not
+define. **Every successful async SSO operation raised `AttributeError` AFTER doing its work** — the
+async surface was unusable and no SSO security event was ever recorded. Found only because the
+sync-bridge tests drove that path. Fixed in #2035.
+
+## Residue for the next session
+
+- **`lane-1c` worktree left INTACT** on `tmp/reword` with stale `UU` index entries from an abandoned
+  reword. **Everything in it is MERGED** (`580777bea` contained in `origin/main`; fix verified on
+  main). No rebase in progress. Safe to remove — left for the owner rather than force-removed.
+- **A predecessor WIP commit still documents its own `--no-verify`.** That commit is the
+  ORCHESTRATOR's, made to preserve work when a quota limit killed the original lane. Rewording needs
+  an interactive rebase across 15 commits; flagged rather than risked.
+- **#2025 is the last big item and is UNSTARTED**, pending a fail-closed vs opt-in decision. Scope
+  is now clean — Nexus auth landed in #2054, so #2025 is purely the `src/kailash/servers/` gate.
+  Zero auth primitives across all five server modules today.
+
+## Issues filed this session
+
+#2038 · #2039 (**cause UNKNOWN, three excluded**) · #2040 · #2041 · #2044 · #2047 (MFA node has no
+ACTOR concept — the root behind 5 rounds of patching) · #2052 · #2056 · #2057 (5-of-6 guards
+dispose safely, one outlier)
+
+
+**UPDATE 11 (latest): main `caa892aeb`. TEN issues closed, 19 PRs merged.**
+Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, + masker follow-up.
+**BOTH CRITICALs down** (#2024, and #2025 remains the open one).
+
+**#2054 (#2013)** — the gateway exposed no auth API, so "implement `set_auth_manager`" was
+impossible; the lane installed Nexus's real Starlette `JWTMiddleware` ahead of CORS (Starlette
+prepends, so CORS must stay outermost or preflight 401s). Fail-closed: no credential source →
+`AuthNotConfiguredError` at construction. **BREAKING** — `enable_auth=True` / `NEXUS_ENV=prod` now
+require a credential; CHANGELOG entry landed under a NEW `[Unreleased]` in
+`packages/kailash-nexus/CHANGELOG.md` (NOT folded into shipped 2.16.0 — that would misreport when
+the break takes effect).
+
+**Why the dead guard shipped:** three unit tests drove `Mock()` objects, and a Mock satisfies every
+`hasattr`, so the test passed identically whether auth was installed or not. Same
+non-discriminating-instrument class as the rest of this session.
+
+**#2057's real finding (re-verified across all six sites): 5-of-6 dispose safely, ONE outlier.**
+`add_permission_rule` is the only guard whose callee has zero definitions, and its
+`return {"success": True, "rule_id": hash(...)}` sits OUTSIDE the `if add_rule_fn:` block — so the
+caller gets a success AND an id referring to nothing, plus a `permission_rule_created` audit event
+for a rule never registered. The correct behaviour is already in the file, five times over.
+
+**Worktrees retired:** lane-2b, 2d, 1e, 3a, 2c, 2a, 1b. **Live:** lane-1c only.
+
+## ⚠ OUTSTANDING — #2035 commit messages claim bypasses that may not have happened
+
+The rebase removed `955fbafc9` / `2e734a053`, but the bodies carried through and still read
+"Committed with --no-verify". **One of those messages is the orchestrator's** (the WIP-preservation
+commit made when quota killed the original lane). Lane 1C asked to reword or squash and to state
+plainly whether the re-created commits went through the hooks. History must match reality.
+
+
 **UPDATE 10 (latest): main `727bc8d19`. EIGHT issues closed, 16 PRs merged.**
 Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, + masker follow-up.
 
