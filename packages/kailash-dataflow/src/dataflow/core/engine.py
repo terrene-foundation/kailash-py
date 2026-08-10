@@ -130,6 +130,28 @@ _KNOWN_DATAFLOW_CONFIG_KEYS = frozenset(
     }
 )
 
+
+def _schema_default_for_field(field_info: Dict[str, Any]) -> Any:
+    """Return the SCHEMA-level default for a field, or None when it has none.
+
+    Issue #2006: a CALLABLE model default (``ts: datetime = _now``) is an
+    APPLICATION-level default. The CREATE path calls it and binds the result as
+    a query parameter (``core/nodes.py``, CREATE operation), and no SQL
+    expression corresponds to an arbitrary Python callable -- so every
+    schema-facing consumer (CREATE TABLE DDL, ALTER-ADD COLUMN, the migration
+    diff, schema comparison) MUST treat a callable as "this column carries no
+    DEFAULT". Interpolating it instead emitted
+    ``DEFAULT '<function _now at 0x10c1fb740>'`` -- accepted by the DDL
+    generator with no diagnostic, so a model could register whose generated
+    schema was garbage. Routing every consumer through this one helper is what
+    keeps the DDL layer and the INSERT layer from disagreeing again.
+    """
+    default_value = field_info.get("default")
+    if callable(default_value):
+        return None
+    return default_value
+
+
 # ErrorEnhancer for rich error messages
 # Platform ErrorEnhancer for module-level (static) enhancements
 try:
@@ -3311,7 +3333,9 @@ class DataFlow(DataFlowEventMixin):
             model_fields[field_name] = {
                 "type": field_info.get("type", str),
                 "required": field_info.get("required", True),
-                "default": field_info.get("default"),
+                # Issue #2006: a callable default is application-level; the
+                # schema diff must not see the function object.
+                "default": _schema_default_for_field(field_info),
             }
 
         # Use the correct ModelSchema format with tables
@@ -6500,42 +6524,44 @@ class DataFlow(DataFlowEventMixin):
         if field_info.get("required", True):
             definition_parts.append("NOT NULL")
 
-        # Handle default values
-        if "default" in field_info:
-            default_value = field_info["default"]
-            if default_value is not None:
-                if isinstance(default_value, str):
-                    definition_parts.append(f"DEFAULT '{default_value}'")
-                elif isinstance(default_value, bool):
-                    if database_type == "postgresql":
-                        definition_parts.append(f"DEFAULT {str(default_value).upper()}")
-                    elif database_type == "mysql":
-                        definition_parts.append(f"DEFAULT {1 if default_value else 0}")
-                    else:  # sqlite
-                        definition_parts.append(f"DEFAULT {1 if default_value else 0}")
-                elif isinstance(default_value, (list, dict)):
-                    # Serialize list/dict defaults to JSON with database-specific syntax
-                    import json
+        # Handle default values. Issue #2006: routed through
+        # _schema_default_for_field so a callable model default emits NO column
+        # DEFAULT (the CREATE path supplies its value as a bound parameter)
+        # instead of interpolating the function object's repr() into the DDL.
+        default_value = _schema_default_for_field(field_info)
+        if default_value is not None:
+            if isinstance(default_value, str):
+                definition_parts.append(f"DEFAULT '{default_value}'")
+            elif isinstance(default_value, bool):
+                if database_type == "postgresql":
+                    definition_parts.append(f"DEFAULT {str(default_value).upper()}")
+                elif database_type == "mysql":
+                    definition_parts.append(f"DEFAULT {1 if default_value else 0}")
+                else:  # sqlite
+                    definition_parts.append(f"DEFAULT {1 if default_value else 0}")
+            elif isinstance(default_value, (list, dict)):
+                # Serialize list/dict defaults to JSON with database-specific syntax
+                import json
 
-                    json_str = json.dumps(default_value)
-                    # SQL-escape single quotes (replace ' with '' for SQL string literals)
-                    json_str_escaped = json_str.replace("'", "''")
-                    if database_type == "postgresql":
-                        # PostgreSQL: Cast to jsonb type
-                        definition_parts.append(f"DEFAULT '{json_str_escaped}'::jsonb")
-                    elif database_type == "mysql":
-                        # MySQL: Use CAST expression (MySQL 8.0+)
-                        definition_parts.append(
-                            f"DEFAULT (CAST('{json_str_escaped}' AS JSON))"
-                        )
-                    else:  # sqlite
-                        # SQLite: Store as TEXT (SQLite uses TEXT for JSON storage)
-                        definition_parts.append(f"DEFAULT '{json_str_escaped}'")
-                elif isinstance(default_value, (int, float)):
-                    definition_parts.append(f"DEFAULT {default_value}")
-                else:
-                    # For other types, try to convert to string safely
-                    definition_parts.append(f"DEFAULT '{str(default_value)}'")
+                json_str = json.dumps(default_value)
+                # SQL-escape single quotes (replace ' with '' for SQL string literals)
+                json_str_escaped = json_str.replace("'", "''")
+                if database_type == "postgresql":
+                    # PostgreSQL: Cast to jsonb type
+                    definition_parts.append(f"DEFAULT '{json_str_escaped}'::jsonb")
+                elif database_type == "mysql":
+                    # MySQL: Use CAST expression (MySQL 8.0+)
+                    definition_parts.append(
+                        f"DEFAULT (CAST('{json_str_escaped}' AS JSON))"
+                    )
+                else:  # sqlite
+                    # SQLite: Store as TEXT (SQLite uses TEXT for JSON storage)
+                    definition_parts.append(f"DEFAULT '{json_str_escaped}'")
+            elif isinstance(default_value, (int, float)):
+                definition_parts.append(f"DEFAULT {default_value}")
+            else:
+                # For other types, try to convert to string safely
+                definition_parts.append(f"DEFAULT '{str(default_value)}'")
 
         return " ".join(definition_parts)
 
@@ -7585,7 +7611,8 @@ class DataFlow(DataFlowEventMixin):
                     name=field_name,
                     type=sql_type,
                     nullable=not field_info.get("required", True),
-                    default=field_info.get("default"),
+                    # Issue #2006: callable defaults carry no column DEFAULT.
+                    default=_schema_default_for_field(field_info),
                 )
                 columns.append(column)
 
@@ -7922,7 +7949,9 @@ class DataFlow(DataFlowEventMixin):
                 "nullable": not field_info.get("required", True),
                 "primary_key": False,  # Only id is primary key
                 "unique": field_name in ["email", "username"],  # Common unique fields
-                "default": field_info.get("default"),
+                # Issue #2006: keep the migration diff in lockstep with the
+                # CREATE TABLE DDL -- a callable default is not a column DEFAULT.
+                "default": _schema_default_for_field(field_info),
             }
 
         # Always include the auto-generated timestamp columns that DataFlow adds
