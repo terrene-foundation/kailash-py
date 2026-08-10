@@ -35,9 +35,28 @@ CREATE_SECRET = "sk-live-9876543210zyxwvutsrq"
 @pytest.mark.parametrize(
     "rendered",
     [
+        # Quoted-key mapping: Python dict repr and JSON.
         "{'id': 't-1', 'token': 'sk-live-9876543210zyxwvutsrq'}",
         '{"api_key": "sk-live-9876543210zyxwvutsrq"}',
         "{'password': 'sk-live-9876543210zyxwvutsrq'}",
+        # Keys that CONTAIN a credential word rather than being one. All three
+        # are standard credential names and all three leaked when the
+        # alternation was anchored to the whole key.
+        "{'api_token': 'sk-live-9876543210zyxwvutsrq'}",
+        "{'x-api-key': 'sk-live-9876543210zyxwvutsrq'}",
+        "{'client_secret': 'sk-live-9876543210zyxwvutsrq'}",
+        "{'aws_secret_access_key': 'sk-live-9876543210zyxwvutsrq'}",
+        # Unquoted key: object repr / kwargs, the shape
+        # mask_sensitive_values(str(kwargs)) genuinely meets.
+        "Node(token='sk-live-9876543210zyxwvutsrq')",
+        "Create(id='t-1', client_secret='sk-live-9876543210zyxwvutsrq', n=1)",
+        "Node(api_token=sk-live-9876543210zyxwvutsrq)",
+        # A value containing the OTHER quote character. Python repr switches
+        # quote style when the value holds an apostrophe; the single combined
+        # value class stopped at that apostrophe and emitted the rest of the
+        # secret verbatim -- output that carries BOTH the mask and the secret,
+        # which is worse than not masking at all.
+        "{'password': \"it's <sk-live-9876543210zyxwvutsrq>\"}",
     ],
 )
 def test_masker_covers_quoted_key_mapping_form(rendered: str) -> None:
@@ -57,12 +76,48 @@ def test_masker_covers_quoted_key_mapping_form(rendered: str) -> None:
 
 
 @pytest.mark.unit
-def test_masker_leaves_non_sensitive_fields_intact() -> None:
+@pytest.mark.parametrize(
+    "rendered",
+    [
+        "{'id': 't-1', 'name': 'alice'}",
+        # Widening the key match to allow affixes must not swallow these.
+        # Masking a primary key would gut the parameter traces this issue's
+        # other fixes deliberately preserved.
+        "{'cache_key': 'users:1'}",
+        "{'primary_key': 'id'}",
+        "{'sort_key': 'created_at'}",
+        # Affixes must be separated by _ or -, so a credential word appearing
+        # as a bare substring does not match.
+        "{'tokenizer': 'gpt2'}",
+        "{'monkey': 'banana'}",
+        "{'keyboard': 'qwerty'}",
+    ],
+)
+def test_masker_leaves_non_sensitive_fields_intact(rendered: str) -> None:
     """Over-masking would destroy the diagnostic value of every trace."""
     from dataflow.core.logging_config import mask_sensitive_values
 
-    rendered = "{'id': 't-1', 'name': 'alice'}"
     assert mask_sensitive_values(rendered) == rendered
+
+
+@pytest.mark.unit
+def test_masking_does_not_corrupt_the_surrounding_text() -> None:
+    """The mask must replace the value and nothing else.
+
+    The generic value classes excluded whitespace and commas but not brackets,
+    so a repr's closing paren was captured into the secret and vanished with
+    it -- leaving unbalanced output that is hard to read and hard to parse.
+    """
+    from dataflow.core.logging_config import mask_sensitive_values
+
+    assert (
+        mask_sensitive_values("Node(api_token=sk-live-9876543210zyxwvutsrq)")
+        == "Node(api_token=***MASKED***)"
+    )
+    assert (
+        mask_sensitive_values("[token=sk-live-9876543210zyxwvutsrq]")
+        == "[token=***MASKED***]"
+    )
 
 
 @pytest.mark.unit
