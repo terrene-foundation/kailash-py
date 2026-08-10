@@ -8,6 +8,31 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 7 (burn-down, latest): main is `a0f8f3832`. FIVE PRs merged, THREE issues closed.**
+#2046 landed the masker's remaining key shapes — verified ON MAIN this time (see trap 7).
+
+## ⚠ TRAP 7 — verify on the MERGED tree, not the lane worktree
+
+I reported "all masker gaps closed" after #2036. **They had NOT shipped.** My check ran in the
+lane worktree, which held 132 lines of UNCOMMITTED work; on main `api_token`, `x-api-key`,
+`client_secret` and `Node(token=...)` were still leaking. Caught only because the non-forcing
+`git worktree remove` REFUSED and surfaced the two modified files — `--force` would have deleted
+them silently. **After any merge, re-run the verification against the MAIN checkout.**
+Now confirmed on main: 6 positive shapes masked, 6 negative controls (`cache_key`, `primary_key`,
+`sort_key`, `tokenizer`, `monkey`, `keyboard`) preserved — both polarities pinned in tests.
+
+## ⚠ TRAP 8 — an idle lane is NOT a finished lane
+
+I ran `git checkout -b` inside lane-1e's LIVE worktree and committed its in-flight edits; the lane's
+own `git commit` then reported "nothing to commit". Nothing was lost, but two actors in one worktree
+can silently attribute or destroy each other's work. Same root error as the quota resurrection:
+**"reported complete + idle" ≠ done.** A worktree with uncommitted changes is a live workspace.
+
+**Merged:** #2034 (#2015), #2037 (#2014), #2036 (#2027), #2043, #2046. **#2006 unblocked.**
+**Open:** #2035 (#2026) — `async_run` `NameError` on both admin gates (confirmed by execution),
+JWT `sub` fallback, `if session_id:` skip, truthy-string flag gates, CodeQL HIGH on the API-key hash.
+**Worktrees retired:** lane-2b, lane-2d, lane-1e. **Live:** lane-1c. **Scratch-only:** lane-2a/2c/2e.
+
 **UPDATE 6 (burn-down, latest): main is `f137d73c9`. FOUR PRs merged, THREE issues closed.**
 
 | Merged | Closes | Note |
