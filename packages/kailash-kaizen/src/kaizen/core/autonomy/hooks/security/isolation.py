@@ -12,8 +12,11 @@ SECURITY: CWE-265 (Privilege Issues)
 import asyncio
 import logging
 import multiprocessing
+import os
+import pickle
 import sys
 import time
+from queue import Empty as QueueEmpty
 from typing import Any
 
 from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
@@ -23,6 +26,61 @@ from ..protocol import HookHandler
 from ..types import HookContext, HookResult
 
 logger = logging.getLogger(__name__)
+
+#: Start method used for hook isolation, selected EXPLICITLY rather than
+#: inherited from the platform default (issue #2014).
+#:
+#: ``spawn`` is the default on macOS and Windows and is available everywhere;
+#: ``fork`` is the default only on Linux. Pinning ``spawn`` on every platform
+#: means the picklability requirement below is uniform instead of
+#: platform-dependent -- a hook that isolates on the developer's Linux box now
+#: isolates identically on the operator's macOS box, or fails loudly on both.
+_ISOLATION_START_METHOD = "spawn"
+
+#: Wall-clock budget for the child interpreter to boot, import the handler's
+#: module, and signal readiness. This is deliberately NOT charged against the
+#: caller's hook timeout: under ``spawn`` the child pays a full interpreter
+#: startup plus import cost, which routinely exceeds the sub-second per-hook
+#: timeouts ``HookManager.trigger`` defaults to.
+DEFAULT_STARTUP_TIMEOUT = 30.0
+
+#: Queue poll granularity while waiting for a child message.
+_POLL_INTERVAL = 0.02
+
+#: Grace period to drain a message the child wrote immediately before exiting.
+_DRAIN_TIMEOUT = 0.5
+
+#: Grace period for a terminated child to actually die.
+_REAP_TIMEOUT = 1.0
+
+
+class HookIsolationError(RuntimeError):
+    """
+    Raised when hook process isolation cannot be established (issue #2014).
+
+    This error means the SECURITY CONTROL is unavailable -- not that the hook
+    failed. It is raised INSTEAD of running the hook, never alongside it: a
+    caller that asked for isolation and cannot get it must be told, because the
+    alternative (running caller-supplied hook code with full agent privileges
+    while reporting success) is a silent downgrade of the control to OFF.
+
+    Attributes:
+        handler_name: Safe name of the hook whose isolation could not be set up
+        reason: Why isolation could not be established
+
+    Example:
+        >>> try:
+        >>>     await manager.trigger(HookEvent.PRE_AGENT_LOOP, "agent-1", {})
+        >>> except HookIsolationError as e:
+        >>>     print(f"{e.handler_name} cannot be isolated: {e.reason}")
+    """
+
+    def __init__(self, handler_name: str, reason: str):
+        self.handler_name = handler_name
+        self.reason = reason
+        super().__init__(
+            f"Hook isolation could not be established for {handler_name}: {reason}"
+        )
 
 
 class ResourceLimits:
@@ -142,6 +200,88 @@ class ResourceLimits:
             raise
 
 
+def _isolated_hook_worker(
+    limits: ResourceLimits,
+    handler: HookHandler,
+    context: HookContext,
+    result_queue: Any,
+) -> None:
+    """
+    Entry point executed inside the isolated child process (issue #2014).
+
+    MUST stay at MODULE SCOPE. Under the ``spawn`` start method the child is a
+    fresh interpreter, so ``multiprocessing`` transfers the target by pickling
+    it -- and pickle stores a function by its ``module.qualname``, not its code.
+    A nested or closure worker cannot be pickled at all, which is precisely how
+    isolation used to fail: ``Process.start()`` raised
+    ``Can't get local object 'IsolatedHookExecutor.execute_isolated.<locals>._run_hook'``
+    and the caller swallowed it and ran the hook in-process instead.
+
+    The worker speaks a 3-tuple protocol on ``result_queue``:
+    ``(status, payload, worker_pid)`` where status is one of
+    ``ready`` / ``success`` / ``error``. ``ready`` is sent FIRST, before any
+    caller-supplied code runs, so the parent can (a) confirm a real child is
+    alive and (b) charge interpreter startup to a separate budget instead of
+    the hook's timeout.
+
+    Args:
+        limits: Resource limits to apply before running any hook code
+        handler: Hook handler to execute
+        context: Hook context to pass to the handler
+        result_queue: Queue back to the parent process
+    """
+    worker_pid = os.getpid()
+
+    # Sent BEFORE limits are applied and before any caller-supplied code runs:
+    # it is the parent's proof that a distinct process exists.
+    result_queue.put(("ready", None, worker_pid))
+
+    try:
+        limits.apply()
+    except Exception as e:
+        # ``scrub_local_error`` matches ``ResourceLimits.apply``: this is an
+        # in-process OS call whose errno text IS the diagnostic.
+        result_queue.put(
+            (
+                "error",
+                f"Resource limits could not be applied: {scrub_local_error(e)}",
+                worker_pid,
+            )
+        )
+        return
+
+    try:
+        start_time = time.perf_counter()
+        result = asyncio.run(handler.handle(context))
+        result.duration_ms = (time.perf_counter() - start_time) * 1000
+    except Exception as e:
+        # ``handler.handle`` is CALLER-SUPPLIED code, so ``e`` is whatever it
+        # raised -- an HTTP client, a DB driver, an SDK -- and this string
+        # crosses the process boundary into BOTH a parent log line and the
+        # returned ``HookResult.error``. Scrubbed here, at the point it is
+        # built, so neither consumer can re-leak it.
+        result_queue.put(("error", f"Hook error: {scrub_remote_error(e)}", worker_pid))
+        return
+
+    try:
+        # Pickled explicitly rather than left to the queue's feeder thread: a
+        # feeder-thread pickling failure surfaces as a traceback on the child's
+        # stderr and a SILENTLY dropped item, which the parent would then
+        # report as the unrelated "did not return a result".
+        pickle.dumps(result)
+    except Exception as e:
+        result_queue.put(
+            (
+                "error",
+                f"Hook result cannot cross the process boundary: {scrub_remote_error(e)}",
+                worker_pid,
+            )
+        )
+        return
+
+    result_queue.put(("success", result, worker_pid))
+
+
 class IsolatedHookExecutor:
     """
     Execute hooks in isolated processes with resource limits (SECURITY FIX #5).
@@ -176,18 +316,26 @@ class IsolatedHookExecutor:
     - Isolates hook execution from main process
     """
 
-    def __init__(self, limits: ResourceLimits):
+    def __init__(
+        self,
+        limits: ResourceLimits,
+        startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
+    ):
         """
         Initialize isolated hook executor.
 
         Args:
             limits: Resource limits to apply in child process
+            startup_timeout: Seconds allowed for the child interpreter to boot
+                and signal readiness, charged SEPARATELY from the per-hook
+                timeout (default: 30s)
 
         Example:
             >>> limits = ResourceLimits(max_memory_mb=50)
             >>> executor = IsolatedHookExecutor(limits=limits)
         """
         self.limits = limits
+        self.startup_timeout = startup_timeout
 
     async def execute_isolated(
         self,
@@ -202,12 +350,22 @@ class IsolatedHookExecutor:
         returns result. If hook times out or crashes, returns error result.
 
         Args:
-            handler: Hook handler to execute
+            handler: Hook handler to execute. MUST be picklable, which under the
+                ``spawn`` start method means its class must be importable at
+                module scope -- a lambda, a closure, or a locally-defined
+                function cannot be isolated.
             context: Hook context (must be picklable)
-            timeout: Maximum execution time in seconds
+            timeout: Maximum hook execution time in seconds, measured from the
+                moment the child signals readiness (interpreter startup is
+                charged to ``startup_timeout`` instead)
 
         Returns:
             HookResult with success/failure status and metadata
+
+        Raises:
+            HookIsolationError: If the isolated process cannot be started, does
+                not signal readiness, or reports the parent's own PID. The hook
+                is NOT executed in that case -- see issue #2014.
 
         Example:
             >>> result = await executor.execute_isolated(
@@ -223,115 +381,193 @@ class IsolatedHookExecutor:
         - Timeout prevents infinite loops
         - Graceful failure handling prevents agent crashes
         """
-        # ``handler_name`` reaches three log lines below AND the returned
+        # ``handler_name`` reaches the log lines below AND the returned
         # ``HookResult.error`` on the timeout and crash paths, so it must not be
         # able to carry caller state; see ``safe_handler_name``.
         handler_name = getattr(handler, "name", safe_handler_name(handler))
+        parent_pid = os.getpid()
 
-        # Create queue for inter-process communication
-        queue: multiprocessing.Queue = multiprocessing.Queue()
+        # Explicit context, never the platform default: see
+        # ``_ISOLATION_START_METHOD``. The queue must come from the SAME context
+        # as the process that receives it.
+        mp_context = multiprocessing.get_context(_ISOLATION_START_METHOD)
+        result_queue = mp_context.Queue()
 
-        # Define worker function (runs in child process)
-        def _run_hook():
-            """
-            Worker function that runs in isolated child process.
+        process = mp_context.Process(
+            target=_isolated_hook_worker,
+            args=(self.limits, handler, context, result_queue),
+            name=f"kaizen-isolated-hook-{handler_name}",
+        )
 
-            Applies resource limits and executes hook.
-            """
-            try:
-                # STEP 1: Apply resource limits
-                self.limits.apply()
+        try:
+            # Under ``spawn`` the handler, context and limits are pickled HERE,
+            # before the child is launched, so an unpicklable handler raises
+            # synchronously and leaves no orphan process behind.
+            process.start()
+        except Exception as e:
+            result_queue.close()
+            raise HookIsolationError(
+                handler_name,
+                f"the isolated process could not be started under the "
+                f"'{_ISOLATION_START_METHOD}' start method "
+                f"({scrub_remote_error(e)}). The handler and context must be "
+                f"picklable: define the handler class at module scope rather "
+                f"than as a lambda, closure, or locally-defined function.",
+            ) from e
 
-                # STEP 2: Execute hook
-                start_time = time.perf_counter()
-                result = asyncio.run(handler.handle(context))
-                duration_ms = (time.perf_counter() - start_time) * 1000
-
-                # STEP 3: Add timing metadata
-                result.duration_ms = duration_ms
-
-                # STEP 4: Send result to parent process
-                queue.put(("success", result))
-
-            except Exception as e:
-                # Send error to parent process. ``handler.handle`` is
-                # CALLER-SUPPLIED code, so ``e`` is whatever it raised -- an
-                # HTTP client, a DB driver, an SDK -- and this string crosses
-                # the process boundary into BOTH a parent log line and the
-                # returned ``HookResult.error``. Scrubbed here, at the point it
-                # is built, so neither consumer can re-leak it.
-                error_msg = f"Hook error: {scrub_remote_error(e)}"
-                queue.put(("error", error_msg))
-
-        # Start isolated process
-        process = multiprocessing.Process(target=_run_hook)
-        process.start()
-
-        # Wait for completion with timeout
-        process.join(timeout=timeout)
-
-        # Check if process is still running (timeout)
-        if process.is_alive():
-            logger.warning(
-                f"SECURITY: Hook timeout in isolated process - {handler_name}"
+        try:
+            # The supervision loop blocks on a queue and on process reaping;
+            # running it in a worker thread keeps the caller's event loop free.
+            return await asyncio.to_thread(
+                self._supervise, process, result_queue, handler_name, timeout, parent_pid
             )
-            process.terminate()
-            process.join(timeout=1.0)  # Give it 1 second to terminate gracefully
+        finally:
+            self._reap(process)
+            result_queue.close()
 
-            # Force kill if still alive
-            if process.is_alive():
-                process.kill()
-                process.join()
+    def _supervise(
+        self,
+        process: Any,
+        result_queue: Any,
+        handler_name: str,
+        timeout: float,
+        parent_pid: int,
+    ) -> HookResult:
+        """
+        Supervise the isolated process from the parent (runs in a worker thread).
 
+        Two phases with separate budgets: readiness (``startup_timeout``) then
+        the hook itself (``timeout``).
+
+        Raises:
+            HookIsolationError: If readiness never arrives or the worker reports
+                the parent's PID -- both mean the control is not in place.
+        """
+        # PHASE 1: readiness. Absence here means no isolated process is running
+        # our worker, so there is nothing to fall back to except the very
+        # in-process execution this control exists to prevent.
+        message, reason = self._receive(process, result_queue, self.startup_timeout)
+        if message is None:
+            raise HookIsolationError(
+                handler_name,
+                f"the isolated process did not signal readiness within "
+                f"{self.startup_timeout}s (reason: {reason}, "
+                f"exit code: {process.exitcode})",
+            )
+
+        status, _payload, worker_pid = message
+        if status != "ready":
+            raise HookIsolationError(
+                handler_name,
+                f"the isolated process sent {status!r} before signalling "
+                f"readiness (isolation protocol violation)",
+            )
+        if worker_pid == parent_pid:
+            # Belt and braces: if this ever holds, the hook is running with full
+            # agent privileges and the control is OFF.
+            raise HookIsolationError(
+                handler_name,
+                f"the hook worker reported the parent PID ({parent_pid}); "
+                f"the hook is NOT isolated",
+            )
+
+        logger.debug(
+            "Hook %s isolated in process %s (parent %s)",
+            handler_name,
+            worker_pid,
+            parent_pid,
+        )
+
+        # PHASE 2: the hook's own result.
+        message, reason = self._receive(process, result_queue, timeout)
+
+        if message is None and reason == "timeout":
+            logger.warning(
+                "SECURITY: Hook timeout in isolated process - %s", handler_name
+            )
             return HookResult(
                 success=False,
                 error=f"Hook timeout in isolated process: {handler_name}",
                 duration_ms=timeout * 1000,
             )
 
-        # Check exit code
-        if process.exitcode != 0:
+        if message is None:
+            # Child exited without a result: crash, kill, or resource limit.
+            process.join(timeout=_REAP_TIMEOUT)
             logger.error(
-                f"SECURITY: Hook process crashed - {handler_name} (exit code: {process.exitcode})"
+                "SECURITY: Hook process exited without a result - %s (exit code: %s)",
+                handler_name,
+                process.exitcode,
             )
             return HookResult(
                 success=False,
-                error=f"Hook process crashed (exit code: {process.exitcode})",
+                error=(
+                    f"Hook process exited without returning a result "
+                    f"(exit code: {process.exitcode})"
+                ),
                 duration_ms=0.0,
             )
 
-        # Get result from queue
-        try:
-            if not queue.empty():
-                status, result = queue.get(timeout=1.0)
+        status, payload, _worker_pid = message
 
-                if status == "success":
-                    logger.debug(
-                        f"Hook executed successfully in isolated process: {handler_name}"
-                    )
-                    return result
-                else:
-                    # Error result
-                    logger.error(f"Hook failed in isolated process: {result}")
-                    return HookResult(success=False, error=result, duration_ms=0.0)
-            else:
-                # Queue empty - hook did not return result
-                logger.error(f"SECURITY: Hook did not return result - {handler_name}")
-                return HookResult(
-                    success=False,
-                    error="Hook did not return result",
-                    duration_ms=0.0,
-                )
+        if status == "success":
+            logger.debug(
+                "Hook executed successfully in isolated process: %s", handler_name
+            )
+            return payload
 
-        except Exception as e:
-            # The queue payload was produced by the child from caller-supplied
-            # hook code, so a deserialization failure can render it.
-            logger.error(
-                "SECURITY: Failed to retrieve hook result: %s", scrub_remote_error(e)
-            )
-            return HookResult(
-                success=False, error=f"Failed to retrieve result: {e}", duration_ms=0.0
-            )
+        logger.error("Hook failed in isolated process: %s", payload)
+        return HookResult(success=False, error=payload, duration_ms=0.0)
+
+    @staticmethod
+    def _receive(
+        process: Any, result_queue: Any, budget: float
+    ) -> tuple[tuple[str, Any, int] | None, str]:
+        """
+        Wait up to ``budget`` seconds for one message from the child.
+
+        Polls rather than blocking on ``Queue.get(timeout=budget)`` so that a
+        child which dies without writing is noticed immediately instead of
+        after the full budget. Reads BEFORE joining, so a result larger than the
+        pipe buffer cannot deadlock the child inside its own flush.
+
+        Returns:
+            ``(message, "message")`` on success, or ``(None, "timeout")`` /
+            ``(None, "exited")`` when no message arrived.
+        """
+        deadline = time.monotonic() + budget
+
+        while True:
+            try:
+                return result_queue.get(timeout=_POLL_INTERVAL), "message"
+            except QueueEmpty:
+                pass
+
+            if not process.is_alive():
+                # Last chance: the child may have written just before exiting.
+                try:
+                    return result_queue.get(timeout=_DRAIN_TIMEOUT), "message"
+                except QueueEmpty:
+                    return None, "exited"
+
+            if time.monotonic() >= deadline:
+                return None, "timeout"
+
+    @staticmethod
+    def _reap(process: Any) -> None:
+        """Terminate, kill, and release the child process. Never raises."""
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=_REAP_TIMEOUT)
+
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=_REAP_TIMEOUT)
+
+        if process.exitcode is not None:
+            # ``close()`` releases the process handle/fds; it is only legal once
+            # the child has actually been reaped.
+            process.close()
 
 
 class IsolatedHookManager(HookManager):
