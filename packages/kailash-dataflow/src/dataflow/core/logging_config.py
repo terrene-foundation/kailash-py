@@ -110,6 +110,20 @@ DEFAULT_SENSITIVE_PATTERNS: List[str] = [
     r"refresh[_-]?token[=:\s]+([^\s,;\"']+)",
     # Connection strings
     r"(password|pwd|passwd)[=:\s]+([^\s,;\"']+)",
+    # Quoted-key mapping form -- Python dict repr and JSON.
+    #
+    # Issue #2027: every pattern above requires the key to be followed
+    # immediately by ``=``, ``:`` or whitespace, so none of them match
+    # ``{'token': 'sk-live-...'}`` -- the key's own closing quote sits
+    # between the name and the separator. That made
+    # ``mask_sensitive_values(str(kwargs))`` a no-op on exactly the input it
+    # is most often handed (a node's kwargs), so credentials passed as model
+    # fields reached DEBUG logs verbatim. The value class is also excluded by
+    # ``[^\s,;\"']+``, which stops at the opening quote.
+    r"['\"](?:password|passwd|pwd|token|api[_-]?key|apikey|secret|"
+    r"secret[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|"
+    r"auth[_-]?token|credentials?|authorization)['\"]\s*:\s*"
+    r"['\"]([^'\"]*)['\"]",
 ]
 
 # Default mask replacement string

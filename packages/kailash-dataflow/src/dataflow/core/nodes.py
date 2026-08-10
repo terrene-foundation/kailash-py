@@ -1658,7 +1658,8 @@ class NodeGenerator:
                 logger = logging.getLogger(__name__)
                 # ADR-002: Changed from WARNING to DEBUG - this is diagnostic tracing, not a problem
                 logger.debug(
-                    f"DataFlow Node {self.model_name}{self.operation.title()}Node - received kwargs: {kwargs}"
+                    f"DataFlow Node {self.model_name}{self.operation.title()}Node"
+                    f" - received kwargs: {mask_sensitive_values(str(kwargs))}"
                 )
 
                 # Ensure table exists before any database operations (lazy table creation)
