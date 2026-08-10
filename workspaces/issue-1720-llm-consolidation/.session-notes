@@ -8,6 +8,20 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**⚠ CORRECTION TO TRAP 1 — the `pythonpath` ini key is WHITESPACE-separated, NOT colon-separated.**
+
+I briefed roughly eight lanes with `-o pythonpath="<a>:<b>"`. **That is wrong.** `pytest.ini`'s
+`pythonpath` takes a whitespace-separated list, so a colon-joined value is parsed as ONE bogus path,
+silently falls back, and resolves the package from the MAIN checkout — producing exactly the
+vacuous pass the trap warns about. Correct form:
+
+    pytest -o pythonpath="<worktree>/src <worktree>/packages/<pkg>/src"     # SPACES
+
+Caught by lane 2E, which confirmed it by printing `__file__` instead of trusting the flag. This is
+the trap reproducing itself one level up: a wrong instruction about how to verify, producing
+confident wrong results. **Always print the resolved `__file__`; never trust the flag alone.**
+
+
 **UPDATE 7 (burn-down, latest): main is `a0f8f3832`. FIVE PRs merged, THREE issues closed.**
 #2046 landed the masker's remaining key shapes — verified ON MAIN this time (see trap 7).
 
