@@ -2,7 +2,8 @@
 
 This module provides:
 - Resource reference support in JSON API
-- Secret management with encryption
+- Secret management with pluggable backends (encryption at rest is provided by
+  ``FileSecretBackend``; other backends do not encrypt what they store)
 - Enhanced client SDK for async workflows
 - Production-ready gateway for complex deployments
 """

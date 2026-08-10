@@ -36,10 +36,20 @@ from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["restrict_to_owner", "OWNER_ONLY_MODE", "owner_only_is_enforceable"]
+__all__ = [
+    "restrict_to_owner",
+    "restrict_dir_to_owner",
+    "OWNER_ONLY_MODE",
+    "OWNER_ONLY_DIR_MODE",
+    "owner_only_is_enforceable",
+]
 
 # Owner read/write, no group, no other. Meaningful on POSIX only.
 OWNER_ONLY_MODE = 0o600
+
+# Directories additionally need the execute bit to be traversable by their
+# owner; 0o600 on a directory locks the owner out of its own store.
+OWNER_ONLY_DIR_MODE = 0o700
 
 
 @lru_cache(maxsize=1)
@@ -143,4 +153,27 @@ def restrict_to_owner(
         os.fchmod(fd, OWNER_ONLY_MODE)
     else:
         os.chmod(path, OWNER_ONLY_MODE)
+    return True
+
+
+def restrict_dir_to_owner(path: Union[str, Path]) -> bool:
+    """Restrict a DIRECTORY so only its owner can list or traverse it.
+
+    Same contract as :func:`restrict_to_owner`, with ``0o700`` instead of
+    ``0o600`` because a directory without the owner's execute bit cannot be
+    opened even by its owner. Kept here rather than as a call-site ``chmod``
+    for the reason in the module docstring: the Windows answer is a DACL, not
+    a mode, and only this module knows that.
+
+    ``os.makedirs(..., mode=0o700)`` alone is not enough on POSIX: the mode is
+    masked by the process umask, and it is ignored entirely for a directory
+    that already exists — which is the common case for a long-lived store.
+
+    Returns:
+        ``True`` if owner-only access was actually enforced, ``False`` on
+        Windows without ``pywin32`` (the directory exists, but is NOT private).
+    """
+    if sys.platform == "win32":
+        return _restrict_via_dacl(path)
+    os.chmod(path, OWNER_ONLY_DIR_MODE)
     return True
