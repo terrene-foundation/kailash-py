@@ -29,6 +29,8 @@ from typing import Optional, Sequence
 
 from kailash_mcp.errors import MCPError, MCPErrorCode
 
+from kailash.utils.command_safety import safe_command_ref
+
 # Standard MCP launcher executables considered safe to spawn without an
 # explicit per-caller allowlist. Deliberately EXCLUDES shells (``sh``,
 # ``bash``, ``zsh``, ``cmd``, ``powershell``) and generic download/exec tools
@@ -56,13 +58,29 @@ class SpawnSecurityError(MCPError):
     Carries :data:`MCPErrorCode.AUTHORIZATION_FAILED` (``-32003``) — a spawn
     rejection is an authorization decision, not a transport or validation
     failure.
+
+    The rejected command is untrusted input and routinely carries a
+    credential as a CLI flag (``npx ... --token=<secret>``). This exception
+    therefore NEVER stores it. ``command`` is converted at construction time
+    to a disclosure-safe ``basename#fingerprint`` reference
+    (:func:`~kailash.utils.command_safety.safe_command_ref`) and exposed as
+    ``data["command_ref"]``.
+
+    Doing the conversion here rather than at each call site is what makes the
+    guarantee hold: ``MCPError.to_dict`` copies ``data`` into the JSON-RPC
+    error payload, so the attribute, the wire form, and every message built
+    from it are all covered at once — including sinks added later.
     """
 
-    def __init__(self, message: str, command: Optional[str] = None) -> None:
+    def __init__(self, message: str, command: object = None) -> None:
         super().__init__(
             message,
             error_code=MCPErrorCode.AUTHORIZATION_FAILED,
-            data={"command": command} if command is not None else None,
+            data=(
+                {"command_ref": safe_command_ref(command)}
+                if command is not None
+                else None
+            ),
         )
 
 
@@ -94,7 +112,7 @@ def validate_spawn_command(
     if not isinstance(command, str) or not command:
         raise SpawnSecurityError(
             "spawn command must be a non-empty string",
-            command=command if isinstance(command, str) else None,
+            command=command,
         )
 
     # Reject path traversal regardless of the allowlist / opt-out — a ``..``
@@ -102,7 +120,7 @@ def validate_spawn_command(
     segments = command.replace("\\", "/").split("/")
     if ".." in segments:
         raise SpawnSecurityError(
-            f"spawn command rejected (path traversal): {command!r}",
+            f"spawn command rejected (path traversal): {safe_command_ref(command)}",
             command=command,
         )
 
@@ -119,7 +137,7 @@ def validate_spawn_command(
         return
 
     raise SpawnSecurityError(
-        f"spawn command {command!r} is not in the allowlist "
+        f"spawn command {safe_command_ref(command)} is not in the allowlist "
         f"(allowed: {sorted(allowed)}). Add it to `allowed_commands`, pass "
         f"`allow_arbitrary=True` (or set `allow_arbitrary_commands=True` in the "
         f"client/transport config) to permit arbitrary commands.",
