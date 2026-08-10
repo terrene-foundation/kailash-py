@@ -845,15 +845,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 Connection, "return_value"
             )
 
-            # For non-mocked environments, skip real LDAP connections to test servers
-            server_url = self.connection_config.get("server", "")
-            is_test_server = "test." in server_url or server_url.startswith(
-                "ldap://test"
-            )
-
-            if is_test_server and not is_mocked:
-                # Simulate connection for test servers when not mocked
-                raise ImportError("Using test simulation")
+            # Simulation is opted into explicitly, never inferred from the
+            # server's NAME. This previously routed any directory whose URL
+            # contained "test." or began with "ldap://test" into the simulated
+            # backend, so a real production directory named e.g.
+            # ldap://test.corp.example.com was never actually contacted
+            # (issue #2026).
+            if self.connection_config.get("simulate_directory") and not is_mocked:
+                raise ImportError("Using directory simulation (opted in)")
 
             # Get connection config
             server_url = self.connection_config.get("server", "ldap://localhost:389")

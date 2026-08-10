@@ -807,6 +807,30 @@ def test_directory_fallback_still_works_when_explicitly_enabled():
     assert result["authenticated"] is True
 
 
+def test_simulation_is_not_selected_by_the_server_hostname():
+    """A real directory named 'test.*' must still be contacted for real.
+
+    Simulation used to be inferred from the server URL containing "test." or
+    starting with "ldap://test", so a production directory with such a name was
+    silently never contacted.
+    """
+    node = _directory_node()
+    node.connection_config["server"] = "ldap://test.corp.example.net:389"
+
+    # No explicit simulate_directory opt-in => the real connector is used, and
+    # because the host does not resolve the attempt FAILS rather than quietly
+    # succeeding against the simulated backend.
+    result = asyncio.run(node._test_connection())
+
+    assert result["connection_status"] != "connected", (
+        "a 'test.'-named server was routed to simulation and reported a "
+        f"successful connection it never made: {result}"
+    )
+    assert "Simulated" not in str(
+        result.get("server_info", {})
+    ), f"simulation was selected from the hostname: {result}"
+
+
 def test_unreachable_directory_does_not_authenticate():
     """An attacker who makes the directory unreachable must not get in.
 
