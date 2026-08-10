@@ -6,10 +6,24 @@
 #1970/#1971/#1972/#1974/#1981, and #2005/#2008/#2007 were already closed or closed here.
 **9 of the original 22 outstanding issues are now closed.**
 
-Four NEW security issues were filed that **outrank everything on the original list**, plus
-**PR #2028** (open) closing out #1995.
+Four NEW security issues were filed that **outrank everything on the original list**.
+
+**UPDATE (burn-down session): PR #2028 MERGED as `a101c81f9` — Gate 0 is CLEARED.** #1995 closed
+with the SHA. 1,819 files changed. Parallel burn-down waves are now running; see
+`02-plans/launch-ledger.md` for the durable agent-launch table (which lanes are in flight, on
+which branches) and `02-plans/burndown-waves.md` for the plan.
 
 Workspace issue-1720-llm-consolidation, phase 05-codify.
+
+## ⚠ TRAP INTRODUCED BY THE #2028 MERGE — every line number below is STALE
+
+#2028 reordered imports across 1,819 files. **Every `file.py:NNN` citation in these notes, in
+`burndown-waves.md`, and in the bodies of issues #1997–#2030 was written pre-merge and has
+SHIFTED.** Do not hand any of them to an agent as a trusted locator. Anchor on grep-stable
+symbols and re-derive the line (`symbol-anchored-citations.md` MUST-3). Measured examples of the
+drift: `gateway/security.py` plaintext write `:205 → :211`; `sso.py` forged-token branch
+`:924 → :926`; `base_agent.py` swallow still `:743` (unshifted — so the drift is per-file and
+you cannot assume a uniform offset either way).
 
 ## Read first
 
@@ -18,9 +32,18 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
    topic; two lanes sharing a file serialize regardless of the plan.
 2. **The five new security issues — #2024, #2025, #2026, #2027, #2030.** Two are CRITICAL. All
    verified against source by the orchestrator, not taken from a subagent report.
-3. **PR #2028** — #1995 fix. **Do NOT merge on the earlier "green" report**: `Test DataFlow Infra
-   Regression (Postgres/Redis)` fails on it and passed on #2016. Same selection passes locally
-   (23 passed, real PG+Redis); collection clean. UNRESOLVED pending the CI log.
+3. ~~**PR #2028**~~ **RESOLVED AND MERGED** (`a101c81f9`). The `Test DataFlow Infra Regression
+   (Postgres/Redis)` failure recorded here cleared on its own on the final run — it was a flake,
+   not a real regression, and the local pass was right. **CodeQL reported "377 new alerts
+   including 6 high severity" and that was an ARTIFACT**, not a regression: CodeQL keys its
+   new-vs-existing diff on alert LOCATION, and the import reorder shifted nearly every line.
+   Proven by comparing full alert sets at `(rule, severity, path)` granularity — deliberately NOT
+   at line granularity, since line is exactly what the reorder perturbs (a line-keyed comparison
+   could not discriminate the hypothesis from its negation). `comm -23 pr main` was EMPTY (PR ⊆
+   main); `comm -13` returned 26 `unused-import`/`unused-local-variable` alerts the PR REMOVES;
+   totals reconcile (2345 − 2319 = 26). Evidence is posted as a comment on #2028.
+   **Reusable method: when a mechanical repo-wide change makes a location-keyed scanner go red,
+   diff the alert SETS on a location-independent key before believing the "new alerts" count.**
 4. **PR #2031 (DRAFT)** — `rules/specification-verification.md`. **Tier-1 redteam COMPLETE;
    verdict land-amended; amendments in `638a6c487`.** The redteam found the rule FAILED ITS OWN
    MUST-1 in three places — a fabricated comparand ("the 27 filed"; #2015 filed 24), a 24-vs-25
@@ -37,11 +60,24 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
 
 ## In-flight state
 
-**PR #2028 (open, chore/1995-isort-normalization)** — 2 commits, `c29a1fbce` + `c40a09a87`.
-Acceptance criterion VERIFIED: clean tree → `pre-commit run --all-files` exit 0 → 0 files
-modified. Not yet merged; CI not yet checked. Working tree clean, branch pushed.
+**PR #2028 — MERGED** (`a101c81f9`), branch deleted, #1995 closed with the SHA. Acceptance
+criterion was VERIFIED pre-merge: clean tree → `pre-commit run --all-files` exit 0 → 0 files
+modified.
 
-**Nothing else in flight.** No uncommitted work.
+**Parallel burn-down waves IN FLIGHT.** The authoritative, compaction-surviving record is
+`02-plans/launch-ledger.md` — read it before spawning anything, so a resumed session does not
+re-launch a lane that is already running or already merged
+(`orchestration-launch-ledger.md` MUST-1/2/3).
+
+At the time of writing: 3 read-only investigation lanes (#2025, #2024, #2030+#2022) and 2
+implementation lanes in sibling worktrees under
+`/Users/esperie/repos/kailash/build/.kailash-py-wt/` — `lane-1c` (`fix/2026-auth-test-stubs`,
+#2026) and `lane-1e` (`fix/2027-sensitive-value-sinks`, #2027). All branches pinned to
+merge-base `a101c81f9`.
+
+**Sequencing constraint that survives this session:** lane 1E touches
+`packages/kailash-dataflow/src/dataflow/core/nodes.py`, so **#2006 must wait for #2027 to
+merge**. #2030 and #2022 share `base_agent.py` and must stay ONE lane, never two.
 
 ## The four new security issues (higher priority than the original 22)
 
