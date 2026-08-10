@@ -13,10 +13,18 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
 
 ## Read first
 
-1. **The four new security issues — #2024, #2025, #2026, #2027.** Two are CRITICAL. All were
+1. **`workspaces/issue-1720-llm-consolidation/02-plans/burndown-waves.md`** — the parallelized
+   wave plan (~4–5 cycles vs 12–15 serial). Lanes are partitioned by FILE DISJOINTNESS, not by
+   topic; two lanes sharing a file serialize regardless of the plan.
+2. **The five new security issues — #2024, #2025, #2026, #2027, #2030.** Two are CRITICAL. All
    verified against source by the orchestrator, not taken from a subagent report.
-2. **PR #2028** — #1995 fix. Green and idempotent; needs merge.
-3. The **"specs were wrong" section** below. This is the load-bearing finding of the session.
+3. **PR #2028** — #1995 fix. **Do NOT merge on the earlier "green" report**: `Test DataFlow Infra
+   Regression (Postgres/Redis)` fails on it and passed on #2016. Same selection passes locally
+   (23 passed, real PG+Redis); collection clean. UNRESOLVED pending the CI log.
+4. **`rules/specification-verification.md`** (NEW, uncommitted) — the codified defense for the
+   wrong-specifications class. Its Tier-1 self-referential redteam was dispatched but its findings
+   had NOT landed when this note was written; treat the rule as PROPOSED, not ratified.
+5. The **"specs were wrong" section** below. This is the load-bearing finding of the session.
 
 ## In-flight state
 
@@ -118,6 +126,31 @@ A diligent session implements each faithfully and closes it wrongly. Verify befo
   Do NOT widen the threshold.
 - `.env` `OPENAI_API_KEY` is INVALID (live 401). Anthropic works.
 - Tests: ALWAYS `.venv/bin/python -m pytest`. An errored run is zero evidence, not a failure.
+
+## The codify (NEW this session — PROPOSED, redteam findings not yet incorporated)
+
+**`.claude/rules/specification-verification.md`** + depth extract at
+`.claude/guides/rule-extracts/specification-verification.md`. Codifies the wrong-specifications
+class per co-owner directive.
+
+Four MUST clauses: (1) re-derive every load-bearing factual claim before implementing; (2) test any
+PRESCRIBED remedy against the named threat before adopting it; (3) build your own enumeration
+instrument, never inherit the spec's grep; (4) post the correction back when measurement contradicts
+the spec.
+
+Design decisions worth knowing:
+- **`priority: 10 / scope: path-scoped`** on source globs, NOT baseline. Reasoning: the failure
+  always terminates in a source edit, so a glob reaches it at the moment that matters, and Rule 10's
+  proximity-band gate (which fires on `priority: 0 + scope: baseline` only) does not apply. The
+  redteam was explicitly asked to attack this — if it found a path where a session acts on a wrong
+  spec WITHOUT touching a matched file, the globs under-reach and scope must change.
+- **Deliberately NOT on `self-referential-codify.md`'s allowlist** — it is a universal
+  implementation-quality rule firing in all sessions, the same disposition `zero-tolerance.md`
+  carries. Recorded in the rule's Origin per the omission-precedent shape.
+- **Known gap:** ships with NO probe set and no manifest-registered fixtures, which
+  `coc-artifact-eval-coverage.md` MUST-1 requires of a new prose artifact. This is a real
+  outstanding obligation, not an oversight to discover later.
+- 201 lines, 1 over the 200-line guidance.
 
 ## Next session
 
