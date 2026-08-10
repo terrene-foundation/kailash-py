@@ -829,6 +829,182 @@ def test_delivery_errors_do_not_disclose_the_destination():
     ), f"the enrolled destination leaked through the error text: {result}"
 
 
+def _enrolled_totp_node():
+    """A node with one genuinely verified TOTP factor and live backup codes."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"totp": {"secret": "JBSWY3DPEHPK3PXP", "verified": True}},
+        "backup_codes": ["REALCODE"],
+    }
+    return node
+
+
+def test_revoke_requires_admin_override():
+    """revoke + setup is reset spelled with two calls."""
+    node = _enrolled_totp_node()
+
+    result = node.execute(action="revoke", user_id="victim", method="all")
+
+    assert result["success"] is False
+    assert node.user_mfa_data["victim"][
+        "methods"
+    ], f"revoke destroyed the victim's factors with no override: {result}"
+
+
+def test_revoke_then_setup_cannot_take_over_an_enrolled_account():
+    """The full three-call takeover chain must not complete."""
+    node = _enrolled_totp_node()
+
+    node.execute(action="revoke", user_id="victim", method="all")
+    setup = node.execute(action="setup", user_id="victim", method="totp")
+
+    assert (
+        setup["success"] is False
+    ), f"revoke cleared the way for a takeover setup: {setup}"
+    assert (
+        node.user_mfa_data["victim"]["methods"]["totp"]["secret"] == "JBSWY3DPEHPK3PXP"
+    )
+
+
+def test_disable_requires_admin_override_on_the_async_surface():
+    """A gate in one dispatcher and absent in the other is not a gate."""
+    node = _enrolled_totp_node()
+
+    result = asyncio.run(
+        node.async_run(action="disable", user_id="victim", method="totp")
+    )
+
+    assert result["success"] is False
+    assert "totp" in node.user_mfa_data["victim"]["methods"]
+
+
+def test_verify_backup_async_requires_a_verified_factor():
+    """The fifth backup-code site carried none of the other four's guarantees."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"totp": {"secret": "S", "verified": False}},
+        "backup_codes": ["UNPROVEN"],
+    }
+
+    result = asyncio.run(
+        node.async_run(action="verify_backup", user_id="victim", code="UNPROVEN")
+    )
+
+    assert result["verified"] is False
+    assert result["success"] is False
+
+
+def test_verify_backup_async_reports_failure_as_success_false():
+    """It returned success=True for a REJECTED code."""
+    node = _enrolled_totp_node()
+
+    result = asyncio.run(
+        node.async_run(action="verify_backup", user_id="victim", code="WRONGCODE")
+    )
+
+    assert result["verified"] is False
+    assert (
+        result["success"] is False
+    ), f"a rejected backup code was reported as a success: {result}"
+
+
+def test_verify_backup_async_still_accepts_a_real_code():
+    """Positive control."""
+    node = _enrolled_totp_node()
+
+    result = asyncio.run(
+        node.async_run(action="verify_backup", user_id="victim", code="REALCODE")
+    )
+
+    assert result["verified"] is True
+    assert result["success"] is True
+
+
+def test_push_challenge_cannot_be_approved_with_the_challenge_id_alone():
+    """challenge_id is echoed to the caller; the token goes only to the device."""
+    node = _mfa_node(push_provider={"service": "fcm", "server_key": "k"})
+    node.user_devices["user-1"] = [{"device_id": "d1", "push_token": "t"}]
+    node.user_mfa_data["user-1"] = {
+        "methods": {"push": {"device_id": "d1", "verified": False}},
+        "backup_codes": [],
+    }
+
+    class _OK:
+        status_code = 200
+
+    with patch("requests.post", return_value=_OK()):
+        sent = node.execute(action="send_push", user_id="user-1", auth_context={})
+
+    assert "challenge_token" not in sent, "the device token leaked to the caller"
+
+    approved = node.execute(
+        action="approve_push", user_id="user-1", challenge_id=sent["challenge_id"]
+    )
+    assert approved["success"] is False
+
+    verified = node.execute(
+        action="verify_push", user_id="user-1", challenge_id=sent["challenge_id"]
+    )
+    assert verified["verified"] is False
+
+
+def test_push_becomes_verified_only_after_a_genuine_device_approval():
+    """Positive control: push must be completable, and mark itself verified."""
+    node = _mfa_node(push_provider={"service": "fcm", "server_key": "k"})
+    node.user_devices["user-1"] = [{"device_id": "d1", "push_token": "t"}]
+    node.user_mfa_data["user-1"] = {
+        "methods": {"push": {"device_id": "d1", "verified": False}},
+        "backup_codes": [],
+    }
+
+    class _OK:
+        status_code = 200
+
+    captured = {}
+
+    def _post(url, json=None, headers=None, timeout=None):
+        captured.update(json["data"])
+        return _OK()
+
+    with patch("requests.post", side_effect=_post):
+        sent = node.execute(action="send_push", user_id="user-1", auth_context={})
+
+    node.execute(
+        action="approve_push",
+        user_id="user-1",
+        challenge_id=sent["challenge_id"],
+        challenge_token=captured["challenge_token"],
+    )
+    verified = node.execute(
+        action="verify_push", user_id="user-1", challenge_id=sent["challenge_id"]
+    )
+
+    assert verified["verified"] is True
+    assert node.user_mfa_data["user-1"]["methods"]["push"]["verified"] is True
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"method": "sms", "user_phone": 12345},
+        {"method": "email", "user_email": 123},
+    ],
+)
+def test_malformed_input_returns_a_result_dict_not_an_exception(kwargs):
+    """A non-string phone/email crashed out of execute() with a raw TypeError.
+
+    `device_info` is excluded: it is a dict-typed NodeParameter, so the
+    framework's own typed validation rejects a non-dict before `run()` is
+    entered, which is the correct contract for a declared type.
+    """
+    node = _mfa_node()
+
+    result = node.execute(action="setup", user_id="user-1", **kwargs)
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+
+
 def test_send_push_failure_returns_a_result_dict_not_an_exception():
     """Every other MFA failure returns a dict; push must not abort a workflow."""
     node = _mfa_node()
