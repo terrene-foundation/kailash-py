@@ -167,11 +167,17 @@ def test_mfa_orphan_send_sms_method_is_deleted():
 
 @pytest.mark.regression
 def test_mfa_module_level_send_sms_helper_still_exists():
-    """The module-level ``_send_sms`` helper stays — it IS used (line 648)."""
+    """The module-level ``_send_sms`` transport seam stays — it IS used.
+
+    Its contract changed in issue #2026: it used to log the message body (the
+    OTP) and ``return True`` without sending anything. It now fails closed, so
+    a caller can never mistake "nothing was sent" for a delivered code.
+    """
     from kailash.nodes.auth import mfa
 
     assert callable(mfa._send_sms)
-    assert mfa._send_sms("+15555550123", "test message") is True
+    with pytest.raises(mfa.MFADeliveryError):
+        mfa._send_sms("+15555550123", "test message")
 
 
 @pytest.mark.regression

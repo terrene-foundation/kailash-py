@@ -566,6 +566,20 @@ class TestMFAVerificationFunctionality:
 
             backup_codes = setup_result["backup_codes"]
 
+            # Complete the enrolment before using a backup code: a backup code
+            # substitutes for a VERIFIED factor, so accepting one against an
+            # unverified enrolment made setup->verify a complete second factor
+            # with nothing proven (issue #2026).
+            from kailash.nodes.auth.mfa import TOTPGenerator
+
+            secret = mfa_node.user_mfa_data["user123"]["methods"]["totp"]["secret"]
+            mfa_node.execute(
+                action="verify",
+                user_id="user123",
+                method="totp",
+                code=TOTPGenerator.generate_totp(secret),
+            )
+
             # Use the first backup code
             backup_code = backup_codes[0]
 
@@ -802,6 +816,9 @@ class TestMFARecoveryAndManagement:
                 user_id="user123",
                 method="totp",
                 user_email="user@example.com",
+                # reset destroys the existing factor and mints a new one, so it
+                # requires an explicit administrative flag (issue #2026).
+                admin_override=True,
             )
 
             # Verify reset result

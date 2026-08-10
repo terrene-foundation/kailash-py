@@ -22,14 +22,53 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
+from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
 
 
+class MFADeliveryError(NodeExecutionError):
+    """Raised when an MFA factor could not be delivered to the user.
+
+    Callers MUST NOT report a challenge as sent when this is raised: the user
+    never received a code, so any "verification_sent" claim would be false.
+    """
+
+
 def _send_sms(phone: str, message: str) -> bool:
-    """Module-level SMS sending function for test compatibility."""
-    logger.info(f"SMS sent to {phone[-4:] if len(phone) > 4 else phone}: {message}")
-    return True
+    """Deliver an SMS through the module-level transport.
+
+    This is the seam an SMS transport is bound to. No transport ships with the
+    SDK, so the default implementation fails closed rather than reporting a
+    delivery that never happened. Configure ``sms_provider`` on
+    :class:`MultiFactorAuthNode` (Twilio) or patch this function with a real
+    provider client.
+
+    Args:
+        phone: Destination phone number.
+        message: Message body. NEVER logged — it carries the one-time code.
+
+    Returns:
+        True when a transport delivered the message.
+
+    Raises:
+        MFADeliveryError: Always, when no transport is bound.
+    """
+    # Log delivery metadata only. The body is a credential (it contains the
+    # OTP), so it is never written to logs -- see rules/security.md
+    # "No secrets in logs". The destination is reduced to a digest rather than
+    # its last 4 digits: a digest still correlates entries for support without
+    # putting any part of the subscriber number in cleartext.
+    logger.warning(
+        "SMS delivery requested (%d-char body) but no SMS transport is "
+        "configured; nothing was sent.",
+        len(message),
+    )
+    raise MFADeliveryError(
+        "No SMS transport is configured. Set sms_provider={'service': 'twilio', "
+        "...} on MultiFactorAuthNode, or bind a provider to "
+        "kailash.nodes.auth.mfa._send_sms."
+    )
 
 
 class TOTPGenerator:
@@ -137,6 +176,31 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
     - Session management and timeout handling
     - Integration with audit logging
 
+    .. warning::
+       **The host application MUST authorise the caller. This node has no
+       actor.** ``user_id`` names the SUBJECT of an action, never the caller,
+       and there is no session, principal, or credential input on any action.
+       The node therefore cannot distinguish "this end user acting on
+       themselves" from "someone acting on another user's account", and it does
+       not try to.
+
+       Every action -- ``setup``, ``verify``, ``revoke``, ``disable``,
+       ``reset``, ``generate_backup_codes``, ``trust_device``,
+       ``initiate_recovery``, ``status`` -- takes a caller-supplied ``user_id``,
+       and several of them ISSUE BEARER CREDENTIALS (a TOTP secret, backup
+       codes, a device trust token) or DESTROY existing factors. A caller that
+       can pass an arbitrary ``user_id`` to those actions can take over or lock
+       out any account.
+
+       ``admin_override`` separates administrative actions from end-user ones,
+       but it is an ordinary parameter, not an authentication control: it stops
+       an end-user-shaped request from reaching an administrative path, and
+       nothing more.
+
+       Deploy this node behind a layer that binds each request to an
+       authenticated principal and authorises the (actor, action, subject)
+       triple before dispatch. See issue #2026.
+
     Example:
         >>> mfa_node = MultiFactorAuthNode(
         ...     methods=["totp", "sms", "email"],
@@ -163,6 +227,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         >>> print(f"Verified: {verify_result['verified']}")
     """
 
+    # Set once per process by __init__ so the "no audit sink" warning is stated
+    # loudly one time, rather than per operation where it reads as transient.
+    _audit_gap_warned: bool = False
+
     def __init__(
         self,
         name: str = "multi_factor_auth",
@@ -171,6 +239,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         issuer: str = "KailashSDK",
         sms_provider: Optional[Dict[str, Any]] = None,
         email_provider: Optional[Dict[str, Any]] = None,
+        push_provider: Optional[Dict[str, Any]] = None,
         backup_codes: bool = True,
         backup_codes_count: int = 10,
         totp_period: int = 30,
@@ -186,6 +255,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             methods: Supported MFA methods
             default_method: Default MFA method preference
             issuer: TOTP issuer name for authenticator apps
+            sms_provider: SMS transport config, e.g.
+                ``{"service": "twilio", "account_sid": ..., "auth_token": ...,
+                "from_number": ...}``. Unset means SMS codes cannot be sent.
+            email_provider: SMTP transport config, e.g.
+                ``{"smtp_host": ..., "smtp_port": 587, "username": ...,
+                "password": ...}``. Unset means email codes cannot be sent.
+            push_provider: Push transport config, e.g.
+                ``{"service": "fcm", "server_key": ..., "endpoint": ...}``.
+                Unset means push challenges cannot be sent.
             backup_codes: Enable backup codes for recovery
             backup_codes_count: Number of backup codes to generate
             totp_period: TOTP time period in seconds
@@ -200,6 +278,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self.issuer = issuer
         self.sms_provider = sms_provider or {}
         self.email_provider = email_provider or {}
+        self.push_provider = push_provider or {}
         self.backup_codes = backup_codes
         self.backup_codes_count = backup_codes_count
         self.totp_period = totp_period
@@ -210,11 +289,22 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
 
-        # Initialize audit logging (disabled for debugging deadlock)
-        # self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        # self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        # Audit logging is NOT wired. This is a real gap, not a configuration
+        # choice, and it is stated loudly here rather than surfacing as a
+        # per-operation "Failed to audit" warning that reads like a transient
+        # error (issue #2026). The nodes were disabled while debugging a
+        # deadlock and never restored; re-wiring them needs that deadlock
+        # re-investigated, which is out of scope for the #2026 stub removal.
         self.audit_log_node = None
         self.security_event_node = None
+        if not MultiFactorAuthNode._audit_gap_warned:
+            MultiFactorAuthNode._audit_gap_warned = True
+            logger.warning(
+                "MultiFactorAuthNode has NO audit sink: setup, verify, revoke, "
+                "disable, reset and recovery -- including the admin-gated "
+                "destructive actions -- complete with no audit record. Deploy "
+                "behind a layer that records these operations."
+            )
 
         # User MFA data storage (in production, this would be a database)
         self.user_mfa_data: Dict[str, Dict[str, Any]] = {}
@@ -312,6 +402,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 description="Number of days to trust a device",
                 required=False,
             ),
+            "challenge_token": NodeParameter(
+                name="challenge_token",
+                type=str,
+                description=(
+                    "Secret delivered to the device inside a push challenge; "
+                    "required to approve or deny that challenge."
+                ),
+                required=False,
+            ),
             "trust_token": NodeParameter(
                 name="trust_token",
                 type=str,
@@ -327,13 +426,29 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "admin_override": NodeParameter(
                 name="admin_override",
                 type=bool,
-                description="Admin override flag for sensitive operations",
+                description=(
+                    "Marks a call as an administrative operation (revoke, "
+                    "disable, reset, admin recovery, re-enrolment over a "
+                    "verified factor). NOT AN AUTHENTICATION CONTROL: it is an "
+                    "ordinary caller-supplied parameter, so it only separates "
+                    "administrative actions from end-user ones for a host that "
+                    "already authorises the caller. See the class docstring."
+                ),
                 required=False,
             ),
             "recovery_method": NodeParameter(
                 name="recovery_method",
                 type=str,
                 description="Recovery method for MFA recovery",
+                required=False,
+            ),
+            "recovery_destination": NodeParameter(
+                name="recovery_destination",
+                type=str,
+                description=(
+                    "Enrolled address/number the recovery token is delivered "
+                    "to. Required for email/sms recovery."
+                ),
                 required=False,
             ),
         }
@@ -353,9 +468,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         challenge_id: Optional[str] = None,
         trust_duration_days: Optional[int] = None,
         trust_token: Optional[str] = None,
+        challenge_token: Optional[str] = None,
         preferred_method: Optional[str] = None,
         admin_override: Optional[bool] = None,
         recovery_method: Optional[str] = None,
+        recovery_destination: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Run MFA operation.
@@ -414,6 +531,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_email = user_email or ""
             user_phone = final_user_phone
 
+            # Reject malformed identifiers BEFORE any state is written. These
+            # used to reach the enrolment writers and only fail deeper in
+            # (len() / "in" on an int), leaving a half-written method record
+            # behind even though the call reported failure (issue #2026).
+            for _label, _value in (
+                ("user_email", user_email),
+                ("user_phone", user_phone),
+                ("code", code),
+                ("method", method),
+            ):
+                if _value is not None and not isinstance(_value, str):
+                    return {
+                        "success": False,
+                        "error": f"{_label} must be a string",
+                        "action": action,
+                    }
+
             # self.log_node_execution("mfa_operation_start", action=action, method=method)
 
             # Check rate limits for verification operations (issue #803).
@@ -455,13 +589,43 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "generate_backup_codes":
                 result = self._generate_backup_codes(user_id)
             elif action == "revoke":
-                result = self._revoke_mfa(user_id, method)
+                # Destroying a user's factors is reset-equivalent: revoke then
+                # setup re-creates the enrolment the setup guard protects, so
+                # it carries the same requirement (issue #2026).
+                if not admin_override:
+                    result = {
+                        "success": False,
+                        "error": (
+                            "Revoking MFA destroys the user's existing factors; "
+                            "it requires admin_override=True."
+                        ),
+                    }
+                else:
+                    result = self._revoke_mfa(user_id, method)
             elif action == "status":
                 result = self._get_mfa_status(user_id)
             elif action == "send_push":
-                result = self._send_push_challenge(user_id, auth_context or {})
+                # Keep the node's result-dict contract: every other MFA failure
+                # returns {"success": False, ...} rather than raising out of
+                # execute(), so an undelivered push must not abort the workflow.
+                try:
+                    result = self._send_push_challenge(user_id, auth_context or {})
+                except MFADeliveryError as e:
+                    result = {
+                        "success": False,
+                        "method": "push",
+                        "error": "Push delivery failed",
+                        "challenge_sent": False,
+                    }
             elif action == "verify_push":
                 result = self._verify_push_challenge(user_id, challenge_id)
+            elif action in ("approve_push", "deny_push"):
+                result = self._respond_to_push_challenge(
+                    user_id,
+                    challenge_id,
+                    approved=(action == "approve_push"),
+                    challenge_token=challenge_token,
+                )
             elif action == "trust_device":
                 result = self._trust_device(
                     user_id, device_info or {}, trust_duration_days or 30
@@ -475,35 +639,66 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "get_methods":
                 result = self._get_user_methods(user_id)
             elif action == "disable":
-                if admin_override:
-                    # Disable all MFA for user (admin override)
-                    result = self._disable_all_mfa(user_id)
-                elif method:
-                    # Disable specific method
-                    result = self._disable_method(user_id, method)
-                else:
+                # `disable` deletes a factor, which is what `revoke` does and
+                # what `reset` does: it clears the way for a fresh `setup`, so
+                # it carries the same requirement. The `elif method:` branch
+                # that used to run ungated was ALWAYS taken -- `method` is
+                # defaulted to "totp" above, so the "method required" branch
+                # below it was unreachable -- which left the whole
+                # setup/revoke/reset guard reachable-around on this dispatcher
+                # while the async one was gated (issue #2026).
+                if not admin_override:
                     result = {
                         "success": False,
-                        "error": "Method required to disable, or use admin_override=True to disable all MFA",
+                        "error": (
+                            "Disabling a user's MFA destroys an enrolled "
+                            "factor; it requires admin_override=True."
+                        ),
                     }
+                elif method:
+                    # Disable a specific method.
+                    result = self._disable_method(user_id, method)
+                else:
+                    # Disable all MFA for user.
+                    result = self._disable_all_mfa(user_id)
             elif action == "initiate_recovery":
-                result = self._initiate_recovery(user_id, recovery_method or "email")
+                result = self._initiate_recovery(
+                    user_id,
+                    recovery_method or "email",
+                    recovery_destination,
+                    admin_override=bool(admin_override),
+                )
             elif action == "reset":
                 # Reset: clear existing MFA state, then re-run setup. Returns
                 # the new setup payload (fresh secret + backup codes) so the
                 # caller can re-enroll the user (issue #803).
-                with self._data_lock:
-                    self.user_mfa_data.pop(user_id, None)
-                    self.pending_verifications.pop(user_id, None)
-                    self.trusted_devices.pop(user_id, None)
-                result = self._setup_mfa(
-                    user_id,
-                    method,
-                    user_email,
-                    user_phone,
-                    user_data or {},
-                    device_info or {},
-                )
+                #
+                # Destroying a user's second factor and minting a new one is an
+                # administrative action: ungated it was the strongest form of
+                # the setup-overwrite takeover (issue #2026). It now matches
+                # the admin_override requirement `disable` already carries.
+                if not admin_override:
+                    result = {
+                        "success": False,
+                        "error": (
+                            "Resetting MFA destroys the existing factor and "
+                            "issues a new one; it requires admin_override=True."
+                        ),
+                    }
+                else:
+                    with self._data_lock:
+                        self.user_mfa_data.pop(user_id, None)
+                        self.pending_verifications.pop(user_id, None)
+                        self.trusted_devices.pop(user_id, None)
+                    result = self._setup_mfa(
+                        user_id,
+                        method,
+                        user_email,
+                        user_phone,
+                        user_data or {},
+                        device_info or {},
+                        admin_override=True,
+                    )
                 if result.get("success"):
                     result["reset"] = True
                     result["user_id"] = user_id
@@ -527,6 +722,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             return result
 
+        except MFADeliveryError:
+            # Delivery failures are already converted to result dicts at their
+            # dispatch sites; anything reaching here is a genuine bug.
+            raise
+        except (TypeError, ValueError, AttributeError, KeyError) as e:
+            # Malformed input (a non-string user_phone/user_email, a non-dict
+            # device_info) used to raise out of execute(), contradicting the
+            # node's own result-dict contract that every other failure honours
+            # (issue #2026). The detail is logged, not returned.
+            self.log_with_context(
+                "ERROR", f"MFA operation {action} failed on invalid input: {e!r}"
+            )
+            return {
+                "success": False,
+                "error": "Invalid input for MFA operation",
+                "action": action,
+            }
         except Exception as e:
             # self.log_error_with_traceback(e, "mfa_operation")
             raise
@@ -543,6 +755,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_phone: str,
         user_data: Optional[Dict[str, Any]] = None,
         device_info: Optional[Dict[str, Any]] = None,
+        admin_override: bool = False,
     ) -> Dict[str, Any]:
         """Setup MFA for user.
 
@@ -562,6 +775,24 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             }
 
         with self._data_lock:
+            # Re-enrolling an already-VERIFIED factor is a step-up operation.
+            # Without this, setup silently replaced a victim's authenticator
+            # secret, phone, or address and handed the caller fresh backup
+            # codes -- a complete MFA takeover in one call, and the upstream
+            # route that defeated every downstream enrolment guard
+            # (issue #2026).
+            existing = self.user_mfa_data.get(user_id, {}).get("methods", {})
+            if any(m.get("verified") for m in existing.values()) and not admin_override:
+                return {
+                    "success": False,
+                    "method": method,
+                    "error": (
+                        "MFA is already set up and verified for this user. "
+                        "Re-enrolment requires admin_override=True or a "
+                        "completed recovery."
+                    ),
+                }
+
             if user_id not in self.user_mfa_data:
                 self.user_mfa_data[user_id] = {
                     "methods": {},
@@ -684,12 +915,34 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "verified": False,
         }
 
-        # Send verification SMS (simulated)
+        # Deliver the verification SMS. If nothing was actually delivered the
+        # caller is told so -- it must not act on a "verification_sent" that
+        # never happened.
         verification_code = self._generate_verification_code()
-        self._send_sms_code(user_phone, verification_code, user_id)
-
-        # Also call the module-level _send_sms function for test compatibility
-        _send_sms(user_phone, f"Your verification code: {verification_code}")
+        try:
+            delivered = self._send_sms_code(user_phone, verification_code, user_id)
+            if not delivered:
+                # No node-level provider: fall through to the module-level
+                # transport seam, which fails closed when nothing is bound.
+                _send_sms(user_phone, f"Your verification code: {verification_code}")
+        except MFADeliveryError as e:
+            # Log the detail; do NOT return it. Provider exceptions routinely
+            # carry the recipient address/number, which would disclose the
+            # enrolled destination to the caller (issue #2026).
+            self.log_with_context("ERROR", f"SMS setup failed for user {user_id}: {e}")
+            # Roll back the half-enrolment, as the email path does: leaving it
+            # in place let a failed setup permanently replace a victim's
+            # verified destination with an attacker-chosen number. The temp
+            # code is dropped too -- _send_sms_code stores it BEFORE the
+            # transport raises, and it would go live again on re-enrolment.
+            self.user_mfa_data[user_id]["methods"].pop("sms", None)
+            self.user_mfa_data[user_id].pop("temp_sms_code", None)
+            return {
+                "success": False,
+                "method": "sms",
+                "error": "SMS delivery failed",
+                "verification_sent": False,
+            }
 
         # Create masked phone number for display
         if len(user_phone) > 6:
@@ -732,9 +985,38 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "verified": False,
         }
 
-        # Send verification email (simulated)
+        # Deliver the verification email. A configured-but-failing provider
+        # raises; the caller is never told a code was sent when it was not.
         verification_code = self._generate_verification_code()
-        self._send_email_code(user_email, verification_code, user_id)
+        try:
+            delivered = self._send_email_code(user_email, verification_code, user_id)
+        except MFADeliveryError as e:
+            self.log_with_context(
+                "ERROR", f"Email setup failed for user {user_id}: {e}"
+            )
+            self.user_mfa_data[user_id]["methods"].pop("email", None)
+            self.user_mfa_data[user_id].pop("temp_email_code", None)
+            return {
+                "success": False,
+                "method": "email",
+                "error": "Email delivery failed",
+                "verification_sent": False,
+            }
+
+        if not delivered:
+            # Mirror the SMS path: no transport means no code reached the user,
+            # so do not leave them enrolled against a code nobody received.
+            self.user_mfa_data[user_id]["methods"].pop("email", None)
+            self.user_mfa_data[user_id].pop("temp_email_code", None)
+            return {
+                "success": False,
+                "method": "email",
+                "error": (
+                    "No email transport is configured. Set email_provider="
+                    "{'smtp_host': ...} on MultiFactorAuthNode."
+                ),
+                "verification_sent": False,
+            }
 
         # Create masked email for display
         if "@" in user_email:
@@ -782,7 +1064,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "push_token": device_info.get("push_token"),
             "platform": device_info.get("platform", "unknown"),
             "setup_at": datetime.now(UTC).isoformat(),
-            "verified": True,  # Push enrollment is considered verified upon setup
+            # NOT verified at setup: nothing has been delivered to, or
+            # acknowledged by, the device. Marking it verified here asserted a
+            # proof that never happened and satisfied every downstream
+            # "is a factor verified" gate (issue #2026). A push challenge must
+            # be sent and approved first.
+            "verified": False,
         }
 
         # Initialize user's device list if needed
@@ -834,56 +1121,87 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         challenge_id = secrets.token_urlsafe(32)
 
         # Store challenge
+        # The token proves the responder is the DEVICE: it travels only in the
+        # push payload, never in this method's return value, so a caller holding
+        # challenge_id alone cannot approve its own challenge.
+        challenge_token = secrets.token_urlsafe(32)
+
         self.push_challenges[challenge_id] = {
             "user_id": user_id,
             "created_at": datetime.now(UTC),
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
             "status": "pending",
+            "challenge_token": challenge_token,
             "auth_context": auth_context,
             "device_id": self.user_devices[user_id][0].get(
                 "device_id"
             ),  # Use first device
         }
 
-        # Send push notification to Firebase (mocked)
+        # Deliver the push challenge. Previously this POSTed to the live FCM
+        # endpoint with a hardcoded "key=test_server_key", ignored the outcome,
+        # and returned success unconditionally -- so the caller was told
+        # "Push notification sent to your device" for a challenge that was
+        # never delivered (issue #2026).
+        server_key = self.push_provider.get("server_key")
+        if not server_key:
+            self.push_challenges.pop(challenge_id, None)
+            self.log_with_context(
+                "ERROR",
+                "Push challenge requested but no push transport is configured; "
+                "nothing was sent.",
+            )
+            raise MFADeliveryError(
+                "No push transport is configured. Set push_provider="
+                "{'service': 'fcm', 'server_key': ...} on MultiFactorAuthNode."
+            )
+
+        device = self.user_devices[user_id][0]  # Use first device for simplicity
+        endpoint = self.push_provider.get(
+            "endpoint", "https://fcm.googleapis.com/fcm/send"
+        )
+        fcm_data = {
+            "to": device.get("push_token"),
+            "notification": {
+                "title": "MFA Verification Required",
+                "body": f"Login attempt from {auth_context.get('location', 'Unknown location')}",
+            },
+            "data": {
+                "challenge_id": challenge_id,
+                # Delivered to the device only; never returned to the caller.
+                "challenge_token": challenge_token,
+                "ip_address": auth_context.get("ip_address", "Unknown"),
+                "browser": auth_context.get("browser", "Unknown"),
+            },
+        }
+
         try:
             import requests
 
-            device = self.user_devices[user_id][0]  # Use first device for simplicity
-
-            # Mock Firebase FCM request
-            fcm_data = {
-                "to": device.get("push_token"),
-                "notification": {
-                    "title": "MFA Verification Required",
-                    "body": f"Login attempt from {auth_context.get('location', 'Unknown location')}",
-                },
-                "data": {
-                    "challenge_id": challenge_id,
-                    "ip_address": auth_context.get("ip_address", "Unknown"),
-                    "browser": auth_context.get("browser", "Unknown"),
-                },
-            }
-
-            # Mock Firebase endpoint (for testing)
             response = requests.post(
-                "https://fcm.googleapis.com/fcm/send",
+                endpoint,
                 json=fcm_data,
-                headers={"Authorization": "key=test_server_key"},
+                headers={"Authorization": f"key={server_key}"},
+                timeout=self.push_provider.get("timeout", 10),
+            )
+        except Exception as e:
+            # Fail closed: an undelivered challenge must not be reported as sent.
+            self.push_challenges.pop(challenge_id, None)
+            self.log_with_context("ERROR", f"Failed to send push notification: {e}")
+            raise MFADeliveryError(f"Failed to send push notification: {e}") from e
+
+        if response.status_code != 200:
+            self.push_challenges.pop(challenge_id, None)
+            self.log_with_context(
+                "ERROR", f"Push notification failed: {response.status_code}"
+            )
+            raise MFADeliveryError(
+                f"Push provider rejected the challenge (HTTP {response.status_code})"
             )
 
-            if response.status_code == 200:
-                self.log_with_context(
-                    "INFO", f"Push challenge sent to device {device.get('device_id')}"
-                )
-            else:
-                self.log_with_context(
-                    "WARNING", f"Push notification failed: {response.status_code}"
-                )
-
-        except Exception as e:
-            self.log_with_context("ERROR", f"Failed to send push notification: {e}")
-
+        self.log_with_context(
+            "INFO", f"Push challenge sent to device {device.get('device_id')}"
+        )
         return {
             "success": True,
             "challenge_id": challenge_id,
@@ -944,6 +1262,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             device_id = challenge.get("device_id")
             del self.push_challenges[challenge_id]
 
+            # First approval proves the device: push enrolment is verified here
+            # rather than at setup time, where nothing had been delivered to or
+            # acknowledged by the device (issue #2026).
+            push_method = (
+                self.user_mfa_data.get(user_id, {}).get("methods", {}).get("push")
+            )
+            if push_method is not None and not push_method.get("verified"):
+                push_method["verified"] = True
+                push_method["verified_at"] = datetime.now(UTC).isoformat()
+
             # Create MFA session
             session_id = self._create_mfa_session(user_id)
 
@@ -969,6 +1297,58 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "verified": False,
                 "message": "Push challenge is still pending user response",
             }
+
+    def _respond_to_push_challenge(
+        self,
+        user_id: str,
+        challenge_id: Optional[str],
+        approved: bool,
+        challenge_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Record the device's approve/deny response to a push challenge.
+
+        Without this, nothing ever wrote ``status`` other than ``"pending"``, so
+        :meth:`_verify_push_challenge` could never succeed and ``push`` was a
+        permanently incompletable factor (issue #2026).
+
+        The response is authenticated by ``challenge_token`` -- the secret handed
+        to the device in the push payload. A ``challenge_id`` alone is not
+        sufficient: it is echoed to the caller by ``send_push``.
+
+        Args:
+            user_id: User the challenge belongs to.
+            challenge_id: Challenge identifier.
+            approved: True to approve, False to deny.
+            challenge_token: Secret delivered to the device with the challenge.
+
+        Returns:
+            Result describing the recorded response.
+        """
+        if not challenge_id:
+            return {"success": False, "error": "challenge_id required"}
+
+        challenge = self.push_challenges.get(challenge_id)
+        if not challenge or challenge.get("user_id") != user_id:
+            return {"success": False, "error": "Invalid or unknown challenge"}
+
+        if challenge.get("expires_at", datetime.now(UTC)) <= datetime.now(UTC):
+            del self.push_challenges[challenge_id]
+            return {"success": False, "error": "Challenge has expired"}
+
+        expected = challenge.get("challenge_token") or ""
+        if not challenge_token or not secrets.compare_digest(
+            str(expected).encode("utf-8"), str(challenge_token).encode("utf-8")
+        ):
+            return {"success": False, "error": "Invalid challenge response"}
+
+        challenge["status"] = "approved" if approved else "denied"
+        challenge["responded_at"] = datetime.now(UTC).isoformat()
+
+        return {
+            "success": True,
+            "challenge_id": challenge_id,
+            "status": challenge["status"],
+        }
 
     def _trust_device(
         self, user_id: str, device_info: Dict[str, Any], trust_duration_days: int
@@ -1079,19 +1459,59 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "device_id": fingerprint,
                     "trust_token": device_data.get("trust_token"),
                     "expires_at": device_data.get("expires_at"),
+                    # Tag the origin so expiry cleanup deletes from the store
+                    # the entry actually came from: removing a synthesised dict
+                    # from the OTHER store raised KeyError/ValueError out of
+                    # execute() (issue #2026).
+                    "_store": "user_mfa_data",
+                    "_fingerprint": fingerprint,
                 }
                 devices_to_check.append(device_obj)
 
+        # A device_id is an identifier, not a secret -- it is echoed back by
+        # setup_push and trust_device. Without a token requirement, anyone
+        # naming a device_id got skip_mfa=True (issue #2026).
+        if not trust_token:
+            return {
+                "success": True,
+                "trusted": False,
+                "skip_mfa": False,
+                "reason": "trust_token required",
+            }
+
         for device in devices_to_check:
             device_matches = device.get("device_id") == device_id
-            token_matches = not trust_token or device.get("trust_token") == trust_token
+            stored_token = device.get("trust_token") or ""
+            token_matches = secrets.compare_digest(
+                str(stored_token).encode("utf-8"), str(trust_token).encode("utf-8")
+            )
 
             if device_matches and token_matches:
-                # Check if trust has expired
-                expires_at = datetime.fromisoformat(device.get("expires_at", ""))
+                # A missing/malformed expiry is treated as expired rather than
+                # raising out of execute().
+                try:
+                    expires_at = datetime.fromisoformat(device.get("expires_at") or "")
+                except (TypeError, ValueError):
+                    expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
                 if expires_at <= datetime.now(UTC):
-                    # Remove expired trust
-                    self.trusted_devices[user_id].remove(device)
+                    # Remove expired trust from the store it came from.
+                    if device.get("_store") == "user_mfa_data":
+                        self.user_mfa_data.get(user_id, {}).get(
+                            "trusted_devices", {}
+                        ).pop(device.get("_fingerprint"), None)
+                    elif user_id in self.trusted_devices:
+                        try:
+                            self.trusted_devices[user_id].remove(device)
+                        except ValueError:
+                            # Already removed by a concurrent expiry cleanup.
+                            # The device is gone either way, which is the
+                            # outcome this branch exists to produce, so there
+                            # is nothing to recover from.
+                            self.log_with_context(
+                                "DEBUG",
+                                "Expired trusted device was already removed",
+                            )
                     return {
                         "success": True,
                         "trusted": False,
@@ -1179,35 +1599,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                             "error": "Invalid code or expired verification",
                         }
 
-                # For testing purposes, auto-setup TOTP if not configured
-                if method == "totp" and code == "123456":
-                    # Auto-setup TOTP for test user
-                    self.user_mfa_data[user_id] = {
-                        "methods": {
-                            "totp": {
-                                "secret": "JBSWY3DPEHPK3PXP",  # Test secret
-                                "setup_at": datetime.now(UTC).isoformat(),
-                                "verified": True,
-                            }
-                        },
-                        "backup_codes": [],
-                        "created_at": datetime.now(UTC).isoformat(),
-                    }
-
-                    # Create MFA session
-                    session_id = self._create_mfa_session_internal(user_id)
-
-                    # Log security event
-                    # Log security event (sync version - no security event logging)
-
-                    return {
-                        "success": True,
-                        "verified": True,
-                        "method": method,
-                        "session_id": session_id,
-                        "auto_setup": True,
-                    }
-
+                # A user with no MFA enrolled cannot satisfy a second factor.
+                # This previously auto-enrolled ANY user who presented the
+                # literal code "123456" against a hardcoded shared secret and
+                # handed back a fully verified MFA session (issue #2026):
+                # verification is never a path to enrolment.
                 return {
                     "success": False,
                     "verified": False,
@@ -1217,7 +1613,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             # Check if it's a backup code first
-            if self.backup_codes and code in user_data.get("backup_codes", []):
+            # A backup code only substitutes for a factor that EXISTS and has
+            # been verified. Codes are minted at setup time, so accepting them
+            # against an unverified enrolment made `setup -> verify` a
+            # complete second factor with nothing proven (issue #2026).
+            if (
+                self.backup_codes
+                and any(
+                    m.get("verified") for m in user_data.get("methods", {}).values()
+                )
+                and code in user_data.get("backup_codes", [])
+            ):
                 # Remove used backup code
                 user_data["backup_codes"].remove(code)
                 self.mfa_stats["backup_codes_used"] += 1
@@ -1240,7 +1646,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # Handle backup_code method specially
             if method == "backup_code":
-                if self.backup_codes and code in user_data.get("backup_codes", []):
+                # A backup code only substitutes for a factor that EXISTS and
+                # has been verified (issue #2026).
+                if (
+                    self.backup_codes
+                    and any(
+                        m.get("verified") for m in user_data.get("methods", {}).values()
+                    )
+                    and code in user_data.get("backup_codes", [])
+                ):
                     # Remove used backup code
                     user_data["backup_codes"].remove(code)
                     self.mfa_stats["backup_codes_used"] += 1
@@ -1346,35 +1760,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         with self._data_lock:
             if user_id not in self.user_mfa_data:
-                # For testing purposes, auto-setup TOTP if not configured
-                if method == "totp" and code == "123456":
-                    # Auto-setup TOTP for test user
-                    self.user_mfa_data[user_id] = {
-                        "methods": {
-                            "totp": {
-                                "secret": "JBSWY3DPEHPK3PXP",  # Test secret
-                                "setup_at": datetime.now(UTC).isoformat(),
-                                "verified": True,
-                            }
-                        },
-                        "backup_codes": [],
-                        "created_at": datetime.now(UTC).isoformat(),
-                    }
-
-                    # Create MFA session
-                    session_id = self._create_mfa_session_internal(user_id)
-
-                    # Log security event
-                    # Log security event (sync version - no security event logging)
-
-                    return {
-                        "success": True,
-                        "verified": True,
-                        "method": method,
-                        "session_id": session_id,
-                        "auto_setup": True,
-                    }
-
+                # A user with no MFA enrolled cannot satisfy a second factor.
+                # This previously auto-enrolled ANY user who presented the
+                # literal code "123456" against a hardcoded shared secret and
+                # handed back a fully verified MFA session (issue #2026):
+                # verification is never a path to enrolment.
                 return {
                     "success": False,
                     "verified": False,
@@ -1384,7 +1774,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             # Check if it's a backup code first
-            if self.backup_codes and code in user_data.get("backup_codes", []):
+            # A backup code only substitutes for a factor that EXISTS and has
+            # been verified. Codes are minted at setup time, so accepting them
+            # against an unverified enrolment made `setup -> verify` a
+            # complete second factor with nothing proven (issue #2026).
+            if (
+                self.backup_codes
+                and any(
+                    m.get("verified") for m in user_data.get("methods", {}).values()
+                )
+                and code in user_data.get("backup_codes", [])
+            ):
                 # Remove used backup code
                 user_data["backup_codes"].remove(code)
                 self.mfa_stats["backup_codes_used"] += 1
@@ -1407,7 +1807,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # Handle backup_code method specially
             if method == "backup_code":
-                if self.backup_codes and code in user_data.get("backup_codes", []):
+                # A backup code only substitutes for a factor that EXISTS and
+                # has been verified (issue #2026).
+                if (
+                    self.backup_codes
+                    and any(
+                        m.get("verified") for m in user_data.get("methods", {}).values()
+                    )
+                    and code in user_data.get("backup_codes", [])
+                ):
                     # Remove used backup code
                     user_data["backup_codes"].remove(code)
                     self.mfa_stats["backup_codes_used"] += 1
@@ -1498,10 +1906,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         Returns:
             True if code is valid
         """
-        # For testing purposes, accept the test code "123456"
-        if code == "123456":
-            return True
-
         try:
             # Use pyotp for compatibility with test
             import pyotp
@@ -1547,22 +1951,49 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 del self.user_mfa_data[user_id]["temp_sms_code"]
                 return True
 
-        # Fallback: accept any 6-digit code for basic compatibility
-        return len(code) == 6 and code.isdigit()
+        # Fail closed: a code that matches no issued challenge is invalid. The
+        # previous shape-only fallback accepted ANY 6-digit string, so every
+        # SMS second factor could be cleared by guessing "000000".
+        return False
 
     def _verify_email_code(self, user_id: str, code: str) -> bool:
         """Verify email code.
+
+        Verified against the challenge actually issued to this user by
+        :meth:`_send_email_code` (or a pending verification), never by shape.
 
         Args:
             user_id: User ID
             code: Code to verify
 
         Returns:
-            True if code is valid
+            True if code matches a live, unexpired challenge for this user
         """
-        # In a real implementation, this would check against sent codes
-        # For demonstration, accept any 6-digit code
-        return len(code) == 6 and code.isdigit()
+        # Check pending verifications first
+        if user_id in self.pending_verifications:
+            pending = self.pending_verifications[user_id]
+            if (
+                pending.get("method") == "email"
+                and pending.get("code") == code
+                and pending.get("expires_at", datetime.now(UTC)) > datetime.now(UTC)
+            ):
+                del self.pending_verifications[user_id]
+                return True
+
+        # Check the code stored when the email challenge was delivered
+        if user_id in self.user_mfa_data:
+            temp_code_data = self.user_mfa_data[user_id].get("temp_email_code")
+            if (
+                temp_code_data
+                and temp_code_data.get("code") == code
+                and temp_code_data.get("expires_at", datetime.now(UTC))
+                > datetime.now(UTC)
+            ):
+                del self.user_mfa_data[user_id]["temp_email_code"]
+                return True
+
+        # Fail closed: previously ANY 6-digit string was accepted.
+        return False
 
     def _generate_backup_codes_for_user(self, user_id: str) -> List[str]:
         """Generate backup codes for user and return just the codes list."""
@@ -1598,12 +2029,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {"success": False, "error": "Backup codes not enabled"}
 
         with self._data_lock:
-            if user_id not in self.user_mfa_data:
-                # Initialize user data if not exists
-                self.user_mfa_data[user_id] = {
-                    "methods": {},
-                    "backup_codes": [],
-                    "created_at": datetime.now(UTC).isoformat(),
+            # Gate on an ENROLLED FACTOR, not on the presence of a record:
+            # set_preference and trust_device both create an empty
+            # user_mfa_data entry, so a key-presence check was bypassable in
+            # two calls. The codes returned here are accepted directly by
+            # _verify_mfa, so issuing them to an unenrolled user reached the
+            # same outcome as the removed "123456" auto-enrolment stub
+            # (issue #2026). Backup codes supplement a factor; never establish one.
+            if not self.user_mfa_data.get(user_id, {}).get("methods"):
+                return {
+                    "success": False,
+                    "user_id": user_id,
+                    "error": "MFA not setup for user",
                 }
 
             # Generate backup codes
@@ -1652,10 +2089,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             if method == "all":
-                # Revoke all methods
+                # Capture the method list BEFORE clearing it: reading it after
+                # the reset always reported an empty revoked_methods.
+                revoked_methods = list(user_data.get("methods", {}).keys())
                 user_data["methods"] = {}
                 user_data["backup_codes"] = []
-                revoked_methods = list(user_data.get("methods", {}).keys())
             else:
                 if method not in user_data["methods"]:
                     return {
@@ -1667,8 +2105,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 del user_data["methods"][method]
                 revoked_methods = [method]
 
-            # Invalidate all sessions
-            self._invalidate_user_sessions(user_id)
+            # Invalidate all sessions. The lock-free variant: _data_lock is
+            # already held here and is not reentrant.
+            self._invalidate_user_sessions_internal(user_id)
 
             # Log security event
             # self._log_security_event(user_id, "mfa_revoked", "high")
@@ -1774,13 +2213,27 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_id: User ID
         """
         with self._data_lock:
-            sessions_to_remove = []
-            for session_id, session_data in self.user_sessions.items():
-                if session_data["user_id"] == user_id:
-                    sessions_to_remove.append(session_id)
+            self._invalidate_user_sessions_internal(user_id)
 
-            for session_id in sessions_to_remove:
-                del self.user_sessions[session_id]
+    def _invalidate_user_sessions_internal(self, user_id: str) -> None:
+        """Invalidate all sessions for user. Caller MUST hold ``_data_lock``.
+
+        ``_data_lock`` is a non-reentrant ``threading.Lock``, so the locking
+        wrapper above cannot be called from a context that already holds it --
+        ``_revoke_mfa`` did exactly that and self-deadlocked while holding the
+        lock, wedging every MFA operation in the process (issue #2026). Mirrors
+        the ``_create_mfa_session_internal`` split.
+
+        Args:
+            user_id: User ID
+        """
+        sessions_to_remove = [
+            session_id
+            for session_id, session_data in self.user_sessions.items()
+            if session_data["user_id"] == user_id
+        ]
+        for session_id in sessions_to_remove:
+            del self.user_sessions[session_id]
 
     def _check_rate_limit(self, user_id: str) -> bool:
         """Check rate limit for user.
@@ -1852,40 +2305,34 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self.log_with_context("WARNING", f"QR code generation failed: {e}")
             return ""
 
-    def _send_sms_code(self, phone: str, code: str, user_id: str) -> None:
-        """Send SMS verification code.
+    def _send_sms_code(self, phone: str, code: str, user_id: str) -> bool:
+        """Send SMS verification code via the configured provider.
 
         Args:
             phone: Phone number
             code: Verification code
             user_id: User ID
+
+        Returns:
+            True if a configured provider actually delivered the message,
+            False if no provider is configured (nothing was sent).
+
+        Raises:
+            MFADeliveryError: A provider IS configured but delivery failed.
         """
+        delivered = False
+
         # Use Twilio if configured
         if self.sms_provider and self.sms_provider.get("service") == "twilio":
-            try:
-                from twilio.rest import Client
-
-                client = Client(
-                    self.sms_provider.get("account_sid"),
-                    self.sms_provider.get("auth_token"),
-                )
-
-                message = client.messages.create(
-                    body=f"Your verification code: {code}",
-                    from_=self.sms_provider.get("from_number"),
-                    to=phone,
-                )
-
-                self.log_with_context(
-                    "INFO", f"SMS sent via Twilio to {phone[-4:]} (SID: {message.sid})"
-                )
-
-            except Exception as e:
-                self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
+            self._twilio_send(phone, f"Your verification code: {code}")
+            delivered = True
         else:
-            # Fallback to logging
+            # No provider bound: say so at WARNING. This previously logged
+            # "SMS code sent", which was false.
             self.log_with_context(
-                "INFO", f"SMS code sent to {phone[-4:]} for user {user_id}"
+                "WARNING",
+                f"No SMS provider configured; no code was delivered to "
+                f"the enrolled destination for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -1898,51 +2345,38 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
 
-    def _send_email_code(self, email: str, code: str, user_id: str) -> None:
-        """Send email verification code.
+        return delivered
+
+    def _send_email_code(self, email: str, code: str, user_id: str) -> bool:
+        """Send email verification code via the configured SMTP provider.
 
         Args:
             email: Email address
             code: Verification code
             user_id: User ID
+
+        Returns:
+            True if a configured provider actually delivered the message,
+            False if no provider is configured (nothing was sent).
+
+        Raises:
+            MFADeliveryError: A provider IS configured but delivery failed.
         """
+        delivered = False
+
         # Use SMTP if configured
         if self.email_provider and self.email_provider.get("smtp_host"):
-            try:
-                import smtplib
-                from email.mime.multipart import MIMEMultipart
-                from email.mime.text import MIMEText
-
-                # Create message
-                msg = MIMEMultipart()
-                msg["From"] = self.email_provider.get("username")  # type: ignore[reportArgumentType]
-                msg["To"] = email
-                msg["Subject"] = "MFA Verification Code"
-
-                body = f"Your verification code: {code}"
-                msg.attach(MIMEText(body, "plain"))
-
-                # Send email
-                server = smtplib.SMTP(
-                    self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
-                    self.email_provider.get("smtp_port", 587),
-                )
-                server.starttls()
-                server.login(
-                    self.email_provider.get("username"),  # type: ignore[reportArgumentType]
-                    self.email_provider.get("password"),  # type: ignore[reportArgumentType]
-                )
-                server.send_message(msg)
-                server.quit()
-
-                self.log_with_context("INFO", f"Email sent via SMTP to {email}")
-
-            except Exception as e:
-                self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
+            self._smtp_send(
+                email, "MFA Verification Code", f"Your verification code: {code}"
+            )
+            delivered = True
         else:
-            # Fallback to logging
+            # No provider bound: say so at WARNING. This previously logged
+            # "Email code sent", which was false.
             self.log_with_context(
-                "INFO", f"Email code sent to {email} for user {user_id}"
+                "WARNING",
+                f"No email provider configured; no code was delivered to "
+                f"{self._mask_email(email)} for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -1954,6 +2388,93 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "code": code,
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
+
+        return delivered
+
+    def _twilio_send(self, phone: Optional[str], body: str) -> None:
+        """Send one SMS via the configured Twilio provider.
+
+        The single Twilio transport, shared by code delivery and recovery-token
+        delivery. ``body`` is a credential-bearing message and is never logged.
+
+        Raises:
+            MFADeliveryError: Delivery failed.
+        """
+        try:
+            from twilio.rest import Client
+
+            client = Client(
+                self.sms_provider.get("account_sid"),
+                self.sms_provider.get("auth_token"),
+            )
+            message = client.messages.create(
+                body=body,
+                from_=self.sms_provider.get("from_number"),
+                to=phone,
+            )
+            masked = "the enrolled destination"
+            self.log_with_context(
+                "INFO", f"SMS sent via Twilio to {masked} (SID: {message.sid})"
+            )
+        except Exception as e:
+            # Fail closed. Swallowing this made the caller report
+            # "verification_sent": True for a code the user never got.
+            self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
+            raise MFADeliveryError(f"Failed to send SMS via Twilio: {e}") from e
+
+    def _smtp_send(self, email: Optional[str], subject: str, body: str) -> None:
+        """Send one email via the configured SMTP provider.
+
+        The single SMTP transport, shared by code delivery and recovery-token
+        delivery. ``body`` is credential-bearing and is never logged; the
+        recipient is logged masked.
+
+        Raises:
+            MFADeliveryError: Delivery failed.
+        """
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            msg = MIMEMultipart()
+            msg["From"] = self.email_provider.get("username")  # type: ignore[reportArgumentType]
+            msg["To"] = email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "plain"))
+
+            # An explicit timeout: smtplib defaults to the global socket
+            # timeout (None), so a blackholing host blocked forever.
+            server = smtplib.SMTP(
+                self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
+                self.email_provider.get("smtp_port", 587),
+                timeout=self.email_provider.get("timeout", 15),
+            )
+            server.starttls()
+            server.login(
+                self.email_provider.get("username"),  # type: ignore[reportArgumentType]
+                self.email_provider.get("password"),  # type: ignore[reportArgumentType]
+            )
+            server.send_message(msg)
+            server.quit()
+
+            self.log_with_context(
+                "INFO", f"Email sent via SMTP to {self._mask_email(email)}"
+            )
+        except Exception as e:
+            # Fail closed. Swallowing this made the caller report
+            # "verification_sent": True for a code the user never got.
+            self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
+            raise MFADeliveryError(f"Failed to send email via SMTP: {e}") from e
+
+    @staticmethod
+    def _mask_email(email: Optional[str]) -> str:
+        """Mask an address for logging, mirroring the SMS last-4 treatment."""
+        if not email or "@" not in email:
+            return "****"
+        local, _, domain = email.partition("@")
+        head = local[:2] if len(local) > 2 else local[:1]
+        return f"{head}***@{domain}"
 
     async def _log_security_event(
         self, user_id: str, event_type: str, severity: str
@@ -2004,9 +2525,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "ip_address": "unknown",  # In real implementation, get from request
         }
 
+        if self.audit_log_node is None:
+            # No sink is wired at all -- already reported once at init. Do not
+            # emit a per-operation "Failed to audit", which reads like a
+            # transient fault rather than a standing gap (issue #2026).
+            return
+
         try:
             await self.audit_log_node.async_run(**audit_entry)  # type: ignore[reportAttributeAccessIssue]
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
+            # Narrow: a broad `except Exception` here hid the fact that the
+            # sink was None behind a warning that looked transient.
             self.log_with_context("WARNING", f"Failed to audit MFA operation: {e}")
 
     def validate_session(self, session_id: str) -> Dict[str, Any]:
@@ -2064,6 +2593,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_email = kwargs.get("user_email", "")
         user_phone = kwargs.get("user_phone", "")
         phone_number = kwargs.get("phone_number", "")
+        admin_override = bool(kwargs.get("admin_override"))
 
         # Handle phone_number parameter alias
         final_user_phone = user_phone or phone_number
@@ -2138,7 +2668,19 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "generate_backup_codes":
                 result = self._generate_backup_codes(user_id)  # type: ignore[reportArgumentType]
             elif action == "revoke":
-                result = self._revoke_mfa(user_id, method)  # type: ignore[reportArgumentType]
+                # Destroying a user's factors is reset-equivalent: revoke then
+                # setup re-creates the enrolment the setup guard protects, so
+                # it carries the same requirement (issue #2026).
+                if not admin_override:
+                    result = {
+                        "success": False,
+                        "error": (
+                            "Revoking MFA destroys the user's existing factors; "
+                            "it requires admin_override=True."
+                        ),
+                    }
+                else:
+                    result = self._revoke_mfa(user_id, method)  # type: ignore[reportArgumentType]
             elif action == "status":
                 result = self._get_mfa_status(user_id)  # type: ignore[reportArgumentType]
             elif action == "verify_backup":
@@ -2156,7 +2698,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "list_methods":
                 result = self._list_methods(user_id)  # type: ignore[reportArgumentType]
             elif action == "disable":
-                result = self._disable_method(user_id, method)  # type: ignore[reportArgumentType]
+                # Match the sync surface: a gate present in one dispatcher and
+                # absent in the other is not a gate (issue #2026).
+                if admin_override:
+                    result = self._disable_all_mfa(user_id)  # type: ignore[reportArgumentType]
+                else:
+                    result = {
+                        "success": False,
+                        "error": (
+                            "Disabling a user's MFA method requires "
+                            "admin_override=True."
+                        ),
+                    }
             else:
                 result = {"success": False, "error": f"Unknown action: {action}"}
 
@@ -2177,18 +2730,57 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             return result
 
+        except MFADeliveryError:
+            # Delivery failures are already converted to result dicts at their
+            # dispatch sites; anything reaching here is a genuine bug.
+            raise
+        except (TypeError, ValueError, AttributeError, KeyError) as e:
+            # Malformed input (a non-string user_phone/user_email, a non-dict
+            # device_info) used to raise out of execute(), contradicting the
+            # node's own result-dict contract that every other failure honours
+            # (issue #2026). The detail is logged, not returned.
+            self.log_with_context(
+                "ERROR", f"MFA operation {action} failed on invalid input: {e!r}"
+            )
+            return {
+                "success": False,
+                "error": "Invalid input for MFA operation",
+                "action": action,
+            }
         except Exception as e:
             # self.log_error_with_traceback(e, "mfa_operation")
             raise
 
     def _verify_backup_code(self, user_id: str, code: str) -> Dict[str, Any]:
-        """Verify backup code for user."""
+        """Verify backup code for user.
+
+        The fifth backup-code verification site. It carried none of the
+        guarantees the other four gained in issue #2026: it accepted a code
+        against an enrolment that had verified nothing, and it reported
+        ``success: True`` for a REJECTED code, so a caller gating on the
+        conventional ``success`` field granted access on a failed verification.
+        """
         with self._data_lock:
             if user_id not in self.user_mfa_data:
-                return {"success": True, "verified": False, "reason": "user_not_found"}
+                return {
+                    "success": False,
+                    "verified": False,
+                    "reason": "user_not_found",
+                }
 
             user_data = self.user_mfa_data[user_id]
             backup_codes = user_data.get("backup_codes", [])
+
+            # A backup code substitutes for a VERIFIED factor; it never
+            # establishes one (issue #2026).
+            if not any(
+                m.get("verified") for m in user_data.get("methods", {}).values()
+            ):
+                return {
+                    "success": False,
+                    "verified": False,
+                    "reason": "no_verified_factor",
+                }
 
             if code in backup_codes:
                 # Remove used backup code
@@ -2197,14 +2789,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 self.mfa_stats["backup_codes_used"] += 1
 
                 return {"success": True, "verified": True, "method": "backup_code"}
-            else:
-                return {
-                    "success": True,
-                    "verified": False,
-                    "reason": (
-                        "already_used" if code not in backup_codes else "invalid_code"
-                    ),
-                }
+
+            return {
+                "success": False,
+                "verified": False,
+                "reason": "invalid_code",
+            }
 
     def _trust_device_by_fingerprint(
         self, user_id: str, device_fingerprint: str
@@ -2328,40 +2918,207 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # Don't fail the main operation if audit logging fails
                 logger.warning(f"Audit logging failed: {e}")
 
-    def _initiate_recovery(self, user_id: str, recovery_method: str) -> Dict[str, Any]:
-        """Initiate MFA recovery for user."""
+    def _initiate_recovery(
+        self,
+        user_id: str,
+        recovery_method: str,
+        recovery_destination: Optional[str] = None,
+        admin_override: bool = False,
+    ) -> Dict[str, Any]:
+        """Initiate MFA recovery for user.
+
+        The recovery token is a bearer credential that clears the second factor.
+        It is delivered out-of-band to the enrolled destination and is NEVER
+        returned to the caller: previously the token was both returned in the
+        response and never sent anywhere, so anyone who could reach this action
+        for a victim's user_id received their recovery credential directly
+        (issue #2026).
+
+        The destination is resolved from the user's ENROLLED method record, not
+        from anything the caller supplies: recovery is by definition reachable by
+        an un-MFA'd principal, so a caller-chosen address would simply mail the
+        victim's recovery credential to the attacker.
+
+        The token is also delivered through a dedicated transport rather than
+        :meth:`_send_email_code` / :meth:`_send_sms_code`, because those store
+        what they send as ``temp_email_code`` / ``temp_sms_code`` -- which would
+        make the 24-hour recovery token redeemable as a routine second factor.
+
+        Args:
+            user_id: User initiating recovery.
+            recovery_method: ``email``, ``sms``, or ``admin``.
+            recovery_destination: Ignored for delivery. When supplied it must
+                match the enrolled destination, and is rejected otherwise.
+
+        Returns:
+            Result describing that a token was issued and delivered. The token
+            itself is not included.
+        """
         if recovery_method not in ["email", "sms", "admin"]:
             return {
                 "success": False,
                 "error": f"Unsupported recovery method: {recovery_method}",
             }
 
-        # Generate recovery token
+        # "admin" bypasses the enrolled-destination checks entirely and always
+        # reports delivered, so ungated it minted a recovery_requests entry for
+        # any caller-chosen user_id (issue #2026).
+        if recovery_method == "admin" and not admin_override:
+            return {
+                "success": False,
+                "error": "Admin recovery requires admin_override=True.",
+            }
+
+        # Resolve the destination under the lock, then RELEASE it before the
+        # network call: delivery previously ran inside _data_lock, so one hung
+        # SMTP host wedged every MFA operation in the process.
+        with self._data_lock:
+            enrolled = (
+                self.user_mfa_data.get(user_id, {})
+                .get("methods", {})
+                .get(recovery_method, {})
+                if recovery_method in ("email", "sms")
+                else {}
+            )
+
+            destination = None
+            if recovery_method == "email":
+                destination = enrolled.get("email")
+            elif recovery_method == "sms":
+                destination = enrolled.get("phone")
+
+            if recovery_method in ("email", "sms"):
+                if not destination:
+                    return {
+                        "success": False,
+                        "error": (
+                            f"No enrolled {recovery_method} destination for this "
+                            "user; recovery cannot be delivered."
+                        ),
+                    }
+                # An UNVERIFIED destination is one an unauthenticated `setup`
+                # call could have just written, which would redirect the
+                # victim's recovery token to an attacker's address.
+                if not enrolled.get("verified"):
+                    return {
+                        "success": False,
+                        "error": (
+                            f"The enrolled {recovery_method} destination is not "
+                            "verified; recovery cannot be delivered to it."
+                        ),
+                    }
+
+            # A supplied destination is a confirmation value, never a routing
+            # instruction. Mismatch is refused rather than honoured. Compared as
+            # UTF-8 bytes because compare_digest rejects non-ASCII str.
+            if recovery_destination and not secrets.compare_digest(
+                str(recovery_destination).encode("utf-8"),
+                str(destination or "").encode("utf-8"),
+            ):
+                return {
+                    "success": False,
+                    "error": "recovery_destination does not match the enrolled destination",
+                }
+
         recovery_token = secrets.token_urlsafe(32)
         expires_at = datetime.now(UTC) + timedelta(hours=24)  # 24 hour expiry
 
-        # Store recovery request
-        if not hasattr(self, "recovery_requests"):
-            self.recovery_requests = {}
+        # Deliver BEFORE recording the request, so a request is never left
+        # pending against a token the user cannot have received.
+        try:
+            delivered = self._deliver_recovery_token(
+                recovery_method, destination, recovery_token, user_id
+            )
+        except MFADeliveryError as e:
+            self.log_with_context(
+                "ERROR", f"Recovery delivery failed for user {user_id}: {e}"
+            )
+            return {
+                "success": False,
+                "recovery_method": recovery_method,
+                "error": "Recovery token delivery failed",
+            }
 
-        self.recovery_requests[user_id] = {
-            "recovery_token": recovery_token,
-            "recovery_method": recovery_method,
-            "created_at": datetime.now(UTC).isoformat(),
-            "expires_at": expires_at.isoformat(),
-            "used": False,
-        }
+        if not delivered:
+            return {
+                "success": False,
+                "recovery_method": recovery_method,
+                "error": (
+                    f"No {recovery_method} transport is configured; the "
+                    "recovery token was not delivered."
+                ),
+            }
 
-        # In a real implementation, this would send the recovery token via email/SMS
-        # For testing, we just return the token
+        with self._data_lock:
+            if not hasattr(self, "recovery_requests"):
+                self.recovery_requests = {}
+
+            self.recovery_requests[user_id] = {
+                "recovery_token": recovery_token,
+                "recovery_method": recovery_method,
+                "created_at": datetime.now(UTC).isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "used": False,
+            }
 
         return {
             "success": True,
-            "recovery_token": recovery_token,
             "recovery_method": recovery_method,
             "expires_in": 24 * 60 * 60,  # 24 hours in seconds
             "message": f"Recovery token sent via {recovery_method}",
         }
+
+    def _deliver_recovery_token(
+        self,
+        recovery_method: str,
+        destination: Optional[str],
+        recovery_token: str,
+        user_id: str,
+    ) -> bool:
+        """Deliver a recovery token WITHOUT registering it as an MFA code.
+
+        Deliberately does not reuse :meth:`_send_email_code` /
+        :meth:`_send_sms_code`: those persist the delivered value as a live
+        second-factor challenge, which would let the recovery token be replayed
+        against ``action="verify"``.
+
+        Returns:
+            True if a transport delivered the token, False if none is configured.
+
+        Raises:
+            MFADeliveryError: A transport IS configured but delivery failed.
+        """
+        body = (
+            "Your account recovery token (valid 24 hours): "
+            f"{recovery_token}\nIf you did not request this, ignore this message."
+        )
+
+        if recovery_method == "admin":
+            # Operator-mediated channel; the token is retrieved from
+            # recovery_requests by an authorised operator, never echoed here.
+            self.log_with_context(
+                "WARNING",
+                f"Admin MFA recovery issued for user {user_id}; the token must "
+                "be retrieved by an authorised operator.",
+            )
+            return True
+
+        if recovery_method == "email":
+            if not (self.email_provider and self.email_provider.get("smtp_host")):
+                return False
+            self._smtp_send(destination, "Account recovery", body)
+            self.log_with_context(
+                "INFO", f"Recovery token delivered by email for user {user_id}"
+            )
+            return True
+
+        if not (self.sms_provider and self.sms_provider.get("service") == "twilio"):
+            return False
+        self._twilio_send(destination, body)
+        self.log_with_context(
+            "INFO", f"Recovery token delivered by SMS for user {user_id}"
+        )
+        return True
 
     def _disable_all_mfa(self, user_id: str) -> Dict[str, Any]:
         """Disable all MFA for user (admin override)."""
