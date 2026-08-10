@@ -8,6 +8,30 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 6 (burn-down, latest): main is `f137d73c9`. FOUR PRs merged, THREE issues closed.**
+
+| Merged | Closes | Note |
+| --- | --- | --- |
+| #2034 | #2015 | 3 blockers confirmed-by-execution, fixed, re-verified |
+| #2037 | #2014 | F1 RCE fixed: boundary moved pickle → JSON bytes; exploit now `MARKER: ABSENT` |
+| #2036 | #2027 | Windows `fchmod` fixed (verified by deleting the attribute); masker gaps ALL closed |
+| #2043 | — | session notes |
+
+**#2006 IS NOW UNBLOCKED** — #2036 merged, so `dataflow/core/nodes.py` is free.
+
+**Still open:** **#2035 (#2026)** — blocker: `async_run(self, **kwargs)` never binds `admin_override`
+but references it at BOTH admin gates → `NameError` on revoke and disable (confirmed by execution).
+Also JWT `sub` fallback, `if session_id:` skip, truthy-string flag gates, CodeQL HIGH on the
+API-key sha256. 67 tests never reached those arms — that coverage gap is the real lesson.
+
+**Filed:** #2038 (CI Tier-2 `continue-on-error` — green is not evidence), #2039 (dataflow isort
+`src_paths`), #2040 (log injection), #2041 (`SecretManager` ephemeral key — on the shipped default
+path, higher impact than #2024), #2044 (CodeQL does not model `fingerprint_secret` as a sanitizer;
+3 alerts left visible rather than suppressed).
+
+**Worktrees retired:** lane-2b, lane-2d, lane-1e. **Remaining:** lane-1c (in flight), lane-2a /
+lane-2c / lane-2e (scratch-only WIP, need relaunch).
+
 **UPDATE 5 (burn-down, latest): main is `0f323546f`. TWO lane fixes landed — #2034 (#2015) and
 #2037 (#2014).** #2037's F1 RCE is **FIXED AND RE-VERIFIED BY EXECUTION**: the boundary moved from
 pickle to JSON bytes, the exploit now yields `MARKER: ABSENT` (was `MARKER == PARENT PID`) and a
