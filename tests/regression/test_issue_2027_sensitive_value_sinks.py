@@ -398,7 +398,7 @@ class TestRestrictToOwnerIsCrossPlatform:
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(fp.sys, "platform", "win32")
-            mp.setattr(fp, "_WARNED_NO_ACL", False)
+            fp._warn_no_acl_mechanism.cache_clear()
             # No pywin32 in this environment, so the import inside the helper
             # raises ImportError -- the exact state a Windows user without the
             # optional dependency is in.
@@ -407,7 +407,7 @@ class TestRestrictToOwnerIsCrossPlatform:
 
         assert applied is False, "helper claimed protection it did not apply"
         assert "NOT access-controlled" in caplog.text
-        assert str(target) in caplog.text
+        assert "pywin32" in caplog.text, "operator is not told how to fix it"
 
     def test_warns_only_once_per_process(self, tmp_path, caplog) -> None:
         """A per-write warning on a busy audit log would flood the operator."""
@@ -418,7 +418,7 @@ class TestRestrictToOwnerIsCrossPlatform:
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(fp.sys, "platform", "win32")
-            mp.setattr(fp, "_WARNED_NO_ACL", False)
+            fp._warn_no_acl_mechanism.cache_clear()
             with caplog.at_level(logging.WARNING):
                 fp.restrict_to_owner(target)
                 fp.restrict_to_owner(target)

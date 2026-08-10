@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Union
 
@@ -40,10 +41,27 @@ __all__ = ["restrict_to_owner", "OWNER_ONLY_MODE", "owner_only_is_enforceable"]
 # Owner read/write, no group, no other. Meaningful on POSIX only.
 OWNER_ONLY_MODE = 0o600
 
-# Emit the "not access-controlled on this platform" warning once per process
-# rather than once per secret written -- a per-write warning on a busy audit
-# log would be its own denial of service on the operator's log stream.
-_WARNED_NO_ACL = False
+
+@lru_cache(maxsize=1)
+def _warn_no_acl_mechanism() -> None:
+    """Warn that this platform cannot restrict access, once per process.
+
+    Once, not once per call: a per-write warning on a busy audit log would be
+    its own denial of service on the operator's log stream. ``lru_cache`` is
+    the one-shot latch -- tests reset it with ``cache_clear()``.
+
+    The message deliberately does not call the file "secret": this helper is
+    general-purpose and the caller may be protecting an audit log or a key.
+    What matters is naming the mechanism that is missing and how to supply it.
+    """
+    logger.warning(
+        "File permissions are NOT access-controlled on this platform. POSIX "
+        "mode bits do not restrict readers on Windows, and pywin32 is not "
+        "installed, so no DACL could be applied. Any user able to read the "
+        "containing directory can read files this process intended to be "
+        "owner-only. Install pywin32 (pip install pywin32), or place them in "
+        "a directory whose ACL already restricts access."
+    )
 
 
 def owner_only_is_enforceable() -> bool:
@@ -63,23 +81,17 @@ def owner_only_is_enforceable() -> bool:
 
 def _restrict_via_dacl(path: Union[str, Path]) -> bool:
     """Windows: restrict the file's DACL to the current user's SID."""
-    global _WARNED_NO_ACL
     try:
         import ntsecuritycon as con  # type: ignore[import-untyped]
         import win32api  # type: ignore[import-untyped]
         import win32security  # type: ignore[import-untyped]
     except ImportError:
-        if not _WARNED_NO_ACL:
-            _WARNED_NO_ACL = True
-            logger.warning(
-                "Secret file %s is NOT access-controlled on this platform. "
-                "POSIX mode bits do not restrict readers on Windows, and "
-                "pywin32 is not installed so no DACL could be applied. Any "
-                "user able to read the containing directory can read this "
-                "file. Install pywin32 (pip install pywin32) or place the "
-                "file in a directory whose ACL already restricts access.",
-                path,
-            )
+        # The path is deliberately NOT interpolated here. The warning is about
+        # a missing platform mechanism, not about one file, and it fires once
+        # per process -- naming a single arbitrary path would misleadingly
+        # imply only that file is affected. Callers that need per-file
+        # attribution have the False return value.
+        _warn_no_acl_mechanism()
         return False
 
     username = win32api.GetUserName()
