@@ -21,13 +21,18 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
 3. **PR #2028** — #1995 fix. **Do NOT merge on the earlier "green" report**: `Test DataFlow Infra
    Regression (Postgres/Redis)` fails on it and passed on #2016. Same selection passes locally
    (23 passed, real PG+Redis); collection clean. UNRESOLVED pending the CI log.
-4. **PR #2031 (DRAFT)** — `rules/specification-verification.md`, the codified defense for the
-   wrong-specifications class, on branch `docs/codify-specification-verification` off main.
-   Its Tier-1 self-referential redteam (reviewer + cc-architect + analyst) was DISPATCHED but its
-   findings had NOT landed when this note was written. **Treat the rule as PROPOSED, not ratified;
-   do not merge #2031 until the redteam findings are incorporated.** The three agents were asked to
-   attack the scope decision, verify every evidentiary claim in the rule against source, and make
-   the strongest case that the rule should not exist — re-dispatch them if their reports are lost.
+4. **PR #2031 (DRAFT)** — `rules/specification-verification.md`. **Tier-1 redteam COMPLETE;
+   verdict land-amended; amendments in `638a6c487`.** The redteam found the rule FAILED ITS OWN
+   MUST-1 in three places — a fabricated comparand ("the 27 filed"; #2015 filed 24), a 24-vs-25
+   internal contradiction, and wrong replacement line numbers for #2013 (4813/4826; actual
+   4814/4825, and 4782 is a status-dict key not a method). All corrected, each RE-DERIVED by the
+   orchestrator — **one reviewer correction was itself wrong** (proposed base_agent 734/743;
+   actual 728/735/744), which is why the redteam's numbers were not taken on trust.
+   **Two OPEN questions gate the merge** — see the PR comment: (a) should the rule be BASELINE
+   rather than path-scoped (MUST-1/3 fire before the fix is written, but a path-scoped rule loads
+   at the first matching edit — after the decision point); (b) it ships with NO probe set and NO
+   eval-manifest entry, which `coc-artifact-eval-coverage.md` MUST-1 requires and MUST-4 blocks
+   the Detection block for. Until (b) lands the rule is review-layer-only.
 5. The **"specs were wrong" section** below. This is the load-bearing finding of the session.
 
 ## In-flight state
