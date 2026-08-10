@@ -8,6 +8,40 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 10 (latest): main `727bc8d19`. EIGHT issues closed, 16 PRs merged.**
+Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, + masker follow-up.
+
+**#2053 (#1997)** — coverage was PRESET-dependent, not per-vendor. Fix uses a three-class filter
+(lower AND upper AND digit in a 32+ alnum run), which excludes SHAs/MD5/UUIDs (single-case) and
+CamelCase (digit-free) **structurally**, not by luck. Orchestrator re-verified both polarities: all
+4 vendors redacted on BOTH presets; digests + CamelCase preserved on the conservative preset (the
+~180-call-site one). Digest redaction on the REMOTE preset was checked against main and is
+PRE-EXISTING, not introduced. `together` (64-hex) is a documented xfail-strict residual.
+
+**Filed this round:** #2047 (MFA node has no ACTOR concept — `user_id` is the subject, never the
+caller; `admin_override` is a caller-supplied boolean, so 5 adversarial rounds each patched an
+action while the root stood), #2052, #2056 (FastMCP URI contract), #2057 (dead guards).
+
+## ⚠ #2057's REAL finding — inconsistent disposition, not the getattr pattern
+
+Six `getattr(self.access_manager, ...)` guards in `middleware/auth/access_control.py`:
+
+| guard | defs | absent-branch |
+| --- | --- | --- |
+| `check_workflow_access` | 3 | **fails CLOSED** (`allowed=False`) |
+| `check_node_access` / `get_user_permissions` / `get_stats` | live | — |
+| **`add_permission_rule`** | **0** | **returns `success: True` AND logs `permission_rule_created`** |
+
+So the rule is never registered, yet the response AND the audit trail both report success — a
+**falsified audit record of a security control**. Same file, same hand, opposite disposition from
+its siblings. **No access-control bypass** — both check paths are live and one fails closed.
+
+**Correction:** the orchestrator ranked `token_claims` as the top worry from sweep output WITHOUT
+reading the site; it is LOW (`token_payload` is set on every authenticated request and checked
+first). Lane 2A re-read each site and corrected it. Ranking from a name-sweep is the sweep's own
+stated limitation.
+
+
 **UPDATE 9 (latest): main `207f7d858`. SEVEN issues closed** — #1995, #2015, #2014, #2027,
 #2004, #2006, plus the masker follow-up. 14 PRs merged.
 
