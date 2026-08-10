@@ -41,6 +41,7 @@ from ...nodes.security import (
     SecurityEventNode,
 )
 from ...nodes.transform import DataTransformer
+from ...utils.http_errors import safe_http_detail
 from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 
 logger = logging.getLogger(__name__)
@@ -224,8 +225,9 @@ class MiddlewareAuthManager:
             token_result = {"token": token}
         except Exception as e:
             raise HTTPException(
-                status_code=500, detail=f"Failed to create token: {str(e)}"
-            )
+                status_code=500,
+                detail=safe_http_detail(e, logger=logger, context="create token"),
+            ) from e
 
         # Log token creation
         if self.enable_audit:

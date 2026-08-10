@@ -24,6 +24,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..resources.registry import ResourceRegistry
+from ..utils.http_errors import safe_http_detail
 from .enhanced_gateway import (
     EnhancedDurableAPIGateway,
     ResourceReference,
@@ -159,8 +160,10 @@ async def execute_workflow(
         response = await gateway.execute_workflow(workflow_id, workflow_request)
         return WorkflowResponseModel(**response.to_dict())
     except Exception as e:
-        logger.error(f"Workflow execution failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=safe_http_detail(e, logger=logger, context="execute workflow"),
+        ) from e
 
 
 @router.get(
@@ -172,16 +175,46 @@ async def get_workflow_status(
     gateway: EnhancedDurableAPIGateway = Depends(get_gateway),
 ):
     """Get status of a workflow execution."""
+    # Scoped to the lookup ALONE. `safe_types=(ValueError,)` under an
+    # `except ValueError` was a no-op allowlist: every exception that could
+    # reach it was inside it by construction, so the fail-closed default was
+    # unreachable at this site. Worse, the old `try:` also spanned the
+    # `WorkflowResponseModel(...)` construction below, and
+    # `pydantic.ValidationError` subclasses `ValueError` -- a validation
+    # failure returned the offending INPUT VALUES to the caller as a 404.
     try:
         response = await gateway.get_workflow_status(request_id)
-        if response.workflow_id != workflow_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Request {request_id} is for workflow {response.workflow_id}, not {workflow_id}",
-            )
-        return WorkflowResponseModel(**response.to_dict())
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        # The gateway's own not-found signal (enhanced_gateway.py raises
+        # `ValueError(f"Request {request_id} not found")`). Nothing in that
+        # message is unknown to the caller, so nothing is allowlisted and
+        # the generic fail-closed 404 body is used instead.
+        raise HTTPException(
+            status_code=404,
+            detail=safe_http_detail(
+                e,
+                logger=logger,
+                context="get workflow status",
+                status_code=404,
+            ),
+        ) from e
+
+    if response.workflow_id != workflow_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Request {request_id} is for workflow {response.workflow_id}, not {workflow_id}",
+        )
+
+    try:
+        return WorkflowResponseModel(**response.to_dict())
+    except Exception as e:
+        # Serialization failure is a server fault, not a missing resource.
+        raise HTTPException(
+            status_code=500,
+            detail=safe_http_detail(
+                e, logger=logger, context="serialize workflow status"
+            ),
+        ) from e
 
 
 @router.get("/workflows")
@@ -243,8 +276,12 @@ async def register_workflow(
             "message": f"Workflow {workflow_id} registered successfully",
         }
     except Exception as e:
-        logger.error(f"Workflow registration failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=safe_http_detail(
+                e, logger=logger, context="register workflow", status_code=400
+            ),
+        ) from e
 
 
 @router.get("/health")

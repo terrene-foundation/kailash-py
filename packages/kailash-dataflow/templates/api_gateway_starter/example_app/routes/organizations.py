@@ -4,9 +4,12 @@ Organization CRUD routes with authentication.
 All endpoints require JWT authentication.
 """
 
+import logging
+
 from fastapi import APIRouter, Request
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.errors import (
+    INTERNAL_ERROR,
     NOT_FOUND_ERROR,
     VALIDATION_ERROR,
     ProblemDetail,
@@ -23,7 +26,10 @@ from templates.api_gateway_starter.utils.validation import (
 
 from dataflow import DataFlow
 from kailash.runtime import LocalRuntime
+from kailash.utils.http_errors import safe_http_detail
 from kailash.workflow.builder import WorkflowBuilder
+
+logger = logging.getLogger(__name__)
 
 
 def create_organization_router(db: DataFlow) -> APIRouter:
@@ -55,10 +61,21 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
+        # Validation is its own block. A ValueError raised HERE is the
+        # validator's own message, written for the caller, so it is returned
+        # verbatim -- that is the whole point of a 400.
         try:
-            # Validate request
             validated = validate_create_request("Organization", org_data)
+        except ValueError as e:
+            problem = ProblemDetail(
+                type=VALIDATION_ERROR,
+                title="Validation Error",
+                status=400,
+                detail=str(e),
+            )
+            return problem.to_response()
 
+        try:
             # Execute DataFlow workflow. Context-managed runtime per
             # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
@@ -79,12 +96,17 @@ def create_organization_router(db: DataFlow) -> APIRouter:
 
             return created_response(org, resource_id=org["id"])
 
-        except ValueError as e:
+        except Exception as e:
+            # Past validation, anything raised came from the database layer,
+            # and a driver's connect error quotes the DSN -- password and
+            # all. It is also not a 400: the caller's request was fine.
             problem = ProblemDetail(
-                type=VALIDATION_ERROR,
-                title="Validation Error",
-                status=400,
-                detail=str(e),
+                type=INTERNAL_ERROR,
+                title="Internal Error",
+                status=500,
+                detail=safe_http_detail(
+                    e, logger=logger, context="create organization"
+                ),
             )
             return problem.to_response()
 
@@ -103,10 +125,22 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
+        # Validation is its own block, matching create_organization above.
+        # Leaving the execute inside this `try` meant any ValueError SUBCLASS
+        # raised by DataFlow -- pydantic ValidationError, JSONDecodeError,
+        # UnicodeDecodeError -- was returned verbatim as a 400.
         try:
-            # Validate pagination
             offset, limit = validate_pagination_params(page, limit, max_limit=100)
+        except ValueError as e:
+            problem = ProblemDetail(
+                type=VALIDATION_ERROR,
+                title="Validation Error",
+                status=400,
+                detail=str(e),
+            )
+            return problem.to_response()
 
+        try:
             # Execute DataFlow workflow. Context-managed runtime per
             # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
@@ -124,12 +158,17 @@ def create_organization_router(db: DataFlow) -> APIRouter:
 
             return paginated_response(organizations, total, page, limit)
 
-        except ValueError as e:
+        except Exception as e:
+            # Everything reaching here is the database layer failing. There is
+            # deliberately no `except ValueError` arm ahead of this one: a
+            # ValueError subclass raised by DataFlow is an infrastructure
+            # fault, not a client mistake, and routing it to a 400 was how the
+            # driver's message reached the caller.
             problem = ProblemDetail(
-                type=VALIDATION_ERROR,
-                title="Validation Error",
-                status=400,
-                detail=str(e),
+                type=INTERNAL_ERROR,
+                title="Internal Error",
+                status=500,
+                detail=safe_http_detail(e, logger=logger, context="list organizations"),
             )
             return problem.to_response()
 
