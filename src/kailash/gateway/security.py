@@ -748,7 +748,16 @@ class FileSecretBackend(SecretBackend):
             current = self._open_envelope(reference, envelope).get("version")
             if isinstance(current, int) and not isinstance(current, bool):
                 highest = max(highest, current)
-        except (OSError, SecretEncryptionError, json.JSONDecodeError):
+        except (OSError, SecretEncryptionError, json.JSONDecodeError) as e:
+            # Traced, not silent: on a first store this is the ordinary case,
+            # but the same branch catches a file that failed the envelope
+            # checks, and that is worth a breadcrumb.
+            logger.debug(
+                "No readable predecessor for secret %s when choosing its next "
+                "version (%s); using the manifest mark alone.",
+                reference,
+                e,
+            )
             # No readable predecessor — a first store, a legacy file, or one
             # that fails the checks above. Either way the manifest mark alone
             # decides, and a store must not be blocked by an unreadable file it
@@ -832,8 +841,9 @@ class FileSecretBackend(SecretBackend):
             os.remove(file_path)
         except FileNotFoundError:
             # Deleting an absent secret has always been a no-op; keep that,
-            # but without the exists()-then-remove race.
-            pass
+            # but without the exists()-then-remove race, and without being
+            # silent about it.
+            logger.debug("Secret %s was already absent; delete is a no-op.", reference)
 
 
 # For production, you would implement:
