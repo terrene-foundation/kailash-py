@@ -31,10 +31,12 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from pydantic import BaseModel, Field
 
 from kailash.runtime.local import LocalRuntime
+from kailash.utils.http_errors import safe_http_detail
 from kailash.utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
+from kailash.utils.url_credentials import mask_error_text
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
@@ -446,7 +448,14 @@ class WorkflowAPI:
                 elif isinstance(raw_body, str):
                     typed_body = {"error": raw_body}
                 else:
-                    typed_body = {"error": str(typed_exc)}
+                    # Allowlisted by the typed-status contract (the handler
+                    # authored this message for its caller), so the text is
+                    # kept -- but masked, exactly as safe_http_detail treats
+                    # its own safe_types branch. A handler that accidentally
+                    # interpolates a DSN should not be the one place that
+                    # ships it. No reference suffix here: the typed body is a
+                    # published response shape and callers parse it.
+                    typed_body = {"error": mask_error_text(typed_exc)}
                 # Intent is logged server-side; the typed body is operator-facing
                 # by the handler's own design, so it is returned verbatim.
                 logger.warning(
@@ -644,11 +653,16 @@ class WorkflowAPI:
             # ========================================
             # ERROR EVENT
             # ========================================
-            logger.error(f"Workflow stream execution failed: {e}")
+            # The SSE error frame is a response body like any other -- it is
+            # streamed straight to the subscriber. A workflow failing inside
+            # a node surfaces the driver's message here, DSN and all, so it
+            # goes through the same helper the non-streaming handlers use.
             yield f"id: {event_id}\n"
             yield "event: error\n"
             error_data = {
-                "error": str(e),
+                "error": safe_http_detail(
+                    e, logger=logger, context="stream workflow execution"
+                ),
                 "timestamp": time.time(),
             }
             yield f"data: {json.dumps(error_data)}\n\n"
