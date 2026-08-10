@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -58,6 +59,21 @@ class LegacyPlaintextSecretError(SecretEncryptionError):
     who can write into the secrets directory replace an envelope with a
     plaintext file of their choosing and have it honoured — a downgrade oracle
     that removes the protection this class exists to provide.
+    """
+
+    pass
+
+
+class SecretRollbackError(SecretEncryptionError):
+    """Raised when a secret file is older than the version last stored.
+
+    The rotation-undone case: a credential is rotated because it leaked, a
+    file-level backup is restored weeks later for unrelated reasons, and the
+    store is silently back on the compromised value. The restored envelope is
+    cryptographically perfect — correct key, correct reference — so nothing
+    but a version comparison against state held OUTSIDE the envelope can catch
+    it. See :class:`FileSecretBackend` for exactly which restore scenarios are
+    detected and which are not.
     """
 
     pass
@@ -247,6 +263,14 @@ _MAX_KDF_ITERATIONS = 10_000_000
 #: Salt length in bytes. Fresh per stored secret, persisted in the envelope.
 _SALT_BYTES = 32
 
+#: Filename of the high-water-mark manifest. Leading dot, so it can never
+#: collide with a secret: ``validate_id`` restricts references to
+#: ``[A-Za-z0-9_-]+``, which cannot produce this name.
+_VERSION_MANIFEST_NAME = ".secret-versions.json"
+
+#: Internal ``ref`` the manifest's own envelope is bound to. Same reason.
+_VERSION_MANIFEST_REF = ".secret-versions"
+
 
 class FileSecretBackend(SecretBackend):
     """Secret backend that encrypts each secret at rest in its own file.
@@ -260,14 +284,64 @@ class FileSecretBackend(SecretBackend):
     alongside the ciphertext, so the store survives a process restart and no
     two files share a derived key. The master key itself is never written.
 
-    The plaintext under that ciphertext is ``{"ref": <reference>, "secret":
-    <value>}``, and ``get_secret`` refuses an envelope whose embedded ``ref``
-    is not the reference it was asked for. Fernet authenticates its ciphertext
-    but has no associated-data channel, so without that binding the envelope is
-    a free-standing blob: copying ``staging_key.json`` over ``db_master.json``
-    would verify perfectly and return the attacker's chosen value, and a
-    backup restore would silently roll a rotated secret back to its
-    pre-rotation value with no attacker involved at all.
+    The plaintext under that ciphertext is ``{"ref": <reference>, "version":
+    <int>, "stored_at": <unix seconds>, "secret": <value>}``. Two checks read
+    it, and they close two different attacks.
+
+    **Substitution** — ``get_secret`` refuses an envelope whose embedded
+    ``ref`` is not the reference it was asked for. Fernet authenticates its
+    ciphertext but has no associated-data channel, so without that binding an
+    envelope verifies under ANY name: copying ``staging_key.json`` over
+    ``db_master.json`` would return the attacker's chosen value with every
+    integrity check passing.
+
+    **Rollback** — the ``ref`` binding does NOT close this, because a restored
+    backup carries the CORRECT ref. Each store increments ``version``, and the
+    high-water mark is kept in a separate authenticated manifest
+    (``.secret-versions.json``); a read whose envelope version is BELOW the
+    mark raises :class:`SecretRollbackError`.
+
+    What that guarantee is, precisely
+    ---------------------------------
+
+    ================================================  =========
+    Scenario                                          Detected?
+    ================================================  =========
+    Restore one secret file over a rotated secret     YES
+    Restore several secret files, manifest untouched  YES
+    Tamper with the manifest to lower a mark          YES — it is an
+                                                      authenticated envelope
+                                                      and cannot be forged
+                                                      without the master key
+    Restore the WHOLE directory, manifest included    **NO** by default —
+                                                      ``state_dir`` outside the
+                                                      store closes it
+    DELETE the manifest, then restore an old file     **NO.** The marks are the
+                                                      only record; once gone, a
+                                                      restored old envelope is
+                                                      indistinguishable from a
+                                                      never-rotated one
+    ================================================  =========
+
+    The default keeps the manifest inside ``secrets_dir``, so a whole-directory
+    restore reverts the marks along with the secrets and the rollback is
+    invisible. Pass ``state_dir`` (or set ``KAILASH_SECRETS_STATE_DIR``) to a
+    location with an independent backup lifecycle to close that case; there is
+    no way to close it from inside the store alone. Whichever location is used
+    needs its own durability: **deleting the manifest silently disables
+    rollback detection**, and nothing inside the store can distinguish that
+    from a first run.
+
+    ``max_age`` is the complementary check for deployments that cannot provide
+    external state, and it is the only one of these that survives losing the
+    manifest: it bounds how old a stored envelope may be at read time, turning
+    a restored months-old backup into a loud error with no external
+    coordination at all. It does NOT detect the restore of a RECENT envelope.
+
+    Concurrency: the manifest is read-modify-written without a cross-process
+    lock, so simultaneous stores from separate processes may lose a mark bump.
+    The mark is additionally floored at the version already on disk for that
+    reference, which bounds the loss to one increment rather than a reset.
 
     Args:
         secrets_dir: Directory holding one file per secret. Created ``0o700``.
@@ -277,6 +351,12 @@ class FileSecretBackend(SecretBackend):
         master_key_source: Name of the environment variable read when
             ``master_key`` is not given. Defaults to
             ``KAILASH_SECRETS_MASTER_KEY``.
+        state_dir: Where the version manifest lives. Defaults to
+            ``KAILASH_SECRETS_STATE_DIR`` if set, otherwise ``secrets_dir`` —
+            see the table above for what that default does and does not catch.
+        max_age: Optional maximum age, in seconds, of a stored envelope at read
+            time. Unset means no staleness check is performed and none is
+            claimed.
 
     Raises:
         SecretEncryptionError: If no master key is available, or if it is
@@ -301,9 +381,12 @@ class FileSecretBackend(SecretBackend):
         *,
         master_key: Optional[str] = None,
         master_key_source: str = "KAILASH_SECRETS_MASTER_KEY",
+        state_dir: Optional[str] = None,
+        max_age: Optional[float] = None,
     ):
         self.secrets_dir = secrets_dir
         self.master_key_source = master_key_source
+        self.max_age = max_age
 
         key = (
             master_key if master_key is not None else os.environ.get(master_key_source)
@@ -338,6 +421,27 @@ class FileSecretBackend(SecretBackend):
                 secrets_dir,
             )
 
+        self.state_dir = (
+            state_dir or os.environ.get("KAILASH_SECRETS_STATE_DIR") or secrets_dir
+        )
+        if self.state_dir != secrets_dir:
+            os.makedirs(self.state_dir, mode=0o700, exist_ok=True)
+            restrict_dir_to_owner(self.state_dir)
+        else:
+            # Stated rather than silent: with the manifest inside the store, a
+            # whole-directory restore reverts the high-water marks along with
+            # the secrets, and the rollback it would otherwise catch becomes
+            # invisible. Anyone who accepts that should do so knowingly.
+            logger.info(
+                "Secret version manifest lives inside %s. A restore of the "
+                "whole directory will revert it with the secrets, so a "
+                "rolled-back secret would not be detected. Set "
+                "KAILASH_SECRETS_STATE_DIR (or pass state_dir=) to a location "
+                "with an independent backup lifecycle to close that case.",
+                secrets_dir,
+            )
+        self._manifest_path = os.path.join(self.state_dir, _VERSION_MANIFEST_NAME)
+
     def _path_for(self, reference: str) -> str:
         """Resolve a reference to its file, rejecting traversal.
 
@@ -347,6 +451,45 @@ class FileSecretBackend(SecretBackend):
         """
         validate_id(reference)
         return os.path.join(self.secrets_dir, f"{reference}.json")
+
+    def _read_version_marks(self) -> Dict[str, int]:
+        """Return the per-reference high-water marks, or ``{}`` if unset.
+
+        The manifest is itself an authenticated envelope bound to a reserved
+        ref, so it can be deleted or restored but not forged: an attacker who
+        can write in the directory cannot lower a mark without the master key.
+        A manifest that is present but unreadable is a hard error rather than
+        an empty dict — treating it as empty would make deleting the mark
+        equivalent to having none, which is the whole check undone.
+        """
+        try:
+            envelope = safe_read_json(Path(self._manifest_path))
+        except FileNotFoundError:
+            return {}
+        except json.JSONDecodeError as e:
+            raise SecretEncryptionError(
+                f"Secret version manifest at {self._manifest_path} is not "
+                f"readable JSON. Rollback protection cannot be evaluated; "
+                f"refusing to read secrets rather than skipping the check."
+            ) from e
+
+        marks = self._open_envelope(_VERSION_MANIFEST_REF, envelope)["secret"]
+        if not isinstance(marks, dict):
+            raise SecretEncryptionError(
+                f"Secret version manifest at {self._manifest_path} has an "
+                f"unexpected shape."
+            )
+        return {k: v for k, v in marks.items() if isinstance(v, int)}
+
+    def _record_version_mark(self, reference: str, version: int) -> None:
+        """Raise the high-water mark for ``reference`` to ``version``."""
+        marks = self._read_version_marks()
+        if marks.get(reference, 0) >= version:
+            return
+        marks[reference] = version
+        self._write_envelope(
+            self._manifest_path, self._seal(_VERSION_MANIFEST_REF, marks, version=0)
+        )
 
     def _cipher_for(self, salt: bytes, iterations: int) -> Fernet:
         """Derive the per-file Fernet key from the master key and salt."""
@@ -365,7 +508,10 @@ class FileSecretBackend(SecretBackend):
             SecretNotFoundError: No file for this reference.
             LegacyPlaintextSecretError: The file predates envelope encryption.
             SecretEncryptionError: The envelope is malformed, uses an
-                unsupported format, or does not decrypt under this master key.
+                unsupported format, does not decrypt under this master key, or
+                is bound to a different reference.
+            SecretRollbackError: The envelope is older than the version last
+                stored under this reference, or older than ``max_age``.
             OSError: The path is a symlink (refused, not followed).
         """
         file_path = self._path_for(reference)
@@ -386,12 +532,58 @@ class FileSecretBackend(SecretBackend):
                 f"and store it again."
             ) from e
 
-        return self._open_envelope(reference, envelope)
+        payload = self._open_envelope(reference, envelope)
+        self._reject_if_rolled_back(reference, payload)
+        return payload["secret"]
 
-    def _open_envelope(
-        self, reference: str, envelope: Any
-    ) -> Union[str, Dict[str, Any]]:
-        """Validate an envelope and decrypt it. No plaintext fallback, ever."""
+    def _reject_if_rolled_back(self, reference: str, payload: Dict[str, Any]) -> None:
+        """Refuse an envelope that is behind the high-water mark, or stale.
+
+        This is the check the ``ref`` binding cannot do. A restored backup is
+        cryptographically perfect — right key, right reference — so the only
+        evidence that it is the WRONG generation lives outside the envelope.
+        """
+        version = payload.get("version")
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise SecretEncryptionError(
+                f"Secret {reference} carries no usable version. It was written "
+                f"by a build without rollback protection; rotate the secret and "
+                f"store it again."
+            )
+
+        mark = self._read_version_marks().get(reference, 0)
+        if version < mark:
+            raise SecretRollbackError(
+                f"Secret {reference} is version {version} but version {mark} "
+                f"was stored. This file is an earlier generation — most likely "
+                f"a restored backup that has undone a rotation. If the "
+                f"rollback is intended, store the current value again rather "
+                f"than restoring the old file."
+            )
+
+        if self.max_age is None:
+            return
+        stored_at = payload.get("stored_at")
+        if not isinstance(stored_at, (int, float)) or isinstance(stored_at, bool):
+            raise SecretEncryptionError(
+                f"Secret {reference} carries no usable store timestamp, so the "
+                f"configured max_age cannot be enforced."
+            )
+        age = time.time() - stored_at
+        if age > self.max_age:
+            raise SecretRollbackError(
+                f"Secret {reference} was stored {int(age)}s ago, beyond the "
+                f"configured max_age of {int(self.max_age)}s. Rotate it, or "
+                f"raise max_age if this lifetime is expected."
+            )
+
+    def _open_envelope(self, reference: str, envelope: Any) -> Dict[str, Any]:
+        """Validate and decrypt an envelope, returning its whole payload.
+
+        The payload, not just the secret: the version and timestamp under the
+        ciphertext are what the rollback check reads. No plaintext fallback,
+        ever.
+        """
         if not isinstance(envelope, dict) or "ciphertext" not in envelope:
             raise LegacyPlaintextSecretError(
                 f"Secret {reference} is stored in cleartext, not an encrypted "
@@ -461,41 +653,82 @@ class FileSecretBackend(SecretBackend):
                 f"written by a build that did not bind the ciphertext to its "
                 f"reference; rotate the secret and store it again."
             )
+        if "secret" not in payload:
+            raise SecretEncryptionError(
+                f"Secret {reference} decrypted to a payload with no value."
+            )
         # The binding check. Fernet proves the bytes were written by a holder
         # of this master key -- NOT that they were written for THIS reference.
         # Without this, copying one envelope over another substitutes the
-        # secret while every integrity check still passes, and a backup restore
-        # rolls a rotated secret back with no attacker involved at all.
+        # secret while every integrity check still passes. It does NOT close
+        # rollback: a restored backup carries the CORRECT ref, which is what
+        # _reject_if_rolled_back exists for.
         if payload["ref"] != reference:
             raise SecretEncryptionError(
                 f"Secret {reference} holds an envelope written for a different "
                 f"reference. The file has been substituted or restored over."
             )
 
-        return payload["secret"]
+        return payload
 
-    async def store_secret(self, reference: str, secret: Any) -> None:
-        """Encrypt ``secret`` and write it owner-only under ``reference``."""
-        file_path = self._path_for(reference)
+    def _seal(self, reference: str, secret: Any, version: int) -> Dict[str, Any]:
+        """Build an encrypted envelope binding ``secret`` to ref and version.
 
+        The reference and the version travel INSIDE the ciphertext: Fernet has
+        no associated-data channel, so anything left outside it is editable by
+        whoever can write the file. ``json.dumps`` rather than ``str()`` — it
+        round-trips dicts and strings back to their original type, so
+        ``get_secret`` returns what was handed in.
+        """
         salt = os.urandom(_SALT_BYTES)
-        cipher = self._cipher_for(salt, SECRET_KDF_ITERATIONS)
-        # The reference travels INSIDE the ciphertext so get_secret can prove
-        # the envelope was written for the name it was asked for; Fernet has no
-        # associated-data channel to carry it in the clear.
-        #
-        # json.dumps rather than str(): it round-trips dicts and strings back
-        # to their original type, so get_secret returns what was handed in.
-        payload = {"ref": reference, "secret": secret}
-        token = cipher.encrypt(json.dumps(payload).encode())
-        envelope = {
+        payload = {
+            "ref": reference,
+            "version": version,
+            "stored_at": time.time(),
+            "secret": secret,
+        }
+        token = self._cipher_for(salt, SECRET_KDF_ITERATIONS).encrypt(
+            json.dumps(payload).encode()
+        )
+        return {
             "v": SECRET_ENVELOPE_VERSION,
             "kdf": SECRET_ENVELOPE_KDF,
             "iterations": SECRET_KDF_ITERATIONS,
             "salt": base64.b64encode(salt).decode(),
             "ciphertext": token.decode(),
         }
-        self._write_envelope(file_path, envelope)
+
+    def _next_version(self, reference: str) -> int:
+        """One past the highest version seen for ``reference``.
+
+        Both the manifest mark and the version already on disk are consulted,
+        so a lost mark (deleted manifest, unlocked concurrent store) costs at
+        most one increment rather than resetting the counter to 1 and making
+        every later rollback undetectable.
+        """
+        highest = self._read_version_marks().get(reference, 0)
+        try:
+            envelope = safe_read_json(Path(self._path_for(reference)))
+            current = self._open_envelope(reference, envelope).get("version")
+            if isinstance(current, int) and not isinstance(current, bool):
+                highest = max(highest, current)
+        except (OSError, SecretEncryptionError, json.JSONDecodeError):
+            # No readable predecessor — a first store, a legacy file, or one
+            # that fails the checks above. Either way the manifest mark alone
+            # decides, and a store must not be blocked by an unreadable file it
+            # is about to replace.
+            pass
+        return highest + 1
+
+    async def store_secret(self, reference: str, secret: Any) -> None:
+        """Encrypt ``secret`` and write it owner-only under ``reference``."""
+        file_path = self._path_for(reference)
+        version = self._next_version(reference)
+        self._write_envelope(file_path, self._seal(reference, secret, version))
+        # Mark AFTER the secret lands. The other order fails closed in the
+        # wrong direction: a mark raised past a write that then failed would
+        # reject the still-valid previous secret on every subsequent read.
+        self._record_version_mark(reference, version)
 
     def _write_envelope(self, file_path: str, envelope: Dict[str, Any]) -> None:
         """Write the envelope atomically, owner-only, and durably.

@@ -25,15 +25,18 @@ import os
 import shutil
 import stat
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
+from kailash.gateway import security as security_module
 from kailash.gateway.security import (
     FileSecretBackend,
     LegacyPlaintextSecretError,
     SecretEncryptionError,
     SecretNotFoundError,
+    SecretRollbackError,
 )
 
 pytestmark = pytest.mark.integration
@@ -270,6 +273,209 @@ class TestEnvelopesAreBoundToTheirReference:
         above would pass against a get_secret that raises unconditionally."""
         asyncio.run(backend.store_secret("db_master", "SECRET-PROD-VALUE"))
         assert asyncio.run(backend.get_secret("db_master")) == "SECRET-PROD-VALUE"
+
+
+class TestAnEnvelopeThatVerifiesCryptographicallyIsStillRejectedAsStale:
+    """The property, not the mechanism: a restored backup is cryptographically
+    perfect — right master key, right reference, intact Fernet tag — and must
+    still be refused because it is the wrong GENERATION.
+
+    Falsifying result: the read returns the pre-rotation value. Neither Fernet
+    nor the ref-binding gives this, since a restored file carries the correct
+    ref; only state held outside the envelope can.
+    """
+
+    def test_rotate_then_restore_a_backup_is_rejected(self, backend, tmp_path) -> None:
+        """The reported repro, kept verbatim rather than rewritten: store,
+        back up, rotate, restore, read."""
+        backup = tmp_path.parent / "cred-backup.json"
+
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        shutil.copyfile(tmp_path / "cred.json", backup)
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+        assert asyncio.run(backend.get_secret("cred")) == "ROTATED"
+
+        shutil.copyfile(backup, tmp_path / "cred.json")
+
+        with pytest.raises(SecretRollbackError) as excinfo:
+            asyncio.run(backend.get_secret("cred"))
+        # If the counter were decorative this would read "ORIGINAL" instead.
+        assert "version 1" in str(excinfo.value)
+        assert "version 2" in str(excinfo.value)
+
+    def test_the_version_advances_on_every_store(self, backend) -> None:
+        for expected in (1, 2, 3):
+            asyncio.run(backend.store_secret("cred", f"value-{expected}"))
+            assert backend._read_version_marks()["cred"] == expected
+
+    def test_a_current_envelope_is_not_rejected(self, backend) -> None:
+        """Guards against a check that raises unconditionally, which would
+        satisfy every rollback assertion above for the wrong reason."""
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+        assert asyncio.run(backend.get_secret("cred")) == "ROTATED"
+
+    def test_the_high_water_mark_cannot_be_lowered_by_editing_the_manifest(
+        self, backend, tmp_path
+    ) -> None:
+        """The manifest is an authenticated envelope, so an attacker who can
+        write in the directory still cannot forge a lower mark."""
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+
+        manifest = tmp_path / ".secret-versions.json"
+        envelope = json.loads(manifest.read_text())
+        envelope["ciphertext"] = envelope["ciphertext"][:-4] + "AAAA"
+        manifest.write_text(json.dumps(envelope))
+
+        with pytest.raises(SecretEncryptionError):
+            asyncio.run(backend.get_secret("cred"))
+
+    def test_the_marks_are_not_readable_from_the_manifest(
+        self, backend, tmp_path
+    ) -> None:
+        asyncio.run(backend.store_secret("db_master", SENTINEL))
+        raw = (tmp_path / ".secret-versions.json").read_bytes()
+        assert b"db_master" not in raw, "the manifest lists reference names"
+
+
+class TestTheDocumentedLimitsOfRollbackDetection:
+    """These tests pin what the docstring says is NOT detected.
+
+    They exist because an overstated guarantee is the defect class this whole
+    change is about: if someone later closes one of these, this test fails and
+    tells them to correct the docstring rather than leaving it understated.
+    """
+
+    def _restore_whole_directory(self, store: Path, backup: Path) -> None:
+        shutil.rmtree(store)
+        shutil.copytree(backup, store)
+
+    def test_a_whole_directory_restore_is_undetected_by_default(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        monkeypatch.delenv("KAILASH_SECRETS_STATE_DIR", raising=False)
+        store, backup = tmp_path / "secrets", tmp_path / "backup"
+        backend = FileSecretBackend(str(store))
+
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        shutil.copytree(store, backup)
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+        self._restore_whole_directory(store, backup)
+
+        # DOCUMENTED LIMIT: the manifest lives in the store, so the restore
+        # reverted the marks along with the secret.
+        assert asyncio.run(backend.get_secret("cred")) == "ORIGINAL"
+
+    def test_state_dir_outside_the_store_closes_that_case(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        store, backup = tmp_path / "secrets", tmp_path / "backup"
+        backend = FileSecretBackend(str(store), state_dir=str(tmp_path / "state"))
+
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        shutil.copytree(store, backup)
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+        self._restore_whole_directory(store, backup)
+
+        with pytest.raises(SecretRollbackError):
+            asyncio.run(backend.get_secret("cred"))
+
+    def test_the_state_dir_can_come_from_the_environment(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        monkeypatch.setenv("KAILASH_SECRETS_STATE_DIR", str(tmp_path / "state"))
+        backend = FileSecretBackend(str(tmp_path / "secrets"))
+
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        assert (tmp_path / "state" / ".secret-versions.json").exists()
+
+    def test_deleting_the_manifest_disables_detection(self, backend, tmp_path) -> None:
+        """DOCUMENTED LIMIT, and the reason the docstring says the manifest
+        needs its own durability: once the marks are gone, a restored old
+        envelope is indistinguishable from a never-rotated one."""
+        backup = tmp_path.parent / "cred-backup2.json"
+        asyncio.run(backend.store_secret("cred", "ORIGINAL"))
+        shutil.copyfile(tmp_path / "cred.json", backup)
+        asyncio.run(backend.store_secret("cred", "ROTATED"))
+
+        (tmp_path / ".secret-versions.json").unlink()
+        shutil.copyfile(backup, tmp_path / "cred.json")
+
+        assert asyncio.run(backend.get_secret("cred")) == "ORIGINAL"
+
+    def test_a_lost_manifest_costs_one_increment_not_the_whole_counter(
+        self, backend, tmp_path
+    ) -> None:
+        """The next store still lands ABOVE the restored file, because the
+        version already on disk floors the new one."""
+        asyncio.run(backend.store_secret("cred", "v1"))
+        asyncio.run(backend.store_secret("cred", "v2"))
+        (tmp_path / ".secret-versions.json").unlink()
+
+        asyncio.run(backend.store_secret("cred", "v3"))
+        assert backend._read_version_marks()["cred"] == 3
+
+
+class TestMaxAgeStalenessCheck:
+    """The no-external-state option: bounds how old an envelope may be.
+
+    Falsifying result: a months-old restored envelope reads clean.
+    """
+
+    def test_an_envelope_older_than_max_age_is_refused(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        writer = FileSecretBackend(str(tmp_path))
+        asyncio.run(writer.store_secret("cred", SENTINEL))
+
+        reader = FileSecretBackend(str(tmp_path), max_age=60)
+        # Captured first: the test module's ``time`` IS security's ``time``,
+        # so a lambda calling time.time() would call itself.
+        real_time = time.time
+        monkeypatch.setattr(security_module.time, "time", lambda: real_time() + 3600)
+        with pytest.raises(SecretRollbackError, match="max_age"):
+            asyncio.run(reader.get_secret("cred"))
+
+    def test_an_envelope_within_max_age_is_accepted(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        backend = FileSecretBackend(str(tmp_path), max_age=3600)
+        asyncio.run(backend.store_secret("cred", SENTINEL))
+        assert asyncio.run(backend.get_secret("cred")) == SENTINEL
+
+    def test_unset_max_age_performs_no_staleness_check(
+        self, backend, monkeypatch
+    ) -> None:
+        """Unset means no check AND no claim — the docstring says so."""
+        asyncio.run(backend.store_secret("cred", SENTINEL))
+        # Captured first: the test module's ``time`` IS security's ``time``,
+        # so a lambda calling time.time() would call itself.
+        real_time = time.time
+        monkeypatch.setattr(security_module.time, "time", lambda: real_time() + 10**9)
+        assert asyncio.run(backend.get_secret("cred")) == SENTINEL
+
+    def test_max_age_survives_the_manifest_being_deleted(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """The property that makes max_age worth having: it is the only one of
+        the three checks that does not depend on the manifest."""
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        backend = FileSecretBackend(str(tmp_path), max_age=60)
+        asyncio.run(backend.store_secret("cred", SENTINEL))
+        (tmp_path / ".secret-versions.json").unlink()
+
+        # Captured first: the test module's ``time`` IS security's ``time``,
+        # so a lambda calling time.time() would call itself.
+        real_time = time.time
+        monkeypatch.setattr(security_module.time, "time", lambda: real_time() + 3600)
+        with pytest.raises(SecretRollbackError, match="max_age"):
+            asyncio.run(backend.get_secret("cred"))
 
 
 class TestMasterKeyStrengthFloor:
