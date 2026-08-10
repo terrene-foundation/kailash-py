@@ -8,8 +8,14 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
-**UPDATE 4 (burn-down, latest): main is `04bf57ff3`. FIRST LANE FIX LANDED — PR #2034 merged,
-#2015 CLOSED.** Its three security blockers were CONFIRMED BY EXECUTION, fixed, then independently
+**UPDATE 5 (burn-down, latest): main is `0f323546f`. TWO lane fixes landed — #2034 (#2015) and
+#2037 (#2014).** #2037's F1 RCE is **FIXED AND RE-VERIFIED BY EXECUTION**: the boundary moved from
+pickle to JSON bytes, the exploit now yields `MARKER: ABSENT` (was `MARKER == PARENT PID`) and a
+loud typed refusal — `hook result may only contain JSON primitives, got <class 'Evil'>` — while a
+benign hook still runs isolated (`PARENT 12592 | HOOK RAN IN 12663`), so the fix did not buy safety
+by breaking everything. lane-2b and lane-2d worktrees retired.
+
+**UPDATE 4: PR #2034 merged, #2015 CLOSED.** Its three security blockers were CONFIRMED BY EXECUTION, fixed, then independently
 re-verified (no call site passes an allowlist; the template execute-blocks no longer catch
 `ValueError`; the helper is now total). lane-2b worktree retired.
 
