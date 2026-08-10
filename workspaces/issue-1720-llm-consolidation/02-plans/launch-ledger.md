@@ -186,3 +186,34 @@ orchestrator's call under work-preservation pressure, disclosed here and to the
 user rather than done silently. Nothing was pushed, so no shared state is
 affected. **Next session MUST re-run the full gate and re-commit properly before
 any of these branches leaves local.**
+
+## RESUMPTION after quota reset (2026-08-10, ~17:20 SGT)
+
+All 7 preserved WIP commits verified intact at their recorded SHAs before relaunch.
+
+**Scope ruling on the 1E ∩ 1B overlap (`src/kailash/gateway/security.py`).**
+Inspected rather than assumed. Lane 1E's hunk replaces write-then-`chmod` with
+`os.open(..., 0o600)` + `O_NOFOLLOW` + `fchmod`, closing the window where a secret
+file is briefly world-readable. That is a DISTINCT defect from #2024's (documents
+encryption, writes plaintext) and it leaves `f.write(secret)` untouched. **Kept in
+1E** — file-mode hygiene on secret material is squarely #2027's theme — and
+**#2024 is sequenced to land on top of it.** The #2024 investigator was told about
+the in-flight change so it designs for the post-1E shape.
+
+| track | agent       | issue | status    | note                                          |
+| ----- | ----------- | ----- | --------- | --------------------------------------------- |
+| 1C    | LANE-1C-R2  | #2026 | in-flight | resumes WIP `d3f6974aa`                       |
+| 1E    | LANE-1E-R2  | #2027 | in-flight | resumes WIP `8909ca4cb`; keeps the 0o600 hunk |
+| 2B    | LANE-2B-R2  | #2015 | in-flight | resumes WIP `edaf72f3f`                       |
+| 2D    | LANE-2D-R2  | #2014 | in-flight | resumes WIP `5edc3d6da`                       |
+| 1A    | INV-2025-R2 | #2025 | in-flight | READ-ONLY; CRITICAL, no prior findings exist  |
+| 1B    | INV-2024-R2 | #2024 | in-flight | READ-ONLY; CRITICAL, no prior findings exist  |
+
+**Held back deliberately (2A #2013, 2C #1997, 2E #2004, 1D #2030+#2022):** each
+produced only scratch artifacts before termination and is cheap to restart. Six
+concurrent, not ten — the pool was exhausted once already, and landing four lanes
+beats re-spreading across ten. Relaunch these as the current six complete.
+
+Every resumed lane carries the shared-stash prohibition and a mandate to re-run
+the FULL pre-commit gate and re-commit properly, because the WIP commits bypassed
+it. No WIP branch leaves local until that gate passes.
