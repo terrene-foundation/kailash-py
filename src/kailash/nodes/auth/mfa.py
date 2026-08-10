@@ -22,14 +22,52 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
+from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
 
 
+class MFADeliveryError(NodeExecutionError):
+    """Raised when an MFA factor could not be delivered to the user.
+
+    Callers MUST NOT report a challenge as sent when this is raised: the user
+    never received a code, so any "verification_sent" claim would be false.
+    """
+
+
 def _send_sms(phone: str, message: str) -> bool:
-    """Module-level SMS sending function for test compatibility."""
-    logger.info(f"SMS sent to {phone[-4:] if len(phone) > 4 else phone}: {message}")
-    return True
+    """Deliver an SMS through the module-level transport.
+
+    This is the seam an SMS transport is bound to. No transport ships with the
+    SDK, so the default implementation fails closed rather than reporting a
+    delivery that never happened. Configure ``sms_provider`` on
+    :class:`MultiFactorAuthNode` (Twilio) or patch this function with a real
+    provider client.
+
+    Args:
+        phone: Destination phone number.
+        message: Message body. NEVER logged — it carries the one-time code.
+
+    Returns:
+        True when a transport delivered the message.
+
+    Raises:
+        MFADeliveryError: Always, when no transport is bound.
+    """
+    # Log delivery metadata only. The body is a credential (it contains the
+    # OTP), so it is never written to logs -- see rules/security.md
+    # "No secrets in logs".
+    logger.warning(
+        "SMS delivery requested for %s (%d-char body) but no SMS transport is "
+        "configured; nothing was sent.",
+        phone[-4:] if len(phone) > 4 else "****",
+        len(message),
+    )
+    raise MFADeliveryError(
+        "No SMS transport is configured. Set sms_provider={'service': 'twilio', "
+        "...} on MultiFactorAuthNode, or bind a provider to "
+        "kailash.nodes.auth.mfa._send_sms."
+    )
 
 
 class TOTPGenerator:
@@ -684,12 +722,26 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "verified": False,
         }
 
-        # Send verification SMS (simulated)
+        # Deliver the verification SMS. If nothing was actually delivered the
+        # caller is told so -- it must not act on a "verification_sent" that
+        # never happened.
         verification_code = self._generate_verification_code()
-        self._send_sms_code(user_phone, verification_code, user_id)
-
-        # Also call the module-level _send_sms function for test compatibility
-        _send_sms(user_phone, f"Your verification code: {verification_code}")
+        try:
+            delivered = self._send_sms_code(user_phone, verification_code, user_id)
+            if not delivered:
+                # No node-level provider: fall through to the module-level
+                # transport seam, which fails closed when nothing is bound.
+                _send_sms(user_phone, f"Your verification code: {verification_code}")
+        except MFADeliveryError as e:
+            self.log_with_context(
+                "ERROR", f"SMS setup failed for user {user_id}: {e}"
+            )
+            return {
+                "success": False,
+                "method": "sms",
+                "error": f"SMS delivery failed: {e}",
+                "verification_sent": False,
+            }
 
         # Create masked phone number for display
         if len(user_phone) > 6:
@@ -732,9 +784,21 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "verified": False,
         }
 
-        # Send verification email (simulated)
+        # Deliver the verification email. A configured-but-failing provider
+        # raises; the caller is never told a code was sent when it was not.
         verification_code = self._generate_verification_code()
-        self._send_email_code(user_email, verification_code, user_id)
+        try:
+            self._send_email_code(user_email, verification_code, user_id)
+        except MFADeliveryError as e:
+            self.log_with_context(
+                "ERROR", f"Email setup failed for user {user_id}: {e}"
+            )
+            return {
+                "success": False,
+                "method": "email",
+                "error": f"Email delivery failed: {e}",
+                "verification_sent": False,
+            }
 
         # Create masked email for display
         if "@" in user_email:
@@ -1498,10 +1562,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         Returns:
             True if code is valid
         """
-        # For testing purposes, accept the test code "123456"
-        if code == "123456":
-            return True
-
         try:
             # Use pyotp for compatibility with test
             import pyotp
@@ -1547,22 +1607,49 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 del self.user_mfa_data[user_id]["temp_sms_code"]
                 return True
 
-        # Fallback: accept any 6-digit code for basic compatibility
-        return len(code) == 6 and code.isdigit()
+        # Fail closed: a code that matches no issued challenge is invalid. The
+        # previous shape-only fallback accepted ANY 6-digit string, so every
+        # SMS second factor could be cleared by guessing "000000".
+        return False
 
     def _verify_email_code(self, user_id: str, code: str) -> bool:
         """Verify email code.
+
+        Verified against the challenge actually issued to this user by
+        :meth:`_send_email_code` (or a pending verification), never by shape.
 
         Args:
             user_id: User ID
             code: Code to verify
 
         Returns:
-            True if code is valid
+            True if code matches a live, unexpired challenge for this user
         """
-        # In a real implementation, this would check against sent codes
-        # For demonstration, accept any 6-digit code
-        return len(code) == 6 and code.isdigit()
+        # Check pending verifications first
+        if user_id in self.pending_verifications:
+            pending = self.pending_verifications[user_id]
+            if (
+                pending.get("method") == "email"
+                and pending.get("code") == code
+                and pending.get("expires_at", datetime.now(UTC)) > datetime.now(UTC)
+            ):
+                del self.pending_verifications[user_id]
+                return True
+
+        # Check the code stored when the email challenge was delivered
+        if user_id in self.user_mfa_data:
+            temp_code_data = self.user_mfa_data[user_id].get("temp_email_code")
+            if (
+                temp_code_data
+                and temp_code_data.get("code") == code
+                and temp_code_data.get("expires_at", datetime.now(UTC))
+                > datetime.now(UTC)
+            ):
+                del self.user_mfa_data[user_id]["temp_email_code"]
+                return True
+
+        # Fail closed: previously ANY 6-digit string was accepted.
+        return False
 
     def _generate_backup_codes_for_user(self, user_id: str) -> List[str]:
         """Generate backup codes for user and return just the codes list."""
@@ -1852,14 +1939,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self.log_with_context("WARNING", f"QR code generation failed: {e}")
             return ""
 
-    def _send_sms_code(self, phone: str, code: str, user_id: str) -> None:
-        """Send SMS verification code.
+    def _send_sms_code(self, phone: str, code: str, user_id: str) -> bool:
+        """Send SMS verification code via the configured provider.
 
         Args:
             phone: Phone number
             code: Verification code
             user_id: User ID
+
+        Returns:
+            True if a configured provider actually delivered the message,
+            False if no provider is configured (nothing was sent).
+
+        Raises:
+            MFADeliveryError: A provider IS configured but delivery failed.
         """
+        delivered = False
+
         # Use Twilio if configured
         if self.sms_provider and self.sms_provider.get("service") == "twilio":
             try:
@@ -1879,13 +1975,20 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 self.log_with_context(
                     "INFO", f"SMS sent via Twilio to {phone[-4:]} (SID: {message.sid})"
                 )
+                delivered = True
 
             except Exception as e:
+                # Fail closed. Swallowing this made the caller report
+                # "verification_sent": True for a code the user never got.
                 self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
+                raise MFADeliveryError(f"Failed to send SMS via Twilio: {e}") from e
         else:
-            # Fallback to logging
+            # No provider bound: say so at WARNING. This previously logged
+            # "SMS code sent", which was false.
             self.log_with_context(
-                "INFO", f"SMS code sent to {phone[-4:]} for user {user_id}"
+                "WARNING",
+                f"No SMS provider configured; no code was delivered to "
+                f"{phone[-4:] if len(phone) > 4 else '****'} for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -1898,14 +2001,25 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
 
-    def _send_email_code(self, email: str, code: str, user_id: str) -> None:
-        """Send email verification code.
+        return delivered
+
+    def _send_email_code(self, email: str, code: str, user_id: str) -> bool:
+        """Send email verification code via the configured SMTP provider.
 
         Args:
             email: Email address
             code: Verification code
             user_id: User ID
+
+        Returns:
+            True if a configured provider actually delivered the message,
+            False if no provider is configured (nothing was sent).
+
+        Raises:
+            MFADeliveryError: A provider IS configured but delivery failed.
         """
+        delivered = False
+
         # Use SMTP if configured
         if self.email_provider and self.email_provider.get("smtp_host"):
             try:
@@ -1936,13 +2050,20 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 server.quit()
 
                 self.log_with_context("INFO", f"Email sent via SMTP to {email}")
+                delivered = True
 
             except Exception as e:
+                # Fail closed. Swallowing this made the caller report
+                # "verification_sent": True for a code the user never got.
                 self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
+                raise MFADeliveryError(f"Failed to send email via SMTP: {e}") from e
         else:
-            # Fallback to logging
+            # No provider bound: say so at WARNING. This previously logged
+            # "Email code sent", which was false.
             self.log_with_context(
-                "INFO", f"Email code sent to {email} for user {user_id}"
+                "WARNING",
+                f"No email provider configured; no code was delivered to "
+                f"{email} for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -1954,6 +2075,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "code": code,
             "expires_at": datetime.now(UTC) + timedelta(minutes=5),
         }
+
+        return delivered
 
     async def _log_security_event(
         self, user_id: str, event_type: str, severity: str

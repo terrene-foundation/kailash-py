@@ -39,6 +39,10 @@ def ldap_node():
             "base_dn": "dc=test,dc=com",
             "user_base_dn": "ou=users,dc=test,dc=com",
             "group_base_dn": "ou=groups,dc=test,dc=com",
+            # The built-in credential table fails closed unless explicitly
+            # opted into (issue #2026). These tests exercise that table, so
+            # they opt in; production deployments must not.
+            "allow_insecure_credential_fallback": True,
         },
     )
 

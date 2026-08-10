@@ -1244,7 +1244,33 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
     def _fallback_directory_auth(self, username: str, password: str) -> Dict[str, Any]:
-        """Built-in credential table fallback for testing."""
+        """Built-in credential table, for tests and local development ONLY.
+
+        Fails closed unless explicitly opted into via
+        ``connection_config={"allow_insecure_credential_fallback": True}``.
+
+        Without that gate this table authenticated ANY username presenting the
+        default password (``valid_passwords.get(username, "password123")``
+        returns the default for unknown users), and it was reachable in
+        production whenever the real LDAP bind raised — an attacker who could
+        make the directory unreachable could log in as anyone.
+        """
+        if not self.connection_config.get("allow_insecure_credential_fallback"):
+            self.log_error(
+                "Directory authentication is unavailable and the built-in "
+                "credential fallback is disabled; refusing to authenticate "
+                f"{username}."
+            )
+            return {
+                "authenticated": False,
+                "username": username,
+                "reason": "directory_unavailable",
+                "message": (
+                    "Directory service unavailable and insecure credential "
+                    "fallback is disabled."
+                ),
+            }
+
         valid_passwords = {
             "test.user": "password123",
             "normal.user": "password123",

@@ -922,16 +922,11 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
             return token_response["response"]
         except Exception as e:
-            # For test compatibility, simulate successful token exchange if using example URL
-            if "oauth.example.com" in token_url:
-                return {
-                    "access_token": "test_access_token",
-                    "token_type": "Bearer",
-                    "expires_in": 3600,
-                    "refresh_token": "test_refresh_token",
-                }
-            else:
-                raise ValueError(f"Token exchange failed: {str(e)}")
+            # Fail closed for every endpoint. A failed token exchange NEVER
+            # yields a token: there is no URL, host, or substring for which a
+            # synthetic "success" is correct. Tests that need a token supply an
+            # explicit http_client double.
+            raise ValueError(f"Token exchange failed: {e}") from e
 
     async def _get_oauth_user_info(
         self, provider: str, access_token: str
@@ -962,17 +957,10 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
             return userinfo_response["response"]
         except Exception as e:
-            # For test compatibility, simulate user info response for test tokens
-            if access_token == "test_access_token":
-                return {
-                    "sub": "test_user_id",
-                    "email": "test.user@example.com",
-                    "given_name": "Test",
-                    "family_name": "User",
-                    "name": "Test User",
-                }
-            else:
-                raise ValueError(f"User info request failed: {str(e)}")
+            # Fail closed. Deriving an identity from the *value* of a bearer
+            # token let anyone presenting "test_access_token" be provisioned as
+            # test.user@example.com once the userinfo call failed.
+            raise ValueError(f"User info request failed: {e}") from e
 
     def _map_attributes(
         self, raw_attributes: Dict[str, Any], provider: str

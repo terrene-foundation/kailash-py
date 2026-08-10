@@ -502,9 +502,11 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if not api_key:
             return {"authenticated": False, "error": "API key required"}
 
-        # DEBUG: Log API key details
+        # Log key metadata only -- an API key is a credential and must never be
+        # written to logs (rules/security.md "No secrets in logs").
         self.log_info(
-            f"DEBUG: _authenticate_api_key - api_key={api_key}, length={len(api_key)}, starts_with_ak={api_key.startswith('ak_')}"
+            f"_authenticate_api_key - key_prefix={api_key[:6]}..., "
+            f"length={len(api_key)}, well_formed={api_key.startswith('ak_')}"
         )
 
         # Validate API key (simulation)
@@ -652,29 +654,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         primary_method: str,
         primary_auth_result: Dict[str, Any],
     ) -> List[str]:
-        """Determine if additional authentication factors are required."""
+        """Determine if additional authentication factors are required.
+
+        Step-up requirements are derived from risk and method only. They are
+        NEVER relaxed based on the *content* of an identifier: a principal who
+        chooses their own user_id or API key would otherwise pick one
+        containing "test." and opt themselves out of MFA.
+        """
         additional_factors = []
 
-        # Check if we're in test environment (test users, company.com domain, or test credentials)
-        # For API keys, check if extracted user_id from primary_auth_result contains "test"
-        api_user_id = (
-            primary_auth_result.get("user_id") if primary_method == "api_key" else None
-        )
-
-        is_test_env = (
-            user_id
-            and ("test." in user_id or "@company.com" in user_id or "test_" in user_id)
-        ) or (api_user_id and "test" in api_user_id)
-
-        # DEBUG: Log test environment detection
         self.log_info(
-            f"DEBUG: _determine_additional_factors - user_id={user_id}, api_user_id={api_user_id}, primary_method={primary_method}, is_test_env={is_test_env}, risk_score={risk_score}"
+            f"_determine_additional_factors - primary_method={primary_method}, "
+            f"risk_score={risk_score}"
         )
-
-        # Skip additional factors for test environment unless explicitly high risk
-        if is_test_env and risk_score < 0.9:
-            self.log_info("DEBUG: Skipping additional factors for test environment")
-            return additional_factors
 
         # Risk-based additional factors
         if risk_score > 0.7:  # High risk
@@ -685,14 +677,14 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             if "passwordless" in self.enabled_methods:
                 additional_factors.append("passwordless")
 
-        # Method-specific requirements (relaxed for test environment)
-        if primary_method == "api_key" and not is_test_env:
-            # API keys might require MFA for sensitive operations in production
-            if "mfa" in self.enabled_methods:
+        # Method-specific requirements
+        if primary_method == "api_key":
+            # API keys are bearer credentials: require a second factor.
+            if "mfa" in self.enabled_methods and "mfa" not in additional_factors:
                 additional_factors.append("mfa")
 
-        # User-specific requirements (disabled for test environment)
-        if not is_test_env and user_id and hash(user_id) % 3 == 0:  # Every 3rd user
+        # User-specific requirements (pre-existing sampling rule, retained)
+        if user_id and hash(user_id) % 3 == 0:  # Every 3rd user
             if "mfa" in self.enabled_methods and "mfa" not in additional_factors:
                 additional_factors.append("mfa")
 
