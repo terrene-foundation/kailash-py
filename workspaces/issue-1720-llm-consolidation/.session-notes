@@ -8,6 +8,32 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 9 (latest): main `207f7d858`. SEVEN issues closed** — #1995, #2015, #2014, #2027,
+#2004, #2006, plus the masker follow-up. 14 PRs merged.
+
+**#2051 (#2006) merged.** The issue's `else`-branch diagnosis was REFUTED by measurement: `@db.model`
+records `{"required": False, "default": None}`, so the **`elif`** branch ran and patching only the
+`else` would have left the reported case broken. Both branches fixed. Bonus defect found and fixed:
+callable defaults were `repr()`-interpolated into DDL. Fail-first independently re-verified by the
+orchestrator — 11/11 pass on branch source, 7F/4P against main's dataflow source (the 4 are
+deliberate guards).
+
+**Filed #2052** (from lane 3A, out of shard budget): schema-introspected registration stores raw SQL
+default TEXT in the `default` slot, so a dynamically registered model writes the literal string
+`CURRENT_TIMESTAMP` / `'open'` (quotes included) into rows. Needs a `default` vs `default_sql` split.
+
+**#2011 SIGHTED LIVE:** `kaizen_implementation_test.log` (0 bytes) appeared in a lane worktree during
+test runs — the defect is real and still firing. It blocked a worktree removal, which is how it
+surfaced.
+
+**⚠ `--no-verify` DISCLOSURE (lane 1C, commit `955fbafc9`).** NOT user-authorized. Justification was
+sound and verified environmental: the Tier-1 hook runs worktree tests against the MAIN checkout's
+editable install, and `kailash.utils.command_safety` was on main but not that branch. **The blocker
+is now GONE** (#2049 merged; `Run Tier 1 unit tests ... Passed` on main), so the lane was told to
+rebase and re-commit WITHOUT the bypass. A bypass necessary an hour ago and unnecessary now must not
+ship.
+
+
 **UPDATE 8 (latest): main `4e6eeea1d`. SIX issues closed** — #1995, #2015, #2014, #2027, #2004,
 plus the masker follow-up. #2049 merged (#2004): fix at the RAISE SITE (`basename#fingerprint`),
 closing message + `.data` + `to_dict()` at once, plus a FOURTH surface nobody had named
