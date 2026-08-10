@@ -21,7 +21,10 @@ still contains the defect behind a different spelling.
 """
 
 import asyncio
+import hashlib
+import json
 import logging
+import time
 from unittest.mock import patch
 
 import pytest
@@ -458,6 +461,256 @@ def test_api_key_is_not_logged_in_full(caplog):
 
 
 # ---------------------------------------------------------------------------
+# 6b. Sibling: JWT auth must verify the signature, not just decode the payload
+# ---------------------------------------------------------------------------
+
+
+def _forged_jwt(claims: dict) -> str:
+    """Build an unsigned token the old decoder would have accepted."""
+    import base64
+
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    payload = b64(json.dumps(claims).encode())
+    return f"{header}.{payload}.{b64(b'not-a-real-signature')}"
+
+
+def test_jwt_rejects_a_forged_unsigned_token():
+    """The signature is what makes a JWT a credential."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test", jwt_config={"secret": "the-real-signing-secret"}
+    )
+    forged = _forged_jwt({"sub": "admin", "exp": int(time.time()) + 3600})
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": forged}, user_id="nobody", risk_context={}
+        )
+    )
+
+    assert (
+        result["authenticated"] is False
+    ), f"a token signed with nothing authenticated as admin: {result}"
+
+
+def test_jwt_rejects_a_token_signed_with_the_wrong_key():
+    """Signed, well-formed, unexpired — but not by us."""
+    pyjwt = pytest.importorskip("jwt")
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test", jwt_config={"secret": "the-real-signing-secret"}
+    )
+    attacker_token = pyjwt.encode(
+        {"sub": "admin", "exp": int(time.time()) + 3600},
+        "attacker-chosen-key",
+        algorithm="HS256",
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": attacker_token},
+            user_id="nobody",
+            risk_context={},
+        )
+    )
+
+    assert result["authenticated"] is False
+
+
+def test_jwt_accepts_a_properly_signed_token():
+    """Positive control: a genuinely signed token still authenticates."""
+    pyjwt = pytest.importorskip("jwt")
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    secret = "the-real-signing-secret"
+    node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
+    good = pyjwt.encode(
+        {"sub": "alice", "exp": int(time.time()) + 3600}, secret, algorithm="HS256"
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": good}, user_id="nobody", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is True
+    assert result["user_id"] == "alice"
+
+
+def test_jwt_fails_closed_when_no_verification_key_is_configured():
+    """No key configured must mean refuse, not 'skip verification'."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+    forged = _forged_jwt({"sub": "admin", "exp": int(time.time()) + 3600})
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": forged}, user_id="nobody", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+
+
+def test_jwt_error_does_not_leak_which_check_failed():
+    """A distinguishing error message is a forging oracle."""
+    pyjwt = pytest.importorskip("jwt")
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    secret = "the-real-signing-secret"
+    node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
+
+    expired = pyjwt.encode(
+        {"sub": "alice", "exp": int(time.time()) - 10}, secret, algorithm="HS256"
+    )
+    bad_sig = pyjwt.encode(
+        {"sub": "alice", "exp": int(time.time()) + 3600}, "wrong", algorithm="HS256"
+    )
+
+    errors = {
+        asyncio.run(
+            node._authenticate_jwt(
+                credentials={"jwt_token": tok}, user_id="n", risk_context={}
+            )
+        )["error"]
+        for tok in (expired, bad_sig)
+    }
+
+    assert len(errors) == 1, f"error message distinguishes failure modes: {errors}"
+
+
+# ---------------------------------------------------------------------------
+# 6c. Sibling: API keys must be checked against issued material
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "forged",
+    [
+        "ak_" + "a" * 29 + "_admin",  # >=32 chars, "ak_" prefix, admin suffix
+        "ak_" + "0123456789abcdef0123456789abcdef" + "_test_service",
+        "ak_" + "z" * 64,
+    ],
+)
+def test_api_key_rejects_a_self_minted_key(forged):
+    """Format was the whole check; anyone could mint a valid-looking key."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        api_key_store={
+            hashlib.sha256(b"the-only-issued-key").hexdigest(): {"user_id": "svc"}
+        },
+    )
+
+    result = asyncio.run(
+        node._authenticate_api_key(
+            credentials={"api_key": forged}, user_id="nobody", risk_context={}
+        )
+    )
+
+    assert (
+        result["authenticated"] is False
+    ), f"a self-minted API key authenticated: {result}"
+
+
+def test_api_key_accepts_an_issued_key_and_uses_the_stored_identity():
+    """Positive control — and the identity comes from the store, not the key."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    issued = "ak_" + "issued-key-material-0123456789ab"
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        api_key_store={
+            hashlib.sha256(issued.encode()).hexdigest(): {"user_id": "billing-svc"}
+        },
+    )
+
+    result = asyncio.run(
+        node._authenticate_api_key(
+            credentials={"api_key": issued}, user_id="ignored", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is True
+    assert result["user_id"] == "billing-svc"
+
+
+def test_api_key_identity_is_not_derived_from_the_key_text():
+    """The old code took user_id from the key's own trailing segment."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    issued = "ak_" + "material-0123456789abcdef0123" + "_admin"
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        api_key_store={
+            hashlib.sha256(issued.encode()).hexdigest(): {"user_id": "lowpriv"}
+        },
+    )
+
+    result = asyncio.run(
+        node._authenticate_api_key(
+            credentials={"api_key": issued}, user_id="ignored", risk_context={}
+        )
+    )
+
+    assert (
+        result["user_id"] == "lowpriv"
+    ), "identity was derived from the key text rather than the store"
+
+
+def test_api_key_fails_closed_when_no_store_is_configured():
+    """No store must mean refuse, not accept-anything-well-formed."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+
+    result = asyncio.run(
+        node._authenticate_api_key(
+            credentials={"api_key": "ak_" + "a" * 40}, user_id="n", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+
+
+def test_api_key_honours_revocation_and_expiry():
+    """A revoked or expired key must stop working."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    revoked = "ak_" + "revoked-key-material-0123456789"
+    expired = "ak_" + "expired-key-material-0123456789"
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        api_key_store={
+            hashlib.sha256(revoked.encode()).hexdigest(): {
+                "user_id": "svc",
+                "revoked": True,
+            },
+            hashlib.sha256(expired.encode()).hexdigest(): {
+                "user_id": "svc",
+                "expires_at": time.time() - 1,
+            },
+        },
+    )
+
+    for key in (revoked, expired):
+        result = asyncio.run(
+            node._authenticate_api_key(
+                credentials={"api_key": key}, user_id="n", risk_context={}
+            )
+        )
+        assert result["authenticated"] is False
+
+
+# ---------------------------------------------------------------------------
 # 7. Sibling: MFA step-up must not be waived by identifier content
 # ---------------------------------------------------------------------------
 
@@ -570,66 +823,4 @@ def test_unreachable_directory_does_not_authenticate():
     assert result["authenticated"] is False
 
 
-# ---------------------------------------------------------------------------
-# 9. Sibling: verification must never be a path to enrolment
-# ---------------------------------------------------------------------------
-
-
-def test_verify_does_not_auto_enrol_an_unknown_user():
-    """'123456' used to auto-enrol ANY user against a hardcoded secret.
-
-    ``_verify_mfa`` for a user with no MFA data returned a fully verified
-    session (``auto_setup: True``) whenever the code was ``123456``.
-    """
-    node = _mfa_node()
-    result = node._verify_mfa("never-enrolled", "123456", "totp")
-
-    assert result["verified"] is False
-    assert result["success"] is False
-    assert "session_id" not in result
-    assert "never-enrolled" not in node.user_mfa_data
-
-
-def test_verify_async_does_not_auto_enrol_an_unknown_user():
-    """Same defect existed on the async verification path."""
-    node = _mfa_node()
-    result = asyncio.run(node._verify_mfa_async("never-enrolled", "123456", "totp"))
-
-    assert result["verified"] is False
-    assert result["success"] is False
-    assert "session_id" not in result
-    assert "never-enrolled" not in node.user_mfa_data
-
-
-# ---------------------------------------------------------------------------
-# 10. Sibling: push challenges must not be reported as sent when unconfigured
-# ---------------------------------------------------------------------------
-
-
-def test_push_challenge_fails_closed_without_a_provider():
-    """It used to POST to live FCM with 'key=test_server_key', ignore the
-    outcome, and report the challenge as delivered."""
-    from kailash.nodes.auth import mfa
-
-    node = _mfa_node()
-    node.user_devices = {
-        "user-1": [{"device_id": "d1", "push_token": "tok", "platform": "ios"}]
-    }
-
-    with pytest.raises(mfa.MFADeliveryError):
-        node._send_push_challenge("user-1", {"ip_address": "203.0.113.9"})
-
-
-def test_push_challenge_does_not_retain_an_undelivered_challenge():
-    """A challenge that was never delivered must not stay verifiable."""
-    from kailash.nodes.auth import mfa
-
-    node = _mfa_node()
-    node.user_devices = {
-        "user-1": [{"device_id": "d1", "push_token": "tok", "platform": "ios"}]
-    }
-
-    with pytest.raises(mfa.MFADeliveryError):
-        node._send_push_challenge("user-1", {})
-
-    assert node.push_challenges == {}
+# Auto-enrolment and push-delivery coverage lives in sections 5b/5c above.

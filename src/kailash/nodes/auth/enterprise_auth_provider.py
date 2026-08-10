@@ -54,6 +54,8 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         mfa_config: Dict[str, Any] | None = None,
         directory_config: Dict[str, Any] | None = None,
         session_config: Dict[str, Any] | None = None,
+        jwt_config: Dict[str, Any] | None = None,
+        api_key_store: Dict[str, Dict[str, Any]] | None = None,
         risk_assessment_enabled: bool = True,
         adaptive_auth_enabled: bool = True,
         fraud_detection_enabled: bool = True,
@@ -79,6 +81,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         self.mfa_config = mfa_config or {}
         self.directory_config = directory_config or {}
         self.session_config = session_config or {}
+        # JWT verification material. Without a key, 'jwt' authentication fails
+        # closed rather than trusting an unverified payload (issue #2026).
+        self.jwt_config = jwt_config or {}
+        # Issued API keys, mapped by sha256(key) -> {"user_id": ..., optional
+        # "expires_at" (epoch seconds) and "revoked" (bool)}. Empty means
+        # 'api_key' authentication fails closed.
+        self.api_key_store = api_key_store or {}
         self.risk_assessment_enabled = risk_assessment_enabled
         self.adaptive_auth_enabled = adaptive_auth_enabled
         self.fraud_detection_enabled = fraud_detection_enabled
@@ -509,34 +518,53 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             f"length={len(api_key)}, well_formed={api_key.startswith('ak_')}"
         )
 
-        # Validate API key (simulation)
-        if len(api_key) >= 32 and api_key.startswith("ak_"):
-            # Extract user ID from API key (in production, lookup from database)
-            # For test API keys like "ak_1234567890abcdef_test_service", preserve the test indicator
-            if "test" in api_key:
-                # Extract the test-related part for test environment detection
-                parts = api_key.split("_")
-                test_parts = [part for part in parts if "test" in part]
-                extracted_user_id = (
-                    test_parts[0] if test_parts else api_key.split("_")[-1]
-                )
-            else:
-                extracted_user_id = (
-                    api_key.split("_")[-1] if "_" in api_key else user_id
-                )
-
+        # An API key is a bearer credential and MUST be checked against issued
+        # key material. This previously accepted ANY string >= 32 chars starting
+        # with "ak_" and derived the user_id from the key's own text, so an
+        # attacker minted "ak_" + 29 chars + "_admin" and was authenticated as
+        # admin without any key ever having been issued (issue #2026).
+        if not self.api_key_store:
             self.log_info(
-                f"DEBUG: API key validated - extracted_user_id={extracted_user_id}"
+                "API key authentication attempted but no api_key_store is "
+                "configured; refusing."
             )
             return {
-                "authenticated": True,
-                "user_id": extracted_user_id,
-                "auth_method": "api_key",
-                "api_key_id": api_key[:10] + "...",
+                "authenticated": False,
+                "error": (
+                    "API key authentication is not configured. Provide "
+                    "api_key_store={<sha256(key)>: {'user_id': ...}} or remove "
+                    "'api_key' from enabled_methods."
+                ),
             }
-        else:
-            self.log_info("DEBUG: API key validation failed - invalid format")
+
+        key_digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        record = None
+        for candidate_digest, candidate_record in self.api_key_store.items():
+            # Constant-time compare so a timing signal cannot reveal which
+            # issued key a guess is converging on.
+            if secrets.compare_digest(key_digest, candidate_digest):
+                record = candidate_record
+                break
+
+        if record is None:
+            self.log_info("API key validation failed - key not recognised")
             return {"authenticated": False, "error": "Invalid API key"}
+
+        if record.get("revoked"):
+            self.log_info("API key validation failed - key revoked")
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        expires_at = record.get("expires_at")
+        if expires_at is not None and float(expires_at) <= time.time():
+            self.log_info("API key validation failed - key expired")
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        return {
+            "authenticated": True,
+            "user_id": record.get("user_id", user_id),
+            "auth_method": "api_key",
+            "api_key_id": key_digest[:10] + "...",
+        }
 
     async def _authenticate_jwt(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
@@ -546,32 +574,58 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if not jwt_token:
             return {"authenticated": False, "error": "JWT token required"}
 
-        # Validate JWT (simulation - in production use proper JWT library)
-        try:
-            # Simple validation - check if it has 3 parts separated by dots
-            parts = jwt_token.split(".")
-            if len(parts) == 3:
-                # Decode payload (without signature verification for simulation)
-                payload_b64 = parts[1]
-                # Add padding if needed
-                payload_b64 += "=" * (4 - len(payload_b64) % 4)
-                payload = json.loads(base64.b64decode(payload_b64))
+        # The signature is the ONLY thing that makes a JWT a credential. This
+        # previously base64-decoded the payload with NO signature verification
+        # and returned authenticated=True with user_id taken from the token's
+        # own "sub" claim, so anyone could mint {"sub": "admin", "exp": <future>}
+        # and be authenticated as admin (issue #2026).
+        verification_key = self.jwt_config.get("secret") or self.jwt_config.get(
+            "public_key"
+        )
+        if not verification_key:
+            self.log_info(
+                "JWT authentication attempted but no jwt_config verification "
+                "key is configured; refusing."
+            )
+            return {
+                "authenticated": False,
+                "error": (
+                    "JWT authentication is not configured. Provide "
+                    "jwt_config={'secret': ...} or {'public_key': ...}, or "
+                    "remove 'jwt' from enabled_methods."
+                ),
+            }
 
-                # Check expiration
-                exp = payload.get("exp")
-                if exp and exp > time.time():
-                    return {
-                        "authenticated": True,
-                        "user_id": payload.get("sub", user_id),
-                        "auth_method": "jwt",
-                        "jwt_claims": payload,
-                    }
-                else:
-                    return {"authenticated": False, "error": "JWT token expired"}
-            else:
-                return {"authenticated": False, "error": "Invalid JWT format"}
+        try:
+            import jwt as pyjwt
+        except ImportError:
+            return {
+                "authenticated": False,
+                "error": ("JWT authentication requires PyJWT. Install kailash[auth]."),
+            }
+
+        try:
+            payload = pyjwt.decode(
+                jwt_token,
+                verification_key,
+                algorithms=self.jwt_config.get("algorithms", ["HS256"]),
+                audience=self.jwt_config.get("audience"),
+                issuer=self.jwt_config.get("issuer"),
+                options={"require": ["exp"]},
+            )
         except Exception as e:
-            return {"authenticated": False, "error": f"JWT validation failed: {e}"}
+            # Do not echo the library's message back to the caller: it
+            # distinguishes "bad signature" from "expired" from "wrong
+            # audience", which is an oracle for forging attempts.
+            self.log_info(f"JWT validation failed: {type(e).__name__}")
+            return {"authenticated": False, "error": "Invalid JWT token"}
+
+        return {
+            "authenticated": True,
+            "user_id": payload.get("sub", user_id),
+            "auth_method": "jwt",
+            "jwt_claims": payload,
+        }
 
     async def _validate_social_token(
         self, provider: str, access_token: str
