@@ -22,9 +22,8 @@ from datetime import datetime, timezone
 import pytest
 
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
-from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.chain_store.memory import InMemoryTrustStore
-
+from kailash.trust.exceptions import TrustChainNotFoundError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,7 +175,9 @@ class TestGetChainIncludeInactive:
         with pytest.raises(TrustChainNotFoundError):
             await store.get_chain("agent-A")
 
-    async def test_get_soft_deleted_chain_with_include_inactive_false_raises(self, store):
+    async def test_get_soft_deleted_chain_with_include_inactive_false_raises(
+        self, store
+    ):
         """get_chain with include_inactive=False must NOT find soft-deleted chains."""
         await store.store_chain(_make_chain("agent-A"))
         await store.delete_chain("agent-A", soft_delete=True)
@@ -199,7 +200,9 @@ class TestGetChainIncludeInactive:
         chain = await store.get_chain("agent-A", include_inactive=True)
         assert chain.genesis.agent_id == "agent-A"
 
-    async def test_get_non_existent_chain_with_include_inactive_true_raises(self, store):
+    async def test_get_non_existent_chain_with_include_inactive_true_raises(
+        self, store
+    ):
         """get_chain with include_inactive=True for non-existent chain must raise."""
         with pytest.raises(TrustChainNotFoundError):
             await store.get_chain("ghost-agent", include_inactive=True)

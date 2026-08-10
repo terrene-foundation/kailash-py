@@ -32,6 +32,7 @@ from kailash.nodes.base import NodeMetadata
 
 if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents._model_env import resolve_default_model

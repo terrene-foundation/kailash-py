@@ -14,8 +14,6 @@ Integrates all components from API Gateway Starter template with DataFlow for da
 from typing import Optional
 
 from fastapi import FastAPI, Request
-
-from dataflow import DataFlow
 from templates.api_gateway_starter.example_app.config import get_settings
 from templates.api_gateway_starter.example_app.models import register_models
 from templates.api_gateway_starter.example_app.routes.organizations import (
@@ -34,6 +32,8 @@ from templates.api_gateway_starter.middleware.rate_limit import (
 )
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.responses import success_response
+
+from dataflow import DataFlow
 
 
 def create_app(db: Optional[DataFlow] = None) -> FastAPI:
@@ -194,7 +194,6 @@ def create_app(db: Optional[DataFlow] = None) -> FastAPI:
 
     # API key protected endpoints
     from fastapi import APIRouter
-
     from templates.api_gateway_starter.middleware.api_key_auth import api_key_required
 
     api_router = APIRouter(prefix="/api", tags=["api"])
@@ -217,13 +216,13 @@ def create_app(db: Optional[DataFlow] = None) -> FastAPI:
             401: Missing or invalid API key
             403: Insufficient scopes
         """
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.api_gateway_starter.utils.responses import paginated_response
         from templates.api_gateway_starter.utils.validation import (
             validate_pagination_params,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         # Get organization from API key
         api_key_data = getattr(request.state, "api_key_data", {})

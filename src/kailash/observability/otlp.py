@@ -286,9 +286,7 @@ def _configure_metrics(resource, otlp_endpoint, prometheus, force):
             from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
                 OTLPMetricExporter,
             )
-            from opentelemetry.sdk.metrics.export import (
-                PeriodicExportingMetricReader,
-            )
+            from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
             readers.append(
                 PeriodicExportingMetricReader(
@@ -358,9 +356,7 @@ def _configure_logs(resource, otlp_endpoint):
         return (False, None)
     try:
         from opentelemetry._logs import set_logger_provider
-        from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
-            OTLPLogExporter,
-        )
+        from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
         from opentelemetry.sdk._logs import LoggerProvider
         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     except ImportError:

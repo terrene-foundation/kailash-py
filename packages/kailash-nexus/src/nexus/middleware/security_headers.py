@@ -45,7 +45,9 @@ class SecurityHeadersConfig:
     """
 
     # Content-Security-Policy
-    csp: str = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'"
+    csp: str = (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'"
+    )
 
     # Strict-Transport-Security (max-age in seconds, default 1 year)
     hsts_max_age: int = 31536000

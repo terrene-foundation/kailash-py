@@ -10,11 +10,10 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
+from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 
 logger = logging.getLogger(__name__)
 

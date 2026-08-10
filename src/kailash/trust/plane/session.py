@@ -1,8 +1,6 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 """AuditSession — session-scoped EATP audit context.
 
 Application-layer convenience that brackets EATP operations. Creates
@@ -17,6 +15,8 @@ Usage:
     # ... record decisions within the session ...
     await project.end_session()
 """
+
+from __future__ import annotations
 
 import hashlib
 import logging

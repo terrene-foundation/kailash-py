@@ -8,16 +8,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from kailash_ml.engines.model_registry import (
+    ALL_STAGES,
+    VALID_TRANSITIONS,
     ModelVersion,
     _attempt_onnx_export,
+    _read_mlmodel_yaml,
     _validate_artifact_name,
     _write_mlmodel_yaml,
-    _read_mlmodel_yaml,
-    VALID_TRANSITIONS,
-    ALL_STAGES,
 )
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
-
 
 # ---------------------------------------------------------------------------
 # Helpers

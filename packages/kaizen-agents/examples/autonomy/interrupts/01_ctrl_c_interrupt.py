@@ -25,9 +25,8 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
     HookContext,
@@ -44,6 +43,7 @@ from kaizen.core.autonomy.interrupts.manager import (
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Setup logging
 logging.basicConfig(
@@ -214,7 +214,7 @@ def print_banner(checkpoint_dir: Path, has_checkpoint: bool) -> None:
 
 
 def print_statistics(
-    result: Dict[str, Any], metrics_hook: InterruptMetricsHook, budget_spent: float
+    result: dict[str, Any], metrics_hook: InterruptMetricsHook, budget_spent: float
 ) -> None:
     """Print execution statistics.
 

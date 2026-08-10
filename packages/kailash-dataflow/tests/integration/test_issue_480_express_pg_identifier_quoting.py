@@ -26,8 +26,8 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from dataflow import DataFlow
 
+from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

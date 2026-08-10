@@ -109,7 +109,6 @@ class TestBaseAgentMRO:
 
     def test_node_in_mro(self):
         from kailash.nodes.base import Node
-
         from kaizen.core.base_agent import BaseAgent
 
         assert issubclass(BaseAgent, Node)

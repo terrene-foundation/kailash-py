@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.agent import PactGovernedAgent
 from kailash.trust.pact.clearance import RoleClearance

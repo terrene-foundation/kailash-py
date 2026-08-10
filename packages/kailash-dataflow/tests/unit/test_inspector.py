@@ -147,9 +147,8 @@ class TestConnectionAnalysis:
 
     def test_find_broken_connections(self, sample_workflow):
         """Should identify broken connections."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import ConnectionInfo, Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         # Create workflow with broken connection
         workflow = WorkflowBuilder()
@@ -299,9 +298,8 @@ class TestParameterTracing:
 
     def test_parameter_trace_with_dot_notation(self):
         """Should handle dot notation in parameter tracing."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector, ParameterTrace
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -569,9 +567,8 @@ class TestInspectorIntegration:
 
     def test_inspector_with_dataflow_workflow(self, memory_dataflow):
         """Should inspect DataFlow-generated workflow."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         db = memory_dataflow
 
@@ -602,9 +599,8 @@ class TestInspectorIntegration:
 
     def test_inspector_parameter_tracing_real_workflow(self, memory_dataflow):
         """Should trace parameters in real DataFlow workflow."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         db = memory_dataflow
 
@@ -639,9 +635,8 @@ class TestInspectorIntegration:
 
     def test_inspector_connection_validation_catches_errors(self):
         """Should catch connection validation errors."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -672,9 +667,8 @@ class TestInspectorIntegration:
 
     def test_inspector_execution_order_matches_runtime(self):
         """Should produce execution order matching runtime behavior."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -701,9 +695,8 @@ class TestInspectorIntegration:
 
     def test_inspector_with_cyclic_workflow(self):
         """Should handle cyclic workflows gracefully."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -737,9 +730,8 @@ class TestInspectorIntegration:
 
     def test_inspector_with_complex_multipath_workflow(self):
         """Should handle workflows with multiple execution paths."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -981,9 +973,8 @@ class TestInspectorErrorHandling:
 
     def test_empty_workflow(self):
         """Should handle empty workflow gracefully."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1004,9 +995,8 @@ class TestInspectorErrorHandling:
 
     def test_single_node_workflow(self):
         """Should handle single-node workflow."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1041,9 +1031,8 @@ class TestInspectorErrorHandling:
 
     def test_disconnected_nodes(self):
         """Should handle workflow with disconnected nodes."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1078,9 +1067,8 @@ class TestInspectorErrorHandling:
 
     def test_node_dependencies_nonexistent_node(self):
         """Should handle nonexistent node ID."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1102,9 +1090,8 @@ class TestInspectorErrorHandling:
 
     def test_complex_dot_notation_parameter_tracing(self):
         """Should trace parameters with complex dot notation."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1143,9 +1130,8 @@ class TestAdvancedWorkflowPatterns:
 
     def test_diamond_dependency_pattern(self):
         """Should handle diamond dependency pattern."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1189,9 +1175,8 @@ class TestAdvancedWorkflowPatterns:
 
     def test_fan_out_fan_in_pattern(self):
         """Should handle fan-out fan-in pattern."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1246,9 +1231,8 @@ class TestAdvancedWorkflowPatterns:
 
     def test_long_chain_workflow(self):
         """Should handle long sequential chains."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1298,9 +1282,8 @@ class TestInspectorPerformance:
 
     def test_large_workflow_metrics(self):
         """Should handle large workflows efficiently."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):
@@ -1330,9 +1313,8 @@ class TestInspectorPerformance:
 
     def test_highly_connected_workflow(self):
         """Should handle workflows with many connections."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.platform.inspector import Inspector
+        from kailash.workflow.builder import WorkflowBuilder
 
         class MockDataFlow:
             def __init__(self):

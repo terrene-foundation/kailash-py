@@ -43,6 +43,7 @@ Behavioral-Over-Source-Grep).
 import asyncio
 
 import pytest
+
 from kailash.nodes.data.async_sql import (
     AsyncSQLDatabaseNode,
     DatabaseConfig,

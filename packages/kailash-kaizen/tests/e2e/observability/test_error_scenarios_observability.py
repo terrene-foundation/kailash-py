@@ -21,10 +21,11 @@ import os
 from pathlib import Path
 
 import pytest
-from tests.utils.docker_config import get_jaeger_config
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from tests.utils.docker_config import get_jaeger_config
 
 
 class QASignature(Signature):
@@ -107,8 +108,9 @@ class TestNetworkTimeoutObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="timeout-test-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="timeout-test-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -180,8 +182,9 @@ class TestRateLimitObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="rate-limit-test-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="rate-limit-test-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -272,8 +275,9 @@ class TestProviderFailureObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="provider-failure-test-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="provider-failure-test-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -314,8 +318,9 @@ class TestProviderFailureObservability:
 
         fallback_agent = BaseAgent(config=valid_config, signature=QASignature())
         fallback_obs = fallback_agent.enable_observability(
-            service_name="provider-fallback-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="provider-fallback-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         fallback_obs.audit.storage = custom_storage
 

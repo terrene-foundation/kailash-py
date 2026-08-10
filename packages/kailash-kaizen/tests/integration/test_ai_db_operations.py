@@ -210,7 +210,9 @@ class TestDataTransformationPipeline:
     def transform_agent_class(self):
         """Get DataTransformAgent class."""
         try:
-            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import DataTransformAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import (
+                DataTransformAgent,
+            )
 
             return DataTransformAgent
         except ImportError:
@@ -282,7 +284,9 @@ class TestQualityAssessmentWorkflow:
     def quality_agent_class(self):
         """Get DataQualityAgent class."""
         try:
-            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import DataQualityAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import (
+                DataQualityAgent,
+            )
 
             return DataQualityAgent
         except ImportError:
@@ -409,7 +413,9 @@ class TestSemanticDatabaseSearch:
     def semantic_agent_class(self):
         """Get SemanticSearchAgent class."""
         try:
-            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import SemanticSearchAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import (
+                SemanticSearchAgent,
+            )
 
             return SemanticSearchAgent
         except ImportError:

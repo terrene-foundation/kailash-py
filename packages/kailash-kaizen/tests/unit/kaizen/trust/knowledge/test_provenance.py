@@ -13,6 +13,7 @@ Tests cover:
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.knowledge import (
     InMemoryProvenanceStore,
     KnowledgeEntry,

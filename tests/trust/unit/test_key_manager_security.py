@@ -33,13 +33,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kailash.trust.signing.crypto import generate_keypair, sign
 from kailash.trust.key_manager import (
     AWSKMSKeyManager,
     InMemoryKeyManager,
     KeyManagerError,
     KeyMetadata,
 )
+from kailash.trust.signing.crypto import generate_keypair, sign
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,9 @@ class TestC2GetKeyPrivateKeyExposure:
     def test_private_get_key_exists(self):
         """_get_key() must exist as a private method for internal use."""
         km = InMemoryKeyManager()
-        assert hasattr(km, "_get_key"), "_get_key() must exist as a private method for internal use."
+        assert hasattr(
+            km, "_get_key"
+        ), "_get_key() must exist as a private method for internal use."
 
     @pytest.mark.asyncio
     async def test_private_get_key_returns_key_for_valid_id(self):
@@ -143,7 +145,9 @@ class TestC2GetKeyPrivateKeyExposure:
     def test_has_key_method_exists(self):
         """has_key() must exist as a public method."""
         km = InMemoryKeyManager()
-        assert hasattr(km, "has_key"), "has_key(key_id) -> bool must exist for safe existence checking."
+        assert hasattr(
+            km, "has_key"
+        ), "has_key(key_id) -> bool must exist for safe existence checking."
 
     @pytest.mark.asyncio
     async def test_has_key_returns_true_for_existing_key(self):
@@ -170,9 +174,9 @@ class TestC2GetKeyPrivateKeyExposure:
     def test_sign_with_key_method_exists(self):
         """sign_with_key() must exist as a public method."""
         km = InMemoryKeyManager()
-        assert hasattr(km, "sign_with_key"), (
-            "sign_with_key(key_id, payload) -> str must exist for signing without exposing the key."
-        )
+        assert hasattr(
+            km, "sign_with_key"
+        ), "sign_with_key(key_id, payload) -> str must exist for signing without exposing the key."
 
     @pytest.mark.asyncio
     async def test_sign_with_key_produces_valid_signature(self):
@@ -247,9 +251,9 @@ class TestC3RegisterKeyRevocationBypass:
     async def test_revoked_key_ids_set_exists(self):
         """InMemoryKeyManager must have a _revoked_key_ids attribute."""
         km = InMemoryKeyManager()
-        assert hasattr(km, "_revoked_key_ids"), (
-            "_revoked_key_ids: Set[str] must exist to track permanently revoked key_ids."
-        )
+        assert hasattr(
+            km, "_revoked_key_ids"
+        ), "_revoked_key_ids: Set[str] must exist to track permanently revoked key_ids."
         assert isinstance(km._revoked_key_ids, set)
 
     @pytest.mark.asyncio
@@ -432,4 +436,7 @@ class TestH7AWSKMSVerifyWrongKeyFallback:
 
         # Verify was called with the second key's ARN, not the first
         call_kwargs = mock_client.verify.call_args[1]
-        assert call_kwargs["KeyId"] == "arn:aws:kms:us-east-1:123456789012:key/mrk-second-key"
+        assert (
+            call_kwargs["KeyId"]
+            == "arn:aws:kms:us-east-1:123456789012:key/mrk-second-key"
+        )

@@ -9,7 +9,6 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException, Request
-
 from templates.saas_starter.security import api_keys
 
 # Import verify_api_key for test mocking

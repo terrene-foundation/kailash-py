@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from kaizen.integrations.nexus.session_manager import (
     CrossChannelSession,
     NexusSessionManager,

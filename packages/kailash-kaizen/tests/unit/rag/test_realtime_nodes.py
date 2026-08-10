@@ -31,8 +31,8 @@ from collections import deque
 from typing import Any, Dict, List
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.realtime import (
     IncrementalIndexNode,
     RealtimeRAGNode,

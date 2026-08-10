@@ -8,11 +8,11 @@ clearance granting, bridge/KSP creation, rate limiting, and WebSocket events.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -21,17 +21,11 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     OrgDefinition,
     TeamConfig,
-    TrustPostureLevel,
 )
-from kailash.trust.pact.access import PactBridge
-from pact.governance.api.auth import GovernanceAuth
-from pact.governance.api.router import create_governance_app
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.knowledge import KnowledgeItem
-
+from pact.governance.api.auth import GovernanceAuth
+from pact.governance.api.router import create_governance_app
 
 # ===================================================================
 # Test fixtures

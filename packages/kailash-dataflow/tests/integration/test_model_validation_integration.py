@@ -19,6 +19,7 @@ Test Coverage:
 from dataclasses import dataclass
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.validation.model_validator import (
     validate_auto_field_conflicts,

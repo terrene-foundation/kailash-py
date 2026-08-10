@@ -10,6 +10,7 @@ These are Tier 1 unit tests - fast, isolated, no external dependencies.
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransition,

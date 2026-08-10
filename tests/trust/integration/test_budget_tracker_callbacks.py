@@ -27,11 +27,7 @@ from typing import List
 
 import pytest
 
-from kailash.trust.constraints.budget_tracker import (
-    BudgetEvent,
-    BudgetTracker,
-)
-
+from kailash.trust.constraints.budget_tracker import BudgetEvent, BudgetTracker
 
 # ---------------------------------------------------------------------------
 # Helper

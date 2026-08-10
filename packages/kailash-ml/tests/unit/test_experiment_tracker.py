@@ -7,14 +7,9 @@ Uses a real SQLite database via ConnectionManager (in-memory).
 from __future__ import annotations
 
 import asyncio
-import math
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.experiment_tracker import (
     Experiment,
     ExperimentNotFoundError,
@@ -29,6 +24,7 @@ from kailash_ml.engines.experiment_tracker import (
     _validate_status,
 )
 
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -139,9 +135,7 @@ class TestExperimentManagement:
     async def test_create_experiment_with_tags(
         self, tracker: ExperimentTracker
     ) -> None:
-        exp_id = await tracker.create_experiment(
-            "tagged-exp", tags={"env": "dev", "team": "ml"}
-        )
+        await tracker.create_experiment("tagged-exp", tags={"env": "dev", "team": "ml"})
         exp = await tracker.get_experiment("tagged-exp")
         assert exp.tags == {"env": "dev", "team": "ml"}
 
@@ -856,7 +850,7 @@ class TestConcurrency:
     ) -> None:
         """Multiple concurrent create_experiment calls for the same name
         should return the same ID."""
-        tasks = [tracker.create_experiment(f"concurrent-exp") for _ in range(10)]
+        tasks = [tracker.create_experiment("concurrent-exp") for _ in range(10)]
         results = await asyncio.gather(*tasks)
         # All should return the same experiment ID
         assert len(set(results)) == 1

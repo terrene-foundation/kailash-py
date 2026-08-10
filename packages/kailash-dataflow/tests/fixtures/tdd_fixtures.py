@@ -30,6 +30,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import asyncpg
 import pytest
+
 from dataflow.testing.tdd_support import (
     TDDDatabaseManager,
     TDDTestContext,
@@ -272,7 +273,7 @@ async def tdd_transaction_dataflow():
             teardown_start = time.time()
             try:
                 df.close()
-            except:
+            except Exception:
                 pass  # Ignore cleanup errors
             teardown_time = (time.time() - teardown_start) * 1000
 

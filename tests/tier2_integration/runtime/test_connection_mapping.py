@@ -230,5 +230,3 @@ class TestConnectionMappingLocalRuntime:
 
             # Verify execution completes without error
             assert "target" in result
-
-

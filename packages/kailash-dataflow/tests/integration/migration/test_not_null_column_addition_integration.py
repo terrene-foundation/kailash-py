@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import pytest
+
 from dataflow.migrations.constraint_validator import ConstraintValidator
 from dataflow.migrations.default_strategies import DefaultValueStrategyManager
 from dataflow.migrations.not_null_handler import (
@@ -30,7 +31,6 @@ from dataflow.migrations.not_null_handler import (
     NotNullColumnHandler,
     ValidationResult,
 )
-
 from kailash.runtime.local import LocalRuntime
 
 # Import the new test harness infrastructure

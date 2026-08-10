@@ -16,6 +16,7 @@ import hashlib
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.signing.merkle import MerkleTree
 from kailash.trust.signing.timestamping import (
     LocalTimestampAuthority,

@@ -24,9 +24,7 @@ class TestAwsKmsKeyManagerImportError:
 
         # Simulate boto3 not being available by patching the availability flag
         with patch.object(aws_kms_mod, "_BOTO3_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.aws_kms import (
-                AwsKmsKeyManager,
-            )
+            from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
             with pytest.raises(
                 ImportError, match="pip install kailash\\[aws-secrets\\]"
@@ -47,9 +45,7 @@ class TestAzureKeyVaultKeyManagerImportError:
 
     def test_init_raises_import_error_without_azure(self) -> None:
         """AzureKeyVaultKeyManager must raise ImportError if azure-keyvault-keys is not installed."""
-        from kailash.trust.plane.key_managers import (
-            azure_keyvault as azure_mod,
-        )
+        from kailash.trust.plane.key_managers import azure_keyvault as azure_mod
 
         # Simulate azure libs not being available by patching the availability flag
         with patch.object(azure_mod, "_AZURE_AVAILABLE", False):

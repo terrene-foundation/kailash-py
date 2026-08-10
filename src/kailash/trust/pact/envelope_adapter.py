@@ -52,8 +52,8 @@ def _get_trust_models() -> Any:
 
 
 if TYPE_CHECKING:
-    from kailash.trust.plane.models import ConstraintEnvelope as TrustConstraintEnvelope
     from kailash.trust.pact.engine import GovernanceEngine
+    from kailash.trust.plane.models import ConstraintEnvelope as TrustConstraintEnvelope
 
 
 class EnvelopeAdapterError(PactError):

@@ -7,6 +7,7 @@ Tests BUG #1 fix: Literal types should be converted to JSON schema enum constrai
 from typing import Literal
 
 import pytest
+
 from kaizen.core.structured_output import (
     StructuredOutputGenerator,
     create_structured_output_config,

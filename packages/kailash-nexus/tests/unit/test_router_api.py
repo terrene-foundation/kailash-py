@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi import APIRouter
+
 from nexus import Nexus
 from nexus.core import RouterInfo
 

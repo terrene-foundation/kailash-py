@@ -17,10 +17,10 @@ importing the modules under test is sufficient — no test-side registration.
 from __future__ import annotations
 
 import pytest
+
 from kailash.nodes.base import Node
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.graph import Workflow
-
 from kaizen.nodes.rag.strategies import (
     HierarchicalRAGNode,
     HybridRAGNode,

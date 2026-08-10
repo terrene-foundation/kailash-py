@@ -63,9 +63,8 @@ from typing import TYPE_CHECKING, Any, Optional
 from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
-    from nexus import Nexus
-
     from kaizen_agents.journey.core import Journey, JourneyConfig, PathwayManager
+    from nexus import Nexus
 
 logger = logging.getLogger(__name__)
 

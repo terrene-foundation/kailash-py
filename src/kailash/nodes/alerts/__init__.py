@@ -20,7 +20,8 @@ from .base import AlertNode, AlertSeverity
 
 try:
     from .discord import DiscordAlertNode
-except ImportError: DiscordAlertNode = None  # type: ignore[assignment,misc]
+except ImportError:
+    DiscordAlertNode = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "AlertNode",

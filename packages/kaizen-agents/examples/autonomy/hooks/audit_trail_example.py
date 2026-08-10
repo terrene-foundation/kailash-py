@@ -19,7 +19,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
@@ -49,12 +49,12 @@ class AuditEntry:
     agent_id: str
     trace_id: str
     action: str
-    inputs: Dict[str, Any]
-    outputs: Dict[str, Any]
+    inputs: dict[str, Any]
+    outputs: dict[str, Any]
     duration_ms: float
     success: bool
     error: str | None = None
-    metadata: Dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class AuditTrailHook:
@@ -79,8 +79,8 @@ class AuditTrailHook:
             audit_log_path: Path to audit log file (None = in-memory only)
         """
         self.audit_log_path = audit_log_path
-        self.audit_entries: List[AuditEntry] = []
-        self.loop_start_times: Dict[str, float] = {}
+        self.audit_entries: list[AuditEntry] = []
+        self.loop_start_times: dict[str, float] = {}
 
         # Create audit log file if path provided
         if audit_log_path:
@@ -179,17 +179,17 @@ class AuditTrailHook:
                 json.dump(asdict(entry), f)
                 f.write("\n")
 
-    def query_by_agent(self, agent_id: str) -> List[AuditEntry]:
+    def query_by_agent(self, agent_id: str) -> list[AuditEntry]:
         """Query audit entries by agent ID."""
         return [e for e in self.audit_entries if e.agent_id == agent_id]
 
-    def query_by_trace(self, trace_id: str) -> List[AuditEntry]:
+    def query_by_trace(self, trace_id: str) -> list[AuditEntry]:
         """Query audit entries by trace ID."""
         return [e for e in self.audit_entries if e.trace_id == trace_id]
 
     def query_by_timerange(
         self, start_time: datetime, end_time: datetime
-    ) -> List[AuditEntry]:
+    ) -> list[AuditEntry]:
         """Query audit entries by time range."""
         return [
             e

@@ -11,7 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import math
 from datetime import UTC, datetime
 
 import pytest
@@ -22,7 +21,6 @@ from pact.mcp.types import (
     McpGovernanceConfig,
     McpToolPolicy,
 )
-
 
 # ---------------------------------------------------------------------------
 # McpToolPolicy

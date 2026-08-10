@@ -26,11 +26,7 @@ from kailash.trust.pact.config import (
 )
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.decomposer import Subtask
-from kaizen_agents.types import (
-    AgentSpec,
-    ConstraintEnvelope,
-    MemoryConfig,
-)
+from kaizen_agents.types import AgentSpec, ConstraintEnvelope, MemoryConfig
 
 # ---------------------------------------------------------------------------
 # CapabilityMatcher — finds existing specs matching required capabilities

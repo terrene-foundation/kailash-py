@@ -12,9 +12,8 @@ Shows different ways to use the Nexus API:
 
 import os
 
-from nexus import Nexus
-
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 # ---------------------------------------------------------------------------
 # Pattern 1: Simple -- like FastAPI

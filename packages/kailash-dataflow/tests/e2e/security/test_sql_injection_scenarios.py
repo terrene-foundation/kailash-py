@@ -12,11 +12,11 @@ import sqlite3
 from typing import Any, Dict, List
 
 import pytest
-from dataflow import DataFlow
-from nexus import Nexus
 
+from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 class TestSQLInjectionE2EScenarios:

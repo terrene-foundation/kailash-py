@@ -19,7 +19,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.adapters.factory import AdapterFactory
 from dataflow.adapters.sql_dialects import DialectManager
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 

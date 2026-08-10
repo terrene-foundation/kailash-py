@@ -10,6 +10,7 @@ from datetime import datetime, time
 from typing import Any, Dict
 
 import pytest
+
 from dataflow.core.protected_engine import ProtectedDataFlow
 from dataflow.core.protection import (
     ConnectionProtection,
@@ -22,7 +23,6 @@ from dataflow.core.protection import (
     TimeWindow,
     WriteProtectionConfig,
 )
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -510,7 +510,7 @@ class TestCriticalWriteProtectionE2E:
 
         try:
             runtime.execute(workflow_create.build())
-        except:
+        except Exception:
             operations_tested.append("CREATE blocked and audited")
 
         # Test READ (should be allowed and audited)
@@ -520,7 +520,7 @@ class TestCriticalWriteProtectionE2E:
         try:
             runtime.execute(workflow_read.build())
             operations_tested.append("READ allowed and audited")
-        except:
+        except Exception:
             pass
 
         # Check audit log

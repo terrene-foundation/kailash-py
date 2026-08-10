@@ -18,7 +18,6 @@ import asyncio
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List
 
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
@@ -59,11 +58,11 @@ class PrometheusMetricsHook:
         # self.active_loops = Gauge(...)
 
         # For demo, use simple dictionaries
-        self.loop_durations: List[float] = []
-        self.loop_counts: Dict[str, int] = defaultdict(int)
-        self.error_counts: Dict[str, int] = defaultdict(int)
+        self.loop_durations: list[float] = []
+        self.loop_counts: dict[str, int] = defaultdict(int)
+        self.error_counts: dict[str, int] = defaultdict(int)
         self.active_loops = 0
-        self.loop_start_times: Dict[str, float] = {}
+        self.loop_start_times: dict[str, float] = {}
 
     async def record_loop_start(self, context: HookContext) -> HookResult:
         """

@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 try:
     from mcp import ClientSession
-    from mcp.client.stdio import StdioServerParameters, stdio_client
     from mcp.client.sse import sse_client
+    from mcp.client.stdio import StdioServerParameters, stdio_client
 
     _MCP_AVAILABLE = True
 except ImportError:

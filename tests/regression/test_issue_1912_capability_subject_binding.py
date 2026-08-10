@@ -49,11 +49,7 @@ from kailash.trust.chain import (
 )
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import AuthorityInactiveError, AuthorityNotFoundError
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
 
 pytestmark = pytest.mark.regression

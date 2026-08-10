@@ -34,10 +34,9 @@ from tests.infrastructure.test_harness import IntegrationTestSuite
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
-from dataflow.database.query_builder import create_query_builder
-
 from dataflow import DataFlow
 from dataflow.core import DataFlowConfig, Environment
+from dataflow.database.query_builder import create_query_builder
 
 
 @pytest.fixture

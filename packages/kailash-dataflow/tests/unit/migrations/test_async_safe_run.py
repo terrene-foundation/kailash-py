@@ -75,9 +75,8 @@ class TestExecuteWorkflowSafeBasic:
 
     def test_helper_returns_tuple(self):
         """Verify the helper returns (results, run_id) tuple."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -104,9 +103,8 @@ class TestSyncContextExecution:
 
     def test_execute_in_sync_context(self):
         """Test helper works in pure sync context (no event loop)."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -127,9 +125,8 @@ class TestSyncContextExecution:
 
     def test_multiple_sequential_calls_sync(self):
         """Test multiple sequential calls work correctly in sync context."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         for i in range(5):
             workflow = WorkflowBuilder()
@@ -163,9 +160,8 @@ class TestAsyncContextExecution:
         In async context, async_safe_run uses a thread pool, causing SQLite to fail.
         The actual production use case (PostgreSQL) works correctly.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -193,9 +189,8 @@ class TestAsyncContextExecution:
     @pytest.mark.asyncio
     async def test_multiple_calls_in_async_context(self):
         """Test multiple calls work correctly in async context."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         for i in range(3):
             workflow = WorkflowBuilder()
@@ -219,9 +214,8 @@ class TestAsyncContextExecution:
         Note: SQLite has threading limitations, so this test expects failures.
         PostgreSQL (the actual production use case) works correctly.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         def create_and_execute(idx):
             workflow = WorkflowBuilder()
@@ -258,9 +252,8 @@ class TestErrorPropagation:
         The workflow execution raises an exception for SQL errors.
         This verifies that errors bubble up correctly.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -289,9 +282,8 @@ class TestErrorPropagation:
     @pytest.mark.asyncio
     async def test_sql_error_propagates_in_async(self):
         """Test that SQL errors propagate correctly in async context."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -376,9 +368,8 @@ class TestNestedCalls:
         Note: If running in an async context (like pytest-asyncio creates),
         SQLite threading errors may occur. Handle gracefully.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         try:
             # First workflow
@@ -449,9 +440,8 @@ class TestThreadSafety:
         This test verifies execution completes (with expected SQLite errors).
         PostgreSQL (the actual use case) works correctly.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         results_list = []
         sqlite_errors = []
@@ -502,9 +492,8 @@ class TestSchemaStateManagerIntegration:
 
         Note: May encounter SQLite threading errors if run in async context.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.schema_state_manager import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -535,9 +524,8 @@ class TestSchemaStateManagerIntegration:
         This test verifies execution completes (with expected SQLite errors).
         PostgreSQL (the actual use case) works correctly.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.schema_state_manager import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         workflow.add_node(
@@ -613,9 +601,8 @@ class TestEdgeCases:
 
     def test_empty_workflow(self):
         """Test handling of empty workflow."""
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         # Empty workflow - no nodes
@@ -628,9 +615,8 @@ class TestEdgeCases:
 
         Note: May encounter SQLite threading errors in async context.
         """
-        from kailash.workflow.builder import WorkflowBuilder
-
         from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+        from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
         for i in range(3):

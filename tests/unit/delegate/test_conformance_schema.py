@@ -24,8 +24,8 @@ from kailash.delegate.conformance import (
     ConformanceVectorIntegrityError,
     ConformanceVectorLoader,
     ReceiptError,
-    ReceiptsAgreeReport,
     ReceiptsAgreementError,
+    ReceiptsAgreeReport,
     SchemaError,
     SpecAnchor,
     assert_receipts_agree,
@@ -34,7 +34,6 @@ from kailash.delegate.conformance import (
     receipts_agree_dict,
     validate_vector_set,
 )
-
 
 # ---------------------------------------------------------------------------
 # SpecAnchor -- mandatory dotted-decimal Delegate-spec § anchor
@@ -595,8 +594,9 @@ class TestConformanceVectorLoader:
         path = tmp_path / "dup.json"
         # Compute the digest as if the file were honest, so we get past
         # the integrity check and into validate_vector_set.
-        from kailash.delegate.conformance.schema import _canonical_json_bytes
         import hashlib
+
+        from kailash.delegate.conformance.schema import _canonical_json_bytes
 
         digest = hashlib.sha256(_canonical_json_bytes([v1, v2])).hexdigest()
         path.write_text(

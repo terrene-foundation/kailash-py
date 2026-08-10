@@ -982,6 +982,7 @@ class WorkflowScheduler:
             >>> scheduler.update_cron(sid, "0 */2 * * *")  # every 2 hours
         """
         from apscheduler.triggers.cron import CronTrigger
+
         from kailash.sdk_exceptions import ScheduleNotFound
 
         if schedule_id not in self._schedules:

@@ -6,11 +6,9 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from kailash_ml.engines.training_pipeline import TrainingPipeline
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
-
-from kailash_ml.engines.training_pipeline import TrainingPipeline
-
 
 # ---------------------------------------------------------------------------
 # Helpers

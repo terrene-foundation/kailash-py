@@ -35,7 +35,6 @@ from kaizen.orchestration import (
     SharedMemoryCoordinator,
 )
 
-
 # ---------------------------------------------------------------------------
 # Real coordinator-aware agents
 # ---------------------------------------------------------------------------

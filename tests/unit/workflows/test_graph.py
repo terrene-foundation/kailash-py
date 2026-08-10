@@ -6,6 +6,7 @@ import pytest
 
 from kailash.nodes import NodeRegistry
 from kailash.nodes.base import Node
+from kailash.sdk_exceptions import NodeConfigurationError
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -58,7 +59,7 @@ def _mock_get(node_type: str):
     # For other nodes, try to get from registry, but return MockNode if not found
     try:
         return _original_get(node_type)
-    except:
+    except NodeConfigurationError:
         # If node not found, return MockNode for testing
         return MockNode
 

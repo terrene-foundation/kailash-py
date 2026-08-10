@@ -67,9 +67,7 @@ class TestModelExplainerInit:
 
     def test_lazy_import_from_package(self) -> None:
         from kailash_ml import ModelExplainer
-        from kailash_ml.engines.model_explainer import (
-            ModelExplainer as DirectExplainer,
-        )
+        from kailash_ml.engines.model_explainer import ModelExplainer as DirectExplainer
 
         assert ModelExplainer is DirectExplainer
 
@@ -264,7 +262,6 @@ class TestToPlotly:
 
     def test_summary_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -275,7 +272,6 @@ class TestToPlotly:
 
     def test_beeswarm_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -286,7 +282,6 @@ class TestToPlotly:
 
     def test_dependence_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -322,7 +317,6 @@ class TestToPlotly:
 
     def test_dependence_with_interaction(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data

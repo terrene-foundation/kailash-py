@@ -27,7 +27,6 @@ from kailash_ml.tracking import (
     SqliteTrackerStore,
 )
 
-
 SIG = ModelSignature(
     inputs=(("x", "Float64", False, None),),
     outputs=(("y", "Int64", False, None),),

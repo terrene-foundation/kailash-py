@@ -54,7 +54,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_RESERVED_METADATA_KEYS = frozenset({"agent_id", "authority_id", "action", "resource", "hook_type", "trace_id"})
+_RESERVED_METADATA_KEYS = frozenset(
+    {"agent_id", "authority_id", "action", "resource", "hook_type", "trace_id"}
+)
 """Metadata keys that hooks must not overwrite via modified_context.
 
 These keys carry trust-critical provenance and must be set only by the
@@ -152,7 +154,9 @@ class HookResult:
         """
         allow = data["allow"]
         if not isinstance(allow, bool):
-            raise TypeError(f"HookResult.allow must be bool, got {type(allow).__name__}: {allow!r}")
+            raise TypeError(
+                f"HookResult.allow must be bool, got {type(allow).__name__}: {allow!r}"
+            )
         return cls(
             allow=allow,
             reason=data.get("reason"),
@@ -263,7 +267,9 @@ class HookRegistry:
             ValueError: If a hook with the same name is already registered.
         """
         if hook.name in self._hooks:
-            raise ValueError(f"Hook '{hook.name}' is already registered. Unregister it first to replace.")
+            raise ValueError(
+                f"Hook '{hook.name}' is already registered. Unregister it first to replace."
+            )
         self._hooks[hook.name] = hook
         logger.debug(
             f"Registered hook '{hook.name}' for events: "
@@ -312,7 +318,9 @@ class HookRegistry:
             try:
                 result = await asyncio.wait_for(hook(context), timeout=self._timeout)
             except asyncio.TimeoutError:
-                reason = f"Hook '{hook.name}' timed out after {self._timeout}s (fail-closed)"
+                reason = (
+                    f"Hook '{hook.name}' timed out after {self._timeout}s (fail-closed)"
+                )
                 logger.warning(f"[HOOK] {reason}")
                 return HookResult(allow=False, reason=reason)
             except Exception as exc:
@@ -337,7 +345,9 @@ class HookRegistry:
             if result.modified_context:
                 modified = result.modified_context
                 if len(modified) > 100:
-                    logger.warning(f"[HOOK] Hook '{hook.name}' modified_context exceeds 100 keys, truncating")
+                    logger.warning(
+                        f"[HOOK] Hook '{hook.name}' modified_context exceeds 100 keys, truncating"
+                    )
                     modified = dict(list(modified.items())[:100])
 
                 for key in modified:
@@ -347,7 +357,9 @@ class HookRegistry:
                         )
                         continue
                     if key in context.metadata:
-                        logger.debug(f"[HOOK] Hook '{hook.name}' overwrites metadata key '{key}'")
+                        logger.debug(
+                            f"[HOOK] Hook '{hook.name}' overwrites metadata key '{key}'"
+                        )
                     context.metadata[key] = modified[key]
 
         return HookResult(allow=True)

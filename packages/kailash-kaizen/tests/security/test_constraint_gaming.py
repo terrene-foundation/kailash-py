@@ -35,6 +35,7 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from kailash.trust.chain import ActionResult, AuditAnchor
 from kailash.trust.constraint_validator import (
     ConstraintValidator,
@@ -58,7 +59,6 @@ from kailash.trust.constraints.evaluator import (
     InteractionMode,
     MultiDimensionEvaluator,
 )
-
 from kaizen.trust.audit_store import (
     AppendOnlyAuditStore,
     AuditRecord,

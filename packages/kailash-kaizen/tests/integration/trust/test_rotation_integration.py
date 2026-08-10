@@ -63,7 +63,6 @@ from kailash.trust.signing.rotation import (
     RotationStatus,
     RotationStatusInfo,
 )
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     OrganizationalAuthority,

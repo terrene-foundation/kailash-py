@@ -23,6 +23,7 @@ Permanent regression tests — NEVER delete (``rules/testing.md`` Regression).
 from __future__ import annotations
 
 import pytest
+
 from dataflow import DataFlow
 
 

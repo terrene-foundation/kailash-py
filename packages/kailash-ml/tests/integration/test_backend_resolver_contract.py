@@ -27,7 +27,6 @@ import math
 
 import polars as pl
 import pytest
-
 from kailash_ml._device import (
     KNOWN_BACKENDS,
     BackendInfo,
@@ -43,12 +42,43 @@ def _tiny_classification_frame() -> pl.DataFrame:
     # RandomForest.fit(), small enough to stay under 1s per run.
     return pl.DataFrame(
         {
-            "f1": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8,
-                   -0.1, -0.2, -0.3, -0.4, -0.5, -0.6, -0.7, -0.8],
-            "f2": [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7,
-                   -1.0, -1.1, -1.2, -1.3, -1.4, -1.5, -1.6, -1.7],
-            "target": [1, 1, 1, 1, 1, 1, 1, 1,
-                       0, 0, 0, 0, 0, 0, 0, 0],
+            "f1": [
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                -0.1,
+                -0.2,
+                -0.3,
+                -0.4,
+                -0.5,
+                -0.6,
+                -0.7,
+                -0.8,
+            ],
+            "f2": [
+                1.0,
+                1.1,
+                1.2,
+                1.3,
+                1.4,
+                1.5,
+                1.6,
+                1.7,
+                -1.0,
+                -1.1,
+                -1.2,
+                -1.3,
+                -1.4,
+                -1.5,
+                -1.6,
+                -1.7,
+            ],
+            "target": [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
         }
     )
 
@@ -119,7 +149,8 @@ class TestBackendResolverContract:
         assert "bf16" in msg
         # suggested_precision field MUST be populated
         assert excinfo.value.suggested_precision in (
-            "16-mixed", "32-true",
+            "16-mixed",
+            "32-true",
         )
 
     def test_fp32_always_universal(self):
@@ -136,20 +167,19 @@ class TestMLEngineBackendPropagation:
         the CPU override regardless of the host backend, and the
         resolver must NOT be mocked — this is the wiring check.
         """
-        from kailash_ml.engines.training_pipeline import TrainingPipeline  # noqa: F401 — orphan check
-        from kailash_ml.trainable import SklearnTrainable
         import asyncio
 
         from kailash_ml import MLEngine
+        from kailash_ml.engines.training_pipeline import (  # noqa: F401 — orphan check
+            TrainingPipeline,
+        )
 
         data = _tiny_classification_frame()
         engine = MLEngine(accelerator="auto")
         host_info = engine.backend_info
         assert host_info is not None
 
-        result = asyncio.run(
-            engine.fit(data, target="target", family="sklearn")
-        )
+        result = asyncio.run(engine.fit(data, target="target", family="sklearn"))
         # sklearn is CPU-only per ml-backends.md §5.1
         assert result.accelerator == "cpu"
         assert result.precision == "32-true"

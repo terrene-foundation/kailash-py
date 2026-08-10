@@ -15,12 +15,13 @@ import inspect
 import logging
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from kailash.trust.auth.exceptions import ExpiredTokenError, InvalidTokenError
-from kailash.trust.auth.jwt import JWTConfig, JWTValidator
-from kailash.trust.auth.models import AuthenticatedUser
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from kailash.trust.auth.exceptions import ExpiredTokenError, InvalidTokenError
+from kailash.trust.auth.jwt import JWTConfig, JWTValidator
+from kailash.trust.auth.models import AuthenticatedUser
 
 # Cross-engine propagation surface per specs/nexus-ml-integration.md §§2–3.
 # JWT middleware sets these on every validated request so kailash-ml,

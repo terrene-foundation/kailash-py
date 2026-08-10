@@ -27,8 +27,8 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.signing.crypto import generate_keypair, hash_reasoning_trace
 from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.crypto import generate_keypair, hash_reasoning_trace
 
 # ---------------------------------------------------------------------------
 # Helpers: reusable fixtures
@@ -126,8 +126,9 @@ def _make_chain_without_reasoning() -> TrustLineageChain:
 
 nacl = pytest.importorskip("nacl", reason="PyNaCl required for SD-JWT tests")
 
-# Import module under test after confirming nacl is available
-from kailash.trust.interop.sd_jwt import (
+# Import module under test after confirming nacl is available — noqa: E402
+# is the guard, not an oversight.
+from kailash.trust.interop.sd_jwt import (  # noqa: E402
     create_reasoning_sd_jwt,
     create_sd_jwt,
     verify_sd_jwt,
@@ -444,7 +445,10 @@ class TestReasoningSdJwtRoundTrip:
 
         trace = result["delegations"][0]["reasoning_trace"]
         assert trace["decision"] == "approve delegation"
-        assert trace["rationale"] == "agent has required capabilities and clean audit history"
+        assert (
+            trace["rationale"]
+            == "agent has required capabilities and clean audit history"
+        )
         assert trace["alternatives_considered"] == ["deny", "defer to human"]
         assert trace["confidence"] == 0.95
         assert trace["methodology"] == "capability_matching"
@@ -480,7 +484,10 @@ class TestReasoningSdJwtRoundTrip:
 
         trace = result["delegations"][0]["reasoning_trace"]
         assert trace["decision"] == "approve delegation"
-        assert trace["rationale"] == "agent has required capabilities and clean audit history"
+        assert (
+            trace["rationale"]
+            == "agent has required capabilities and clean audit history"
+        )
         # alternatives_considered MUST be stripped at CONFIDENTIAL level
         assert "alternatives_considered" not in trace
 
@@ -545,7 +552,9 @@ class TestReasoningSdJwtMixedDelegations:
     def test_mixed_confidentiality_delegations(self):
         """Each delegation's reasoning is handled per its own confidentiality."""
         genesis = _make_genesis()
-        public_trace = _make_reasoning_trace(confidentiality=ConfidentialityLevel.PUBLIC)
+        public_trace = _make_reasoning_trace(
+            confidentiality=ConfidentialityLevel.PUBLIC
+        )
         secret_trace = _make_reasoning_trace(
             confidentiality=ConfidentialityLevel.SECRET,
             decision="escalate to senior agent",

@@ -14,14 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from kailash_ml.automl import (
-    AutoMLConfig,
-    AutoMLEngine,
-    ParamSpec,
-    Trial,
-    TrialOutcome,
-)
-
+from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 
 # ---------------------------------------------------------------------------
 # AutoMLConfig validation
@@ -291,7 +284,6 @@ class TestEnginePromptInjectionScan:
         self, simple_space: list[ParamSpec]
     ) -> None:
         # Inject via a fake strategy that produces a poisonous string
-        from kailash_ml.automl.strategies import SearchStrategy
 
         class _PoisonStrategy:
             name = "poison"

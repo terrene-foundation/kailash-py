@@ -82,7 +82,6 @@ def test_trace_exporter_default_path_log_is_sanitized():
     while the sanitizer sat on the un-taken raise branch.
     """
     from kailash.diagnostics.protocols import TraceEvent, TraceEventType
-
     from kaizen.observability.trace_exporter import TraceExporter
 
     def _boom_sink(event, fingerprint):

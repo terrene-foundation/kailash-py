@@ -15,7 +15,6 @@ import pytest
 from nexus import Nexus
 from nexus.core import Nexus as NexusCore
 
-
 # ---------------------------------------------------------------------------
 # @app.on_event() tests
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ Answers patient questions about the healthcare referral process
 while offering to return to the main flow.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -52,7 +52,7 @@ class FAQSignature(Signature):
     question: str = InputField(
         desc="Patient's question about the referral process or healthcare"
     )
-    current_context: Dict[str, Any] = InputField(
+    current_context: dict[str, Any] = InputField(
         desc="Current journey context for relevant, personalized answers"
     )
 

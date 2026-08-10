@@ -290,7 +290,7 @@ class DurableGatewayTestBase:
                     )
                     if response.status_code == 200:
                         return
-            except:
+            except httpx.HTTPError:
                 await asyncio.sleep(0.5)
 
         raise TimeoutError(f"Gateway did not start within {timeout} seconds")

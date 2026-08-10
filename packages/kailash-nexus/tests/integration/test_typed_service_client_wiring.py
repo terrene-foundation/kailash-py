@@ -279,8 +279,6 @@ class TestTypedVerbsAuth:
         httpserver.expect_request("/users/1").respond_with_handler(handler)
         try:
             await service.get_typed("/users/1", User)
-            assert (
-                received_headers.get("Authorization") == "Bearer test-token-xyz"
-            )
+            assert received_headers.get("Authorization") == "Bearer test-token-xyz"
         finally:
             await service.aclose()

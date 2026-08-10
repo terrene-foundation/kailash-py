@@ -58,8 +58,9 @@ try:
 except ImportError:  # pragma: no cover - optional-extra guard
     _google_compute_engine = None
 
-from kaizen.llm.errors import AuthError, LlmClientError, MissingCredential
 from pydantic import SecretStr
+
+from kaizen.llm.errors import AuthError, LlmClientError, MissingCredential
 
 logger = logging.getLogger(__name__)
 

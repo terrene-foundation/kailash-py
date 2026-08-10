@@ -9,11 +9,12 @@ from datetime import datetime, timedelta, timezone
 import jwt as pyjwt
 import pytest
 from fastapi import APIRouter, Depends, Request
+from starlette.testclient import TestClient
+
 from nexus import Nexus
 from nexus.auth.dependencies import RequirePermission, RequireRole
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
 from nexus.auth.rbac import RBACManager, RBACMiddleware
-from starlette.testclient import TestClient
 
 SECRET = "integration-test-secret-key-at-least-32-chars"
 

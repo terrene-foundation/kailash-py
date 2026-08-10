@@ -5,7 +5,7 @@ Gathers patient symptoms, severity, preferences, and insurance information
 for specialist referral.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -48,21 +48,21 @@ class IntakeSignature(Signature):
     patient_message: str = InputField(
         desc="Patient's description of their condition and needs"
     )
-    conversation_history: List[Dict[str, Any]] = InputField(
+    conversation_history: list[dict[str, Any]] = InputField(
         desc="Previous conversation turns for context", default=[]
     )
 
     # Outputs
-    symptoms: List[str] = OutputField(
+    symptoms: list[str] = OutputField(
         desc="Extracted list of symptoms (e.g., ['back pain', 'stiffness', 'numbness'])"
     )
     severity: str = OutputField(
         desc="Assessed severity level: 'mild', 'moderate', 'severe', or 'urgent'"
     )
-    preferences: Dict[str, Any] = OutputField(
+    preferences: dict[str, Any] = OutputField(
         desc="Patient preferences including time_preference, gender_preference, telehealth_ok, location_preference"
     )
-    insurance_info: Optional[str] = OutputField(
+    insurance_info: str | None = OutputField(
         desc="Insurance provider and plan information if mentioned"
     )
     response: str = OutputField(

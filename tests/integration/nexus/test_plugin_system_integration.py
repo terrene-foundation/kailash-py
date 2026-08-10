@@ -5,6 +5,7 @@ Validates the stub fixes in plugins.py.
 """
 
 import pytest
+
 from nexus import Nexus
 from nexus.plugins import (
     AuthPlugin,

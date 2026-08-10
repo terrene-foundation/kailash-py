@@ -17,8 +17,8 @@ import aiohttp
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
-
 from kailash_mcp import MCPClient, MCPServer
+from kailash_mcp.auth.oauth import ResourceServer
 from kailash_mcp.auth.providers import APIKeyAuth
 from kailash_mcp.discovery.discovery import (
     HealthChecker,
@@ -27,7 +27,7 @@ from kailash_mcp.discovery.discovery import (
     ServiceMesh,
     ServiceRegistry,
 )
-from kailash_mcp.auth.oauth import ResourceServer
+
 from tests.utils.docker_config import (
     ensure_docker_services,
     get_postgres_connection_string,
@@ -90,7 +90,7 @@ def run_mcp_server(server_id: int, port: int, redis_url: str):
                 await r.ping()
                 redis_status = "connected"
                 await r.aclose()
-            except:
+            except redis.RedisError:
                 redis_status = "disconnected"
 
             return {

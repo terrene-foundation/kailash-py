@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 import pytest
 import pytest_asyncio
+
 from dataflow.migrations.auto_migration_system import (
     AutoMigrationSystem,
     ColumnDefinition,
@@ -21,7 +22,6 @@ from dataflow.migrations.auto_migration_system import (
     TableDefinition,
 )
 from dataflow.migrations.batched_migration_executor import BatchedMigrationExecutor
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
@@ -81,7 +81,7 @@ class TestBatchedMigrationExecutorIntegration:
             for table in cleanup_tables:
                 try:
                     await connection.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
-                except:
+                except Exception:
                     pass  # Ignore cleanup errors
 
     @pytest.fixture
@@ -213,7 +213,7 @@ class TestBatchedMigrationExecutorIntegration:
                 await executor.connection.execute(
                     f"DROP TABLE IF EXISTS perf_test_table_{i}_{test_id};"
                 )
-            except:
+            except Exception:
                 pass
 
         # Test sequential execution (simulate non-batched) with new unique names
@@ -248,7 +248,7 @@ class TestBatchedMigrationExecutorIntegration:
                 await executor.connection.execute(
                     f"DROP TABLE IF EXISTS seq_test_table_{i}_{test_id};"
                 )
-            except:
+            except Exception:
                 pass
 
         # Batched execution should be faster or comparable

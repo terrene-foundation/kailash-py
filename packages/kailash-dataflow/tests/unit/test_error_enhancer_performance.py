@@ -308,9 +308,9 @@ class TestPerformanceBenchmarks:
 
         avg_time_ms = (sum(times) / len(times)) * 1000
 
-        assert avg_time_ms < 5.0, (
-            f"FULL mode overhead ({avg_time_ms:.2f}ms) exceeds target (5ms)"
-        )
+        assert (
+            avg_time_ms < 5.0
+        ), f"FULL mode overhead ({avg_time_ms:.2f}ms) exceeds target (5ms)"
 
     def test_minimal_mode_performance_target(self):
         """MINIMAL mode should have <1ms overhead per error."""
@@ -339,9 +339,9 @@ class TestPerformanceBenchmarks:
 
         avg_time_ms = (sum(times) / len(times)) * 1000
 
-        assert avg_time_ms < 1.0, (
-            f"MINIMAL mode overhead ({avg_time_ms:.2f}ms) exceeds target (1ms)"
-        )
+        assert (
+            avg_time_ms < 1.0
+        ), f"MINIMAL mode overhead ({avg_time_ms:.2f}ms) exceeds target (1ms)"
 
     def test_disabled_mode_performance_target(self):
         """DISABLED mode should have <0.1ms overhead (passthrough only)."""
@@ -365,9 +365,9 @@ class TestPerformanceBenchmarks:
 
         avg_time_ms = (sum(times) / len(times)) * 1000
 
-        assert avg_time_ms < 0.1, (
-            f"DISABLED mode overhead ({avg_time_ms:.2f}ms) exceeds target (0.1ms)"
-        )
+        assert (
+            avg_time_ms < 0.1
+        ), f"DISABLED mode overhead ({avg_time_ms:.2f}ms) exceeds target (0.1ms)"
 
 
 # ============================================================================
@@ -393,9 +393,9 @@ class TestMemoryAndResourceManagement:
 
         # Cache should not exceed configured size
         cache_info = enhancer.get_cache_info()
-        assert cache_info["size"] <= 100, (
-            f"Cache size ({cache_info['size']}) exceeds limit (100)"
-        )
+        assert (
+            cache_info["size"] <= 100
+        ), f"Cache size ({cache_info['size']}) exceeds limit (100)"
         # Cache should be at or near max size (LRU keeps it bounded)
         assert cache_info["maxsize"] == 100
 

@@ -125,9 +125,9 @@ def test_openai_plan_generation_performance(planning_agent):
     # Performance target (relaxed for GPT-5 reasoning models with CoT tokens)
     # GPT-5 takes longer due to internal reasoning before generating output
     print(f"Plan generation time: {plan_generation_time:.3f}s")
-    assert plan_generation_time < 30.0, (
-        f"Plan generation too slow: {plan_generation_time:.3f}s (target: <30s)"
-    )
+    assert (
+        plan_generation_time < 30.0
+    ), f"Plan generation too slow: {plan_generation_time:.3f}s (target: <30s)"
 
 
 @pytest.mark.integration

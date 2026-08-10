@@ -9,13 +9,13 @@ import asyncio
 import time
 
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 from dataflow.cache.invalidation import CacheInvalidator, InvalidationPattern
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.redis_manager import CacheConfig, RedisCacheManager
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.mark.e2e
@@ -161,9 +161,9 @@ class TestCacheE2E:
         count_result = results["count_users"]
 
         # List operation works correctly
-        assert len(list_result["records"]) == 4, (
-            f"Expected 4 records, got {len(list_result['records'])}"
-        )
+        assert (
+            len(list_result["records"]) == 4
+        ), f"Expected 4 records, got {len(list_result['records'])}"
 
         # Count might have a bug with filters, skip for now as it's not critical
         # The list operation already returns the count correctly

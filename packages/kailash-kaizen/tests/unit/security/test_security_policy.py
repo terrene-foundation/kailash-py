@@ -107,6 +107,7 @@ class TestSecurityPolicy:
         from datetime import datetime, timedelta, timezone
 
         import jwt
+
         from kaizen.security.authentication import AuthenticationProvider
         from kaizen.security.authorization import AuthorizationProvider
         from kaizen.security.policy import SecurityPolicy

@@ -364,6 +364,6 @@ class TestExecutionPipelineDocker(DockerIntegrationTestBase):
         try:
             result_df = await execution_pipeline.execute(context_df)
             # Would check dataframe properties if supported
-        except:
+        except Exception:
             # Not all implementations support dataframe
             pass

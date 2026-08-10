@@ -78,8 +78,9 @@ async def simulate_autonomous_agent_execution():
             monitor._metrics_collector.record_db_query(read_ms=15.0 + iteration * 2)
             monitor._metrics_collector.record_db_query(write_ms=25.0 + iteration * 3)
 
-            # Simulate memory allocation
-            tool_data = [[j] * 500 for j in range(20)]
+            # Simulate memory allocation (list is observed by the profiler
+            # via RSS, not read directly here)
+            _tool_data = [[j] * 500 for j in range(20)]
             await asyncio.sleep(0.2)
 
         print()

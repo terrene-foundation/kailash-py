@@ -27,12 +27,7 @@ from typing import Optional
 import pytest
 
 from nexus.service_client import ServiceClientDeserializeError
-from nexus.typed_service_client import (
-    Decoder,
-    TypedServiceClient,
-    _default_decode,
-)
-
+from nexus.typed_service_client import Decoder, TypedServiceClient, _default_decode
 
 # ---------------------------------------------------------------------------
 # Test dataclasses — plain, frozen, with defaults, with optional fields
@@ -153,16 +148,12 @@ class TestDefaultDecoderFailures:
     def test_bool_rejected_for_int_field(self) -> None:
         """bool is a subclass of int; rejected explicitly to catch drift."""
         with pytest.raises(ServiceClientDeserializeError) as exc_info:
-            _default_decode(
-                {"id": True, "name": "Alice", "email": "a@x.com"}, User
-            )
+            _default_decode({"id": True, "name": "Alice", "email": "a@x.com"}, User)
         assert "bool" in str(exc_info.value)
 
     def test_null_rejected_for_non_optional_field(self) -> None:
         with pytest.raises(ServiceClientDeserializeError) as exc_info:
-            _default_decode(
-                {"id": 42, "name": None, "email": "a@x.com"}, User
-            )
+            _default_decode({"id": 42, "name": None, "email": "a@x.com"}, User)
         assert "null" in str(exc_info.value) or "None" in str(exc_info.value)
 
     def test_non_mapping_payload_raises(self) -> None:
@@ -222,9 +213,7 @@ class TestNonDataclassTargets:
 
     def test_strict_kwargs_class_rejects_unknown_field(self) -> None:
         with pytest.raises(ServiceClientDeserializeError):
-            _default_decode(
-                {"id": 1, "name": "A", "extra": True}, StrictKwargsClass
-            )
+            _default_decode({"id": 1, "name": "A", "extra": True}, StrictKwargsClass)
 
     def test_strict_kwargs_class_rejects_missing_required(self) -> None:
         with pytest.raises(ServiceClientDeserializeError):
@@ -260,9 +249,7 @@ class TestRegisterDecoder:
         )
         assert result is client
 
-    def test_register_rejects_non_class(
-        self, client: TypedServiceClient
-    ) -> None:
+    def test_register_rejects_non_class(self, client: TypedServiceClient) -> None:
         with pytest.raises(TypeError):
             client.register_decoder("not a class", lambda p, c: None)  # type: ignore[arg-type]
 
@@ -272,9 +259,7 @@ class TestRegisterDecoder:
         with pytest.raises(TypeError):
             client.register_decoder(User, "not-a-callable")  # type: ignore[arg-type]
 
-    def test_custom_decoder_dispatched(
-        self, client: TypedServiceClient
-    ) -> None:
+    def test_custom_decoder_dispatched(self, client: TypedServiceClient) -> None:
         sentinel = object()
 
         def custom(payload, cls):
@@ -325,13 +310,11 @@ class TestRegisterDecoder:
 
         c1.register_decoder(User, decoder_for_c1)
         # c1 dispatches to the custom decoder.
-        assert (
-            c1._decode({"id": 1, "name": "A", "email": "a@x"}, User) is sentinel
-        )
+        assert c1._decode({"id": 1, "name": "A", "email": "a@x"}, User) is sentinel
         # c2 falls back to the default decoder and produces a real User.
-        assert c2._decode(
-            {"id": 1, "name": "A", "email": "a@x"}, User
-        ) == User(id=1, name="A", email="a@x")
+        assert c2._decode({"id": 1, "name": "A", "email": "a@x"}, User) == User(
+            id=1, name="A", email="a@x"
+        )
 
     def test_unknown_class_uses_default_decoder(
         self, client: TypedServiceClient

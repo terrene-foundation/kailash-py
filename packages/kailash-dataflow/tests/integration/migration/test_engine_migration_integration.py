@@ -16,10 +16,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pytest
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig, SecurityConfig
 from dataflow.core.engine import DataFlow
 from dataflow.migrations.auto_migration_system import AutoMigrationSystem
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

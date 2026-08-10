@@ -1,7 +1,7 @@
 # Self-Hosted GPU Runner — Maintenance Guide
 
-**Scope:** `terrene-foundation/kailash-py` GitHub Actions self-hosted runner  
-**Labels required:** `self-hosted`, `cuda`, `gpu`  
+**Scope:** `terrene-foundation/kailash-py` GitHub Actions self-hosted runner
+**Labels required:** `self-hosted`, `cuda`, `gpu`
 **Decision authority:** IT-1 (Decision 7, `specs/ml-backends.md § Hardware-gated CI`)
 
 ---
@@ -61,7 +61,7 @@ tar xzf ./actions-runner-linux-x64-2.x.y.tar.gz
 
 ### 3.3 Register the runner with required labels
 
-**Get a fresh registration token from GitHub UI:**  
+**Get a fresh registration token from GitHub UI:**
 `github.com/terrene-foundation/kailash-py` → Settings → Actions → Runners → New self-hosted runner
 
 ```bash
@@ -86,7 +86,7 @@ sudo ./svc.sh status   # must show: active (running)
 
 ### 3.5 Verify runner appears in GitHub
 
-Go to `github.com/terrene-foundation/kailash-py` → Settings → Actions → Runners.  
+Go to `github.com/terrene-foundation/kailash-py` → Settings → Actions → Runners.
 The runner `kailash-ml-cuda-runner-01` should appear with status **Idle**.
 
 Alternatively:
@@ -319,9 +319,9 @@ gh workflow run gpu-smoke.yml --repo terrene-foundation/kailash-py
 
 ## 10. Decision Record
 
-**Date:** 2026-04-23  
-**Decision:** Persistent-but-controlled runner (not ephemeral per-job)  
-**Reason:** CUDA driver + torch install time (~5–10 min) makes ephemeral runners impractical for per-PR CI. Isolation is enforced via per-job `.venv` cleanup at the workflow level.  
+**Date:** 2026-04-23
+**Decision:** Persistent-but-controlled runner (not ephemeral per-job)
+**Reason:** CUDA driver + torch install time (~5–10 min) makes ephemeral runners impractical for per-PR CI. Isolation is enforced via per-job `.venv` cleanup at the workflow level.
 **Review trigger:** Re-evaluate if runner pool exceeds 3 machines or if ephemeral GPU cloud instances become cost-competitive with persistent hosts.
 
 **IT-1 scope:** This document covers the code/docs side of IT-1. The actual act of provisioning a GPU VM and registering with GitHub is a human step requiring billing authorization and GitHub org admin credentials.

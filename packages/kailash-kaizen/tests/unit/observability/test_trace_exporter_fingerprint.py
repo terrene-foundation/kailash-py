@@ -25,9 +25,7 @@ from kailash.diagnostics.protocols import (
     TraceEventType,
     compute_trace_event_fingerprint,
 )
-
 from kaizen.observability import TraceExporter, compute_fingerprint
-
 
 # ---------------------------------------------------------------------------
 # Fixed test vectors — byte-exact cross-SDK contract

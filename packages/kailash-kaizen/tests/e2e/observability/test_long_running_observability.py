@@ -23,10 +23,11 @@ from pathlib import Path
 
 import psutil
 import pytest
-from tests.utils.docker_config import get_jaeger_config
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from tests.utils.docker_config import get_jaeger_config
 
 
 class QASignature(Signature):
@@ -112,8 +113,9 @@ class TestContinuousObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="continuous-agent-e2e", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="continuous-agent-e2e",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -162,9 +164,9 @@ class TestContinuousObservability:
 
         # Validate: No significant memory leaks
         # Allow up to 50% memory increase for caching/buffering
-        assert memory_increase_percent < 50, (
-            f"Memory leak detected: {memory_increase_percent:.1f}% increase"
-        )
+        assert (
+            memory_increase_percent < 50
+        ), f"Memory leak detected: {memory_increase_percent:.1f}% increase"
 
         # Validate: All calls completed
         assert call_count == total_calls
@@ -271,9 +273,9 @@ class TestHighVolumeMetrics:
         memory_increase_mb = final_memory_mb - initial_memory_mb
 
         # Validate: Memory increase is reasonable (<100 MB for 10k observations)
-        assert memory_increase_mb < 100, (
-            f"Excessive memory usage: {memory_increase_mb:.1f} MB"
-        )
+        assert (
+            memory_increase_mb < 100
+        ), f"Excessive memory usage: {memory_increase_mb:.1f} MB"
 
         # Validate: Prometheus export performance (<100ms)
         export_start = time.time()

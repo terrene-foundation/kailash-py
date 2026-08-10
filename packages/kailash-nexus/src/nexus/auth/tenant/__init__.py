@@ -5,9 +5,6 @@ This package re-exports them for backward compatibility and retains the
 Starlette/FastAPI TenantMiddleware.
 """
 
-from nexus.auth.tenant.middleware import TenantMiddleware
-from nexus.auth.tenant.resolver import TenantResolver
-
 from kailash.trust.auth.context import (
     TenantAccessDeniedError,
     TenantConfig,
@@ -21,6 +18,8 @@ from kailash.trust.auth.context import (
     get_current_tenant_id,
     require_tenant,
 )
+from nexus.auth.tenant.middleware import TenantMiddleware
+from nexus.auth.tenant.resolver import TenantResolver
 
 __all__ = [
     "TenantConfig",

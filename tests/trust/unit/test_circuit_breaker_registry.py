@@ -11,6 +11,7 @@ default config propagation, and cleanup operations.
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerRegistry,

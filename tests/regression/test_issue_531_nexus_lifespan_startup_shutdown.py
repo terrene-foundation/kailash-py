@@ -134,13 +134,13 @@ async def test_lifespan_fires_handlers_even_when_dispatch_methods_missing(
 
     async with app.router.lifespan_context(app):
         assert fired == ["startup"], (
-            f"on_startup did not fire when dispatch methods were "
-            f"removed — lifespan is calling a version-drifting method "
-            f"rather than iterating on_startup directly. See #531."
+            "on_startup did not fire when dispatch methods were "
+            "removed — lifespan is calling a version-drifting method "
+            "rather than iterating on_startup directly. See #531."
         )
 
     assert fired == ["startup", "shutdown"], (
-        f"on_shutdown did not fire when dispatch methods were "
-        f"removed — lifespan teardown is calling a version-drifting "
-        f"method. See #531."
+        "on_shutdown did not fire when dispatch methods were "
+        "removed — lifespan teardown is calling a version-drifting "
+        "method. See #531."
     )

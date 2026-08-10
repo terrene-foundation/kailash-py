@@ -39,7 +39,6 @@ from kailash.trust.plane.siem import (
 )
 from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -758,7 +757,11 @@ class TestCLIExportSIEM:
             main, ["--dir", trust_dir, "export", "--format", "cef", "--since", "24h"]
         )
         assert result.exit_code == 0
-        lines = [l for l in result.output.strip().split("\n") if l.startswith("CEF:")]
+        lines = [
+            line
+            for line in result.output.strip().split("\n")
+            if line.startswith("CEF:")
+        ]
         assert len(lines) >= 1
 
     def test_export_cef_with_since_zero_results(self, tmp_path):

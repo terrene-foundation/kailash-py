@@ -5,11 +5,11 @@ Tests end-to-end error processing flow: capture → categorize → solutions loo
 
 import pytest
 import pytest_asyncio
+
 from dataflow import DataFlow
 from dataflow.debug.error_capture import ErrorCapture
 from dataflow.debug.error_categorizer import ErrorCategorizer
 from dataflow.debug.knowledge_base import KnowledgeBase
-
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

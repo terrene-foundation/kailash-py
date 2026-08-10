@@ -11,8 +11,8 @@ import os
 import sys
 
 import pytest
-from kailash.runtime.local import LocalRuntime
 
+from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 sys.path.insert(0, "src")

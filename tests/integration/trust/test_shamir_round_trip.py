@@ -48,7 +48,6 @@ from kailash.trust.vault.shamir import (  # noqa: E402  -- import after skip gat
     serialize_shard,
 )
 
-
 # ---------------------------------------------------------------------------
 # Generate / reconstruct round-trip
 # ---------------------------------------------------------------------------

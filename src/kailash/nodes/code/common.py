@@ -373,7 +373,9 @@ def get_module_suggestions(module_name: str) -> list[str]:
     return suggestions
 
 
-def format_dangerous_function_error(function_name: str, module_name: str | None = None) -> str:
+def format_dangerous_function_error(
+    function_name: str, module_name: str | None = None
+) -> str:
     """Format consistent error message for dangerous function calls.
 
     Args:

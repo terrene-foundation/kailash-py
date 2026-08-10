@@ -23,6 +23,7 @@ from typing import Any, Dict
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyAnalyzer,
     DependencyReport,
@@ -46,7 +47,6 @@ from dataflow.migrations.risk_assessment_engine import (
     RiskLevel,
     RiskScore,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

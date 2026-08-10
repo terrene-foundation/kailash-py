@@ -40,13 +40,9 @@ from dataflow.classification import (
     MaskingStrategy,
     RetentionPolicy,
 )
-from dataflow.ml import (
-    ML_TRAIN_END_EVENT,
-    TrainingContext,
-    emit_train_end,
-    hash as df_hash,
-    on_train_end,
-)
+from dataflow.ml import ML_TRAIN_END_EVENT, TrainingContext, emit_train_end
+from dataflow.ml import hash as df_hash
+from dataflow.ml import on_train_end
 
 pytestmark = [pytest.mark.integration, pytest.mark.regression]
 
@@ -154,12 +150,12 @@ def test_emit_train_end_redacts_classified_value_in_error_string(
         f"classified field name 'secret_password' MUST be scrubbed; got: "
         f"{safe_error!r}"
     )
-    assert "ssn" not in safe_error, (
-        f"classified field name 'ssn' MUST be scrubbed; got: {safe_error!r}"
-    )
-    assert "[REDACTED]" in safe_error, (
-        f"redaction sentinel MUST be present; got: {safe_error!r}"
-    )
+    assert (
+        "ssn" not in safe_error
+    ), f"classified field name 'ssn' MUST be scrubbed; got: {safe_error!r}"
+    assert (
+        "[REDACTED]" in safe_error
+    ), f"redaction sentinel MUST be present; got: {safe_error!r}"
 
     # Defence-in-depth: the raw value MUST NOT appear in repr(payload).
     repr_payload = repr(payload)
@@ -188,7 +184,7 @@ def test_emit_train_end_redacts_known_classified_values_when_caller_supplies_the
 
     raw_error = (
         "psycopg.errors.UniqueViolation: duplicate key value violates "
-        "unique constraint \"users_secret_password_key\"\n"
+        'unique constraint "users_secret_password_key"\n'
         "DETAIL:  Key (secret_password)=(hunter2-the-leak) already exists."
     )
 
@@ -237,9 +233,9 @@ def test_emit_train_end_passes_unclassified_error_through_unchanged(
 
     assert len(received) == 1
     payload = received[0].payload
-    assert payload["error"] == raw_error, (
-        f"unclassified error MUST pass through; got: {payload['error']!r}"
-    )
+    assert (
+        payload["error"] == raw_error
+    ), f"unclassified error MUST pass through; got: {payload['error']!r}"
 
 
 def test_emit_train_end_no_policy_passes_error_through_unchanged(
@@ -271,6 +267,6 @@ def test_emit_train_end_no_policy_passes_error_through_unchanged(
 
     assert len(received) == 1
     payload = received[0].payload
-    assert payload["error"] == raw_error, (
-        "with no policy, emitter MUST NOT alter the error"
-    )
+    assert (
+        payload["error"] == raw_error
+    ), "with no policy, emitter MUST NOT alter the error"

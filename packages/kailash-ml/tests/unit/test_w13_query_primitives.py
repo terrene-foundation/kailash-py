@@ -36,7 +36,6 @@ from kailash_ml.tracking.query import (
     run_record_from_row,
 )
 
-
 # ---------------------------------------------------------------------------
 # Filter DSL — pure parser unit tests (no backend)
 # ---------------------------------------------------------------------------

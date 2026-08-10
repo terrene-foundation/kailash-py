@@ -9,10 +9,8 @@ flag echoes the caller's intent.
 """
 from __future__ import annotations
 
-import pytest
-
 import polars as pl
-
+import pytest
 from kailash_ml import FinalizeResult, MLEngine, TrainingResult
 
 

@@ -31,8 +31,8 @@ Tier 1 scope:
 from __future__ import annotations
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.optimized import (
     AsyncParallelRAGNode,
     BatchOptimizedRAGNode,

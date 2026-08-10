@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.agent import (
     GovernanceBlockedError,

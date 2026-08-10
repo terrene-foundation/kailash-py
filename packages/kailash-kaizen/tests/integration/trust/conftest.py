@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
+
 from kailash.trust.orchestration.integration.registry_aware import (
     CapabilityBasedSelector,
     HealthAwareSelector,
@@ -33,7 +34,6 @@ from kailash.trust.orchestration.integration.secure_channel import (
     SecureOrchestrationChannel,
 )
 from kailash.trust.registry.store import InMemoryAgentRegistryStore
-
 from kaizen.trust import (  # Crypto; Chain; Authority; Operations; Registry; Messaging; Orchestration
     AgentHealthMonitor,
     AgentMetadata,

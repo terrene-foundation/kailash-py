@@ -29,7 +29,6 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftReport
 
 from kailash.db.connection import ConnectionManager
 
-
 # ---------------------------------------------------------------------------
 # Synthetic weekly-seasonal signal
 # ---------------------------------------------------------------------------

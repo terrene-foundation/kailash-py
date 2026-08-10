@@ -27,7 +27,6 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-
 from kaizen.trust.store import PostgresTrustStore
 
 

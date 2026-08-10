@@ -47,11 +47,7 @@ from kailash.trust.migrations.subject_binding_1912 import (
     SubjectBindingMigration,
     SubjectBindingMigrationError,
 )
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing
 
 pytestmark = pytest.mark.regression

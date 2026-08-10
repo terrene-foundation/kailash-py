@@ -16,6 +16,7 @@ Infrastructure: Mocked MCPClient for fast tests
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
 

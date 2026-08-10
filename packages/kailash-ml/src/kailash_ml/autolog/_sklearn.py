@@ -41,10 +41,7 @@ import pickle
 import sys
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
-from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
-    register_integration,
-)
+from kailash_ml.autolog._registry import FrameworkIntegration, register_integration
 
 if TYPE_CHECKING:
     from kailash_ml.autolog.config import AutologConfig
@@ -312,10 +309,7 @@ async def _log_classifier_figures(
     """
     import plotly.figure_factory as ff  # noqa: PLC0415
     import plotly.graph_objects as go  # noqa: PLC0415
-    from sklearn.metrics import (  # noqa: PLC0415
-        classification_report,
-        confusion_matrix,
-    )
+    from sklearn.metrics import classification_report, confusion_matrix  # noqa: PLC0415
 
     try:
         y_pred = estimator.predict(X)

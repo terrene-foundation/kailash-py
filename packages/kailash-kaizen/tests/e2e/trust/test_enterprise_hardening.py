@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.cache import CacheStats, TrustChainCache
 from kailash.trust.chain import TrustLineageChain
 from kailash.trust.security import (

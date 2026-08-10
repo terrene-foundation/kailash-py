@@ -5,7 +5,7 @@ index 50e5c8043..a9811c4ca 100644
 @@ -1671,9 +1671,15 @@ class A2AAgentNode(LLMAgentNode):
              if memory_result.get("success"):
                  shared_context = memory_result.get("memories", [])
- 
+
 -        # Store provider and model for use in summarization
 -        self._current_provider = kwargs.get("provider", "mock")
 -        self._current_model = kwargs.get("model", "mock-model")
@@ -18,11 +18,11 @@ index 50e5c8043..a9811c4ca 100644
 +        # rule-based/simple degradation, no fabrication.
 +        self._current_provider = kwargs.get("provider")
 +        self._current_model = kwargs.get("model")
- 
+
          # Enhance messages with shared context
          messages = kwargs.get("messages", [])
 @@ -1696,9 +1702,12 @@ Relevant shared context from other agents:
- 
+
              # Use LLM to extract insights if provider supports it
              use_llm_extraction = kwargs.get("use_llm_insight_extraction", True)
 -            provider = kwargs.get("provider", "mock")
@@ -30,7 +30,7 @@ index 50e5c8043..a9811c4ca 100644
 +            # exactly as "mock" does — the LLM insight path runs ONLY for a real,
 +            # explicitly-provided provider.
 +            provider = kwargs.get("provider")
- 
+
 -            if use_llm_extraction and provider not in ["mock"]:
 +            if use_llm_extraction and provider not in ["mock", None]:
                  # Use LLM to extract and analyze insights
@@ -47,7 +47,7 @@ index 50e5c8043..a9811c4ca 100644
              }
 @@ -1826,11 +1835,13 @@ Format the summary as a brief paragraph (max 200 words) that another agent can q
  Focus on actionable intelligence rather than just listing what each agent said."""
- 
+
          try:
 -            # Use the current agent's LLM configuration for summarization
 -            provider = getattr(self, "_current_provider", "mock")
@@ -57,7 +57,7 @@ index 50e5c8043..a9811c4ca 100644
 +            # falls through to the simple summary below exactly as "mock" did.
 +            provider = getattr(self, "_current_provider", None)
 +            model = getattr(self, "_current_model", None)
- 
+
 -            if provider not in ["mock"]:
 +            if provider not in ["mock", None]:
                  summary_kwargs = {
@@ -69,7 +69,7 @@ index 5ae952a72..797090063 100644
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
 @@ -904,15 +904,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      )
- 
+
              except Exception as e:
 +                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
 +                # error flows into the user-visible execution_results dict; a
@@ -88,11 +88,11 @@ index 5ae952a72..797090063 100644
 -                execution_results["errors"].append(str(e))
 +                execution_results["errors"].append(error_msg)
                  execution_results["success"] = False
- 
+
              return execution_results
 @@ -977,15 +982,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      )
- 
+
              except Exception as e:
 +                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
 +                # error flows into the user-visible execution_results dict; a
@@ -111,7 +111,7 @@ index 5ae952a72..797090063 100644
 -                execution_results["errors"].append(str(e))
 +                execution_results["errors"].append(error_msg)
                  execution_results["success"] = False
- 
+
          return execution_results
 diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1952_a2a_provider_residual.py b/packages/kailash-kaizen/tests/regression/test_issue_1952_a2a_provider_residual.py
 new file mode 100644

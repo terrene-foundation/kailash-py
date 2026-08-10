@@ -26,19 +26,16 @@ from typing import Any
 import numpy as np
 import polars as pl
 from kailash_ml.drift._types import DriftReport, FeatureDriftResult
-from kailash_ml.drift.alerts import (
-    AlertConfig,
-    DriftAlertDispatcher,
-)
+from kailash_ml.drift.alerts import AlertConfig, DriftAlertDispatcher
 from kailash_ml.drift.policy import DriftMonitorReferencePolicy
 from kailash_ml.drift.stats import (
     DriftThresholds,
     chi2_test,
     jensen_shannon_continuous,
     jensen_shannon_discrete,
-    new_category_fraction as _new_category_fraction,
-    select_statistics,
 )
+from kailash_ml.drift.stats import new_category_fraction as _new_category_fraction
+from kailash_ml.drift.stats import select_statistics
 from kailash_ml.errors import (
     DriftMonitorError,
     DriftThresholdError,

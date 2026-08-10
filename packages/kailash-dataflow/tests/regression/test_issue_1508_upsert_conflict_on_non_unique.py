@@ -31,11 +31,11 @@ from __future__ import annotations
 import time
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 from dataflow.sql.dialects import SQLDialectFactory
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def _uid(prefix: str = "u") -> str:

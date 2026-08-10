@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
 from kaizen.ontology import OntologyRegistry
 from kaizen.ontology.types import Concept, ConceptMatch, EmbeddingProvider
 

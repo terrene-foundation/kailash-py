@@ -263,13 +263,12 @@ async def test_bulk_upsert_generated_node_path_warning_free():
     """AC (bulk path 2): the generated ``{Model}BulkUpsertNode``
     (``DataFlowBulkUpsertNode``) round-trips AND emits warning-free row-alias SQL on
     8.0.46; the legacy VALUES() form warns (1287)."""
-    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-
     from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
     from dataflow.sql.dialects import (
         mysql_row_alias_cache_key,
         resolve_mysql_row_alias_support,
     )
+    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
     table = "issue1546_bulk_node"
     conn = _raw_conn()
@@ -348,13 +347,12 @@ async def test_bulk_create_pool_update_path_warning_free():
     """AC (bulk path 3): ``BulkCreatePoolNode`` with ``conflict_resolution='update'``
     round-trips (UPDATE in place on the id PK) AND emits warning-free row-alias SQL
     on 8.0.46; the legacy VALUES() form warns (1287)."""
-    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-
     from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
     from dataflow.sql.dialects import (
         mysql_row_alias_cache_key,
         resolve_mysql_row_alias_support,
     )
+    from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
     table = "issue1546_bulk_pool"
     conn = _raw_conn()

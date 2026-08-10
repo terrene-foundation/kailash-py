@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Set
 from unittest.mock import patch
 
 import pytest
+
 from kailash.trust.revocation.broadcaster import (
     CascadeRevocationManager,
     DeadLetterEntry,
@@ -39,7 +40,6 @@ from kailash.trust.signing.crl import (
     CRLEntry,
     verify_delegation_with_crl,
 )
-
 from kaizen.trust.store import InMemoryTrustStore, TransactionContext
 
 # =============================================================================

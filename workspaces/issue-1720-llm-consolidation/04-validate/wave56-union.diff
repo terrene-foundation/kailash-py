@@ -5,30 +5,30 @@ index f13ed5b97..c55ded4c3 100644
 +++ b/packages/kailash-dataflow/CHANGELOG.md
 @@ -1,5 +1,7 @@
  # DataFlow Changelog
- 
+
 +## [Unreleased]
 +
  ## [2.19.1] - 2026-07-21
- 
+
  ### Docs
 @@ -8,8 +10,6 @@
    docstrings (`classification/masking.py`, `migration/security_definer.py`) —
    disclosure hygiene, behavior-neutral.
- 
+
 -## [Unreleased]
 -
  ## [2.19.0] — 2026-07-21 — FieldType.Vector(dim) embedding column type (#1846)
- 
+
  ### Added
 @@ -1929,7 +1929,7 @@ Patch release closing the merged-but-unreleased gap on `kailash-dataflow` main.
  - Updated `specs/dataflow-ml-integration.md` § 4A.2 — replaced the "Caller is responsible for sanitizing" docstring contract with the emitter-redacted contract, referencing `format_error_for_event` and `rules/event-payload-classification.md` § 1.
  - Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-_ and dataflow-ml-_ specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
- 
+
 -## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
 +## [2.3.2] (cont.) — 2026-04-27 — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
- 
+
  ### Tests
- 
+
 diff --git a/packages/kailash-dataflow/src/dataflow/adapters/dialect.py b/packages/kailash-dataflow/src/dataflow/adapters/dialect.py
 index 46dcfc108..512611918 100644
 --- a/packages/kailash-dataflow/src/dataflow/adapters/dialect.py
@@ -36,13 +36,13 @@ index 46dcfc108..512611918 100644
 @@ -12,17 +12,34 @@ Architecture:
      └── SQLiteDialect
  """
- 
+
 +import hashlib
  import logging
  import re
  from abc import ABC, abstractmethod
  from typing import Any, Dict, List, Tuple
- 
+
 +# Issue #1971: the per-dialect identifier length limits are owned by the core
 +# SDK (kailash.db.dialect) and imported here rather than restated, so the two
 +# live dialect hierarchies cannot drift on the value that decides whether an
@@ -54,24 +54,24 @@ index 46dcfc108..512611918 100644
 +)
 +
  from .exceptions import InvalidIdentifierError
- 
+
  logger = logging.getLogger(__name__)
- 
+
  _SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
- 
+
 +# Length of the hex digest appended when an identifier is fitted to a dialect's
 +# length budget. 8 hex chars = 32 bits of the SHA-256 of the FULL original
 +# identifier — enough to keep two identifiers that share a truncation prefix
 +# distinct, short enough to leave the human-readable head intact.
 +_IDENTIFIER_DIGEST_LENGTH = 8
 +
- 
+
  class SQLDialect(ABC):
      """Abstract base class for SQL dialects.
 @@ -79,6 +96,102 @@ class SQLDialect(ABC):
      def returning_clause(self, cols: List[str]) -> str:
          """RETURNING clause (empty string when unsupported)."""
- 
+
 +    # ------------------------------------------------------------------
 +    # Identifier length budget (issue #1971)
 +    # ------------------------------------------------------------------
@@ -168,16 +168,16 @@ index 46dcfc108..512611918 100644
 +        name = repr(name)
 +    return hashlib.sha256(name.encode("utf-8")).hexdigest()[:4]
 +
- 
+
  # ======================================================================
  # PostgreSQL
 @@ -88,7 +201,7 @@ class SQLDialect(ABC):
  class PostgreSQLDialect(SQLDialect):
      """PostgreSQL dialect."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN-1
 +    _MAX_IDENTIFIER_LENGTH = POSTGRES_MAX_IDENTIFIER_LENGTH
- 
+
      def get_parameter_placeholder(self, position: int) -> str:
          return f"${position}"
 @@ -97,20 +210,20 @@ class PostgreSQLDialect(SQLDialect):
@@ -207,10 +207,10 @@ index 46dcfc108..512611918 100644
 @@ -189,7 +302,7 @@ class PostgreSQLDialect(SQLDialect):
  class MySQLDialect(SQLDialect):
      """MySQL dialect."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
 +    _MAX_IDENTIFIER_LENGTH = MYSQL_MAX_IDENTIFIER_LENGTH
- 
+
      def get_parameter_placeholder(self, position: int) -> str:
          return "%s"
 @@ -198,20 +311,20 @@ class MySQLDialect(SQLDialect):
@@ -240,10 +240,10 @@ index 46dcfc108..512611918 100644
 @@ -286,7 +399,7 @@ class MySQLDialect(SQLDialect):
  class SQLiteDialect(SQLDialect):
      """SQLite dialect."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
 +    _MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
- 
+
      def get_parameter_placeholder(self, position: int) -> str:
          return "?"
 @@ -295,20 +408,20 @@ class SQLiteDialect(SQLDialect):
@@ -301,7 +301,7 @@ index e8cd76e2e..5e3a59a29 100644
 +                        else explicit_index_name
                      )
                      unique = index_config.get("unique", False)
- 
+
 @@ -6760,7 +6777,11 @@ class DataFlow(DataFlowEventMixin):
              if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
                  foreign_key = rel_info["foreign_key"]
@@ -318,7 +318,7 @@ index e8cd76e2e..5e3a59a29 100644
 @@ -6798,7 +6819,14 @@ class DataFlow(DataFlowEventMixin):
                  target_table = rel_info["target_table"]
                  target_key = rel_info.get("target_key", "id")
- 
+
 -                constraint_name = f"fk_{table_name}_{foreign_key}"
 +                # Issue #1971: DataFlow-generated constraint name derived from
 +                # an already-budget-consuming table_name. PostgreSQL truncates
@@ -328,11 +328,11 @@ index e8cd76e2e..5e3a59a29 100644
 +                constraint_name = self._fit_identifier_to_dialect(
 +                    f"fk_{table_name}_{foreign_key}"
 +                )
- 
+
                  # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 1):
                  # validate every identifier before interpolation into DDL.
 @@ -10933,7 +10961,55 @@ class DataFlow(DataFlowEventMixin):
- 
+
          # Apply proper English pluralization
          table_name = self._pluralize(snake_case)
 -        return table_name
@@ -385,7 +385,7 @@ index e8cd76e2e..5e3a59a29 100644
 +            return identifier
 +
 +        return dialect.normalize_identifier(identifier)
- 
+
      def _foreign_key_to_relationship_name(self, foreign_key_column: str) -> str:
          """Convert foreign key column name to relationship name."""
 diff --git a/packages/kailash-dataflow/src/dataflow/migrations/column_removal_manager.py b/packages/kailash-dataflow/src/dataflow/migrations/column_removal_manager.py
@@ -405,7 +405,7 @@ index 1b6796def..8df2d72a9 100644
 +        backup_table = _DIALECT.normalize_identifier(
              f"{table_name}__{column_name}_backup_{int(datetime.now().timestamp())}"
          )
- 
+
 @@ -295,7 +300,11 @@ class TableSnapshotBackupHandler(BackupHandler):
          self, table_name: str, column_name: str, connection: asyncpg.Connection
      ) -> BackupInfo:
@@ -416,7 +416,7 @@ index 1b6796def..8df2d72a9 100644
 +        backup_table = _DIALECT.normalize_identifier(
 +            f"{table_name}_backup_{int(datetime.now().timestamp())}"
 +        )
- 
+
          # Create full table backup — per
          # rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic
 diff --git a/packages/kailash-dataflow/src/dataflow/optimization/index_recommendation_engine.py b/packages/kailash-dataflow/src/dataflow/optimization/index_recommendation_engine.py
@@ -425,8 +425,8 @@ index a43d9361c..70ee267b4 100644
 +++ b/packages/kailash-dataflow/src/dataflow/optimization/index_recommendation_engine.py
 @@ -52,6 +52,23 @@ def _quote_for(dialect: SQLDialect, name: str) -> str:
      return helper.quote_identifier(name)
- 
- 
+
+
 +def _fit_for(dialect: SQLDialect, name: str) -> str:
 +    """Fit a GENERATED index name to *dialect*'s identifier-length budget.
 +
@@ -446,7 +446,7 @@ index a43d9361c..70ee267b4 100644
 +
  class IndexType(Enum):
      """Types of database indexes."""
- 
+
 @@ -1064,7 +1081,8 @@ class IndexRecommendationEngine:
          table_q = _quote_for(self.dialect, table)
          columns_q = [_quote_for(self.dialect, c) for c in columns]
@@ -455,7 +455,7 @@ index a43d9361c..70ee267b4 100644
 +        # Issue #1971: fit the GENERATED name to the dialect budget first.
 +        index_name = _fit_for(self.dialect, f"idx_{table}_{'_'.join(columns)}")
          index_q = _quote_for(self.dialect, index_name)
- 
+
          if self.dialect == SQLDialect.POSTGRESQL:
 @@ -1101,7 +1119,8 @@ class IndexRecommendationEngine:
          # construction if invalid).
@@ -465,7 +465,7 @@ index a43d9361c..70ee267b4 100644
 +        # Issue #1971: fit the GENERATED name to the dialect budget first.
 +        index_name = _fit_for(self.dialect, f"idx_{table}_{column}_partial")
          index_q = _quote_for(self.dialect, index_name)
- 
+
          if self.dialect == SQLDialect.POSTGRESQL:
 @@ -1124,7 +1143,10 @@ class IndexRecommendationEngine:
          table_q = _quote_for(self.dialect, table)
@@ -477,33 +477,33 @@ index a43d9361c..70ee267b4 100644
 +            self.dialect, f"idx_{table}_{'_'.join(index_columns)}_covering"
 +        )
          index_q = _quote_for(self.dialect, index_name)
- 
+
          if self.dialect == SQLDialect.POSTGRESQL and include_columns:
 diff --git a/packages/kailash-kaizen/CHANGELOG.md b/packages/kailash-kaizen/CHANGELOG.md
 index 87b4641f1..b19122658 100644
 --- a/packages/kailash-kaizen/CHANGELOG.md
 +++ b/packages/kailash-kaizen/CHANGELOG.md
 @@ -2,6 +2,9 @@
- 
+
  All notable changes to the Kaizen AI Agent Framework will be documented in this file.
- 
+
 +The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 +and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 +
  ## [Unreleased]
- 
+
  ### Changed (behavior — potentially breaking)
 @@ -1579,11 +1582,6 @@ Minor release shipping the kailash-kaizen side of the kailash 2.18.0 / #890 slim
  - **Bare imports of moved subsystems on a slim install raise raw `ModuleNotFoundError`** — e.g. `from kaizen.observability import ...` requires `[observability]`. The migration table above is the authoritative recovery path.
  - This is a **packaging / install-shape change only** — every Python public-API symbol that existed in 2.20.0 still exists in 2.21.0 with the same signature and semantics. Users on `pip install 'kailash-kaizen[all]'` see no behavior change.
- 
+
 -The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 -and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 -
 -## [Unreleased]
 -
  ## [2.20.0] — 2026-05-06 — LLM-first trait derivation per agent-reasoning.md Rule 1 (#829)
- 
+
  ### Changed
 diff --git a/packages/kailash-kaizen/src/kaizen/core/agents.py b/packages/kailash-kaizen/src/kaizen/core/agents.py
 index b52714667..c19962e4a 100644
@@ -511,7 +511,7 @@ index b52714667..c19962e4a 100644
 +++ b/packages/kailash-kaizen/src/kaizen/core/agents.py
 @@ -2643,14 +2643,22 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
                  )
- 
+
              except Exception as e:
 +                # A round drives an LLM execution; its exception can echo a
 +                # credential into the round record and onto the log (#1970 sweep).
@@ -562,7 +562,7 @@ index 1e1a8a780..0e089dbc8 100644
 +++ b/packages/kailash-kaizen/src/kaizen/core/autonomy/control/transports/http.py
 @@ -246,7 +246,14 @@ class HTTPTransport(Transport):
                      raise ConnectionError(f"HTTP error {response.status}: {error_text}")
- 
+
          except aiohttp.ClientError as e:
 -            raise ConnectionError(f"Failed to write to transport: {e}") from e
 +            # aiohttp embeds the request URL in its exception text; the control
@@ -573,12 +573,12 @@ index 1e1a8a780..0e089dbc8 100644
 +                f"Failed to write to transport: "
 +                f"{sanitize_provider_error(e, 'Control transport')}"
 +            ) from e
- 
+
      def read_messages(self) -> AsyncIterator[str]:
          """
 @@ -347,9 +354,16 @@ class HTTPTransport(Transport):
                      continue
- 
+
          except aiohttp.ClientError as e:
 -            # Log error but don't crash
 -            # In production, this would use proper logging
@@ -594,7 +594,7 @@ index 1e1a8a780..0e089dbc8 100644
 +                file=sys.stderr,
 +            )
              return
- 
+
      async def close(self) -> None:
 diff --git a/packages/kailash-kaizen/src/kaizen/core/framework.py b/packages/kailash-kaizen/src/kaizen/core/framework.py
 index e489638ec..639a62fce 100644
@@ -616,14 +616,14 @@ index e489638ec..639a62fce 100644
 +                "verify .env has a working LLM provider key. Underlying: "
 +                f"{sanitize_provider_error(e, 'LLM')}"
              ) from e
- 
+
          traits_csv = (result or {}).get("traits_csv", "") or ""
 diff --git a/packages/kailash-kaizen/src/kaizen/execution/streaming_executor.py b/packages/kailash-kaizen/src/kaizen/execution/streaming_executor.py
 index 162a92df6..bb4339810 100644
 --- a/packages/kailash-kaizen/src/kaizen/execution/streaming_executor.py
 +++ b/packages/kailash-kaizen/src/kaizen/execution/streaming_executor.py
 @@ -314,11 +314,16 @@ class StreamingExecutor:
- 
+
          except Exception as e:
              # === ERROR Event ===
 +            # The event stream crosses a process boundary to the Enterprise-App
@@ -691,7 +691,7 @@ index 1d0036729..3809acf28 100644
 @@ -18,12 +18,28 @@ Why this exists:
      generalises across natural language variation while remaining observable
      and cacheable.
- 
+
 +Structured output (#1981):
 +    Both agents request structured output derived from THEIR OWN signature.
 +    Providers whose wire carries a schema (OpenAI family) get a strict
@@ -715,7 +715,7 @@ index 1d0036729..3809acf28 100644
      (task, capability) pair even if the same comparison is requested
 -    repeatedly inside one selection round.
 +    repeatedly inside one selection round. Only VALID judgments are cached.
- 
+
  Observability:
      Every invocation emits entry and exit log lines with correlation_id,
 @@ -36,17 +52,20 @@ import logging
@@ -725,16 +725,16 @@ index 1d0036729..3809acf28 100644
 -from dataclasses import dataclass, field
 +from dataclasses import dataclass, field, replace
  from typing import Any, Dict, Optional, Tuple
- 
+
  from kaizen.config.providers import ConfigurationError
  from kaizen.core._provider_env import _keyless_mock_allowed
  from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 +from kaizen.core.prompt_utils import generate_prompt_from_signature, json_prompt_suffix
 +from kaizen.core.structured_output import StructuredOutput
  from kaizen.signatures import InputField, OutputField, Signature
- 
+
  logger = logging.getLogger(__name__)
- 
+
  __all__ = [
 +    "ReasoningDegradedError",
      "TextSimilaritySignature",
@@ -742,8 +742,8 @@ index 1d0036729..3809acf28 100644
      "TextSimilarityAgent",
 @@ -59,6 +78,56 @@ __all__ = [
  ]
- 
- 
+
+
 +# ---------------------------------------------------------------------------
 +# Errors
 +# ---------------------------------------------------------------------------
@@ -799,8 +799,8 @@ index 1d0036729..3809acf28 100644
  # ---------------------------------------------------------------------------
 @@ -117,6 +186,60 @@ class CapabilityMatchSignature(Signature):
      reasoning: str = OutputField(description="One sentence explaining the decision")
- 
- 
+
+
 +# ---------------------------------------------------------------------------
 +# Structured output
 +# ---------------------------------------------------------------------------
@@ -861,7 +861,7 @@ index 1d0036729..3809acf28 100644
 @@ -131,14 +254,18 @@ class TextSimilarityAgent(BaseAgent):
      about its structured inputs.
      """
- 
+
 +    _ROLE = (
 +        "You are a semantic similarity judge. Given two texts, rate how "
 +        "close their meaning is on a 0.0-1.0 scale and justify the score "
@@ -870,7 +870,7 @@ index 1d0036729..3809acf28 100644
 +
      def _default_signature(self) -> Signature:
          return TextSimilaritySignature()
- 
+
      def _generate_system_prompt(self) -> str:
 -        return (
 -            "You are a semantic similarity judge. Given two texts, rate how "
@@ -879,12 +879,12 @@ index 1d0036729..3809acf28 100644
 +        return _reasoning_system_prompt(
 +            self._ROLE, self.signature, self.config.response_format
          )
- 
- 
+
+
 @@ -149,16 +276,20 @@ class CapabilityMatchAgent(BaseAgent):
      as `TextSimilarityAgent`.
      """
- 
+
 +    _ROLE = (
 +        "You are a capability matcher for multi-agent routing. Given an "
 +        "agent capability (name + description) and a task requirement, "
@@ -895,7 +895,7 @@ index 1d0036729..3809acf28 100644
 +
      def _default_signature(self) -> Signature:
          return CapabilityMatchSignature()
- 
+
      def _generate_system_prompt(self) -> str:
 -        return (
 -            "You are a capability matcher for multi-agent routing. Given an "
@@ -906,12 +906,12 @@ index 1d0036729..3809acf28 100644
 +        return _reasoning_system_prompt(
 +            self._ROLE, self.signature, self.config.response_format
          )
- 
- 
+
+
 @@ -213,6 +344,14 @@ def _resolve_reasoning_config(
      cheap. If no config is supplied, fall back to `.env`-defined model with
      the same defaults per `rules/env-models`.
- 
+
 +    Structured output is NOT resolved here — it depends on which reasoning
 +    signature the agent will run, which only the `get_*_agent` factories
 +    know. They pass this config through `_with_structured_output` (#1981).
@@ -926,7 +926,7 @@ index 1d0036729..3809acf28 100644
 @@ -252,21 +391,37 @@ def _resolve_reasoning_config(
              mcp_enabled=False,
          )
- 
+
 -    # Clone and harden
 +    # Clone and harden. `response_format` is deliberately absent — see the
 +    # docstring; `_with_structured_output` supplies the correct one.
@@ -942,8 +942,8 @@ index 1d0036729..3809acf28 100644
          base_url=config.base_url,
          mcp_enabled=False,
      )
- 
- 
+
+
 +def _with_structured_output(
 +    config: BaseAgentConfig, signature: Signature
 +) -> BaseAgentConfig:
@@ -988,8 +988,8 @@ index 1d0036729..3809acf28 100644
      if agent is None:
 @@ -313,11 +472,31 @@ def get_capability_match_agent(
  # ---------------------------------------------------------------------------
- 
- 
+
+
 -def _coerce_float(value: Any, default: float = 0.0) -> float:
 -    try:
 +def _usable_score(value: Any) -> Optional[float]:
@@ -1024,8 +1024,8 @@ index 1d0036729..3809acf28 100644
      if score > 1.0:
 @@ -325,6 +504,42 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
      return score
- 
- 
+
+
 +def _coerce_float(value: Any, default: float = 0.0) -> float:
 +    """Clamped float for values already known to be usable (cache reads)."""
 +    score = _usable_score(value)
@@ -1067,7 +1067,7 @@ index 1d0036729..3809acf28 100644
      text_b: str,
 @@ -347,7 +562,16 @@ def llm_text_similarity(
              fresh UUID is generated if not supplied.
- 
+
      Returns:
 -        float: Similarity in [0.0, 1.0].
 +        float: Similarity in [0.0, 1.0]. ``0.0`` here always means the LLM
@@ -1085,12 +1085,12 @@ index 1d0036729..3809acf28 100644
          return 0.0
 @@ -394,11 +618,10 @@ def llm_text_similarity(
          raise
- 
+
      latency_ms = (time.monotonic() - t0) * 1000
 -    raw_similarity = result.get("similarity")
 -    similarity = _coerce_float(raw_similarity)
 +    degradation = _degradation_reason(result, "similarity")
- 
+
 -    if raw_similarity is None or result.get("error"):
 -        # Sibling of the `llm_capability_match` degradation guard above — same
 +    if degradation is not None:
@@ -1115,14 +1115,14 @@ index 1d0036729..3809acf28 100644
 +            error=degradation,
 +            raw_response=_raw_response_of(result),
 +        )
- 
+
 +    similarity = _coerce_float(result.get("similarity"))
      _CACHE._similarity_results[cache_key] = result
      logger.info(
          "llm_text_similarity.ok",
 @@ -449,7 +678,22 @@ def llm_capability_match(
          correlation_id: Optional correlation ID for logs.
- 
+
      Returns:
 -        float: Match confidence in [0.0, 1.0].
 +        float: Match confidence in [0.0, 1.0]. ``0.0`` here always means the
@@ -1146,12 +1146,12 @@ index 1d0036729..3809acf28 100644
          return 0.0
 @@ -494,22 +738,24 @@ def llm_capability_match(
          raise
- 
+
      latency_ms = (time.monotonic() - t0) * 1000
 -    raw_score = result.get("match_score")
 -    score = _coerce_float(raw_score)
 +    degradation = _degradation_reason(result, "match_score")
- 
+
 -    if raw_score is None or result.get("error"):
 +    if degradation is not None:
          # The agent returned WITHOUT a usable score — e.g. the provider emitted
@@ -1196,7 +1196,7 @@ index 1d0036729..3809acf28 100644
 +            error=degradation,
 +            raw_response=_raw_response_of(result),
 +        )
- 
+
 +    score = _coerce_float(result.get("match_score"))
      _CACHE._match_results[cache_key] = result
      logger.info(
@@ -1218,7 +1218,7 @@ index 77fdc7301..df54794bc 100644
 +                    "LLM analysis failed, using heuristic: %s",
 +                    sanitize_provider_error(e, "LLM"),
 +                )
- 
+
          logger.debug(
              f"Task analysis: type={analysis.type.value}, "
 diff --git a/packages/kailash-kaizen/src/kaizen/llm/routing/fallback.py b/packages/kailash-kaizen/src/kaizen/llm/routing/fallback.py
@@ -1240,7 +1240,7 @@ index f1b0123da..e3aabc2e4 100644
 +                    error_message = sanitize_provider_error(
 +                        e, model, include_error_type=False
 +                    )
- 
+
                      logger.warning(
 -                        f"Execution failed: model={model}, "
 -                        f"error={error_type}: {error_message}"
@@ -1249,7 +1249,7 @@ index f1b0123da..e3aabc2e4 100644
 +                        error_type,
 +                        error_message,
                      )
- 
+
                      # Check if this is a non-fallback error
 @@ -495,11 +506,21 @@ class FallbackRouter(LLMRouter):
                          if model_idx + 1 < len(execution_order)
@@ -1288,12 +1288,12 @@ index 38559af34..1ba1aeb3b 100644
 +    from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
      headers = headers or {}
- 
+
      # Security validation: URL
 @@ -236,13 +241,17 @@ def _make_http_request(
- 
+
              return result
- 
+
 +    # The caller supplies `headers` (commonly `Authorization: Bearer ...`) and a
 +    # URL that may embed userinfo/query credentials; urllib echoes both into its
 +    # exception text. Every `error` field below crosses back to the MCP client,
@@ -1307,7 +1307,7 @@ index 38559af34..1ba1aeb3b 100644
 -            "error": str(e),
 +            "error": sanitize_provider_error(e, "HTTP request"),
          }
- 
+
      except URLError as e:
 @@ -251,7 +260,7 @@ def _make_http_request(
              "body": "",
@@ -1316,7 +1316,7 @@ index 38559af34..1ba1aeb3b 100644
 -            "error": str(e.reason),
 +            "error": sanitize_provider_error(e, "HTTP request"),
          }
- 
+
      except Exception as e:
 @@ -260,7 +269,7 @@ def _make_http_request(
              "body": "",
@@ -1325,8 +1325,8 @@ index 38559af34..1ba1aeb3b 100644
 -            "error": str(e),
 +            "error": sanitize_provider_error(e, "HTTP request"),
          }
- 
- 
+
+
 diff --git a/packages/kailash-kaizen/src/kaizen/mcp/builtin_server/tools/web.py b/packages/kailash-kaizen/src/kaizen/mcp/builtin_server/tools/web.py
 index e2d81bf44..5dcdbdfe7 100644
 --- a/packages/kailash-kaizen/src/kaizen/mcp/builtin_server/tools/web.py
@@ -1342,11 +1342,11 @@ index e2d81bf44..5dcdbdfe7 100644
 +
      if user_agent is None:
          user_agent = "Kaizen-MCP/1.0 (compatible; bot)"
- 
+
 @@ -129,6 +134,9 @@ async def fetch_url(
              "error": f"HTTP Error {e.code}: {e.reason}",
          }
- 
+
 +    # A fetch URL can embed userinfo or a presigned-URL token, and urllib echoes
 +    # it into the exception text; the `error` field crosses back to the MCP
 +    # client, so both handlers route through the sanitizer (#1970 sweep).
@@ -1360,7 +1360,7 @@ index e2d81bf44..5dcdbdfe7 100644
 -            "error": str(e.reason),
 +            "error": sanitize_provider_error(e, "Web fetch"),
          }
- 
+
      except Exception as e:
 @@ -146,7 +154,7 @@ async def fetch_url(
              "content_type": "",
@@ -1369,15 +1369,15 @@ index e2d81bf44..5dcdbdfe7 100644
 -            "error": str(e),
 +            "error": sanitize_provider_error(e, "Web fetch"),
          }
- 
- 
+
+
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
 index 312b3feef..6f9cf72d1 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/a2a.py
 @@ -381,6 +381,17 @@ class A2AAgentCard:
          Calculate how well this agent matches given requirements.
- 
+
          Returns a score between 0.0 and 1.0.
 +
 +        Raises:
@@ -1395,7 +1395,7 @@ index 312b3feef..6f9cf72d1 100644
              return 0.5  # Neutral score for no requirements
 @@ -3585,16 +3596,61 @@ class A2ACoordinatorNode(CycleAwareNode):
          )
- 
+
      def _find_best_agents_for_task(self, task: A2ATask) -> List[Tuple[str, float]]:
 -        """Find best agents for a task using agent cards."""
 +        """Find best agents for a task using agent cards.
@@ -1426,12 +1426,12 @@ index 312b3feef..6f9cf72d1 100644
 +        degraded: List[str] = []
 +        degraded_model = "unknown"
 +        candidates = 0
- 
+
          for agent_id, card in self.agent_cards.items():
              # Skip if incompatible
              if task.delegated_by and not card.is_compatible_with(task.delegated_by):
                  continue
- 
+
 +            candidates += 1
 +
              # Calculate match score
@@ -1454,13 +1454,13 @@ index 312b3feef..6f9cf72d1 100644
 +                    },
 +                )
 +                continue
- 
+
              # Apply collaboration style bonus
              if len(task.assigned_to) > 0:
 @@ -3609,6 +3665,30 @@ class A2ACoordinatorNode(CycleAwareNode):
- 
+
              matches.append((agent_id, score))
- 
+
 +        if degraded:
 +            if not matches:
 +                # Nothing was scoreable: there is no ranking to return, and an
@@ -1487,21 +1487,21 @@ index 312b3feef..6f9cf72d1 100644
 +
          # Sort by score descending
          matches.sort(key=lambda x: x[1], reverse=True)
- 
+
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py
 index 4359f204f..5df473f73 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py
 @@ -6,6 +6,7 @@ from typing import Any
  from kailash.nodes.base import Node, NodeParameter, register_node
- 
+
  from kaizen.config.providers import ConfigurationError
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
- 
- 
+
+
  @register_node()
 @@ -381,9 +382,12 @@ class EmbeddingGeneratorNode(Node):
- 
+
              if isinstance(e, UngovernedEgressRefused):
                  raise
 +            # #1970: the embed paths dispatch to a credentialed provider
@@ -1521,7 +1521,7 @@ index 4359f204f..5df473f73 100644
 -            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 -
              raise RuntimeError(sanitize_provider_error(e, provider)) from e
- 
+
      def _run_embed_coro(self, coro):
 @@ -866,7 +868,9 @@ class EmbeddingGeneratorNode(Node):
                      "Ollama library not installed. Install with: pip install ollama"
@@ -1531,7 +1531,7 @@ index 4359f204f..5df473f73 100644
 +                raise RuntimeError(
 +                    "Ollama embedding error: " f"{sanitize_provider_error(e, 'Ollama')}"
 +                )
- 
+
          # A non-ollama provider reaching this fallback means its four-axis
          # deployment could NOT be resolved (missing/unavailable credential) or
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py
@@ -1577,7 +1577,7 @@ index 8e9c6ecf4..ad1d6b04d 100644
 @@ -59,8 +88,46 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
      re.compile(r"sk-[a-zA-Z0-9]{3,4}\.\.\.[a-zA-Z0-9]{3,4}", re.ASCII),
  ]
- 
+
 -# URL-embedded credentials (user:pass@host)
 -_URL_WITH_AUTH = re.compile(r"(https?://)[^@\s]+:[^@\s]+@", re.ASCII)
 +# URL-embedded credentials (user:pass@host).
@@ -1620,7 +1620,7 @@ index 8e9c6ecf4..ad1d6b04d 100644
 +_URL_WITH_AUTH = re.compile(
 +    r"([A-Za-z][A-Za-z0-9+.-]*://)[^\s]{0,256}:[^\s]{0,256}@", re.ASCII
 +)
- 
+
  # Azure OpenAI endpoint hostname (#1960). The <resource> subdomain is the
  # customer's Azure resource name — sensitive infra identity that reveals the
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/intelligent_agent_orchestrator.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/intelligent_agent_orchestrator.py
@@ -1630,14 +1630,14 @@ index 5228819f7..7fbd96932 100644
 @@ -23,6 +23,7 @@ from collections import defaultdict, deque
  from datetime import datetime
  from typing import Any
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  from kaizen.nodes.ai.a2a import SharedMemoryPoolNode
  from kaizen.nodes.ai.self_organizing import (
      AgentPoolManagerNode,
 @@ -725,7 +726,12 @@ class MCPAgentNode(SelfOrganizingAgentNode):
              return result
- 
+
          except Exception as e:
 -            return {"success": False, "error": str(e)}
 +            # #1970: ``client.execute`` is an MCP tool call — a transport error
@@ -1646,7 +1646,7 @@ index 5228819f7..7fbd96932 100644
 +                "success": False,
 +                "error": sanitize_provider_error(e, f"MCP tool {tool_name}"),
 +            }
- 
+
      def _cache_tool_result(self, tool_name: str, result: dict, cache_node_id: str):
          """Cache tool call result."""
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
@@ -1680,7 +1680,7 @@ index 0d07dd503..739dcaf33 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/ai/llm_agent.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/llm_agent.py
 @@ -1614,7 +1614,9 @@ class LLMAgentNode(Node):
- 
+
                      except TimeoutError as e:
                          self.logger.warning(
 -                            f"MCP server '{server_config.get('name', 'unknown')}' timed out after 30 seconds: {e}"
@@ -1691,7 +1691,7 @@ index 0d07dd503..739dcaf33 100644
                          # Fall back to mock for this server
                          context_data.append(
 @@ -3111,7 +3113,13 @@ Final Answer: 6 hours"""
- 
+
              except (ValueError, json.JSONDecodeError) as e:
                  # Handle extraction errors specifically
 -                self.logger.error(f"Tool call extraction failed: {e}")
@@ -1714,12 +1714,12 @@ index a852da854..80d5f1028 100644
      TextSummarizer,
  )
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
- 
+
  from ..signatures import Signature
  from .base import KaizenNode
 @@ -121,7 +122,10 @@ class KaizenTextGenerationNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenTextGenerationNode execution failed: {e}")
 +            logger.error(
@@ -1727,11 +1727,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenTextGenerationNode"),
 +            )
              raise
- 
+
      def _apply_signature_optimization(
 @@ -247,7 +251,10 @@ class KaizenTextClassificationNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenTextClassificationNode execution failed: {e}")
 +            logger.error(
@@ -1739,11 +1739,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenTextClassificationNode"),
 +            )
              raise
- 
+
      def _enhance_classification(
 @@ -389,7 +396,10 @@ class KaizenTextSummarizationNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenTextSummarizationNode execution failed: {e}")
 +            logger.error(
@@ -1751,11 +1751,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenTextSummarizationNode"),
 +            )
              raise
- 
+
      def _enhance_summary(
 @@ -545,7 +555,10 @@ class KaizenTextEmbeddingNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenTextEmbeddingNode execution failed: {e}")
 +            logger.error(
@@ -1763,11 +1763,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenTextEmbeddingNode"),
 +            )
              raise
- 
+
      def _enhance_embedding(
 @@ -796,7 +809,10 @@ class KaizenConversationNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenConversationNode execution failed: {e}")
 +            logger.error(
@@ -1775,11 +1775,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenConversationNode"),
 +            )
              raise
- 
+
      def _build_conversation_context(self, window_size: int) -> str:
 @@ -897,7 +913,10 @@ class KaizenSentimentAnalysisNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenSentimentAnalysisNode execution failed: {e}")
 +            logger.error(
@@ -1787,11 +1787,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenSentimentAnalysisNode"),
 +            )
              raise
- 
+
      def _enhance_sentiment(
 @@ -1040,7 +1059,10 @@ class KaizenEntityExtractionNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenEntityExtractionNode execution failed: {e}")
 +            logger.error(
@@ -1799,11 +1799,11 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenEntityExtractionNode"),
 +            )
              raise
- 
+
      def _enhance_entity_extraction(
 @@ -1201,7 +1223,10 @@ class KaizenQuestionAnsweringNode(KaizenNode):
              return outputs
- 
+
          except Exception as e:
 -            logger.error(f"KaizenQuestionAnsweringNode execution failed: {e}")
 +            logger.error(
@@ -1811,7 +1811,7 @@ index a852da854..80d5f1028 100644
 +                sanitize_provider_error(e, "KaizenQuestionAnsweringNode"),
 +            )
              raise
- 
+
      def _calculate_answer_confidence(
 @@ -1543,24 +1568,36 @@ class KaizenAIModelNode(KaizenNode):
              result["provider_used"] = provider
@@ -1874,13 +1874,13 @@ index 09403b854..fc66f00d0 100644
 @@ -21,6 +21,7 @@ from kailash.nodes.auth.directory_integration import (
  from kaizen.nodes._env_model import detect_provider, resolve_default_model
  from kaizen.nodes.ai import LLMAgentNode
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -285,7 +286,9 @@ Example output:
- 
+
          except Exception as e:
              logger.warning(
 -                f"AI search analysis failed for '{query}', falling back to default: {e}"
@@ -1892,7 +1892,7 @@ index 09403b854..fc66f00d0 100644
              return {
 @@ -469,7 +472,10 @@ Example output:
              return roles
- 
+
          except Exception as e:
 -            logger.warning(f"AI role assignment failed, falling back to default: {e}")
 +            logger.warning(
@@ -1901,10 +1901,10 @@ index 09403b854..fc66f00d0 100644
 +            )
              # Fallback to safe default - always include "user" role
              return ["user"]
- 
+
 @@ -539,7 +545,10 @@ Example output:
              return permissions
- 
+
          except Exception as e:
 -            logger.warning(f"AI permission mapping failed, using defaults: {e}")
 +            logger.warning(
@@ -1913,10 +1913,10 @@ index 09403b854..fc66f00d0 100644
 +            )
              # Fallback to safe default - read-only permission
              return ["read"]
- 
+
 @@ -606,7 +615,10 @@ Example output:
              return settings
- 
+
          except Exception as e:
 -            logger.warning(f"AI security settings failed, using defaults: {e}")
 +            logger.warning(
@@ -1933,13 +1933,13 @@ index 2eb25e7f2..ff6539031 100644
 @@ -22,6 +22,7 @@ from kailash.nodes.auth.enterprise_auth_provider import (
  from kaizen.nodes._env_model import detect_provider, resolve_default_model
  from kaizen.nodes.ai import LLMAgentNode
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -254,7 +255,9 @@ Example output:
- 
+
          except Exception as e:
              logger.warning(
 -                f"AI fraud detection failed for {user_id}, falling back to rule-based: {e}"
@@ -1956,13 +1956,13 @@ index 00546029a..39f320056 100644
 @@ -24,6 +24,7 @@ from kaizen.nodes.auth.signatures import (
      SSORoleAssignmentSignature,
  )
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -236,7 +237,9 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
- 
+
          except Exception as e:
              logger.warning(
 -                f"AI field mapping failed for {provider}, falling back to rule-based: {e}"
@@ -1974,7 +1974,7 @@ index 00546029a..39f320056 100644
              return self._map_attributes(attributes, provider)
 @@ -319,6 +322,9 @@ Return ONLY the JSON object, no explanation."""
              return roles
- 
+
          except Exception as e:
 -            logger.warning(f"AI role assignment failed, falling back to default: {e}")
 +            logger.warning(
@@ -1988,9 +1988,9 @@ index 85ac2b0e2..4218dc981 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/base.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/base.py
 @@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
- 
+
  from kailash.nodes.base import NodeParameter, register_node
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
  from ..signatures import Signature
@@ -1998,7 +1998,7 @@ index 85ac2b0e2..4218dc981 100644
  from .base_advanced import AINodeBase
 @@ -206,7 +208,12 @@ class KaizenNode(AINodeBase):
              return outputs
- 
+
          except Exception as e:
 -            self.logger.error(f"KaizenNode execution failed: {e}")
 +            # #1970: ``_execute_ai_model`` is the provider seam — an auth /
@@ -2008,7 +2008,7 @@ index 85ac2b0e2..4218dc981 100644
 +                sanitize_provider_error(e, "KaizenNode"),
 +            )
              raise
- 
+
      def _execute_ai_model(
 @@ -251,8 +258,12 @@ class KaizenNode(AINodeBase):
          try:
@@ -2022,7 +2022,7 @@ index 85ac2b0e2..4218dc981 100644
 +            sanitized = sanitize_provider_error(e, type(self).__name__)
 +            self.logger.error("Node execution failed: %s", sanitized)
 +            return {"error": sanitized, "status": "failed"}
- 
+
      def pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
          """
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/compliance/gdpr.py b/packages/kailash-kaizen/src/kaizen/nodes/compliance/gdpr.py
@@ -2032,11 +2032,11 @@ index 4416a3872..5ac090268 100644
 @@ -23,6 +23,7 @@ from kailash.nodes.security.audit_log import AuditLogNode
  from kaizen.nodes._env_model import detect_provider, resolve_default_model
  from kaizen.nodes.ai import LLMAgentNode
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -594,7 +595,10 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                  )
              except Exception as e:
@@ -2047,11 +2047,11 @@ index 4416a3872..5ac090268 100644
 +                    sanitize_provider_error(e, "LLM"),
 +                )
                  ai_insights = None
- 
+
          # Calculate compliance score
 @@ -1580,7 +1584,10 @@ Format your response as JSON with keys: risk_level, legal_implications, best_pra
              return None
- 
+
          except Exception as e:
 -            self.logger.warning(f"AI compliance analysis failed: {e}")
 +            self.logger.warning(
@@ -2059,7 +2059,7 @@ index 4416a3872..5ac090268 100644
 +                sanitize_provider_error(e, "LLM"),
 +            )
              return None
- 
+
      def _parse_ai_compliance_response(self, response: str) -> Optional[Dict[str, Any]]:
 @@ -1817,7 +1824,9 @@ Format your response as JSON with keys: risk_level, legal_implications, best_pra
              self.audit_log_node.execute(**audit_entry)
@@ -2070,7 +2070,7 @@ index 4416a3872..5ac090268 100644
 +                "Failed to audit data subject request: "
 +                f"{sanitize_provider_error(e, 'audit store')}",
              )
- 
+
      def _get_consent_status(self, user_id: str) -> Dict[str, Any]:
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/rag/advanced.py b/packages/kailash-kaizen/src/kaizen/nodes/rag/advanced.py
 index 48bac7aa5..4feaf6f03 100644
@@ -2079,14 +2079,14 @@ index 48bac7aa5..4feaf6f03 100644
 @@ -34,6 +34,7 @@ from ..ai.llm_agent import LLMAgentNode
  # run first regardless of rag-package import order.
  from . import similarity as _similarity  # noqa: F401
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -546,13 +547,16 @@ Respond with JSON only:
              }
- 
+
          except Exception as e:
 -            logger.error(f"RAG execution failed at attempt {attempt + 1}: {e}")
 +            # #1970: the RAG workflow dispatches embedding/generation calls to
@@ -2103,10 +2103,10 @@ index 48bac7aa5..4feaf6f03 100644
 +                "error": sanitized,
                  "attempt": attempt + 1,
              }
- 
+
 @@ -593,12 +597,13 @@ Respond with JSON only:
              return verification
- 
+
          except Exception as e:
 -            logger.error(f"Verification failed: {e}")
 +            sanitized = sanitize_provider_error(e, "verifier LLM")
@@ -2122,7 +2122,7 @@ index 48bac7aa5..4feaf6f03 100644
                  "reasoning": "Automated verification failed",
 @@ -1000,12 +1005,13 @@ class RAGFusionNode(Node):
                  )
- 
+
              except Exception as e:
 -                logger.error(f"Query retrieval failed for '{query}': {e}")
 +                sanitized = sanitize_provider_error(e, "retrieval")
@@ -2138,7 +2138,7 @@ index 48bac7aa5..4feaf6f03 100644
                      }
 @@ -1098,7 +1104,10 @@ Generate {self.num_query_variations} high-quality variations that will improve r
              return variations
- 
+
          except Exception as e:
 -            logger.error(f"Query variation generation failed: {e}")
 +            logger.error(
@@ -2147,7 +2147,7 @@ index 48bac7aa5..4feaf6f03 100644
 +            )
              # Fallback to simple variations
              return self._generate_fallback_variations(original_query)
- 
+
 @@ -1509,9 +1518,16 @@ class HyDENode(Node):
                      }
                  )
@@ -2165,11 +2165,11 @@ index 48bac7aa5..4feaf6f03 100644
 +                        "error": sanitized,
 +                    }
                  )
- 
+
          # Combine and rank results
 @@ -1595,7 +1611,10 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
              return hypotheses
- 
+
          except Exception as e:
 -            logger.error(f"Hypothesis generation failed: {e}")
 +            logger.error(
@@ -2181,7 +2181,7 @@ index 48bac7aa5..4feaf6f03 100644
                  f"A comprehensive answer to '{query}' would include detailed explanations and examples."
 @@ -1940,7 +1959,10 @@ Generate a broader, more abstract version that would help retrieve relevant back
              return abstract_query
- 
+
          except Exception as e:
 -            logger.error(f"Abstract query generation failed: {e}")
 +            logger.error(
@@ -2190,7 +2190,7 @@ index 48bac7aa5..4feaf6f03 100644
 +            )
              # Fallback to simple abstraction
              return self._generate_fallback_abstraction(specific_query)
- 
+
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/rag/agentic.py b/packages/kailash-kaizen/src/kaizen/nodes/rag/agentic.py
 index 11d5351cd..f6b8bae78 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/rag/agentic.py
@@ -2198,11 +2198,11 @@ index 11d5351cd..f6b8bae78 100644
 @@ -30,6 +30,7 @@ from kailash.workflow.graph import Workflow
  from ..ai.llm_agent import LLMAgentNode  # noqa: F401
  from kaizen.core._provider_env import detect_provider_from_env
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
- 
+
+
 @@ -1344,8 +1345,11 @@ class ToolAugmentedRAGNode(Node):
                      tool_func = self.tool_registry[tool_name]
                      tool_outputs[tool_name] = tool_func(query, context)
@@ -2214,7 +2214,7 @@ index 11d5351cd..f6b8bae78 100644
 +                    sanitized = sanitize_provider_error(e, f"tool {tool_name}")
 +                    logger.error("Tool %s failed: %s", tool_name, sanitized)
 +                    tool_outputs[tool_name] = {"error": sanitized}
- 
+
          # Augment response with tool outputs
          augmented_answer = self._synthesize_with_tools(query, documents, tool_outputs)
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/rag/router.py b/packages/kailash-kaizen/src/kaizen/nodes/rag/router.py
@@ -2222,16 +2222,16 @@ index 2cc82dbbb..377e87070 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/rag/router.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/rag/router.py
 @@ -14,6 +14,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
- 
+
  from ..ai.llm_agent import LLMAgentNode
- 
+
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  logger = logging.getLogger(__name__)
- 
+
  # Default routing model resolved from the environment (.env is the single
 @@ -133,7 +134,10 @@ class RAGStrategyRouterNode(Node):
              strategy_decision = self._parse_llm_response(llm_response)
- 
+
          except Exception as e:
 -            logger.warning(f"LLM strategy selection failed: {e}, using fallback")
 +            logger.warning(
@@ -2239,7 +2239,7 @@ index 2cc82dbbb..377e87070 100644
 +                sanitize_provider_error(e, "LLM"),
 +            )
              strategy_decision = self._fallback_strategy_selection(analysis)
- 
+
          # Combine analysis with decision
 diff --git a/packages/kailash-kaizen/src/kaizen/nodes/security/ai_behavior_analysis.py b/packages/kailash-kaizen/src/kaizen/nodes/security/ai_behavior_analysis.py
 index 32431ffb4..ecfa06e74 100644
@@ -2247,7 +2247,7 @@ index 32431ffb4..ecfa06e74 100644
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/security/ai_behavior_analysis.py
 @@ -420,14 +420,17 @@ Your analysis should help security teams understand:
              return result
- 
+
          except Exception as e:
 -            logger.error(f"AI behavior analysis failed: {e}")
 +            # #1970: ``_call_llm_for_analysis`` dispatches to a credentialed
@@ -2272,7 +2272,7 @@ index 42aeb4819..5f0975368 100644
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/security/ai_threat_detection.py
 @@ -437,14 +437,17 @@ Your analysis should help security teams understand:
              return result
- 
+
          except Exception as e:
 -            logger.error(f"AI threat detection failed: {e}")
 +            # #1970: ``_call_llm_for_intelligence`` dispatches to a credentialed
@@ -2310,7 +2310,7 @@ index 8a8179a91..4ae294630 100644
 +                    f"{sanitize_provider_error(exc, 'Trace sink')}"
                  ) from exc
              return fingerprint
- 
+
 @@ -430,8 +436,14 @@ class TraceExporter:
                  },
              )
@@ -2326,7 +2326,7 @@ index 8a8179a91..4ae294630 100644
 +                    f"{sanitize_provider_error(exc, 'Trace sink')}"
                  ) from exc
              return fingerprint
- 
+
 diff --git a/packages/kailash-kaizen/src/kaizen/providers/document/ollama_vision_provider.py b/packages/kailash-kaizen/src/kaizen/providers/document/ollama_vision_provider.py
 index 937120447..893ceb921 100644
 --- a/packages/kailash-kaizen/src/kaizen/providers/document/ollama_vision_provider.py
@@ -2334,7 +2334,7 @@ index 937120447..893ceb921 100644
 @@ -30,6 +30,8 @@ from io import BytesIO
  from pathlib import Path
  from typing import Any, Dict, List, Optional
- 
+
 +from kailash.utils.url_credentials import mask_error_text
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  from kaizen.providers.document.base_provider import (
@@ -2342,7 +2342,7 @@ index 937120447..893ceb921 100644
      ExtractionResult,
 @@ -228,11 +230,21 @@ class OllamaVisionProvider(BaseDocumentProvider):
                          all_tables.append(table)
- 
+
                  except httpx.HTTPStatusError as e:
 -                    logger.error(f"Ollama API error for page {idx + 1}: {e}")
 -                    raise RuntimeError(f"Ollama Vision API call failed: {e}")
@@ -2363,7 +2363,7 @@ index 937120447..893ceb921 100644
 +                    )
 +                    logger.error("Error processing page %s: %s", idx + 1, sanitized)
 +                    raise RuntimeError(f"Ollama Vision processing failed: {sanitized}")
- 
+
          # Combine all text
          extracted_text = "\n\n".join(all_text_parts)
 @@ -298,7 +310,12 @@ class OllamaVisionProvider(BaseDocumentProvider):
@@ -2378,7 +2378,7 @@ index 937120447..893ceb921 100644
 +                mask_error_text(sanitize_provider_error(e, "Ollama Vision")),
 +            )
              return False
- 
+
      def get_capabilities(self) -> Dict[str, Any]:
 diff --git a/packages/kailash-kaizen/src/kaizen/providers/document/provider_manager.py b/packages/kailash-kaizen/src/kaizen/providers/document/provider_manager.py
 index 27c0353ac..d3e763ce1 100644
@@ -2387,7 +2387,7 @@ index 27c0353ac..d3e763ce1 100644
 @@ -33,6 +33,8 @@ Example:
  import logging
  from typing import Any, Dict, List, Optional
- 
+
 +from kailash.utils.url_credentials import mask_error_text
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  from kaizen.providers.document.base_provider import (
@@ -2395,7 +2395,7 @@ index 27c0353ac..d3e763ce1 100644
      ExtractionResult,
 @@ -209,7 +211,13 @@ class ProviderManager:
                  return result
- 
+
              except Exception as e:
 -                error_msg = f"{provider_name} failed: {e}"
 +                # #1970: document providers (Landing AI, OpenAI Vision) are
@@ -2414,22 +2414,22 @@ index 06918c8d4..b0b63256c 100644
 +++ b/packages/kailash-kaizen/src/kaizen/providers/ollama_model_manager.py
 @@ -1,9 +1,15 @@
  """Ollama model management for Kaizen multi-modal processing."""
- 
+
 +import logging
  import subprocess
  from dataclasses import dataclass
  from typing import Callable, Dict, Optional
- 
+
 +from kailash.utils.url_credentials import mask_error_text
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
 +logger = logging.getLogger(__name__)
 +
- 
+
  @dataclass
  class ModelInfo:
 @@ -85,7 +91,12 @@ class OllamaModelManager:
- 
+
              return models
          except Exception as e:
 -            raise RuntimeError(f"Failed to list Ollama models: {e}")
@@ -2439,12 +2439,12 @@ index 06918c8d4..b0b63256c 100644
 +                "Failed to list Ollama models: "
 +                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
 +            )
- 
+
      def model_exists(self, model_name: str) -> bool:
          """Check if a specific model exists locally."""
 @@ -139,7 +150,14 @@ class OllamaModelManager:
              return True
- 
+
          except Exception as e:
 -            print(f"❌ Failed to download model {model_name}: {e}")
 +            # #1970 + observability Rule 1: a pull failure is an ERROR log
@@ -2456,7 +2456,7 @@ index 06918c8d4..b0b63256c 100644
 +                mask_error_text(sanitize_provider_error(e, "Ollama")),
 +            )
              return False
- 
+
      def ensure_model_available(
 diff --git a/packages/kailash-kaizen/src/kaizen/providers/ollama_provider.py b/packages/kailash-kaizen/src/kaizen/providers/ollama_provider.py
 index 0aa21fa5b..0c5f86404 100644
@@ -2464,11 +2464,11 @@ index 0aa21fa5b..0c5f86404 100644
 +++ b/packages/kailash-kaizen/src/kaizen/providers/ollama_provider.py
 @@ -4,6 +4,7 @@ from dataclasses import dataclass
  from typing import Any, Dict, Iterator, Optional
- 
+
  from kailash.utils.url_credentials import mask_error_text
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
- 
- 
+
+
  @dataclass
 @@ -66,7 +67,7 @@ class OllamaProvider:
          except Exception as e:
@@ -2478,33 +2478,33 @@ index 0aa21fa5b..0c5f86404 100644
 +                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}\n"
                  "Install: https://ollama.ai/download"
              )
- 
+
 @@ -111,7 +112,10 @@ class OllamaProvider:
              }
- 
+
          except Exception as e:
 -            raise RuntimeError(f"Ollama generation failed: {mask_error_text(str(e))}")
 +            raise RuntimeError(
 +                "Ollama generation failed: "
 +                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
 +            )
- 
+
      def generate_stream(
          self, prompt: str, system: Optional[str] = None, **kwargs
 @@ -151,7 +155,10 @@ class OllamaProvider:
                          yield content
- 
+
          except Exception as e:
 -            raise RuntimeError(f"Ollama streaming failed: {mask_error_text(str(e))}")
 +            raise RuntimeError(
 +                "Ollama streaming failed: "
 +                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
 +            )
- 
+
      def generate_vision(
          self, prompt: str, image_path: str, system: Optional[str] = None, **kwargs
 @@ -202,5 +209,6 @@ class OllamaProvider:
- 
+
          except Exception as e:
              raise RuntimeError(
 -                f"Ollama vision generation failed: {mask_error_text(str(e))}"
@@ -2518,16 +2518,16 @@ index 62a11cd62..95d0efc59 100644
 @@ -4,6 +4,9 @@ from dataclasses import dataclass
  from pathlib import Path
  from typing import Any, Dict, List, Optional, Union
- 
+
 +from kailash.utils.url_credentials import mask_error_text
 +from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
  from ..signatures.multi_modal import ImageField
  from .ollama_provider import OllamaConfig, OllamaProvider
- 
+
 @@ -165,7 +168,12 @@ class OllamaVisionProvider(OllamaProvider):
              }
- 
+
          except Exception as e:
 -            raise RuntimeError(f"Multi-image analysis failed: {e}")
 +            # #1970: ``ollama.chat`` against a credentialed/proxied endpoint
@@ -2536,7 +2536,7 @@ index 62a11cd62..95d0efc59 100644
 +                "Multi-image analysis failed: "
 +                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
 +            )
- 
+
      def describe_image(
          self, image: Union[ImageField, str, Path], detail: str = "auto", **kwargs
 diff --git a/packages/kailash-kaizen/src/kaizen/signatures/core.py b/packages/kailash-kaizen/src/kaizen/signatures/core.py
@@ -2544,7 +2544,7 @@ index 65304a4fa..b8f42ce9d 100644
 --- a/packages/kailash-kaizen/src/kaizen/signatures/core.py
 +++ b/packages/kailash-kaizen/src/kaizen/signatures/core.py
 @@ -1635,7 +1635,17 @@ Be precise, helpful, and focused on the signature requirements."""
- 
+
                          return result
                      except Exception as e:
 -                        audit_logger.error(f"Signature execution failed: {str(e)}")
@@ -2560,7 +2560,7 @@ index 65304a4fa..b8f42ce9d 100644
 +                            sanitize_provider_error(e, "Signature execution"),
 +                        )
                          raise
- 
+
                  return audited_signature_processor
 diff --git a/packages/kailash-kaizen/src/kaizen/signatures/multi_modal.py b/packages/kailash-kaizen/src/kaizen/signatures/multi_modal.py
 index 50195096e..a01a45fd5 100644
@@ -2580,7 +2580,7 @@ index 50195096e..a01a45fd5 100644
 +                f"Failed to load image from URL: "
 +                f"{sanitize_provider_error(e, 'Image fetch')}"
 +            ) from e
- 
+
      def _load_from_base64(self, base64_str: str):
          """Load image from base64 string."""
 @@ -416,7 +424,14 @@ class AudioField:
@@ -2596,7 +2596,7 @@ index 50195096e..a01a45fd5 100644
 +                f"Failed to load audio from URL: "
 +                f"{sanitize_provider_error(e, 'Audio fetch')}"
 +            ) from e
- 
+
      def _load_from_base64(self, data_url: str):
          """Load audio from base64 data URL."""
 diff --git a/packages/kailash-kaizen/src/kaizen/strategies/async_single_shot.py b/packages/kailash-kaizen/src/kaizen/strategies/async_single_shot.py
@@ -2604,7 +2604,7 @@ index cf857e33d..c9557847f 100644
 --- a/packages/kailash-kaizen/src/kaizen/strategies/async_single_shot.py
 +++ b/packages/kailash-kaizen/src/kaizen/strategies/async_single_shot.py
 @@ -386,7 +386,13 @@ class AsyncSingleShotStrategy:
- 
+
          except Exception as e:
              # Error handling - propagate real errors, only use skeleton for missing providers
 +            # ``error_msg`` stays RAW for the internal classification below and
@@ -2614,18 +2614,18 @@ index cf857e33d..c9557847f 100644
 +            # the returned dict / log (#1970 sweep).
              error_msg = str(e)
 +            sanitized = sanitize_provider_error(e, "LLM")
- 
+
              # Only use skeleton fallback for truly missing providers (e.g., in unit tests without API keys)
              # NOT for API errors which should be propagated to reveal real issues
 @@ -403,13 +409,13 @@ class AsyncSingleShotStrategy:
                  import logging
- 
+
                  logging.getLogger(__name__).warning(
 -                    f"Using skeleton result due to missing provider: {error_msg}"
 +                    "Using skeleton result due to missing provider: %s", sanitized
                  )
                  return self._generate_skeleton_result(agent, inputs)
- 
+
              # For all other errors (including API errors), return error info to reveal issues
              return {
 -                "error": error_msg,
@@ -2638,7 +2638,7 @@ index 6fa27eb9d..7e55d9946 100644
 --- a/packages/kailash-kaizen/src/kaizen/strategies/multi_cycle.py
 +++ b/packages/kailash-kaizen/src/kaizen/strategies/multi_cycle.py
 @@ -483,13 +483,23 @@ class MultiCycleStrategy:
- 
+
              except Exception as e:
                  # Task 2.15: Error termination
 +                # A cycle drives an LLM call; its exception can echo a credential
@@ -2664,7 +2664,7 @@ index 6fa27eb9d..7e55d9946 100644
 +                    "cycle": cycle_num,
 +                }
                  break
- 
+
          # If no explicit termination, use last cycle result
 @@ -573,10 +583,17 @@ class MultiCycleStrategy:
              workflow = agent.workflow_generator.generate_signature_workflow()
@@ -2676,7 +2676,7 @@ index 6fa27eb9d..7e55d9946 100644
 +            # credential; sanitize — sibling of async_single_shot.build_workflow,
 +            # #1970 sweep / #1720 creds-in-logs.)
              import logging
- 
+
 -            logging.getLogger(__name__).error(f"Workflow generation failed: {e}")
 +            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
@@ -2684,7 +2684,7 @@ index 6fa27eb9d..7e55d9946 100644
 +                "Workflow generation failed: %s", sanitize_provider_error(e, "LLM")
 +            )
              return None
- 
+
      # Task 2.11: Extension Points
 diff --git a/packages/kailash-kaizen/src/kaizen/strategies/single_shot.py b/packages/kailash-kaizen/src/kaizen/strategies/single_shot.py
 index 94934fbb4..0d9ac4145 100644
@@ -2711,7 +2711,7 @@ index 94934fbb4..0d9ac4145 100644
                          )
                          tool_content = json.dumps(
 @@ -278,7 +285,15 @@ class SingleShotStrategy:
- 
+
          except Exception as e:
              # Task 2.10: Error handling - propagate real errors, only use skeleton for missing providers
 +            # ``error_msg`` stays RAW for the internal classification below (the
@@ -2723,22 +2723,22 @@ index 94934fbb4..0d9ac4145 100644
 +
              error_msg = str(e)
 +            sanitized = sanitize_provider_error(e, "LLM")
- 
+
              # Only use skeleton fallback for truly missing providers (e.g., in unit tests without API keys)
              # NOT for API errors which should be propagated to reveal real issues
 @@ -295,12 +310,12 @@ class SingleShotStrategy:
                  import logging
- 
+
                  logging.getLogger(__name__).warning(
 -                    f"Using skeleton result due to missing provider: {error_msg}"
 +                    "Using skeleton result due to missing provider: %s", sanitized
                  )
                  return self._generate_skeleton_result(agent, inputs)
- 
+
              # For all other errors (including API errors), return error info to reveal issues
 -            return {"error": error_msg, "status": "failed"}
 +            return {"error": sanitized, "status": "failed"}
- 
+
      def build_workflow(self, agent: Any) -> WorkflowBuilder:
          """
 @@ -342,10 +357,17 @@ class SingleShotStrategy:
@@ -2751,7 +2751,7 @@ index 94934fbb4..0d9ac4145 100644
 +            # credential; sanitize — sibling of async_single_shot.build_workflow,
 +            # #1970 sweep / #1720 creds-in-logs.)
              import logging
- 
+
 -            logging.getLogger(__name__).error(f"Workflow generation failed: {e}")
 +            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 +
@@ -2759,7 +2759,7 @@ index 94934fbb4..0d9ac4145 100644
 +                "Workflow generation failed: %s", sanitize_provider_error(e, "LLM")
 +            )
              return None
- 
+
      # Task 2.11: Extension Points
 diff --git a/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py b/packages/kailash-kaizen/src/kaizen/tools/native/search_tools.py
 index 7e264c7a8..b8a7e5c07 100644
@@ -2779,7 +2779,7 @@ index 7e264c7a8..b8a7e5c07 100644
 +            sanitized = sanitize_provider_error(e, "Web search")
 +            logger.error("DuckDuckGo search failed: %s", sanitized)
 +            return NativeToolResult.from_error(f"Search failed: {sanitized}")
- 
+
      def get_schema(self) -> Dict[str, Any]:
          return {
 @@ -309,7 +315,13 @@ class WebFetchTool(BaseTool):
@@ -2794,7 +2794,7 @@ index 7e264c7a8..b8a7e5c07 100644
 +            return NativeToolResult.from_error(
 +                f"Fetch failed: {sanitize_provider_error(e, 'Web fetch')}"
 +            )
- 
+
      def _extract_text(self, html: str) -> str:
          """Extract text content from HTML.
 diff --git a/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py b/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py
@@ -2803,7 +2803,7 @@ index 6cb0bc326..67eec3e0c 100644
 +++ b/packages/kailash-kaizen/src/kaizen/tools/native/task_tool.py
 @@ -247,15 +247,22 @@ class TaskTool(BaseTool):
              )
- 
+
          except Exception as e:
 -            logger.exception(f"Subagent execution failed: {e}")
 +            # A subagent run drives an LLM provider call; its exception can echo
@@ -2826,13 +2826,13 @@ index 6cb0bc326..67eec3e0c 100644
 +                f"Subagent execution failed: {sanitized}",
                  subagent_result=result.to_dict(),
              )
- 
+
 diff --git a/packages/kailash-kaizen/tests/e2e/providers/test_multi_database_e2e.py b/packages/kailash-kaizen/tests/e2e/providers/test_multi_database_e2e.py
 index db6f352ca..c187f53b6 100644
 --- a/packages/kailash-kaizen/tests/e2e/providers/test_multi_database_e2e.py
 +++ b/packages/kailash-kaizen/tests/e2e/providers/test_multi_database_e2e.py
 @@ -14,6 +14,7 @@ Test Tier: 3 (E2E with real infrastructure, NO MOCKING)
- 
+
  import asyncio
  import logging
 +import os
@@ -2840,7 +2840,7 @@ index db6f352ca..c187f53b6 100644
  import time
  from datetime import datetime
 @@ -57,25 +58,59 @@ def sqlite_db():
- 
+
  @pytest.fixture
  def postgres_db():
 +    """Real PostgreSQL connection for the PostgreSQL leg of the comparison.
@@ -2874,7 +2874,7 @@ index db6f352ca..c187f53b6 100644
 +            "PostgreSQL leg. Export "
 +            "POSTGRES_TEST_URL=postgresql://user:pass@host:port/db to run."
 +        )
- 
+
 -    Note: Requires PostgreSQL running locally or in Docker.
 -    Falls back to SQLite if PostgreSQL not available.
 -    """
@@ -2891,7 +2891,7 @@ index db6f352ca..c187f53b6 100644
 +            await conn.fetchval("SELECT 1")
 +        finally:
 +            await conn.close()
- 
+
      try:
 -        db = DataFlow(database_url=postgres_url, auto_migrate=True)
 -        # Test connection
@@ -2911,11 +2911,11 @@ index db6f352ca..c187f53b6 100644
 +        )
 +
 +    yield postgres_url
- 
- 
+
+
  @pytest.fixture
 @@ -185,9 +220,9 @@ async def test_postgres_vs_sqlite_persistence(
- 
+
      # Validate data integrity
      print("\n5. Validating data integrity across backends...")
 -    assert sqlite_loaded[0]["user"] == postgres_loaded[0]["user"], (
@@ -2928,7 +2928,7 @@ index db6f352ca..c187f53b6 100644
          sqlite_loaded[1]["metadata"]["topic"] == postgres_loaded[1]["metadata"]["topic"]
      ), "Metadata should match"
 @@ -288,9 +323,9 @@ async def test_postgres_vs_sqlite_performance(
- 
+
      # Both should be under cold tier target (<100ms per operation)
      assert sqlite_read_time < 500, f"SQLite read too slow: {sqlite_read_time:.2f}ms"
 -    assert postgres_read_time < 500, (
@@ -2937,7 +2937,7 @@ index db6f352ca..c187f53b6 100644
 +    assert (
 +        postgres_read_time < 500
 +    ), f"PostgreSQL read too slow: {postgres_read_time:.2f}ms"
- 
+
      print("\n" + "=" * 70)
      print("✓ PostgreSQL vs SQLite - Performance: PASSED")
 diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1720_b1_redteam_fixes.py b/packages/kailash-kaizen/tests/regression/test_issue_1720_b1_redteam_fixes.py
@@ -2966,7 +2966,7 @@ index 77d14776b..955fcd95d 100644
 -        sanitizer_mod, "sanitize_provider_error", lambda e, provider: sentinel
 +        embedding_mod, "sanitize_provider_error", lambda e, provider: sentinel
      )
- 
+
      node = EmbeddingGeneratorNode()
 diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1973_a2a_capability_match.py b/packages/kailash-kaizen/tests/regression/test_issue_1973_a2a_capability_match.py
 index bf697cb12..d098c56b3 100644
@@ -2975,7 +2975,7 @@ index bf697cb12..d098c56b3 100644
 @@ -324,10 +324,17 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
      successful match (``zero-tolerance.md`` Rule 3), and CACHING it so the
      transient failure became permanent for the process.
- 
+
 -    The score contract is unchanged (0.0 is still returned — the bridges
 -    deliberately absorb a single judge failure rather than sink a whole
 -    selection round). What changes is that the degradation is now loud and
@@ -2992,7 +2992,7 @@ index bf697cb12..d098c56b3 100644
 +    Those assertions are the teeth of this class and are unchanged. The return
 +    contract now lives in ``test_issue_1981_reasoning_structured_output.py``.
      """
- 
+
      @pytest.fixture
 @@ -355,7 +362,11 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
      def test_unparseable_capability_response_warns_and_is_not_cached(
@@ -3004,12 +3004,12 @@ index bf697cb12..d098c56b3 100644
 +            ReasoningDegradedError,
 +            llm_capability_match,
 +        )
- 
+
          config = self._stub_agent(
              monkeypatch,
 @@ -367,14 +378,15 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
          )
- 
+
          with caplog.at_level(logging.WARNING, logger="kaizen.llm.reasoning"):
 -            score = llm_capability_match(
 -                capability_name="python",
@@ -3025,7 +3025,7 @@ index bf697cb12..d098c56b3 100644
 +                    requirement="build an API",
 +                    config=config,
 +                )
- 
+
 -        assert score == 0.0  # contract unchanged
          degraded = [
              r
@@ -3036,7 +3036,7 @@ index bf697cb12..d098c56b3 100644
      ):
 -        from kaizen.llm.reasoning import llm_capability_match
 +        from kaizen.llm.reasoning import ReasoningDegradedError, llm_capability_match
- 
+
          # No explicit "error" key — just an absent match_score. Still degraded.
          config = self._stub_agent(
              monkeypatch, "get_capability_match_agent", {"response": "some prose"}
@@ -3066,7 +3066,7 @@ index bf697cb12..d098c56b3 100644
 +            ReasoningDegradedError,
 +            llm_text_similarity,
 +        )
- 
+
          config = self._stub_agent(
              monkeypatch, "get_text_similarity_agent", {"error": "JSON_PARSE_FAILED"}
          )
@@ -3075,7 +3075,7 @@ index bf697cb12..d098c56b3 100644
 +            # #1981: sibling parity — the similarity helper raises too.
 +            with pytest.raises(ReasoningDegradedError):
 +                llm_text_similarity(text_a="a", text_b="b", config=config)
- 
+
          assert [
              r
 diff --git a/packages/kailash-kaizen/tests/unit/execution/test_streaming_executor.py b/packages/kailash-kaizen/tests/unit/execution/test_streaming_executor.py
@@ -3095,7 +3095,7 @@ index 538d201be..e13b9fb70 100644
 +            error_events[0].message == "Agent execution error (ValueError): Test error"
 +        )
          assert error_events[0].error_type == "ValueError"
- 
+
 +    @pytest.mark.asyncio
 +    async def test_error_event_message_is_credential_sanitized(self):
 +        """A credential embedded in an agent exception MUST NOT reach ErrorEvent.
@@ -3133,7 +3133,7 @@ index aeaada239..8f740f7d6 100644
 +++ b/packages/kailash-nexus/CHANGELOG.md
 @@ -1,5 +1,39 @@
  # Nexus Changelog
- 
+
 +## [Unreleased]
 +
 +### Changed (BREAKING) — workflow-name validation now runs at `register()` (#1972)
@@ -3169,16 +3169,16 @@ index aeaada239..8f740f7d6 100644
 +  a tool that `tools/list` would never advertise.
 +
  ## [2.15.0] — 2026-07-25 — Deployment lifecycle: deregister + non-blocking start (#1959)
- 
+
  ### Added
 diff --git a/packages/kailash-nexus/src/nexus/core.py b/packages/kailash-nexus/src/nexus/core.py
 index aa6162ba0..309c74866 100644
 --- a/packages/kailash-nexus/src/nexus/core.py
 +++ b/packages/kailash-nexus/src/nexus/core.py
 @@ -1361,32 +1361,6 @@ Check the documentation or explore available resources.
- 
+
          logger.debug(f"Workflow '{name}' registered as MCP resource at {uri}")
- 
+
 -    def _create_mock_mcp_server(self):
 -        """Create a simple mock MCP server for testing."""
 -
@@ -3207,10 +3207,10 @@ index aa6162ba0..309c74866 100644
 -
      def _create_sdk_mcp_server(self):
          """Create production-ready MCP server using Core SDK.
- 
+
 @@ -1510,9 +1484,14 @@ Check the documentation or explore available resources.
          the dict ``_handle_list_tools`` reads to answer ``tools/list``.
- 
+
          Direct writes to ``_mcp_server._tools`` are BLOCKED: that dict only
 -        exists on the FastMCP fallback shim (kailash_mcp/server.py:236) and
 -        is invisible to the MCPServer's JSON-RPC handlers, so tools added
@@ -3223,11 +3223,11 @@ index aa6162ba0..309c74866 100644
 +        (``kailash_mcp/server.py:2837``) iterates ``_tool_registry``, so
 +        tools added by a direct ``_tools`` write never appear in
 +        ``tools/list`` over WebSocket.
- 
+
          Uses self.runtime (server-level shared runtime) instead of creating
          a new AsyncLocalRuntime per invocation (M3-001 fix).
 @@ -1580,6 +1559,7 @@ Check the documentation or explore available resources.
- 
+
          # Register via the proper @tool() decorator path — this writes to
          # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from.
 +        decorator_error: Optional[Exception] = None
@@ -3269,7 +3269,7 @@ index aa6162ba0..309c74866 100644
 +                else ""
              )
 +        )
- 
+
      def _get_api_keys(self) -> Dict[str, str]:
          """Get API keys for authentication.
 @@ -1657,9 +1652,25 @@ Check the documentation or explore available resources.
@@ -3282,7 +3282,7 @@ index aa6162ba0..309c74866 100644
 +                (see :func:`nexus.validation.validate_workflow_name`).
          """
          import time
- 
+
 +        from nexus.validation import validate_workflow_name
 +
 +        # Validate the name BEFORE any state is mutated. The execute route
@@ -3296,7 +3296,7 @@ index aa6162ba0..309c74866 100644
 +        validate_workflow_name(name)
 +
          registration_start = time.time()
- 
+
          # Handle WorkflowBuilder
 diff --git a/packages/kailash-nexus/src/nexus/validation.py b/packages/kailash-nexus/src/nexus/validation.py
 index 5adbea85c..7711debb5 100644
@@ -3305,7 +3305,7 @@ index 5adbea85c..7711debb5 100644
 @@ -33,6 +33,15 @@ DANGEROUS_KEYS = [
  # Maximum key length to prevent memory attacks
  MAX_KEY_LENGTH = 256
- 
+
 +# Characters permitted in a workflow name. This is the MCP tool-name charset
 +# (SEP-986) and is also safe as an HTTP path segment, an ``AnyUrl`` authority
 +# in ``workflow://<name>``, and a CLI argument — the four surfaces a
@@ -3315,11 +3315,11 @@ index 5adbea85c..7711debb5 100644
 +    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz" "0123456789" "_-."
 +).__contains__
 +
- 
+
  def validate_workflow_inputs(
      inputs: Any, max_size: int = DEFAULT_MAX_INPUT_SIZE
 @@ -128,7 +137,17 @@ def validate_workflow_inputs(
- 
+
  def validate_workflow_name(name: str) -> str:
      """
 -    Validate workflow name for security.
@@ -3334,12 +3334,12 @@ index 5adbea85c..7711debb5 100644
 +    registration, with the offending characters named — instead of as an
 +    opaque third-party URL-parser error or as a workflow that registers
 +    successfully and then 400s on every execute request.
- 
+
      Args:
          name: Workflow name to validate
 @@ -140,10 +159,10 @@ def validate_workflow_name(name: str) -> str:
          ValueError: If validation fails
- 
+
      Security Checks:
 -        1. Must be non-empty string
 -        2. Must not contain path separators (prevents directory traversal)
@@ -3355,7 +3355,7 @@ index 5adbea85c..7711debb5 100644
 @@ -151,26 +170,33 @@ def validate_workflow_name(name: str) -> str:
      if not name or not name.strip():
          raise ValueError("Workflow name cannot be empty")
- 
+
 -    # Check for path separators (prevents directory traversal)
 -    if "/" in name or "\\" in name:
 +    # Check length
@@ -3365,7 +3365,7 @@ index 5adbea85c..7711debb5 100644
 -            f"Use simple names like 'my_workflow' instead."
 +            f"Workflow name too long: {len(name)} chars (max: 128). Use a shorter name."
          )
- 
+
 -    # Check for dangerous characters
 -    dangerous_chars = ["<", ">", "|", "&", ";", "$", "`", "!", "*", "?"]
 -    found_dangerous = [char for char in dangerous_chars if char in name]
@@ -3380,7 +3380,7 @@ index 5adbea85c..7711debb5 100644
 +            f"Workflow name cannot contain path separators: {name}. "
 +            f"Use simple names like 'my_workflow' instead."
          )
- 
+
 -    # Check length
 -    if len(name) > 128:
 +    # Allowlist, not a blocklist. A blocklist of "dangerous" shell
@@ -3397,7 +3397,7 @@ index 5adbea85c..7711debb5 100644
 +            f"Use letters, digits, and the characters '_', '-', '.' only "
 +            f"(MCP tool-name charset, SEP-986)."
          )
- 
+
      return name
 diff --git a/packages/kailash-nexus/tests/regression/test_issue_1285_close_cascades_runtime.py b/packages/kailash-nexus/tests/regression/test_issue_1285_close_cascades_runtime.py
 index b55f540e0..bf49c54e8 100644
@@ -3405,8 +3405,8 @@ index b55f540e0..bf49c54e8 100644
 +++ b/packages/kailash-nexus/tests/regression/test_issue_1285_close_cascades_runtime.py
 @@ -33,13 +33,36 @@ import pytest
  from kailash.runtime.async_local import AsyncLocalRuntime
- 
- 
+
+
 -def _leaked_runtimes():
 -    """Return live AsyncLocalRuntime instances still holding a reference."""
 +def _held_runtime_ids():
@@ -3441,20 +3441,20 @@ index b55f540e0..bf49c54e8 100644
 +        and getattr(o, "_ref_count", 0) > 0
 +        and id(o) not in baseline_ids
      ]
- 
- 
+
+
 @@ -50,6 +73,7 @@ class TestIssue1285CloseCascadesRuntime:
      def test_close_releases_all_runtime_refs(self):
          from nexus import Nexus
- 
+
 +        baseline_ids = _held_runtime_ids()
          app = Nexus(api_port=20101, mcp_port=20102, enable_durability=False)
- 
+
          @app.handler("ping")
 @@ -60,10 +84,10 @@ class TestIssue1285CloseCascadesRuntime:
          assert app.runtime.ref_count >= 1
          app.close()
- 
+
 -        leaked = _leaked_runtimes()
 +        leaked = _leaked_runtimes(baseline_ids)
          assert not leaked, (
@@ -3463,7 +3463,7 @@ index b55f540e0..bf49c54e8 100644
 +            f"{len(leaked)} AsyncLocalRuntime(s) created by this Nexus are still "
 +            f"held after Nexus.close(): {[(id(o), o._ref_count) for o in leaked]}"
          )
- 
+
      def test_close_emits_no_resource_warning(self):
 diff --git a/packages/kailash-nexus/tests/unit/test_core_comprehensive.py b/packages/kailash-nexus/tests/unit/test_core_comprehensive.py
 index 14174d329..abbe96397 100644
@@ -3471,7 +3471,7 @@ index 14174d329..abbe96397 100644
 +++ b/packages/kailash-nexus/tests/unit/test_core_comprehensive.py
 @@ -469,7 +469,11 @@ class TestNexusEdgeCases:
      """Test edge cases and boundary conditions."""
- 
+
      def test_empty_workflow_name(self):
 -        """Test registration with empty name."""
 +        """Empty name is rejected — it is not addressable on any channel.
@@ -3480,35 +3480,35 @@ index 14174d329..abbe96397 100644
 +        MCP tool name, so an empty-named workflow could never be invoked.
 +        """
          from nexus import Nexus
- 
+
          from kailash.workflow.builder import WorkflowBuilder
 @@ -478,14 +482,14 @@ class TestNexusEdgeCases:
          workflow = WorkflowBuilder()
          workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
- 
+
 -        # Empty name is allowed - stored like any other name
 -        app.register("", workflow)
 +        with pytest.raises(ValueError, match="cannot be empty"):
 +            app.register("", workflow)
- 
+
 -        # Workflow is registered with empty string as key
 -        assert "" in app._workflows
 +        # Rejected before any state was mutated.
 +        assert "" not in app._workflows
- 
+
      def test_very_long_workflow_name(self):
 -        """Test registration with very long name."""
 +        """Names above the 128-char cap are rejected with the length named."""
          from nexus import Nexus
- 
+
          from kailash.workflow.builder import WorkflowBuilder
 @@ -494,15 +498,29 @@ class TestNexusEdgeCases:
          workflow = WorkflowBuilder()
          workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
- 
+
 -        # Very long name
          long_name = "a" * 1000
- 
+
 -        # Should handle gracefully
 -        app.register(long_name, workflow)
 -        assert long_name in app._workflows
@@ -3521,7 +3521,7 @@ index 14174d329..abbe96397 100644
 +        at_limit = "a" * 128
 +        app.register(at_limit, workflow)
 +        assert at_limit in app._workflows
- 
+
      def test_special_characters_in_name(self):
 -        """Test registration with special characters."""
 +        """Special characters are rejected at register(), naming each one.
@@ -3535,15 +3535,15 @@ index 14174d329..abbe96397 100644
 +        execute route runs this same validator.
 +        """
          from nexus import Nexus
- 
+
          from kailash.workflow.builder import WorkflowBuilder
 @@ -511,12 +529,24 @@ class TestNexusEdgeCases:
          workflow = WorkflowBuilder()
          workflow.add_node("HTTPRequestNode", "test", {"url": "https://example.com"})
- 
+
 -        # Special characters
          special_name = "test-workflow_123!@#$%^&*()"
- 
+
 -        # Should handle special characters
 -        app.register(special_name, workflow)
 -        assert special_name in app._workflows
@@ -3563,7 +3563,7 @@ index 14174d329..abbe96397 100644
 +        # The legal prefix of the same name registers without complaint.
 +        app.register("test-workflow_123", workflow)
 +        assert "test-workflow_123" in app._workflows
- 
+
      def test_health_check_when_not_started(self):
          """Test health_check() when Nexus is not started."""
 diff --git a/packages/kailash-nexus/tests/unit/test_enhanced_mcp_integration.py b/packages/kailash-nexus/tests/unit/test_enhanced_mcp_integration.py
@@ -3573,7 +3573,7 @@ index b2cf06fa0..16389f222 100644
 @@ -280,6 +280,11 @@ class TestMCPServerLifecycle:
          mock_new_loop.assert_called_once()
          mock_set_loop.assert_called_once_with(mock_loop)
- 
+
 +        # The loop assertions above hold even if the channel is never touched
 +        # (they only observe the patches). Assert the injected channel was
 +        # actually driven, so a regression that stops calling start() fails.
@@ -3585,7 +3585,7 @@ index b2cf06fa0..16389f222 100644
 @@ -328,6 +333,9 @@ class TestMCPServerLifecycle:
                  assert mock_new_loop.called
                  assert mock_set_loop.called
- 
+
 +                # ...and the channel MUST be the thing that loop drove.
 +                app._mcp_channel.stop.assert_called_once()
 +
@@ -3595,13 +3595,13 @@ index b2cf06fa0..16389f222 100644
 @@ -357,6 +365,11 @@ class TestMCPServerLifecycle:
                  assert mock_new_loop.called
                  assert mock_set_loop.called
- 
+
 +                # The fallback branch (no channel) MUST reach _mcp_server.stop;
 +                # without this the test passes even if stop() never runs the
 +                # branch the test is named for.
 +                app._mcp_server.stop.assert_called_once()
 +
- 
+
  class TestErrorHandling:
      """Test error handling in MCP integration."""
 diff --git a/packages/kailash-nexus/tests/unit/test_nexus_shared_runtime.py b/packages/kailash-nexus/tests/unit/test_nexus_shared_runtime.py
@@ -3611,7 +3611,7 @@ index 45115de74..2afe34658 100644
 @@ -7,6 +7,8 @@ eliminates the DoS vector from unbounded runtime creation.
  Tier 1 (Unit) - Fast, isolated, uses mocks for external services only.
  """
- 
+
 +import asyncio
 +import json
  import os
@@ -3619,8 +3619,8 @@ index 45115de74..2afe34658 100644
  from unittest.mock import AsyncMock, MagicMock, patch
 @@ -17,6 +19,22 @@ import pytest
  sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
- 
- 
+
+
 +def _stub_workflow():
 +    """Build a real single-node Workflow for MCP tool-registration tests.
 +
@@ -3639,10 +3639,10 @@ index 45115de74..2afe34658 100644
 +
  class TestNexusSharedRuntime:
      """Test that Nexus creates and manages a server-level shared runtime."""
- 
+
 @@ -84,36 +102,56 @@ class TestNexusSharedRuntime:
- 
- 
+
+
  class TestNexusMCPToolClosure:
 -    """Test that _register_workflow_as_mcp_tool uses self.runtime, not a new one."""
 -
@@ -3675,7 +3675,7 @@ index 45115de74..2afe34658 100644
 +        (commit 9504d5f9c); this test is the tripwire for reintroducing it.
          """
          from nexus import Nexus
- 
+
          app = Nexus()
 +        try:
 +            # Production wiring: the real Core SDK MCPServer, as built by
@@ -3692,7 +3692,7 @@ index 45115de74..2afe34658 100644
 +                "workflow tool missing from _tool_registry — tools/list will not "
 +                "surface it over WebSocket"
 +            )
- 
+
 -        # In WebSocket-only mode, _mcp_server is None.
 -        # Inject a mock to test the closure behaviour.
 -        app._mcp_server = MagicMock()
@@ -3719,12 +3719,12 @@ index 45115de74..2afe34658 100644
 +            ), f"tools/list did not advertise the workflow tool; got {names}"
 +        finally:
 +            app.close()
- 
+
      @pytest.mark.asyncio
      async def test_workflow_tool_does_not_create_new_runtime(self):
 @@ -121,33 +159,106 @@ class TestNexusMCPToolClosure:
          from nexus import Nexus
- 
+
          app = Nexus()
 +        try:
 +            workflow = _stub_workflow()
@@ -3773,7 +3773,7 @@ index 45115de74..2afe34658 100644
 +        branch (zero-tolerance Rule 3).
 +        """
 +        from nexus import Nexus
- 
+
 -        # Inject mock server (WebSocket-only mode has no server by default)
 -        app._mcp_server = MagicMock()
 -        app._mcp_server._tools = {}
@@ -3787,7 +3787,7 @@ index 45115de74..2afe34658 100644
 -        tool_func = app._mcp_server._tools["test_workflow"]
 +        class NoRegistrySurfaceServer:
 +            """MCP server exposing neither registration surface.
- 
+
 -        # Patch AsyncLocalRuntime to detect if it gets called
 -        with patch("nexus.core.AsyncLocalRuntime") as mock_runtime_cls:
 -            # Mock the runtime's execute_workflow_async
@@ -3799,7 +3799,7 @@ index 45115de74..2afe34658 100644
 +            under test would never be reached and the assertion would be
 +            vacuous — the exact false green this module was ported to remove.
 +            """
- 
+
 -            await tool_func(input_data="test")
 +        app = Nexus()
 +        real_server = app._mcp_server
@@ -3828,13 +3828,13 @@ index 45115de74..2afe34658 100644
 +        MUST reach the caller rather than being left in a log line.
 +        """
 +        from nexus import Nexus
- 
+
 -            # AsyncLocalRuntime() should NOT have been called (no new runtime)
 -            mock_runtime_cls.assert_not_called()
 +        class FailingToolServer:
 +            def tool(self, *args, **kwargs):
 +                raise ValueError("registry is sealed")
- 
+
 -        # Cleanup
 -        app.close()
 +        app = Nexus()
@@ -3848,7 +3848,7 @@ index 45115de74..2afe34658 100644
 +            # server's acquired runtime reference is stranded.
 +            app._mcp_server = real_server
 +            app.close()
- 
+
      # NOTE: TestMCPServerSharedRuntime was removed along with the old
      # nexus.mcp.server.MCPServer class.  The shared runtime pattern is now
 diff --git a/packages/kaizen-agents/conftest.py b/packages/kaizen-agents/conftest.py
@@ -3868,15 +3868,15 @@ index 04c3ee2b1..d0787d357 100644
 +subject offered — the #1981 fake-pass shape. Both halves now live here, so
 +the marker is a real gate rather than a registered-but-unchecked one.
  """
- 
+
 +import os
  import sys
  from pathlib import Path
- 
+
 +import pytest
 +
  from kailash.testing.env_cost_guard import install_cost_guard, scrub_provider_secrets
- 
+
 +_REAL_LLM_ENV_FLAG = "KAIZEN_ALLOW_REAL_LLM"
 +_REAL_LLM_MARKER = "requires_real_llm"
 +
@@ -3916,7 +3916,7 @@ index c3007a4f7..1cf63e78a 100644
      "regression: regression tests pinning a fixed bug (NEVER delete)",
 +    "requires_real_llm: Tests that make real (billed) LLM provider calls; skipped unless KAIZEN_ALLOW_REAL_LLM=1",
  ]
- 
+
  [tool.black]
 diff --git a/packages/kaizen-agents/src/kaizen_agents/patterns/_reasoning_bridge.py b/packages/kaizen-agents/src/kaizen_agents/patterns/_reasoning_bridge.py
 index 4527147b7..c0fae4aed 100644
@@ -3924,16 +3924,16 @@ index 4527147b7..c0fae4aed 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/_reasoning_bridge.py
 @@ -27,7 +27,7 @@ import uuid
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 -from kaizen.llm.reasoning import llm_text_similarity
 +from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
- 
+
  logger = logging.getLogger(__name__)
- 
+
 @@ -66,8 +66,19 @@ async def _score_capability_async(
      """Single-capability async scoring helper.
- 
+
      Accepts dataclass Capability (sync matcher since #1973), async matchers,
 -    legacy sync mocks, and plain strings. All error paths return 0.0 with a
 -    WARN log so one LLM failure cannot sink a whole selection round.
@@ -4084,8 +4084,8 @@ index 4527147b7..c0fae4aed 100644
 +            },
 +        )
      return best_score
- 
- 
+
+
 @@ -177,7 +274,11 @@ def score_capability_list_sync(
      reasoning_config: BaseAgentConfig | None = None,
      correlation_id: str | None = None,
@@ -4169,8 +4169,8 @@ index 4527147b7..c0fae4aed 100644
 +            },
 +        )
      return scored
- 
- 
+
+
 @@ -213,6 +367,14 @@ def rank_agents_by_capability_sync(
      Patterns call this from their sync selection methods and then pick the
      best-scoring agent (or top-k). Sorting is left to the caller so each
@@ -4192,7 +4192,7 @@ index 1c9a02b73..7ab43e6bf 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/llm_routing.py
 @@ -29,7 +29,11 @@ import uuid
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgentConfig
 -from kaizen.llm.reasoning import llm_capability_match, llm_text_similarity
 +from kaizen.llm.reasoning import (
@@ -4200,12 +4200,12 @@ index 1c9a02b73..7ab43e6bf 100644
 +    llm_capability_match,
 +    llm_text_similarity,
 +)
- 
+
  logger = logging.getLogger(__name__)
- 
+
 @@ -77,9 +81,31 @@ class LLMBased:
          - A plain string -- delegates to ``llm_text_similarity``.
- 
+
          Returns a float in ``[0.0, 1.0]``.
 +
 +        Raises:
@@ -4233,12 +4233,12 @@ index 1c9a02b73..7ab43e6bf 100644
 +                },
 +            )
 +            raise
- 
+
      async def select_best(
          self,
 @@ -94,6 +120,18 @@ class LLMBased:
          or any object with ``.name`` and ``.description`` attributes.
- 
+
          Returns ``None`` when *candidates* is empty.
 +
 +        Degraded judgments (#1981): a candidate the LLM judge could not
@@ -4256,7 +4256,7 @@ index 1c9a02b73..7ab43e6bf 100644
          if not candidates:
              return None
 @@ -102,18 +140,65 @@ class LLMBased:
- 
+
          best_candidate: Any = None
          best_score: float = -1.0
 -
@@ -4290,7 +4290,7 @@ index 1c9a02b73..7ab43e6bf 100644
              if s > best_score:
                  best_score = s
                  best_candidate = candidate
- 
+
 +        if degraded:
 +            if scored == 0:
 +                # Nothing was scoreable: there is no ranking to return, and
@@ -4325,7 +4325,7 @@ index 1c9a02b73..7ab43e6bf 100644
              },
          )
 @@ -133,6 +218,12 @@ class LLMBased:
- 
+
          Delegates to the appropriate reasoning helper based on the
          capability's type.
 +
@@ -4344,10 +4344,10 @@ index d07f1307d..44a161515 100644
 @@ -42,9 +42,11 @@ Created: 2025-10-27
  Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
  """
- 
+
 +import logging
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent
 +from kaizen.llm.reasoning import ReasoningDegradedError
  from kaizen_agents.patterns._reasoning_bridge import (
@@ -4356,16 +4356,16 @@ index d07f1307d..44a161515 100644
 @@ -61,6 +63,8 @@ except ImportError:
      Capability = None
      A2AAgentCard = None
- 
+
 +logger = logging.getLogger(__name__)
 +
- 
+
  class BlackboardPipeline(Pipeline):
      """
 @@ -168,6 +172,22 @@ class BlackboardPipeline(Pipeline):
                  if best_specialist is not None and best_score > 0:
                      return best_specialist
- 
+
 +        except ReasoningDegradedError as exc:
 +            # #1981: EVERY specialist's capability scoring degraded. The
 +            # documented no-match return (None) stands — this method's sync
@@ -4392,10 +4392,10 @@ index f87e6499e..d442a4b91 100644
 @@ -40,9 +40,11 @@ Created: 2025-10-27
  Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
  """
- 
+
 +import logging
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent
 +from kaizen.llm.reasoning import ReasoningDegradedError
  from kaizen_agents.patterns._reasoning_bridge import (
@@ -4404,16 +4404,16 @@ index f87e6499e..d442a4b91 100644
 @@ -59,6 +61,8 @@ except ImportError:
      Capability = None
      A2AAgentCard = None
- 
+
 +logger = logging.getLogger(__name__)
 +
- 
+
  class EnsemblePipeline(Pipeline):
      """
 @@ -160,6 +164,22 @@ class EnsemblePipeline(Pipeline):
                  if top_agents:
                      return top_agents
- 
+
 +        except ReasoningDegradedError as exc:
 +            # #1981: EVERY agent's capability scoring degraded, so the
 +            # first-top_k fallback below is an unjudged pick. `run()` is a sync
@@ -4440,10 +4440,10 @@ index 98ca41b89..4b9effa79 100644
 @@ -29,9 +29,11 @@ Created: 2025-10-27
  Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
  """
- 
+
 +import logging
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent
 +from kaizen.llm.reasoning import ReasoningDegradedError
  from kaizen_agents.patterns._reasoning_bridge import (
@@ -4452,16 +4452,16 @@ index 98ca41b89..4b9effa79 100644
 @@ -48,6 +50,8 @@ except ImportError:
      Capability = None
      A2AAgentCard = None
- 
+
 +logger = logging.getLogger(__name__)
 +
- 
+
  class MetaControllerPipeline(Pipeline):
      """
 @@ -141,6 +145,21 @@ class MetaControllerPipeline(Pipeline):
                  if best_agent is not None and best_score > 0:
                      return best_agent
- 
+
 +        except ReasoningDegradedError as exc:
 +            # #1981: EVERY agent's capability scoring degraded, so the fallback
 +            # below is an unjudged pick. `run()` is a sync public contract that
@@ -4486,7 +4486,7 @@ index 59f0a7dc7..21a1888c5 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/patterns/supervisor_worker.py
 @@ -45,6 +45,7 @@ from dataclasses import dataclass
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 +from kaizen.llm.reasoning import ReasoningDegradedError
  from kaizen.memory.shared_memory import SharedMemoryPool
@@ -4495,7 +4495,7 @@ index 59f0a7dc7..21a1888c5 100644
 @@ -246,6 +247,23 @@ class SupervisorAgent(BaseAgent):
                              return {"worker": best_worker, "score": best_score}
                          return best_worker
- 
+
 +            except ReasoningDegradedError as exc:
 +                # #1981: EVERY worker's capability scoring degraded, so the
 +                # round-robin fallback below is an unjudged pick (and the
@@ -4522,17 +4522,17 @@ index 265151f09..12e5ac583 100644
 +++ b/packages/kaizen-agents/src/kaizen_agents/patterns/registry.py
 @@ -56,7 +56,7 @@ from enum import StrEnum
  from typing import Any
- 
+
  from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 -from kaizen.llm.reasoning import llm_text_similarity
 +from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
  from kaizen_agents.patterns.runtime import AgentMetadata, AgentStatus
- 
+
  logger = logging.getLogger(__name__)
 @@ -433,17 +433,32 @@ class AgentRegistry:
          Jaccard word-overlap implementation (see
          `rules/agent-reasoning.md` MUST Rule 1).
- 
+
 +        Degraded judgments (#1981): an agent whose every capability the judge
 +        failed to score has UNKNOWN fit and is EXCLUDED from the result. It
 +        is NOT scored at a fabricated 0.0 — that zero was indistinguishable
@@ -4542,7 +4542,7 @@ index 265151f09..12e5ac583 100644
          Args:
              capability: Capability to search for
              status_filter: Optional status filter (default: ACTIVE)
- 
+
          Returns:
              List of matching agent metadata sorted by semantic relevance
 +
@@ -4553,19 +4553,19 @@ index 265151f09..12e5ac583 100644
          """
          async with self._query_semaphore:
              self._total_queries += 1
- 
+
              matching_agents: list[tuple] = []
 +            candidates = 0
 +            scored_agents = 0
 +            degraded_agents: list[str] = []
 +            degraded_model = "unknown"
- 
+
              # Resolve a reasoning config from any registered agent so the
              # LLM judge inherits the host model selection.
 @@ -467,7 +482,10 @@ class AgentRegistry:
                  if not capabilities:
                      continue
- 
+
 +                candidates += 1
                  best_score = 0.0
 +                agent_scored = 0
@@ -4604,7 +4604,7 @@ index 265151f09..12e5ac583 100644
 +                    agent_scored += 1
                      if score > best_score:
                          best_score = score
- 
+
 +                if agent_degraded and agent_scored == 0:
 +                    degraded_agents.append(agent_id)
 +                    continue
@@ -4612,7 +4612,7 @@ index 265151f09..12e5ac583 100644
 +                scored_agents += 1
                  if best_score > 0:
                      matching_agents.append((metadata, best_score))
- 
+
 +            if degraded_agents:
 +                if scored_agents == 0:
 +                    raise ReasoningDegradedError(
@@ -4637,7 +4637,7 @@ index 265151f09..12e5ac583 100644
 +
              # Sort by match score (highest first)
              matching_agents.sort(key=lambda x: x[1], reverse=True)
- 
+
 @@ -631,8 +694,24 @@ class AgentRegistry:
                              await listener(event)
                          else:
@@ -4662,7 +4662,7 @@ index 265151f09..12e5ac583 100644
 +                                "error": str(exc),
 +                            },
 +                        )
- 
+
              except TimeoutError:
                  continue
 diff --git a/packages/kaizen-agents/src/kaizen_agents/patterns/runtime.py b/packages/kaizen-agents/src/kaizen_agents/patterns/runtime.py
@@ -4676,12 +4676,12 @@ index 5a7289507..047e61cbb 100644
 -from kaizen.llm.reasoning import llm_text_similarity
 +from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
  from kaizen.memory.shared_memory import SharedMemoryPool
- 
+
  logger = logging.getLogger(__name__)
 @@ -536,6 +536,11 @@ class OrchestrationRuntime:
          Returns:
              Selected agent or None if no agents available
- 
+
 +        Raises:
 +            ReasoningDegradedError: SEMANTIC strategy only — every candidate
 +                capability degraded (#1981), so no ranking exists. See
@@ -4713,12 +4713,12 @@ index 5a7289507..047e61cbb 100644
 +        scored_capabilities = 0
 +        degraded_agents: list[str] = []
 +        degraded_model = "unknown"
- 
+
          reasoning_config = self._resolve_reasoning_config(agents)
- 
+
 @@ -611,14 +632,49 @@ class OrchestrationRuntime:
                  continue
- 
+
              # Calculate capability match score via LLM (not keyword overlap)
 +            agent_scored = 0
 +            agent_degraded = 0
@@ -4741,7 +4741,7 @@ index 5a7289507..047e61cbb 100644
                  if score > best_score:
                      best_agent = metadata.agent
                      best_score = score
- 
+
 +            if agent_degraded and agent_scored == 0:
 +                degraded_agents.append(agent_id)
 +
@@ -4772,7 +4772,7 @@ index 5a7289507..047e61cbb 100644
 @@ -659,9 +715,15 @@ class OrchestrationRuntime:
              - Legacy test mocks with a single-positional `matches_requirement`
              - Plain strings (capability name only) — scored via LLM similarity
- 
+
 -        Returns 0.0 on any exception so a single LLM failure cannot sink the
 -        entire routing decision; a WARN log captures the failure so
 -        `rules/observability.md` MUST Rule 5 still triages it.
@@ -4787,7 +4787,7 @@ index 5a7289507..047e61cbb 100644
 +                degraded judgment can never out-rank or tie a real one.
          """
          correlation_id = f"route_{agent_id or 'unknown'}"
- 
+
 @@ -673,6 +735,18 @@ class OrchestrationRuntime:
                      config=reasoning_config,
                      correlation_id=correlation_id,
@@ -4851,7 +4851,7 @@ index fc19efcab..bf3ae591c 100644
 --- a/packages/kaizen-agents/tests/e2e/orchestration/test_orchestration_runtime_e2e.py
 +++ b/packages/kaizen-agents/tests/e2e/orchestration/test_orchestration_runtime_e2e.py
 @@ -139,10 +139,28 @@ def writing_agent_e2e(task_signature):
- 
+
  @pytest.mark.asyncio
  @pytest.mark.e2e
 +@pytest.mark.requires_real_llm
@@ -4885,7 +4885,7 @@ index 04d761ed1..0cc2e80af 100644
 --- a/packages/kaizen-agents/tests/integration/orchestration/test_orchestration_runtime_integration.py
 +++ b/packages/kaizen-agents/tests/integration/orchestration/test_orchestration_runtime_integration.py
 @@ -238,8 +238,25 @@ async def test_random_routing_with_real_agents(
- 
+
  @pytest.mark.asyncio
  @pytest.mark.integration
 +@pytest.mark.requires_real_llm
@@ -4923,7 +4923,7 @@ index 8af160929..72056839c 100644
 +    "MYSQL_MAX_IDENTIFIER_LENGTH",
 +    "SQLITE_MAX_IDENTIFIER_LENGTH",
  ]
- 
+
 +# ---------------------------------------------------------------------------
 +# Per-dialect identifier length limits — SINGLE SOURCE OF TRUTH (issue #1971)
 +# ---------------------------------------------------------------------------
@@ -4939,33 +4939,33 @@ index 8af160929..72056839c 100644
 +
  _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
  _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
- 
+
 @@ -416,7 +432,7 @@ class QueryDialect(ABC):
  class PostgresDialect(QueryDialect):
      """PostgreSQL dialect — uses ``$1, $2, ...`` numbered placeholders."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN - 1
 +    _MAX_IDENTIFIER_LENGTH = POSTGRES_MAX_IDENTIFIER_LENGTH
      _QUOTE_CHAR = '"'
- 
+
      @property
 @@ -493,7 +509,7 @@ class PostgresDialect(QueryDialect):
  class MySQLDialect(QueryDialect):
      """MySQL dialect — uses ``%s`` positional placeholders."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
 +    _MAX_IDENTIFIER_LENGTH = MYSQL_MAX_IDENTIFIER_LENGTH
      _QUOTE_CHAR = "`"
- 
+
      @property
 @@ -597,7 +613,7 @@ class MySQLDialect(QueryDialect):
  class SQLiteDialect(QueryDialect):
      """SQLite dialect — uses ``?`` positional placeholders (canonical)."""
- 
+
 -    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
 +    _MAX_IDENTIFIER_LENGTH = SQLITE_MAX_IDENTIFIER_LENGTH
      _QUOTE_CHAR = '"'
- 
+
      @property
 
 # ===== UNTRACKED NEW TEST FILES =====
@@ -8526,4 +8526,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

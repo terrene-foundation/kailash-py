@@ -37,11 +37,11 @@ index a27f4e61b..5db6c34de 100644
 +existing `KAIZEN_ALLOW_REAL_LLM` / `USE_REAL_PROVIDERS` opt-in shape. A real
 +user never sets it, so real keyless callers fail loud.
  """
- 
+
  import os
 +from typing import Optional
- 
- 
+
+
 -def detect_provider_from_env() -> str:
 +def _keyless_mock_allowed() -> bool:
 +    """True only when a test harness has EXPLICITLY opted into keyless->mock.
@@ -58,7 +58,7 @@ index a27f4e61b..5db6c34de 100644
 +def detect_provider_from_env() -> Optional[str]:
 +    """
 +    Env-first provider fallback: openai -> anthropic -> None (keyless).
- 
+
      Returns:
          "openai" if OPENAI_API_KEY is set, else "anthropic" if
 -        ANTHROPIC_API_KEY is set, else "mock". Mirrors
@@ -93,14 +93,14 @@ index 3c8d48599..b52714667 100644
 --- a/packages/kailash-kaizen/src/kaizen/core/agents.py
 +++ b/packages/kailash-kaizen/src/kaizen/core/agents.py
 @@ -1159,23 +1159,30 @@ CRITICAL RULES:
- 
+
          return response_structure
- 
+
 -    def _get_provider_for_config(self) -> str:
 +    def _get_provider_for_config(self) -> Optional[str]:
          """
          Determine the appropriate LLM provider based on configuration and environment.
- 
+
          Returns:
 -            str: Provider name ("openai", "anthropic", "smart_mock", etc.)
 +            Optional[str]: Provider name ("openai", "anthropic", "mock", etc.)
@@ -113,7 +113,7 @@ index 3c8d48599..b52714667 100644
          # If provider is explicitly set, use it
          if "provider" in self.config:
              return self.config["provider"]
- 
+
 -        # Env-first fallback (openai -> anthropic -> mock). This IS the
 -        # canonical order every other LLMAgentNode-param-building site in
 +        # Env-first fallback (openai -> anthropic -> None when keyless). This IS
@@ -126,14 +126,14 @@ index 3c8d48599..b52714667 100644
 +        # None when keyless so the unresolved provider fails loud at the node
 +        # (#1952 closes the keyless-mock residual of #1947).
          return _detect_provider_from_env()
- 
+
      def _is_mock_provider_active(self) -> bool:
 diff --git a/packages/kailash-kaizen/src/kaizen/core/base_agent.py b/packages/kailash-kaizen/src/kaizen/core/base_agent.py
 index 08cd324cd..277a808b7 100644
 --- a/packages/kailash-kaizen/src/kaizen/core/base_agent.py
 +++ b/packages/kailash-kaizen/src/kaizen/core/base_agent.py
 @@ -598,7 +598,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
- 
+
          if self.config.model is not None:
              node_config["model"] = self.config.model
 -        node_config["provider"] = current_provider  # required; else defaults to "mock"
@@ -146,9 +146,9 @@ index 39f0f036c..3813b77e1 100644
 --- a/packages/kailash-kaizen/src/kaizen/core/mixins/caching_mixin.py
 +++ b/packages/kailash-kaizen/src/kaizen/core/mixins/caching_mixin.py
 @@ -100,8 +100,14 @@ class CachingMixin:
- 
+
      Cache can be bypassed by passing cache_bypass=True to run().
- 
+
 +    Enabled via the ``batch_processing_enabled`` config flag — that is the
 +    field BaseAgent maps to this mixin (see ``BaseAgent._MIXIN_MAP``). There
 +    is no ``caching_enabled`` field on BaseAgentConfig; passing one has no
@@ -159,7 +159,7 @@ index 39f0f036c..3813b77e1 100644
 -        config = BaseAgentConfig(caching_enabled=True, cache_ttl=600)
 +        config = BaseAgentConfig(batch_processing_enabled=True)
          agent = SimpleQAAgent(config)
- 
+
          # First call - executes and caches
 @@ -206,8 +212,25 @@ class CachingMixin:
          Returns:
@@ -194,7 +194,7 @@ index a8d6dd867..5d43cbaa8 100644
 @@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional
  from kailash.workflow.builder import WorkflowBuilder
  from kailash.workflow.credentials import get_credential_store
- 
+
 +from kaizen.core._provider_env import detect_provider_from_env
  from kaizen.core.config import BaseAgentConfig
  from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
@@ -217,11 +217,11 @@ index a8d6dd867..5d43cbaa8 100644
          providers_with_structured_output = ["openai", "google", "gemini", "azure"]
 -        effective_provider = llm_provider or "openai"
 +        effective_provider = resolved_provider
- 
+
          if structured_output_mode == "off":
              response_format = None
 @@ -269,7 +275,7 @@ class WorkflowGenerator:
- 
+
          # Create LLMAgentNode with signature-based configuration
          node_config = {
 -            "provider": llm_provider or "openai",
@@ -230,17 +230,17 @@ index a8d6dd867..5d43cbaa8 100644
              "system_prompt": self._get_system_prompt(),
              "generation_config": generation_config,
 @@ -367,7 +373,7 @@ class WorkflowGenerator:
- 
+
                      # Convert to provider-specific format
                      provider_tools = get_tools_for_provider(
 -                        mcp_tools, llm_provider or "openai"
 +                        mcp_tools, resolved_provider
                      )
- 
+
                      # Add to node config
 @@ -418,8 +424,10 @@ class WorkflowGenerator:
              generation_config["max_tokens"] = self.config.max_tokens
- 
+
          # Create simple LLMAgentNode configuration (no signature)
 +        # #1948: resolve the provider from the environment when unset instead of
 +        # hardcoding "openai" (see _build_llm_node_config above for rationale).
@@ -255,7 +255,7 @@ index 2b12630d0..1b2559044 100644
 --- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
 +++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
 @@ -14,7 +14,10 @@ Features:
- 
+
  import hashlib
  import json
 -from typing import Any, Dict, Optional
@@ -263,8 +263,8 @@ index 2b12630d0..1b2559044 100644
 +
 +if TYPE_CHECKING:
 +    from ...core.base_agent import BaseAgent
- 
- 
+
+
  class DeploymentCache:
 @@ -59,6 +62,11 @@ class DeploymentCache:
          - RESOLVED LLM provider (see FIX 8 note below)
@@ -275,13 +275,13 @@ index 2b12630d0..1b2559044 100644
 +          MCP tools or a custom prompt override — must NOT collide)
 +        - Temperature (#1948: same-shape agents at different temperatures
 +          build different workflows and must key distinctly)
- 
+
          Args:
              agent: BaseAgent instance
 @@ -97,12 +105,50 @@ class DeploymentCache:
          llm_provider = getattr(config, "llm_provider", None)
          resolved_provider = llm_provider or detect_provider_from_env()
- 
+
 +        # #1948: key on the agent's REAL EFFECTIVE system prompt plus
 +        # temperature. Two agents that share name + provider + model +
 +        # signature but carry different prompts (or run at different
@@ -328,17 +328,17 @@ index 2b12630d0..1b2559044 100644
 +            "system_prompt": effective_system_prompt,
 +            "temperature": getattr(config, "temperature", None),
          }
- 
+
          # Create deterministic JSON string
 @@ -142,7 +188,7 @@ class DeploymentCache:
          # Store workflow
          self._cache[cache_key] = workflow
- 
+
 -    def invalidate(self, cache_key: str = None):
 +    def invalidate(self, cache_key: Optional[str] = None):
          """
          Invalidate cache entry or entire cache.
- 
+
 diff --git a/packages/kailash-kaizen/src/kaizen/llm/reasoning.py b/packages/kailash-kaizen/src/kaizen/llm/reasoning.py
 index 17d1fa7d7..b6213de5d 100644
 --- a/packages/kailash-kaizen/src/kaizen/llm/reasoning.py
@@ -346,16 +346,16 @@ index 17d1fa7d7..b6213de5d 100644
 @@ -39,6 +39,8 @@ import uuid
  from dataclasses import dataclass, field
  from typing import Any, Dict, Optional, Tuple
- 
+
 +from kaizen.config.providers import ConfigurationError
 +from kaizen.core._provider_env import _keyless_mock_allowed
  from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
  from kaizen.signatures import InputField, OutputField, Signature
- 
+
 @@ -211,9 +213,13 @@ def _resolve_reasoning_config(
      cheap. If no config is supplied, fall back to `.env`-defined model with
      the same defaults per `rules/env-models`.
- 
+
 -    Last-resort fallback is the `mock` provider: this keeps unit tests that
 -    pass bare `Mock(spec=BaseAgent)` stubs working without real API keys,
 -    while production paths always route through an explicit config.
@@ -396,7 +396,7 @@ index 50e5c8043..a9811c4ca 100644
 @@ -1671,9 +1671,15 @@ class A2AAgentNode(LLMAgentNode):
              if memory_result.get("success"):
                  shared_context = memory_result.get("memories", [])
- 
+
 -        # Store provider and model for use in summarization
 -        self._current_provider = kwargs.get("provider", "mock")
 -        self._current_model = kwargs.get("model", "mock-model")
@@ -409,11 +409,11 @@ index 50e5c8043..a9811c4ca 100644
 +        # rule-based/simple degradation, no fabrication.
 +        self._current_provider = kwargs.get("provider")
 +        self._current_model = kwargs.get("model")
- 
+
          # Enhance messages with shared context
          messages = kwargs.get("messages", [])
 @@ -1696,9 +1702,12 @@ Relevant shared context from other agents:
- 
+
              # Use LLM to extract insights if provider supports it
              use_llm_extraction = kwargs.get("use_llm_insight_extraction", True)
 -            provider = kwargs.get("provider", "mock")
@@ -421,7 +421,7 @@ index 50e5c8043..a9811c4ca 100644
 +            # exactly as "mock" does — the LLM insight path runs ONLY for a real,
 +            # explicitly-provided provider.
 +            provider = kwargs.get("provider")
- 
+
 -            if use_llm_extraction and provider not in ["mock"]:
 +            if use_llm_extraction and provider not in ["mock", None]:
                  # Use LLM to extract and analyze insights
@@ -438,7 +438,7 @@ index 50e5c8043..a9811c4ca 100644
              }
 @@ -1826,11 +1835,13 @@ Format the summary as a brief paragraph (max 200 words) that another agent can q
  Focus on actionable intelligence rather than just listing what each agent said."""
- 
+
          try:
 -            # Use the current agent's LLM configuration for summarization
 -            provider = getattr(self, "_current_provider", "mock")
@@ -448,7 +448,7 @@ index 50e5c8043..a9811c4ca 100644
 +            # falls through to the simple summary below exactly as "mock" did.
 +            provider = getattr(self, "_current_provider", None)
 +            model = getattr(self, "_current_model", None)
- 
+
 -            if provider not in ["mock"]:
 +            if provider not in ["mock", None]:
                  summary_kwargs = {
@@ -459,12 +459,12 @@ index cc9b69d5b..4359f204f 100644
 --- a/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/embedding_generator.py
 @@ -5,6 +5,8 @@ from typing import Any
- 
+
  from kailash.nodes.base import Node, NodeParameter, register_node
- 
+
 +from kaizen.config.providers import ConfigurationError
 +
- 
+
  @register_node()
  class EmbeddingGeneratorNode(Node):
 @@ -236,7 +238,13 @@ class EmbeddingGeneratorNode(Node):
@@ -485,7 +485,7 @@ index cc9b69d5b..4359f204f 100644
 @@ -253,6 +261,27 @@ class EmbeddingGeneratorNode(Node):
          timeout = kwargs.get("timeout", 60)
          max_retries = kwargs.get("max_retries", 3)
- 
+
 +        # #1952: fail loud on an unresolved provider for any embedding-PRODUCING
 +        # operation, BEFORE the try block so it propagates as a typed raise (not
 +        # a success:False dict). calculate_similarity over two SUPPLIED vectors
@@ -516,8 +516,8 @@ index 99126241a..797090063 100644
 +++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/iterative_llm_agent.py
 @@ -13,6 +13,26 @@ from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
  from kaizen.nodes.ai.llm_agent import LLMAgentNode
- 
- 
+
+
 +class SynthesisError(Exception):
 +    """Raised when the synthesis-phase LLM call genuinely fails.
 +
@@ -540,10 +540,10 @@ index 99126241a..797090063 100644
 +
  def _resolve_action_model(kwargs: dict) -> str:
      """Env-first model for the action/synthesis LLM call.
- 
+
 @@ -410,13 +430,19 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      iteration_state.end_time = time.time()
- 
+
                  except Exception as e:
 -                    iteration_state.error = str(e)
 +                    # #1953 (return/log parity): iteration_state.error flows into
@@ -555,18 +555,18 @@ index 99126241a..797090063 100644
 +                    iteration_state.error = error_msg
                      iteration_state.success = False
                      iteration_state.end_time = time.time()
- 
+
                      if enable_detailed_logging:
                          self.logger.error(
 -                            f"Iteration {iteration_num} failed: {sanitize_provider_error(e, 'iteration')}"
 +                            f"Iteration {iteration_num} failed: {error_msg}"
                          )
- 
+
                  iterations.append(iteration_state)
 @@ -453,6 +479,32 @@ class IterativeLLMAgentNode(LLMAgentNode):
                  },
              }
- 
+
 +        except SynthesisError as e:
 +            # #1953: the iterations ran, but the synthesis-phase LLM call
 +            # genuinely failed (resolved, non-mock provider). Surface
@@ -598,7 +598,7 @@ index 99126241a..797090063 100644
                  "success": False,
 @@ -553,15 +605,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                  )
- 
+
              except Exception as e:
 +                # #1953 (return/log parity): this "error" flows into the returned
 +                # iterations[].discoveries array via to_dict(); sanitize ONCE and
@@ -621,7 +621,7 @@ index 99126241a..797090063 100644
                      }
 @@ -847,15 +904,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      )
- 
+
              except Exception as e:
 +                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
 +                # error flows into the user-visible execution_results dict; a
@@ -640,7 +640,7 @@ index 99126241a..797090063 100644
 -                execution_results["errors"].append(str(e))
 +                execution_results["errors"].append(error_msg)
                  execution_results["success"] = False
- 
+
              return execution_results
 @@ -910,9 +972,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                                  "tool_outputs", {}
@@ -657,7 +657,7 @@ index 99126241a..797090063 100644
                      execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
 @@ -920,15 +982,20 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      )
- 
+
              except Exception as e:
 +                # #1953 (defense-in-depth parity with the L438/1120/1852 folds):
 +                # error flows into the user-visible execution_results dict; a
@@ -676,7 +676,7 @@ index 99126241a..797090063 100644
 -                execution_results["errors"].append(str(e))
 +                execution_results["errors"].append(error_msg)
                  execution_results["success"] = False
- 
+
          return execution_results
 @@ -1057,10 +1124,14 @@ class IterativeLLMAgentNode(LLMAgentNode):
                      )
@@ -693,11 +693,11 @@ index 99126241a..797090063 100644
 -                step_result["output"] = f"Error executing {action}: {str(e)}"
 +                step_result["output"] = f"Error executing {action}: {error_msg}"
                  step_result["success"] = False
- 
+
          step_result["duration"] = time.time() - start_time
 @@ -1537,9 +1608,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                  improvement = current_score - previous_score
- 
+
                  diminishing_returns = improvement < min_improvement
 -                convergence_result["criteria_met"]["diminishing_returns"] = (
 -                    diminishing_returns
@@ -705,7 +705,7 @@ index 99126241a..797090063 100644
 +                convergence_result["criteria_met"][
 +                    "diminishing_returns"
 +                ] = diminishing_returns
- 
+
                  # Only stop for diminishing returns if we already have decent confidence
                  if (
 @@ -1654,7 +1725,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
@@ -714,13 +714,13 @@ index 99126241a..797090063 100644
                              f"custom_{criterion_name}"
 -                        ] = criterion_score > 0.5
 +                        ] = (criterion_score > 0.5)
- 
+
                      except Exception as e:
                          self.logger.warning(
 @@ -1754,6 +1825,7 @@ provide your best analysis of the query directly.""",
              },
          ]
- 
+
 +        synthesis_error: str | None = None
          try:
              # Use the parent's LLM capabilities to generate synthesis
@@ -763,12 +763,12 @@ index 99126241a..797090063 100644
 +        # success=True would mask a real LLM failure (#1953 error-masking class;
 +        # consistent with the #1947 fabricated-content-as-real guard above).
          synthesis = f"## Analysis Results for: {user_query}\n\n"
- 
+
          if all_results:
 @@ -1793,7 +1887,12 @@ provide your best analysis of the query directly.""",
              f"- {successful_iterations}/{len(iterations)} iterations successful\n\n"
          )
- 
+
 -        return synthesis
 +        # #1953: surface the synthesis failure to run() (success=False) with the
 +        # degraded process-report attached — never return it as final_response.
@@ -776,7 +776,7 @@ index 99126241a..797090063 100644
 +            synthesis_error or "synthesis LLM call failed",
 +            degraded_report=synthesis,
 +        )
- 
+
      def _update_global_discoveries(
          self, global_discoveries: dict[str, Any], new_discoveries: dict[str, Any]
 diff --git a/packages/kailash-kaizen/src/kaizen/signatures/core.py b/packages/kailash-kaizen/src/kaizen/signatures/core.py
@@ -801,7 +801,7 @@ index d1f7b5e35..fe376f10e 100644
 +++ b/packages/kailash-kaizen/tests/conftest.py
 @@ -23,6 +23,16 @@ from pathlib import Path
  use_real_providers = os.getenv("USE_REAL_PROVIDERS", "").lower() == "true"
- 
+
  if not use_real_providers:
 +    # #1952: the unit suite runs deliberately keyless (the package-root
 +    # cost-guard scrubs provider secrets) and relies on the mock provider

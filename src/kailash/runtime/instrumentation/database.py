@@ -141,7 +141,9 @@ class DatabaseInstrumentor:
                 tracer.end_span(span, error=exc)
                 raise
 
-        wrapper.__name__ = original.__name__ if hasattr(original, "__name__") else method_name
+        wrapper.__name__ = (
+            original.__name__ if hasattr(original, "__name__") else method_name
+        )
         wrapper.__qualname__ = getattr(original, "__qualname__", method_name)
         return wrapper
 

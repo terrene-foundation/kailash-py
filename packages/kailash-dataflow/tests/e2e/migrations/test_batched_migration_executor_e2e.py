@@ -10,10 +10,10 @@ import time
 from typing import Any, Dict, List
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.migrations.auto_migration_system import AutoMigrationSystem
 from dataflow.migrations.batched_migration_executor import BatchedMigrationExecutor
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -43,7 +43,7 @@ class TestBatchedMigrationExecutorE2E:
             for table in test_tables:
                 try:
                     await conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
-                except:
+                except Exception:
                     pass
 
         yield db
@@ -53,7 +53,7 @@ class TestBatchedMigrationExecutorE2E:
             for table in test_tables:
                 try:
                     await conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
-                except:
+                except Exception:
                     pass
 
     @pytest.mark.asyncio

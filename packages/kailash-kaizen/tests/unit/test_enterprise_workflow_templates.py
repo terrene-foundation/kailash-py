@@ -28,6 +28,7 @@ from unittest.mock import patch
 
 # Import framework components
 import pytest
+
 from kaizen.core.framework import Kaizen
 
 # Test markers

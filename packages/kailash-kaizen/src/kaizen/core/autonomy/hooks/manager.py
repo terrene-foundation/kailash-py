@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 import anyio
+
 from kaizen.utils.credential_scrub import scrub_remote_error
 
 from .protocol import BaseHook, HookHandler

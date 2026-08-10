@@ -6,6 +6,7 @@ Tier 1 tests - tests middleware configuration and route matching.
 from unittest.mock import MagicMock
 
 import pytest
+
 from nexus.auth.rate_limit.config import RateLimitConfig
 from nexus.auth.rate_limit.middleware import RateLimitMiddleware
 

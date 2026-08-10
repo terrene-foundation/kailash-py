@@ -24,7 +24,7 @@ def example_1_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pattern = create_debate_pattern(model="gpt-4o-mini", temperature=0.7)
+    _pattern = create_debate_pattern(model="gpt-4o-mini", temperature=0.7)
 
     print("✓ Pattern created with custom model")
     print("  Model: gpt-4")
@@ -39,7 +39,7 @@ def example_2_separate_configs():
 
     # Proponent and Opponent use GPT-4 (better arguments)
     # Judge uses GPT-4 (better judgment)
-    pattern = create_debate_pattern(
+    _pattern = create_debate_pattern(
         proponent_config={
             "model": "gpt-4o-mini",
             "temperature": 0.7,  # Creative arguments
@@ -75,7 +75,7 @@ def example_3_environment_variables():
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
     # Create pattern - will use environment variables
-    pattern = create_debate_pattern()
+    _pattern = create_debate_pattern()
 
     print("✓ Pattern created using environment variables")
     print(f"  KAIZEN_MODEL: {os.environ.get('KAIZEN_MODEL')}")
@@ -143,7 +143,9 @@ def example_6_complete_workflow():
     print("-" * 70)
 
     # Create pattern with optimal config
-    pattern = create_debate_pattern(model="gpt-4o-mini", temperature=0.7, max_tokens=2000)
+    pattern = create_debate_pattern(
+        model="gpt-4o-mini", temperature=0.7, max_tokens=2000
+    )
 
     # Run debate
     topic = "Should AI development be open source or proprietary?"

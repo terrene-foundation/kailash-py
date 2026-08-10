@@ -1,6 +1,7 @@
 """Tier 1 unit tests for data encryption system."""
 
 import pytest
+
 from kaizen.security.encryption import EncryptionProvider
 
 

@@ -220,7 +220,6 @@ class RedisNode(Node):
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
 
-
     def execute(
         self, key: Optional[str] = None, value: Optional[Any] = None, **kwargs
     ) -> Dict[str, Any]:

@@ -103,11 +103,7 @@ except ImportError:
 
 # UCAN v0.10.0 delegation tokens — uses pynacl for Ed25519 signing.
 try:
-    from kailash.trust.interop.ucan import (
-        UCAN_VERSION,
-        from_ucan,
-        to_ucan,
-    )
+    from kailash.trust.interop.ucan import UCAN_VERSION, from_ucan, to_ucan
 
     __all__ += [
         "UCAN_VERSION",

@@ -19,7 +19,6 @@ from kailash.trust.esa import (
     SystemType,
 )
 from kailash.trust.operations import CapabilityRequest, TrustOperations
-
 from kaizen.trust.authority import OrganizationalAuthorityRegistry
 from kaizen.trust.store import PostgresTrustStore
 

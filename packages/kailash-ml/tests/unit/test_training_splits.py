@@ -6,9 +6,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-
 from kailash_ml.engines.training_pipeline import EvalSpec, TrainingPipeline
-
 
 # ---------------------------------------------------------------------------
 # Helpers

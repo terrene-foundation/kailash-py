@@ -8,6 +8,7 @@ Tests cover:
 """
 
 import pytest
+
 from kailash.trust.signing.crypto import NACL_AVAILABLE
 
 # Skip crypto tests if PyNaCl not available

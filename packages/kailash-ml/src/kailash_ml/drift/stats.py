@@ -27,7 +27,6 @@ from typing import Optional
 
 import numpy as np
 import polars as pl
-
 from kailash_ml.errors import ZeroVarianceReferenceError
 
 __all__ = [

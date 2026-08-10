@@ -20,6 +20,7 @@ Time to run: ~1 minute
 from dataclasses import dataclass
 
 import anyio
+
 from kaizen.core.autonomy.control.protocol import ControlProtocol
 from kaizen.core.autonomy.control.transports import CLITransport
 from kaizen.core.base_agent import BaseAgent

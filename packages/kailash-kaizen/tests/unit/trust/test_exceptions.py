@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import pytest
+
 from kailash.trust.exceptions import (
     AgentAlreadyEstablishedError,
     AuthorityInactiveError,

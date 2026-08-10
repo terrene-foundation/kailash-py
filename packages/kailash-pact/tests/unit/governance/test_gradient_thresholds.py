@@ -9,8 +9,6 @@ TODO-03: check_gradient_dereliction() for rubber-stamping detection.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from kailash.trust.pact.config import (
@@ -24,7 +22,6 @@ from kailash.trust.pact.envelopes import (
     RoleEnvelope,
     check_gradient_dereliction,
 )
-
 
 # ---------------------------------------------------------------------------
 # TODO-02: DimensionThresholds validation

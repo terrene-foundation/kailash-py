@@ -15,6 +15,7 @@ not SUPERVISED (autonomy_level=3).  This module validates:
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransitionRequest,

@@ -20,6 +20,7 @@ from __future__ import annotations
 from urllib.parse import unquote, urlparse
 
 import pytest
+
 from kailash.config.database_config import (
     AsyncDatabaseConfigBuilder,
     DatabaseConfigBuilder,

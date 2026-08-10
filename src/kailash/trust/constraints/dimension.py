@@ -323,7 +323,9 @@ class ConstraintDimension(ABC):
                 },
             )
         except (TypeError, ValueError) as e:
-            raise ValueError(f"Cannot compose non-numeric constraints for dimension {self.name}: {e}")
+            raise ValueError(
+                f"Cannot compose non-numeric constraints for dimension {self.name}: {e}"
+            )
 
 
 class ConstraintDimensionRegistry:

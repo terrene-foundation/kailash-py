@@ -8,8 +8,9 @@ Demonstrates usage with Ollama vision models.
 import os
 
 import pytest
-from kaizen.signatures.multi_modal import AudioField, ImageField, MultiModalSignature
 from PIL import Image
+
+from kaizen.signatures.multi_modal import AudioField, ImageField, MultiModalSignature
 
 
 class TestMultiModalIntegration:

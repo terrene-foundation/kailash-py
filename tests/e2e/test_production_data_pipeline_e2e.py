@@ -271,7 +271,7 @@ class TestProductionDataPipeline:
                                 record["total"] = float(record["quantity"]) * float(
                                     record["price"]
                                 )
-                            except:
+                            except (ValueError, TypeError):
                                 record["total"] = 0
 
                         valid_records.append(record)

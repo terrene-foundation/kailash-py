@@ -15,10 +15,10 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
 from datetime import date
 from pathlib import Path
 
+import pytest
 from spec_drift_gate import (
     BaselineEntry,
     BaselineParseError,

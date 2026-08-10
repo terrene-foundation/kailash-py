@@ -6,10 +6,10 @@ Validates that handler registration and execution works as documented.
 import asyncio
 
 import pytest
-from nexus import Nexus
 
 from kailash.nodes.handler import HandlerNode, make_handler_workflow
 from kailash.runtime import AsyncLocalRuntime
+from nexus import Nexus
 
 
 class TestGoldenPattern1Handler:

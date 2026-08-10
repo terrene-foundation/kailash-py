@@ -31,10 +31,10 @@ import uuid
 from typing import Any
 
 import pytest
-from kailash.nodes.data.async_sql import _PROCESS_POOL_REGISTRY, set_pool_defaults
 
 from dataflow import DataFlow
 from dataflow.features.transactions import TransactionScope
+from kailash.nodes.data.async_sql import _PROCESS_POOL_REGISTRY, set_pool_defaults
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 # dataflow_lifecycle: asserts GC reaping of pool-registry entries across closed

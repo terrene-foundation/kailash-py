@@ -20,7 +20,6 @@ from kailash_ml.tracking.registry import (
     ModelRegistry,
 )
 
-
 # --- ALIAS_REGEX --------------------------------------------------------
 
 

@@ -62,17 +62,13 @@ def main():
     print(f"✅ Workspace: {workspace}")
     print()
 
-    # Setup tool registry with builtin tools
+    # Tool setup: ReActAgent auto-connects to MCP servers for tool discovery
+    # (ToolRegistry-based manual registration was removed; see
+    # kaizen_agents.agents.autonomous.claude_code.ClaudeCodeAgent for the
+    # current MCP-based tool provisioning pattern).
     print("=" * 80)
-    print("PHASE 1: Tool Registry Setup")
+    print("PHASE 1: Tool Discovery (via MCP auto-connect)")
     print("=" * 80)
-    print()
-
-    tool_count = registry.count()
-    print(f"✅ Registered {tool_count} builtin tools:")
-    for tool_name in registry.get_tool_names():
-        tool = registry.get(tool_name)
-        print(f"   - {tool_name:20s} [{tool.danger_level.value:8s}] {tool.description}")
     print()
 
     # Create autonomous ReActAgent with tools
@@ -92,7 +88,7 @@ def main():
     print("✅ Created ReActAgent with configuration:")
     print("   - Model: gpt-3.5-turbo")
     print("   - Max Cycles: 10")
-    print(f"   - Tool Registry: {tool_count} tools")
+    print("   - Tools: auto-connected via MCP server")
     print("   - Convergence: Objective (while(tool_calls_exist))")
     print()
 

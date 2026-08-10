@@ -16,12 +16,12 @@ Usage:
 import asyncio
 from pathlib import Path
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.handlers import TimeoutInterruptHandler
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 
 class TaskSignature(Signature):

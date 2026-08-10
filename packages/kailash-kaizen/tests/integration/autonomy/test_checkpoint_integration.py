@@ -19,12 +19,13 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import HookEvent, HookPriority, HookResult
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 
 class SimpleTaskSignature(Signature):
@@ -229,9 +230,9 @@ async def test_resume_from_checkpoint_full_flow():
         await agent2._autonomous_loop("Continue counting")
 
         # Assert: Step number continued from checkpoint
-        assert agent2.current_step >= step_at_checkpoint, (
-            f"Should resume from step {step_at_checkpoint}"
-        )
+        assert (
+            agent2.current_step >= step_at_checkpoint
+        ), f"Should resume from step {step_at_checkpoint}"
 
 
 @pytest.mark.integration
@@ -563,9 +564,9 @@ async def test_retention_policy_deletes_old_checkpoints():
 
         # Assert: Only retention_count checkpoints remain
         checkpoints = await storage.list_checkpoints()
-        assert len(checkpoints) <= 3, (
-            f"Should keep max 3 checkpoints, found {len(checkpoints)}"
-        )
+        assert (
+            len(checkpoints) <= 3
+        ), f"Should keep max 3 checkpoints, found {len(checkpoints)}"
 
 
 @pytest.mark.integration
@@ -608,17 +609,17 @@ async def test_retention_keeps_latest():
         checkpoints = await storage.list_checkpoints()
 
         # Check that remaining checkpoints are limited by retention
-        assert len(checkpoints) <= 2, (
-            f"Should keep max 2 checkpoints, found {len(checkpoints)}"
-        )
+        assert (
+            len(checkpoints) <= 2
+        ), f"Should keep max 2 checkpoints, found {len(checkpoints)}"
 
         # If we have checkpoints, they should have reasonable step numbers
         if len(checkpoints) > 0:
             # Just verify we have some checkpoints, don't assert on exact step numbers
             # as they depend on the execution flow
-            assert all(c.step_number > 0 for c in checkpoints), (
-                "All checkpoints should have step > 0"
-            )
+            assert all(
+                c.step_number > 0 for c in checkpoints
+            ), "All checkpoints should have step > 0"
 
 
 # ═══════════════════════════════════════════════════════════════

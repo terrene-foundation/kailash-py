@@ -38,7 +38,9 @@ def example_2_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pattern = create_consensus_pattern(num_voters=3, model="gpt-4o-mini", temperature=0.7)
+    _pattern = create_consensus_pattern(
+        num_voters=3, model="gpt-4o-mini", temperature=0.7
+    )
 
     print("✓ Pattern created with custom model")
     print("  Model: gpt-4")
@@ -111,7 +113,7 @@ def example_5_environment_variables():
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
     # Create pattern - will use environment variables
-    pattern = create_consensus_pattern(num_voters=3)
+    _pattern = create_consensus_pattern(num_voters=3)
 
     print("✓ Pattern created using environment variables")
     print(f"  KAIZEN_MODEL: {os.environ.get('KAIZEN_MODEL')}")

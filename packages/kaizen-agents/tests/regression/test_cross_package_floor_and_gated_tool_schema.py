@@ -226,14 +226,14 @@ def _defines_symbol(source: str, symbol: str) -> bool:
     except SyntaxError:  # pragma: no cover - defensive
         return False
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             if node.name == symbol:
                 return True
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == symbol:
                     return True
-        elif isinstance(node, (ast.AnnAssign, ast.ImportFrom, ast.Import)):
+        elif isinstance(node, ast.AnnAssign | ast.ImportFrom | ast.Import):
             if isinstance(node, ast.AnnAssign):
                 if isinstance(node.target, ast.Name) and node.target.id == symbol:
                     return True

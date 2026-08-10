@@ -15,6 +15,10 @@ from typing import Any
 
 import pytest
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.agent import PactGovernedAgent
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -22,24 +26,16 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
+from kailash.trust.pact.context import GovernanceContext
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.store import MemoryAccessPolicyStore, MemoryClearanceStore
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.agent import PactGovernedAgent
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg
-from kailash.trust.pact.context import GovernanceContext
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.store import (
-    MemoryAccessPolicyStore,
-    MemoryClearanceStore,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -174,7 +170,7 @@ class TestFrozenFieldMutations:
             agent_context.org_id = "hacked-org"  # type: ignore[misc]
 
     def test_cannot_mutate_created_at(self, agent_context: GovernanceContext) -> None:
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         with pytest.raises(AttributeError):
             agent_context.created_at = datetime.now(UTC)  # type: ignore[misc]

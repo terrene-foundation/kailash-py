@@ -19,6 +19,7 @@ Run with:
 import os
 
 from dotenv import load_dotenv
+
 from kaizen_agents._model_env import resolve_default_model
 from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 

@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
 
 # ===========================================================================

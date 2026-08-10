@@ -13,7 +13,7 @@ def check_command_exists(command):
     try:
         subprocess.run([command, "--version"], capture_output=True, check=True)
         return True
-    except:
+    except (OSError, subprocess.CalledProcessError):
         return False
 
 
@@ -22,7 +22,7 @@ def check_docker_running():
     try:
         result = subprocess.run(["docker", "info"], capture_output=True, text=True)
         return result.returncode == 0
-    except:
+    except OSError:
         return False
 
 
@@ -36,7 +36,7 @@ def check_container_running(container_name_pattern):
             check=True,
         )
         return any(container_name_pattern in line for line in result.stdout.split("\n"))
-    except:
+    except (OSError, subprocess.CalledProcessError):
         return False
 
 
@@ -59,7 +59,7 @@ def check_postgres():
             text=True,
         )
         return result.returncode == 0
-    except:
+    except OSError:
         return False
 
 
@@ -72,7 +72,7 @@ def check_redis():
             text=True,
         )
         return "PONG" in result.stdout
-    except:
+    except OSError:
         return False
 
 
@@ -81,7 +81,7 @@ def check_ollama():
     try:
         response = requests.get("http://localhost:11435/api/tags", timeout=5)
         return response.status_code == 200
-    except:
+    except requests.exceptions.RequestException:
         return False
 
 

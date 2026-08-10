@@ -449,9 +449,9 @@ class TestWarningCountReduction:
         ]
 
         # Test that we have more debug than warning messages for informational content
-        assert len(debug_messages) >= 6, (
-            "Should have at least 6 informational messages as DEBUG"
-        )
+        assert (
+            len(debug_messages) >= 6
+        ), "Should have at least 6 informational messages as DEBUG"
 
         # The key metric: informational messages are DEBUG, actual issues are WARNING
         assert len(debug_messages) > 0
@@ -523,9 +523,9 @@ class TestMaskSensitiveValuesIntegration:
         source = inspect.getsource(nodes)
 
         # Check that mask_sensitive_values is imported
-        assert "from .logging_config import mask_sensitive_values" in source, (
-            "nodes.py should import mask_sensitive_values from logging_config"
-        )
+        assert (
+            "from .logging_config import mask_sensitive_values" in source
+        ), "nodes.py should import mask_sensitive_values from logging_config"
 
     def test_mask_sensitive_values_imported_in_engine(self):
         """Verify engine.py imports mask_sensitive_values."""
@@ -536,9 +536,9 @@ class TestMaskSensitiveValuesIntegration:
         source = inspect.getsource(engine)
 
         # Check that mask_sensitive_values is imported
-        assert "from .logging_config import mask_sensitive_values" in source, (
-            "engine.py should import mask_sensitive_values from logging_config"
-        )
+        assert (
+            "from .logging_config import mask_sensitive_values" in source
+        ), "engine.py should import mask_sensitive_values from logging_config"
 
     def test_connection_string_masking_in_node_logs(self):
         """Verify connection strings are masked when logged in nodes."""

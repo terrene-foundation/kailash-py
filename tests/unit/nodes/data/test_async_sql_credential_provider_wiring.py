@@ -24,11 +24,7 @@ from typing import List
 
 import pytest
 
-from kailash.nodes.data.async_sql import (
-    DatabaseConfig,
-    DatabaseType,
-    PostgreSQLAdapter,
-)
+from kailash.nodes.data.async_sql import DatabaseConfig, DatabaseType, PostgreSQLAdapter
 
 
 class RotatingTokenProvider:

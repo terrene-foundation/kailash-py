@@ -13,6 +13,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from kaizen.providers.document.base_provider import ExtractionResult
 from kaizen.providers.document.openai_vision_provider import OpenAIVisionProvider
 

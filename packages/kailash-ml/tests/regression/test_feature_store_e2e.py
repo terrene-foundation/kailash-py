@@ -83,8 +83,7 @@ except ImportError as exc:
         allow_module_level=True,
     )
 
-from dataflow import DataFlow  # noqa: E402
-from kailash_ml.errors import FeatureStoreError, TenantRequiredError  # noqa: E402
+from kailash_ml.errors import TenantRequiredError  # noqa: E402
 from kailash_ml.features import (  # noqa: E402
     CANONICAL_SINGLE_TENANT_SENTINEL,
     FeatureField,
@@ -92,6 +91,7 @@ from kailash_ml.features import (  # noqa: E402
     FeatureStore,
 )
 
+from dataflow import DataFlow  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures — real DataFlow + real Postgres

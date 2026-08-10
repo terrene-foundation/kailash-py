@@ -18,7 +18,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
 from kaizen.nodes._optional import require_numpy
 
 from .a2a import A2AAgentCard

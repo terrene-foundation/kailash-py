@@ -19,8 +19,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kailash.trust.cache import CacheStats, TrustChainCache
 
+from kailash.trust.cache import CacheStats, TrustChainCache
 from kaizen.trust import (
     AuthorityType,
     CapabilityAttestation,

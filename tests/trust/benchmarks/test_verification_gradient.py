@@ -27,7 +27,9 @@ import pytest
 # Skip entire module if pytest-benchmark is not installed
 pytest.importorskip("pytest_benchmark")
 
-from kailash.trust.chain import (
+# Deliberately after the importorskip guard above — noqa: E402 is the guard,
+# not an oversight.
+from kailash.trust.chain import (  # noqa: E402
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -35,9 +37,12 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.constraint_validator import ConstraintValidator
-from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
-
+from kailash.trust.constraint_validator import ConstraintValidator  # noqa: E402
+from kailash.trust.signing.crypto import (  # noqa: E402
+    generate_keypair,
+    sign,
+    verify_signature,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers — build chains with real Ed25519 signatures

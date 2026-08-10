@@ -48,8 +48,8 @@ from collections.abc import AsyncGenerator, Callable
 from typing import TYPE_CHECKING, Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.events import (
     BudgetExhausted,

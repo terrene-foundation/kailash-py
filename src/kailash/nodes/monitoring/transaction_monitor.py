@@ -901,7 +901,8 @@ class TransactionMonitorNode(AsyncNode):
         recent_traces = [
             trace
             for trace in self._active_traces.values()
-            if current_time - trace.get("start_time", 0) < 300  # Last 5 minutes  # type: ignore[reportAttributeAccessIssue]
+            if current_time - trace.get("start_time", 0)
+            < 300  # Last 5 minutes  # type: ignore[reportAttributeAccessIssue]
         ]
 
         status_info = {

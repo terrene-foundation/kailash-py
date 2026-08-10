@@ -17,10 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from nexus.service_client import (
-    ServiceClient,
-    ServiceClientHttpStatusError,
-)
+from nexus.service_client import ServiceClient, ServiceClientHttpStatusError
 
 
 @pytest.fixture

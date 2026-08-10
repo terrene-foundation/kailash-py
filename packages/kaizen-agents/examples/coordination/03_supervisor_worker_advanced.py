@@ -14,8 +14,8 @@ Learning Objectives:
 Estimated time: 10 minutes
 """
 
-from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 from kaizen.memory import SharedMemoryPool
+from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
 
 def simulate_worker_failure(worker, task):

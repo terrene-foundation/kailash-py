@@ -323,6 +323,24 @@ known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 # Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /
 # `black .` skips them too. Without this, `black --check .` can never exit 0 (#1995).
 extend_skip_glob = ["*/docs/development/templates/*"]
+# `src_paths` MUST be explicit in this monorepo. Left unset, isort infers
+# first-party membership from the batch of files it is handed — so
+# `pre-commit run --all-files` and the commit-time hook (which sees only staged
+# files) classified the SAME import differently, and each re-grouped what the
+# other had just written. That non-determinism, not a one-off drift, is why the
+# repo sat at ~2,000 permanently-modified files for four cycles (#1995).
+src_paths = [
+    "src",
+    "tests",
+    "packages/kailash-align/src",
+    "packages/kailash-dataflow/src",
+    "packages/kailash-kaizen/src",
+    "packages/kailash-mcp/src",
+    "packages/kailash-ml/src",
+    "packages/kailash-nexus/src",
+    "packages/kailash-pact/src",
+    "packages/kaizen-agents/src",
+]
 
 [tool.black]
 line-length = 88
@@ -333,6 +351,16 @@ extend-exclude = '''
   | examples/outputs
   | _build
   | docs/development/templates
+)/
+'''
+# `extend-exclude` is IGNORED for paths passed explicitly on the command line,
+# which is exactly how pre-commit invokes black — so the scaffold templates
+# (not valid Python; they carry `{Placeholder}` substitution tokens) still
+# reached the parser and failed the hook with exit 123. `force-exclude` is the
+# only form black honours for explicit file arguments (#1995).
+force-exclude = '''
+/(
+    docs/development/templates
 )/
 '''
 

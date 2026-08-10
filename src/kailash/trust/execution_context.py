@@ -156,7 +156,9 @@ class ExecutionContext:
     constraints: Dict[str, Any] = field(default_factory=dict)
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-    def _validate_constraint_tightening(self, additional_constraints: Dict[str, Any]) -> None:
+    def _validate_constraint_tightening(
+        self, additional_constraints: Dict[str, Any]
+    ) -> None:
         """
         Validate that additional constraints only tighten, never loosen.
 
@@ -180,7 +182,9 @@ class ExecutionContext:
 
             old_value = self.constraints[key]
 
-            if isinstance(old_value, (int, float)) and isinstance(new_value, (int, float)):
+            if isinstance(old_value, (int, float)) and isinstance(
+                new_value, (int, float)
+            ):
                 if new_value > old_value:
                     raise ConstraintViolationError(
                         f"Cannot loosen numeric constraint '{key}': "
@@ -316,7 +320,9 @@ class ExecutionContext:
 
     def __str__(self) -> str:
         """Return human-readable representation."""
-        chain_str = " -> ".join(self.delegation_chain) if self.delegation_chain else "[]"
+        chain_str = (
+            " -> ".join(self.delegation_chain) if self.delegation_chain else "[]"
+        )
         return f"ExecutionContext(human={self.human_origin.human_id}, chain={chain_str}, depth={self.delegation_depth})"
 
 
@@ -326,7 +332,9 @@ class ExecutionContext:
 
 # Context variable for async-safe propagation
 # Using ContextVar ensures each async task has its own isolated context
-_execution_context: ContextVar[Optional[ExecutionContext]] = ContextVar("execution_context", default=None)
+_execution_context: ContextVar[Optional[ExecutionContext]] = ContextVar(
+    "execution_context", default=None
+)
 
 
 def get_current_context() -> Optional[ExecutionContext]:

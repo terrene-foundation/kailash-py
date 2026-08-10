@@ -18,7 +18,6 @@ import pytest
 # Import integration components with conditional import
 try:
     from dataflow import DataFlow
-
     from kaizen_agents.integrations.dataflow import (
         DATAFLOW_AVAILABLE,
         DataQualityAgent,

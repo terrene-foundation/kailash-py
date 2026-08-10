@@ -31,10 +31,9 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from dataflow import DataFlow
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks import (
     BaseHook,
     HookContext,
@@ -46,6 +45,7 @@ from kaizen.memory.backends.dataflow_backend import DataFlowBackend
 from kaizen.memory.persistent_buffer import PersistentBufferMemory
 from kaizen.memory.tiers import HotMemoryTier
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Configure logging
 logging.basicConfig(
@@ -64,7 +64,7 @@ class ResearchSignature(Signature):
     confidence: float = OutputField(
         description="Confidence score 0-1 for finding quality"
     )
-    sources: List[str] = OutputField(description="List of sources cited")
+    sources: list[str] = OutputField(description="List of sources cited")
 
 
 class MemoryAccessHook(BaseHook):
@@ -79,7 +79,7 @@ class MemoryAccessHook(BaseHook):
 
     def __init__(self):
         super().__init__(name="memory_access_hook")
-        self.access_log: List[Dict[str, Any]] = []
+        self.access_log: list[dict[str, Any]] = []
         self.stats = {
             "hot_tier_accesses": 0,
             "warm_tier_accesses": 0,
@@ -87,7 +87,7 @@ class MemoryAccessHook(BaseHook):
             "total_access_time_ms": 0.0,
         }
 
-    def supported_events(self) -> List[HookEvent]:
+    def supported_events(self) -> list[HookEvent]:
         """Hook into post-agent loop to track memory access."""
         return [HookEvent.POST_AGENT_LOOP]
 
@@ -126,7 +126,7 @@ class MemoryAccessHook(BaseHook):
             logger.error(f"Failed to log memory access: {e}")
             return HookResult(success=False, error=str(e))
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get memory access summary statistics."""
         total_accesses = (
             self.stats["hot_tier_accesses"]
@@ -237,7 +237,7 @@ class LongRunningResearchAgent(BaseAutonomousAgent):
             "Configured 3-tier memory: Hot (100 items, <1ms) | Warm (500 turns, <10ms) | Cold (unlimited, <100ms)"
         )
 
-    async def research_query(self, query: str) -> Dict[str, Any]:
+    async def research_query(self, query: str) -> dict[str, Any]:
         """
         Execute research query with 3-tier memory.
 
@@ -358,7 +358,7 @@ class LongRunningResearchAgent(BaseAutonomousAgent):
                 "sources": [],
             }
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """Get comprehensive memory statistics across all tiers."""
         hot_stats = self.hot_memory.get_stats()
         warm_stats = self.warm_memory.get_stats()

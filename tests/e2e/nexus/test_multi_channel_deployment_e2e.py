@@ -7,9 +7,9 @@ Validates end-to-end integration of all stub fixes.
 import asyncio
 
 import pytest
-from nexus import Nexus
 
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 @pytest.mark.e2e
@@ -381,9 +381,9 @@ class TestResourceSystemE2E:
 
         E2E Test: Validates resource system end-to-end.
         """
-        from nexus.resources import NexusResourceManager
-
         from kailash_mcp import MCPServer
+
+        from nexus.resources import NexusResourceManager
 
         nexus = Nexus(
             api_port=8016,
@@ -433,9 +433,9 @@ class TestResourceSystemE2E:
 
         E2E Test: Validates documentation resource endpoints.
         """
-        from nexus.resources import NexusResourceManager
-
         from kailash_mcp import MCPServer
+
+        from nexus.resources import NexusResourceManager
 
         nexus = Nexus(auto_discovery=False, enable_durability=False)
 

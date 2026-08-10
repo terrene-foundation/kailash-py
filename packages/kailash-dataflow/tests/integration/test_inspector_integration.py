@@ -12,9 +12,9 @@ Tests cover:
 """
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.platform.inspector import Inspector
-
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

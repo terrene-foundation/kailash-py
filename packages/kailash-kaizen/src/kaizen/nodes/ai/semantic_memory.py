@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 import aiohttp
-from kailash.nodes.base import Node, NodeParameter, register_node
 
+from kailash.nodes.base import Node, NodeParameter, register_node
 from kaizen.nodes._optional import require_numpy
 
 if TYPE_CHECKING:

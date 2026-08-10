@@ -25,7 +25,6 @@ from typing import Any
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Pattern 1: validate_id() rejects path traversal
 # ---------------------------------------------------------------------------
@@ -387,10 +386,7 @@ class TestPattern7MonotonicEscalation:
 
     def test_delegation_revocation_is_irreversible(self, tmp_path: Path) -> None:
         """A revoked delegate cannot be re-activated (monotonic status)."""
-        from kailash.trust.plane.delegation import (
-            DelegateStatus,
-            DelegationManager,
-        )
+        from kailash.trust.plane.delegation import DelegateStatus, DelegationManager
 
         trust_dir = tmp_path / "trust-plane"
         trust_dir.mkdir()
@@ -484,9 +480,9 @@ class TestPattern8HmacCompareDigest:
 
         # Recovery should detect the tamper and NOT revoke
         recovered = mgr.recover_pending_revocations()
-        assert recovered == [], (
-            "Tampered WAL should be rejected; no delegates should be revoked"
-        )
+        assert (
+            recovered == []
+        ), "Tampered WAL should be rejected; no delegates should be revoked"
 
 
 # ---------------------------------------------------------------------------

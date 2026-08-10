@@ -12,13 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from kaizen.llm.auth.azure import (
-    AzureEntra,
-    CachedToken,
-    COGNITIVE_SERVICES_SCOPE,
-)
+from kaizen.llm.auth.azure import COGNITIVE_SERVICES_SCOPE, AzureEntra, CachedToken
 from kaizen.llm.errors import AuthError
-
 
 # ---------------------------------------------------------------------------
 # Construction shape + mutual exclusivity

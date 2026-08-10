@@ -24,7 +24,6 @@ import re
 
 from kaizen.llm.errors import ModelGrammarInvalid
 
-
 # Azure deployment-name allowlist: letters, digits, underscore, hyphen.
 # Length 1-64 matches Azure's documented constraint. Deliberately rejects
 # CRLF, control chars, spaces, unicode, and any URL-special char that

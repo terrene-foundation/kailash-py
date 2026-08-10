@@ -25,13 +25,13 @@ import asyncio
 import logging
 import threading
 import warnings
-
-from dataflow.core.exceptions import (
-    sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from typing import Any, AsyncGenerator, Callable, Dict, Iterator, List, Optional
+
+from dataflow.core.exceptions import (  # Issue #1552: redact driver-error VALUES
+    sanitize_db_error,
+)
 
 logger = logging.getLogger(__name__)
 

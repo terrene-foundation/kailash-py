@@ -16,6 +16,7 @@ from collections import deque
 
 import pytest
 from fastapi.testclient import TestClient
+
 from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 from nexus.events import EventBus

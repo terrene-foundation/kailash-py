@@ -948,8 +948,8 @@ class AuthManager:
         """
         result = self.provider.authenticate(credentials)
         if inspect.isawaitable(result):
-            # An async provider reached the SYNC auth path. Fail CLOSED with a
-            # typed AuthenticationError rather than letting the un-awaited
+            # An async provider reached the SYNC auth path. Fail CLOSED with a typed
+            # AuthenticationError rather than letting the un-awaited
             # coroutine leak downstream into an opaque AttributeError -> 500.
             # Close the coroutine so no "was never awaited" RuntimeWarning
             # fires at GC.

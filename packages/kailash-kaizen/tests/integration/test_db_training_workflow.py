@@ -132,7 +132,9 @@ class TestDBTrainingWorkflow:
 
     def test_pipeline_automation_workflow(self, real_db):
         """Test automated training and deployment pipeline."""
-        from kaizen_agents.integrations.dataflow.db_driven_ai import PipelineOrchestrator
+        from kaizen_agents.integrations.dataflow.db_driven_ai import (
+            PipelineOrchestrator,
+        )
 
         config = RealConfig()
         orchestrator = PipelineOrchestrator(config=config, db=real_db)
@@ -200,7 +202,6 @@ class TestLLMIntegration:
     def test_llm_feature_recommendation(self):
         """Test LLM recommending features from database schema."""
         from dataflow import DataFlow
-
         from kaizen_agents.integrations.dataflow.db_driven_ai import DBTrainingPipeline
 
         db = DataFlow("sqlite:///:memory:")

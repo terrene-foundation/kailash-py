@@ -30,7 +30,6 @@ import sys
 from datetime import datetime
 
 from dataflow import DataFlow
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

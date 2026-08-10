@@ -72,10 +72,8 @@ from typing import Any, Optional
 
 from kailash.diagnostics.protocols import (
     JudgeCallable,  # re-exported for downstream consumers
-    JudgeInput,
-    JudgeResult,
-    JudgeWinner,
 )
+from kailash.diagnostics.protocols import JudgeInput, JudgeResult, JudgeWinner
 from kaizen.cost.tracker import CostTracker
 from kaizen.signatures import InputField, OutputField, Signature
 

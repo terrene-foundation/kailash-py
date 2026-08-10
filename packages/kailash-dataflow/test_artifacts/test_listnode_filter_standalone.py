@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -319,11 +318,11 @@ def main():
 
     print(f"\nTotal: {passed}/{total} tests passed")
 
-    # Cleanup
+    # Cleanup — best-effort; files may already be gone or dir non-empty
     try:
         os.remove(db_path)
         os.rmdir(temp_dir)
-    except:
+    except OSError:
         pass
 
     # Exit with appropriate code

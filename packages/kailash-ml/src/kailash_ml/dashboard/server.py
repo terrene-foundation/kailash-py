@@ -443,9 +443,10 @@ class DashboardApp:
 
     async def initialize(self) -> None:
         """Initialize database connection, engines, and Starlette app."""
-        from kailash.db.connection import ConnectionManager
         from kailash_ml.engines.experiment_tracker import ExperimentTracker
         from kailash_ml.engines.model_registry import ModelRegistry
+
+        from kailash.db.connection import ConnectionManager
 
         self._conn = ConnectionManager(self._db_url)
         await self._conn.initialize()

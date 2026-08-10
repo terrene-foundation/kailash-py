@@ -198,7 +198,7 @@ class TestConnectionPoolIntegration:
                             "query": "SELECT * FROM nonexistent_table",
                         }
                     )
-                except:
+                except Exception:
                     pass  # Expected to fail
 
             # Check connection health degraded

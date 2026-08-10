@@ -7,19 +7,19 @@ These tests verify both features work correctly together and don't regress.
 """
 
 import asyncio
-import re
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime, LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 # Ensure we import from our local src directory
 from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 # Test database URL — default points at the shared SDK test infrastructure
 # (postgres:15 running on host port 5434, database "kailash_test").

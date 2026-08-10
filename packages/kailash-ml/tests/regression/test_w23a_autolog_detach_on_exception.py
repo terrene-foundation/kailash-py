@@ -19,8 +19,6 @@ from typing import Any, List
 from unittest.mock import patch
 
 import pytest
-
-from kailash.ml.errors import AutologDetachError
 from kailash_ml.autolog import (
     AutologConfig,
     FrameworkIntegration,
@@ -28,6 +26,8 @@ from kailash_ml.autolog import (
     register_integration,
     unregister_integration,
 )
+
+from kailash.ml.errors import AutologDetachError
 
 
 class _ObservableIntegration(FrameworkIntegration):

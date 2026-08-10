@@ -8,7 +8,6 @@ import pytest
 
 from kaizen.l3.context.projection import ScopeProjection
 
-
 # ---------------------------------------------------------------------------
 # Single-star matching: exactly one dot-segment
 # ---------------------------------------------------------------------------

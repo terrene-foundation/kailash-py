@@ -16,8 +16,8 @@ import warnings
 
 import pytest
 
-from kailash.runtime.local import LocalRuntime
 from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 
 # ---------------------------------------------------------------------------
@@ -27,8 +27,8 @@ class TestCLIChannelRuntimeInjection:
     """Test CLIChannel accepts and manages an injected runtime."""
 
     def _make_channel(self, runtime=None):
-        from kailash.channels.cli_channel import CLIChannel
         from kailash.channels.base import ChannelConfig, ChannelType
+        from kailash.channels.cli_channel import CLIChannel
 
         config = ChannelConfig(
             name="test-cli",
@@ -84,8 +84,8 @@ class TestMCPChannelRuntimeInjection:
     """Test MCPChannel accepts and manages an injected runtime."""
 
     def _make_channel(self, runtime=None):
-        from kailash.channels.mcp_channel import MCPChannel
         from kailash.channels.base import ChannelConfig, ChannelType
+        from kailash.channels.mcp_channel import MCPChannel
 
         config = ChannelConfig(
             name="test-mcp",

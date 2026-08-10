@@ -36,9 +36,9 @@ from __future__ import annotations
 import time
 
 import pytest
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
 from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]

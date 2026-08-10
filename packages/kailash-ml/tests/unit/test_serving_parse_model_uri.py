@@ -10,7 +10,6 @@ ModelRegistry alias. The parser converts the three supported URI forms
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.serving import parse_model_uri
 
 

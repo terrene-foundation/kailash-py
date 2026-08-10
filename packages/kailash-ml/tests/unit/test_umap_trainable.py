@@ -18,11 +18,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import kailash_ml
 import numpy as np
 import polars as pl
 import pytest
-
-import kailash_ml
 from kailash_ml import UMAPTrainable
 from kailash_ml.trainable import TrainingContext
 

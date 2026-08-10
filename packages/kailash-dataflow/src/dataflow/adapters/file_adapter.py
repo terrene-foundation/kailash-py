@@ -440,8 +440,8 @@ class FileSourceAdapter(BaseSourceAdapter):
             return
 
         try:
-            from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
         except ImportError:
             logger.warning(
                 "watchdog is not installed — file watching disabled for '%s'. "

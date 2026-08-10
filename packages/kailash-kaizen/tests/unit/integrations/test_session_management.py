@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from time import sleep
 
 import pytest
+
 from kaizen.integrations.nexus import NEXUS_AVAILABLE
 
 if not NEXUS_AVAILABLE:

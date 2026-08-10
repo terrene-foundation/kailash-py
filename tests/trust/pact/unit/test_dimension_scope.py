@@ -15,11 +15,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kailash.trust.chain import (
-    ALL_DIMENSIONS,
-    VALID_DIMENSION_NAMES,
-    DelegationRecord,
-)
+from kailash.trust.chain import ALL_DIMENSIONS, VALID_DIMENSION_NAMES, DelegationRecord
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -30,7 +26,6 @@ from kailash.trust.pact.config import (
     TemporalConstraintConfig,
 )
 from kailash.trust.pact.envelopes import intersect_envelopes
-
 
 # ---------------------------------------------------------------------------
 # Helpers

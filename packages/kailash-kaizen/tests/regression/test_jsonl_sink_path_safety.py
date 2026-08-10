@@ -25,9 +25,7 @@ from pathlib import Path
 import pytest
 
 from kailash.diagnostics.protocols import TraceEvent, TraceEventType
-
 from kaizen.observability import JsonlSink
-
 
 pytestmark = pytest.mark.regression
 

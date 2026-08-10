@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from typing import Any, List, Tuple
 
-from sklearn.pipeline import FeatureUnion as _SKFeatureUnion
-
 from kailash_ml.estimators._protocol import check_transformer_step
+from sklearn.pipeline import FeatureUnion as _SKFeatureUnion
 
 __all__ = ["FeatureUnion"]
 
@@ -37,7 +36,9 @@ class FeatureUnion(_SKFeatureUnion):
                 )
             name, step = entry
             if not isinstance(name, str) or not name:
-                raise TypeError(f"FeatureUnion entry {idx} name must be a non-empty str")
+                raise TypeError(
+                    f"FeatureUnion entry {idx} name must be a non-empty str"
+                )
             check_transformer_step(name, step)
         super().__init__(
             transformer_list=transformer_list,

@@ -92,4 +92,3 @@ Used with `MultiCycleStrategy` to determine when to stop iterating:
 | `TestDrivenConvergence`   | Stop when all tests pass             |
 | `SatisfactionConvergence` | Stop when confidence threshold met   |
 | `HybridConvergence`       | Compose strategies with AND/OR logic |
-

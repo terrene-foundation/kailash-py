@@ -867,8 +867,8 @@ class TestWorkflowBuilderAdvancedFeatures:
     def test_legacy_fluent_api_raises_error(self):
         """Test that legacy fluent API raises error in v1.0."""
         try:
-            from kailash.workflow.builder import WorkflowBuilder
             from kailash.sdk_exceptions import WorkflowValidationError
+            from kailash.workflow.builder import WorkflowBuilder
 
             builder = WorkflowBuilder()
 

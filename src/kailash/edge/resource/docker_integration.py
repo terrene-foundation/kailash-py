@@ -9,9 +9,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 try:
-    from docker.types import EndpointSpec, LogConfig, RestartPolicy, UpdateConfig
-
     import docker
+    from docker.types import EndpointSpec, LogConfig, RestartPolicy, UpdateConfig
 
     DOCKER_AVAILABLE = True
 except ImportError:

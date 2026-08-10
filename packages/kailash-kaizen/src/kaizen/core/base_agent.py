@@ -32,14 +32,13 @@ from typing import Any, Dict, List, Optional
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.builder import WorkflowBuilder
 from kailash_mcp.client import MCPClient
-
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 
+from ._provider_env import detect_provider_from_env as _detect_provider
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
 from .config import BaseAgentConfig
-from ._provider_env import detect_provider_from_env as _detect_provider
 from .mcp_mixin import MCPMixin
 
 __all__ = ["BaseAgent", "BaseAgentConfig"]

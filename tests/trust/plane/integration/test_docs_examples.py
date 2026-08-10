@@ -11,8 +11,8 @@ reference modules that actually exist in the trustplane package.
 from __future__ import annotations
 
 import ast
-import re
 import importlib
+import re
 from pathlib import Path
 
 import pytest

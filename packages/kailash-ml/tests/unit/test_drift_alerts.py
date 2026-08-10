@@ -19,7 +19,6 @@ Protocol satisfied) rather than a mock — see rules/testing.md
 """
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import json
 from datetime import datetime, timedelta, timezone
@@ -35,7 +34,6 @@ from kailash_ml.drift.alerts import (
     WebhookAlertChannel,
 )
 from kailash_ml.engines.drift_monitor import DriftReport, FeatureDriftResult
-
 
 # ---------------------------------------------------------------------------
 # Test doubles — real classes satisfying the Protocol

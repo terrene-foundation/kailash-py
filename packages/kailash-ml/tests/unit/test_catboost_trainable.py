@@ -16,7 +16,6 @@ the extra is absent).
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml import CatBoostTrainable, Trainable
 
 # CatBoostTrainable raises kailash_ml._device.UnsupportedFamily — the
@@ -26,7 +25,6 @@ from kailash_ml import CatBoostTrainable, Trainable
 # Match the actual raise site.
 from kailash_ml._device import UnsupportedFamily
 from kailash_ml.trainable import TrainingContext
-
 
 # ---------------------------------------------------------------------------
 # Importability + protocol conformance

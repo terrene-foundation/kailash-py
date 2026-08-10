@@ -59,9 +59,7 @@ from kailash.trust.exceptions import (
     UnsupportedSigningPayloadVersionError,
 )
 from kailash.trust.execution_context import ExecutionContext, get_current_context
-from kailash.trust.signing.chain_state_signing import (
-    chain_state_canonical_payload_str,
-)
+from kailash.trust.signing.chain_state_signing import chain_state_canonical_payload_str
 from kailash.trust.signing.crypto import (
     hash_chain,
     serialize_for_signing,

@@ -961,7 +961,7 @@ class TestLocalRuntimeAdvancedFeatures:
                         # Execute the target immediately for testing
                         try:
                             target()
-                        except:
+                        except Exception:
                             pass
                     return (
                         original_init(**kwargs)

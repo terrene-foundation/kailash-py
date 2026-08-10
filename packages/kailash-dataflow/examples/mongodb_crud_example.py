@@ -17,9 +17,6 @@ Prerequisites:
 import asyncio
 from datetime import datetime
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
 from dataflow import DataFlow
 from dataflow.adapters import MongoDBAdapter
 from dataflow.nodes.mongodb_nodes import (
@@ -32,6 +29,8 @@ from dataflow.nodes.mongodb_nodes import (
     DocumentUpdateNode,
     MongoAggregateNode,
 )
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 async def setup_connection():

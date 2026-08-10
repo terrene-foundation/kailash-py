@@ -30,8 +30,8 @@ from typing import Any, Dict, List
 
 import pytest
 from dotenv import load_dotenv
-from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent
 
+from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import async_retry_with_backoff
 
@@ -301,17 +301,17 @@ async def test_tot_agent_exploration():
 
     # Validate paths
     paths = result["paths"]
-    assert len(paths) == config.num_paths, (
-        f"Expected {config.num_paths} paths, got {len(paths)}"
-    )
+    assert (
+        len(paths) == config.num_paths
+    ), f"Expected {config.num_paths} paths, got {len(paths)}"
 
     # Each path should have proper structure
     for i, path in enumerate(paths):
         assert "path_id" in path, f"Path {i} missing path_id"
         assert "reasoning" in path, f"Path {i} missing reasoning"
-        assert isinstance(path["reasoning"], str), (
-            f"Path {i} reasoning should be string"
-        )
+        assert isinstance(
+            path["reasoning"], str
+        ), f"Path {i} reasoning should be string"
 
         # Path should have non-empty reasoning (unless error)
         if "error" not in path:
@@ -333,9 +333,9 @@ async def test_tot_agent_exploration():
         assert "score" in evaluation, f"Evaluation {i} missing score"
         assert "path" in evaluation, f"Evaluation {i} missing path"
         score = evaluation["score"]
-        assert 0.0 <= score <= 1.0, (
-            f"Evaluation {i} score {score} out of range [0.0, 1.0]"
-        )
+        assert (
+            0.0 <= score <= 1.0
+        ), f"Evaluation {i} score {score} out of range [0.0, 1.0]"
 
     # Print evaluation scores
     print("\n✓ Path Evaluations:")
@@ -393,9 +393,9 @@ async def test_tot_agent_exploration():
     # 4. Check for parallel execution evidence (if enabled)
     if config.parallel_execution:
         # All paths should have been generated (no early termination)
-        assert len(paths) == config.num_paths, (
-            "Parallel execution should generate all paths"
-        )
+        assert (
+            len(paths) == config.num_paths
+        ), "Parallel execution should generate all paths"
         print(f"  ✓ Parallel execution: All {config.num_paths} paths generated")
 
     # 5. Validate score distribution

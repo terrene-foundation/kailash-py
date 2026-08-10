@@ -14,9 +14,8 @@ from typing import Any, Dict
 import asyncpg
 
 try:
-    from docker.errors import DockerException
-
     import docker
+    from docker.errors import DockerException
 except ImportError:
     docker = None
     DockerException = Exception  # Fallback for when Docker is not installed

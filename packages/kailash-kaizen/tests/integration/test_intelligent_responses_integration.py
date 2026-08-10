@@ -11,6 +11,7 @@ import os
 import time
 
 import pytest
+
 from kaizen import Kaizen
 
 
@@ -69,20 +70,20 @@ class TestRealLLMProviderIntegration:
         assert len(answer.strip()) > 0, "Answer cannot be empty"
 
         # CRITICAL: Must NOT be template response
-        assert not answer.startswith("I understand you want me to work with"), (
-            f"Real LLM returned template instead of intelligence: {answer}"
-        )
+        assert not answer.startswith(
+            "I understand you want me to work with"
+        ), f"Real LLM returned template instead of intelligence: {answer}"
 
         # Must contain intelligent knowledge
-        assert "Paris" in answer, (
-            f"Real LLM must know Paris is capital of France: {answer}"
-        )
+        assert (
+            "Paris" in answer
+        ), f"Real LLM must know Paris is capital of France: {answer}"
 
         # Should be reasonably concise for simple question
         word_count = len(answer.split())
-        assert 1 <= word_count <= 50, (
-            f"Simple answer should be concise, got {word_count} words: {answer}"
-        )
+        assert (
+            1 <= word_count <= 50
+        ), f"Simple answer should be concise, got {word_count} words: {answer}"
 
     @pytest.mark.requires_real_llm
     def test_real_llm_mathematical_reasoning(self, real_llm_config):
@@ -106,9 +107,9 @@ class TestRealLLMProviderIntegration:
         answer = result["answer"]
 
         # Must NOT be template responses
-        assert not calculation.startswith("I understand"), (
-            f"Calculation is template: {calculation}"
-        )
+        assert not calculation.startswith(
+            "I understand"
+        ), f"Calculation is template: {calculation}"
         assert not answer.startswith("I understand"), f"Answer is template: {answer}"
 
         # Must show mathematical intelligence
@@ -120,9 +121,9 @@ class TestRealLLMProviderIntegration:
         # Must have correct final answer
         answer_lower = answer.lower()
         correct_answers = ["3.00", "3", "$3.00", "$3", "three dollars"]
-        assert any(correct in answer_lower for correct in correct_answers), (
-            f"Must calculate correctly (3.00): {answer}"
-        )
+        assert any(
+            correct in answer_lower for correct in correct_answers
+        ), f"Must calculate correctly (3.00): {answer}"
 
     @pytest.mark.requires_real_llm
     def test_real_llm_domain_knowledge(self, real_llm_config):
@@ -144,12 +145,12 @@ class TestRealLLMProviderIntegration:
         key_concepts = result["key_concepts"]
 
         # Must NOT be templates
-        assert not explanation.startswith("I understand"), (
-            f"Explanation is template: {explanation}"
-        )
-        assert not key_concepts.startswith("I understand"), (
-            f"Key concepts is template: {key_concepts}"
-        )
+        assert not explanation.startswith(
+            "I understand"
+        ), f"Explanation is template: {explanation}"
+        assert not key_concepts.startswith(
+            "I understand"
+        ), f"Key concepts is template: {key_concepts}"
 
         # Must demonstrate scientific knowledge
         explanation_lower = explanation.lower()
@@ -165,17 +166,17 @@ class TestRealLLMProviderIntegration:
         explanation_matches = sum(
             1 for term in scientific_terms if term in explanation_lower
         )
-        assert explanation_matches >= 3, (
-            f"Explanation lacks scientific knowledge: {explanation}"
-        )
+        assert (
+            explanation_matches >= 3
+        ), f"Explanation lacks scientific knowledge: {explanation}"
 
         key_concepts_lower = key_concepts.lower()
         concept_matches = sum(
             1 for term in scientific_terms if term in key_concepts_lower
         )
-        assert concept_matches >= 2, (
-            f"Key concepts lack scientific terms: {key_concepts}"
-        )
+        assert (
+            concept_matches >= 2
+        ), f"Key concepts lack scientific terms: {key_concepts}"
 
     @pytest.mark.requires_real_llm
     def test_real_llm_response_consistency(self, real_llm_config):
@@ -199,9 +200,9 @@ class TestRealLLMProviderIntegration:
             answer = result.get("answer", "")
 
             # Must not be template
-            assert not answer.startswith("I understand"), (
-                f"Response {i + 1} is template: {answer}"
-            )
+            assert not answer.startswith(
+                "I understand"
+            ), f"Response {i + 1} is template: {answer}"
 
             # Must contain correct answer
             assert "Jupiter" in answer, f"Response {i + 1} must know Jupiter: {answer}"
@@ -240,9 +241,9 @@ class TestRealLLMProviderIntegration:
         assert "answer" in result, "Must have answer field even if truncated"
 
         answer = result["answer"]
-        assert not answer.startswith("I understand"), (
-            f"Truncated response is template: {answer}"
-        )
+        assert not answer.startswith(
+            "I understand"
+        ), f"Truncated response is template: {answer}"
         assert len(answer) > 0, "Must have some response despite truncation"
 
     @pytest.mark.requires_real_llm
@@ -265,21 +266,21 @@ class TestRealLLMProviderIntegration:
             # If it succeeds despite short timeout, verify it's still intelligent
             if isinstance(result, dict) and "answer" in result:
                 answer = result["answer"]
-                assert not answer.startswith("I understand"), (
-                    f"Fast response is template: {answer}"
-                )
+                assert not answer.startswith(
+                    "I understand"
+                ), f"Fast response is template: {answer}"
                 # For simple math, even fast response should be correct
-                assert "4" in answer or "four" in answer.lower(), (
-                    f"Fast math answer incorrect: {answer}"
-                )
+                assert (
+                    "4" in answer or "four" in answer.lower()
+                ), f"Fast math answer incorrect: {answer}"
 
         except Exception as e:
             # Timeout or other API error is acceptable for very short timeout
             error_msg = str(e).lower()
             acceptable_errors = ["timeout", "connection", "api", "rate limit"]
-            assert any(acceptable in error_msg for acceptable in acceptable_errors), (
-                f"Unexpected error type: {e}"
-            )
+            assert any(
+                acceptable in error_msg for acceptable in acceptable_errors
+            ), f"Unexpected error type: {e}"
 
 
 class TestRealLLMSignatureIntegration:
@@ -315,9 +316,9 @@ class TestRealLLMSignatureIntegration:
             content = result[field]
             assert isinstance(content, str), f"Field {field} must be string"
             assert len(content.strip()) > 0, f"Field {field} cannot be empty"
-            assert not content.startswith("I understand"), (
-                f"Field {field} is template: {content}"
-            )
+            assert not content.startswith(
+                "I understand"
+            ), f"Field {field} is template: {content}"
 
         # Verify business intelligence in responses
         all_content = " ".join(result.values()).lower()
@@ -348,9 +349,9 @@ class TestRealLLMSignatureIntegration:
         analysis_indicators = sum(
             1 for indicator in analytical_indicators if indicator in analysis
         )
-        assert analysis_indicators >= 1, (
-            f"Analysis lacks analytical depth: {result['analysis']}"
-        )
+        assert (
+            analysis_indicators >= 1
+        ), f"Analysis lacks analytical depth: {result['analysis']}"
 
         # Recommendations should be actionable
         recommendations = result["recommendations"].lower()
@@ -364,9 +365,9 @@ class TestRealLLMSignatureIntegration:
             "focus",
         ]
         action_indicators = sum(1 for word in action_words if word in recommendations)
-        assert action_indicators >= 1, (
-            f"Recommendations lack actionable advice: {result['recommendations']}"
-        )
+        assert (
+            action_indicators >= 1
+        ), f"Recommendations lack actionable advice: {result['recommendations']}"
 
     @pytest.mark.requires_real_llm
     def test_signature_pattern_integration_real_llm(self, real_llm_config):
@@ -409,12 +410,12 @@ class TestRealLLMSignatureIntegration:
         assert len(solution_content.strip()) > 0, f"CoT missing solution: {result}"
 
         # Must not be templates
-        assert not reasoning_content.startswith("I understand"), (
-            f"CoT reasoning is template: {reasoning_content}"
-        )
-        assert not solution_content.startswith("I understand"), (
-            f"CoT solution is template: {solution_content}"
-        )
+        assert not reasoning_content.startswith(
+            "I understand"
+        ), f"CoT reasoning is template: {reasoning_content}"
+        assert not solution_content.startswith(
+            "I understand"
+        ), f"CoT solution is template: {solution_content}"
 
         # Must show business problem-solving intelligence
         all_content = (reasoning_content + " " + solution_content).lower()
@@ -454,12 +455,12 @@ class TestRealLLMPerformanceIntegration:
 
         # Must still be intelligent
         answer = result.get("answer", "")
-        assert not answer.startswith("I understand"), (
-            f"Performance test returned template: {answer}"
-        )
-        assert "25" in answer or "twenty" in answer.lower(), (
-            f"Performance test incorrect: {answer}"
-        )
+        assert not answer.startswith(
+            "I understand"
+        ), f"Performance test returned template: {answer}"
+        assert (
+            "25" in answer or "twenty" in answer.lower()
+        ), f"Performance test incorrect: {answer}"
 
         print(f"Real LLM response time: {response_time:.2f}s")
 
@@ -486,9 +487,9 @@ class TestRealLLMPerformanceIntegration:
         total_time = end_time - start_time
 
         # Should process all within reasonable time
-        assert total_time < 60.0, (
-            f"Batch processing too slow: {total_time}s for {len(numbers)} requests"
-        )
+        assert (
+            total_time < 60.0
+        ), f"Batch processing too slow: {total_time}s for {len(numbers)} requests"
 
         # All must be intelligent responses
         for i, result in enumerate(results):
@@ -496,15 +497,15 @@ class TestRealLLMPerformanceIntegration:
             assert "word" in result, f"Batch result {i} missing word field"
 
             word = result["word"].lower()
-            assert not word.startswith("i understand"), (
-                f"Batch result {i} is template: {word}"
-            )
+            assert not word.startswith(
+                "i understand"
+            ), f"Batch result {i} is template: {word}"
 
             # Should contain the expected word (approximately)
             expected = expected_words[i]
-            assert expected in word, (
-                f"Batch result {i} incorrect: expected '{expected}' in '{word}'"
-            )
+            assert (
+                expected in word
+            ), f"Batch result {i} incorrect: expected '{expected}' in '{word}'"
 
         print(
             f"Batch processing: {len(numbers)} requests in {total_time:.2f}s ({total_time / len(numbers):.2f}s avg)"
@@ -548,12 +549,12 @@ class TestRealLLMWorkflowIntegration:
                 intelligent_response = value
                 break
 
-        assert intelligent_response is not None, (
-            f"Workflow must produce intelligent response: {results}"
-        )
-        assert not intelligent_response.startswith("I understand"), (
-            f"Workflow produced template response: {intelligent_response}"
-        )
+        assert (
+            intelligent_response is not None
+        ), f"Workflow must produce intelligent response: {results}"
+        assert not intelligent_response.startswith(
+            "I understand"
+        ), f"Workflow produced template response: {intelligent_response}"
 
         # Should be a reasonable response to "Hello, world!"
         response_lower = intelligent_response.lower()
@@ -561,9 +562,9 @@ class TestRealLLMWorkflowIntegration:
         matches = sum(
             1 for indicator in greeting_indicators if indicator in response_lower
         )
-        assert matches >= 1, (
-            f"Response should acknowledge greeting: {intelligent_response}"
-        )
+        assert (
+            matches >= 1
+        ), f"Response should acknowledge greeting: {intelligent_response}"
 
     @pytest.mark.requires_real_llm
     def test_multi_step_workflow_intelligence(self, real_llm_config):
@@ -584,15 +585,15 @@ class TestRealLLMWorkflowIntegration:
             data="Sales increased 20% last quarter due to new product launch"
         )
 
-        assert isinstance(analysis_result, dict), (
-            "Analysis must return structured result"
-        )
+        assert isinstance(
+            analysis_result, dict
+        ), "Analysis must return structured result"
         assert "analysis" in analysis_result, "Must contain analysis field"
 
         analysis = analysis_result["analysis"]
-        assert not analysis.startswith("I understand"), (
-            f"Analysis is template: {analysis}"
-        )
+        assert not analysis.startswith(
+            "I understand"
+        ), f"Analysis is template: {analysis}"
 
         # Must show analytical intelligence
         analysis_lower = analysis.lower()
@@ -618,9 +619,9 @@ class TestRealLLMWorkflowIntegration:
         assert not summary.startswith("I understand"), f"Summary is template: {summary}"
 
         # Summary should be more concise than analysis
-        assert len(summary.split()) < len(analysis.split()), (
-            f"Summary should be shorter than analysis. Summary: {summary}, Analysis: {analysis}"
-        )
+        assert len(summary.split()) < len(
+            analysis.split()
+        ), f"Summary should be shorter than analysis. Summary: {summary}, Analysis: {analysis}"
 
         # Summary should still contain key business concepts
         summary_lower = summary.lower()

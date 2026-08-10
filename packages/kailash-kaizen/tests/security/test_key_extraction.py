@@ -30,6 +30,7 @@ from dataclasses import asdict
 from io import StringIO
 
 import pytest
+
 from kailash.trust.key_manager import (
     BOTO3_AVAILABLE,
     AWSKMSKeyManager,

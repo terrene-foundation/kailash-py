@@ -29,11 +29,10 @@ Usage:
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks import (
     BaseHook,
     HookContext,
@@ -43,6 +42,7 @@ from kaizen.core.autonomy.hooks import (
 )
 from kaizen.core.autonomy.state import AgentState, FilesystemStorage, StateManager
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Configure logging
 logging.basicConfig(
@@ -62,7 +62,7 @@ class ProjectSignature(Signature):
     completion_status: str = OutputField(
         description="Status: complete, in_progress, blocked"
     )
-    dependencies: List[str] = OutputField(description="List of task dependencies")
+    dependencies: list[str] = OutputField(description="List of task dependencies")
 
 
 class ProgressMetricsHook(BaseHook):
@@ -78,11 +78,11 @@ class ProgressMetricsHook(BaseHook):
 
     def __init__(self):
         super().__init__(name="progress_metrics_hook")
-        self.daily_progress: Dict[int, List[str]] = {}
-        self.checkpoint_stats: List[Dict[str, Any]] = []
-        self.fork_operations: List[Dict[str, Any]] = []
+        self.daily_progress: dict[int, list[str]] = {}
+        self.checkpoint_stats: list[dict[str, Any]] = []
+        self.fork_operations: list[dict[str, Any]] = []
 
-    def supported_events(self) -> List[HookEvent]:
+    def supported_events(self) -> list[HookEvent]:
         """Hook into POST_AGENT_LOOP and POST_CHECKPOINT_SAVE."""
         return [HookEvent.POST_AGENT_LOOP, HookEvent.POST_CHECKPOINT_SAVE]
 
@@ -128,7 +128,7 @@ class ProgressMetricsHook(BaseHook):
             logger.error(f"Error in progress metrics hook: {e}")
             return HookResult(success=False, error=str(e))
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get project progress summary."""
         total_tasks = sum(len(tasks) for tasks in self.daily_progress.values())
         avg_compression = (
@@ -211,7 +211,7 @@ class ProjectAgent:
             ],
         }
 
-    async def work_on_project(self, day: int, branch: str = "main") -> Dict[str, Any]:
+    async def work_on_project(self, day: int, branch: str = "main") -> dict[str, Any]:
         """
         Execute project tasks for a given day.
 
@@ -234,7 +234,7 @@ class ProjectAgent:
         completed_tasks = []
         step_number = (day - 1) * 10  # Offset for day
 
-        for i, task in enumerate(tasks):
+        for _i, task in enumerate(tasks):
             step_number += 1
             logger.info(f"\nSTEP {step_number}: {task}")
 
@@ -292,7 +292,7 @@ class ProjectAgent:
             "checkpoint_id": final_checkpoint_id,
         }
 
-    async def fork_and_experiment(self, parent_checkpoint_id: str) -> Dict[str, Any]:
+    async def fork_and_experiment(self, parent_checkpoint_id: str) -> dict[str, Any]:
         """
         Fork from parent checkpoint to create experimental branch.
 
@@ -366,15 +366,14 @@ async def main():
     agent = ProjectAgent()
 
     # Day 1: Initial development
-    day1_result = await agent.work_on_project(day=1, branch="main")
-    day1_checkpoint = day1_result["checkpoint_id"]
+    await agent.work_on_project(day=1, branch="main")
 
     # Day 2: Continue main branch
     day2_result = await agent.work_on_project(day=2, branch="main")
     day2_checkpoint = day2_result["checkpoint_id"]
 
     # Fork from Day 2 for experimentation
-    fork_result = await agent.fork_and_experiment(day2_checkpoint)
+    await agent.fork_and_experiment(day2_checkpoint)
 
     # Day 3: Experiment branch (try alternative approach)
     logger.info(f"{'=' * 60}")

@@ -10,9 +10,9 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 from kailash.sdk_exceptions import NodeExecutionError
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
 class TestLLMAgentToolExecutionEdgeCases:

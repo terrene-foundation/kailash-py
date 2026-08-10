@@ -5,6 +5,7 @@ Does NOT test actual Redis connectivity (that's Tier 2).
 """
 
 import pytest
+
 from nexus.auth.rate_limit.backends.base import RateLimitBackend
 
 # =============================================================================

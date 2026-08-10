@@ -34,7 +34,6 @@ from kaizen.signatures.from_brief import (
     _validate_triples,
 )
 
-
 # ---------------------------------------------------------------------------
 # _validate_class_name — SEC-2 regression
 # ---------------------------------------------------------------------------

@@ -32,12 +32,7 @@ import uuid
 import pytest
 
 from dataflow import DataFlow
-from dataflow.classification import (
-    DataClassification,
-    MaskingStrategy,
-    classify,
-)
-
+from dataflow.classification import DataClassification, MaskingStrategy, classify
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration]

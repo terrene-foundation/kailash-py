@@ -38,6 +38,7 @@ import json
 import sys
 
 import anyio
+
 from kaizen.core.autonomy.control import (
     CLITransport,
     ControlProtocol,

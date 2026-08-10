@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import pytest
+
 from dataflow.exceptions import EnhancedDataFlowError, ErrorSolution
 from dataflow.platform.inspector import ErrorDiagnosis, Inspector
 

@@ -30,8 +30,8 @@ from typing import Any, Dict
 
 import pytest
 from dotenv import load_dotenv
-from kaizen_agents.agents.specialized.pev import PEVAgent
 
+from kaizen_agents.agents.specialized.pev import PEVAgent
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
     OllamaHealthChecker,
@@ -310,15 +310,15 @@ async def test_pev_agent_complete_cycle():
 
     # Key PEV validation: Agent should show iterative behavior
     # Either verification passed OR refinements were made
-    assert verification["passed"] or len(refinements) > 0, (
-        "PEV agent should either pass verification or make refinements"
-    )
+    assert (
+        verification["passed"] or len(refinements) > 0
+    ), "PEV agent should either pass verification or make refinements"
 
     # If verification passed, quality should be higher
     if verification["passed"]:
-        assert quality_result["quality_score"] >= 0.5, (
-            "Passed verification but low quality"
-        )
+        assert (
+            quality_result["quality_score"] >= 0.5
+        ), "Passed verification but low quality"
         assert quality_result["completeness"], "Passed verification but incomplete"
 
     # Validate execution details
@@ -335,9 +335,9 @@ async def test_pev_agent_complete_cycle():
     # Check for improvement over iterations
     if len(refinements) >= 2:
         # Multiple refinements suggest genuine iterative improvement
-        assert quality_result["improvement"], (
-            "Multiple refinements but no improvement detected"
-        )
+        assert quality_result[
+            "improvement"
+        ], "Multiple refinements but no improvement detected"
         print(f"  ✓ Iterative improvement confirmed ({len(refinements)} refinements)")
 
 

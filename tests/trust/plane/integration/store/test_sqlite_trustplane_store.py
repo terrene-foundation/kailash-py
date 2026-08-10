@@ -23,7 +23,11 @@ from pathlib import Path
 
 import pytest
 
-from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import (
+    DelegateStatus,
+    DelegationRecipient,
+    ReviewResolution,
+)
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import (
     DecisionRecord,
@@ -33,7 +37,6 @@ from kailash.trust.plane.models import (
 )
 from kailash.trust.plane.store import TrustPlaneStore
 from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

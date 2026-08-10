@@ -22,10 +22,11 @@ import os
 from pathlib import Path
 
 import pytest
-from tests.utils.docker_config import get_jaeger_config
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from tests.utils.docker_config import get_jaeger_config
 
 
 class TaskSignature(Signature):
@@ -120,8 +121,9 @@ class TestSupervisorWorkerObservability:
         )
         supervisor = BaseAgent(config=supervisor_config, signature=TaskSignature())
         supervisor_obs = supervisor.enable_observability(
-            service_name="supervisor-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="supervisor-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         supervisor_obs.audit.storage = custom_storage
 
@@ -136,8 +138,9 @@ class TestSupervisorWorkerObservability:
             )
             worker = BaseAgent(config=worker_config, signature=TaskSignature())
             worker_obs = worker.enable_observability(
-                service_name=f"worker-agent-{i}", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+                service_name=f"worker-agent-{i}",
+                jaeger_host=jaeger_config["host"],
+                jaeger_port=jaeger_config["grpc_port"],
             )
             worker_obs.audit.storage = custom_storage
             workers.append(worker)
@@ -226,8 +229,9 @@ class TestConsensusObservability:
             )
             agent = BaseAgent(config=config, signature=DecisionSignature())
             obs = agent.enable_observability(
-                service_name=f"voting-agent-{i}", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+                service_name=f"voting-agent-{i}",
+                jaeger_host=jaeger_config["host"],
+                jaeger_port=jaeger_config["grpc_port"],
             )
             obs.audit.storage = custom_storage
             agents.append(agent)
@@ -310,8 +314,9 @@ class TestSequentialHandoffObservability:
             config=research_config, signature=AnalysisSignature()
         )
         research_obs = research_agent.enable_observability(
-            service_name="research-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="research-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         research_obs.audit.storage = custom_storage
 
@@ -324,8 +329,9 @@ class TestSequentialHandoffObservability:
         )
         code_agent = BaseAgent(config=code_config, signature=TaskSignature())
         code_obs = code_agent.enable_observability(
-            service_name="code-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="code-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         code_obs.audit.storage = custom_storage
 
@@ -338,8 +344,9 @@ class TestSequentialHandoffObservability:
         )
         review_agent = BaseAgent(config=review_config, signature=AnalysisSignature())
         review_obs = review_agent.enable_observability(
-            service_name="review-agent", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="review-agent",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         review_obs.audit.storage = custom_storage
 

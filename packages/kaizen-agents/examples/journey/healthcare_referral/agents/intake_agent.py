@@ -6,7 +6,7 @@ during the intake phase of the healthcare referral journey.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from examples.journey.healthcare_referral.signatures.intake import IntakeSignature
 from kaizen.core.base_agent import BaseAgent
@@ -55,7 +55,7 @@ class IntakeAgent(BaseAgent):
         False
     """
 
-    def __init__(self, config: Optional[IntakeAgentConfig] = None):
+    def __init__(self, config: IntakeAgentConfig | None = None):
         """
         Initialize IntakeAgent.
 
@@ -71,8 +71,8 @@ class IntakeAgent(BaseAgent):
     async def process_intake(
         self,
         patient_message: str,
-        conversation_history: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Process patient message during intake phase.
 
@@ -97,8 +97,8 @@ class IntakeAgent(BaseAgent):
     def process_intake_sync(
         self,
         patient_message: str,
-        conversation_history: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Synchronous version of process_intake.
 

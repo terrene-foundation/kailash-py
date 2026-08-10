@@ -15,6 +15,7 @@ import inspect
 import math
 
 import pytest
+
 from kailash.trust.pact import access as access_module
 from kailash.trust.pact.access import KnowledgeSharePolicy, can_access
 from kailash.trust.pact.addressing import Address, AddressError, AddressSegment

@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.pact.clearance import (
     POSTURE_CEILING,
     RoleClearance,

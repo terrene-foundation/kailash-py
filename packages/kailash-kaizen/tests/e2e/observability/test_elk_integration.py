@@ -18,14 +18,14 @@ from datetime import datetime
 from io import StringIO
 
 import pytest
+
 from kaizen.core.autonomy.hooks import HookEvent, HookManager
 from kaizen.core.autonomy.hooks.builtin.logging_hook import LoggingHook
 
 # Check if optional E2E dependencies are available
 try:
-    import elasticsearch  # noqa: F401
-
     import docker  # noqa: F401
+    import elasticsearch  # noqa: F401
 
     ELASTICSEARCH_AVAILABLE = True
 except ImportError:
@@ -190,9 +190,9 @@ class TestElasticsearchIntegration:
                 log_output = log_capture.getvalue()
                 log_lines = [line for line in log_output.strip().split("\n") if line]
 
-                assert len(log_lines) >= 4, (
-                    f"Expected 4+ log lines, got {len(log_lines)}"
-                )
+                assert (
+                    len(log_lines) >= 4
+                ), f"Expected 4+ log lines, got {len(log_lines)}"
 
                 # Parse and send logs to Elasticsearch
                 for line in log_lines:
@@ -311,9 +311,8 @@ class TestKibanaIntegration:
         Note: This test is optional due to Kibana's slow startup time (60s+).
         Skipped by default to keep test suite fast.
         """
-        import requests
-
         import docker
+        import requests
 
         client = docker.from_env()
 

@@ -1,12 +1,11 @@
 """Unit tests for Provenance[T] field-level source tracking (issue #242)."""
 
 import math
-from datetime import datetime, UTC, timezone
+from datetime import UTC, datetime, timezone
 
 import pytest
 
 from dataflow.core.provenance import Provenance, ProvenanceMetadata, SourceType
-
 
 # ---------------------------------------------------------------------------
 # SourceType enum

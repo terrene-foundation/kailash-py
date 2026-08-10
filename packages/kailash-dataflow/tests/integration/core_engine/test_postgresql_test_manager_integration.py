@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List
 
 import pytest
+
 from dataflow.migrations.auto_migration_system import ColumnDefinition, TableDefinition
 from dataflow.migrations.migration_test_framework import (
     MigrationTestFramework,
@@ -28,7 +29,6 @@ from dataflow.migrations.postgresql_test_manager import (
     PostgreSQLTestExecutionResult,
     PostgreSQLTestManager,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 from tests.utils.real_infrastructure import real_infra
 

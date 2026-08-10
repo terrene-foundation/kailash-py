@@ -14,12 +14,11 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from nexus.extractors.proxy import client_key_for_request
-
 from kailash.trust.rate_limit.backends.base import RateLimitBackend
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 from kailash.trust.rate_limit.config import RateLimitConfig
 from kailash.trust.rate_limit.result import RateLimitResult
+from nexus.extractors.proxy import client_key_for_request
 
 logger = logging.getLogger(__name__)
 

@@ -46,8 +46,6 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
-
-from dataflow import DataFlow
 from templates.saas_starter.auth.jwt_auth import (
     create_user_record,
     generate_access_token,
@@ -57,6 +55,8 @@ from templates.saas_starter.auth.jwt_auth import (
     verify_password,
     verify_token,
 )
+
+from dataflow import DataFlow
 
 # ----------------------------------------------------------------------
 # Fixture — real DataFlow against a temp-file SQLite database.

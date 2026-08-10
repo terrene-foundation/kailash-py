@@ -17,14 +17,13 @@ Key demonstration:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.envelopes import RoleEnvelope
 
 logger = logging.getLogger(__name__)

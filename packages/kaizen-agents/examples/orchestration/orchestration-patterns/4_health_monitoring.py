@@ -108,8 +108,8 @@ async def main():
         print("=" * 70)
         print("Registering Agents with Health Monitoring")
         print("=" * 70)
-        stable_id = await runtime.register_agent(stable_agent)
-        monitored_id = await runtime.register_agent(monitored_agent)
+        await runtime.register_agent(stable_agent)
+        await runtime.register_agent(monitored_agent)
 
         print(f"\n✓ Registered {len(runtime.agents)} agents:")
         print(f"  - {stable_agent._a2a_card['name']}")
@@ -120,7 +120,7 @@ async def main():
         print("\n" + "=" * 70)
         print("Initial Health State:")
         print("=" * 70)
-        for agent_id, metadata in runtime.agents.items():
+        for _agent_id, metadata in runtime.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
             print(f"\n{agent_name}:")
             print(f"  Status: {metadata.status.value}")
@@ -193,7 +193,7 @@ async def main():
         print("Health Monitoring Dashboard:")
         print("=" * 70)
 
-        for agent_id, metadata in runtime.agents.items():
+        for _agent_id, metadata in runtime.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
 
             # Calculate health metrics
@@ -251,7 +251,7 @@ async def main():
             print("\n  - Registering replacement agent...")
             replacement_agent = create_stable_agent()
             replacement_agent._a2a_card["name"] = "ReplacementAgent"
-            replacement_id = await runtime.register_agent(replacement_agent)
+            await runtime.register_agent(replacement_agent)
             print("    ✓ ReplacementAgent added to pool")
         else:
             print("\nAll agents healthy - no replacement needed")

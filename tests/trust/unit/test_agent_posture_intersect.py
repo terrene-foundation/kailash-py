@@ -23,6 +23,7 @@ import itertools
 import json
 
 import pytest
+
 from kailash.trust.envelope import (
     AgentPosture,
     ConstraintEnvelope,

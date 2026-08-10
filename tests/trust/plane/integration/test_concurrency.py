@@ -24,9 +24,8 @@ from kailash.trust._locking import (
     file_lock,
     safe_read_json,
 )
-from kailash.trust.plane.delegation import DelegationManager, DelegateStatus
+from kailash.trust.plane.delegation import DelegateStatus, DelegationManager
 from kailash.trust.plane.holds import HoldManager
-
 
 # --- Helpers for cross-process tests ---
 

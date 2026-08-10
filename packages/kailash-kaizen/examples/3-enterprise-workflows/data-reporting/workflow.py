@@ -265,9 +265,7 @@ class ChartGeneratorAgent(BaseAgent):
             charts = (
                 charts_raw
                 if isinstance(charts_raw, list)
-                else [charts_raw]
-                if charts_raw
-                else []
+                else [charts_raw] if charts_raw else []
             )
 
         chart_result = {"charts": charts}

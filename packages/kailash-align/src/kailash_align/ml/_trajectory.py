@@ -38,7 +38,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover — typing only
-    from kailash_align.pipeline import AlignmentResult
     from kailash_ml.rl import RLLineage
 
 logger = logging.getLogger(__name__)

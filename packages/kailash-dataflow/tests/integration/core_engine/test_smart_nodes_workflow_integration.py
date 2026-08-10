@@ -24,7 +24,6 @@ from dataflow.nodes.natural_language_filter import NaturalLanguageFilterNode
 
 # Import DataFlow smart nodes to trigger registration
 from dataflow.nodes.smart_operations import SmartMergeNode
-
 from kailash.runtime.local import LocalRuntime
 
 # Import Kailash SDK components

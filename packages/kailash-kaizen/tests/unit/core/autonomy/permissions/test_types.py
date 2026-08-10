@@ -6,6 +6,7 @@ Following TDD methodology: Write tests FIRST, then implement.
 """
 
 import pytest
+
 from kaizen.core.autonomy.permissions.types import PermissionMode, ToolPermission
 
 

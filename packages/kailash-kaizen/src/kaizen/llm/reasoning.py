@@ -762,8 +762,8 @@ def llm_capability_match(
         # the caller's ranking arbitrary — a fabricated answer presented as a
         # real one (zero-tolerance.md Rule 3), and unreachable by the caller
         # because it lived only in a log line. #1981 raises instead: WARN keeps
-        # the degradation triageable (observability.md MUST Rule 3) and the
-        # typed error makes it impossible to consume as a score.
+        # the degradation triageable (observability.md MUST Rule 3) and the typed
+        # error makes it impossible to consume as a score.
         #
         # The degraded result is deliberately NOT cached: the cache exists to
         # avoid recomputing a VALID score, and memoising a parse failure would

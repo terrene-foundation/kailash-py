@@ -21,9 +21,8 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 import kailash_ml as km
+import pytest
 from kailash_ml import (
     BackendInfo,
     DeviceReport,
@@ -31,7 +30,6 @@ from kailash_ml import (
     device_report_from_backend_info,
 )
 from kailash_ml._device import KNOWN_BACKENDS, BackendUnavailable
-
 
 # ---------------------------------------------------------------------------
 # DeviceReport — validation contract
@@ -204,9 +202,7 @@ def test_device_report_from_backend_info_uses_post_fallback_info():
 def test_device_report_from_backend_info_array_api_flag():
     """array_api flag propagates unchanged."""
     cpu_info = detect_backend(prefer="cpu")
-    report = device_report_from_backend_info(
-        cpu_info, family="sklearn", array_api=True
-    )
+    report = device_report_from_backend_info(cpu_info, family="sklearn", array_api=True)
     assert report.array_api is True
 
 

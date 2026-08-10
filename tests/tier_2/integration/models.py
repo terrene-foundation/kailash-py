@@ -19,7 +19,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from dataflow import DataFlow
+# Deliberately after load_dotenv() above — DataFlow env-models.md rule requires
+# .env loaded before any operation. noqa: E402 is the guard, not an oversight.
+from dataflow import DataFlow  # noqa: E402
 
 # Use TEST_DATABASE_URL from environment, defaulting to the standard test PostgreSQL instance
 TEST_DATABASE_URL = os.getenv(

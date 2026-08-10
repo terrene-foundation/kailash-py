@@ -292,7 +292,10 @@ class TestProjectMirrorRecording:
 
     def test_envelope_hash_populated_with_envelope(self, tmp_path):
         """When project has constraint envelope, mirror records get its hash."""
-        from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints
+        from kailash.trust.plane.models import (
+            ConstraintEnvelope,
+            OperationalConstraints,
+        )
 
         trust_dir = tmp_path / "tp-envelope"
         envelope = ConstraintEnvelope(

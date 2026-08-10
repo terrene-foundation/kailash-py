@@ -36,15 +36,12 @@ tenant, not once per wrapper call).
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 from typing import TYPE_CHECKING, Any, Optional
 
 from kailash_ml._result import TrainingResult
 from kailash_ml._results import RegisterResult, ServeResult
-from kailash_ml.engine import MLEngine
-from kailash_ml.errors import ModelRegistryError
 
 # autolog / track / rl_train / diagnostic helpers re-exported through
 # this module so ``from kailash_ml._wrappers import autolog`` works
@@ -56,14 +53,14 @@ from kailash_ml.diagnostics import diagnose_classifier, diagnose_regressor
 from kailash_ml.diagnostics.dl import DLDiagnostics
 from kailash_ml.diagnostics.rag import RAGDiagnostics
 from kailash_ml.diagnostics.rl import RLDiagnostics
+from kailash_ml.engine import MLEngine
+from kailash_ml.errors import ModelRegistryError
 from kailash_ml.rl._rl_train import rl_train as _rl_train
 from kailash_ml.tracking import erase_subject as _erase_subject  # noqa: F401
 from kailash_ml.tracking import track as _track_cm
 
 if TYPE_CHECKING:
     import polars as pl
-
-    from kailash_ml.autolog.config import AutologHandle
     from kailash_ml.engines.drift_monitor import DriftMonitor
     from kailash_ml.tracking.runner import ExperimentRun
 
@@ -616,9 +613,11 @@ def diagnose(
         framework = getattr(subject, "framework", "")
         if framework in ("lightning", "torch"):
             return DLDiagnostics(
-                subject.trainable.model
-                if hasattr(subject, "trainable") and subject.trainable is not None
-                else subject,
+                (
+                    subject.trainable.model
+                    if hasattr(subject, "trainable") and subject.trainable is not None
+                    else subject
+                ),
                 tracker=tracker,
             )
         if framework == "sklearn":

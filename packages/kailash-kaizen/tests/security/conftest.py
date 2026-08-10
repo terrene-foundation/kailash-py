@@ -7,6 +7,7 @@ but cryptographic operations use REAL keys.
 """
 
 import pytest
+
 from kailash.trust.key_manager import InMemoryKeyManager, KeyMetadata
 from kailash.trust.signing.crypto import NACL_AVAILABLE, generate_keypair
 

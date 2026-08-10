@@ -175,7 +175,9 @@ class ExternalAgentCostEstimator:
         # Add token costs if provided
         token_cost = 0.0
         if input_tokens or output_tokens:
-            token_cost = self._estimate_token_cost(input_tokens or 0, output_tokens or 0, model_name)
+            token_cost = self._estimate_token_cost(
+                input_tokens or 0, output_tokens or 0, model_name
+            )
 
         # Calculate total with buffer
         subtotal = adjusted_cost + token_cost
@@ -237,7 +239,9 @@ class ExternalAgentCostEstimator:
         # Calculate token cost
         token_cost = 0.0
         if input_tokens or output_tokens:
-            token_cost = self._estimate_token_cost(input_tokens or 0, output_tokens or 0, model_name)
+            token_cost = self._estimate_token_cost(
+                input_tokens or 0, output_tokens or 0, model_name
+            )
 
         # Calculate subtotal and buffer
         subtotal = (base_cost * complexity_multiplier) + token_cost
@@ -287,7 +291,9 @@ class ExternalAgentCostEstimator:
         )
         return self.EXTERNAL_AGENT_COSTS["third_party_agent"]
 
-    def _estimate_token_cost(self, input_tokens: int, output_tokens: int, model_name: str | None) -> float:
+    def _estimate_token_cost(
+        self, input_tokens: int, output_tokens: int, model_name: str | None
+    ) -> float:
         """
         Estimate cost based on token usage.
 

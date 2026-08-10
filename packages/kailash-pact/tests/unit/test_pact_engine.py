@@ -21,17 +21,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from pact.engine import PactEngine
-from pact.work import WorkResult, WorkSubmission
 from pact.costs import CostTracker
+from pact.engine import PactEngine
 from pact.events import EventBus
-
+from pact.work import WorkResult, WorkSubmission
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -294,7 +292,7 @@ class TestSubmit:
 
     def test_submit_emits_events(self, engine_from_yaml: PactEngine) -> None:
         """submit() should emit events to the event bus."""
-        result = engine_from_yaml.submit_sync("Test task", role="D1-R1")
+        engine_from_yaml.submit_sync("Test task", role="D1-R1")
         history = engine_from_yaml.events.get_history()
         # At minimum, a submission event should have been emitted
         assert len(history) > 0
@@ -575,7 +573,7 @@ class TestNanGuardBudgetConsumed:
         with patch.object(
             engine, "_get_or_create_supervisor", return_value=mock_supervisor
         ):
-            result = engine.submit_sync("Test", role="D1-R1")
+            engine.submit_sync("Test", role="D1-R1")
 
         # Cost should NOT have been recorded (NaN sanitized to 0.0)
         assert engine.costs.spent == 0.0
@@ -598,7 +596,7 @@ class TestNanGuardBudgetConsumed:
         with patch.object(
             engine, "_get_or_create_supervisor", return_value=mock_supervisor
         ):
-            result = engine.submit_sync("Test", role="D1-R1")
+            engine.submit_sync("Test", role="D1-R1")
 
         assert engine.costs.spent == 0.0
 
@@ -620,7 +618,7 @@ class TestNanGuardBudgetConsumed:
         with patch.object(
             engine, "_get_or_create_supervisor", return_value=mock_supervisor
         ):
-            result = engine.submit_sync("Test", role="D1-R1")
+            engine.submit_sync("Test", role="D1-R1")
 
         assert engine.costs.spent == 0.0
 
@@ -640,7 +638,7 @@ class TestNanGuardBudgetConsumed:
         with patch.object(
             engine, "_get_or_create_supervisor", return_value=mock_supervisor
         ):
-            result = engine.submit_sync("Test", role="D1-R1")
+            engine.submit_sync("Test", role="D1-R1")
 
         assert engine.costs.spent == 5.0
 
@@ -660,7 +658,7 @@ class TestNanGuardBudgetConsumed:
         with patch.object(
             engine, "_get_or_create_supervisor", return_value=mock_supervisor
         ):
-            result = engine.submit_sync("Test", role="D1-R1")
+            engine.submit_sync("Test", role="D1-R1")
 
         assert engine.costs.spent == 0.0
         assert len(engine.costs.history) == 0
@@ -671,7 +669,7 @@ class TestFreshSupervisorPerSubmit:
 
     def test_supervisor_gets_remaining_budget(self, minimal_yaml_path: Path) -> None:
         """Each submit() should create a supervisor with current remaining budget."""
-        from unittest.mock import AsyncMock, MagicMock, patch, call
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
 
@@ -773,7 +771,7 @@ class TestDegenerateEnvelopeDetection:
     ) -> None:
         """Minimal org without envelopes should produce no degenerate warnings."""
         with caplog.at_level(logging.WARNING, logger="pact.engine"):
-            engine = PactEngine(org=str(minimal_yaml_path))
+            PactEngine(org=str(minimal_yaml_path))
         degenerate_msgs = [r for r in caplog.records if "egenerate" in r.message]
         assert len(degenerate_msgs) == 0
 
@@ -782,7 +780,7 @@ class TestDegenerateEnvelopeDetection:
         from unittest.mock import patch
 
         with patch.object(PactEngine, "_detect_degenerate_envelopes") as mock_detect:
-            engine = PactEngine(org=str(minimal_yaml_path))
+            PactEngine(org=str(minimal_yaml_path))
             mock_detect.assert_called_once()
 
 
@@ -913,6 +911,7 @@ class TestWorkResultNewFields:
     def test_no_hardcoded_model_in_supervisor(self, minimal_yaml_path: Path) -> None:
         """_get_or_create_supervisor should not use hardcoded model strings."""
         import inspect
+
         from pact.engine import PactEngine
 
         source = inspect.getsource(PactEngine._get_or_create_supervisor)

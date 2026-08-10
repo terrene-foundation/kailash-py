@@ -10,10 +10,10 @@ Test Task 1.3: DataFlow SQL Injection Protection
 import asyncio
 
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

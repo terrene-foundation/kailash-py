@@ -6,10 +6,8 @@ valid Prometheus text format with registered metrics.
 
 import pytest
 from fastapi.testclient import TestClient
-
-from src.kailash.servers import WorkflowServer, EnterpriseWorkflowServer
+from src.kailash.servers import EnterpriseWorkflowServer, WorkflowServer
 from src.kailash.servers.durable_workflow_server import DurableWorkflowServer
-
 
 PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 

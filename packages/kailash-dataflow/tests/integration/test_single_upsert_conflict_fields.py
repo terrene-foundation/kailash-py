@@ -32,10 +32,10 @@ import time
 from typing import Optional
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def unique_id(prefix="test"):

@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 from kailash._math_utils import mean
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
 from kailash.visualization.performance import PerformanceVisualizer

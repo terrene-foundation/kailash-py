@@ -7,6 +7,7 @@ proper error capture with full context extraction.
 from datetime import datetime
 
 import pytest
+
 from dataflow.debug.error_capture import CapturedError, ErrorCapture, StackFrame
 
 

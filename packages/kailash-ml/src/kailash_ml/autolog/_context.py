@@ -22,23 +22,14 @@ import functools
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Optional,
-    Sequence,
-    TypeVar,
-)
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence, TypeVar
 
 from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
     _REGISTERED_INTEGRATIONS,
+    FrameworkIntegration,
     registered_integration_names,
 )
 from kailash_ml.autolog.config import AutologConfig, AutologHandle
-
 
 __all__ = ["autolog", "autolog_fn"]
 
@@ -207,12 +198,13 @@ async def autolog(
     :raises AutologAttachError: a framework integration's ``attach``
         call raised; wraps the inner exception as ``__cause__``.
     """
+    from kailash_ml.tracking import get_current_run
+
     from kailash.ml.errors import (
         AutologAttachError,
         AutologDetachError,
         AutologNoAmbientRunError,
     )
-    from kailash_ml.tracking import get_current_run
 
     # Ambient-run gate per §6.1 — evaluated BEFORE the env-disable
     # short-circuit so the disabled-autolog path still surfaces the

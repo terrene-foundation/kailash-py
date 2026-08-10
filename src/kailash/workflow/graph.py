@@ -9,11 +9,10 @@ from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 import yaml
-
-from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 from pydantic import BaseModel, Field, ValidationError
 
 from kailash.nodes.base import Node
+from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 
 try:
     # For normal runtime, use the actual registry

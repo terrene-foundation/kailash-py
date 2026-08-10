@@ -26,12 +26,12 @@ from dataclasses import dataclass
 
 import anyio
 import pytest
+
 from kaizen.core.autonomy.control.protocol import ControlProtocol
 
 # Real imports (no mocks)
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
-
 from tests.utils.mock_transport import MockTransport
 
 # Configure for asyncio (required by Control Protocol)

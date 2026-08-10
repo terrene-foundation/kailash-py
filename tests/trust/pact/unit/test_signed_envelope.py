@@ -26,12 +26,8 @@ from kailash.trust.pact.config import (
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from kailash.trust.pact.envelopes import (
-    SignedEnvelope,
-    sign_envelope,
-)
+from kailash.trust.pact.envelopes import SignedEnvelope, sign_envelope
 from kailash.trust.signing.crypto import generate_keypair
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -23,7 +23,6 @@ from dataflow.core.protection import (
     TimeWindow,
     WriteProtectionConfig,
 )
-
 from kailash.runtime.local import LocalRuntime
 
 # Core SDK imports (standard pattern)

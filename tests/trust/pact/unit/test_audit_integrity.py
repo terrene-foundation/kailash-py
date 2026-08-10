@@ -18,20 +18,19 @@ import json
 
 import pytest
 
+from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.stores.sqlite import (
     SqliteAccessPolicyStore,
     SqliteClearanceStore,
     SqliteEnvelopeStore,
     SqliteOrgStore,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,8 +199,8 @@ class TestEngineAuditIntegrity:
     """GovernanceEngine.verify_audit_integrity() end-to-end."""
 
     def test_engine_verify_audit_integrity(self) -> None:
-        from kailash.trust.pact.engine import GovernanceEngine
         from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+        from kailash.trust.pact.engine import GovernanceEngine
 
         org = _make_compiled_org("audit-test")
         engine = GovernanceEngine(

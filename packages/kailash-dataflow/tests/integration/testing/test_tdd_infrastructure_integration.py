@@ -38,7 +38,6 @@ from dataflow.testing.tdd_support import (
     tdd_test_context,
     teardown_tdd_infrastructure,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
@@ -438,9 +437,9 @@ class TestTDDPerformanceBenchmarks:
         assert total_time < 500, f"50 operations took {total_time:.2f}ms (too slow)"
 
         avg_per_operation = total_time / 50
-        assert avg_per_operation < 10, (
-            f"Average per operation: {avg_per_operation:.2f}ms (too slow)"
-        )
+        assert (
+            avg_per_operation < 10
+        ), f"Average per operation: {avg_per_operation:.2f}ms (too slow)"
 
     async def test_savepoint_performance(self, enable_tdd_mode):
         """Benchmark savepoint creation and rollback performance."""
@@ -474,12 +473,12 @@ class TestTDDPerformanceBenchmarks:
         avg_rollback_time = sum(rollback_times) / len(rollback_times)
 
         # Savepoints should be very fast
-        assert avg_savepoint_time < 10, (
-            f"Average savepoint time: {avg_savepoint_time:.2f}ms"
-        )
-        assert avg_rollback_time < 10, (
-            f"Average rollback time: {avg_rollback_time:.2f}ms"
-        )
+        assert (
+            avg_savepoint_time < 10
+        ), f"Average savepoint time: {avg_savepoint_time:.2f}ms"
+        assert (
+            avg_rollback_time < 10
+        ), f"Average rollback time: {avg_rollback_time:.2f}ms"
 
     async def _ensure_test_environment(self):
         """Ensure test environment is available."""

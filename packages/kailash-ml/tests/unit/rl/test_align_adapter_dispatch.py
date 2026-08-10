@@ -20,7 +20,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from kailash_ml.rl.align_adapter import (
     BRIDGE_ADAPTERS,
     FeatureNotAvailableError,

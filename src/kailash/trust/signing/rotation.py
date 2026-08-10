@@ -34,9 +34,7 @@ from kailash.trust.exceptions import (
     TrustError,
 )
 from kailash.trust.operations import TrustKeyManager
-from kailash.trust.signing.chain_state_signing import (
-    chain_state_canonical_payload_str,
-)
+from kailash.trust.signing.chain_state_signing import chain_state_canonical_payload_str
 from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
 from kailash.trust.signing.delegation_record_signing import (
     delegation_canonical_payload_str,

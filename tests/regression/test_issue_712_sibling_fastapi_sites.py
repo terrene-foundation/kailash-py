@@ -27,6 +27,7 @@ import pytest
 async def test_workflow_api_drives_router_on_startup():
     """WorkflowAPI lifespan iterates router.on_startup post-S2."""
     from fastapi import FastAPI
+
     from kailash.api.workflow_api import WorkflowAPI
     from kailash.workflow.builder import WorkflowBuilder
 
@@ -62,6 +63,7 @@ async def test_workflow_api_drives_router_on_startup():
 async def test_workflow_api_gateway_drives_router_on_startup():
     """WorkflowAPIGateway (api/gateway.py) lifespan iterates router.on_startup."""
     from fastapi import FastAPI
+
     from kailash.api.gateway import WorkflowAPIGateway
 
     gateway = WorkflowAPIGateway()
@@ -94,6 +96,7 @@ async def test_kailash_api_gateway_drives_router_on_startup():
     pytest.importorskip("kailash.middleware.communication.api_gateway")
 
     from fastapi import FastAPI
+
     from kailash.middleware.communication.api_gateway import APIGateway
 
     try:

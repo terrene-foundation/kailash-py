@@ -8,8 +8,8 @@ Following NO MOCKING policy for Tier 2 tests.
 import asyncio
 
 import pytest
-from dataflow.adapters import PostgreSQLVectorAdapter
 
+from dataflow.adapters import PostgreSQLVectorAdapter
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

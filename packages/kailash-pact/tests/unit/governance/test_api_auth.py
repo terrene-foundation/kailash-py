@@ -8,13 +8,11 @@ unauthenticated rejection, and scope-based access control.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock
 
 import pytest
 
 from pact.governance.api.auth import GovernanceAuth
-
 
 # ===================================================================
 # GovernanceAuth initialization
@@ -35,7 +33,9 @@ class TestGovernanceAuthInit:
         auth = GovernanceAuth()
         assert auth._api_token == "env-token-456"
 
-    def test_falls_back_to_pact_api_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_falls_back_to_pact_api_token(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Falls back to PACT_API_TOKEN when governance-specific token not set."""
         monkeypatch.delenv("PACT_GOVERNANCE_API_TOKEN", raising=False)
         monkeypatch.setenv("PACT_API_TOKEN", "general-token-789")

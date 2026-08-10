@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from dataclasses import fields, replace
 
-import pytest
-
 from kailash_ml._device_report import DeviceReport
 from kailash_ml._result import TrainingResult
 

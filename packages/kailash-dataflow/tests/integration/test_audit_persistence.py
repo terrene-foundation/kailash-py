@@ -27,7 +27,6 @@ from dataflow.core.audit_integration import AuditIntegration
 from dataflow.core.event_store import EventStoreBackend
 from dataflow.core.event_stores.sqlite import SQLiteEventStore
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

@@ -61,8 +61,6 @@ from typing import Optional
 
 import pytest
 
-from dataflow import DataFlow
-
 # ``templates.saas_starter.*`` resolves because the kailash-dataflow tests
 # conftest (``packages/kailash-dataflow/tests/conftest.py`` line 163) adds
 # ``packages/kailash-dataflow`` to sys.path; the sibling
@@ -74,6 +72,8 @@ from templates.saas_starter.integrations.webhooks import (
     retry_failed_webhook,
     verify_webhook_signature,
 )
+
+from dataflow import DataFlow
 
 # ---------------------------------------------------------------------------
 # Fixtures — file-backed SQLite DataFlow with only the WebhookEvent model

@@ -104,7 +104,7 @@ async def render_runs_view(
             }
         ],
         "layout": {
-            "title": f"Runs by status"
+            "title": "Runs by status"
             + (f" — experiment={experiment}" if experiment else ""),
             "xaxis": {"title": "status"},
             "yaxis": {"title": "count"},

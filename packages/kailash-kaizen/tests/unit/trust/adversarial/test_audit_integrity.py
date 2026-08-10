@@ -30,6 +30,7 @@ from typing import List
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import ActionResult, AuditAnchor, LinkedHashChain
 from kailash.trust.signing.merkle import (
     MerkleProof,
@@ -44,7 +45,6 @@ from kailash.trust.signing.timestamping import (
     TimestampSource,
     TimestampToken,
 )
-
 from kaizen.trust.audit_store import (
     AppendOnlyAuditStore,
     AuditRecord,

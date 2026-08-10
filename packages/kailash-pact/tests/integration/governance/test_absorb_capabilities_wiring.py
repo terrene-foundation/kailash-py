@@ -35,7 +35,6 @@ import pytest
 
 from kailash.trust.pact.audit import AuditChain
 from kailash.trust.pact.config import VerificationLevel
-
 from pact.costs import CostTracker
 from pact.engine import PactEngine
 

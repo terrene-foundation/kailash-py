@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 import pytest
 
+from kailash.middleware.gateway.event_store import EventStore
+from kailash.middleware.gateway.event_store_sqlite import SqliteEventStoreBackend
 from kailash.nodes.base import NodeRegistry
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.transaction.node_executor import (
@@ -19,18 +21,16 @@ from kailash.nodes.transaction.node_executor import (
     RegistryNodeExecutor,
 )
 from kailash.nodes.transaction.saga_coordinator import SagaCoordinatorNode, SagaState
-from kailash.middleware.gateway.event_store import EventStore
-from kailash.middleware.gateway.event_store_sqlite import SqliteEventStoreBackend
-from kailash.runtime.shutdown import ShutdownCoordinator
-from kailash.runtime.signals import SignalChannel, QueryRegistry
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.execution_tracker import ExecutionTracker
-from kailash.runtime.tracing import WorkflowTracer, get_workflow_tracer
 from kailash.runtime.pause import PauseController
-from kailash.runtime.quotas import ResourceQuotas, QuotaEnforcer
+from kailash.runtime.quotas import QuotaEnforcer, ResourceQuotas
+from kailash.runtime.shutdown import ShutdownCoordinator
+from kailash.runtime.signals import QueryRegistry, SignalChannel
+from kailash.runtime.tracing import WorkflowTracer, get_workflow_tracer
+from kailash.workflow.continuation import ContinuationContext, ContinueAsNew
 from kailash.workflow.dlq import PersistentDLQ
 from kailash.workflow.versioning import WorkflowVersionRegistry
-from kailash.workflow.continuation import ContinueAsNew, ContinuationContext
 
 
 class TestSagaRealExecution:
@@ -340,33 +340,33 @@ class TestAllImportsResolve:
     """Verify all new modules are importable."""
 
     def test_runtime_imports(self):
-        from kailash.runtime.signals import SignalChannel
-        from kailash.runtime.shutdown import ShutdownCoordinator
         from kailash.runtime.cancellation import CancellationToken
         from kailash.runtime.execution_tracker import ExecutionTracker
-        from kailash.runtime.tracing import WorkflowTracer
         from kailash.runtime.pause import PauseController
         from kailash.runtime.quotas import QuotaEnforcer
         from kailash.runtime.scheduler import WorkflowScheduler
+        from kailash.runtime.shutdown import ShutdownCoordinator
+        from kailash.runtime.signals import SignalChannel
+        from kailash.runtime.tracing import WorkflowTracer
 
     def test_transaction_imports(self):
         from kailash.nodes.transaction.node_executor import (
+            MockNodeExecutor,
             NodeExecutor,
             RegistryNodeExecutor,
-            MockNodeExecutor,
         )
         from kailash.nodes.transaction.participant_transport import (
-            ParticipantTransport,
             LocalNodeTransport,
+            ParticipantTransport,
         )
 
     def test_middleware_imports(self):
+        from kailash.middleware.gateway.event_store_backend import EventStoreBackend
         from kailash.middleware.gateway.event_store_sqlite import (
             SqliteEventStoreBackend,
         )
-        from kailash.middleware.gateway.event_store_backend import EventStoreBackend
 
     def test_workflow_imports(self):
+        from kailash.workflow.continuation import ContinuationContext, ContinueAsNew
         from kailash.workflow.dlq import PersistentDLQ
         from kailash.workflow.versioning import WorkflowVersionRegistry
-        from kailash.workflow.continuation import ContinueAsNew, ContinuationContext

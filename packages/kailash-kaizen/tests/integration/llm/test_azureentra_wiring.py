@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from kaizen.llm.auth.azure import AzureEntra, COGNITIVE_SERVICES_SCOPE
+from kaizen.llm.auth.azure import COGNITIVE_SERVICES_SCOPE, AzureEntra
 from kaizen.llm.deployment import LlmDeployment
 
 

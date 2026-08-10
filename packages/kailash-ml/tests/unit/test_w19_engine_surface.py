@@ -25,19 +25,13 @@ from typing import Any
 
 import polars as pl
 import pytest
-
 from kailash_ml import MLEngine, SetupResult
 from kailash_ml._env import (
     CANONICAL_STORE_URL_ENV,
     DEFAULT_STORE_URL,
     LEGACY_TRACKER_DB_ENV,
 )
-from kailash_ml.engine import (
-    TargetInFeaturesError,
-    TargetNotFoundError,
-    _default_store_url,
-)
-
+from kailash_ml.engine import TargetNotFoundError, _default_store_url
 
 # ----------------------------------------------------------------------
 # Helpers

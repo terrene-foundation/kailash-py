@@ -11,11 +11,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
+
+from dataflow import DataFlow
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

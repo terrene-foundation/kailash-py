@@ -15,12 +15,12 @@ Learning Objectives:
 Estimated time: 10 minutes
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_consensus_pattern
 
 
-def analyze_vote_confidence(votes: List[Dict[str, Any]]):
+def analyze_vote_confidence(votes: list[dict[str, Any]]):
     """Analyze confidence levels across votes."""
     if not votes:
         return {
@@ -41,7 +41,7 @@ def analyze_vote_confidence(votes: List[Dict[str, Any]]):
 
 
 def check_quorum(
-    votes: List[Dict[str, Any]], total_voters: int, quorum_pct: float = 0.5
+    votes: list[dict[str, Any]], total_voters: int, quorum_pct: float = 0.5
 ) -> bool:
     """Check if voting quorum is met."""
     non_abstain_votes = [v for v in votes if v["vote"] != "abstain"]
@@ -78,7 +78,7 @@ def main():
     # Simulate tie (2-2 split)
     print("Voting results:")
     votes = []
-    for i, voter in enumerate(pattern.voters):
+    for _i, voter in enumerate(pattern.voters):
         vote = voter.vote(proposal)
         votes.append(vote)
 

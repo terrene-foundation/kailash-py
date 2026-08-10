@@ -78,10 +78,10 @@ import json
 from typing import Any, Dict
 
 import pytest
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
-
 from kaizen.nodes.rag.query_processing import (
     AdaptiveQueryProcessorNode,
     MultiHopQueryPlannerNode,
@@ -318,9 +318,8 @@ def deterministic_llm(monkeypatch: pytest.MonkeyPatch):
     if needed. Teardown restores both surfaces in LIFO order, leaving the
     registry clean for sibling tests in the same session.
     """
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag.query_processing as qp_mod
+    from kailash.nodes.base import NodeRegistry
 
     # Surface 1: the module's imported symbol — restored by monkeypatch.
     monkeypatch.setattr(
@@ -812,9 +811,8 @@ class _MessageCapturingLLMAgent(_DeterministicLLMAgent):
 def capturing_llm(monkeypatch: pytest.MonkeyPatch):
     """Like ``deterministic_llm`` but substitutes the message-capturing adapter,
     and clears the capture sink per test."""
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag.query_processing as qp_mod
+    from kailash.nodes.base import NodeRegistry
 
     _CAPTURED_MESSAGES.clear()
 
@@ -987,9 +985,8 @@ class _ConfigurableContentLLMAgent(_DeterministicLLMAgent):
 @pytest.fixture
 def configurable_llm(monkeypatch: pytest.MonkeyPatch):
     """Substitute the configurable-content adapter + clear the content map."""
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag.query_processing as qp_mod
+    from kailash.nodes.base import NodeRegistry
 
     _CONFIGURED_CONTENT.clear()
     monkeypatch.setattr(

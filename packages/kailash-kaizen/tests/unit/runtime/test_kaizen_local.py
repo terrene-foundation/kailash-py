@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from kaizen.runtime.adapter import RuntimeAdapter
+from kaizen.runtime.capabilities import RuntimeCapabilities
+from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
@@ -25,8 +27,6 @@ from kaizen_agents.runtime_adapters.types import (
     PermissionMode,
     PlanningStrategy,
 )
-from kaizen.runtime.capabilities import RuntimeCapabilities
-from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 
 
 class TestLocalKaizenAdapterInterface:

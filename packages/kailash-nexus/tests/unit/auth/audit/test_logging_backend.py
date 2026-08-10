@@ -7,6 +7,7 @@ import json
 import logging
 
 import pytest
+
 from nexus.auth.audit.backends.logging import LoggingBackend
 from nexus.auth.audit.record import AuditRecord
 

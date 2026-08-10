@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from kaizen.llm.presets import list_presets
 
-
 # Source of truth: the exact preset-name literals shipped in
 # kailash-rs/crates/kailash-kaizen/src/llm/deployment/presets.rs.
 # Any drift between this tuple and the Rust SDK is a cross-SDK parity
@@ -201,10 +200,10 @@ def test_azure_openai_default_api_version_matches_rust() -> None:
 def test_bedrock_supported_regions_cross_sdk_contract() -> None:
     """Region allowlist shape is stable; operators expect the same regions
     to work against both SDKs."""
-    from kaizen.llm.auth.aws import BEDROCK_SUPPORTED_REGIONS
-
     # Every region MUST match the AWS region shape (e.g. us-east-1).
     import re
+
+    from kaizen.llm.auth.aws import BEDROCK_SUPPORTED_REGIONS
 
     aws_region_re = re.compile(r"^[a-z]{2,3}-[a-z]+(-[a-z]+)?-\d{1,2}$")
     for region in BEDROCK_SUPPORTED_REGIONS:

@@ -6,7 +6,7 @@ hesitation during the booking process.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from examples.journey.healthcare_referral.signatures.persuasion import (
     PersuasionSignature,
@@ -54,7 +54,7 @@ class PersuasionAgent(BaseAgent):
         ["cost", "time_commitment"]
     """
 
-    def __init__(self, config: Optional[PersuasionAgentConfig] = None):
+    def __init__(self, config: PersuasionAgentConfig | None = None):
         """
         Initialize PersuasionAgent.
 
@@ -70,10 +70,10 @@ class PersuasionAgent(BaseAgent):
     async def address_hesitation(
         self,
         patient_message: str,
-        symptoms: List[str],
-        hesitation_reason: Optional[str] = None,
-        current_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        symptoms: list[str],
+        hesitation_reason: str | None = None,
+        current_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Address patient hesitation about booking.
 
@@ -99,10 +99,10 @@ class PersuasionAgent(BaseAgent):
     def address_hesitation_sync(
         self,
         patient_message: str,
-        symptoms: List[str],
-        hesitation_reason: Optional[str] = None,
-        current_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        symptoms: list[str],
+        hesitation_reason: str | None = None,
+        current_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Synchronous version of address_hesitation.
 

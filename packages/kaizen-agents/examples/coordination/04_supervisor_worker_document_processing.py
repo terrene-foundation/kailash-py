@@ -23,7 +23,7 @@ Estimated time: 15 minutes
 
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
@@ -80,7 +80,7 @@ SAMPLE_DOCUMENTS = [
 ]
 
 
-def create_document_batch(start_idx: int, batch_size: int) -> List[Dict[str, Any]]:
+def create_document_batch(start_idx: int, batch_size: int) -> list[dict[str, Any]]:
     """Create a batch of documents for processing."""
     # Cycle through sample documents
     batch = []
@@ -216,7 +216,7 @@ def main():
     print("Worker Execution (simulated parallel):")
     print()
 
-    for worker_idx, worker in enumerate(pattern.workers):
+    for _worker_idx, worker in enumerate(pattern.workers):
         assigned_tasks = worker.get_assigned_tasks()
 
         if assigned_tasks:

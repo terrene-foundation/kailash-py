@@ -11,6 +11,7 @@ _missing_(), and remain interoperable.
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.envelope import AgentPosture
 from kailash.trust.posture.postures import TrustPosture
 

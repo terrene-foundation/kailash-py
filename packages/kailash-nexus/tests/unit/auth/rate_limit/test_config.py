@@ -4,6 +4,7 @@ Tier 1 tests - mocking allowed.
 """
 
 import pytest
+
 from nexus.auth.rate_limit.config import RateLimitConfig
 
 # =============================================================================

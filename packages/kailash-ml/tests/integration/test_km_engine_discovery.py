@@ -24,16 +24,10 @@ Test strategy
 """
 from __future__ import annotations
 
-import pytest
-
 import kailash_ml
+import pytest
 from kailash_ml import EngineInfo, engine_info, list_engines
-from kailash_ml.engines.registry import (
-    EngineNotFoundError,
-    MethodSignature,
-    ParamSpec,
-)
-
+from kailash_ml.engines.registry import EngineNotFoundError, MethodSignature, ParamSpec
 
 # The authoritative engine list per ``specs/ml-engines-v2-addendum.md §E1.1``.
 EXPECTED_ENGINES = {

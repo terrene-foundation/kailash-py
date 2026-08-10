@@ -19,6 +19,7 @@ import uuid
 from io import StringIO
 
 import pytest
+
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager
 from kaizen.core.autonomy.hooks.builtin.logging_hook import LoggingHook
 from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
@@ -160,9 +161,9 @@ class TestLoggingHookTraceIdIntegration:
                 trace_ids.append(log_data.get("trace_id"))
 
             # All should have the same trace_id
-            assert all(tid == shared_trace_id for tid in trace_ids), (
-                f"Not all trace_ids match: {trace_ids}"
-            )
+            assert all(
+                tid == shared_trace_id for tid in trace_ids
+            ), f"Not all trace_ids match: {trace_ids}"
 
         finally:
             logger.removeHandler(handler)
@@ -610,9 +611,9 @@ class TestBaseAgentIntegration:
             all_logs = [json.loads(line) for line in log_lines[:4]]
             trace_ids = [log.get("trace_id") for log in all_logs]
 
-            assert all(tid == workflow_trace_id for tid in trace_ids), (
-                f"Not all logs have same trace_id: {trace_ids}"
-            )
+            assert all(
+                tid == workflow_trace_id for tid in trace_ids
+            ), f"Not all logs have same trace_id: {trace_ids}"
 
         finally:
             logger.removeHandler(handler)

@@ -28,6 +28,7 @@ pytest.importorskip(
 
 from hypothesis import assume, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
+
 from kailash.trust.chain import (  # noqa: E402
     AuthorityType,
     CapabilityAttestation,

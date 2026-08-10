@@ -348,7 +348,7 @@ class TestTwoPhaseCommitE2E:
         try:
             await coordinator1.async_run(operation="execute_transaction")
             assert False, "Expected failure did not occur"
-        except:
+        except Exception:
             pass  # Expected failure
 
         # Simulate system restart - create new coordinator instance

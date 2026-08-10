@@ -9,10 +9,8 @@ finalized without paying the retrain cost.
 """
 from __future__ import annotations
 
-import pytest
-
 import polars as pl
-
+import pytest
 from kailash_ml import FinalizeResult, MLEngine
 
 

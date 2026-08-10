@@ -7,10 +7,10 @@ chain recording, and depth-exceeded safety limits.
 import pytest
 
 from kailash.workflow.continuation import (
+    DEFAULT_MAX_CONTINUATION_DEPTH,
     ContinuationContext,
     ContinuationDepthExceededError,
     ContinueAsNew,
-    DEFAULT_MAX_CONTINUATION_DEPTH,
 )
 
 

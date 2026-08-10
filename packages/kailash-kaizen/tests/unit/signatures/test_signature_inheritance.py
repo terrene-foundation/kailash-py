@@ -10,6 +10,7 @@ Bug Report:
 """
 
 import pytest
+
 from kaizen.core.structured_output import (
     StructuredOutputGenerator,
     create_structured_output_config,
@@ -70,9 +71,9 @@ class TestSignatureInheritance:
         assert "conversation_text" in sig.input_fields
 
         # CRITICAL: Child should have ALL 10 output fields (6 from parent + 4 from child)
-        assert len(sig.output_fields) == 10, (
-            f"Expected 10 fields, got {len(sig.output_fields)}: {list(sig.output_fields.keys())}"
-        )
+        assert (
+            len(sig.output_fields) == 10
+        ), f"Expected 10 fields, got {len(sig.output_fields)}: {list(sig.output_fields.keys())}"
 
         # Verify parent fields are present
         assert "next_action" in sig.output_fields

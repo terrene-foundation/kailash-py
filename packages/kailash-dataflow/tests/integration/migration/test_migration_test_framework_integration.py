@@ -12,6 +12,7 @@ import time
 from typing import Dict, List
 
 import pytest
+
 from dataflow.migrations.auto_migration_system import (
     ColumnDefinition,
     Migration,
@@ -25,7 +26,6 @@ from dataflow.migrations.migration_test_framework import (
     MigrationTestFramework,
     MigrationTestResult,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

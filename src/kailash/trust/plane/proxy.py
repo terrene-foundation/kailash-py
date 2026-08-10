@@ -28,7 +28,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 

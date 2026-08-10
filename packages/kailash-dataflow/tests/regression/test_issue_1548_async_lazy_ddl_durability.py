@@ -184,8 +184,8 @@ async def test_express_create_is_durable_on_separate_connection(test_suite):
             )
             count = await conn.fetchval(f'SELECT count(*) FROM "{table}"')
             assert count >= 1, (
-                f"row not durable — express.create reported success but the row "
-                f"is absent on a separate connection (#1548)"
+                "row not durable — express.create reported success but the row "
+                "is absent on a separate connection (#1548)"
             )
 
         # Red-team #2: pin that the internal verify helper resolves a

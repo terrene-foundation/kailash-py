@@ -84,12 +84,9 @@ from kailash_ml.diagnostics.classical import (
     diagnose_classifier,
     diagnose_regressor,
 )
-from kailash_ml.diagnostics.dl import (
-    DLDiagnostics,
-    run_diagnostic_checkpoint,
-)
+from kailash_ml.diagnostics.dl import DLDiagnostics, run_diagnostic_checkpoint
 from kailash_ml.diagnostics.rag import RAGDiagnostics
-from kailash_ml.diagnostics.rl import RLDiagnostics, RLDiagnosticFinding
+from kailash_ml.diagnostics.rl import RLDiagnosticFinding, RLDiagnostics
 
 # Optional re-exports from kaizen — pulled only when kailash-ml[agents]
 # is installed (which declares the kailash-kaizen>=2.7.5 dependency).

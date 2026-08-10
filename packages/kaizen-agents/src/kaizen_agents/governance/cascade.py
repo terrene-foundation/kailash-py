@@ -377,9 +377,7 @@ def _intersect_dicts(
             result[key] = parent_val
         elif isinstance(parent_val, dict) and isinstance(child_val, dict):
             result[key] = _intersect_dicts(parent_val, child_val, _depth + 1)
-        elif isinstance(parent_val, (int, float)) and isinstance(
-            child_val, (int, float)
-        ):
+        elif isinstance(parent_val, int | float) and isinstance(child_val, int | float):
             # NaN/Inf guard: fail-closed on non-finite values
             if not math.isfinite(float(parent_val)) or not math.isfinite(
                 float(child_val)

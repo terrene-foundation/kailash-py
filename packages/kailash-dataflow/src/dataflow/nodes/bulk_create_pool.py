@@ -599,9 +599,7 @@ class BulkCreatePoolNode(SmartNodeConnectionMixin, AsyncNode):
                 # fresh (non-pooled) node; clean it up after the query so its
                 # connection does not leak a ResourceWarning on GC — symmetry with
                 # the sibling bulk_upsert.py::_execute_query cleanup (#1546 round-2).
-                from ..core.credential_provider import (
-                    get_active_credential_provider,
-                )
+                from ..core.credential_provider import get_active_credential_provider
 
                 sql_node = AsyncSQLDatabaseNode(
                     connection_string=connection_string,

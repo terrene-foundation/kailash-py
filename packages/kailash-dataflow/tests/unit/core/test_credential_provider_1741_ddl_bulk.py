@@ -18,9 +18,8 @@ Deterministic Protocol-satisfying recorders only — NEVER a MagicMock
 from __future__ import annotations
 
 import contextvars
-from typing import List
-
 import types
+from typing import List
 
 import pytest
 

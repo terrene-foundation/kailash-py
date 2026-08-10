@@ -43,8 +43,6 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from dataflow import DataFlow
-
 # ``templates.saas_starter.*`` resolves because the kailash-dataflow tests
 # conftest (packages/kailash-dataflow/tests/conftest.py) adds
 # ``packages/kailash-dataflow`` to sys.path; the sibling
@@ -56,6 +54,8 @@ from templates.saas_starter.billing.subscriptions import (
     get_organization_subscription,
     upgrade_subscription,
 )
+
+from dataflow import DataFlow
 
 # ---------------------------------------------------------------------------
 # Fixtures — file-backed SQLite DataFlow with only the models this surface

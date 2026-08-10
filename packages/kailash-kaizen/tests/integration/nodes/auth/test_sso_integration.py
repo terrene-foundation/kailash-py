@@ -20,6 +20,7 @@ import json
 import os
 
 import pytest
+
 from kaizen.nodes.auth.sso import SSOAuthenticationNode
 
 # Skip if USE_REAL_PROVIDERS is not enabled

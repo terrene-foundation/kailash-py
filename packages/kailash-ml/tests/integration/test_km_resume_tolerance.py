@@ -11,9 +11,8 @@ surface (both of which run without Lightning Trainer setup).
 """
 from __future__ import annotations
 
-import pytest
-
 import kailash_ml as km
+import pytest
 from kailash_ml._wrappers import _reset_default_engines
 from kailash_ml.errors import ModelRegistryError, RunNotFoundError
 

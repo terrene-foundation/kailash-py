@@ -7,9 +7,10 @@ import time
 
 import jwt
 import pytest
-from dataflow import DataFlow
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+
+from dataflow import DataFlow
 from nexus import Nexus
 from nexus.auth import JWTConfig, TenantConfig
 from nexus.auth.dependencies import RequirePermission, RequireRole

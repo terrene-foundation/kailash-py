@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,

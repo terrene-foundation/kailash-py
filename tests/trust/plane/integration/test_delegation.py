@@ -14,9 +14,9 @@ import pytest
 from kailash.trust.plane.delegation import (
     DEFAULT_MAX_DELEGATION_DEPTH,
     VALID_DIMENSIONS,
-    DelegationRecipient,
     DelegateStatus,
     DelegationManager,
+    DelegationRecipient,
     ReviewResolution,
 )
 from kailash.trust.plane.holds import HoldManager, HoldRecord

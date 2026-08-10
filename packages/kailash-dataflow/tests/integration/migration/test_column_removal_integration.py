@@ -182,7 +182,6 @@ from dataflow.migrations.dependency_analyzer import (
     TriggerDependency,
     ViewDependency,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

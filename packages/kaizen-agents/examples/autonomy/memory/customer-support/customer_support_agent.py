@@ -24,11 +24,10 @@ Usage:
     - Provide personalized responses based on past interactions
 """
 
-import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from dataflow import DataFlow
 from kaizen.core.autonomy.hooks import (
@@ -78,7 +77,7 @@ class ConversationAnalyticsHook(BaseHook):
 
     def __init__(self):
         super().__init__(name="conversation_analytics_hook")
-        self.conversations: List[Dict[str, Any]] = []
+        self.conversations: list[dict[str, Any]] = []
         self.stats = {
             "total_turns": 0,
             "resolved_conversations": 0,
@@ -86,7 +85,7 @@ class ConversationAnalyticsHook(BaseHook):
             "total_confidence": 0.0,
         }
 
-    def supported_events(self) -> List[HookEvent]:
+    def supported_events(self) -> list[HookEvent]:
         """Hook into post-agent loop to track conversation metrics."""
         return [HookEvent.POST_AGENT_LOOP]
 
@@ -133,7 +132,7 @@ class ConversationAnalyticsHook(BaseHook):
             logger.error(f"Failed to log conversation analytics: {e}")
             return HookResult(success=False, error=str(e))
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get conversation analytics summary."""
         return {
             "total_turns": self.stats["total_turns"],
@@ -239,8 +238,8 @@ class CustomerSupportAgent(BaseAgent):
             logger.warning(f"Failed to load history: {e}")
 
     def _extract_user_preferences(
-        self, history: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, history: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Extract user preferences from conversation history.
 
@@ -312,7 +311,7 @@ class CustomerSupportAgent(BaseAgent):
 
         return preferences
 
-    def respond(self, user_message: str) -> Dict[str, Any]:
+    def respond(self, user_message: str) -> dict[str, Any]:
         """
         Generate response to user message with conversation context.
 
@@ -415,7 +414,7 @@ class CustomerSupportAgent(BaseAgent):
                 "history_length": 0,
             }
 
-    def get_session_stats(self) -> Dict[str, Any]:
+    def get_session_stats(self) -> dict[str, Any]:
         """Get session statistics and memory info."""
         context = self.memory.load_context(self.customer_id)
         memory_stats = self.memory.get_stats()

@@ -25,11 +25,7 @@ from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import AuthorityType, CapabilityType
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import AuthorityInactiveError, AuthorityNotFoundError
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
 
 

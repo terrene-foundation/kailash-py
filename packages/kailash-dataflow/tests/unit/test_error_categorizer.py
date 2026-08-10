@@ -7,6 +7,7 @@ error categorization using regex and semantic features.
 from datetime import datetime
 
 import pytest
+
 from dataflow.debug.error_capture import CapturedError, StackFrame
 from dataflow.debug.error_categorizer import ErrorCategorizer, ErrorCategory
 from dataflow.debug.knowledge_base import KnowledgeBase

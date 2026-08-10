@@ -80,4 +80,3 @@ class ToolResult:
 ### 10.5 MCP Suppression
 
 When `config.has_structured_output` is True, MCP auto-discovery is suppressed because some providers (notably Gemini) reject requests combining function calling with JSON response mode. This is logged at DEBUG level.
-

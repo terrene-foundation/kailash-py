@@ -30,7 +30,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager, HookResult
 from kaizen.core.autonomy.state import AgentState, FilesystemStorage, StateManager
@@ -48,15 +47,15 @@ class ExtractSignature(Signature):
 
     source: str = InputField(description="Data source to extract from")
     record_count: int = InputField(description="Number of records to extract")
-    records: List[Dict] = OutputField(description="Extracted records")
+    records: list[dict] = OutputField(description="Extracted records")
     extraction_time: float = OutputField(description="Time taken for extraction")
 
 
 class TransformSignature(Signature):
     """Signature for data transformation stage."""
 
-    records: List[Dict] = InputField(description="Records to transform")
-    transformed_records: List[Dict] = OutputField(description="Transformed records")
+    records: list[dict] = InputField(description="Records to transform")
+    transformed_records: list[dict] = OutputField(description="Transformed records")
     rejected_count: int = OutputField(description="Number of rejected records")
     transformation_time: float = OutputField(
         description="Time taken for transformation"
@@ -66,7 +65,7 @@ class TransformSignature(Signature):
 class LoadSignature(Signature):
     """Signature for data loading stage."""
 
-    records: List[Dict] = InputField(description="Records to load")
+    records: list[dict] = InputField(description="Records to load")
     loaded_count: int = OutputField(description="Number of loaded records")
     load_time: float = OutputField(description="Time taken for loading")
 
@@ -88,7 +87,7 @@ class DataExtractorAgent(BaseAgent):
         # A2A capability: "Data extraction from CSV, JSON, databases"
         self.stage_type = "extractor"
 
-    def extract_data(self, source: str, record_count: int) -> Dict:
+    def extract_data(self, source: str, record_count: int) -> dict:
         """Extract data from source."""
         print(f"\n📂 Extractor: Extracting {record_count:,} records from {source}...")
 
@@ -139,7 +138,7 @@ class DataTransformerAgent(BaseAgent):
         # A2A capability: "Data transformation, cleaning, validation"
         self.stage_type = "transformer"
 
-    def transform_data(self, records: List[Dict]) -> Dict:
+    def transform_data(self, records: list[dict]) -> dict:
         """Transform and clean data."""
         print(f"\n🔄 Transformer: Cleaning and validating {len(records):,} records...")
 
@@ -198,7 +197,7 @@ class DataLoaderAgent(BaseAgent):
         # A2A capability: "Data loading to PostgreSQL, MySQL, MongoDB"
         self.stage_type = "loader"
 
-    def load_data(self, records: List[Dict]) -> Dict:
+    def load_data(self, records: list[dict]) -> dict:
         """Load data to database."""
         print(f"\n💾 Loader: Loading {len(records):,} records to database...")
 
@@ -227,7 +226,7 @@ class DataLoaderAgent(BaseAgent):
             "load_time": load_time,
         }
 
-    def verify_data(self, expected_count: int) -> Dict:
+    def verify_data(self, expected_count: int) -> dict:
         """Verify data integrity."""
         print("\n🔍 Loader: Verifying data integrity...")
 
@@ -259,7 +258,7 @@ class DataLoaderAgent(BaseAgent):
 class ControllerSignature(Signature):
     """Signature for pipeline controller."""
 
-    blackboard_state: Dict = InputField(description="Current blackboard state")
+    blackboard_state: dict = InputField(description="Current blackboard state")
     next_stage: str = OutputField(description="Next pipeline stage to execute")
 
 
@@ -274,9 +273,9 @@ class PipelineControllerAgent(BaseAgent):
 
         self.stage_type = "controller"
 
-    def next_stage(self, blackboard: Dict) -> Optional[str]:
+    def next_stage(self, blackboard: dict) -> str | None:
         """Determine next stage based on blackboard state."""
-        current_stage = blackboard.get("current_stage", None)
+        current_stage = blackboard.get("current_stage")
 
         if current_stage is None:
             return "extract"
@@ -291,7 +290,7 @@ class PipelineControllerAgent(BaseAgent):
 
         return None
 
-    def is_complete(self, blackboard: Dict) -> bool:
+    def is_complete(self, blackboard: dict) -> bool:
         """Check if pipeline is complete."""
         return blackboard.get("current_stage") == "verify" and blackboard.get(
             "verification_result", {}
@@ -363,8 +362,8 @@ class ComplexDataPipeline:
         transformer: DataTransformerAgent,
         loader: DataLoaderAgent,
         controller: PipelineControllerAgent,
-        hook_manager: Optional[HookManager] = None,
-        state_manager: Optional[StateManager] = None,
+        hook_manager: HookManager | None = None,
+        state_manager: StateManager | None = None,
     ):
         """
         Initialize complex data pipeline.
@@ -410,7 +409,7 @@ class ComplexDataPipeline:
 
     async def execute_pipeline(
         self, source: str, record_count: int, max_iterations: int = 5
-    ) -> Dict:
+    ) -> dict:
         """
         Execute multi-stage data pipeline.
 

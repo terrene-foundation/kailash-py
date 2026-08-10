@@ -21,6 +21,8 @@ Coverage:
 """
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 from kailash_ml.automl.strategies import (
     BayesianSearchStrategy,
@@ -243,14 +245,10 @@ class TestBayesianSearch:
 
         # Only skip comparison if skopt is installed (the skopt path
         # threads its own RNG and may differ across process restarts)
-        try:  # pragma: no cover — skipped unless extra installed
-            import skopt  # type: ignore[import-not-found,unused-ignore]
-
+        if importlib.util.find_spec("skopt") is not None:
             pytest.skip(
                 "skopt installed — fallback-determinism test is for fallback only"
             )
-        except ImportError:
-            pass
         assert _run_sequence() == _run_sequence()
 
     def test_respects_max_trials(self) -> None:

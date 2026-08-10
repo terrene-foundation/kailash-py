@@ -115,5 +115,3 @@ class TestRefCounting:
         rt.close()  # ref_count = 0
         rt.close()  # Already at 0, should be safe no-op
         rt.close()  # Still safe
-
-

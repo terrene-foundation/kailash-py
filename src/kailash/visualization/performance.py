@@ -75,8 +75,8 @@ class PerformanceVisualizer:
             )
 
             lines.append("## Summary\n")
-            lines.append(f"| Metric | Value |")
-            lines.append(f"|--------|-------|")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
             lines.append(f"| Total Execution Time | {total_duration:.2f}s |")
             lines.append(f"| Average CPU Usage | {avg_cpu:.1f}% |")
             lines.append(f"| Peak Memory Usage | {max_memory:.1f} MB |")
@@ -91,7 +91,7 @@ class PerformanceVisualizer:
             lines.append("gantt")
             lines.append("    dateFormat X")
             lines.append("    axisFormat %s")
-            lines.append(f"    title Task Execution Timeline")
+            lines.append("    title Task Execution Timeline")
 
             started_times = [
                 t.started_at for t in timed_tasks if t.started_at is not None

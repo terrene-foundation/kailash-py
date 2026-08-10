@@ -10,11 +10,11 @@ import random
 import time
 
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 from dataflow.core.nodes import NodeGenerator
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

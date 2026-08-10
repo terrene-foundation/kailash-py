@@ -31,10 +31,9 @@ import asyncio
 import os
 import time
 
+from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 
 # Persistent SQLite files so tables survive across the multiple short-lived
 # connections DataFlow opens (an in-memory database would give each connection

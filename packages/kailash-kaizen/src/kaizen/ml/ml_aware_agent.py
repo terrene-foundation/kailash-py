@@ -88,12 +88,7 @@ from kaizen.ml._tool_discovery import (
     MLRegistryUnavailableError,
     discover_ml_tools,
 )
-from kaizen.tools.types import (
-    DangerLevel,
-    ToolCategory,
-    ToolDefinition,
-    ToolParameter,
-)
+from kaizen.tools.types import DangerLevel, ToolCategory, ToolDefinition, ToolParameter
 
 __all__ = ["MLAwareAgent"]
 

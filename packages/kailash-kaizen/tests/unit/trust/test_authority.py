@@ -10,8 +10,8 @@ Tests cover:
 from datetime import datetime
 
 import pytest
-from kailash.trust.chain import AuthorityType
 
+from kailash.trust.chain import AuthorityType
 from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
 
 

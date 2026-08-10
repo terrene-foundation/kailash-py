@@ -232,7 +232,7 @@ def quickstart(ctx, project_name, author, domain, qs_mode):
         click.echo(f"Initialized shadow-first project: {project.manifest.project_name}")
         click.echo(f"  Project ID: {project.manifest.project_id}")
         click.echo(f"  Template:   {template_name}")
-        click.echo(f"  Mode:       shadow (observe only, no enforcement)")
+        click.echo("  Mode:       shadow (observe only, no enforcement)")
         click.echo(f"  Trust dir:  {trust_dir}")
         click.echo()
         click.echo("Shadow mode is now active. AI actions will be observed")
@@ -271,7 +271,7 @@ def quickstart(ctx, project_name, author, domain, qs_mode):
         )
         click.echo(f"  Project ID: {project.manifest.project_id}")
         click.echo(f"  Template:   {template_name}")
-        click.echo(f"  Mode:       strict (constraints enforced)")
+        click.echo("  Mode:       strict (constraints enforced)")
         click.echo(f"  Trust dir:  {trust_dir}")
         click.echo()
         click.echo("Constraint enforcement is active. Actions violating the")
@@ -302,8 +302,8 @@ def quickstart(ctx, project_name, author, domain, qs_mode):
 
         click.echo(f"Initialized exploration project: {project.manifest.project_name}")
         click.echo(f"  Project ID: {project.manifest.project_id}")
-        click.echo(f"  Template:   minimal (credential patterns only)")
-        click.echo(f"  Mode:       shadow (observe only)")
+        click.echo("  Template:   minimal (credential patterns only)")
+        click.echo("  Mode:       shadow (observe only)")
         click.echo(f"  Trust dir:  {trust_dir}")
         click.echo()
         click.echo("Getting started:")
@@ -542,9 +542,8 @@ def export_cmd(
     elif fmt in ("soc2", "iso27001"):
         _export_compliance(ctx, project, fmt, output_path, period)
     else:
-        from kailash.trust.reasoning.traces import ConfidentialityLevel
-
         from kailash.trust.plane.bundle import VerificationBundle
+        from kailash.trust.reasoning.traces import ConfidentialityLevel
 
         ceiling = ConfidentialityLevel(confidentiality)
         bundle = _run(
@@ -1639,7 +1638,7 @@ def tenants_create(ctx, name):
     click.echo(f"  Directory: {tenant_dir}")
     click.echo(f"  Store:     {db_path}")
     click.echo()
-    click.echo(f"Initialize a project in this tenant:")
+    click.echo("Initialize a project in this tenant:")
     click.echo(f'  attest --tenant {name} init --name "My Project" --author "Author"')
 
 
@@ -1756,7 +1755,7 @@ def identity_setup(ctx, issuer, client_id, provider, domain):
     config = IdentityConfig(config_path)
     config.configure(idp)
 
-    click.echo(f"OIDC identity provider configured:")
+    click.echo("OIDC identity provider configured:")
     click.echo(f"  Provider: {provider}")
     click.echo(f"  Domain:   {domain}")
     click.echo(f"  Issuer:   {issuer}")

@@ -12,6 +12,7 @@ Tests cover:
 from datetime import datetime
 
 import pytest
+
 from kailash.trust.exceptions import InvalidSignatureError
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,

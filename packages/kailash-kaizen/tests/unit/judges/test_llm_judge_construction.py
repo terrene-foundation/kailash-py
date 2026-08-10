@@ -12,8 +12,8 @@ import os
 import re
 
 import pytest
-from kailash.diagnostics.protocols import JudgeCallable
 
+from kailash.diagnostics.protocols import JudgeCallable
 from kaizen.judges import JudgeBudgetExhaustedError, LLMJudge, resolve_judge_model
 
 # ---------------------------------------------------------------------------

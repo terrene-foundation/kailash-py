@@ -15,14 +15,14 @@ Estimated time: 10 minutes
 """
 
 import json
-from typing import Any, Dict
+from typing import Any
 
+from kaizen.core.base_agent import BaseAgentConfig
 from kaizen_agents.patterns.patterns import create_sequential_pipeline
 from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
-from kaizen.core.base_agent import BaseAgentConfig
 
 
-def analyze_stage_metadata(stage_results: list) -> Dict[str, Any]:
+def analyze_stage_metadata(stage_results: list) -> dict[str, Any]:
     """Analyze metadata from all stages."""
     analysis = {
         "total_stages": len(stage_results),
@@ -40,7 +40,7 @@ def analyze_stage_metadata(stage_results: list) -> Dict[str, Any]:
         # Parse metadata
         try:
             metadata = json.loads(stage.get("stage_metadata", "{}"))
-        except:
+        except (json.JSONDecodeError, TypeError):
             metadata = {}
 
         analysis["stages"].append(
@@ -80,7 +80,7 @@ def main():
         ("format", "Format for output"),
     ]
 
-    for stage_id, description in stages:
+    for stage_id, _description in stages:
         agent = PipelineStageAgent(config=BaseAgentConfig(), agent_id=stage_id)
         pipeline1.add_stage(agent)
 

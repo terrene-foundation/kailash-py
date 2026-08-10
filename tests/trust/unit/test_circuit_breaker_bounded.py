@@ -24,6 +24,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
 from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerRegistry,

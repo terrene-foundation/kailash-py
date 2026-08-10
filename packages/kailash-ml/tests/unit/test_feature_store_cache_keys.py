@@ -9,18 +9,13 @@ stability per rules/tenant-isolation.md.
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.errors import TenantRequiredError
 from kailash_ml.features import (
     CANONICAL_SINGLE_TENANT_SENTINEL,
     make_feature_cache_key,
     make_feature_group_wildcard,
 )
-from kailash_ml.features.cache_keys import (
-    FEATURE_KEY_VERSION,
-    validate_tenant_id,
-)
-
+from kailash_ml.features.cache_keys import FEATURE_KEY_VERSION, validate_tenant_id
 
 # ---------------------------------------------------------------------------
 # Happy path

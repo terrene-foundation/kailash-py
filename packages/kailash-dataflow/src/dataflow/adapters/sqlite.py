@@ -71,11 +71,11 @@ def _require_aiosqlite() -> None:
         )
 
 
+from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
+    sanitize_db_error,
+)
 from .base import DatabaseAdapter
 from .dialect import DialectManager
-from ..core.exceptions import (
-    sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
 from .exceptions import ConnectionError, QueryError, TransactionError
 
 _sqlite_dialect = DialectManager.get_dialect("sqlite")

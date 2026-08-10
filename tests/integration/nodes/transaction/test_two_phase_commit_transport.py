@@ -30,7 +30,6 @@ from kailash.nodes.transaction.two_phase_commit import (
     TwoPhaseCommitParticipant,
 )
 
-
 # ---------------------------------------------------------------------------
 # Integration: 2PC with LocalNodeTransport (3 local participants, all commit)
 # ---------------------------------------------------------------------------

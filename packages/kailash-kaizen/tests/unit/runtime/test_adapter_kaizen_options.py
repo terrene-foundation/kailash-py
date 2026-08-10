@@ -10,10 +10,10 @@ import pytest
 
 from kaizen.core.kaizen_options import KaizenOptions
 from kaizen.core.specialist_types import SkillDefinition, SpecialistDefinition
-from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
-from kaizen_agents.runtime_adapters.types import AutonomousConfig, PlanningStrategy
 from kaizen.runtime.specialist_loader import SpecialistLoader
 from kaizen.runtime.specialist_registry import SkillRegistry, SpecialistRegistry
+from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
+from kaizen_agents.runtime_adapters.types import AutonomousConfig, PlanningStrategy
 
 
 class TestLocalKaizenAdapterWithKaizenOptions:

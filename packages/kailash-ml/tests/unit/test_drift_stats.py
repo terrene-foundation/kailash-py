@@ -23,7 +23,6 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-
 from kailash_ml.drift import (
     JSD_SMOOTH_EPS,
     KL_SMOOTH_EPS,
@@ -37,7 +36,6 @@ from kailash_ml.drift import (
 )
 from kailash_ml.drift.stats import new_category_fraction
 from kailash_ml.errors import DriftThresholdError, ZeroVarianceReferenceError
-
 
 # ---------------------------------------------------------------------------
 # Pinned smoothing constants — spec §3.6 cross-SDK parity

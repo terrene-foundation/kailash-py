@@ -25,6 +25,7 @@ pytest.importorskip(
 
 from hypothesis import given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
+
 from kailash.trust.pact.config import (  # noqa: E402
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,

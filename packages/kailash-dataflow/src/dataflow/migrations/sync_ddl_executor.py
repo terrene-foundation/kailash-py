@@ -22,18 +22,17 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
-from kailash.db.dialect import (
-    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
-    _validate_identifier,
-)
-from kailash.utils.url_credentials import mask_url
-
 # Issue #1550: this executor is the LOWEST layer that touches the raw driver
 # exception on the eager-DDL path — it logs the error BEFORE returning it to the
 # engine, so sanitizing only at the engine layer leaves this log raw. Redact
 # here, at the single point every DDL caller (engine, schema_state_manager,
 # auto_migration_system) funnels through.
 from dataflow.core.exceptions import sanitize_db_error
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
+from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
 

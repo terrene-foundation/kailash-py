@@ -15,10 +15,10 @@ Test Strategy:
 """
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture(scope="function")
@@ -33,9 +33,9 @@ async def db_with_cleanup():
 
     # Cleanup after test
     metrics = await db.cleanup_all_pools()
-    assert metrics["cleanup_failures"] == 0, (
-        f"Pool cleanup failed: {metrics['cleanup_errors']}"
-    )
+    assert (
+        metrics["cleanup_failures"] == 0
+    ), f"Pool cleanup failed: {metrics['cleanup_errors']}"
 
 
 @pytest.mark.asyncio

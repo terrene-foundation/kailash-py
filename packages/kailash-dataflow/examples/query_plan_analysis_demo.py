@@ -319,9 +319,7 @@ def demonstrate_query_plan_analysis():
         status = (
             "✅"
             if analysis.optimization_score >= 80
-            else "⚠️"
-            if analysis.optimization_score >= 60
-            else "❌"
+            else "⚠️" if analysis.optimization_score >= 60 else "❌"
         )
         query_preview = analysis.query_sql.strip().split("\n")[0][:50] + "..."
         print(

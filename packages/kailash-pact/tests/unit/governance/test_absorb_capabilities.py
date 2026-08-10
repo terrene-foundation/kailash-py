@@ -24,13 +24,12 @@ import asyncio
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from kailash.trust.pact.config import VerificationLevel
 from pact.costs import CostTracker
-from pact.engine import PactEngine, GovernanceHeldError
+from pact.engine import GovernanceHeldError, PactEngine
 from pact.governance.results import (
     ChainVerificationResult,
     ConsumptionReport,

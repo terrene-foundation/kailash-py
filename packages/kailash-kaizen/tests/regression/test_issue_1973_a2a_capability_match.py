@@ -236,9 +236,8 @@ class TestReasoningBridgesPreserveConfigPropagation:
         self, monkeypatch
     ):
         pytest.importorskip("kaizen_agents")
-        from kaizen_agents.patterns._reasoning_bridge import score_capability_sync
-
         import kaizen.llm.reasoning as reasoning
+        from kaizen_agents.patterns._reasoning_bridge import score_capability_sync
 
         seen = {}
 
@@ -271,9 +270,8 @@ class TestReasoningBridgesPreserveConfigPropagation:
         pytest.importorskip("kaizen_agents")
         import asyncio
 
-        from kaizen_agents.patterns.runtime import OrchestrationRuntime
-
         import kaizen.llm.reasoning as reasoning
+        from kaizen_agents.patterns.runtime import OrchestrationRuntime
 
         seen = {}
 

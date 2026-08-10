@@ -8,7 +8,6 @@ All errors include remediation suggestions to help users fix configuration issue
 from typing import Any
 
 from kaizen_agents._model_env import resolve_default_model
-
 from kaizen_agents.api.types import (
     AgentCapabilities,
     ExecutionMode,
@@ -403,7 +402,7 @@ def validate_configuration(
 
     if "timeout_seconds" in kwargs:
         timeout = kwargs["timeout_seconds"]
-        if not isinstance(timeout, (int, float)) or timeout <= 0:
+        if not isinstance(timeout, int | float) or timeout <= 0:
             errors.append(
                 ConfigurationError(
                     message="timeout_seconds must be a positive number.",

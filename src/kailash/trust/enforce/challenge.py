@@ -48,8 +48,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from kailash.trust.chain import TrustLineageChain
-from kailash.trust.signing.crypto import sign, verify_signature
 from kailash.trust.exceptions import TrustError
+from kailash.trust.signing.crypto import sign, verify_signature
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,9 @@ class ChallengeProtocol:
         rate_limit_window_seconds: int = 60,
     ) -> None:
         if challenge_timeout_seconds < 0:
-            raise ValueError(f"challenge_timeout_seconds must be non-negative, got {challenge_timeout_seconds}")
+            raise ValueError(
+                f"challenge_timeout_seconds must be non-negative, got {challenge_timeout_seconds}"
+            )
 
         self._challenge_timeout_seconds = challenge_timeout_seconds
         self._max_challenges_per_agent = max_challenges_per_agent
@@ -311,7 +313,11 @@ class ChallengeProtocol:
                 details={
                     "agent_id": chain.genesis.agent_id,
                     "required_proof": challenge.required_proof,
-                    "available_capabilities": [cap.capability for cap in chain.capabilities if not cap.is_expired()],
+                    "available_capabilities": [
+                        cap.capability
+                        for cap in chain.capabilities
+                        if not cap.is_expired()
+                    ],
                 },
             )
 
@@ -425,9 +431,13 @@ class ChallengeProtocol:
         # 6. Verify cryptographic signature
         payload = f"{challenge.nonce}:{challenge.timestamp.isoformat()}:{challenge.challenger_id}"
         try:
-            signature_valid = verify_signature(payload, response.signed_nonce, agent_public_key)
+            signature_valid = verify_signature(
+                payload, response.signed_nonce, agent_public_key
+            )
         except Exception as exc:
-            logger.warning(f"[CHALLENGE] Signature verification error for challenge {challenge.challenge_id}: {exc}")
+            logger.warning(
+                f"[CHALLENGE] Signature verification error for challenge {challenge.challenge_id}: {exc}"
+            )
             return False
 
         if not signature_valid:
@@ -472,7 +482,11 @@ class ChallengeProtocol:
         window_start = now - timedelta(seconds=self._rate_limit_window_seconds)
 
         # Filter to only timestamps within the current window
-        recent_timestamps = [ts for ts in self._challenge_timestamps[target_agent_id] if ts > window_start]
+        recent_timestamps = [
+            ts
+            for ts in self._challenge_timestamps[target_agent_id]
+            if ts > window_start
+        ]
 
         # Update stored timestamps to only keep recent ones (garbage collection)
         self._challenge_timestamps[target_agent_id] = recent_timestamps

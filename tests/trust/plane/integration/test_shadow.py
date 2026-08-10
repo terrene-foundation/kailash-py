@@ -26,7 +26,6 @@ from kailash.trust.plane.shadow import (
 )
 from kailash.trust.plane.shadow_store import ShadowStore
 
-
 # ---------------------------------------------------------------------------
 # ShadowToolCall dataclass
 # ---------------------------------------------------------------------------

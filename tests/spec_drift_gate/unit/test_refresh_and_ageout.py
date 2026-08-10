@@ -11,14 +11,14 @@ Covers:
 from __future__ import annotations
 
 import json
-import pytest
 from datetime import date
 from pathlib import Path
 
+import pytest
 from spec_drift_gate import (
+    DEFAULT_AGEOUT_DAYS,
     BaselineEntry,
     SpecDriftGateError,
-    DEFAULT_AGEOUT_DAYS,
     ageout_state,
     apply_filter,
     archive_resolved,

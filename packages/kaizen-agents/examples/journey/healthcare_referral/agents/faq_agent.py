@@ -6,7 +6,7 @@ during the healthcare referral journey.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from examples.journey.healthcare_referral.signatures.faq import FAQSignature
 from kaizen.core.base_agent import BaseAgent
@@ -53,7 +53,7 @@ class FAQAgent(BaseAgent):
         "An orthopedist is a medical doctor who specializes in..."
     """
 
-    def __init__(self, config: Optional[FAQAgentConfig] = None):
+    def __init__(self, config: FAQAgentConfig | None = None):
         """
         Initialize FAQAgent.
 
@@ -69,8 +69,8 @@ class FAQAgent(BaseAgent):
     async def answer_question(
         self,
         question: str,
-        current_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        current_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Answer a patient question.
 
@@ -92,8 +92,8 @@ class FAQAgent(BaseAgent):
     def answer_question_sync(
         self,
         question: str,
-        current_context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        current_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Synchronous version of answer_question.
 

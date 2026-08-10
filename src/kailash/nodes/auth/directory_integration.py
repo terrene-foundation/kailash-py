@@ -355,7 +355,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             self.sync_status[self.directory_type] = sync_stats
             raise
 
-    async def _sync_users(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def _sync_users(
+        self, filters: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         """Sync users from directory."""
         users_result = {"count": 0, "added": 0, "updated": 0, "users": []}
 
@@ -389,7 +391,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         return users_result
 
-    async def _sync_groups(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def _sync_groups(
+        self, filters: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         """Sync groups from directory."""
         groups_result = {"count": 0, "added": 0, "updated": 0, "groups": []}
 
@@ -428,7 +432,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         return groups_result
 
-    async def _sync_incremental(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    async def _sync_incremental(
+        self, filters: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         """Perform incremental sync based on timestamps."""
         # Get last sync timestamp
         last_sync = self.sync_status.get(self.directory_type, {}).get("completed_at")
@@ -710,7 +716,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return {"user": user_data, "source": "directory", "found": True}
 
     async def _get_groups(
-        self, user_id: str | None = None, filters: Dict[str, Any] | None = None, **kwargs
+        self,
+        user_id: str | None = None,
+        filters: Dict[str, Any] | None = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """Get groups from directory."""
         if user_id:
@@ -938,7 +947,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return schema
 
     async def _simulate_directory_search(
-        self, object_type: str, filters: Dict[str, Any], attributes: List[str] | None = None
+        self,
+        object_type: str,
+        filters: Dict[str, Any],
+        attributes: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
         """Search the directory using real LDAP when available, with fallback.
 
@@ -956,14 +968,18 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return self._fallback_directory_search(object_type, filters, attributes)
 
     async def _ldap_directory_search(
-        self, object_type: str, filters: Dict[str, Any], attributes: List[str] | None = None
+        self,
+        object_type: str,
+        filters: Dict[str, Any],
+        attributes: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
         """Perform a real LDAP search using ldap3.
 
         Requires: pip install kailash[ldap]  (ldap3>=2.9)
         """
-        from ldap3 import ALL_ATTRIBUTES, Connection, Server, ServerPool, Tls
         import ssl
+
+        from ldap3 import ALL_ATTRIBUTES, Connection, Server, ServerPool, Tls
 
         server_url = self.connection_config.get("server", "ldap://localhost:389")
         bind_dn = self.connection_config.get("bind_dn", "")
@@ -1065,7 +1081,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return "(&" + "".join(parts) + ")"
 
     def _fallback_directory_search(
-        self, object_type: str, filters: Dict[str, Any], attributes: List[str] | None = None
+        self,
+        object_type: str,
+        filters: Dict[str, Any],
+        attributes: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
         """Built-in sample data fallback when LDAP is unavailable."""
         all_users = [
@@ -1189,8 +1208,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         Requires: pip install kailash[ldap]  (ldap3>=2.9)
         """
-        from ldap3 import Connection, Server, Tls
         import ssl
+
+        from ldap3 import Connection, Server, Tls
 
         server_url = self.connection_config.get("server", "ldap://localhost:389")
         use_ssl = self.connection_config.get("use_ssl", False)
@@ -1292,7 +1312,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             "last_sync": datetime.now(UTC).isoformat(),
         }
 
-    def _build_user_filter(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    def _build_user_filter(
+        self, filters: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         """Build LDAP filter for user search."""
         base_filter = {"objectClass": "person"}
 
@@ -1305,7 +1327,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         return base_filter
 
-    def _build_group_filter(self, filters: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    def _build_group_filter(
+        self, filters: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         """Build LDAP filter for group search."""
         base_filter = {"objectClass": "group"}
 
@@ -1319,7 +1343,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return base_filter
 
     def _build_search_filters(
-        self, query: str, search_intent: Dict[str, Any], filters: Dict[str, Any] | None = None
+        self,
+        query: str,
+        search_intent: Dict[str, Any],
+        filters: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Build search filters from query and intent."""
         search_filters = {}

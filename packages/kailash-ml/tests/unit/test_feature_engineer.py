@@ -11,12 +11,9 @@ from kailash_ml._decorators import ExperimentalWarning, _warned_classes
 from kailash_ml.engines.feature_engineer import (
     FeatureEngineer,
     FeatureRank,
-    GeneratedColumn,
-    GeneratedFeatures,
     SelectedFeatures,
 )
 from kailash_ml.types import FeatureField, FeatureSchema
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

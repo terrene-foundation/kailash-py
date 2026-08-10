@@ -133,7 +133,6 @@ async def test_enterprise_auth_malformed_envelope_fails_closed_to_rule_based():
     from kailash.nodes.auth.enterprise_auth_provider import (
         EnterpriseAuthProviderNode as CoreEnterpriseAuthNode,
     )
-
     from kaizen.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
     node = EnterpriseAuthProviderNode()

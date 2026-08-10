@@ -10,6 +10,7 @@ import jwt
 import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
+
 from nexus.auth import JWTConfig, TenantConfig
 from nexus.auth.dependencies import RequirePermission, RequireRole, get_current_user
 from nexus.auth.plugin import NexusAuthPlugin

@@ -14,6 +14,7 @@ import asyncio
 from datetime import datetime, timedelta
 
 import pytest
+
 from kailash.trust.orchestration.execution_context import TrustExecutionContext
 from kailash.trust.orchestration.integration.registry_aware import (
     CapabilityBasedSelector,
@@ -29,7 +30,6 @@ from kailash.trust.registry.models import (
     RegistrationRequest,
 )
 from kailash.trust.registry.store import InMemoryAgentRegistryStore
-
 from kaizen.trust import generate_keypair
 
 

@@ -13,8 +13,8 @@ import aiohttp
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
-
 from kailash_mcp import MCPServer
+
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 logger = logging.getLogger(__name__)
@@ -328,7 +328,7 @@ class TestMCPStressTesting:
             # In real test, would stop Redis container
             # For now, just close connection to simulate network issue
             await r.aclose()
-        except:
+        except redis.RedisError:
             pass
 
         # Make another call - should still work (fallback to memory cache)

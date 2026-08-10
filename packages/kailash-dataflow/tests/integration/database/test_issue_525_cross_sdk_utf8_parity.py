@@ -40,7 +40,6 @@ import uuid
 import pytest
 
 from dataflow import DataFlow
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration]

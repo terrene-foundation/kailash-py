@@ -174,10 +174,9 @@ os.environ["DATAFLOW_TEST_MODE"] = "true"
 os.environ["DATAFLOW_POOL_SIZE"] = "1"
 os.environ["DATAFLOW_MAX_OVERFLOW"] = "1"
 
+from dataflow import DataFlow, DataFlowConfig
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow, DataFlowConfig
 
 
 @pytest.fixture(scope="function")

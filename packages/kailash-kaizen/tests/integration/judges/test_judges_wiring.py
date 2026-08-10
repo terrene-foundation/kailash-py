@@ -34,10 +34,7 @@ from kailash.diagnostics.protocols import (
 )
 
 # Facade imports — MUST be via kaizen.judges, not direct module paths.
-from kaizen.judges import (
-    JudgeBudgetExhaustedError,
-    LLMDiagnostics,
-)
+from kaizen.judges import JudgeBudgetExhaustedError, LLMDiagnostics
 
 
 class DeterministicJudge:

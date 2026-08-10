@@ -29,10 +29,7 @@ from kailash_ml.drift.alerts import (
     TrackerEventAlertChannel,
     WebhookAlertChannel,
 )
-from kailash_ml.drift.policy import (
-    DriftMonitorReferencePolicy,
-    DriftPolicyMode,
-)
+from kailash_ml.drift.policy import DriftMonitorReferencePolicy, DriftPolicyMode
 from kailash_ml.drift.stats import (
     JSD_SMOOTH_EPS,
     KL_SMOOTH_EPS,

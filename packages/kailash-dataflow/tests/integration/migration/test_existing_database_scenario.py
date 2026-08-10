@@ -10,8 +10,8 @@ import asyncio
 import os
 
 import pytest
-from dataflow import DataFlow
 
+from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

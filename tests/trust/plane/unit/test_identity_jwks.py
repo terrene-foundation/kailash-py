@@ -14,15 +14,11 @@ import time
 from unittest import mock
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
-from kailash.trust.plane.identity import (
-    JWKSProvider,
-)
-from kailash.trust.plane.identity import JWKSError
-
+from kailash.trust.plane.identity import JWKSError, JWKSProvider
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,8 +27,9 @@ from kailash.trust.plane.identity import JWKSError
 
 def _rsa_key_to_jwk(public_key: RSAPublicKey, kid: str = "test-key-1") -> dict:
     """Convert an RSA public key to a JWK dict."""
-    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
     import base64
+
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
 
     numbers = public_key.public_numbers()
 

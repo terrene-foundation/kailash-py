@@ -19,6 +19,7 @@ import json
 import os
 
 import pytest
+
 from kaizen.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kaizen.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 from kaizen.nodes.auth.sso import SSOAuthenticationNode

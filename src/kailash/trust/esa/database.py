@@ -248,6 +248,7 @@ class DatabaseESA(EnterpriseSystemAgent):
             from urllib.parse import urlparse
 
             import aiomysql
+
             from kailash.utils.url_credentials import (
                 decode_userinfo_or_raise,
                 preencode_password_special_chars,

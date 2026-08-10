@@ -33,10 +33,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import json
 
-from nexus import Nexus
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 # ==============================================================================
 # EXAMPLE 1: ZERO-CONFIG DATA PROCESSING WORKFLOW (WorkflowBuilder)

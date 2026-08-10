@@ -52,12 +52,11 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+# Production MCP imports
+from kailash_mcp import MCPServer, enable_auto_discovery
 from kaizen.core.base_agent import BaseAgent
 from kaizen.memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
-
-# Production MCP imports
-from kailash_mcp import MCPServer, enable_auto_discovery
 
 logger = logging.getLogger(__name__)
 

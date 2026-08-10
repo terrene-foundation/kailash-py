@@ -38,9 +38,8 @@ def test_lightgbm_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     """Train a small LightGBM classifier, export to ONNX, assert parity."""
     import lightgbm as lgb
     import onnxruntime as ort
-    from sklearn.datasets import make_classification
-
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
+    from sklearn.datasets import make_classification
 
     X, y = make_classification(
         n_samples=200,

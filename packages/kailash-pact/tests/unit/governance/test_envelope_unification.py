@@ -20,21 +20,18 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kailash.trust.pact.audit import AuditChain
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
-    TrustPostureLevel,
     VerificationGradientConfig,
     VerificationLevel,
 )
-from pact.examples.university.org import create_university_org
-from kailash.trust.pact.audit import AuditChain
-from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelope_adapter import (
     EnvelopeAdapterError,
@@ -52,6 +49,7 @@ from kailash.trust.plane.models import (
     FinancialConstraints,
     OperationalConstraints,
 )
+from pact.examples.university.org import create_university_org
 
 try:
     from pact.use.execution.approval import ApprovalQueue
@@ -527,7 +525,7 @@ class TestRuntimeWithGovernanceUsesVerifyAction:
         runtime.set_agent_role_address("cs-chair-agent", "D1-R1-D1-R1-D1-R1-T1-R1")
 
         # "delete" is blocked by the CS Chair's envelope
-        task_id = runtime.submit("delete", agent_id="cs-chair-agent")
+        runtime.submit("delete", agent_id="cs-chair-agent")
         task = runtime.process_next()
 
         assert task is not None
@@ -568,7 +566,7 @@ class TestRuntimeWithGovernanceUsesVerifyAction:
         runtime.set_agent_role_address("cs-chair-agent", "D1-R1-D1-R1-D1-R1-T1-R1")
 
         # "read" is allowed by the CS Chair's envelope
-        task_id = runtime.submit("read", agent_id="cs-chair-agent")
+        runtime.submit("read", agent_id="cs-chair-agent")
         task = runtime.process_next()
 
         assert task is not None
@@ -611,9 +609,7 @@ class TestRuntimeWithGovernanceUsesVerifyAction:
         runtime.set_agent_role_address("cs-chair-agent", "D1-R1-D1-R1-D1-R1-T1-R1")
 
         # Cost above requires_approval_above_usd ($500) but below max ($1000) -> HELD
-        task_id = runtime.submit(
-            "read", agent_id="cs-chair-agent", metadata={"cost": 750.0}
-        )
+        runtime.submit("read", agent_id="cs-chair-agent", metadata={"cost": 750.0})
         task = runtime.process_next()
 
         assert task is not None
@@ -682,9 +678,7 @@ class TestRuntimeWithGovernanceUsesVerifyAction:
         # Cost at 85% of max ($1000 * 0.85 = $850) -> FLAGGED by engine
         # (no approval threshold, so it hits the near-boundary check at 80%)
         with caplog.at_level(logging.WARNING):
-            task_id = runtime.submit(
-                "read", agent_id="cs-chair-agent", metadata={"cost": 850.0}
-            )
+            runtime.submit("read", agent_id="cs-chair-agent", metadata={"cost": 850.0})
             task = runtime.process_next()
 
         assert task is not None

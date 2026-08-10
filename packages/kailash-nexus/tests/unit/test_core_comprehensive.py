@@ -318,9 +318,8 @@ class TestNexusPerformanceMetrics:
 
     def test_track_performance_metrics(self):
         """Test that performance metrics are tracked during operations."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
 
@@ -360,9 +359,8 @@ class TestNexusChannelMethods:
 
     def test_register_multi_channel(self):
         """Test workflow registration with enterprise gateway."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         with patch("nexus.core.create_gateway") as mock_gateway:
             mock_gw = Mock()
@@ -389,9 +387,8 @@ class TestNexusWorkflowHandling:
 
     def test_register_with_builder(self):
         """Test registering WorkflowBuilder vs Workflow."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         with patch("nexus.core.create_gateway") as mock_gateway:
             mock_gw = Mock()
@@ -433,9 +430,8 @@ class TestNexusWorkflowHandling:
 
     def test_register_duplicate_name(self):
         """Test registration with duplicate name fails in enterprise gateway."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         with patch("nexus.core.create_gateway") as mock_gateway:
             mock_gw = Mock()
@@ -474,9 +470,8 @@ class TestNexusEdgeCases:
         ``/workflows//execute`` is not a routable path and "" is not a legal
         MCP tool name, so an empty-named workflow could never be invoked.
         """
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
         workflow = WorkflowBuilder()
@@ -490,9 +485,8 @@ class TestNexusEdgeCases:
 
     def test_very_long_workflow_name(self):
         """Names above the 128-char cap are rejected with the length named."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
         workflow = WorkflowBuilder()
@@ -521,9 +515,8 @@ class TestNexusEdgeCases:
         HTTP 400 from ``/workflows/{name}/execute`` forever, because the
         execute route runs this same validator.
         """
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
         workflow = WorkflowBuilder()

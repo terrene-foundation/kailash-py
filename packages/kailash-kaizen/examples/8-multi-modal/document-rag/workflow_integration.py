@@ -16,12 +16,11 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
+from kailash.runtime import AsyncLocalRuntime
 from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )
-
-from kailash.runtime import AsyncLocalRuntime
 
 
 def create_sample_invoice() -> str:

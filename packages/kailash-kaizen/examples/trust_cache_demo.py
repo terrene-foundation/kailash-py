@@ -14,7 +14,6 @@ import time
 from datetime import datetime
 
 from kailash.trust.cache import TrustChainCache
-
 from kaizen.trust import (
     AuthorityType,
     CapabilityAttestation,

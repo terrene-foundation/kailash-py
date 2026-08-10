@@ -44,17 +44,6 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-
-
-def _validate_table_name(name: str) -> None:
-    """Raise ValueError if name is not a safe SQL identifier."""
-    if not _TABLE_NAME_RE.match(name):
-        raise ValueError(
-            f"Invalid table name '{name}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
-        )
-
-
 from kailash.nodes.base import NodeMetadata, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.transaction.participant_transport import (
@@ -65,6 +54,16 @@ from kailash.nodes.transaction.participant_transport import (
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 
 logger = logging.getLogger(__name__)
+
+_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Raise ValueError if name is not a safe SQL identifier."""
+    if not _TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+        )
 
 
 class TransactionState(Enum):

@@ -17,15 +17,8 @@ Covers:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
-from kailash.trust.plane.models import (
-    ConstraintEnvelope as TrustConstraintEnvelope,
-    FinancialConstraints,
-    OperationalConstraints,
-)
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
     ConstraintEnvelopeConfig,
@@ -40,8 +33,8 @@ from kailash.trust.pact.envelope_adapter import (
     GovernanceEnvelopeAdapter,
 )
 from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.plane.models import ConstraintEnvelope as TrustConstraintEnvelope
 from pact.examples.university.org import create_university_org
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

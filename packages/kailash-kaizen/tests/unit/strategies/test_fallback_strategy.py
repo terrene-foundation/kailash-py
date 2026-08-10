@@ -15,6 +15,7 @@ Tests cover:
 """
 
 import pytest
+
 from kaizen.strategies.fallback import FallbackStrategy
 
 

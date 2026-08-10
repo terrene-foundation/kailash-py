@@ -15,16 +15,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.auth.sso import SSOAuthenticationNode as CoreSSONode
-
 from kaizen.core.structured_output import create_structured_output_config
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.auth.signatures import (
     SSOFieldMappingSignature,
     SSORoleAssignmentSignature,
 )
-
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
 

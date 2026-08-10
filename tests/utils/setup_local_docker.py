@@ -103,7 +103,7 @@ def wait_for_ollama(base_url="http://localhost:11435"):
             if response.status_code == 200:
                 print("Ollama is ready!")
                 return True
-        except:
+        except requests.exceptions.RequestException:
             pass
         time.sleep(1)
     return False

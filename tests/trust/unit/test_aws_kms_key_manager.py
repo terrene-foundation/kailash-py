@@ -22,16 +22,11 @@ Real AWS KMS testing belongs in Tier 2/3.
 
 import base64
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-from kailash.trust.key_manager import (
-    AWSKMSKeyManager,
-    KeyManagerError,
-    KeyMetadata,
-)
-
+from kailash.trust.key_manager import AWSKMSKeyManager, KeyManagerError, KeyMetadata
 
 # ---------------------------------------------------------------------------
 # Helpers

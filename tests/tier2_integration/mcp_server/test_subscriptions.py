@@ -7,10 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import pytest_asyncio
-
-from kailash_mcp.auth.providers import AuthManager
-from kailash_mcp.auth.providers import PermissionError as PermissionDeniedError
-from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
 from kailash_mcp.advanced.subscriptions import (
     CursorManager,
     ResourceMonitor,
@@ -18,6 +14,9 @@ from kailash_mcp.advanced.subscriptions import (
     ResourceSubscriptionManager,
     SubscriptionError,
 )
+from kailash_mcp.auth.providers import AuthManager
+from kailash_mcp.auth.providers import PermissionError as PermissionDeniedError
+from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
 
 
 class TestResourceSubscription:

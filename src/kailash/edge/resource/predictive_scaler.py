@@ -18,7 +18,9 @@ from kailash._math_utils import linregress, mean, stdev
 # For time series forecasting
 try:
     from statsmodels.tsa.arima.model import ARIMA  # type: ignore[reportMissingImports]
-    from statsmodels.tsa.holtwinters import ExponentialSmoothing  # type: ignore[reportMissingImports]
+    from statsmodels.tsa.holtwinters import (
+        ExponentialSmoothing,  # type: ignore[reportMissingImports]
+    )
 
     STATSMODELS_AVAILABLE = True
 except ImportError:

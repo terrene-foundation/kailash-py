@@ -32,6 +32,7 @@ from collections import deque
 from typing import AsyncIterator
 
 import anyio
+
 from kaizen.core.autonomy.control.transport import Transport
 
 

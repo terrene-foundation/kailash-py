@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.addressing import Address, GrammarError, NodeType
 from kailash.trust.pact.compilation import (
     CompilationError,
@@ -22,7 +21,7 @@ from kailash.trust.pact.compilation import (
     VacancyStatus,
     compile_org,
 )
-
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures: Financial Services org (PACT thesis Section 7.1)

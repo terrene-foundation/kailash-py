@@ -360,7 +360,7 @@ class FailureDiagnoser:
         suggested_actions = [str(a) for a in suggested_actions if a]
 
         confidence = raw.get("confidence", 0.5)
-        if not isinstance(confidence, (int, float)):
+        if not isinstance(confidence, int | float):
             confidence = 0.5
         confidence = max(0.0, min(1.0, float(confidence)))
 

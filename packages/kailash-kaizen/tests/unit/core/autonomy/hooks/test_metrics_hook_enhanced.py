@@ -18,13 +18,6 @@ import time
 from unittest.mock import patch
 
 import pytest
-from kaizen.core.autonomy.hooks import HookContext, HookEvent
-
-# Kaizen imports
-from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
-from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (
-    PerformanceProfilerHook,
-)
 
 # Prometheus client imports
 from prometheus_client import (
@@ -33,6 +26,14 @@ from prometheus_client import (
     Gauge,
     Histogram,
     generate_latest,
+)
+
+from kaizen.core.autonomy.hooks import HookContext, HookEvent
+
+# Kaizen imports
+from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
+from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (
+    PerformanceProfilerHook,
 )
 
 # ============================================================================
@@ -666,9 +667,9 @@ class TestPerformanceBenchmarks:
         avg_time_per_metric_ms = total_time_ms / 1000
 
         # Assert: Average time < 0.5ms per metric
-        assert avg_time_per_metric_ms < 0.5, (
-            f"Metric collection took {avg_time_per_metric_ms:.3f}ms (target: <0.5ms)"
-        )
+        assert (
+            avg_time_per_metric_ms < 0.5
+        ), f"Metric collection took {avg_time_per_metric_ms:.3f}ms (target: <0.5ms)"
 
     @pytest.mark.asyncio
     async def test_export_generation_performance(self):
@@ -692,7 +693,7 @@ class TestPerformanceBenchmarks:
         export_time_ms = (end_time - start_time) * 1000
 
         # Assert: Export generation < 100ms
-        assert export_time_ms < 100, (
-            f"Export took {export_time_ms:.3f}ms (target: <100ms)"
-        )
+        assert (
+            export_time_ms < 100
+        ), f"Export took {export_time_ms:.3f}ms (target: <100ms)"
         assert len(metrics) > 0

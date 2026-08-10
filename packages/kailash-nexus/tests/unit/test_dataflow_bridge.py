@@ -15,9 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from nexus.bridges.dataflow import DataFlowEventBridge, _DATAFLOW_WRITE_ACTIONS
+from nexus.bridges.dataflow import _DATAFLOW_WRITE_ACTIONS, DataFlowEventBridge
 from nexus.events import EventBus, NexusEvent, NexusEventType
-
 
 # ---------------------------------------------------------------------------
 # Helpers

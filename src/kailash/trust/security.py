@@ -44,7 +44,9 @@ except ImportError:
     hashes: Any = None
     default_backend: Any = None
 
-from kailash.trust.exceptions import TrustError
+# Deliberately after the optional `cryptography` availability guard above —
+# noqa: E402 is the guard, not an oversight.
+from kailash.trust.exceptions import TrustError  # noqa: E402
 
 # ============================================================================
 # Exceptions

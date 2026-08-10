@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitState,

@@ -18,10 +18,9 @@ from tests.infrastructure.test_harness import IntegrationTestSuite
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 
 
 @pytest.fixture

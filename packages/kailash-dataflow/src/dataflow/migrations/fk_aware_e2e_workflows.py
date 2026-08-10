@@ -30,16 +30,15 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+# DataFlow imports
+from dataflow.core.engine import DataFlow
+from dataflow.migrations.schema_state_manager import ChangeType
+from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
 # Core SDK imports (conceptual)
 from kailash.workflow.builder import WorkflowBuilder
-
-# DataFlow imports
-from dataflow.core.engine import DataFlow
-from dataflow.migrations.schema_state_manager import ChangeType
-from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
 
 from .fk_aware_nodes import register_fk_aware_nodes
 

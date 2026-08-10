@@ -42,7 +42,6 @@ from kailash.nodes.monitoring.performance_anomaly import (
 )
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

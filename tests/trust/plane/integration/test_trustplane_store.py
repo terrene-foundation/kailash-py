@@ -21,7 +21,11 @@ from pathlib import Path
 
 import pytest
 
-from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import (
+    DelegateStatus,
+    DelegationRecipient,
+    ReviewResolution,
+)
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import (
     DecisionRecord,
@@ -31,7 +35,6 @@ from kailash.trust.plane.models import (
 )
 from kailash.trust.plane.store import TrustPlaneStore
 from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -160,9 +163,9 @@ class TestLifecycle:
             "reviews",
             "anchors",
         ]:
-            assert (trust_dir / subdir).is_dir(), (
-                f"{subdir}/ must exist after initialize"
-            )
+            assert (
+                trust_dir / subdir
+            ).is_dir(), f"{subdir}/ must exist after initialize"
 
     def test_initialize_idempotent(self, trust_dir):
         """Calling initialize() twice must not raise."""

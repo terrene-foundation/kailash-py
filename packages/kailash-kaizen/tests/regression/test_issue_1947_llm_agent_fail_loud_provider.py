@@ -76,7 +76,9 @@ class TestUnresolvedProviderFailsLoud:
         # The framework wraps run()'s ConfigurationError in a NodeExecutionError,
         # but the failure is LOUD — the key regression guarantee is that no
         # result dict with fabricated mock content is returned.
-        with pytest.raises(Exception) as exc_info:  # noqa: PT011 - assert on chain below
+        with pytest.raises(
+            Exception
+        ) as exc_info:  # noqa: PT011 - assert on chain below
             # execute() applies the env-derived model default via validate_inputs;
             # the provider fail-loud fires regardless of model.
             node.execute(messages=_MESSAGES)

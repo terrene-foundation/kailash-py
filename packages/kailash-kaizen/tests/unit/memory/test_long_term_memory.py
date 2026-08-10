@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from kaizen.memory.long_term import LongTermMemory
 from kaizen.memory.storage.sqlite_storage import SQLiteStorage
 

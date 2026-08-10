@@ -7,6 +7,7 @@ Tests middleware initialization, exclusion logic, and IP extraction.
 from unittest.mock import MagicMock
 
 import pytest
+
 from nexus.auth.audit.config import AuditConfig
 from nexus.auth.audit.middleware import AuditMiddleware
 

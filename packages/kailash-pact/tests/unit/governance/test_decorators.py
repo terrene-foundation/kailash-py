@@ -16,7 +16,6 @@ import pytest
 
 from kailash.trust.pact.decorators import governed_tool
 
-
 # ---------------------------------------------------------------------------
 # Basic Decorator Tests
 # ---------------------------------------------------------------------------
@@ -62,7 +61,7 @@ class TestGovernedToolDecorator:
         def expensive_op() -> str:
             return "done"
 
-        assert hasattr(send := expensive_op, "_governance_cost")
+        assert hasattr(expensive_op, "_governance_cost")
         assert expensive_op._governance_cost == 50.0
 
     def test_default_cost_is_zero(self) -> None:

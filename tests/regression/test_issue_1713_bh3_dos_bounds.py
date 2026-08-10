@@ -201,8 +201,8 @@ def test_in_bounds_sign_and_verify_roundtrip_unchanged() -> None:
 
 def test_sign_path_surfaces_typed_error_not_recursionerror() -> None:
     # The sign path (origin.py:241) previously propagated an UNCAUGHT
-    # RecursionError on a deeply-nested instruction; it now surfaces a clean
-    # typed ValueError from the guard.
+    # RecursionError on a deeply-nested instruction; it now surfaces a clean typed
+    # ValueError from the guard.
     nacl = pytest.importorskip("nacl.signing")
     import base64
 

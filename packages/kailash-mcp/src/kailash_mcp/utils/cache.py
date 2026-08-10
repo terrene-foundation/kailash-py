@@ -543,8 +543,9 @@ class CacheManager:
     def _init_redis(self):
         """Initialize Redis connection."""
         try:
-            import redis.asyncio as redis
             from urllib.parse import urlparse
+
+            import redis.asyncio as redis
 
             redis_url = self.config.get("redis_url", "redis://localhost:6379")
             # Validate Redis URL scheme to prevent SSRF (H4)

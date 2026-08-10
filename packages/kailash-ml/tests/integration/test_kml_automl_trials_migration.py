@@ -21,17 +21,16 @@ import importlib
 from pathlib import Path
 
 import pytest
-from kailash.db.connection import ConnectionManager
-
-from kailash_ml.automl import (
-    AutoMLConfig,
-    AutoMLEngine,
-    ParamSpec,
-    Trial,
-    TrialOutcome,
-)
+from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 from kailash_ml.errors import MigrationRequiredError
 
+# Migration helpers expect ``conn.execute(sql, params_tuple)`` shape;
+# ConnectionManager uses varargs ``execute(sql, *args)``. Wrap via the
+# same private adapter ExperimentTracker.create() uses (mirrors W10
+# tracker bootstrap).
+from kailash_ml.tracking.tracker import _MigrationConnAdapter
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Migration module — imported via importlib because the filename starts
@@ -47,13 +46,6 @@ PlaceholderTablePopulatedError = _MIGRATION_MOD.PlaceholderTablePopulatedError
 DowngradeRefusedError = _MIGRATION_MOD.DowngradeRefusedError
 
 
-# Migration helpers expect ``conn.execute(sql, params_tuple)`` shape;
-# ConnectionManager uses varargs ``execute(sql, *args)``. Wrap via the
-# same private adapter ExperimentTracker.create() uses (mirrors W10
-# tracker bootstrap).
-from kailash_ml.tracking.tracker import _MigrationConnAdapter
-
-
 def _adapt(conn: ConnectionManager) -> Any:
     return _MigrationConnAdapter(conn)
 
@@ -61,7 +53,6 @@ def _adapt(conn: ConnectionManager) -> Any:
 # Late import to satisfy ``Any`` annotation above without polluting
 # the module-level import block.
 from typing import Any  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Toy trial — minimal so the test focuses on schema discipline, not

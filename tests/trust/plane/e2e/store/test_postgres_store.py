@@ -31,15 +31,24 @@ psycopg = pytest.importorskip(
     "psycopg", reason="psycopg not installed", exc_type=ImportError
 )
 
-from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
-from kailash.trust.plane.holds import HoldRecord
-from kailash.trust.plane.models import (
+# Deliberately after the importorskip guard above — noqa: E402 is the guard,
+# not an oversight.
+from kailash.trust.plane.delegation import (  # noqa: E402
+    DelegateStatus,
+    DelegationRecipient,
+    ReviewResolution,
+)
+from kailash.trust.plane.holds import HoldRecord  # noqa: E402
+from kailash.trust.plane.models import (  # noqa: E402
     DecisionRecord,
     DecisionType,
     MilestoneRecord,
     ProjectManifest,
 )
-from kailash.trust.plane.store.postgres import SCHEMA_VERSION, PostgresTrustPlaneStore
+from kailash.trust.plane.store.postgres import (  # noqa: E402
+    SCHEMA_VERSION,
+    PostgresTrustPlaneStore,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -585,7 +594,7 @@ class TestExceptionWrapping:
         @contextmanager
         def _raise_store_error():
             raise StoreQueryError("inner query error")
-            yield  # noqa: unreachable
+            yield  # type: ignore[unreachable]
 
         pg_store._pool.connection = _raise_store_error
         try:

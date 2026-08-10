@@ -15,6 +15,7 @@ Tests cover:
 """
 
 import pytest
+
 from kaizen.strategies.human_in_loop import HumanInLoopStrategy
 
 

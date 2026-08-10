@@ -21,11 +21,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kaizen.l3.context import (
-    ContextScope,
-    DataClassification,
-    ScopeProjection,
-)
+from kaizen.l3.context import ContextScope, DataClassification, ScopeProjection
 from kaizen.l3.envelope import (
     AllocationRequest,
     CostEntry,
@@ -49,7 +45,6 @@ from kaizen.l3.messaging import (
     Priority,
     ResourceSnapshot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

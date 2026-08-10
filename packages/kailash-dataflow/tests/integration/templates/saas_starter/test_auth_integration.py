@@ -48,10 +48,6 @@ from datetime import datetime, timedelta
 
 import jwt
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from templates.saas_starter.middleware.tenant import (
     build_org_switching_workflow,
     build_tenant_scoped_bulk_update_workflow,
@@ -71,6 +67,10 @@ from templates.saas_starter.workflows.auth import (
     build_registration_workflow,
     build_token_validation_workflow,
 )
+
+from dataflow import DataFlow
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 # ----------------------------------------------------------------------
 # Fixture — real DataFlow against a temp-file SQLite database with the

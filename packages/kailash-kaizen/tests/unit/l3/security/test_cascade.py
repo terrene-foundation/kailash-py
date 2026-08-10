@@ -25,7 +25,6 @@ from kaizen.l3.factory.instance import (
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

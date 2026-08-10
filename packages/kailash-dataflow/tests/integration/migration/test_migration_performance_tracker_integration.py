@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+
 from dataflow.migrations.auto_migration_system import (
     ColumnDefinition,
     Migration,
@@ -39,7 +40,6 @@ from dataflow.migrations.migration_test_framework import (
     MigrationTestEnvironment,
     MigrationTestFramework,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 try:

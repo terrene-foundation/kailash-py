@@ -13,7 +13,6 @@ import pytest
 from nexus import Nexus
 from nexus.background import BackgroundService
 
-
 # ---------------------------------------------------------------------------
 # Concrete test implementation
 # ---------------------------------------------------------------------------

@@ -238,7 +238,7 @@ def _extract_string_leaves(
         for v in value.values():
             leaves.extend(_extract_string_leaves(v, max_depth, _depth + 1))
         return leaves
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         leaves = []
         for item in value:
             leaves.extend(_extract_string_leaves(item, max_depth, _depth + 1))

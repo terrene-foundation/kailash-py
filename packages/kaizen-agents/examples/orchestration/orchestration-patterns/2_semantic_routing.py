@@ -218,7 +218,9 @@ async def main():
 
         # Display results
         print("\nRouting Results:")
-        for i, (task, agent) in enumerate(zip(concurrent_tasks, selected_agents), 1):
+        for i, (task, agent) in enumerate(
+            zip(concurrent_tasks, selected_agents, strict=False), 1
+        ):
             if agent:
                 agent_name = agent._a2a_card["name"]
                 print(f"{i:2d}. {task:35s} → {agent_name}")

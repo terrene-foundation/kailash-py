@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.core.deprecation import deprecated
 from kaizen.nodes.ai.audio_utils import (
     encode_audio,

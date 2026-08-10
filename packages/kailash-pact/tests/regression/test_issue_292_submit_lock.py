@@ -18,7 +18,6 @@ import pytest
 
 from pact.engine import PactEngine
 
-
 FIXTURES_DIR = Path(__file__).parent.parent / "unit" / "governance" / "fixtures"
 
 

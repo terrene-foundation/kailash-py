@@ -34,6 +34,7 @@ correct allow/deny decisions for the flagship demo.
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
 from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org

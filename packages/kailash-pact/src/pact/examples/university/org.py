@@ -33,8 +33,8 @@ from __future__ import annotations
 
 import logging
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 logger = logging.getLogger(__name__)
 

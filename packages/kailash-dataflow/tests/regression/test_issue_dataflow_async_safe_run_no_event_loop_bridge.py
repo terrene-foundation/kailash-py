@@ -39,9 +39,8 @@ async def test_original_bug_scenario():
     workflow runs on the SAME loop the caller is on. This test
     pins the live-path success contract.
     """
-    from kailash.workflow.builder import WorkflowBuilder
-
     from dataflow.migrations.auto_migration_system import _execute_workflow_safe
+    from kailash.workflow.builder import WorkflowBuilder
 
     # Simulate being in FastAPI context (event loop running).
     loop = asyncio.get_running_loop()

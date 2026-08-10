@@ -9,10 +9,9 @@ import json
 
 import pytest
 import websockets
-from websockets import serve
-
 from kailash_mcp.client import MCPClient
 from kailash_mcp.errors import TransportError
+from websockets import serve
 
 
 class TestWebSocketTransportOriginalBugFix:

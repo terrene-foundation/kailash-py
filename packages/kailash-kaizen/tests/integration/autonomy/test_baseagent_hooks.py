@@ -20,6 +20,7 @@ import logging
 from dataclasses import dataclass
 
 import pytest
+
 from kaizen.core.autonomy.hooks import (
     BaseHook,
     HookContext,

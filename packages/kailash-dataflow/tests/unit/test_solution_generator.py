@@ -7,6 +7,7 @@ to ensure accurate relevance scoring and solution customization.
 from unittest.mock import Mock
 
 import pytest
+
 from dataflow.debug.analysis_result import AnalysisResult
 from dataflow.debug.error_categorizer import ErrorCategory
 from dataflow.debug.knowledge_base import KnowledgeBase

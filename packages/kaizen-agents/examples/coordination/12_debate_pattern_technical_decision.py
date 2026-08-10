@@ -20,7 +20,7 @@ Estimated time: 15 minutes
 
 import json
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_debate_pattern
 
@@ -105,8 +105,8 @@ TECHNICAL_DECISIONS = [
 
 
 def format_decision_report(
-    decision: Dict[str, Any], result: Dict[str, Any], judgment: Dict[str, Any]
-) -> Dict[str, Any]:
+    decision: dict[str, Any], result: dict[str, Any], judgment: dict[str, Any]
+) -> dict[str, Any]:
     """Format technical decision report."""
 
     return {

@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import pytest
+
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer
 from dataflow.migrations.impact_reporter import ImpactReporter, OutputFormat
 from dataflow.migrations.migration_validation_pipeline import (

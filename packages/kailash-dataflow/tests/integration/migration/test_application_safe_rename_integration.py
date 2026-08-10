@@ -29,6 +29,7 @@ from typing import Dict, List, Optional
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.application_safe_rename_strategy import (
     ApplicationHealthChecker,
     ApplicationSafeRenameStrategy,
@@ -51,7 +52,6 @@ from dataflow.migrations.table_rename_analyzer import (
     RenameImpactLevel,
     TableRenameAnalyzer,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 from tests.utils.real_infrastructure import real_infra

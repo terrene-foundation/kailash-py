@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import importlib
 
-import pytest
-
 import kailash_ml
+import pytest
 
 
 @pytest.mark.parametrize("symbol", kailash_ml.__all__)

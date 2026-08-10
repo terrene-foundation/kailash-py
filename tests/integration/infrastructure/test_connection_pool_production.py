@@ -292,7 +292,7 @@ High Concurrency Test Results:
                         "fetch_mode": "one",
                     }
                 )
-            except:
+            except Exception:
                 failed_attempts += 1
 
         # Restart supervisor (simulating recovery)

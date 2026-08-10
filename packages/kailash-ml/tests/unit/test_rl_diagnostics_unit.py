@@ -23,12 +23,12 @@ from typing import Any
 
 import pytest
 
-from kailash.diagnostics.protocols import Diagnostic
-
 # Import through the facade — NOT ``kailash_ml.diagnostics.rl`` — so the
 # wiring test catches an orphan facade attribute if the public surface
 # drifts (rules/orphan-detection.md §1).
-from kailash_ml.diagnostics import RLDiagnostics, RLDiagnosticFinding
+from kailash_ml.diagnostics import RLDiagnosticFinding, RLDiagnostics
+
+from kailash.diagnostics.protocols import Diagnostic
 
 
 class _RecordingTracker:

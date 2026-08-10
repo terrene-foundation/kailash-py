@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from unittest.mock import Mock
 
+import docker
 import psutil
 import pymongo
 import pytest
@@ -43,7 +44,6 @@ import redis
 import sqlalchemy as sa
 from sqlalchemy import create_engine
 
-import docker
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

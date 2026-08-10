@@ -18,10 +18,10 @@ from collections import defaultdict
 from typing import Any, Dict, Optional
 
 import numpy as np
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-
 from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)

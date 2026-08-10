@@ -24,14 +24,7 @@ from typing import Any
 
 import pytest
 
-from kaizen.l3.plan.types import (
-    EdgeType,
-    PlanEdge,
-    PlanNode,
-    PlanNodeState,
-    PlanState,
-)
-
+from kaizen.l3.plan.types import EdgeType, PlanEdge, PlanNode, PlanNodeState, PlanState
 
 # ---------------------------------------------------------------------------
 # Helpers

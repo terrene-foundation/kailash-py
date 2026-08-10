@@ -69,9 +69,9 @@ async def test_complete_batch_processing_workflow():
 
         # Each result should have processed content
         for i, result in enumerate(results):
-            assert "result" in result or "summary" in result or "content" in result, (
-                f"Item {i} should have processed result"
-            )
+            assert (
+                "result" in result or "summary" in result or "content" in result
+            ), f"Item {i} should have processed result"
 
     finally:
         sys.path.remove(str(example_path))

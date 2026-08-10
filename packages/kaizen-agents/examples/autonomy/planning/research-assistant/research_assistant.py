@@ -27,13 +27,12 @@ Usage:
 import asyncio
 import sys
 from pathlib import Path
-from typing import Dict, List
 
-from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import MemoryTransport
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager, HookResult
 from kaizen.memory.tiers import HotMemoryTier
+from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 
 
 class ResearchAuditHook:
@@ -139,7 +138,7 @@ class ResearchAssistant:
         print(f"📝 Audit Trail: {enable_audit}")
         print("=" * 60 + "\n")
 
-    async def research(self, topic: str, context: Dict = None) -> Dict:
+    async def research(self, topic: str, context: dict = None) -> dict:
         """
         Execute research on topic with planning pattern.
 

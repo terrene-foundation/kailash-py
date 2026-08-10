@@ -28,10 +28,7 @@ from typing import Optional
 
 import pytest
 
-from nexus.extractors.proxy import (
-    client_key_for_request,
-    resolve_client_host,
-)
+from nexus.extractors.proxy import client_key_for_request, resolve_client_host
 
 
 class _Client:

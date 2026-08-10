@@ -13,6 +13,7 @@ missing extras.
 """
 from __future__ import annotations
 
+import importlib.util
 import logging
 from typing import Any
 
@@ -188,14 +189,14 @@ def to_lgb_dataset(
     has_cats = bool(cat_cols)
 
     if has_cats:
-        # Minimal pandas conversion for categorical columns only
-        try:
-            import pandas as pd
-        except ImportError as exc:
+        # Minimal pandas conversion for categorical columns only. Availability
+        # check only -- `feature_df.to_pandas()` below is the polars method,
+        # not a `pandas` module reference.
+        if importlib.util.find_spec("pandas") is None:
             raise ImportError(
                 "pandas is required for LightGBM categorical support. "
                 "Install it with: pip install pandas"
-            ) from exc
+            )
 
         feature_df = df.select(feature_columns)
         pdf = feature_df.to_pandas()
@@ -268,13 +269,11 @@ def polars_to_arrow(
     ValueError
         If schema validation is requested and the schemas do not match.
     """
-    try:
-        import pyarrow as pa  # noqa: F841
-    except ImportError as exc:
+    if importlib.util.find_spec("pyarrow") is None:
         raise ImportError(
             "pyarrow is required for polars_to_arrow(). "
             "Install it with: pip install pyarrow"
-        ) from exc
+        )
 
     table = df.to_arrow()
 

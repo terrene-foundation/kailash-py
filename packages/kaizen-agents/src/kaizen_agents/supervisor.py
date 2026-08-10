@@ -904,7 +904,7 @@ class GovernedSupervisor:
         explicit_cost = output.get("cost")
         if (
             explicit_cost is not None
-            and isinstance(explicit_cost, (int, float))
+            and isinstance(explicit_cost, int | float)
             and math.isfinite(explicit_cost)
             and explicit_cost > 0
         ):

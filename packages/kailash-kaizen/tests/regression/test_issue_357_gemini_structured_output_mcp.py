@@ -11,6 +11,7 @@ Structured output mode takes priority over auto-tool discovery.
 """
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
 

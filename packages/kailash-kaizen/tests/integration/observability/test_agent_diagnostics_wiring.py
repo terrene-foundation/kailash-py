@@ -25,14 +25,12 @@ from kailash.diagnostics.protocols import (
     TraceEventType,
     compute_trace_event_fingerprint,
 )
-
 from kaizen.observability import (
     AgentDiagnostics,
     CallableSink,
     TraceExporter,
     compute_fingerprint,
 )
-
 
 pytestmark = pytest.mark.integration
 

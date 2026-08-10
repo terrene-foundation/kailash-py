@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterator, List
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
 from dataflow.performance.migration_optimizer import OptimizedSchemaComparator
 
 

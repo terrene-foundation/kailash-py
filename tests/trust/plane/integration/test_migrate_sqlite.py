@@ -20,7 +20,11 @@ from pathlib import Path
 import pytest
 
 from kailash.trust._locking import safe_read_json
-from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import (
+    DelegateStatus,
+    DelegationRecipient,
+    ReviewResolution,
+)
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.migrate import migrate_to_sqlite
 from kailash.trust.plane.models import (
@@ -31,7 +35,6 @@ from kailash.trust.plane.models import (
 )
 from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
 from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -333,9 +336,9 @@ class TestMigrateToSqliteConfirmDelete:
             "reviews",
             "anchors",
         ):
-            assert not (seeded_trust_dir / subdir).exists(), (
-                f"{subdir}/ should be deleted after confirm_delete"
-            )
+            assert not (
+                seeded_trust_dir / subdir
+            ).exists(), f"{subdir}/ should be deleted after confirm_delete"
 
     def test_confirm_delete_preserves_db(self, seeded_trust_dir):
         migrate_to_sqlite(seeded_trust_dir, confirm_delete=True)

@@ -35,8 +35,9 @@ class TestWorkflowVisualizer:
 
     def test_to_mermaid_with_nodes(self):
         """Test generating Mermaid with nodes."""
-        import networkx as nx
         from unittest.mock import Mock
+
+        import networkx as nx
 
         workflow = Mock()
         workflow.graph = nx.DiGraph()

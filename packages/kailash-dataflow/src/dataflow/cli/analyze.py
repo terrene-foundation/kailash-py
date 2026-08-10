@@ -9,6 +9,7 @@ import sys
 from typing import Any, Dict
 
 import click
+
 from dataflow.cli.output import get_formatter
 from dataflow.cli.validate import load_workflow
 

@@ -20,7 +20,6 @@ import pytest
 from kailash.trust.plane.exceptions import SchemaMigrationError, SchemaTooNewError
 from kailash.trust.plane.store.sqlite import SCHEMA_VERSION, SqliteTrustPlaneStore
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

@@ -258,7 +258,7 @@ def _coerce_float_cap(value: Any) -> tuple[Any, bool]:
     """A spend cap. NaN/Inf are REJECTED: `NaN` silently passes every `>`
     comparison a budget check makes (`trust-plane-security.md` MUST-NOT-5), so
     accepting one here would reinstate the unlimited grant in numeric form."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         return None, False
     if not math.isfinite(value) or value < 0:
         return None, False
@@ -269,8 +269,8 @@ def _coerce_tool_list(value: Any) -> tuple[Any, bool]:
     """An allow/block list. Must be a real sequence of strings; a bare `str`
     is rejected because iterating one yields CHARACTERS, silently producing a
     per-character tool list."""
-    if isinstance(value, (str, bytes, bytearray)) or not isinstance(
-        value, (Sequence, AbstractSet)
+    if isinstance(value, str | bytes | bytearray) or not isinstance(
+        value, Sequence | AbstractSet
     ):
         return None, False
     items = list(value)
@@ -314,9 +314,9 @@ def _constraint_payload_present(raw: Any) -> bool:
     """
     if raw is None:
         return False
-    if isinstance(raw, (str, bytes, bytearray)):
+    if isinstance(raw, str | bytes | bytearray):
         return len(raw) > 0
-    if isinstance(raw, (Mapping, Sequence, AbstractSet)):
+    if isinstance(raw, Mapping | Sequence | AbstractSet):
         return len(raw) > 0
     return True
 
@@ -579,8 +579,8 @@ def normalize_access_constraints(
             setattr(constraints, field_name, coerced)
         return constraints, [], None
 
-    if isinstance(raw, (Sequence, AbstractSet)) and not isinstance(
-        raw, (str, bytes, bytearray)
+    if isinstance(raw, Sequence | AbstractSet) and not isinstance(
+        raw, str | bytes | bytearray
     ):
         # EVERY element must be a real label. A non-`str` element means this is
         # not the documented label-list shape at all, and we are back to a

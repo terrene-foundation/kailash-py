@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
-from dataflow import DataFlow, DataFlowConfig
 
+from dataflow import DataFlow, DataFlowConfig
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

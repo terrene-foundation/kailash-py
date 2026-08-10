@@ -235,9 +235,8 @@ async def get_feature_distribution(data: Any, feature: str) -> dict[str, Any]:
 
 async def get_prediction_accuracy(predictions: Any, actuals: Any) -> dict[str, float]:
     """Compute accuracy metrics. No decisions."""
-    from sklearn.metrics import accuracy_score, mean_squared_error
-
     import numpy as np
+    from sklearn.metrics import accuracy_score, mean_squared_error
 
     try:
         y_pred = np.array(predictions)

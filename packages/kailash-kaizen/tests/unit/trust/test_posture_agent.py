@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from kailash.trust.agents.posture_agent import AuditEntry, PostureAwareAgent
 from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 

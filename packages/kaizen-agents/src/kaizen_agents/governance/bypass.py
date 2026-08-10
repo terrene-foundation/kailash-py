@@ -121,7 +121,7 @@ class BypassManager:
         if not authorizer:
             raise ValueError("authorizer must not be empty")
         if (
-            not isinstance(duration_seconds, (int, float))
+            not isinstance(duration_seconds, int | float)
             or not math.isfinite(float(duration_seconds))
             or duration_seconds <= 0
         ):

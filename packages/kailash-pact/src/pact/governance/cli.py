@@ -114,7 +114,6 @@ def validate(yaml_path: str, verbose: bool) -> None:
 
     # --- Validate clearance references ---
     issues: list[str] = []
-    role_ids = {r.role_id for r in org_def.roles}
 
     for spec in loaded.clearances:
         node = compiled.get_node_by_role_id(spec.role_id)
@@ -139,9 +138,13 @@ def validate(yaml_path: str, verbose: bool) -> None:
         a_node = compiled.get_node_by_role_id(spec.role_a)
         b_node = compiled.get_node_by_role_id(spec.role_b)
         if a_node is None:
-            issues.append(f"Bridge '{spec.id}' role_a '{spec.role_a}' could not be resolved")
+            issues.append(
+                f"Bridge '{spec.id}' role_a '{spec.role_a}' could not be resolved"
+            )
         if b_node is None:
-            issues.append(f"Bridge '{spec.id}' role_b '{spec.role_b}' could not be resolved")
+            issues.append(
+                f"Bridge '{spec.id}' role_b '{spec.role_b}' could not be resolved"
+            )
 
     # --- Show address tree if verbose ---
     if verbose:
@@ -161,7 +164,9 @@ def validate(yaml_path: str, verbose: bool) -> None:
         click.echo()
 
     if not issues:
-        click.echo(f"\n{_green('All references valid.')} Organization is well-formed.\n")
+        click.echo(
+            f"\n{_green('All references valid.')} Organization is well-formed.\n"
+        )
     else:
         click.echo(
             f"\n{_yellow('Validation completed with warnings.')} "

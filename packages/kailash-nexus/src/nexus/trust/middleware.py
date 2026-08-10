@@ -27,10 +27,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Protocol, runtime_checkable
 
-from nexus.trust.headers import EATPHeaderExtractor, ExtractedEATPContext
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from nexus.trust.headers import EATPHeaderExtractor, ExtractedEATPContext
 
 logger = logging.getLogger(__name__)
 

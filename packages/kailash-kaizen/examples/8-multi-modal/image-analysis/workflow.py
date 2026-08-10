@@ -16,8 +16,9 @@ Requirements:
 import sys
 from pathlib import Path
 
-from kaizen_agents.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
 from PIL import Image
+
+from kaizen_agents.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
 
 
 def create_sample_images():

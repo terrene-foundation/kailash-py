@@ -42,33 +42,6 @@ from __future__ import annotations
 
 import logging
 
-# ---------------------------------------------------------------------------
-# Models (constraint envelopes, records, enums)
-# ---------------------------------------------------------------------------
-
-from kailash.trust.plane.models import (
-    CommunicationConstraints,
-    ConstraintEnvelope,
-    DataAccessConstraints,
-    DecisionRecord,
-    DecisionType,
-    EscalationRecord,
-    ExecutionRecord,
-    FinancialConstraints,
-    HumanCompetency,
-    InterventionRecord,
-    MilestoneRecord,
-    OperationalConstraints,
-    ProjectManifest,
-    ReviewRequirement,
-    TemporalConstraints,
-    VerificationCategory,
-)
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
 from kailash.trust.plane.exceptions import (
     ArchiveError,
     BudgetExhaustedError,
@@ -94,20 +67,48 @@ from kailash.trust.plane.exceptions import (
     TrustPlaneStoreError,
     VerificationError,
 )
+from kailash.trust.plane.models import (
+    CommunicationConstraints,
+    ConstraintEnvelope,
+    DataAccessConstraints,
+    DecisionRecord,
+    DecisionType,
+    EscalationRecord,
+    ExecutionRecord,
+    FinancialConstraints,
+    HumanCompetency,
+    InterventionRecord,
+    MilestoneRecord,
+    OperationalConstraints,
+    ProjectManifest,
+    ReviewRequirement,
+    TemporalConstraints,
+    VerificationCategory,
+)
+from kailash.trust.plane.project import TrustProject
+from kailash.trust.plane.store import TrustPlaneStore
+from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
+from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
+
+# ---------------------------------------------------------------------------
+# Models (constraint envelopes, records, enums)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
 # Project
 # ---------------------------------------------------------------------------
 
-from kailash.trust.plane.project import TrustProject
 
 # ---------------------------------------------------------------------------
 # Store protocol and backends
 # ---------------------------------------------------------------------------
 
-from kailash.trust.plane.store import TrustPlaneStore
-from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
-from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
 
 logger = logging.getLogger(__name__)
 

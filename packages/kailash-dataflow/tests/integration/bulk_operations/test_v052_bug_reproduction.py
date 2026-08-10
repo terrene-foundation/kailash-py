@@ -10,11 +10,11 @@ These tests use WorkflowBuilder pattern with auto-generated DataFlow nodes
 """
 
 import pytest
+
+from dataflow import DataFlow
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

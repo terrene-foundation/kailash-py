@@ -44,11 +44,11 @@ index 9dce997cf..46e3a29df 100644
 +++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/session_manager.py
 @@ -85,6 +85,7 @@ class CrossChannelSession:
          self.expires_at = datetime.now() + timedelta(hours=1)
- 
+
          if channel:
 +            # Record the channel's last-activity wall-clock time.
              self.channel_activity[channel] = datetime.now()
- 
+
      def update_state(self, updates: Dict[str, Any], channel: str = None):
 @@ -188,7 +189,18 @@ class NexusSessionManager:
              >>> session = manager.create_session(user_id="user-123", ttl_hours=2)
@@ -107,7 +107,7 @@ index dd0c6ef1a..8e9c6ecf4 100644
 @@ -42,6 +62,14 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
  # URL-embedded credentials (user:pass@host)
  _URL_WITH_AUTH = re.compile(r"(https?://)[^@\s]+:[^@\s]+@", re.ASCII)
- 
+
 +# Azure OpenAI endpoint hostname (#1960). The <resource> subdomain is the
 +# customer's Azure resource name — sensitive infra identity that reveals the
 +# tenant. Redact the resource while keeping the ".openai.azure.com" suffix so
@@ -122,7 +122,7 @@ index dd0c6ef1a..8e9c6ecf4 100644
 @@ -79,6 +107,11 @@ def sanitize_provider_error(
      # Replace URL-embedded credentials
      sanitized = _URL_WITH_AUTH.sub(r"\1[REDACTED]:[REDACTED]@", sanitized)
- 
+
 +    # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
 +    sanitized = _AZURE_OPENAI_ENDPOINT.sub(
 +        "https://[REDACTED].openai.azure.com", sanitized
@@ -138,7 +138,7 @@ index db9ed0dcf..b1bf3c243 100644
 @@ -722,10 +722,13 @@ class EdgeRAGNode(Node):
          local_data = kwargs.get("local_data") or []
          sync_with_cloud = kwargs.get("sync_with_cloud", False)
- 
+
 -        # Check cache first
 +        # Check cache first. ``cache_key`` is a truncated sha256 digest of the
 +        # query, NOT the query text — it carries no user-query content, so it is
@@ -149,14 +149,14 @@ index db9ed0dcf..b1bf3c243 100644
 -            logger.info(f"Cache hit for query: {cache_key}")
 +            logger.debug(f"Cache hit (key: {cache_key})")
              return self.cache[cache_key]
- 
+
          # Resource tracking
 diff --git a/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py b/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
 index 7a48e162a..a1743c78e 100644
 --- a/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
 +++ b/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
 @@ -94,12 +94,23 @@ class ReportAgent(BaseAgent):
- 
+
  @pytest.fixture
  def nexus_app():
 -    """Create Nexus app for testing."""
@@ -170,7 +170,7 @@ index 7a48e162a..a1743c78e 100644
 +    """
      if not NEXUS_AVAILABLE:
          pytest.skip("Nexus not available")
- 
+
      app = Nexus(auto_discovery=False)
 -    yield app
 +    app.start(blocking=False)
@@ -178,18 +178,18 @@ index 7a48e162a..a1743c78e 100644
 +        yield app
 +    finally:
 +        app.stop()
- 
- 
+
+
  @pytest.fixture
 @@ -175,8 +186,8 @@ class TestCompleteMultiChannelWorkflow:
          assert final_state["status"] == "completed"
- 
+
          # Verify session activity tracking
 -        assert session.channel_activity["api"] > 0
 -        assert session.channel_activity["mcp"] > 0
 +        assert "api" in session.channel_activity
 +        assert "mcp" in session.channel_activity
- 
+
      def test_multi_step_workflow_with_sessions(
          self, nexus_app, analysis_agent, report_agent, session_manager
 diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1960_sanitizer_redaction_gaps.py b/packages/kailash-kaizen/tests/regression/test_issue_1960_sanitizer_redaction_gaps.py
@@ -408,7 +408,7 @@ index 1ae2f1816..d2d4c2731 100644
 @@ -1736,6 +1736,91 @@ Check the documentation or explore available resources.
              f"   ⏱️  Registration time: {registration_time:.3f}s"
          )
- 
+
 +    def deregister(self, name: str) -> bool:
 +        """Remove a previously registered workflow from all channels.
 +
@@ -496,11 +496,11 @@ index 1ae2f1816..d2d4c2731 100644
 +
      # Multi-channel registration is handled automatically by the enterprise gateway
      # No need for custom channel registry - the gateway provides this natively
- 
+
 @@ -3581,13 +3666,60 @@ Check the documentation or explore available resources.
          except Exception as e:
              logger.warning(f"MCP server error: {e}. Continuing with other channels.")
- 
+
 -    def start(self):
 +    def _start_transport_ready(self) -> None:
 +        """Bring the HTTP transport to the ready state without a serving loop.
@@ -541,10 +541,10 @@ index 1ae2f1816..d2d4c2731 100644
 +
 +    def start(self, blocking: bool = True):
          """Start the Nexus platform using the enterprise gateway.
- 
+
          Zero-configuration startup that leverages the SDK's enterprise server
          with built-in multi-channel support (API, CLI, MCP).
- 
+
 -        This method blocks until the server is stopped (Ctrl+C or .stop() call).
 +        Args:
 +            blocking: When ``True`` (default) the HTTP server loop runs and this
@@ -563,14 +563,14 @@ index 1ae2f1816..d2d4c2731 100644
 @@ -3605,13 +3737,26 @@ Check the documentation or explore available resources.
          with self._shutdown_hooks_fired_lock:
              self._shutdown_hooks_fired = False
- 
+
 -        logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
 -
          # Auto-discover workflows if enabled
          if self._auto_discovery_enabled:
              logger.info("🔍 Auto-discovering workflows...")
              self._auto_discover_workflows()
- 
+
 +        if not blocking:
 +            # In-process readiness: apply queued config + register workflows
 +            # with the gateway, then mark running WITHOUT the serving loop or
@@ -594,9 +594,9 @@ index c49981db5..2eec4043a 100644
 --- a/src/kailash/servers/workflow_server.py
 +++ b/src/kailash/servers/workflow_server.py
 @@ -656,6 +656,55 @@ class WorkflowServer:
- 
+
          logger.info(f"Registered workflow '{name}' at {prefix}")
- 
+
 +    def deregister_workflow(self, name: str) -> bool:
 +        """Remove a previously registered workflow from the server.
 +
@@ -648,4 +648,3 @@ index c49981db5..2eec4043a 100644
 +
      def register_mcp_server(self, name: str, mcp_server: Any):
          """Register an MCP server with the workflow server.
- 

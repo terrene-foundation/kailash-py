@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import importlib
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import polars as pl
-
+from kailash_ml.engines._shared import validate_model_class as _validate_model_class
 from kailash_ml.interop import to_sklearn_input
 
 logger = logging.getLogger(__name__)
@@ -27,13 +27,6 @@ __all__ = [
     "BagResult",
     "BoostResult",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Security: model class allowlist (shared definition)
-# ---------------------------------------------------------------------------
-
-from kailash_ml.engines._shared import validate_model_class as _validate_model_class
 
 
 # ---------------------------------------------------------------------------

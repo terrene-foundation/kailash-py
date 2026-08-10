@@ -57,8 +57,8 @@ def test_persistent_dlq_initialization_calls_validator(tmp_path: Path) -> None:
     This is the load-bearing test: if a refactor accidentally drops the
     validator call, this test fails.
     """
-    from kailash.workflow import dlq as dlq_module
     from kailash.db import dialect as dialect_module
+    from kailash.workflow import dlq as dlq_module
 
     # Capture the REAL validator before patching. Re-importing inside the
     # spy would resolve to the patched object and recurse forever.

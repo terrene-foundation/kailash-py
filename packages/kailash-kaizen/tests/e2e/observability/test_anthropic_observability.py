@@ -22,10 +22,11 @@ import os
 from pathlib import Path
 
 import pytest
-from tests.utils.docker_config import get_jaeger_config
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from tests.utils.docker_config import get_jaeger_config
 
 
 class QASignature(Signature):
@@ -124,8 +125,9 @@ class TestAnthropicHaikuObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="qa-agent-haiku-e2e", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="qa-agent-haiku-e2e",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -217,8 +219,9 @@ class TestAnthropicVisionObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="vision-agent-claude-e2e", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="vision-agent-claude-e2e",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 
@@ -294,8 +297,9 @@ class TestAnthropicMemoryObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="memory-agent-claude-e2e", jaeger_host=jaeger_config["host"],
-            jaeger_port=jaeger_config["grpc_port"]
+            service_name="memory-agent-claude-e2e",
+            jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"],
         )
         obs.audit.storage = custom_storage
 

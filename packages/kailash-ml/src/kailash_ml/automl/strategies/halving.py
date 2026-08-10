@@ -26,14 +26,8 @@ import logging
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Any
 
-from kailash_ml.automl.strategies._base import (
-    ParamSpec,
-    SearchStrategy,
-    Trial,
-    TrialOutcome,
-)
+from kailash_ml.automl.strategies._base import ParamSpec, Trial, TrialOutcome
 from kailash_ml.automl.strategies.random import _sample_one
 
 logger = logging.getLogger(__name__)

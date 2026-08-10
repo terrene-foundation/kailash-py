@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import pytest
 
-from nexus.middleware.security_headers import SecurityHeadersConfig, SecurityHeadersMiddleware
+from nexus.middleware.security_headers import (
+    SecurityHeadersConfig,
+    SecurityHeadersMiddleware,
+)
 
 
 class TestSecurityHeadersConfig:

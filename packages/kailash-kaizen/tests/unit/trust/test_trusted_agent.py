@@ -17,6 +17,7 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
+
 from kailash.trust.agents.trusted_agent import (
     TrustContext,
     TrustContextManager,

@@ -21,10 +21,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))
 
 from dataflow import DataFlow
 from dataflow.utils.connection import ConnectionManager
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -32,6 +32,7 @@ async def test_suite():
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
+
 
 class TestConnectionPoolIntegration:
     """Test connection pool integration with DataFlow operations."""

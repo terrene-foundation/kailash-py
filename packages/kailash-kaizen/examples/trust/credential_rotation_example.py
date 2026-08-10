@@ -209,9 +209,9 @@ async def demonstrate_key_revocation(rotation_manager, authority_id):
     # For demo purposes, manually expire a key
     for key_id, expiry in status.grace_period_keys.items():
         # Manually set expiry to past (for demo)
-        rotation_manager._grace_period_keys[authority_id][key_id] = (
-            datetime.utcnow() - timedelta(hours=1)
-        )
+        rotation_manager._grace_period_keys[authority_id][
+            key_id
+        ] = datetime.utcnow() - timedelta(hours=1)
         print(f"Simulating expired grace period for {key_id}...")
 
         # Revoke key

@@ -16,13 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.addressing import NodeType
-from kailash.trust.pact.compilation import (
-    RoleDefinition,
-    compile_org,
-)
-
+from kailash.trust.pact.compilation import RoleDefinition, compile_org
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures

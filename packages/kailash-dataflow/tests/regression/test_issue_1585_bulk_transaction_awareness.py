@@ -38,8 +38,6 @@ from __future__ import annotations
 import time
 
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 
@@ -48,6 +46,8 @@ from dataflow import DataFlow
 # in the workflow builder's registry.
 from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode  # noqa: F401
 from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode  # noqa: F401
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture
@@ -425,9 +425,8 @@ async def test_standalone_bulk_create_pool_node_discarded_after_rollback(pg_suit
 #        would report fabricated success while writing nothing).
 @pytest.mark.regression
 async def test_bulk_create_pool_node_fails_closed_without_connection_string():
-    from kailash.sdk_exceptions import NodeExecutionError
-
     from dataflow.nodes.bulk_create_pool import BulkCreatePoolNode
+    from kailash.sdk_exceptions import NodeExecutionError
 
     class _Scope:
         transaction = ("fake_conn", "fake_tx")  # non-None handle
@@ -448,9 +447,8 @@ async def test_bulk_create_pool_node_fails_closed_without_connection_string():
 #        sibling standalone node (security-reviewer #1585 MEDIUM).
 @pytest.mark.regression
 async def test_bulk_upsert_node_fails_closed_without_connection_string():
-    from kailash.sdk_exceptions import NodeExecutionError
-
     from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
+    from kailash.sdk_exceptions import NodeExecutionError
 
     class _Scope:
         transaction = ("fake_conn", "fake_tx")  # non-None handle

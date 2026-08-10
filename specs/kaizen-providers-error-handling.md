@@ -37,4 +37,3 @@ Tries each strategy in order. First success wins.
 ### 20.4 Provider Errors
 
 All provider-specific exceptions are wrapped into the `ProviderError` hierarchy (`kaizen-providers-provider-system.md` § 8.4). Consumers never need to depend on provider SDK exception types.
-

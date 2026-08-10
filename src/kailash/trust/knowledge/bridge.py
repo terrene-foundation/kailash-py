@@ -21,16 +21,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
-
 from kailash.trust.knowledge.entry import KnowledgeEntry, KnowledgeType
 from kailash.trust.knowledge.provenance import (
     InMemoryProvenanceStore,
     ProvenanceRecord,
     ProvRelation,
 )
-
 from kailash.trust.reasoning.traces import ReasoningTrace
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from kailash.trust.operations import TrustOperations

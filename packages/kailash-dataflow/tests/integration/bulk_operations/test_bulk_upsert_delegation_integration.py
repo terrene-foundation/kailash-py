@@ -8,9 +8,9 @@ NO MOCKING - Uses real PostgreSQL on port 5434 via IntegrationTestSuite.
 """
 
 import pytest
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
 from dataflow import DataFlow
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

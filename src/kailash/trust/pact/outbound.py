@@ -57,14 +57,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from functools import wraps
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Awaitable,
-    Callable,
-    Mapping,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Mapping, TypeVar
 
 from kailash.trust.pact.exceptions import PactError
 

@@ -19,8 +19,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
 from kailash.tracking import TaskManager, TaskStatus
@@ -33,6 +31,7 @@ from kailash.workflow.cyclic_runner import (
     ExecutionStage,
     WorkflowState,
 )
+from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 from kailash.workflow.graph import Workflow
 from kailash.workflow.safety import CycleSafetyManager
 

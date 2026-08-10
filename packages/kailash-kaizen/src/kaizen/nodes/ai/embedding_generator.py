@@ -4,7 +4,6 @@ import time
 from typing import Any
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
 from kaizen.config.providers import ConfigurationError
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
@@ -266,8 +265,8 @@ class EmbeddingGeneratorNode(Node):
         # operation, BEFORE the try block so it propagates as a typed raise (not
         # a success:False dict). calculate_similarity over two SUPPLIED vectors
         # needs no provider; every embedding-producing path does. This mirrors
-        # LLMAgentNode's #1947 run() gate so a forgotten provider becomes a
-        # typed ConfigurationError instead of fabricated mock embeddings.
+        # LLMAgentNode's #1947 run() gate so a forgotten provider becomes a typed
+        # ConfigurationError instead of fabricated mock embeddings.
         _needs_provider = operation in (
             "embed_text",
             "embed_batch",

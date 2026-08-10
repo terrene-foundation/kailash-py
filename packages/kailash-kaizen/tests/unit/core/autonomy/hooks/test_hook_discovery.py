@@ -11,6 +11,7 @@ Tests HookManager.discover_filesystem_hooks() functionality including:
 from pathlib import Path
 
 import pytest
+
 from kaizen.core.autonomy.hooks import HookEvent, HookManager
 
 

@@ -14,6 +14,7 @@ Test Coverage:
 """
 
 import pytest
+
 from dataflow.validation.connection_validator import (
     ConnectionValidationResult,
     detect_circular_dependency,

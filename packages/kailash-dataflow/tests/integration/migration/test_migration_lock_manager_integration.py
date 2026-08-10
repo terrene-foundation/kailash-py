@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 # Test infrastructure
 import asyncpg
 import pytest
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 
 # DataFlow imports
@@ -25,7 +26,6 @@ from dataflow.migrations.concurrent_access_manager import (
 )
 from dataflow.utils.connection import ConnectionManager
 from dataflow.utils.connection_adapter import ConnectionManagerAdapter
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 logger = logging.getLogger(__name__)

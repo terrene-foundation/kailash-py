@@ -9,8 +9,8 @@ import time
 from datetime import datetime
 
 import pytest
-from dataflow import DataFlow, DataFlowConfig
 
+from dataflow import DataFlow, DataFlowConfig
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
@@ -41,7 +41,7 @@ class TestZeroToFirstQueryFlow:
         # Cleanup
         try:
             await db.cleanup_test_tables()
-        except:
+        except Exception:
             pass
         db.close()
 

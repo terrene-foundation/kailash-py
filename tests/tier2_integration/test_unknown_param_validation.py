@@ -21,7 +21,6 @@ import pytest
 from kailash.nodes.base import Node, NodeParameter
 from kailash.sdk_exceptions import NodeValidationError
 
-
 # ---------------------------------------------------------------------------
 # Test node fixtures
 # ---------------------------------------------------------------------------

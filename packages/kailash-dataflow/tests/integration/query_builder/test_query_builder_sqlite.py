@@ -16,9 +16,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.database.query_builder import DatabaseType, QueryBuilder
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -27,10 +27,12 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
+
 
 # @pytest.mark.tier2
 class TestQueryBuilderSQLiteIntegration:

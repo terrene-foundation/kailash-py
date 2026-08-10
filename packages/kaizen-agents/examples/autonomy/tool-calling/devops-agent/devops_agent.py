@@ -26,9 +26,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks import BaseHook, HookContext, HookEvent, HookResult
 from kaizen.core.autonomy.permissions import (
     ExecutionContext,
@@ -37,6 +35,7 @@ from kaizen.core.autonomy.permissions import (
     PermissionType,
 )
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 
 class DevOpsSignature(Signature):
@@ -44,7 +43,7 @@ class DevOpsSignature(Signature):
 
     task: str = InputField(description="DevOps task to perform")
     execution_report: str = OutputField(description="Execution report with results")
-    commands_executed: List[str] = OutputField(description="List of commands executed")
+    commands_executed: list[str] = OutputField(description="List of commands executed")
     success: bool = OutputField(description="Whether task succeeded")
 
 
@@ -56,7 +55,7 @@ class AuditTrailHook(BaseHook):
         self.audit_path = audit_path
         self.audit_path.mkdir(parents=True, exist_ok=True)
 
-    def supported_events(self) -> List[HookEvent]:
+    def supported_events(self) -> list[HookEvent]:
         return [HookEvent.PRE_TOOL_USE, HookEvent.POST_TOOL_USE]
 
     async def handle(self, context: HookContext) -> HookResult:
@@ -184,7 +183,7 @@ class DevOpsAgent(BaseAutonomousAgent):
 
         return "UNKNOWN"
 
-    async def execute_bash_safely(self, command: str) -> Dict:
+    async def execute_bash_safely(self, command: str) -> dict:
         """Execute bash command with safety checks."""
         danger_level = self._get_danger_level(command)
         print(f"🔍 Command: {command}")
@@ -252,7 +251,7 @@ class DevOpsAgent(BaseAutonomousAgent):
                 "danger_level": danger_level,
             }
 
-    async def execute_devops_task(self, task: str) -> Dict:
+    async def execute_devops_task(self, task: str) -> dict:
         """Execute DevOps task with multiple commands."""
         print(f"\n🔧 Starting DevOps task: {task}\n")
 
@@ -285,7 +284,7 @@ class DevOpsAgent(BaseAutonomousAgent):
             "success": success_count == len(commands),
         }
 
-    def _plan_commands(self, task: str) -> List[str]:
+    def _plan_commands(self, task: str) -> list[str]:
         """Plan bash commands for task."""
         # Simple task-to-commands mapping for demo
         task_lower = task.lower()
@@ -315,7 +314,7 @@ class DevOpsAgent(BaseAutonomousAgent):
             ]
 
     def _generate_report(
-        self, commands: List[str], results: List[Dict], success_count: int
+        self, commands: list[str], results: list[dict], success_count: int
     ) -> str:
         """Generate execution report."""
         lines = [
@@ -328,7 +327,7 @@ class DevOpsAgent(BaseAutonomousAgent):
             "📋 Command Results:",
         ]
 
-        for cmd, result in zip(commands, results):
+        for cmd, result in zip(commands, results, strict=False):
             status = "✅" if result["success"] else "❌"
             danger = result["danger_level"]
             lines.append(f"  {status} [{danger}] {cmd}")

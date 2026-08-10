@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 import pytest_asyncio
 import websockets
-
 from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
 from kailash_mcp.server import MCPServer
 

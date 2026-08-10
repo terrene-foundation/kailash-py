@@ -13,6 +13,7 @@ scrubber stops at the first ``\\n`` and leaks the credential tail.
 """
 
 import pytest
+
 from kailash.utils.url_credentials import mask_error_text
 
 SECRET = "s3cr3t"

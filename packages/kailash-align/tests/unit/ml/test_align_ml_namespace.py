@@ -19,12 +19,7 @@ import pytest
 
 def test_align_ml_exports_four_bridge_adapters() -> None:
     """The four W30 rl_bridge adapters re-export under spec §2 names."""
-    from kailash_align.ml import (
-        DPOTrainer,
-        OnlineDPOTrainer,
-        PPOTrainer,
-        RLOOTrainer,
-    )
+    from kailash_align.ml import DPOTrainer, OnlineDPOTrainer, PPOTrainer, RLOOTrainer
 
     # Spec §2 canonical names MUST resolve to the W30 storage-module classes
     from kailash_align.rl_bridge import (

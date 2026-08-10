@@ -14,6 +14,7 @@ Coverage: 5 tests for Day 4 acceptance criteria
 import tempfile
 
 import pytest
+
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import HookEvent, HookPriority, HookResult
 from kaizen.core.autonomy.state.manager import StateManager

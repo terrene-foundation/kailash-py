@@ -9,11 +9,10 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
+from dataflow.core.async_utils import async_safe_run  # Phase 6: Async-safe execution
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow.core.async_utils import async_safe_run  # Phase 6: Async-safe execution
 
 logger = logging.getLogger(__name__)
 

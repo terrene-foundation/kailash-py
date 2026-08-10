@@ -27,9 +27,9 @@ import pytest
 from kaizen.llm.deployment import WireProtocol
 from kaizen.llm.errors import MissingCredential
 from kaizen.llm.from_env import (
+    _GCP_REGION_RE,
     ENV_DEPLOYMENT_URI,
     ENV_SELECTOR,
-    _GCP_REGION_RE,
     resolve_env_deployment,
 )
 

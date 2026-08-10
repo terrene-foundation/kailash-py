@@ -18,11 +18,11 @@ from tests.infrastructure.test_harness import IntegrationTestSuite
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.adapters.base import DatabaseAdapter
 from dataflow.adapters.connection_parser import ConnectionParser
+from dataflow.adapters.dialect import DialectManager
 from dataflow.adapters.exceptions import AdapterError, ConnectionError, QueryError
 from dataflow.adapters.factory import AdapterFactory
 from dataflow.adapters.mysql import MySQLAdapter
 from dataflow.adapters.postgresql import PostgreSQLAdapter
-from dataflow.adapters.dialect import DialectManager
 from dataflow.adapters.sqlite import SQLiteAdapter
 
 

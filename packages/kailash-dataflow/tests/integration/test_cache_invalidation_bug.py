@@ -12,11 +12,11 @@ Actual: ListNode returns stale cached data because cache was not invalidated.
 from datetime import datetime, timedelta
 
 import pytest
+
+from dataflow import DataFlow
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -165,9 +165,9 @@ class TestCacheInvalidationBugRepro:
         results, _ = runtime.execute(list2_wf.build())
 
         # THIS ASSERTION FAILS WITH THE BUG
-        assert results["list2"]["count"] == 0, (
-            f"Should get 0 records after delete, but got {results['list2']['count']} from stale cache"
-        )
+        assert (
+            results["list2"]["count"] == 0
+        ), f"Should get 0 records after delete, but got {results['list2']['count']} from stale cache"
 
         # Verify it's actually a cache hit (not fresh query)
         if "_cache" in results["list2"]:
@@ -259,9 +259,9 @@ class TestCacheInvalidationBugRepro:
         results, _ = runtime.execute(list2_wf.build())
 
         # THIS ASSERTION FAILS WITH THE BUG
-        assert results["list2"]["count"] == 0, (
-            f"Should get 0 pending records after update, but got {results['list2']['count']} from stale cache"
-        )
+        assert (
+            results["list2"]["count"] == 0
+        ), f"Should get 0 pending records after update, but got {results['list2']['count']} from stale cache"
 
     @pytest.mark.asyncio
     async def test_bulk_create_then_delete_then_create_cache_bug(
@@ -348,7 +348,7 @@ class TestCacheInvalidationBugRepro:
         results, _ = runtime.execute(query_wf.build())
 
         # Should get the newly inserted record
-        assert results["query"]["count"] == 1, (
-            f"Expected 1 record, got {results['query']['count']}"
-        )
+        assert (
+            results["query"]["count"] == 1
+        ), f"Expected 1 record, got {results['query']['count']}"
         assert results["query"]["records"][0]["name"] == "new_record"

@@ -19,7 +19,6 @@ from kailash.runtime.execution_tracker import ExecutionTracker
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

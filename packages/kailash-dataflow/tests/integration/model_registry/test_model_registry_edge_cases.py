@@ -14,18 +14,20 @@ import uuid
 from datetime import datetime
 
 import pytest
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 from dataflow.core.engine import DataFlow
 from dataflow.core.model_registry import ModelRegistry
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
+
 
 @pytest.fixture
 def test_config(test_suite):
@@ -34,10 +36,12 @@ def test_config(test_suite):
         database=DatabaseConfig(url=test_suite.config.url), environment="edge_case_test"
     )
 
+
 @pytest.fixture
 def unique_test_id():
     """Generate unique test identifier."""
     return f"edge_{uuid.uuid4().hex[:8]}"
+
 
 @pytest.mark.integration
 @pytest.mark.timeout(5)
@@ -378,6 +382,7 @@ class TestModelRegistryErrorHandling:
         assert version1 >= 1
         assert version2 >= 1
 
+
 @pytest.mark.integration
 @pytest.mark.timeout(5)
 class TestModelRegistryPerformanceEdgeCases:
@@ -519,6 +524,7 @@ class TestModelRegistryPerformanceEdgeCases:
         # Performance thresholds
         assert avg_validation_time < 1.0  # Average <1s
         assert max_validation_time < 2.0  # Max <2s
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--timeout=5"])

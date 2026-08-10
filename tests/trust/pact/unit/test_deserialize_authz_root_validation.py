@@ -34,7 +34,6 @@ from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.exceptions import DeserializationError, PactError
 from kailash.trust.pact.stores.sqlite import SqliteOrgStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

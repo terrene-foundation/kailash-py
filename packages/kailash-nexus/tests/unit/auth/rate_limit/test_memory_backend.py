@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
+
 from nexus.auth.rate_limit.backends.base import RateLimitBackend
 from nexus.auth.rate_limit.backends.memory import InMemoryBackend
 

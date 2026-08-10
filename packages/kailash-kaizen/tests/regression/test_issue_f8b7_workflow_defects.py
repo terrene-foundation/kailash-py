@@ -42,11 +42,11 @@ from __future__ import annotations
 import inspect
 
 import pytest
+
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-
 from kaizen.nodes.rag.strategies import (
     RAGConfig,
     create_hierarchical_rag_workflow,

@@ -352,7 +352,7 @@ class IntentDetector:
             relevant = {
                 k: v
                 for k, v in context.items()
-                if isinstance(v, (str, int, float, bool))
+                if isinstance(v, str | int | float | bool)
             }
             if relevant:
                 context_str = json.dumps(relevant, indent=2)

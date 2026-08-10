@@ -35,6 +35,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -51,7 +52,6 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
-
 from kaizen.trust.store import InMemoryTrustStore, TransactionContext
 
 # Skip tests if PyNaCl not available

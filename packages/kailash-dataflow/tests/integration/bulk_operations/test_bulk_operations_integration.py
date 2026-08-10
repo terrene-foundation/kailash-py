@@ -9,10 +9,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -20,6 +20,7 @@ async def test_suite():
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
+
 
 @pytest.mark.asyncio
 async def test_dataflow_bulk_create(test_suite):
@@ -56,6 +57,7 @@ async def test_dataflow_bulk_create(test_suite):
     bulk_create_node = nodes["bulk_create"]
     assert bulk_create_node is not None
 
+
 @pytest.mark.asyncio
 async def test_dataflow_node_registration(test_suite):
     """Test that DataFlow nodes are properly registered with NodeRegistry."""
@@ -80,6 +82,7 @@ async def test_dataflow_node_registration(test_suite):
 
     # The actual node classes are generated dynamically by DataFlow
     # and registered in the node dictionary
+
 
 if __name__ == "__main__":
     import asyncio

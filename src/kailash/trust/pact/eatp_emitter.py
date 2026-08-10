@@ -15,11 +15,7 @@ import logging
 from collections import deque
 from typing import Protocol, runtime_checkable
 
-from kailash.trust.chain import (
-    CapabilityAttestation,
-    DelegationRecord,
-    GenesisRecord,
-)
+from kailash.trust.chain import CapabilityAttestation, DelegationRecord, GenesisRecord
 
 logger = logging.getLogger(__name__)
 

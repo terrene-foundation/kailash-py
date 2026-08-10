@@ -10,9 +10,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from kailash_ml.autolog import autolog
 
 from kailash.ml.errors import AutologUnknownFrameworkError
-from kailash_ml.autolog import autolog
 
 
 @pytest.mark.regression

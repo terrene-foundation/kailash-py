@@ -35,7 +35,6 @@ from kaizen.llm.auth import gcp as gcp_mod
 from kaizen.llm.auth.gcp import DEFAULT_SCOPES, GcpOauth
 from kaizen.llm.errors import AuthError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures — credential-config shapes
 # ---------------------------------------------------------------------------

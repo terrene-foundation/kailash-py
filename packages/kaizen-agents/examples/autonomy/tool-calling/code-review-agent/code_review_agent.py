@@ -24,9 +24,7 @@ Usage:
 import asyncio
 import sys
 from pathlib import Path
-from typing import Dict, List
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import MemoryTransport
 from kaizen.core.autonomy.permissions import (
@@ -36,6 +34,7 @@ from kaizen.core.autonomy.permissions import (
     PermissionType,
 )
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 
 class CodeReviewSignature(Signature):
@@ -44,7 +43,7 @@ class CodeReviewSignature(Signature):
     codebase_path: str = InputField(description="Path to codebase to review")
     review_report: str = OutputField(description="Code review report with findings")
     issues_found: int = OutputField(description="Number of issues found")
-    suggestions: List[str] = OutputField(description="List of improvement suggestions")
+    suggestions: list[str] = OutputField(description="List of improvement suggestions")
 
 
 class CodeReviewAgent(BaseAutonomousAgent):
@@ -148,7 +147,7 @@ class CodeReviewAgent(BaseAutonomousAgent):
 
         return False
 
-    async def review_codebase(self, codebase_path: str) -> Dict:
+    async def review_codebase(self, codebase_path: str) -> dict:
         """Execute code review on codebase."""
         print(f"\n🔍 Starting code review of: {codebase_path}\n")
 
@@ -296,7 +295,7 @@ async def main():
 
     try:
         # Execute code review
-        result = await agent.review_codebase(codebase_path)
+        await agent.review_codebase(codebase_path)
 
         # Show cost information
         print("\n💰 Cost: $0.00 (using Ollama local inference)")

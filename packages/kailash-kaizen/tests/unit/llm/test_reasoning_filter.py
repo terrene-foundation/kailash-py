@@ -33,7 +33,6 @@ from kaizen.llm.reasoning_filter import (
 )
 from kaizen.llm.wire_protocols import openai_chat
 
-
 # ---------------------------------------------------------------------------
 # is_reasoning_model / requires_temperature_1
 # ---------------------------------------------------------------------------

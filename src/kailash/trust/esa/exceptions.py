@@ -216,9 +216,7 @@ class ESADelegationError(ESAError):
             system_id: The system ID
             reason: Human-readable reason for failure
         """
-        message = (
-            f"Failed to delegate capability '{capability}' to agent '{delegatee_id}' for system '{system_id}': {reason}"
-        )
+        message = f"Failed to delegate capability '{capability}' to agent '{delegatee_id}' for system '{system_id}': {reason}"
 
         super().__init__(
             message,

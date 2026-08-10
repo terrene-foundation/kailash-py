@@ -14,6 +14,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
 from kaizen.trust import (
     AuthorityType,
     CapabilityAttestation,

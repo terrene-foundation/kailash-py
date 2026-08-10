@@ -27,7 +27,6 @@ from kailash.trust.plane.compliance import (
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import DecisionRecord, DecisionType, MilestoneRecord
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

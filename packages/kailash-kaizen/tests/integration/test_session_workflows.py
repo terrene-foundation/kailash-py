@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from time import sleep
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.integrations.nexus import NEXUS_AVAILABLE
 from kaizen.signatures import InputField, OutputField, Signature

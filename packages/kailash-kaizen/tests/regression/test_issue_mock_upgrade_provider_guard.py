@@ -374,9 +374,9 @@ class TestSignatureWorkflowCacheInvalidation:
         result1 = agent.execute(question="What changed this quarter?")
         # `execute()` returns Dict in signature-mode, Tuple in workflow-mode
         # (agents.py:2571 idiom) — narrow for pyright before subscripting.
-        assert isinstance(result1, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result1, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         assert stub.dispatched_providers == ["openai"]
         assert result1["answer"] == real_content
 
@@ -386,9 +386,9 @@ class TestSignatureWorkflowCacheInvalidation:
         # Second dispatch MUST reflect the NEW provider, not the stale
         # cached "openai" — this is FIX 1's core correctness property.
         result2 = agent.execute(question="What changed this quarter?")
-        assert isinstance(result2, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result2, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         assert stub.dispatched_providers == ["openai", "mock"], (
             "second dispatch used a STALE cached provider instead of the "
             "live config — update_config() silently failed to propagate"
@@ -415,18 +415,18 @@ class TestSignatureWorkflowCacheInvalidation:
         )
 
         result1 = agent.execute(question="What changed this quarter?")
-        assert isinstance(result1, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result1, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         assert stub.dispatched_providers == ["openai"]
         assert result1["answer"] == real_content
 
         agent.update_config({"provider": "anthropic"})
 
         result2 = agent.execute(question="What changed this quarter?")
-        assert isinstance(result2, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result2, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         assert stub.dispatched_providers == ["openai", "anthropic"]
         # Both dispatches real -> gate never fires -> verbatim both times.
         assert result2["answer"] == real_content
@@ -637,9 +637,9 @@ class TestDirectConfigMutationDoesNotDesyncGateFromDispatch:
 
         # Warm the cache — first dispatch under the real "openai" provider.
         result1 = agent.execute(question="What changed this quarter?")
-        assert isinstance(result1, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result1, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         assert stub.dispatched_providers == ["openai"]
         assert result1["answer"] == real_content
 
@@ -650,9 +650,9 @@ class TestDirectConfigMutationDoesNotDesyncGateFromDispatch:
         agent.config["provider"] = "mock"
 
         result2 = agent.execute(question="What changed this quarter?")
-        assert isinstance(result2, dict), (
-            "execute() with a signature MUST return Dict (signature-mode)"
-        )
+        assert isinstance(
+            result2, dict
+        ), "execute() with a signature MUST return Dict (signature-mode)"
         # FIX 15: the cache rebuilds, so the SECOND dispatch genuinely
         # occurs under "mock" — no longer stuck on the stale "openai".
         assert stub.dispatched_providers == ["openai", "mock"], (
@@ -1132,9 +1132,9 @@ class TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift:
             "to_workflow() MUST rebuild (not return the stale memo) when "
             "the resolved provider drifts due to an ambient env change"
         )
-        assert wf1 is not wf2, (
-            "a provider-drifted call MUST NOT reuse the old memo object"
-        )
+        assert (
+            wf1 is not wf2
+        ), "a provider-drifted call MUST NOT reuse the old memo object"
 
     def test_memo_reused_when_provider_stable(self, monkeypatch, _env_serialized):
         """Perf-benefit check (no regression): the memo IS still reused
@@ -1231,9 +1231,9 @@ class TestCompileWorkflowMemoRebuildsOnProviderDrift:
         wf2 = agent.compile_workflow()
         wf3 = agent.workflow
 
-        assert wf1 is wf2 is wf3, (
-            "stable-provider case MUST still memoize (no perf regression)"
-        )
+        assert (
+            wf1 is wf2 is wf3
+        ), "stable-provider case MUST still memoize (no perf regression)"
 
 
 class TestExecuteWithSignatureCacheRebuildsOnProviderDrift:

@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import pytest
 
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.revocation.broadcaster import (
     InMemoryDelegationRegistry,
@@ -31,8 +32,6 @@ from kailash.trust.revocation.broadcaster import (
     RevocationType,
 )
 from kailash.trust.revocation.cascade import RevocationResult, cascade_revoke
-from kailash.trust.chain_store.memory import InMemoryTrustStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -263,7 +262,9 @@ class TestCircularChainHandling:
         assert result.success is True
         assert set(result.revoked_agents) == {"agent-A", "agent-B"}
 
-    async def test_circular_chain_no_duplicate_events(self, store, registry, broadcaster):
+    async def test_circular_chain_no_duplicate_events(
+        self, store, registry, broadcaster
+    ):
         """Circular chain must not produce duplicate revocation events for same target."""
         await store.store_chain(_make_chain("agent-A"))
         await store.store_chain(_make_chain("agent-B"))
@@ -335,7 +336,9 @@ class TestAuditTrailCompleteness:
 
         event_targets = {e.target_id for e in result.events}
         for agent_id in result.revoked_agents:
-            assert agent_id in event_targets, f"Agent '{agent_id}' was revoked but has no event in the audit trail"
+            assert (
+                agent_id in event_targets
+            ), f"Agent '{agent_id}' was revoked but has no event in the audit trail"
 
     async def test_initial_event_is_agent_revoked(self, store, registry, broadcaster):
         """The first event must be of type AGENT_REVOKED for the target agent."""
@@ -398,7 +401,9 @@ class TestAuditTrailCompleteness:
         event_ids = [e.event_id for e in result.events]
         assert len(event_ids) == len(set(event_ids)), "Event IDs must be unique"
 
-    async def test_events_broadcast_to_broadcaster_history(self, store, registry, broadcaster):
+    async def test_events_broadcast_to_broadcaster_history(
+        self, store, registry, broadcaster
+    ):
         """All events must also appear in the broadcaster's history."""
         await store.store_chain(_make_chain("agent-A"))
         await store.store_chain(_make_chain("agent-B"))
@@ -417,7 +422,9 @@ class TestAuditTrailCompleteness:
         history = broadcaster.get_history()
         history_ids = {e.event_id for e in history}
         for event in result.events:
-            assert event.event_id in history_ids, f"Event '{event.event_id}' missing from broadcaster history"
+            assert (
+                event.event_id in history_ids
+            ), f"Event '{event.event_id}' missing from broadcaster history"
 
     async def test_cascade_event_has_cascade_from(self, store, registry, broadcaster):
         """Cascade events must reference their parent event via cascade_from."""
@@ -438,7 +445,9 @@ class TestAuditTrailCompleteness:
         cascade_events = [e for e in result.events if e.target_id == "agent-B"]
         assert len(cascade_events) >= 1
         for event in cascade_events:
-            assert event.cascade_from is not None, "Cascade events must have cascade_from set"
+            assert (
+                event.cascade_from is not None
+            ), "Cascade events must have cascade_from set"
 
     async def test_event_revoked_by_matches(self, store, registry, broadcaster):
         """All events must carry the revoked_by field from the caller."""
@@ -518,7 +527,9 @@ class TestIdempotentRevocation:
 
         assert result.events == []
 
-    async def test_re_revoke_produces_no_revoked_agents(self, store, registry, broadcaster):
+    async def test_re_revoke_produces_no_revoked_agents(
+        self, store, registry, broadcaster
+    ):
         """Re-revoking must produce empty revoked_agents list."""
         await store.store_chain(_make_chain("agent-A"))
 
@@ -600,7 +611,9 @@ class TestLeafNodeRevocation:
         with pytest.raises(TrustChainNotFoundError):
             await store.get_chain("agent-leaf")
 
-    async def test_leaf_revocation_does_not_affect_parent(self, store, registry, broadcaster):
+    async def test_leaf_revocation_does_not_affect_parent(
+        self, store, registry, broadcaster
+    ):
         """Revoking a leaf must NOT affect its parent's chain."""
         await store.store_chain(_make_chain("agent-parent"))
         await store.store_chain(_make_chain("agent-leaf"))
@@ -846,7 +859,9 @@ class TestCascadeRevokeCustomBroadcaster:
         assert "agent-A" in history_targets
         assert "agent-B" in history_targets
 
-    async def test_subscriber_receives_events_from_custom_broadcaster(self, store, registry):
+    async def test_subscriber_receives_events_from_custom_broadcaster(
+        self, store, registry
+    ):
         """Subscribers on the custom broadcaster must receive cascade events."""
         custom_broadcaster = InMemoryRevocationBroadcaster()
         received_events = []
@@ -1072,7 +1087,9 @@ class TestReasonPropagation:
 
         assert result.events[0].reason == "Specific violation #42"
 
-    async def test_cascade_event_references_parent_reason(self, store, registry, broadcaster):
+    async def test_cascade_event_references_parent_reason(
+        self, store, registry, broadcaster
+    ):
         """Cascade events must reference the original reason in their reason string."""
         await store.store_chain(_make_chain("agent-A"))
         await store.store_chain(_make_chain("agent-B"))

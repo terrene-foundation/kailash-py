@@ -35,7 +35,9 @@ class DelegationGraph:
     edges: Dict[str, List[str]] = field(default_factory=dict)
 
     @classmethod
-    def from_delegations(cls, delegations: List["DelegationRecord"]) -> "DelegationGraph":
+    def from_delegations(
+        cls, delegations: List["DelegationRecord"]
+    ) -> "DelegationGraph":
         """
         Build graph from delegation records.
 

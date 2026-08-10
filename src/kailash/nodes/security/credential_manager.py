@@ -308,7 +308,9 @@ class CredentialManagerNode(Node):
         """
         try:
             from azure.identity import DefaultAzureCredential
-            from azure.keyvault.secrets import SecretClient  # type: ignore[reportMissingImports]
+            from azure.keyvault.secrets import (
+                SecretClient,  # type: ignore[reportMissingImports]
+            )
         except ImportError:
             raise ImportError(
                 "Azure Key Vault support requires 'azure-keyvault-secrets' and "

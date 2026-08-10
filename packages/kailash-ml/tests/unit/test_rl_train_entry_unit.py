@@ -9,7 +9,6 @@ policy (that's the Tier-2 wiring test).
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.errors import RLError
 
 

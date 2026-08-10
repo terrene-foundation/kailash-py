@@ -7,7 +7,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from kailash_ml._gpu_setup import (
     _best_cuda_tag,
     detect_cuda_version,

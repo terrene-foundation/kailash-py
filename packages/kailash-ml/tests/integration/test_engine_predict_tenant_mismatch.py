@@ -19,9 +19,6 @@ import pickle
 
 import numpy as np
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml import MLEngine
 from kailash_ml.engine import TenantRequiredError
 from kailash_ml.engines.model_registry import (
@@ -30,6 +27,9 @@ from kailash_ml.engines.model_registry import (
     ModelVersion,
 )
 from kailash_ml.types import FeatureField, FeatureSchema, ModelSignature
+from sklearn.ensemble import RandomForestClassifier
+
+from kailash.db.connection import ConnectionManager
 
 
 @pytest.fixture

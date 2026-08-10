@@ -4,7 +4,7 @@ Confirmation Signature - Booking Finalization
 Confirms and finalizes the appointment booking with all necessary details.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -48,11 +48,11 @@ class ConfirmationSignature(Signature):
     ]
 
     # Inputs
-    doctor: Dict[str, Any] = InputField(
+    doctor: dict[str, Any] = InputField(
         desc="Selected doctor details including id, name, specialty, location, telehealth_link"
     )
     slot: str = InputField(desc="Selected appointment slot in ISO format")
-    patient_info: Dict[str, Any] = InputField(
+    patient_info: dict[str, Any] = InputField(
         desc="Patient information including symptoms, preferences, insurance collected during intake"
     )
 

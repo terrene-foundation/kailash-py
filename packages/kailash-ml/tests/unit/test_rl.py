@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.rl.policies import PolicyRegistry, PolicySpec, PolicyVersion
 
 
@@ -129,7 +128,7 @@ class TestRLTrainerImportGuard:
     """Verify RLTrainer gives clear ImportError without SB3."""
 
     def test_rl_trainer_importable(self):
-        from kailash_ml.rl.trainer import RLTrainer, RLTrainingConfig, RLTrainingResult
+        from kailash_ml.rl.trainer import RLTrainer, RLTrainingConfig
 
         assert RLTrainer is not None
         config = RLTrainingConfig()
@@ -139,7 +138,7 @@ class TestRLTrainerImportGuard:
 
 class TestEnvironmentRegistryImportGuard:
     def test_env_registry_importable(self):
-        from kailash_ml.rl.envs import EnvironmentRegistry, EnvironmentSpec
+        from kailash_ml.rl.envs import EnvironmentSpec
 
         spec = EnvironmentSpec(name="Test-v0", entry_point="test:TestEnv")
         assert spec.name == "Test-v0"

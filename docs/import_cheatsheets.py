@@ -91,7 +91,7 @@ def get_cheatsheet_category(filename: str) -> str:
             return "enterprise_patterns"
         else:
             return "specialized_patterns"
-    except:
+    except ValueError:
         return "uncategorized"
 
 

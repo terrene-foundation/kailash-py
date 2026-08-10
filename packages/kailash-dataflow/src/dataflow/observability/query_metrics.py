@@ -205,7 +205,7 @@ def _get_query_duration_histogram() -> "Optional[Any]":
         return _QUERY_DURATION_HISTOGRAM
 
     try:
-        from prometheus_client import Histogram, REGISTRY
+        from prometheus_client import REGISTRY, Histogram
     except ImportError:
         logger.warning(
             "dataflow.observability.query_metrics.prometheus_client_missing: "

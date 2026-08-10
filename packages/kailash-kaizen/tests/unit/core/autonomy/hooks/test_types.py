@@ -7,6 +7,7 @@ Tests HookEvent, HookPriority, HookContext, and HookResult.
 import time
 
 import pytest
+
 from kaizen.core.autonomy.hooks.types import (
     HookContext,
     HookEvent,

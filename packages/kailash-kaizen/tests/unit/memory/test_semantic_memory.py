@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List
 
 import pytest
+
 from kaizen.memory.semantic import SemanticMemory
 from kaizen.memory.storage.sqlite_storage import SQLiteStorage
 

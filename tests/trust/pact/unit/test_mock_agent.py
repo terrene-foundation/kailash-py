@@ -16,31 +16,27 @@ from typing import Any
 
 import pytest
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.agent import GovernanceBlockedError
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
+from kailash.trust.pact.decorators import governed_tool
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.store import MemoryAccessPolicyStore, MemoryClearanceStore
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.agent import GovernanceBlockedError
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg
-from kailash.trust.pact.decorators import governed_tool
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.store import (
-    MemoryAccessPolicyStore,
-    MemoryClearanceStore,
-)
 from pact.governance.testing import MockGovernedAgent
-
 
 # ---------------------------------------------------------------------------
 # Sample governed tools for testing

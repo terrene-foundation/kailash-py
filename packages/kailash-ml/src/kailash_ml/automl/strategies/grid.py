@@ -17,12 +17,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any
 
-from kailash_ml.automl.strategies._base import (
-    ParamSpec,
-    SearchStrategy,
-    Trial,
-    TrialOutcome,
-)
+from kailash_ml.automl.strategies._base import ParamSpec, Trial, TrialOutcome
 
 logger = logging.getLogger(__name__)
 

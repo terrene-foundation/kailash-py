@@ -34,6 +34,7 @@ import logging
 from dataclasses import dataclass
 
 import pytest
+
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.protocol import BaseHook, HookHandler
 from kaizen.core.autonomy.hooks.security.isolation import IsolatedHookManager

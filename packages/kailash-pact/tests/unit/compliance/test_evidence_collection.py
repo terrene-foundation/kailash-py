@@ -20,7 +20,6 @@ import pytest
 
 from kailash.trust.audit_store import AuditEventType, InMemoryAuditStore
 from kailash.trust.pact.audit import PactAuditAction
-
 from pact.compliance import (
     CONTROL_SPECS,
     EMITTED_ACTION_VOCABULARY,

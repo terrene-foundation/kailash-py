@@ -21,6 +21,7 @@ Developer Experience Goals:
 
 import pandas as pd
 from dotenv import load_dotenv
+
 from kaizen_agents.agents import SimpleQAAgent
 from kaizen_agents.agents.specialized.simple_qa import SimpleQAConfig
 

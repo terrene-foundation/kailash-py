@@ -12,14 +12,13 @@ from __future__ import annotations
 
 import pytest
 
+from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
+from kaizen.interpretability import InterpretabilityDiagnostics  # noqa: E402
+
 # Unit tests may be exercised without transformers/torch installed
 # because construction and API-only refusal paths don't load the model.
 # `transformers` + `torch` are required only for the probe-math test
 # which exercises sklearn directly — pytest.importorskip handles that.
-
-from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
-
-from kaizen.interpretability import InterpretabilityDiagnostics  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -242,10 +241,9 @@ def test_probe_math_on_synthetic_features() -> None:
 
     # Instead of monkeypatching, exercise the math directly on the
     # same sklearn call the adapter uses — LogisticRegression + CV.
+    import numpy as np
     from sklearn.linear_model import LogisticRegression
     from sklearn.model_selection import cross_val_score
-
-    import numpy as np
 
     # Class 0 centered at (-1, -1), class 1 at (+1, +1); cleanly
     # linearly separable so CV accuracy should be ~1.0.

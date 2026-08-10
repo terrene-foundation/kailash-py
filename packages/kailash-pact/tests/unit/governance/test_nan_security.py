@@ -12,8 +12,6 @@ Per trust-plane-security.md rule 3: math.isfinite() on all numeric constraint fi
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from kailash.trust.pact.config import (
@@ -32,7 +30,6 @@ from kailash.trust.pact.envelopes import (
     _min_optional_int,
     intersect_envelopes,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

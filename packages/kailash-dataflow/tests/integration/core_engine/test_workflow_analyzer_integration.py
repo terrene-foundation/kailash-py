@@ -18,7 +18,6 @@ sys.path.insert(
 )
 
 from dataflow.optimization import PatternType, WorkflowAnalyzer
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

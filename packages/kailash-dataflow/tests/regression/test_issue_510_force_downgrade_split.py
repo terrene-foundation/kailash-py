@@ -139,9 +139,7 @@ def test_issue_510_execute_rollback_uses_force_downgrade():
     """RollbackManager.execute_rollback uses force_downgrade (orchestrator layer)."""
     import inspect
 
-    from dataflow.migrations.application_safe_rename_strategy import (
-        RollbackManager,
-    )
+    from dataflow.migrations.application_safe_rename_strategy import RollbackManager
 
     sig = inspect.signature(RollbackManager.execute_rollback)
     params = sig.parameters
@@ -154,9 +152,7 @@ def test_issue_510_execute_safe_removal_uses_force_downgrade():
     """ColumnRemovalManager.execute_safe_removal uses force_downgrade (orchestrator layer)."""
     import inspect
 
-    from dataflow.migrations.column_removal_manager import (
-        ColumnRemovalManager,
-    )
+    from dataflow.migrations.column_removal_manager import ColumnRemovalManager
 
     sig = inspect.signature(ColumnRemovalManager.execute_safe_removal)
     params = sig.parameters
@@ -173,9 +169,7 @@ def test_issue_510_visual_migration_builder_drops_keep_force_drop():
     """
     import inspect
 
-    from dataflow.migrations.visual_migration_builder import (
-        VisualMigrationBuilder,
-    )
+    from dataflow.migrations.visual_migration_builder import VisualMigrationBuilder
 
     for method_name in ("drop_table", "drop_column", "drop_index"):
         sig = inspect.signature(getattr(VisualMigrationBuilder, method_name))

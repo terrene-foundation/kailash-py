@@ -35,6 +35,9 @@ from __future__ import annotations
 
 import pytest
 
+from kailash.trust.pact.access import PactBridge, can_access
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     DepartmentConfig,
@@ -42,15 +45,7 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Fixture: Full financial services org

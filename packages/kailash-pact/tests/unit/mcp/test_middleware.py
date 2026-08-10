@@ -15,16 +15,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-import pytest_asyncio
 
 from pact.mcp.enforcer import GovernanceDecision, McpGovernanceEnforcer
 from pact.mcp.middleware import McpGovernanceMiddleware, McpInvocationResult
-from pact.mcp.types import (
-    DefaultPolicy,
-    McpGovernanceConfig,
-    McpToolPolicy,
-)
-
+from pact.mcp.types import DefaultPolicy, McpGovernanceConfig, McpToolPolicy
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -251,7 +245,7 @@ class TestMiddlewareProperties:
     @pytest.mark.asyncio
     async def test_metadata_passed(self, middleware: McpGovernanceMiddleware) -> None:
         """Metadata is passed through to governance context."""
-        result = await middleware.invoke(
+        await middleware.invoke(
             "search",
             {},
             agent_id="a",

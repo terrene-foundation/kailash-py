@@ -5,11 +5,11 @@ Provides a generic Provenance[T] wrapper that carries metadata about where
 a field value came from, how confident we are in it, and its change history.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from enum import Enum
-from typing import Generic, TypeVar, Any, Optional
 import math
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any, Generic, Optional, TypeVar
 
 T = TypeVar("T")
 

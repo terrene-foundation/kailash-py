@@ -25,8 +25,6 @@ Requirements:
 
 import asyncio
 import os
-import sys
-from typing import Optional
 
 # Load environment variables
 try:

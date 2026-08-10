@@ -17,11 +17,7 @@ import uuid
 from typing import Any
 
 from kaizen.l3.messaging.errors import ChannelError
-from kaizen.l3.messaging.types import (
-    DelegationPayload,
-    MessageEnvelope,
-    Priority,
-)
+from kaizen.l3.messaging.types import DelegationPayload, MessageEnvelope, Priority
 
 __all__ = ["MessageChannel"]
 

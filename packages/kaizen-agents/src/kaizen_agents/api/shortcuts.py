@@ -94,7 +94,6 @@ def _build_dataflow_warm_backend(memory_path: str) -> "MemoryProviderType":
     """
     try:
         from dataflow import DataFlow
-
         from kaizen.memory.providers.dataflow_backend import DataFlowMemoryBackend
     except ImportError:
         logger.warning(

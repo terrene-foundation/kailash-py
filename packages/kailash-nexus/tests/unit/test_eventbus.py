@@ -16,7 +16,6 @@ import pytest
 
 from nexus.events import EventBus, NexusEvent, NexusEventType
 
-
 # ---------------------------------------------------------------------------
 # NexusEventType tests
 # ---------------------------------------------------------------------------
@@ -150,9 +149,7 @@ class TestEventBusPublishHistory:
         sub_q = bus.subscribe()
         await bus.start()
         try:
-            event = NexusEvent(
-                event_type=NexusEventType.CUSTOM, data={"test": True}
-            )
+            event = NexusEvent(event_type=NexusEventType.CUSTOM, data={"test": True})
             bus.publish(event)
             await asyncio.wait_for(sub_q.get(), timeout=2.0)
 
@@ -192,9 +189,14 @@ class TestEventBusPublishHistory:
         await bus.start()
         try:
             events = [
-                NexusEvent(event_type=NexusEventType.CUSTOM, data={"type": "workflow.started"}),
+                NexusEvent(
+                    event_type=NexusEventType.CUSTOM, data={"type": "workflow.started"}
+                ),
                 NexusEvent(event_type=NexusEventType.HANDLER_CALLED),
-                NexusEvent(event_type=NexusEventType.CUSTOM, data={"type": "workflow.completed"}),
+                NexusEvent(
+                    event_type=NexusEventType.CUSTOM,
+                    data={"type": "workflow.completed"},
+                ),
             ]
             await self._publish_and_drain(bus, events, sub_q)
 

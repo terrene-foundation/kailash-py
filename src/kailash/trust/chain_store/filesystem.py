@@ -30,10 +30,9 @@ from typing import Any, Dict, Generator, List, Optional
 from filelock import FileLock
 
 from kailash.trust._locking import safe_read_json
-
 from kailash.trust.chain import TrustLineageChain
-from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.chain_store import TrustStore
+from kailash.trust.exceptions import TrustChainNotFoundError
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen_agents._model_env import resolve_default_model
-
 from kaizen_agents.api.types import (
     AgentCapabilities,
     ExecutionMode,

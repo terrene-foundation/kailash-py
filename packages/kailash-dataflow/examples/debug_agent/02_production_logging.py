@@ -15,7 +15,6 @@ from dataflow import DataFlow
 from dataflow.debug.debug_agent import DebugAgent
 from dataflow.debug.knowledge_base import KnowledgeBase
 from dataflow.platform.inspector import Inspector
-
 from kailash.runtime import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

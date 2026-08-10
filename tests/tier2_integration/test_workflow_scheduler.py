@@ -5,7 +5,7 @@ when APScheduler is not installed.
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 

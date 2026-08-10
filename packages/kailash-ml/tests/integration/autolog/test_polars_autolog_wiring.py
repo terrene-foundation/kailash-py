@@ -25,7 +25,6 @@ from kailash_ml.autolog._polars import (
 )
 from kailash_ml.tracking import SqliteTrackerStore, track
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 

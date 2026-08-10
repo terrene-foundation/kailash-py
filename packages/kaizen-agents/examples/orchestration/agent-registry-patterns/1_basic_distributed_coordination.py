@@ -15,12 +15,7 @@ import asyncio
 
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen.orchestration import (
-    AgentRegistry,
-    AgentRegistryConfig,
-    AgentStatus,
-    RegistryEventType,
-)
+from kaizen.orchestration import AgentRegistry, AgentRegistryConfig, AgentStatus
 from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================

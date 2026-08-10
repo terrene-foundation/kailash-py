@@ -25,8 +25,8 @@ now clean. This file is the structural floor that catches a regression.
 from __future__ import annotations
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.privacy import (
     ComplianceRAGNode,
     PrivacyPreservingRAGNode,

@@ -44,10 +44,10 @@ from __future__ import annotations
 import time
 
 import pytest
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture
@@ -361,9 +361,8 @@ async def test_sqlite_create_in_scope_discarded_after_rollback(tmp_path):
 # ---------------------------------------------------------------------------
 @pytest.mark.regression
 async def test_run_sql_in_scope_fails_closed_without_transaction_handle():
-    from kailash.sdk_exceptions import NodeExecutionError
-
     from dataflow.core.nodes import _run_sql_in_scope
+    from kailash.sdk_exceptions import NodeExecutionError
 
     class _ScopeWithoutTransaction:
         """A stand-in for a corrupt/unexpected active_transaction object."""

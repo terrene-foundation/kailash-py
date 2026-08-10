@@ -12,10 +12,11 @@ Verifies:
 import warnings
 
 import pytest
-from dataflow.adapters.base_adapter import BaseAdapter
+
 from dataflow.adapters.base import DatabaseAdapter
-from dataflow.adapters.postgresql import PostgreSQLAdapter
+from dataflow.adapters.base_adapter import BaseAdapter
 from dataflow.adapters.mysql import MySQLAdapter
+from dataflow.adapters.postgresql import PostgreSQLAdapter
 from dataflow.adapters.sqlite import SQLiteAdapter
 
 

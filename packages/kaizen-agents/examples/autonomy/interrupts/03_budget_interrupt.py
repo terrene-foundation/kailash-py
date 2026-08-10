@@ -21,9 +21,8 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
     HookContext,
@@ -36,6 +35,7 @@ from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Setup logging
 logging.basicConfig(
@@ -137,7 +137,7 @@ class BudgetMonitoringHook:
                 f"(${self.total_cost:.4f} / ${self.budget_limit:.4f})"
             )
 
-    def get_cost_breakdown(self) -> Dict[str, Any]:
+    def get_cost_breakdown(self) -> dict[str, Any]:
         """Get detailed cost breakdown.
 
         Returns:
@@ -184,7 +184,7 @@ def print_banner(checkpoint_dir: Path, budget_limit: float) -> None:
     )
 
 
-def print_cost_breakdown(breakdown: Dict[str, Any]) -> None:
+def print_cost_breakdown(breakdown: dict[str, Any]) -> None:
     """Print detailed cost breakdown.
 
     Args:

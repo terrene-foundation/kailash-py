@@ -24,6 +24,7 @@ from datetime import timedelta, timezone
 from typing import Any, Dict
 
 import pytest
+
 from kailash.trust.constraints import (
     CommunicationDimension,
     ConstraintCheckResult,

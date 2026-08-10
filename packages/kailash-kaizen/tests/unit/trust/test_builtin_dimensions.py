@@ -14,6 +14,7 @@ Tests cover:
 from datetime import datetime, time
 
 import pytest
+
 from kailash.trust.constraints.builtin import (
     CommunicationDimension,
     CostLimitDimension,

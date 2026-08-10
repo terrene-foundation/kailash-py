@@ -141,9 +141,8 @@ workflow.add_node("HTTPRequestNode", "agent", {"url": "https://example.com"})
 
     def test_workflow_registration_across_channels(self):
         """Test workflow registration works across all channels."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         with patch("nexus.core.create_gateway") as mock_gateway:
             mock_gw = Mock()
@@ -185,9 +184,8 @@ workflow.add_node("HTTPRequestNode", "agent", {"url": "https://example.com"})
 
     def test_complete_user_flow(self):
         """Test complete user flow from zero to running workflows."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         with patch("nexus.core.create_gateway") as mock_gateway:
             mock_gw = Mock()

@@ -27,13 +27,12 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager, HookResult
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # ============================================================================
 # Specialist Agent Signatures
@@ -64,7 +63,7 @@ class DocumentationSignature(Signature):
     task: str = InputField(description="Documentation task to complete")
     documentation: str = OutputField(description="Generated documentation")
     format: str = OutputField(description="Documentation format (Markdown, RST, etc)")
-    sections: List[str] = OutputField(description="Documentation sections included")
+    sections: list[str] = OutputField(description="Documentation sections included")
 
 
 # ============================================================================
@@ -85,7 +84,7 @@ class CodeGenerationAgent(BaseAgent):
         # Capability: "Code generation, implementation, and refactoring"
         self.specialist_type = "code_expert"
 
-    def generate_code(self, task: str) -> Dict:
+    def generate_code(self, task: str) -> dict:
         """Generate code for given task."""
         print("\n💻 Code Expert: Generating code for task...")
 
@@ -145,7 +144,7 @@ class TestGenerationAgent(BaseAgent):
         # A2A capability: "Test generation and validation"
         self.specialist_type = "test_expert"
 
-    def generate_tests(self, task: str) -> Dict:
+    def generate_tests(self, task: str) -> dict:
         """Generate tests for given task."""
         print("\n🧪 Test Expert: Generating tests for task...")
 
@@ -204,7 +203,7 @@ class DocumentationAgent(BaseAgent):
         # A2A capability: "Documentation writing and technical content"
         self.specialist_type = "docs_expert"
 
-    def generate_documentation(self, task: str) -> Dict:
+    def generate_documentation(self, task: str) -> dict:
         """Generate documentation for given task."""
         print("\n📝 Documentation Expert: Creating documentation...")
 
@@ -330,8 +329,8 @@ class MultiSpecialistRouter:
 
     def __init__(
         self,
-        specialists: List[BaseAgent],
-        hook_manager: Optional[HookManager] = None,
+        specialists: list[BaseAgent],
+        hook_manager: HookManager | None = None,
     ):
         """
         Initialize multi-specialist router.
@@ -361,7 +360,7 @@ class MultiSpecialistRouter:
         print("🔄 Fallback: Graceful error handling")
         print("=" * 60 + "\n")
 
-    async def route_task(self, task: str) -> Dict:
+    async def route_task(self, task: str) -> dict:
         """
         Route task to best specialist via A2A semantic matching.
 
@@ -435,7 +434,7 @@ class MultiSpecialistRouter:
             "result": result,
         }
 
-    def _calculate_capability_scores(self, task: str) -> Dict[str, float]:
+    def _calculate_capability_scores(self, task: str) -> dict[str, float]:
         """Calculate A2A capability match scores (simulated)."""
         task_lower = task.lower()
 

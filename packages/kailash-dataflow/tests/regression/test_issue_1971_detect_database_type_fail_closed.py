@@ -65,16 +65,16 @@ import ast
 import pathlib
 
 import pytest
-from kailash.db.dialect import (
-    MYSQL_MAX_IDENTIFIER_LENGTH,
-    POSTGRES_MAX_IDENTIFIER_LENGTH,
-    SQLITE_MAX_IDENTIFIER_LENGTH,
-)
 
 from dataflow.adapters import connection_parser as connection_parser_module
 from dataflow.adapters.connection_parser import ConnectionParser
 from dataflow.adapters.exceptions import AdapterError
 from dataflow.migrations.staging_utilities import StagingUtilities
+from kailash.db.dialect import (
+    MYSQL_MAX_IDENTIFIER_LENGTH,
+    POSTGRES_MAX_IDENTIFIER_LENGTH,
+    SQLITE_MAX_IDENTIFIER_LENGTH,
+)
 
 pytestmark = pytest.mark.regression
 

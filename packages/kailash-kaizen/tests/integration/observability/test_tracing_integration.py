@@ -23,6 +23,7 @@ from typing import Dict, List
 
 import pytest
 import requests
+
 from kaizen.core.autonomy.hooks import HookContext, HookEvent
 from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
 from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (
@@ -255,9 +256,9 @@ class TestRealJaegerExport:
 
         # Assert: All spans in trace share same OpenTelemetry trace ID
         otel_trace_ids = [span["traceID"] for span in found_trace["spans"]]
-        assert len(set(otel_trace_ids)) == 1, (
-            "Spans have different OpenTelemetry trace IDs"
-        )
+        assert (
+            len(set(otel_trace_ids)) == 1
+        ), "Spans have different OpenTelemetry trace IDs"
 
     @pytest.mark.asyncio
     async def test_parent_child_relationships(self, tracing_manager):
@@ -398,9 +399,9 @@ class TestRealJaegerExport:
         export_duration = time.time() - start_time
 
         # Assert: Export completed within 10 seconds
-        assert export_duration < 10.0, (
-            f"Export took {export_duration:.2f}s, expected <10s"
-        )
+        assert (
+            export_duration < 10.0
+        ), f"Export took {export_duration:.2f}s, expected <10s"
 
         # Wait for Jaeger to index
         time.sleep(3)
@@ -529,9 +530,9 @@ class TestBaseAgentIntegration:
                     if tool:
                         found_tools.add(tool)
 
-        assert len(found_tools) >= 3, (
-            f"Expected 3 tools, found {len(found_tools)}: {found_tools}"
-        )
+        assert (
+            len(found_tools) >= 3
+        ), f"Expected 3 tools, found {len(found_tools)}: {found_tools}"
 
     @pytest.mark.asyncio
     async def test_multiple_agents_different_traces(self, tracing_hook):

@@ -14,8 +14,9 @@ import json
 import os
 import tempfile
 
-import kaizen
 import yaml
+
+import kaizen
 
 
 def demo_global_configure():

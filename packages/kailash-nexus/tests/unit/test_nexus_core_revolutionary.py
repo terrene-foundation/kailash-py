@@ -107,9 +107,8 @@ class TestRevolutionaryNexusCore:
 
     def test_multi_channel_workflow_registration(self):
         """Test revolutionary multi-channel workflow registration."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
 
@@ -316,9 +315,8 @@ class TestRevolutionaryNexusCore:
 
     def test_workflow_builder_handling(self):
         """Test proper handling of WorkflowBuilder vs Workflow instances."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
 
@@ -370,9 +368,8 @@ class TestRevolutionaryNexusCore:
 
     def test_realistic_performance_measurement(self):
         """Test realistic performance measurement (not impossibly fast)."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         app = Nexus()
 

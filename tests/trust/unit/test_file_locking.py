@@ -111,7 +111,9 @@ class TestFileLockCrossProcess:
                 [sys.executable, "-c", child_script],
                 env={
                     **os.environ,
-                    "PYTHONPATH": os.path.join(os.path.dirname(__file__), "..", "..", "..", "src"),
+                    "PYTHONPATH": os.path.join(
+                        os.path.dirname(__file__), "..", "..", "..", "src"
+                    ),
                 },
             )
             # Give child time to start and attempt lock

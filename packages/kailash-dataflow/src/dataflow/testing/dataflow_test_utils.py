@@ -12,12 +12,11 @@ import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from dataflow import DataFlow
+from dataflow.migrations.visual_migration_builder import VisualMigrationBuilder
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
-from dataflow.migrations.visual_migration_builder import VisualMigrationBuilder
 
 logger = logging.getLogger(__name__)
 

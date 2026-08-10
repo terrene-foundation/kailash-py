@@ -56,11 +56,7 @@ from kailash.trust.chain import (
 )
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import AuthorityInactiveError, AuthorityNotFoundError
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.chain_state_signing import (
     chain_state_canonical_payload,
     chain_state_canonical_payload_str,
@@ -476,8 +472,9 @@ def test_signed_chain_dict_carries_key_and_round_trips():
 async def test_signed_chain_survives_store_round_trip(ops, memory_store):
     """The signature must survive a full store serialize/deserialize (the path
     every persistent store uses is to_dict/from_dict)."""
-    from kailash.trust.chain_store.filesystem import FilesystemStore
     import tempfile
+
+    from kailash.trust.chain_store.filesystem import FilesystemStore
 
     await _establish(ops, "agent-a", [_cap_req("read_data", ["read_only"])])
     chain = await memory_store.get_chain("agent-a")

@@ -10,7 +10,6 @@ from being accepted as valid tool metadata.
 from __future__ import annotations
 
 import pytest
-
 from kailash_mcp.protocol.messages import JsonRpcValidationError, McpToolInfo
 
 

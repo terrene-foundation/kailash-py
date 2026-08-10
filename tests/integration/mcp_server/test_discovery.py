@@ -6,7 +6,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash_mcp.discovery.discovery import (
     DiscoveryBackend,
     FileBasedDiscovery,
@@ -950,7 +949,9 @@ class TestConvenienceFunctions:
         with patch(
             "kailash_mcp.discovery.discovery.create_default_registry"
         ) as mock_create:
-            with patch("kailash_mcp.discovery.discovery.ServiceMesh") as mock_mesh_class:
+            with patch(
+                "kailash_mcp.discovery.discovery.ServiceMesh"
+            ) as mock_mesh_class:
                 mock_registry = AsyncMock()
                 mock_mesh = AsyncMock()
                 mock_client = MagicMock()

@@ -22,7 +22,6 @@ import pytest
 
 from kailash.runtime.pause import PauseController
 
-
 # ---------------------------------------------------------------------------
 # Construction / Initial State
 # ---------------------------------------------------------------------------

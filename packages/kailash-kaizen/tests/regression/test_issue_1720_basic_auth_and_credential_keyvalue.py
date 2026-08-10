@@ -27,6 +27,7 @@ import re
 import time
 
 import pytest
+
 from kaizen.utils.credential_scrub import (
     _CREDENTIAL_KEY_NAMES,
     _CREDENTIAL_KEYVALUE_TOKEN,

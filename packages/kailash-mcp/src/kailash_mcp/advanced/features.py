@@ -1320,8 +1320,8 @@ class ElicitationSystem:
         try:
             # Dispatch the elicitation/create request through the bound
             # transport, TARGETING ``client_id`` (FINDING 3). Wrap the send so a
-            # transport failure (the client vanished mid-dispatch) surfaces as a
-            # typed MCPError and the ``finally`` below cleans the pending Future /
+            # transport failure (the client vanished mid-dispatch) surfaces as a typed
+            # MCPError and the ``finally`` below cleans the pending Future /
             # callbacks — the awaiter is never left hanging until timeout.
             try:
                 await self._send_elicitation_request(

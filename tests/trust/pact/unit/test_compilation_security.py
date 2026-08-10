@@ -13,7 +13,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.compilation import (
     MAX_CHILDREN_PER_NODE,
     MAX_COMPILATION_DEPTH,
@@ -23,7 +22,7 @@ from kailash.trust.pact.compilation import (
     RoleDefinition,
     compile_org,
 )
-
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 # ---------------------------------------------------------------------------
 # TODO 7006: RoleDefinition must be frozen

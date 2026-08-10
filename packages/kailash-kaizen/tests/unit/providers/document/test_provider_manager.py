@@ -13,6 +13,7 @@ Tests:
 from unittest.mock import patch
 
 import pytest
+
 from kaizen.providers.document.base_provider import ExtractionResult
 from kaizen.providers.document.provider_manager import ProviderManager
 

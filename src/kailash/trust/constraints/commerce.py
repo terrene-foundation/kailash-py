@@ -83,7 +83,9 @@ class CommerceConstraint(ConstraintDimension):
                     "allowed_beneficiaries",
                     [value["beneficiary_id"]] if "beneficiary_id" in value else [],
                 ),
-                "commerce_types": value.get("commerce_types", [ct.value for ct in CommerceType]),
+                "commerce_types": value.get(
+                    "commerce_types", [ct.value for ct in CommerceType]
+                ),
                 "jurisdiction": value.get("jurisdiction"),
                 "attribution_required": value.get("attribution_required", True),
             }
@@ -97,7 +99,9 @@ class CommerceConstraint(ConstraintDimension):
             metadata={"commerce_type_count": len(parsed["commerce_types"])},
         )
 
-    def check(self, constraint: ConstraintValue, context: Dict[str, Any]) -> ConstraintCheckResult:
+    def check(
+        self, constraint: ConstraintValue, context: Dict[str, Any]
+    ) -> ConstraintCheckResult:
         """Check commerce constraint against execution context.
 
         Context keys:
@@ -128,7 +132,11 @@ class CommerceConstraint(ConstraintDimension):
                 )
 
         # Check jurisdiction
-        if jurisdiction and parsed.get("jurisdiction") and jurisdiction != parsed["jurisdiction"]:
+        if (
+            jurisdiction
+            and parsed.get("jurisdiction")
+            and jurisdiction != parsed["jurisdiction"]
+        ):
             return ConstraintCheckResult(
                 satisfied=False,
                 reason=f"Jurisdiction '{jurisdiction}' does not match required '{parsed['jurisdiction']}'",
@@ -138,7 +146,9 @@ class CommerceConstraint(ConstraintDimension):
         if parsed.get("attribution_required"):
             attribution_chain = context.get("attribution_chain", [])
             if not attribution_chain and beneficiary:
-                logger.info(f"Attribution required but no chain provided for beneficiary {beneficiary}")
+                logger.info(
+                    f"Attribution required but no chain provided for beneficiary {beneficiary}"
+                )
 
         return ConstraintCheckResult(
             satisfied=True,
@@ -168,7 +178,9 @@ class CommerceConstraint(ConstraintDimension):
             return False
 
         # If parent requires attribution, child must too
-        if parent.parsed.get("attribution_required") and not child.parsed.get("attribution_required"):
+        if parent.parsed.get("attribution_required") and not child.parsed.get(
+            "attribution_required"
+        ):
             return False
 
         return True

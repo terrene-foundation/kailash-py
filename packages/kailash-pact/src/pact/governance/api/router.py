@@ -12,7 +12,6 @@ Both configure rate limiting, security headers, and the governance router.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -21,9 +20,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from kailash.trust.pact.engine import GovernanceEngine
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.endpoints import create_governance_router
-from kailash.trust.pact.engine import GovernanceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,9 @@ def mount_governance_api(
             all governance endpoints.
     """
     limiter = getattr(app.state, "limiter", None)
-    router = create_governance_router(engine, auth, limiter=limiter, rate_limit=rate_limit)
+    router = create_governance_router(
+        engine, auth, limiter=limiter, rate_limit=rate_limit
+    )
     app.include_router(router)
 
     logger.info(
@@ -92,7 +93,9 @@ def create_governance_app(
 
     # Rate limit exceeded handler
     @app.exception_handler(RateLimitExceeded)
-    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    async def rate_limit_handler(
+        request: Request, exc: RateLimitExceeded
+    ) -> JSONResponse:
         return JSONResponse(
             status_code=429,
             content={"error": "Rate limit exceeded", "detail": str(exc.detail)},
@@ -102,7 +105,9 @@ def create_governance_app(
     app.add_middleware(SlowAPIMiddleware)
 
     # Create and mount the governance router with rate limiting
-    router = create_governance_router(engine, auth, limiter=limiter, rate_limit=rate_limit)
+    router = create_governance_router(
+        engine, auth, limiter=limiter, rate_limit=rate_limit
+    )
     app.include_router(router)
 
     logger.info(

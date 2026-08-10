@@ -22,6 +22,7 @@ import jwt as pyjwt
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
 from nexus.context import get_current_actor_id, get_current_tenant_id
 

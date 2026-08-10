@@ -11,12 +11,6 @@ import pytest
 
 # Check Ollama availability
 try:
-    from kaizen_agents.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
-    from kaizen_agents.agents.transcription_agent import (
-        TranscriptionAgent,
-        TranscriptionAgentConfig,
-    )
-    from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
     from kaizen.cost.tracker import CostTracker
     from kaizen.providers import OLLAMA_AVAILABLE
     from kaizen.providers.multi_modal_adapter import (
@@ -30,6 +24,12 @@ try:
         ImageField,
         MultiModalSignature,
     )
+    from kaizen_agents.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
+    from kaizen_agents.agents.transcription_agent import (
+        TranscriptionAgent,
+        TranscriptionAgentConfig,
+    )
+    from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
     IMPORTS_AVAILABLE = True
 except ImportError as e:

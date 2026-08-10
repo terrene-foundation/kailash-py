@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
@@ -20,6 +18,8 @@ Tables:
 - ``budget_snapshots``: (tracker_id TEXT PK, allocated INT, committed INT, updated_at TEXT)
 - ``budget_transactions``: (id INTEGER PK, tracker_id TEXT, event_type TEXT, amount INT, timestamp TEXT)
 """
+
+from __future__ import annotations
 
 import logging
 import os

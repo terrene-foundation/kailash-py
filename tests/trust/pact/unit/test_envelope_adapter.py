@@ -20,14 +20,13 @@ from typing import Any
 
 import pytest
 
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from pact.examples.university.org import create_university_org
-from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelope_adapter import (
     EnvelopeAdapterError,
@@ -35,7 +34,7 @@ from kailash.trust.pact.envelope_adapter import (
 )
 from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 from kailash.trust.plane.models import ConstraintEnvelope
-
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures

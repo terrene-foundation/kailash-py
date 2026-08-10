@@ -13,16 +13,20 @@ from pathlib import Path
 import aiohttp
 import pytest
 import redis.asyncio as redis
-
 from kailash_mcp import MCPClient, MCPServer
 from kailash_mcp.auth.providers import APIKeyAuth
-from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo, ServiceRegistry
+from kailash_mcp.discovery.discovery import (
+    FileBasedDiscovery,
+    ServerInfo,
+    ServiceRegistry,
+)
 from kailash_mcp.transports.transports import (
     EnhancedStdioTransport,
     SSETransport,
     StreamableHTTPTransport,
     WebSocketTransport,
 )
+
 from tests.utils.docker_config import (
     REDIS_CONFIG,
     ensure_docker_services,
@@ -153,7 +157,7 @@ class TestRealMCPServerIntegration:
                 async with session.get(f"{test_api_url}/health") as resp:
                     if resp.status != 200:
                         return  # Test API server not available, skip test
-        except:
+        except aiohttp.ClientError:
             return  # Test API server not available, skip test
 
         # Create client with HTTP configuration
@@ -356,7 +360,7 @@ class TestMCPHealthChecking:
                 async with session.get(f"{test_api_url}/health") as resp:
                     if resp.status != 200:
                         return  # Test API not available, skip test
-        except:
+        except aiohttp.ClientError:
             return  # Test API not available, skip test
 
         # Create health checker

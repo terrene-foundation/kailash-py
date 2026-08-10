@@ -5,9 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-
-from kailash_mcp.server import MCPServer
 from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
+from kailash_mcp.server import MCPServer
 
 
 class TestBatchSubscriptions:

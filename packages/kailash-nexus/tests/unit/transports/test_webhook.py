@@ -18,12 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
-from nexus.transports.webhook import (
-    DeliveryStatus,
-    WebhookDelivery,
-    WebhookTransport,
-)
-
+from nexus.transports.webhook import DeliveryStatus, WebhookDelivery, WebhookTransport
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -660,9 +655,9 @@ class TestOutboundDelivery:
 
         # All delays should be capped at max_delay
         for d in delays:
-            assert d <= 0.05, (
-                f"backoff delay {d} exceeds max_delay=0.05; captured {delays}"
-            )
+            assert (
+                d <= 0.05
+            ), f"backoff delay {d} exceeds max_delay=0.05; captured {delays}"
 
 
 # ---------------------------------------------------------------------------

@@ -75,7 +75,7 @@ class TestProductionPerformance:
                 if response.status_code == 200:
                     started = True
                     break
-            except:
+            except requests.exceptions.RequestException:
                 time.sleep(0.1)
 
         startup_duration = time.time() - start_time
@@ -220,7 +220,7 @@ result = {'processed': True, 'id': parameters.get('id', 0)}
                         timeout=5,
                     )
                     return response.status_code == 200
-                except:
+                except requests.exceptions.RequestException:
                     return False
 
             # Use thread pool for concurrent requests
@@ -294,7 +294,7 @@ result = {'completed': True}
                 )
                 if response.status_code == 200:
                     request_completed = True
-            except:
+            except requests.exceptions.RequestException:
                 pass
 
         request_thread = threading.Thread(target=make_long_request)
@@ -452,7 +452,7 @@ result = {'success': True}
             # Try to use non-existent plugin (should fail gracefully)
             try:
                 n.use_plugin("non-existent-plugin")
-            except:
+            except Exception:
                 pass  # Expected to fail
 
             # Core should still work

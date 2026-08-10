@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,6 +14,8 @@ operations in record() (reserved subtracted before committed added).
 This is the safe direction -- it may briefly allow a reservation that
 would have been denied, but never denies one that should be allowed.
 """
+
+from __future__ import annotations
 
 import logging
 import math

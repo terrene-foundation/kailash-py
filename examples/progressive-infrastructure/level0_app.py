@@ -9,7 +9,7 @@ Usage:
     python level0_app.py
 """
 
-from kailash import WorkflowBuilder, LocalRuntime
+from kailash import LocalRuntime, WorkflowBuilder
 
 
 def main() -> None:

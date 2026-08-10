@@ -40,8 +40,8 @@ from pathlib import Path
 # Add src to path for local development
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from kaizen_agents.agents.autonomous import AutonomousConfig, BaseAutonomousAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous import AutonomousConfig, BaseAutonomousAgent
 
 
 # Define signature for research tasks
@@ -93,14 +93,12 @@ async def demo_basic_autonomous_execution():
         planning_enabled=True,
     )
 
-    # Create tool registry
-    # Create agent
+    # Create agent (tools are auto-discovered via MCP server connection)
     agent = BaseAutonomousAgent(config=config, signature=ResearchSignature())
 
     print("✓ Created BaseAutonomousAgent")
     print(f"  - Max cycles: {config.max_cycles}")
     print(f"  - Planning enabled: {config.planning_enabled}")
-    print(f"  - Available tools: {len(list(registry.list_tools()))}")
 
     # Execute autonomously
     task = "Research Python async programming patterns and create summary"
@@ -143,8 +141,7 @@ async def demo_checkpoint_recovery():
         checkpoint_frequency=2,  # Save every 2 cycles
     )
 
-    # Create tool registry
-    # Create agent
+    # Create agent (tools are auto-discovered via MCP server connection)
     agent = BaseAutonomousAgent(config=config, signature=ResearchSignature())
 
     print("✓ Created BaseAutonomousAgent with checkpointing")

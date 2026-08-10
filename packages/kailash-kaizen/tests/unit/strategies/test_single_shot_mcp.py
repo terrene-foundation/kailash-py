@@ -14,6 +14,7 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen.strategies.single_shot import _TOOL_NAME_RE, SingleShotStrategy
 
 # ---------------------------------------------------------------------------

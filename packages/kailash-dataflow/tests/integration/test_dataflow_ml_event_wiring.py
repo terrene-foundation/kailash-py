@@ -37,10 +37,9 @@ from dataflow.ml import (
     TrainingContext,
     emit_train_end,
     emit_train_start,
-    hash as df_hash,
-    on_train_end,
-    on_train_start,
 )
+from dataflow.ml import hash as df_hash
+from dataflow.ml import on_train_end, on_train_start
 
 pytestmark = pytest.mark.integration
 

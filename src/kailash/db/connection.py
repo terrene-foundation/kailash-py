@@ -13,11 +13,7 @@ import contextlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from kailash.db.dialect import (
-    DatabaseType,
-    QueryDialect,
-    detect_dialect,
-)
+from kailash.db.dialect import DatabaseType, QueryDialect, detect_dialect
 
 logger = logging.getLogger(__name__)
 

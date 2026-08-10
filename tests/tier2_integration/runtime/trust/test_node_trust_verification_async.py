@@ -11,15 +11,8 @@ import logging
 
 import pytest
 
-from kailash.runtime.trust.context import (
-    RuntimeTrustContext,
-    TrustVerificationMode,
-)
-from kailash.runtime.trust.verifier import (
-    MockTrustVerifier,
-    TrustVerifierConfig,
-)
-
+from kailash.runtime.trust.context import RuntimeTrustContext, TrustVerificationMode
+from kailash.runtime.trust.verifier import MockTrustVerifier, TrustVerifierConfig
 
 # =============================================================================
 # Test node-level trust in AsyncLocalRuntime execution paths

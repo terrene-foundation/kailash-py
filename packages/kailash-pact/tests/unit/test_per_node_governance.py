@@ -17,20 +17,12 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
-from dataclasses import dataclass
 
 import pytest
 
-from kailash.trust.pact.verdict import GovernanceVerdict
 from kailash.trust.pact.exceptions import PactError
-from pact.engine import (
-    GovernanceHeldError,
-    HeldActionCallback,
-    GovernanceCallback,
-    PactEngine,
-    _DefaultGovernanceCallback,
-)
-
+from kailash.trust.pact.verdict import GovernanceVerdict
+from pact.engine import GovernanceHeldError, PactEngine, _DefaultGovernanceCallback
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.revocation.broadcaster import InMemoryDelegationRegistry

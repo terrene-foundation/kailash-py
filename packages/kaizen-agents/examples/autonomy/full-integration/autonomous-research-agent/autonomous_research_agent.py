@@ -25,10 +25,9 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from dataflow import DataFlow
-from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
     HookContext,
@@ -50,8 +49,8 @@ from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.memory import PersistentBufferMemory
 from kaizen.memory.tiers import HotMemoryTier
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 
 # Setup logging
 logging.basicConfig(
@@ -66,8 +65,8 @@ class ResearchSignature(Signature):
 
     task: str = InputField(description="Research task to perform")
     result: str = OutputField(description="Research result")
-    findings: List[str] = OutputField(description="Key findings")
-    sources: List[str] = OutputField(description="Sources consulted")
+    findings: list[str] = OutputField(description="Key findings")
+    sources: list[str] = OutputField(description="Sources consulted")
 
 
 class SystemMetricsHook:
@@ -136,7 +135,7 @@ class SystemMetricsHook:
         """Track memory cache miss."""
         self.memory_misses += 1
 
-    def _log_event(self, event: str, data: Dict[str, Any]) -> None:
+    def _log_event(self, event: str, data: dict[str, Any]) -> None:
         """Log event to JSONL file.
 
         Args:
@@ -347,7 +346,7 @@ class AutonomousResearchAgent:
             f"✅ Meta-controller initialized ({len(self.specialists)} specialists)"
         )
 
-    async def execute_research(self, task: str) -> Dict[str, Any]:
+    async def execute_research(self, task: str) -> dict[str, Any]:
         """Execute autonomous research with all systems integrated.
 
         Args:
@@ -413,7 +412,7 @@ class AutonomousResearchAgent:
             print(f"\n❌ Error: {e}\n")
             return {"status": "error", "error": str(e)}
 
-    async def _check_memory_cache(self, task: str) -> Optional[Dict[str, Any]]:
+    async def _check_memory_cache(self, task: str) -> dict[str, Any] | None:
         """Check if task result is cached in memory.
 
         Args:
@@ -431,7 +430,7 @@ class AutonomousResearchAgent:
         # In production, would query PersistentBufferMemory
         return None
 
-    async def _store_in_memory(self, task: str, result: Dict[str, Any]) -> None:
+    async def _store_in_memory(self, task: str, result: dict[str, Any]) -> None:
         """Store research result in memory tiers.
 
         Args:
