@@ -13,6 +13,7 @@ import binascii
 import json
 import logging
 import os
+import tempfile
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,11 +24,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from ..trust._locking import safe_read_json, validate_id
-from ..utils.file_permissions import (
-    OWNER_ONLY_MODE,
-    restrict_dir_to_owner,
-    restrict_to_owner,
-)
+from ..utils.file_permissions import restrict_dir_to_owner, restrict_to_owner
 
 logger = logging.getLogger(__name__)
 
@@ -263,26 +260,40 @@ class FileSecretBackend(SecretBackend):
     alongside the ciphertext, so the store survives a process restart and no
     two files share a derived key. The master key itself is never written.
 
+    The plaintext under that ciphertext is ``{"ref": <reference>, "secret":
+    <value>}``, and ``get_secret`` refuses an envelope whose embedded ``ref``
+    is not the reference it was asked for. Fernet authenticates its ciphertext
+    but has no associated-data channel, so without that binding the envelope is
+    a free-standing blob: copying ``staging_key.json`` over ``db_master.json``
+    would verify perfectly and return the attacker's chosen value, and a
+    backup restore would silently roll a rotated secret back to its
+    pre-rotation value with no attacker involved at all.
+
     Args:
         secrets_dir: Directory holding one file per secret. Created ``0o700``.
-        master_key: The passphrase to derive from. Prefer the environment
+        master_key: The passphrase to derive from, at least
+            ``MIN_MASTER_KEY_LENGTH`` characters. Prefer the environment
             variable; pass this only when the key comes from another vault.
         master_key_source: Name of the environment variable read when
             ``master_key`` is not given. Defaults to
             ``KAILASH_SECRETS_MASTER_KEY``.
 
     Raises:
-        SecretEncryptionError: If no master key is available. This is
-            deliberate and fails CLOSED at construction — a backend that
-            quietly generated its own key would either write secrets nobody can
-            recover after a restart, or write them under a key with no secrecy
-            at all.
+        SecretEncryptionError: If no master key is available, or if it is
+            shorter than ``MIN_MASTER_KEY_LENGTH``. This is deliberate and
+            fails CLOSED at construction — a backend that quietly generated its
+            own key would either write secrets nobody can recover after a
+            restart, or write them under a key with no secrecy at all, and
+            100k PBKDF2 iterations do not rescue a one-character passphrase.
 
     Note:
         Files written by kailash <= 2.58 are cleartext and are NOT readable
         here; reading one raises :class:`LegacyPlaintextSecretError`. Treat
         those secrets as disclosed, rotate them, and store them again.
     """
+
+    #: Minimum master-key length, matching ``trust.auth.jwt.JWTConfig``.
+    MIN_MASTER_KEY_LENGTH = 32
 
     def __init__(
         self,
@@ -303,6 +314,15 @@ class FileSecretBackend(SecretBackend):
                 f"{master_key_source} environment variable, or pass "
                 f"master_key= explicitly. Refusing to store secrets that "
                 f"would not be encrypted."
+            )
+        if len(key) < self.MIN_MASTER_KEY_LENGTH:
+            # The length is named, the key is not: an exception message can
+            # reach a log or a crash report.
+            raise SecretEncryptionError(
+                f"Master key from {master_key_source} is {len(key)} characters; "
+                f"at least {self.MIN_MASTER_KEY_LENGTH} are required. A "
+                f"passphrase that brief is brute-forceable regardless of the "
+                f"KDF's iteration count."
             )
         self._master_key = key.encode() if isinstance(key, str) else key
 
@@ -434,7 +454,25 @@ class FileSecretBackend(SecretBackend):
                 f"stored under, or the file has been modified."
             ) from e
 
-        return json.loads(plaintext.decode())
+        payload = json.loads(plaintext.decode())
+        if not isinstance(payload, dict) or "ref" not in payload:
+            raise SecretEncryptionError(
+                f"Secret {reference} decrypted to an unbound payload. It was "
+                f"written by a build that did not bind the ciphertext to its "
+                f"reference; rotate the secret and store it again."
+            )
+        # The binding check. Fernet proves the bytes were written by a holder
+        # of this master key -- NOT that they were written for THIS reference.
+        # Without this, copying one envelope over another substitutes the
+        # secret while every integrity check still passes, and a backup restore
+        # rolls a rotated secret back with no attacker involved at all.
+        if payload["ref"] != reference:
+            raise SecretEncryptionError(
+                f"Secret {reference} holds an envelope written for a different "
+                f"reference. The file has been substituted or restored over."
+            )
+
+        return payload["secret"]
 
     async def store_secret(self, reference: str, secret: Any) -> None:
         """Encrypt ``secret`` and write it owner-only under ``reference``."""
@@ -442,9 +480,14 @@ class FileSecretBackend(SecretBackend):
 
         salt = os.urandom(_SALT_BYTES)
         cipher = self._cipher_for(salt, SECRET_KDF_ITERATIONS)
+        # The reference travels INSIDE the ciphertext so get_secret can prove
+        # the envelope was written for the name it was asked for; Fernet has no
+        # associated-data channel to carry it in the clear.
+        #
         # json.dumps rather than str(): it round-trips dicts and strings back
         # to their original type, so get_secret returns what was handed in.
-        token = cipher.encrypt(json.dumps(secret).encode())
+        payload = {"ref": reference, "secret": secret}
+        token = cipher.encrypt(json.dumps(payload).encode())
         envelope = {
             "v": SECRET_ENVELOPE_VERSION,
             "kdf": SECRET_ENVELOPE_KDF,
@@ -452,28 +495,58 @@ class FileSecretBackend(SecretBackend):
             "salt": base64.b64encode(salt).decode(),
             "ciphertext": token.decode(),
         }
+        self._write_envelope(file_path, envelope)
 
-        # Create restricted up front rather than writing then chmod'ing: the
-        # latter leaves the file world-readable for the whole write window.
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        fd = os.open(file_path, flags, OWNER_ONLY_MODE)
+    def _write_envelope(self, file_path: str, envelope: Dict[str, Any]) -> None:
+        """Write the envelope atomically, owner-only, and durably.
+
+        Temp-file-plus-rename rather than an in-place ``O_TRUNC`` write: a
+        crash or a full disk partway through an in-place write leaves a
+        truncated file, which the read path would then report as
+        ``LegacyPlaintextSecretError`` — data loss surfaced to the operator as
+        "this is pre-2.58 cleartext". ``os.replace`` is atomic on POSIX and on
+        Windows, so a reader sees either the whole old file or the whole new
+        one. It also replaces a symlink sitting at the target rather than
+        writing through it.
+
+        Not ``trust._locking.atomic_write``, which is otherwise the same shape:
+        it has no place to apply ``restrict_to_owner`` to the descriptor, and
+        this call site must both apply it and act on its answer.
+        """
+        directory = os.path.dirname(file_path) or "."
+        # mkstemp creates 0o600 on POSIX, so the payload is never world-readable
+        # even for the duration of the write; restrict_to_owner then covers
+        # Windows, where the mode is not the mechanism.
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=f".{os.path.basename(file_path)}.", suffix=".tmp"
+        )
         try:
-            # An existing file keeps its original mode, since the mode argument
-            # applies only on creation, so re-apply on the open descriptor.
-            #
-            # NOTE: owner-only access is enforced on POSIX. On Windows the
-            # returned flag is False unless pywin32 is present, and the file is
-            # then NOT confidential -- see kailash.utils.file_permissions.
-            restrict_to_owner(file_path, fd=fd)
-            f = os.fdopen(fd, "w")
-        except Exception:
-            os.close(fd)
+            if not restrict_to_owner(tmp_path, fd=fd):
+                # The helper's contract: False means no mechanism was available
+                # and the file is NOT confidential. It warns once per process,
+                # which an unrelated earlier write may already have consumed, so
+                # secret material logs its own per-file finding.
+                logger.warning(
+                    "Secret file %s is NOT confidential: owner-only access "
+                    "could not be enforced on this platform. Install pywin32, "
+                    "or place the secrets directory on a volume whose ACL "
+                    "already restricts access.",
+                    file_path,
+                )
+            with os.fdopen(fd, "w") as f:
+                fd = -1  # os.fdopen took ownership — do not double-close
+                json.dump(envelope, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, file_path)
+        except BaseException:
+            if fd >= 0:
+                os.close(fd)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
             raise
-
-        with f:
-            json.dump(envelope, f)
 
     async def delete_secret(self, reference: str) -> None:
         """Delete secret file."""

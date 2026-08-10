@@ -22,6 +22,7 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 import stat
 import sys
 from pathlib import Path
@@ -202,9 +203,168 @@ class TestFailsClosedWithoutAMasterKey:
         monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
         asyncio.run(FileSecretBackend(str(tmp_path)).store_secret("k", SENTINEL))
 
-        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", "a-different-master-key")
+        monkeypatch.setenv(
+            "KAILASH_SECRETS_MASTER_KEY", "a-completely-different-master-key-entirely"
+        )
         with pytest.raises(SecretEncryptionError):
             asyncio.run(FileSecretBackend(str(tmp_path)).get_secret("k"))
+
+
+class TestEnvelopesAreBoundToTheirReference:
+    """Falsifying result: the substituted envelope decrypts and its value is
+    returned under the requested reference.
+
+    Fernet authenticates its ciphertext but carries no associated data, so an
+    envelope with no reference inside it is a free-standing blob: it verifies
+    under ANY name. That makes file-copy substitution and backup-restore
+    rollback indistinguishable from a legitimate read.
+    """
+
+    def test_copying_one_envelope_over_another_is_refused(
+        self, backend, tmp_path
+    ) -> None:
+        asyncio.run(backend.store_secret("db_master", "SECRET-PROD-VALUE"))
+        asyncio.run(backend.store_secret("staging_key", "SECRET-STAGING-VALUE"))
+
+        shutil.copyfile(tmp_path / "staging_key.json", tmp_path / "db_master.json")
+
+        with pytest.raises(SecretEncryptionError, match="different reference"):
+            asyncio.run(backend.get_secret("db_master"))
+
+    def test_a_restored_pre_rotation_backup_is_refused_under_another_name(
+        self, backend, tmp_path
+    ) -> None:
+        """The no-attacker case: a restore process puts the wrong file back."""
+        asyncio.run(backend.store_secret("api_token", "SECRET-CURRENT"))
+        backup = tmp_path / "backup.json"
+        shutil.copyfile(tmp_path / "api_token.json", backup)
+
+        asyncio.run(backend.store_secret("api_token_old", "SECRET-CURRENT"))
+        shutil.copyfile(backup, tmp_path / "api_token_old.json")
+
+        with pytest.raises(SecretEncryptionError, match="different reference"):
+            asyncio.run(backend.get_secret("api_token_old"))
+
+    def test_renaming_a_secret_file_does_not_rename_the_secret(
+        self, backend, tmp_path
+    ) -> None:
+        asyncio.run(backend.store_secret("original", SENTINEL))
+        (tmp_path / "original.json").rename(tmp_path / "renamed.json")
+
+        with pytest.raises(SecretEncryptionError):
+            asyncio.run(backend.get_secret("renamed"))
+
+    def test_the_reference_is_not_recoverable_from_the_envelope(
+        self, backend, tmp_path
+    ) -> None:
+        """The binding lives under the ciphertext, so it is not itself a
+        disclosure: the filename already names the reference, but the bound
+        copy must not be a second cleartext channel that could be edited."""
+        asyncio.run(backend.store_secret("db_master", SENTINEL))
+        envelope = json.loads(_raw(tmp_path, "db_master"))
+        assert "ref" not in envelope
+        assert b"db_master" not in base64.b64decode(envelope["salt"])
+
+    def test_the_legitimate_read_still_works(self, backend) -> None:
+        """The binding must not reject the ordinary case — otherwise the tests
+        above would pass against a get_secret that raises unconditionally."""
+        asyncio.run(backend.store_secret("db_master", "SECRET-PROD-VALUE"))
+        assert asyncio.run(backend.get_secret("db_master")) == "SECRET-PROD-VALUE"
+
+
+class TestMasterKeyStrengthFloor:
+    """Falsifying result: a one-character passphrase is accepted.
+
+    ``if not key`` rejected only the empty string, so 100k PBKDF2 iterations
+    were being applied to a passphrase with no entropy to stretch.
+    """
+
+    @pytest.mark.parametrize("weak", ["x", "short", "a" * 31])
+    def test_a_short_master_key_is_refused(self, tmp_path, monkeypatch, weak) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", weak)
+        with pytest.raises(SecretEncryptionError) as excinfo:
+            FileSecretBackend(str(tmp_path))
+        message = str(excinfo.value)
+        assert str(len(weak)) in message, "received length is not named"
+        assert "32" in message, "the floor is not named"
+        assert weak not in message, "the rejected key was echoed into the error"
+
+    def test_the_floor_is_the_repo_wide_one(self) -> None:
+        from kailash.trust.auth.jwt import JWTConfig
+
+        assert FileSecretBackend.MIN_MASTER_KEY_LENGTH == JWTConfig.MIN_SECRET_LENGTH
+
+    def test_a_key_exactly_at_the_floor_is_accepted(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", "a" * 32)
+        backend = FileSecretBackend(str(tmp_path))
+        asyncio.run(backend.store_secret("k", SENTINEL))
+        assert asyncio.run(backend.get_secret("k")) == SENTINEL
+
+
+class TestTheWriteIsAtomic:
+    """Falsifying result: a failed write leaves the previous secret truncated.
+
+    An in-place O_TRUNC write that dies partway through produces a file the
+    read path reports as LegacyPlaintextSecretError — data loss presented to
+    the operator as "this is pre-2.58 cleartext".
+    """
+
+    def test_a_failed_write_leaves_the_previous_secret_intact(
+        self, backend, tmp_path, monkeypatch
+    ) -> None:
+        asyncio.run(backend.store_secret("k", SENTINEL))
+
+        from kailash.gateway import security as security_module
+
+        def exploding_dump(obj, fp, *args, **kwargs):
+            fp.write('{"v": 1, "kdf": "pbkd')  # a genuine partial write
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(security_module.json, "dump", exploding_dump)
+        with pytest.raises(OSError):
+            asyncio.run(backend.store_secret("k", "REPLACEMENT"))
+        monkeypatch.undo()
+
+        assert asyncio.run(backend.get_secret("k")) == SENTINEL
+
+    def test_a_failed_write_leaves_no_temp_file_behind(
+        self, backend, tmp_path, monkeypatch
+    ) -> None:
+        from kailash.gateway import security as security_module
+
+        def exploding_dump(obj, fp, *args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(security_module.json, "dump", exploding_dump)
+        with pytest.raises(OSError):
+            asyncio.run(backend.store_secret("k", SENTINEL))
+        monkeypatch.undo()
+
+        assert list(tmp_path.iterdir()) == [], f"left behind {list(tmp_path.iterdir())}"
+
+    @posix_only
+    def test_the_payload_is_never_world_readable_even_mid_write(
+        self, backend, monkeypatch
+    ) -> None:
+        """Sampled through the descriptor being written, not the final path:
+        the defect this pins is the window, and the final mode was already
+        correct before the fix."""
+        from kailash.gateway import security as security_module
+
+        observed: list[int] = []
+        real_dump = security_module.json.dump
+
+        def spying_dump(obj, fp, *args, **kwargs):
+            observed.append(stat.S_IMODE(os.fstat(fp.fileno()).st_mode))
+            return real_dump(obj, fp, *args, **kwargs)
+
+        monkeypatch.setattr(security_module.json, "dump", spying_dump)
+        asyncio.run(backend.store_secret("k", SENTINEL))
+
+        assert observed, "the write path never ran; test would be vacuous"
+        assert observed[0] == 0o600, f"world-readable mid-write ({observed[0]:o})"
 
 
 class TestLegacyPlaintextRaisesAndIsNeverHonoured:

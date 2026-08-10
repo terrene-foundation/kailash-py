@@ -311,12 +311,16 @@ class TestFileSecretBackendPermissions:
         """
         from kailash.gateway import security as security_module
 
-        secret_file = tmp_path / "db-creds.json"
         observed: list[int] = []
         real_dump = security_module.json.dump
 
         def spying_dump(obj, fp, *args, **kwargs):
-            observed.append(_mode(secret_file))
+            # Sampled through the descriptor rather than the final path: since
+            # #2024 the write goes to a temp file that is renamed into place,
+            # so the final path does not exist yet at this instant. The
+            # descriptor is the object the payload is actually landing in,
+            # which is what the mode has to be right on.
+            observed.append(stat.S_IMODE(os.fstat(fp.fileno()).st_mode))
             return real_dump(obj, fp, *args, **kwargs)
 
         monkeypatch.setattr(security_module.json, "dump", spying_dump)
