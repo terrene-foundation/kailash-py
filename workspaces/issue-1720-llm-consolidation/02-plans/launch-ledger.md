@@ -35,6 +35,30 @@ All branches pinned to merge-base `a101c81f9` (verified at creation, `worktree-i
 | 1D    | —            | #2030 + #2022 | —                                | —         | blocked on INV-1D |
 | 1E    | LANE-1E-2027 | #2027         | `fix/2027-sensitive-value-sinks` | `lane-1e` | in-flight         |
 
+## Wave 2 — launched early (file-disjointness verified, not assumed)
+
+Collision check run before launch: #2015's `detail=str(e)` sites resolve to exactly 4 files
+(`channels/api_channel.py`, `gateway/api.py`, `middleware/communication/api_gateway.py`,
+`visualization/api.py`) with ZERO overlap against lanes 1C or 1E. 2A's nexus `core.py`/`plugins.py`
+is disjoint from 1E's nexus `auth/rate_limit/middleware.py`.
+
+| track | agent        | issue(s) | branch                         | worktree  | status    |
+| ----- | ------------ | -------- | ------------------------------ | --------- | --------- |
+| 2A    | LANE-2A-2013 | #2013    | `fix/2013-inert-auth-control`  | `lane-2a` | in-flight |
+| 2B    | LANE-2B-2015 | #2015    | `fix/2015-exception-leak-http` | `lane-2b` | in-flight |
+| 2C    | —            | #1997    | —                              | —         | queued    |
+| 2D    | —            | #2014    | —                              | —         | queued    |
+| 2E    | —            | #2004    | —                              | —         | queued    |
+
+Lanes 2B/2A carry an explicit DO-NOT-TOUCH file list naming the other lanes' files, so a lane
+that discovers an in-scope defect in a held file reports it instead of colliding.
+
+## Open PRs from this session
+
+- **#2032** — `docs/burndown-plan-corrections`: Gate-0 clearance + the three measured plan
+  corrections (#2013 confirmed, #2015 confirmed at 24, **#2000's prescribed fix disproved**).
+- **#2031** (pre-existing, DRAFT) — `rules/specification-verification.md`; 2 open questions gate it.
+
 ## Sequencing constraints (from `burndown-waves.md`)
 
 - **1E → 3A**: lane 1E touches `packages/kailash-dataflow/src/dataflow/core/nodes.py`;
