@@ -37,7 +37,10 @@ import pytest
 
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.protocol import BaseHook, HookHandler
-from kaizen.core.autonomy.hooks.security.isolation import IsolatedHookManager
+from kaizen.core.autonomy.hooks.security.isolation import (
+    HookIsolationError,
+    IsolatedHookManager,
+)
 from kaizen.core.autonomy.hooks.security.rate_limiting import (
     RateLimitedHookManager,
     RateLimitError,
@@ -356,6 +359,12 @@ class _FailingExecutor:
     when isolation itself fails. Spawning a real child process to force that
     would test ``multiprocessing``, not the sink; the logger under assertion is
     the real ``kaizen...isolation`` logger either way.
+
+    Since #2014 that sink fires on the way OUT: the manager logs and then
+    RAISES, rather than logging and falling back to in-process execution. The
+    leak surface is unchanged -- and in fact widened, because the scrubbed text
+    now reaches the raised exception message as well as the log line -- so both
+    are asserted below.
     """
 
     def __init__(self, message: str = "isolation unavailable") -> None:
@@ -375,38 +384,42 @@ class TestIsolatedHookManagerSinks:
 
     @pytest.mark.asyncio
     async def test_isolation_failure_does_not_log_the_handler_repr(self, capture):
-        """isolation.py:418 -- the isolation-failure fallback sink."""
+        """The isolation-failure sink, which since #2014 raises rather than falls back."""
         manager = IsolatedHookManager(enable_isolation=True)
         manager.executor = _FailingExecutor()
 
-        result = await manager._execute_hook(
-            _StructuralHandler(_SENTINEL), _context(), timeout=5.0
-        )
+        with pytest.raises(HookIsolationError):
+            await manager._execute_hook(
+                _StructuralHandler(_SENTINEL), _context(), timeout=5.0
+            )
 
-        assert result.success is False
         assert "isolation failed" in capture.text, "sink never fired; vacuous"
         assert _SENTINEL not in capture.text, capture.text
         assert "_StructuralHandler" in capture.text, capture.text
 
     @pytest.mark.asyncio
     async def test_isolation_failure_scrubs_the_exception_text(self, capture):
-        """isolation.py:437 also rendered the EXCEPTION raw, beside the repr.
+        """The same sink also rendered the EXCEPTION raw, beside the repr.
 
-        The same sink interpolates ``{e}``, and that exception comes from
-        ``executor.execute_isolated`` -- which runs the caller's hook. This
-        module imported no scrubber at all, so it was un-swept for the
-        exception-text half of the same leak class.
+        That exception comes from ``executor.execute_isolated`` -- which drives
+        the caller's hook. This module imported no scrubber at all, so it was
+        un-swept for the exception-text half of the same leak class.
+
+        Since #2014 the text reaches the RAISED message as well as the log line,
+        so both are asserted: a scrubber applied to only one of the two would
+        leave the other leaking.
         """
         manager = IsolatedHookManager(enable_isolation=True)
         manager.executor = _FailingExecutor(message=f"connect failed: {_LEAKY_URL}")
 
-        result = await manager._execute_hook(
-            _StructuralHandler("no-credential-here"), _context(), timeout=5.0
-        )
+        with pytest.raises(HookIsolationError) as excinfo:
+            await manager._execute_hook(
+                _StructuralHandler("no-credential-here"), _context(), timeout=5.0
+            )
 
-        assert result.success is False
         assert "isolation failed" in capture.text, "sink never fired; vacuous"
         assert _SENTINEL not in capture.text, capture.text
+        assert _SENTINEL not in str(excinfo.value), str(excinfo.value)
 
     def test_execute_isolated_name_is_derived_without_repr(self):
         """isolation.py:211 -- the name that reaches the RETURNED HookResult.
