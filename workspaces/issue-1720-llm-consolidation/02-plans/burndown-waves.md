@@ -7,14 +7,44 @@ Authored 2026-08-10. Basis: the `/sweep` PCF triage in `.session-notes` (14 BUG,
 agent count — it is _file disjointness_. Two lanes touching one file serialize whatever the plan
 says, so lanes below are partitioned by the files each issue actually modifies.
 
-## Gate 0 — serial, blocks everything
+## Gate 0 — CLEARED (2026-08-10)
 
-**Land PR #2028** (#1995). It reorders imports across ~1,700 files. Any lane branched before it
-lands carries a 1,700-file conflict. Nothing else starts until it merges.
+**PR #2028 merged as `a101c81f9`**; #1995 closed with the SHA; 1,819 files changed.
 
-Blocker: `Test DataFlow Infra Regression (Postgres/Redis)` fails on #2028 and passed on #2016.
-The same selection passes locally (23 passed, real PG+Redis) and collection is clean — **UNRESOLVED
-pending the CI log**. Read it before merging; do not merge on the local pass alone.
+- The `Test DataFlow Infra Regression (Postgres/Redis)` blocker **cleared on its own** on the
+  final run — a flake, not a regression. The local pass was right.
+- **CodeQL's "377 new alerts including 6 high severity" was an ARTIFACT**, disproved rather than
+  waived. CodeQL keys its new-vs-existing diff on alert LOCATION; the reorder shifted nearly
+  every line. Diffing the full alert sets on the location-INDEPENDENT key
+  `(rule, severity, path)` — line granularity could not discriminate, since line is exactly what
+  the reorder perturbs — gave `comm -23 pr main` EMPTY (PR ⊆ main) and `comm -13` = 26
+  `unused-import` alerts the PR REMOVES. Totals reconcile: 2345 − 2319 = 26.
+
+### ⚠ Consequence for every lane: all pre-merge line numbers are STALE
+
+Every `file.py:NNN` in this plan and in the bodies of #1997–#2030 predates the merge and has
+shifted. Drift is **per-file, not uniform** (`gateway/security.py` `:205 → :211`; `sso.py`
+`:924 → :926`; `base_agent.py` `:743` unshifted), so no global offset applies. Anchor on
+grep-stable symbols and re-derive.
+
+## Verified corrections (measured on `a101c81f9` before the lanes launched)
+
+- **#2013 — CONFIRMED REAL.** `def set_auth_manager` has **ZERO definitions repo-wide**; the only
+  mentions are the guard and call at `nexus/plugins.py:103-104`. So `hasattr(gateway,
+"set_auth_manager")` is permanently False and `enable_auth=True` installs nothing. The
+  identical dead-`hasattr` shape for `enable_monitoring` is at `nexus/core.py:4828` (**not**
+  4826 — drifted). Both in one PR.
+- **#2015 — CONFIRMED at 24** `detail=str(e)` sites. Separately there are **43** `detail=f"`
+  sites; those are NOT all leaks and MUST be triaged for which interpolate an exception. The
+  issue's grep finds only the first spelling.
+- **#2000 (lane 3D) — THE PLAN'S FIX SHAPE IS WRONG.** The correct file is
+  `src/kailash/security.py` (not `nodes/api/security.py`), and its `torch` (`:536`) and `sklearn`
+  (`:595`) imports are **already function-local and cached**, so "lazy-import them out" is a
+  no-op. Root cause: `sanitize_input()` → `_get_cached_allowed_types()` builds a **type
+  allowlist** out of the real `torch.Tensor` / `BaseEstimator` class objects, which forces the
+  import on first call and costs the 9–11s. Correct fix is to stop needing the import at all —
+  match on `type(value).__module__` / qualname rather than on imported class identity. Lane 3D
+  must re-derive this itself and not adopt the original prescription.
 
 ## Standing rules for every lane
 
