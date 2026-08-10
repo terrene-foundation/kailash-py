@@ -97,17 +97,20 @@ MUST-2 exists for.
 
 Wrong-specification instances, each of which a faithful implementation would have closed wrongly:
 
-| #     | What the spec said                             | What measurement showed                                                                                                                                   |
-| ----- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #2004 | route through `mask_error_text`                | that helper leaves the credential fully intact; correct fix is at the raise site, plus an unmentioned wire surface                                        |
-| #2006 | the `else` branch sends the explicit NULL      | its own repro model takes the `elif "default"` branch; patching `else` does not fix the reported case                                                     |
-| #2015 | "auth path worst", 27 sites                    | 1 auth site vs 10 unauthenticated routes leaking DSNs; 25 sites, plus a 26th the issue's grep structurally cannot see                                     |
-| #1997 | per-key probabilistic gap for one vendor       | coverage is PRESET-dependent; all four vendors leak unconditionally on the conservative preset, where nothing tested                                      |
-| #2022 | `BaseAgentConfig` built without `llm_provider` | that path already falls back to env detection; the user-facing defect is a swallow reporting a `ConfigurationError` as "the LLM emitted a malformed plan" |
+| #     | What the spec said                             | What measurement showed                                                                                                                                              |
+| ----- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #2004 | route through `mask_error_text`                | that helper leaves the credential fully intact; correct fix is at the raise site, plus an unmentioned wire surface                                                   |
+| #2006 | the `else` branch sends the explicit NULL      | its own repro model takes the `elif "default"` branch; patching `else` does not fix the reported case                                                                |
+| #2015 | "auth path worst"; 24 sites filed              | 1 auth site vs 10 unauthenticated routes leaking DSNs; 24 production `.py` sites confirmed, plus a 25th (f-string spelling) the issue's grep structurally cannot see |
+| #1997 | per-key probabilistic gap for one vendor       | coverage is PRESET-dependent; all four vendors leak unconditionally on the conservative preset, where nothing tested                                                 |
+| #2022 | `BaseAgentConfig` built without `llm_provider` | that path already falls back to env detection; the user-facing defect is a swallow reporting a `ConfigurationError` as "the LLM emitted a malformed plan"            |
 
 Stale-claim instances from the same session (MUST-1 class):
 
-- **#2013** cited `core.py:4782` — that line is `enable_monitoring`; the real site is `4813`.
+- **#2013** cited `core.py:4782` — that line is `"health_monitoring": True`, a status-dict key, not
+  a method at all; `enable_auth` is at `4814` and `enable_monitoring` at `4825`. Note this rule's
+  own first draft "corrected" 4782 to 4813/4826 — both wrong. Two independently-derived wrong
+  numbers for one location is the MUST-1 case at its sharpest.
 - **#2023** titled "five workflow steps"; there are eight, across three files.
 - **#2002** claimed 1,564 of 1,566 uncovered; re-measured 1,698 of 1,715 on the current branch.
 
@@ -115,7 +118,7 @@ Stale-claim instances from the same session (MUST-1 class):
 
 A static-analysis finding is a specification with the same defect profile: it reports what its
 queries model, not what is risky. In the same session, CodeQL flagged a generic pass-through
-`logger.error` at `base_agent.py:744` (a genuine false positive) and did **not** flag lines 727 and
+`logger.error` at `base_agent.py:744` (a genuine false positive) and did **not** flag lines 728 and
 735 two functions above, which render whole agent input and result dicts at INFO by default — the
 actual leak, filed separately.
 

@@ -6,10 +6,20 @@ paths:
   - "**/*.py"
   - "**/*.rs"
   - "**/*.ts"
+  - "**/*.tsx"
   - "**/*.js"
+  - "**/*.jsx"
   - "**/*.mjs"
   - "**/*.rb"
   - "**/*.go"
+  - "**/*.sh"
+  - "**/*.sql"
+  - "**/*.md"
+  - "**/*.yml"
+  - "**/*.yaml"
+  - "**/*.toml"
+  - "**/*.json"
+  - "**/.github/workflows/**"
 ---
 
 # Specification Verification — An Acceptance Criterion Is A Hypothesis, Not A Measurement
@@ -34,10 +44,13 @@ severity, and the named root cause. Cite the command and its output. Inheriting 
 is BLOCKED; so is inheriting them because they were "verified when filed".
 
 ```bash
-# DO — re-derive, and say what the instrument was
-git grep -nE 'detail=str\(e\)' -- src packages ':!*/tests/*' | wc -l   # 24, not the 27 filed
+# DO — re-derive, name the instrument, and reconcile when two disagree
+git grep -nE 'detail=str\(e\)|detail=str\(exc\)' origin/main \
+  -- src packages ':!*/build/*' ':!*/tests/*' | wc -l        # 25 — but 1 is a .md doc example,
+                                                             # so 24 PRODUCTION .py sites (issue filed 24)
 # DO NOT — implement against the issue's stated count
-"Fixing the 27 sites listed in the issue."   # the count was never re-measured
+"Fixing the 24 sites listed in the issue."   # the count was never re-measured, and the
+                                             # f-string spelling is a 25th the issue's grep cannot see
 ```
 
 **BLOCKED rationalizations:** "the issue says N" / "it was measured when filed" / "the reporter
@@ -64,8 +77,10 @@ detail = mask_error_text(str(e))   # looks fixed, still leaks, test written to A
 ```
 
 **BLOCKED rationalizations:** "the AC specifies the fix, my job is to implement it" / "the reporter
-chose the helper deliberately" / "the test passes" / "it's strictly better than nothing". Full
-corpus: extract.
+chose the helper deliberately" / "the test I wrote to the AC passes" / "it's strictly better than
+nothing". Full corpus: extract. (The test clause is the CIRCULAR case — a test written to the AC
+cannot falsify the AC. A green test from an INDEPENDENT oracle is ordinary evidence; nothing here
+licenses distrusting green tests generally.)
 
 **Why:** A prescribed-but-ineffective remedy is worse than no fix — it produces a green test, a
 closed issue, and a documented belief that the class is handled, so no one looks again.
@@ -100,7 +115,8 @@ original wrong premise, and any sibling work still scoped to it stays wrong.
 ```markdown
 # DO — post the correction, then implement against it
 
-"Re-measured: 25 sites, not 27. Split is 1 auth-path / 24 other — the 'auth path worst'
+"Re-measured: 24 production sites, as filed — plus a 25th the issue's grep cannot see
+(f-string spelling). Split is 1 auth-path / 24 other — the 'auth path worst'
 framing points at 1 site while 10 unauthenticated routes leak DSNs. [command + output]"
 
 # DO NOT — quietly fix the right thing and leave the issue asserting the wrong thing
@@ -181,8 +197,8 @@ closed wrongly:
 **#2004** prescribed a remedy that provably does not redact the credential it was filed about —
 tested, `mask_error_text` leaves `--token=sk-live-…` intact, and no scrubber in the monorepo covered
 CLI-flag form. **#2006** blamed a branch its own repro does not take. **#2015** claimed "auth path
-worst" where 1 site is auth and 10 unauthenticated routes leak DSNs, and its grep cannot see a 26th
-site. **#1997** framed as per-key probability what is actually preset-dependence, all four vendors
+worst" where 1 site is auth and 10 unauthenticated routes leak DSNs, and its grep cannot see a 25th
+site (f-string spelling). **#1997** framed as per-key probability what is actually preset-dependence, all four vendors
 leaking where nothing tested. **#2022** named a missing kwarg rather than the swallow that
 misreports it. Three more carried stale counts or line numbers (#2013, #2023, #2002).
 
@@ -199,3 +215,21 @@ implementation work in ALL sessions — it is a universal implementation-quality
 codify-class surface — which is the same disposition `zero-tolerance.md` carries and for the same
 stated reason. It governs how a session consumes a specification, not how codification itself
 operates, so a `/codify` touching it is not modifying a gate that `/codify` runs through.
+
+**Redteam receipt (Tier-1 self-referential, 2026-08-10).** Three agents — cc-architect, reviewer,
+analyst — audited the first draft. **The rule failed its own MUST-1 in three places** and was
+amended before merge: a fabricated comparand ("the 27 filed" — the issue filed 24), an internal
+24-vs-25 contradiction, and two wrong replacement line numbers for #2013 (4813/4826; actual
+4814/4825, with 4782 a status-dict key rather than any method). One reviewer correction was ITSELF
+wrong — `base_agent.py` re-derived to 728/735/744, not the 734/743 proposed — so the amendments here
+are the orchestrator's own re-derivation, not the redteam's numbers taken on trust. That is the rule
+working on itself, and it is the strongest evidence for MUST-1 in the file.
+
+**Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** ~217 lines,
+over the guidance. Named rationale: **four-clause contract with a mandated 8-field Wiring** — each
+MUST carries the DO/DO-NOT + verbatim BLOCKED phrases + `**Why:**` the meta-rule requires, and the
+canonical Trust-Posture Wiring is non-decomposable. All worked cases, the full BLOCKED corpora, the
+per-issue evidence table, and the scanner-findings corollary are already EXTRACTED to
+`guides/rule-extracts/specification-verification.md`; the residual is load-bearing clause text.
+`priority: 10` + `scope: path-scoped`, so it pays NO baseline-emission cost and Rule 10's
+proximity-band gate does not fire. Sibling precedent: `upstream-issue-hygiene.md` + `wave-loop.md`.
