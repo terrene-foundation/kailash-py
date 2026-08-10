@@ -192,14 +192,7 @@ def test_prefixless_key_is_redacted_at_both_module_surfaces(preset_name: str) ->
 #: property under test. (A short value would pass this test whether or not the
 #: vocabulary widened: it would fail the 6-char floor instead, and the check
 #: would report the same verdict either way.)
-BENIGN: Final[List] = [
-    pytest.param("checkpoint at f0e1d2c3b4a5968778695a4b3c2d1e0f0a1b2c3d", id="git-sha"),
-    pytest.param("checksum mismatch: 9e107d9d372bb6826bd81d3542a419d6", id="md5"),
-    pytest.param("trace 6f1c2a3b4d5e6f708192a3b4c5d6e7f8 not found", id="uuid-nohyphen"),
-    pytest.param(
-        "unknown node type: AbstractSingletonProxyFactoryBeanBuilderImpl",
-        id="camelcase-identifier",
-    ),
+BENIGN_BOTH_PRESETS: Final[List] = [
     pytest.param("cache_key=orders:2026-08 evicted", id="cache_key"),
     pytest.param("primary_key=order_id_v2 is not unique", id="primary_key"),
     pytest.param("sort_key=created_at_desc unsupported", id="sort_key"),
@@ -209,9 +202,31 @@ BENIGN: Final[List] = [
     pytest.param("revision 03795208d not found", id="short-sha"),
 ]
 
+#: Credential-free strings that MUST survive the CONSERVATIVE preset only.
+#:
+#: These four are ALREADY over-redacted by the aggressive preset, and always
+#: were: the 40-char contiguous-run and generic-hex rules claim them, which is
+#: the documented false-positive posture pinned in
+#: ``test_scrub_credentials_ordinary_text_is_not_noop.py::OVER_REDACTED``. So
+#: the assertion has to be preset-scoped or it would fail on behaviour #1997
+#: never touched — and scoping it is not a weakening, because these four ARE
+#: the conservative preset's reason to exist. They are the families
+#: ``_MIXED_ALPHABET_OPAQUE_KEY``'s three-class requirement was designed around,
+#: so they are the sharpest available probe that the new rule did not smuggle
+#: shape-only breadth onto the surface with ~180 sinks.
+BENIGN_CONSERVATIVE_ONLY: Final[List] = [
+    pytest.param("checkpoint at f0e1d2c3b4a5968778695a4b3c2d1e0f0a1b2c3d", id="git-sha"),
+    pytest.param("checksum mismatch: 9e107d9d372bb6826bd81d3542a419d6", id="md5"),
+    pytest.param("trace 6f1c2a3b4d5e6f708192a3b4c5d6e7f8 not found", id="uuid-nohyphen"),
+    pytest.param(
+        "unknown node type: AbstractSingletonProxyFactoryBeanBuilderImpl",
+        id="camelcase-identifier",
+    ),
+]
+
 
 @pytest.mark.parametrize("preset_name", sorted(PRESETS))
-@pytest.mark.parametrize("text", BENIGN)
+@pytest.mark.parametrize("text", BENIGN_BOTH_PRESETS)
 def test_benign_text_is_untouched_on_every_preset(preset_name: str, text: str) -> None:
     """Over-masking fails as loudly as under-masking.
 
@@ -225,9 +240,48 @@ def test_benign_text_is_untouched_on_every_preset(preset_name: str, text: str) -
     )
 
 
+@pytest.mark.parametrize("text", BENIGN_CONSERVATIVE_ONLY)
+def test_diagnostic_payload_survives_the_conservative_preset(text: str) -> None:
+    """The conservative preset still preserves what it exists to preserve."""
+    assert scrub_local_error(text) == text, (
+        "the conservative preset rewrote a git SHA / digest / hyphen-free UUID "
+        "/ CamelCase identifier. _MIXED_ALPHABET_OPAQUE_KEY's three-class "
+        "requirement has been weakened into shape-only breadth."
+    )
+
+
 # ---------------------------------------------------------------------------
 # The vendor-name key vocabulary — positive half.
 # ---------------------------------------------------------------------------
+@pytest.mark.parametrize("preset_name", sorted(PRESETS))
+def test_base64_json_survival_window_narrowed_to_32(preset_name: str) -> None:
+    """The COST side of #1997, pinned rather than absorbed silently.
+
+    A base64-encoded JSON blob in an error body used to survive up to 40
+    characters (beyond that ``_AWS_SECRET_CONTIGUOUS_RUN`` claimed it, and only
+    on the aggressive preset). With ``_MIXED_ALPHABET_OPAQUE_KEY`` the window
+    narrows to 32 for blobs that mix case and carry a digit, on BOTH presets.
+
+    That is a real diagnosability cost and it is the price of closing the
+    prefix-less leak — a 32-char provider key and a 32-char base64 blob are the
+    same byte shape, so nothing can claim one and spare the other. Pinned in
+    both directions so a future edit that widens or narrows the window is a
+    loud, deliberate event: ``test_jwt_pattern_does_not_redact_arbitrary_base64_json``
+    in the #1974 file depends on the sub-32 half holding.
+    """
+    import base64
+
+    short_blob = base64.b64encode(b'{"ok":true}').decode().rstrip("=")
+    long_blob = base64.b64encode(b'{"ok":true,"role":"viewer"}').decode().rstrip("=")
+    assert len(short_blob) < 32 <= len(long_blob), (short_blob, long_blob)
+
+    survives = PRESETS[preset_name](f"decoded payload {short_blob}")
+    assert short_blob in survives, f"sub-32 blob no longer survives: {survives!r}"
+
+    claimed = PRESETS[preset_name](f"decoded payload {long_blob}")
+    assert long_blob not in claimed, f"32+ blob no longer claimed: {claimed!r}"
+
+
 @pytest.mark.parametrize("preset_name", sorted(PRESETS))
 @pytest.mark.parametrize(
     "text,secret",
@@ -285,18 +339,31 @@ def test_mixed_alphabet_rule_is_not_shape_only_gated() -> None:
     assert _MIXED_ALPHABET_OPAQUE_KEY not in _OPAQUE_SHAPE_PATTERNS
 
 
-@pytest.mark.parametrize("preset_name", sorted(PRESETS))
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "#1997 DOCUMENTED RESIDUAL — a Together AI key is 64 hex characters, "
-        "which is byte-for-byte a SHA-256 digest. No shape rule can claim it on "
-        "the conservative preset without blanking every digest in every local "
-        "error, which is the diagnostic payload that preset exists to preserve. "
-        "Covered when the key is ANNOUNCED (TOGETHER_API_KEY=...); the residual "
-        "is the BARE form. xfail-strict so it self-clears as XPASS the moment a "
-        "rule does claim it."
-    ),
+@pytest.mark.parametrize(
+    "preset_name",
+    [
+        pytest.param(
+            "conservative",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "#1997 DOCUMENTED RESIDUAL — a Together AI key is 64 hex "
+                    "characters, byte-for-byte a SHA-256 digest. No shape rule "
+                    "can claim it on the CONSERVATIVE preset without blanking "
+                    "every digest in every local error, which is the diagnostic "
+                    "payload that preset exists to preserve. Covered when the "
+                    "key is ANNOUNCED (TOGETHER_API_KEY=...); the residual is "
+                    "the BARE form. xfail-strict so it self-clears as XPASS the "
+                    "moment a rule does claim it."
+                ),
+            ),
+        ),
+        # The REMOTE preset DOES claim it, incidentally, via _GENERIC_HEX_TOKEN.
+        # Asserted as a pass rather than dropped: it is what makes the residual
+        # preset-scoped rather than absolute, and it reds if that rule is ever
+        # narrowed.
+        pytest.param("remote"),
+    ],
 )
 def test_together_bare_key_is_a_documented_residual(preset_name: str) -> None:
     assert _TOGETHER_KEY not in _probe(preset_name, _TOGETHER_KEY)
