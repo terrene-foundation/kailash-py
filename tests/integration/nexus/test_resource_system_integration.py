@@ -5,13 +5,27 @@ Validates the stub fixes in resources.py.
 """
 
 import json
+import os
 
 import pytest
-from kailash_mcp import MCPServer
 
 from kailash.workflow.builder import WorkflowBuilder
+from kailash_mcp import MCPServer
 from nexus import Nexus
 from nexus.resources import NexusResourceManager
+
+
+@pytest.fixture(autouse=True)
+def nexus_auth_credentials(monkeypatch):
+    """Supply a JWT secret so ``Nexus(enable_auth=True)`` can install auth.
+
+    Since #2013, enabling auth installs a real middleware and raises when no
+    credential source exists. These tests exercise the resource system, not
+    credential plumbing, so they get a credential like a real deployment does.
+    """
+    if not os.environ.get("NEXUS_JWT_SECRET"):
+        monkeypatch.setenv("NEXUS_JWT_SECRET", "t" * 64)
+    yield
 
 
 @pytest.mark.integration

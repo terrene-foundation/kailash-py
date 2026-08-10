@@ -23,6 +23,20 @@ import pytest
 from nexus import Nexus
 
 
+@pytest.fixture(autouse=True)
+def nexus_auth_credentials(monkeypatch):
+    """Supply a JWT secret so enabling auth can install a real control.
+
+    Since #2013, auth is a real Starlette middleware rather than a boolean, and
+    Nexus refuses to construct when auth is enabled with no credential source.
+    These tests assert the ENABLE/DISABLE decision matrix, not the credential
+    plumbing, so they get a credential the way a real deployment would.
+    """
+    if not os.environ.get("NEXUS_JWT_SECRET"):
+        monkeypatch.setenv("NEXUS_JWT_SECRET", "t" * 64)
+    yield
+
+
 class TestHybridAuthenticationDefaults:
     """Test Nexus hybrid authentication system for security compliance."""
 

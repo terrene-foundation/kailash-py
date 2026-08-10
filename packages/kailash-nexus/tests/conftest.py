@@ -34,6 +34,24 @@ def pytest_configure(config):
     )
 
 
+@pytest.fixture(autouse=True)
+def nexus_auth_credentials(monkeypatch):
+    """Supply a JWT secret so ``Nexus(enable_auth=True)`` can install auth.
+
+    Since #2013, enabling authentication installs a real middleware and RAISES
+    when no credential source is configured, instead of setting a flag over an
+    open API. Tests here construct ``Nexus(enable_auth=True)`` to exercise
+    unrelated surfaces (MCP wiring, instance independence, config flags), so
+    they need a credential the same way a real deployment does.
+
+    ``setdefault`` semantics: a test that sets its own secret keeps it, and a
+    test asserting the fail-loud path can ``monkeypatch.delenv`` this one.
+    """
+    if not os.environ.get("NEXUS_JWT_SECRET"):
+        monkeypatch.setenv("NEXUS_JWT_SECRET", "t" * 64)
+    yield
+
+
 @pytest.fixture
 def clean_imports():
     """Clean imports to ensure test isolation."""
