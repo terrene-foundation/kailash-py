@@ -31,6 +31,7 @@ from kaizen.execution.events import SkillCompleteEvent, SkillInvokeEvent
 from kaizen.execution.subagent_result import SkillResult
 from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
     from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
@@ -185,25 +186,36 @@ class SkillTool(BaseTool):
             )
 
         except Exception as e:
-            logger.exception(f"Failed to load skill: {e}")
+            # ``logger.exception`` always sets exc_info, so this leaked the raw
+            # message AND the traceback. Skill loading touches the filesystem
+            # and skill-declared config, either of which can carry secrets.
+            logger.error("Failed to load skill: %s", scrub_remote_error(e))
 
             # Emit error completion event
+            # The three RETURN surfaces below are the inverse of the asymmetry
+            # found in delegate/print_mode.py: there the return was scrubbed
+            # and the log was not, here the log line above was fixed in
+            # 20f507bb0 and these were left raw. This direction is the worse
+            # one -- a NativeToolResult goes to the MODEL and into the
+            # transcript, an audience strictly wider than the framework log
+            # (observability.md Rule 6.3: every surface the value reaches).
+            safe_error = scrub_remote_error(e)
             complete_event = SkillCompleteEvent(
                 session_id=self._session_id,
                 skill_name=skill_name,
                 agent_id=self._agent_id,
                 success=False,
-                error_message=str(e),
+                error_message=safe_error,
             )
             await self._emit_event(complete_event)
 
             result = SkillResult.from_error(
                 skill_name=skill_name,
-                error_message=str(e),
+                error_message=safe_error,
             )
 
             return NativeToolResult.from_error(
-                f"Failed to load skill '{skill_name}': {e}",
+                f"Failed to load skill '{skill_name}': {safe_error}",
                 skill_result=result.to_dict(),
             )
 
@@ -256,7 +268,12 @@ class SkillTool(BaseTool):
                 else:
                     self._on_event(event)
             except Exception as e:
-                logger.warning(f"Failed to emit event: {e}")
+                # ``_on_event`` is a caller-supplied callback -- the same
+                # class as the l3/event_hooks.py listener sink that 20f507bb0
+                # fixed. Missed here for the same reason as the hooks/manager
+                # loading path: raw ``{e}`` with no exc_info is invisible to
+                # an exc_info-shaped grep.
+                logger.warning("Failed to emit event: %s", scrub_remote_error(e))
 
     def get_schema(self) -> Dict[str, Any]:
         """Return JSON Schema for LLM function calling."""

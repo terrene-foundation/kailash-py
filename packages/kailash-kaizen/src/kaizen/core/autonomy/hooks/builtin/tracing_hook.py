@@ -39,6 +39,7 @@ import time
 from typing import ClassVar, List, Optional
 
 from kaizen.core.autonomy.observability.tracing_manager import TracingManager
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
@@ -230,7 +231,9 @@ class TracingHook(BaseHook):
             )
 
         except Exception as e:
-            logger.error(f"TracingHook failed: {e}", exc_info=True)
+            # The tracing backend is caller-configured and commonly
+            # credentialed (an ingest token); its errors echo the endpoint.
+            logger.error("TracingHook failed: %s", scrub_remote_error(e))
 
             # Return success=False to indicate tracing failure
             return HookResult(

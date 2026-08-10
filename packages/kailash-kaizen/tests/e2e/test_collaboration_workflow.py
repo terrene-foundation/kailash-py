@@ -24,6 +24,35 @@ from kaizen.memory.shared_memory import SharedMemoryPool
 # Real LLM providers
 from tests.utils.real_llm_providers import RealOpenAIProvider
 
+
+def _share(pool: SharedMemoryPool, agent_id: str, insight: Dict[str, Any]) -> None:
+    """Write a legacy-shaped insight dict through the pool's REAL contract.
+
+    These workflows called ``pool.add_insight(agent_id, {topic, insight,
+    confidence, ...})``, an API ``SharedMemoryPool`` has never had. The real
+    writer is ``write_insight(insight)`` — ONE dict requiring ``agent_id``,
+    ``content``, ``tags``, ``importance`` and ``segment``, all validated. Both
+    the arity and every field name differ, so this was never a rename.
+
+    The caller's dict is left untouched: these tests return it and assert on
+    its own keys, so the translation is confined to the pool boundary. Every
+    key outside the mapped three rides along as metadata.
+    """
+    record = {
+        "agent_id": agent_id,
+        "content": insight["insight"],
+        "tags": [insight["topic"]],
+        "importance": insight["confidence"],
+        "segment": "collaboration",
+    }
+    metadata = {
+        k: v for k, v in insight.items() if k not in {"topic", "insight", "confidence"}
+    }
+    if metadata:
+        record["metadata"] = metadata
+    pool.write_insight(record)
+
+
 # =============================================================================
 # COMPLETE MULTI-AGENT COLLABORATION E2E TESTS (3 tests)
 # =============================================================================
@@ -67,9 +96,9 @@ def test_complete_multi_agent_collaboration_workflow():
 
         # Should have contributions from multiple agents
         if "agent_outputs" in results:
-            assert len(results["agent_outputs"]) >= 2, (
-                "Should have outputs from multiple agents"
-            )
+            assert (
+                len(results["agent_outputs"]) >= 2
+            ), "Should have outputs from multiple agents"
 
         # Shared insights should exist
         if "shared_insights" in results:
@@ -105,15 +134,17 @@ def test_multi_agent_research_synthesis_workflow():
             "type": "research",
             "agent": "researcher",
         }
-        pool.add_insight("researcher", insight)
+        _share(pool, "researcher", insight)
         return insight
 
     # Agent 2: Analyst (analyzes research)
     def analyst_agent(topic: str) -> Dict[str, Any]:
         # Get research insights
-        research_insights = pool.get_insights(agent_id="analyst", topic=topic, top_k=3)
+        research_insights = pool.read_relevant(
+            agent_id="analyst", tags=[topic], limit=3
+        )
 
-        context = "\n".join([ins.get("insight", "") for ins in research_insights])
+        context = "\n".join([ins.get("content", "") for ins in research_insights])
 
         messages = [
             {
@@ -134,17 +165,17 @@ def test_multi_agent_research_synthesis_workflow():
             "type": "analysis",
             "agent": "analyst",
         }
-        pool.add_insight("analyst", insight)
+        _share(pool, "analyst", insight)
         return insight
 
     # Agent 3: Synthesizer (creates final synthesis)
     def synthesizer_agent(topic: str) -> Dict[str, Any]:
         # Get all insights
-        all_insights = pool.get_insights(agent_id="synthesizer", topic=topic, top_k=5)
+        all_insights = pool.read_relevant(agent_id="synthesizer", tags=[topic], limit=5)
 
         context = "\n".join(
             [
-                f"{ins.get('type', 'unknown')}: {ins.get('insight', '')}"
+                f"{ins.get('metadata', {}).get('type', 'unknown')}: {ins.get('content', '')}"
                 for ins in all_insights
             ]
         )
@@ -263,10 +294,10 @@ def test_insight_flow_sequential_enhancement():
     # Sequential enhancement workflow
     def enhance_insight(agent_id: str, topic: str, iteration: int) -> Dict[str, Any]:
         # Get previous insights
-        previous_insights = pool.get_insights(agent_id=agent_id, topic=topic, top_k=5)
+        previous_insights = pool.read_relevant(agent_id=agent_id, tags=[topic], limit=5)
 
         if previous_insights:
-            context = "\n".join([ins.get("insight", "") for ins in previous_insights])
+            context = "\n".join([ins.get("content", "") for ins in previous_insights])
             prompt = f"Previous insights:\n{context}\n\nEnhance and expand on these insights about {topic}."
         else:
             prompt = f"Provide initial insights about {topic}."
@@ -286,7 +317,7 @@ def test_insight_flow_sequential_enhancement():
             "agent": agent_id,
         }
 
-        pool.add_insight(agent_id, insight)
+        _share(pool, agent_id, insight)
         return insight
 
     # Execute sequential enhancement
@@ -303,12 +334,12 @@ def test_insight_flow_sequential_enhancement():
 
     # Confidence should increase with iterations
     confidences = [e["confidence"] for e in enhancements]
-    assert confidences[-1] > confidences[0], (
-        "Confidence should increase with enhancement"
-    )
+    assert (
+        confidences[-1] > confidences[0]
+    ), "Confidence should increase with enhancement"
 
     # Final insights should build on earlier ones
-    final_insights = pool.get_insights(agent_id="final", topic=topic, top_k=10)
+    final_insights = pool.read_relevant(agent_id="final", tags=[topic], limit=10)
     assert len(final_insights) >= 3, "Should accumulate multiple insights"
 
 
@@ -336,17 +367,17 @@ def test_insight_flow_parallel_aggregation():
             "agent": agent_id,
         }
 
-        pool.add_insight(agent_id, insight)
+        _share(pool, agent_id, insight)
         return insight
 
     # Aggregator combines parallel insights
     def aggregator_agent(topic: str) -> Dict[str, Any]:
-        all_insights = pool.get_insights(agent_id="aggregator", topic=topic, top_k=10)
+        all_insights = pool.read_relevant(agent_id="aggregator", tags=[topic], limit=10)
 
         insights_by_aspect = {}
         for ins in all_insights:
-            aspect = ins.get("aspect", "general")
-            insights_by_aspect[aspect] = ins.get("insight", "")
+            aspect = ins.get("metadata", {}).get("aspect", "general")
+            insights_by_aspect[aspect] = ins.get("content", "")
 
         combined = "\n\n".join(
             [

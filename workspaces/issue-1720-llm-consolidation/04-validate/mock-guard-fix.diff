@@ -1,0 +1,2413 @@
+### diff ###
+diff --git a/packages/kailash-kaizen/conftest.py b/packages/kailash-kaizen/conftest.py
+index 5f5292ee3..e035e6f8e 100644
+--- a/packages/kailash-kaizen/conftest.py
++++ b/packages/kailash-kaizen/conftest.py
+@@ -8,11 +8,23 @@ tests/-subtree conftest guard only covers `packages/kailash-kaizen/tests`).
+ kailash-kaizen declares its own pytest rootdir, so the repo-root conftest guard
+ never fires for `pytest packages/kailash-kaizen` — and a bare run MUST make ZERO
+ billed LLM calls, so this rootdir MUST withhold/scrub provider secrets.
++
++The root conftest.py's ``requires_real_llm`` marker-skip enforcement
++(``pytest_collection_modifyitems``) is duplicated here for the SAME reason:
++a marker registered in ``pytest.ini`` (satisfying ``--strict-markers``) but
++never actually CHECKED is a fake gate (rules/testing.md § "Pytest Plugin +
++Marker Declaration Pair"; the checked half is a MUST, not optional) — every
++``@pytest.mark.requires_real_llm`` test would otherwise run un-skipped
++(and un-guarded) whenever invoked via kailash-kaizen's own rootdir, exactly
++as the un-scrubbed-secret gap this file's cost-guard half already closes.
+ """
+ 
++import os
+ import sys
+ from pathlib import Path
+ 
++import pytest
++
+ from kailash.testing.env_cost_guard import install_cost_guard, scrub_provider_secrets
+ 
+ # Add src directory to sys.path
+@@ -24,7 +36,28 @@ if src_dir.exists() and str(src_dir) not in sys.path:
+ # LLM calls even with a provider key in .env or exported in the shell.
+ install_cost_guard(Path(__file__).resolve().parents[2] / ".env")
+ 
++_REAL_LLM_ENV_FLAG = "KAIZEN_ALLOW_REAL_LLM"
++_REAL_LLM_MARKER = "requires_real_llm"
++
+ 
+ def pytest_collection_finish(session):
+     """Backstop: remove any provider secret re-injected during collection."""
+     scrub_provider_secrets()
++
++
++def pytest_collection_modifyitems(config, items):
++    """Skip every ``requires_real_llm`` test unless the operator opted in.
++
++    Mirrors the root conftest.py's hook of the same name EXACTLY (same env
++    flag, same marker name) — this is the checked half of the marker gate
++    for invocations that resolve kailash-kaizen's own rootdir (which never
++    loads the repo-root conftest.py — see module docstring).
++    """
++    if os.environ.get(_REAL_LLM_ENV_FLAG) == "1":
++        return
++    skip_real_llm = pytest.mark.skip(
++        reason=f"real-LLM opt-in off (set {_REAL_LLM_ENV_FLAG}=1)"
++    )
++    for item in items:
++        if _REAL_LLM_MARKER in item.keywords:
++            item.add_marker(skip_real_llm)
+diff --git a/packages/kailash-kaizen/src/kaizen/core/agents.py b/packages/kailash-kaizen/src/kaizen/core/agents.py
+index 692c7eae0..9dd5e0f79 100644
+--- a/packages/kailash-kaizen/src/kaizen/core/agents.py
++++ b/packages/kailash-kaizen/src/kaizen/core/agents.py
+@@ -5,6 +5,7 @@ This module provides agent classes and management capabilities for signature-bas
+ AI programming, built on Core SDK workflow patterns.
+ """
+ 
++import hashlib
+ import inspect
+ import json
+ import logging
+@@ -15,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+ 
+ from kaizen.errors import EnvModelMissing
+ 
++from ._provider_env import detect_provider_from_env as _detect_provider_from_env
++
+ # PERFORMANCE OPTIMIZATION: Lazy loading for Kailash imports
+ # WorkflowBuilder imports can bring heavy dependencies
+ 
+@@ -42,6 +45,31 @@ def _resolve_default_model() -> str:
+     )
+ 
+ 
++def _fingerprint_payload(payload: Any) -> str:
++    """Non-reversible ``len=<N> sha256=<8-hex>`` fingerprint for WARN logs.
++
++    Per rules/security.md "No secrets in logs" + rules/observability.md
++    Rule 4/Rule 8: a WARN-level log line MUST NOT dump a caller's raw
++    payload (user prompt, LLM response content) verbatim — that payload may
++    carry PII, and WARN-level aggregators (Datadog/Splunk/CloudWatch) often
++    have broader access than the originating request. The fingerprint keeps
++    the log line grep-able and diffable (same input -> same fingerprint)
++    without ever reproducing the payload's content. Raw content, when
++    useful for local debugging, belongs at DEBUG (off by default in prod).
++
++    Fails closed to a fixed sentinel on ANY exception (e.g. a pathological
++    caller-defined `__repr__` that raises) — a WARN-log helper MUST NEVER
++    itself crash the call site it is meant to make more observable.
++    """
++    try:
++        raw = payload if isinstance(payload, str) else repr(payload)
++        raw_bytes = raw.encode("utf-8", errors="replace")
++        digest = hashlib.sha256(raw_bytes).hexdigest()[:8]
++        return f"len={len(raw_bytes)} sha256={digest}"
++    except Exception:
++        return "len=? sha256=unavailable"
++
++
+ if TYPE_CHECKING:
+     from .framework import Kaizen
+ 
+@@ -127,6 +155,12 @@ class Agent:
+         # Agent state
+         self._workflow: Optional[Any] = None
+         self._is_compiled = False
++        # FIX 13: the provider `self._workflow` was BUILT with —
++        # `compile_workflow()` only trusts the `_is_compiled`/`_workflow`
++        # memo when this still matches the CURRENT resolved provider. See
++        # `compile_workflow()` for the full rationale (stale-memo-on-env-drift,
++        # the SAME class of gap FIX12 closed for `BaseAgent.to_workflow()`).
++        self._workflow_provider: Optional[str] = None
+         self._execution_history: List[Dict[str, Any]] = []
+ 
+         # MCP integration state
+@@ -204,7 +238,21 @@ class Agent:
+             >>> workflow = agent.compile_workflow()
+             >>> results, run_id = kaizen.execute(workflow.build())
+         """
+-        if self._is_compiled and self._workflow:
++        # FIX 13: the memo MUST be provider-aware — SAME class of gap FIX12
++        # closed for `BaseAgent.to_workflow()`. `_is_compiled`/`_workflow`
++        # alone answer "was a workflow already built", not "is it still
++        # valid" — `_get_provider_for_config()` is env-dependent, so an
++        # ambient-env change (a real key injected into a long-lived process
++        # AFTER the first compile, with no explicit `update_config()` call)
++        # left the memo trusted forever, serving a stale mock-dispatching
++        # workflow. Trust the memo ONLY when the resolved provider is
++        # unchanged.
++        current_provider = self._get_provider_for_config()
++        if (
++            self._is_compiled
++            and self._workflow
++            and self._workflow_provider == current_provider
++        ):
+             logger.debug(f"Using cached workflow for agent: {self.agent_id}")
+             return self._workflow
+ 
+@@ -215,7 +263,17 @@ class Agent:
+         # Add LLM node using string-based pattern with Core SDK compatible parameters.
+         # `_set_default_config` enforces `model` from KAIZEN_DEFAULT_MODEL env var
+         # (rules/env-models.md) — index access is correct here; no hardcoded fallback.
++        # PART B: `provider` MUST be set explicitly here — LLMAgentNode's own
++        # parameter default is "mock" (`kaizen/nodes/ai/llm_agent.py::get_parameters`).
++        # Without this, an agent with NO explicit `"provider"` key in `self.config`
++        # (the common case — `_get_provider_for_config()` auto-detects from env)
++        # would silently mock-dispatch via `execute_workflow()`/`.workflow`
++        # regardless of real API keys present. The loop below may still
++        # override with an explicit `self.config["provider"]` value, which is
++        # the SAME value `_get_provider_for_config()` already returns in that
++        # case, so this is a no-op override, not a conflict.
+         node_params = {
++            "provider": current_provider,
+             "model": self.config["model"],
+             "timeout": self.config.get("timeout", 30),
+         }
+@@ -273,16 +331,22 @@ class Agent:
+         # Store compiled workflow
+         self._workflow = workflow
+         self._is_compiled = True
++        self._workflow_provider = current_provider
+ 
+         logger.info(f"Compiled workflow for agent: {self.agent_id}")
+         return workflow
+ 
+     @property
+     def workflow(self):  # Return type deferred due to lazy loading
+-        """Get the compiled workflow for this agent."""
+-        if not self._is_compiled:
+-            return self.compile_workflow()
+-        return self._workflow
++        """Get the compiled workflow for this agent.
++
++        Always routes through `compile_workflow()` — NOT a direct
++        `self._workflow` return when `_is_compiled` is True — so the
++        provider-aware memo check (FIX 13) applies uniformly. A direct
++        return here would bypass that check and could hand back a
++        workflow built under a since-drifted provider.
++        """
++        return self.compile_workflow()
+ 
+     def execute_workflow(
+         self,
+@@ -340,6 +404,17 @@ class Agent:
+         """
+         self.config.update(config_updates)
+         self._is_compiled = False  # Force recompilation
++        # Invalidate the cached signature-execution workflow (agents.py
++        # `_execute_with_signature`): that cache bakes `provider` (and every
++        # other config-derived param) into the node config ONCE and reuses
++        # it forever. Without invalidation, a config change (e.g. switching
++        # provider) would silently keep dispatching under the STALE provider
++        # while `_is_mock_provider_active()` reads the NEW one LIVE — the two
++        # would disagree and the mock-upgrade gate would misfire either way.
++        if hasattr(self, "_signature_workflow"):
++            del self._signature_workflow
++        if hasattr(self, "_signature_workflow_provider"):
++            del self._signature_workflow_provider
+         logger.info(f"Updated config for agent: {self.agent_id}")
+ 
+     def to_node_config(self) -> Dict[str, Any]:
+@@ -349,9 +424,18 @@ class Agent:
+         Returns:
+             Dict[str, Any]: Node configuration for workflow integration
+         """
++        # FIX 9: same LLMAgentNode-param-building bug class as the 6 sites
++        # already fixed (agents.py/base_agent.py/nexus/signatures compiler)
++        # — a consumer feeding this config to `add_node(...)` with no
++        # explicit "provider" key would silently mock-dispatch a
++        # real-provider agent. `setdefault` preserves an explicit
++        # `self.config["provider"]` (matching `_get_provider_for_config()`'s
++        # own precedence) and resolves via the SAME method otherwise.
++        resolved = self.config.copy()
++        resolved.setdefault("provider", self._get_provider_for_config())
+         return {
+             "type": "LLMAgentNode",
+-            "config": self.config.copy(),
++            "config": resolved,
+             "signature": (
+                 self.signature.name
+                 if (self.signature and hasattr(self.signature, "name"))
+@@ -560,8 +644,24 @@ class Agent:
+         # Store current execution inputs for intelligent mock conversion
+         self._current_execution_inputs = inputs.copy()
+ 
+-        # Compile signature to workflow parameters if needed
+-        if not hasattr(self, "_signature_workflow"):
++        # Compile signature to workflow parameters if needed.
++        # FIX 15 (Round 5 final-sweep finding — SAME class as FIX 12/13): a
++        # bare `hasattr` guard answers "was a signature-workflow already
++        # built", not "is it still valid" — `_get_provider_for_config()` is
++        # env-dependent, so an ambient-env change (a real key injected into
++        # a long-lived process AFTER the first `_execute_with_signature`
++        # call, with no explicit `update_config()`/`set_signature()`/
++        # `reset()`) left this cache trusted forever, keeping every
++        # subsequent signature-execution dispatch on the STALE provider —
++        # not merely a mock-upgrade-gate misclassification (PART A below
++        # already keeps the gate honest against whatever's dispatched), but
++        # the DISPATCH ITSELF never advancing past the provider resolved at
++        # first build. Rebuild whenever the resolved provider drifts.
++        current_provider = self._get_provider_for_config()
++        if (
++            not hasattr(self, "_signature_workflow")
++            or getattr(self, "_signature_workflow_provider", None) != current_provider
++        ):
+             from ..signatures import SignatureCompiler
+ 
+             compiler = SignatureCompiler()
+@@ -576,7 +676,7 @@ class Agent:
+             # Model defaulted from KAIZEN_DEFAULT_MODEL via `_set_default_config`
+             # (rules/env-models.md) — no hardcoded fallback permitted here.
+             enhanced_params = {
+-                "provider": self._get_provider_for_config(),  # Smart provider selection
++                "provider": current_provider,  # Smart provider selection
+                 "model": self.config["model"],
+                 "timeout": self.config.get("timeout", 30),
+             }
+@@ -629,6 +729,7 @@ class Agent:
+                 enhanced_params,
+             )
+             self._signature_workflow = workflow
++            self._signature_workflow_provider = current_provider
+ 
+         # Execute workflow
+         if not self.kaizen:
+@@ -665,9 +766,17 @@ class Agent:
+                     agent_result = node_result
+                     break
+ 
+-        # Parse LLM response to structured output based on signature
++        # Parse LLM response to structured output based on signature.
++        # PART A: `enhanced_params["provider"]` (read above from the — possibly
++        # STALE — cached `_signature_workflow` node config) is the value
++        # ACTUALLY placed in the node just dispatched at `updated_workflow.
++        # add_node(...)` two lines above, so threading it through makes the
++        # mock-upgrade gate match dispatch by construction even when the
++        # cache is stale (the mutator invalidations above make config
++        # CHANGES take effect; this threading makes the gate agree with
++        # whatever WAS dispatched regardless).
+         structured_result = self._parse_llm_response_to_signature_output(
+-            agent_result, signature
++            agent_result, signature, dispatched_provider=enhanced_params.get("provider")
+         )
+ 
+         # Track execution history
+@@ -747,8 +856,12 @@ class Agent:
+         # Extract intelligent response from LLM results
+         agent_result = results.get(self.agent_id, {})
+ 
+-        # Handle different response formats from LLMAgentNode
+-        intelligent_response = self._extract_intelligent_response(agent_result, inputs)
++        # Handle different response formats from LLMAgentNode.
++        # PART A: thread the provider ACTUALLY dispatched (llm_params["provider"])
++        # into the gate so it can never disagree with live config/env.
++        intelligent_response = self._extract_intelligent_response(
++            agent_result, inputs, dispatched_provider=llm_params["provider"]
++        )
+ 
+         # Track execution history
+         self._execution_history.append(
+@@ -919,7 +1032,10 @@ CRITICAL RULES:
+         return schema
+ 
+     def _extract_intelligent_response(
+-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
++        self,
++        llm_result: Dict[str, Any],
++        original_inputs: Dict[str, Any],
++        dispatched_provider: Optional[str] = None,
+     ) -> Dict[str, Any]:
+         """
+         Extract intelligent response from LLMAgentNode result.
+@@ -927,6 +1043,14 @@ CRITICAL RULES:
+         Args:
+             llm_result: Raw result from LLMAgentNode execution
+             original_inputs: Original user inputs for context
++            dispatched_provider: The provider value ACTUALLY placed in the
++                LLMAgentNode config that produced `llm_result`. When given,
++                the mock-upgrade gate uses this value directly
++                (`_mock_gate_open`) instead of re-deriving provider from
++                live config/env, so gate and dispatch can never disagree.
++                Callers SHOULD pass this; omitting it falls back to
++                `_is_mock_provider_active()` (see its docstring for why
++                that fallback can drift).
+ 
+         Returns:
+             Structured intelligent response
+@@ -960,12 +1084,25 @@ CRITICAL RULES:
+                             response_content = str(candidate["content"])
+                             break
+ 
+-            # Check if this is a mock response that needs intelligent conversion
+-            is_mock_response = response_content and (
+-                response_content.startswith("I understand you want me to work with")
+-                or response_content.startswith("Regarding your question about")
+-                or response_content.startswith("Based on the provided data and context")
+-                or "Mock vision response for testing" in response_content
++            # Check if this is a mock response that needs intelligent conversion.
++            # GATED: reclassifying content as "mock" (and later discarding it
++            # for fabricated keyword-lookup output) is ONLY valid when the
++            # DISPATCHED provider (or, absent that, the live-derived provider)
++            # is genuinely mock. A REAL provider's output MUST be returned
++            # verbatim — see `_mock_gate_open` and rules/zero-tolerance.md
++            # Rule 2 (no hardcoded mock responses on a production path) /
++            # Rule 3 (no silent fallback that discards real output).
++            is_mock_response = (
++                response_content
++                and self._mock_gate_open(dispatched_provider)
++                and (
++                    response_content.startswith("I understand you want me to work with")
++                    or response_content.startswith("Regarding your question about")
++                    or response_content.startswith(
++                        "Based on the provided data and context"
++                    )
++                    or "Mock vision response for testing" in response_content
++                )
+             )
+ 
+             if response_content and not is_mock_response:
+@@ -978,8 +1115,22 @@ CRITICAL RULES:
+             else:
+                 # Handle mock responses - replace with intelligent answers
+                 if is_mock_response:
+-                    logger.info(
+-                        f"Converting mock response to intelligent response for: {original_inputs}"
++                    # Raw inputs stay at DEBUG only — WARN carries a
++                    # non-reversible fingerprint (rules/security.md "No
++                    # secrets in logs"; rules/observability.md Rule 4/8).
++                    logger.debug(
++                        f"Mock-upgrade original inputs (mock provider): {original_inputs}"
++                    )
++                    logger.warning(
++                        "Mock-upgrade fired: substituting fabricated "
++                        "intelligent-mock content for mock-provider LLM "
++                        "output (mode=fake, provider=%r, inputs_fingerprint=%s)",
++                        (
++                            dispatched_provider
++                            if dispatched_provider is not None
++                            else self._get_provider_for_config()
++                        ),
++                        _fingerprint_payload(original_inputs),
+                     )
+                     intelligent_response = self._generate_intelligent_mock_response(
+                         original_inputs
+@@ -1019,16 +1170,75 @@ CRITICAL RULES:
+         if "provider" in self.config:
+             return self.config["provider"]
+ 
+-        # Check for API keys to determine available providers
+-        import os
+-
+-        if os.getenv("OPENAI_API_KEY"):
+-            return "openai"
+-        elif os.getenv("ANTHROPIC_API_KEY"):
+-            return "anthropic"
+-        else:
+-            # Use mock provider for testing (but we'll extract intelligent responses)
+-            return "mock"
++        # Env-first fallback (openai -> anthropic -> mock). This IS the
++        # canonical order every other LLMAgentNode-param-building site in
++        # the Agent deployment surface mirrors via `detect_provider_from_env`
++        # (`kaizen/core/_provider_env.py`) — kept inline here (rather than
++        # delegating) so this method stays the single documented source of
++        # the contract; the shared helper exists for OTHER call sites.
++        return _detect_provider_from_env()
++
++    def _is_mock_provider_active(self) -> bool:
++        """
++        FALLBACK provider check — LIVE re-derivation from config/env.
++
++        Returns True when `_get_provider_for_config()`, evaluated AT THE
++        MOMENT THIS IS CALLED, resolves to the mock/test provider.
++        `_get_provider_for_config()` is the SAME provider-resolution method
++        used to build the ``provider`` param handed to ``LLMAgentNode`` in
++        every execution path (`_execute_direct_llm`, `_execute_with_signature`,
++        `_execute_with_pattern` — used by `execute_cot`/`execute_react`).
++
++        This is a FALLBACK, not the preferred gate: a LIVE re-derivation can
++        disagree with what was ACTUALLY dispatched if `self.config`/env
++        changes between the dispatch-build call and this call — e.g. a
++        direct `agent.config["provider"] = "mock"` mutation (bypasses the
++        cache-invalidating mutators in `update_config`/`set_signature`/
++        `reset`), or an env-derived provider changing mid-call. The
++        PREFERRED path is `_mock_gate_open(dispatched_provider=...)` below,
++        which gates on the provider value actually placed in the dispatched
++        node config — see that method's docstring. This method is used only
++        when no `dispatched_provider` is available to the caller.
++
++        This gate exists so that content returned by a REAL provider
++        (openai/anthropic/...) is NEVER reclassified as a mock template and
++        silently replaced with fabricated keyword-lookup content — see
++        rules/zero-tolerance.md Rule 2 (no hardcoded mock responses on a
++        production path) and Rule 3 (no silent fallback that discards real
++        output). Only genuinely mock/test-transport output (which the mock
++        provider generates) is eligible for the intelligent-mock upgrade.
++        """
++        return self._get_provider_for_config() == "mock"
++
++    def _mock_gate_open(self, dispatched_provider: Optional[str] = None) -> bool:
++        """
++        Resolve whether the mock-upgrade classifier gate is OPEN.
++
++        STRUCTURAL FIX (closes the whack-a-mole gate-vs-dispatch disagreement
++        class): when `dispatched_provider` is supplied, it is the provider
++        VALUE ACTUALLY PLACED in the LLMAgentNode config that produced the
++        result currently being classified. Gating on that value directly —
++        instead of re-deriving provider from `self.config`/env at
++        classification time — makes gate and dispatch agree BY
++        CONSTRUCTION, closing two proven fabrication paths:
++
++        1. A direct `agent.config["provider"] = "mock"` mutation (an idiom
++           real callers use) bypasses the cache-invalidating mutators in
++           `update_config`/`set_signature`/`reset`, so a stale-dispatched
++           REAL response would otherwise still get discarded because a live
++           re-derivation sees the mutated "mock" value.
++        2. `_get_provider_for_config()` can be read once at dispatch-build
++           time and AGAIN later at classification time; an env change (or
++           any config mutation) between the two reads makes them disagree
++           mid-call under live re-derivation.
++
++        `_is_mock_provider_active()` (live re-derivation) is used ONLY as a
++        fallback when `dispatched_provider is None` — i.e. callers that
++        cannot supply the dispatched value.
++        """
++        if dispatched_provider is not None:
++            return dispatched_provider == "mock"
++        return self._is_mock_provider_active()
+ 
+     def _generate_intelligent_mock_response(self, inputs: Dict[str, Any]) -> str:
+         """
+@@ -1208,18 +1418,29 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
+                 return "I understand your question and I'm ready to provide a thoughtful, detailed response based on the information and context available."
+ 
+     def _parse_llm_response_to_signature_output(
+-        self, llm_result: Dict[str, Any], signature: Any
++        self,
++        llm_result: Dict[str, Any],
++        signature: Any,
++        dispatched_provider: Optional[str] = None,
+     ) -> Dict[str, Any]:
+         """
+         Parse unstructured LLM response into structured output based on signature.
+ 
+         This uses the advanced parsing system to convert raw LLM responses
+         to the structured format expected by signature-based programming.
++
++        Args:
++            llm_result: Raw LLM result
++            signature: Signature describing the expected structured output
++            dispatched_provider: The provider value ACTUALLY placed in the
++                LLMAgentNode config that produced `llm_result` — threaded
++                through to `_apply_intelligent_mock_conversion_to_llm_result`
++                so the mock-upgrade gate matches dispatch by construction.
+         """
+         # First, apply intelligent mock conversion if needed
+         # This ensures signature-based execution also gets intelligent responses
+         processed_llm_result = self._apply_intelligent_mock_conversion_to_llm_result(
+-            llm_result
++            llm_result, dispatched_provider=dispatched_provider
+         )
+ 
+         # Use the advanced structured output parser
+@@ -1229,7 +1450,7 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
+         return parser.parse_signature_response(processed_llm_result, signature)
+ 
+     def _apply_intelligent_mock_conversion_to_llm_result(
+-        self, llm_result: Dict[str, Any]
++        self, llm_result: Dict[str, Any], dispatched_provider: Optional[str] = None
+     ) -> Dict[str, Any]:
+         """
+         Apply intelligent mock conversion to LLM result if it contains mock responses.
+@@ -1238,6 +1459,13 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
+ 
+         Args:
+             llm_result: Raw LLM result
++            dispatched_provider: The provider value ACTUALLY placed in the
++                LLMAgentNode config that produced `llm_result`. When given,
++                the mock-upgrade gate uses this value directly
++                (`_mock_gate_open`) instead of re-deriving provider from
++                live config/env, so gate and dispatch can never disagree —
++                even when the signature-execution workflow cache
++                (`self._signature_workflow`) is stale.
+ 
+         Returns:
+             LLM result with intelligent responses if mock was detected
+@@ -1269,18 +1497,42 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
+         # logger.debug(f"LLM result structure: {result_copy}")
+         # logger.debug(f"Extracted response content: {response_content}")
+ 
+-        # Check if this is a mock response that needs intelligent conversion
+-        is_mock_response = response_content and (
+-            response_content.startswith("I understand you want me to work with")
+-            or response_content.startswith("Regarding your question about")
+-            or response_content.startswith("Based on the provided data and context")
+-            or "Mock vision response for testing" in response_content
++        # Check if this is a mock response that needs intelligent conversion.
++        # GATED: see `_mock_gate_open` — the DISPATCHED provider (or, absent
++        # that, the live-derived provider) must genuinely be mock before any
++        # content may be reclassified and substituted; a REAL provider's
++        # output MUST be returned verbatim (rules/zero-tolerance.md Rule 2
++        # no hardcoded mock responses on a production path / Rule 3 no
++        # silent fallback that discards real output).
++        is_mock_response = (
++            response_content
++            and self._mock_gate_open(dispatched_provider)
++            and (
++                response_content.startswith("I understand you want me to work with")
++                or response_content.startswith("Regarding your question about")
++                or response_content.startswith("Based on the provided data and context")
++                or "Mock vision response for testing" in response_content
++            )
+         )
+ 
+         if is_mock_response:
+             # We need to infer the original inputs from the LLM result context
+-            # For signature-based execution, we can extract from the mock response
++            # For signature-based execution, we can extract from the mock response.
++            # Raw content stays at DEBUG only — WARN carries a non-reversible
++            # fingerprint (rules/security.md "No secrets in logs";
++            # rules/observability.md Rule 4/8).
+             logger.debug(f"Mock response detected: {response_content}")
++            logger.warning(
++                "Mock-upgrade fired: substituting fabricated intelligent-mock "
++                "content for mock-provider LLM output (mode=fake, provider=%r, "
++                "response_fingerprint=%s)",
++                (
++                    dispatched_provider
++                    if dispatched_provider is not None
++                    else self._get_provider_for_config()
++                ),
++                _fingerprint_payload(response_content),
++            )
+ 
+             # Use current execution inputs if available, otherwise extract from mock response
+             if (
+@@ -1627,12 +1879,16 @@ Final Answer: [Your complete solution]
+         """
+ 
+     def _extract_cot_response(
+-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
++        self,
++        llm_result: Dict[str, Any],
++        original_inputs: Dict[str, Any],
++        dispatched_provider: Optional[str] = None,
+     ) -> Dict[str, Any]:
+         """Extract Chain-of-Thought response structure."""
+-        # Get the intelligent response (handles mock conversion)
++        # Get the intelligent response (handles mock conversion). Threads
++        # `dispatched_provider` per PART A so the gate matches dispatch.
+         intelligent_response = self._extract_intelligent_response(
+-            llm_result, original_inputs
++            llm_result, original_inputs, dispatched_provider=dispatched_provider
+         )
+         response_text = intelligent_response.get("answer", "")
+ 
+@@ -1692,12 +1948,16 @@ Final Answer: [Your complete solution]
+         return cot_structure
+ 
+     def _extract_react_response(
+-        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
++        self,
++        llm_result: Dict[str, Any],
++        original_inputs: Dict[str, Any],
++        dispatched_provider: Optional[str] = None,
+     ) -> Dict[str, Any]:
+         """Extract ReAct response structure."""
+-        # Get the intelligent response (handles mock conversion)
++        # Get the intelligent response (handles mock conversion). Threads
++        # `dispatched_provider` per PART A so the gate matches dispatch.
+         intelligent_response = self._extract_intelligent_response(
+-            llm_result, original_inputs
++            llm_result, original_inputs, dispatched_provider=dispatched_provider
+         )
+         response_text = intelligent_response.get("answer", "")
+ 
+@@ -1814,7 +2074,9 @@ Final Answer: [Your complete solution]
+         agent_result = results.get(f"{self.agent_id}_cot", {})
+ 
+         # Handle different response formats and extract CoT structure
+-        cot_response = self._extract_cot_response(agent_result, inputs)
++        cot_response = self._extract_cot_response(
++            agent_result, inputs, dispatched_provider=llm_params["provider"]
++        )
+ 
+         # Track execution history
+         self._execution_history.append(
+@@ -1879,7 +2141,9 @@ Final Answer: [Your complete solution]
+         agent_result = results.get(f"{self.agent_id}_react", {})
+ 
+         # Handle different response formats and extract ReAct structure
+-        react_response = self._extract_react_response(agent_result, inputs)
++        react_response = self._extract_react_response(
++            agent_result, inputs, dispatched_provider=llm_params["provider"]
++        )
+ 
+         # Track execution history
+         self._execution_history.append(
+@@ -2116,6 +2380,15 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
+             from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+ 
+             base_params = {
++                # `provider` MUST be set explicitly — LLMAgentNode's own
++                # parameter default is "mock" (see `get_parameters()` in
++                # `kaizen/nodes/ai/llm_agent.py`), so omitting it here made
++                # every CoT/ReAct execution silently mock-dispatch
++                # regardless of the agent's actual configured provider.
++                # `_get_provider_for_config()` is the SAME env-first
++                # provider resolution used by every other execute path
++                # (`_execute_direct_llm`, `_execute_with_signature`).
++                "provider": self._get_provider_for_config(),
+                 "model": self.config.get("model")
+                 or os.environ.get("OPENAI_PROD_MODEL")
+                 or os.environ.get("DEFAULT_LLM_MODEL")
+@@ -2424,6 +2697,14 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
+         """
+         self.signature = signature
+         self._is_compiled = False  # Force recompilation
++        # Invalidate the cached signature-execution workflow — see the same
++        # comment in `update_config`. A new signature changes the compiled
++        # node params (messages/system_prompt/etc.), so the stale cache
++        # would dispatch against the OLD signature's node config.
++        if hasattr(self, "_signature_workflow"):
++            del self._signature_workflow
++        if hasattr(self, "_signature_workflow_provider"):
++            del self._signature_workflow_provider
+         logger.info(f"Set signature '{signature.name}' for agent: {self.agent_id}")
+ 
+     def get_execution_history(self) -> List[Dict[str, Any]]:
+@@ -2455,8 +2736,17 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
+         """Reset agent state and clear execution history."""
+         self._workflow = None
+         self._is_compiled = False
++        self._workflow_provider = None
+         self._execution_history.clear()
+ 
++        # Invalidate the cached signature-execution workflow — see the same
++        # comment in `update_config`. Reset MUST NOT leave a stale cached
++        # node config (with a stale `provider`) alive across the reset.
++        if hasattr(self, "_signature_workflow"):
++            del self._signature_workflow
++        if hasattr(self, "_signature_workflow_provider"):
++            del self._signature_workflow_provider
++
+         # Reset MCP state
+         self.mcp_connections = []
+         self.mcp_connection_errors = []
+@@ -2514,7 +2804,17 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
+         # Add communication node with target agent. Target agent's model was
+         # validated at its `_set_default_config` (KAIZEN_DEFAULT_MODEL env var,
+         # rules/env-models.md) — index access is correct; no hardcoded fallback.
++        # PART B: `provider` MUST be set explicitly — LLMAgentNode's own
++        # parameter default is "mock" (`kaizen/nodes/ai/llm_agent.py::get_parameters`).
++        # Without this, EVERY inter-agent communication silently mock-dispatched
++        # regardless of `target_agent`'s actually configured provider, AND (unlike
++        # every other LLMAgentNode-param site in this file) this path has NO
++        # mock-upgrade gating at all — the raw mock template would be returned
++        # verbatim as the inter-agent reply. `target_agent._get_provider_for_config()`
++        # resolves the RECEIVING agent's own provider (the one whose model/config
++        # this node dispatches under), consistent with every other param above.
+         communication_params = {
++            "provider": target_agent._get_provider_for_config(),
+             "model": target_agent.config["model"],
+             "generation_config": {
+                 "temperature": target_agent.config.get("temperature", 0.7),
+diff --git a/packages/kailash-kaizen/src/kaizen/core/base_agent.py b/packages/kailash-kaizen/src/kaizen/core/base_agent.py
+index bfdeb95c2..08cd324cd 100644
+--- a/packages/kailash-kaizen/src/kaizen/core/base_agent.py
++++ b/packages/kailash-kaizen/src/kaizen/core/base_agent.py
+@@ -39,6 +39,7 @@ from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
+ from .a2a_mixin import A2AMixin
+ from .agent_loop import AgentLoop
+ from .config import BaseAgentConfig
++from ._provider_env import detect_provider_from_env as _detect_provider
+ from .mcp_mixin import MCPMixin
+ 
+ __all__ = ["BaseAgent", "BaseAgentConfig"]
+@@ -216,6 +217,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
+         self._framework = None
+         self._agent = None
+         self._workflow = None
++        self._workflow_provider = None  # provider `_workflow` was built with
+ 
+         # WorkflowGenerator
+         from .workflow_generator import WorkflowGenerator
+@@ -583,7 +585,9 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
+         Returns:
+             WorkflowBuilder: Workflow representation ready for execution.
+         """
+-        if self._workflow is not None:
++        # Memo is provider-aware (env-dependent resolution -> rebuild on drift).
++        current_provider = self.config.llm_provider or _detect_provider()
++        if self._workflow is not None and self._workflow_provider == current_provider:
+             return self._workflow
+ 
+         workflow = WorkflowBuilder()
+@@ -594,16 +598,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
+ 
+         if self.config.model is not None:
+             node_config["model"] = self.config.model
+-        if self.config.llm_provider is not None:
+-            node_config["provider"] = self.config.llm_provider
+-        # Route generation params into the declared `generation_config` dict.
+-        # LLMAgentNode.get_parameters() declares `generation_config: dict`
+-        # (description: "Generation parameters (temperature, max_tokens, top_p)")
+-        # and llm_agent.py reads ONLY generation_config at runtime — top-level
+-        # `temperature` / `max_tokens` are not declared NodeParameters and the
+-        # Kailash validator (`src/kailash/nodes/base.py:_validate_inputs`) flags
+-        # them as "Unknown parameter" on EVERY execution because
+-        # BaseAgentConfig.temperature defaults to 0.1 (non-None).
++        node_config["provider"] = current_provider  # required; else defaults to "mock"
++        # generation_config is LLMAgentNode's declared dict param (the only one
++        # llm_agent.py reads at runtime) — top-level temperature/max_tokens
++        # aren't declared NodeParameters and the Kailash validator flags them
++        # as "Unknown parameter" every run since temperature defaults non-None.
+         generation_config: Dict[str, Any] = {}
+         if self.config.temperature is not None:
+             generation_config["temperature"] = self.config.temperature
+@@ -621,6 +620,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
+         workflow.add_node("LLMAgentNode", "agent", node_config)
+ 
+         self._workflow = workflow
++        self._workflow_provider = current_provider
+         return workflow
+ 
+     def to_workflow_node(self) -> Node:
+@@ -1009,5 +1009,6 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
+         self._framework = None
+         self._agent = None
+         self._workflow = None
++        self._workflow_provider = None
+ 
+         logger.debug(f"Cleanup completed for agent {self.agent_id}")
+diff --git a/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py b/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py
+index 3c96de85c..268f9bb59 100644
+--- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py
++++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py
+@@ -45,6 +45,19 @@ class NexusDeploymentMixin:
+         """
+         from kailash.workflow.builder import WorkflowBuilder
+ 
++        # FIX 5: LLMAgentNode's NodeParameter is named "provider" — it never
++        # reads "llm_provider". Passing "llm_provider" silently dropped the
++        # configured provider and every deployment defaulted to LLMAgentNode's
++        # own "mock" parameter default (`kaizen/nodes/ai/llm_agent.py::
++        # get_parameters`), regardless of a real provider being explicitly
++        # configured. `detect_provider_from_env()` mirrors
++        # `Agent._get_provider_for_config()`'s exact env-first fallback
++        # (openai -> anthropic -> mock) so an unset `llm_provider` never
++        # re-defaults to mock when a real API key is present.
++        from kaizen.core._provider_env import detect_provider_from_env
++
++        provider = self.config.llm_provider or detect_provider_from_env()
++
+         # Create workflow from agent's signature
+         workflow = WorkflowBuilder()
+ 
+@@ -53,7 +66,7 @@ class NexusDeploymentMixin:
+             "LLMAgentNode",
+             "agent_node",
+             {
+-                "llm_provider": self.config.llm_provider,
++                "provider": provider,
+                 "model": self.config.model,
+                 "temperature": getattr(self.config, "temperature", 0.7),
+                 "system_prompt": self._build_system_prompt(),
+diff --git a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
+index ae9e6ac48..2b12630d0 100644
+--- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
++++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
+@@ -56,7 +56,7 @@ class DeploymentCache:
+ 
+         The cache key is based on:
+         - Workflow name
+-        - LLM provider
++        - RESOLVED LLM provider (see FIX 8 note below)
+         - Model name
+         - Signature structure
+ 
+@@ -71,10 +71,36 @@ class DeploymentCache:
+         config = getattr(agent, "config", None)
+         signature = getattr(agent, "signature", None)
+ 
++        # FIX 8: hash the RESOLVED provider, not the raw `llm_provider`
++        # attribute, so the key CHANGES the moment ambient key availability
++        # changes for an agent with no explicit `llm_provider` (the common
++        # auto-detect case FIX5/FIX6 target) — otherwise the key stayed
++        # IDENTICAL regardless of what `to_workflow()` would actually
++        # resolve the provider to, and a cache HIT would keep serving a
++        # workflow built under a now-stale provider.
++        #
++        # NOTE (FIX 14 — scope this claim honestly): this key change is
++        # necessary but NOT sufficient on its own to guarantee a fresh
++        # rebuild. A cache MISS still only causes a fresh `to_workflow()`
++        # call — it does NOT, by itself, force that call to re-resolve the
++        # provider if `to_workflow()`'s OWN internal memo
++        # (`self._workflow`/`self._workflow_provider`) is stale in some
++        # OTHER way. The "keys arrive mid-process -> real dispatch" property
++        # is jointly guaranteed by THIS key tracking the resolved provider
++        # AND `to_workflow()`/`compile_workflow()` invalidating their own
++        # memo on the SAME provider drift (see FIX 12/FIX 13 in
++        # `kaizen/core/base_agent.py` and `kaizen/core/agents.py`). This
++        # cache is defense-in-depth for the DEPLOY-time redundant-rebuild
++        # cost, not the sole guarantor of freshness.
++        from kaizen.core._provider_env import detect_provider_from_env
++
++        llm_provider = getattr(config, "llm_provider", None)
++        resolved_provider = llm_provider or detect_provider_from_env()
++
+         # Build key data
+         key_data = {
+             "name": name,
+-            "llm_provider": getattr(config, "llm_provider", None),
++            "provider": resolved_provider,
+             "model": getattr(config, "model", None),
+             "signature": str(signature) if signature else None,
+         }
+diff --git a/packages/kailash-kaizen/src/kaizen/signatures/core.py b/packages/kailash-kaizen/src/kaizen/signatures/core.py
+index ad71b5f16..653908e75 100644
+--- a/packages/kailash-kaizen/src/kaizen/signatures/core.py
++++ b/packages/kailash-kaizen/src/kaizen/signatures/core.py
+@@ -1306,9 +1306,33 @@ class SignatureCompiler:
+         self, signature_obj: Signature, config: Dict[str, Any]
+     ) -> Dict[str, Any]:
+         """Create LLMAgentNode parameters for signature execution."""
++        # ADDITIONAL sibling fix (same class as agents.py's provider-gate
++        # hardening): `config.get("provider", "mock")` silently mock-dispatched
++        # every multi-modal signature whose config had no EXPLICIT "provider"
++        # key, even when a real API key was configured — matching the
++        # LLMAgentNode-param-building bug class fixed across the Agent
++        # deployment surface (rules/zero-tolerance.md Rule 2; no hardcoded
++        # mock responses on a production path). Delegates to the shared
++        # `detect_provider_from_env()` (kaizen/core/_provider_env.py) so an
++        # unconfigured provider resolves to a real key when one is present,
++        # falling back to "mock" only when neither is set — the SAME
++        # env-first order `Agent._get_provider_for_config()` uses.
++        # LOCAL import: `kaizen.core.__init__` imports `kaizen.signatures`
++        # at module scope, and `kaizen.signatures.__init__` imports `.core`
++        # (this file) at module scope — a module-level import here would
++        # risk a circular partial-init depending on which package a caller
++        # imports first. `_provider_env` is a leaf module (only imports
++        # `os`), so a lazy import here is always safe.
++        if "provider" in config:
++            resolved_provider = config["provider"]
++        else:
++            from kaizen.core._provider_env import detect_provider_from_env
++
++            resolved_provider = detect_provider_from_env()
++
+         node_params = {
+             "model": config["model"],
+-            "provider": config.get("provider", "mock"),  # Use mock for testing
++            "provider": resolved_provider,
+             "timeout": config.get("timeout", 30),
+         }
+ 
+diff --git a/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py b/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py
+index f2a27c462..efe610827 100644
+--- a/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py
++++ b/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py
+@@ -62,6 +62,7 @@ def kaizen_production():
+ class TestCompleteIntelligentWorkflows:
+     """Test complete end-to-end intelligent workflows."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_intelligent_business_analysis_workflow(
+         self, kaizen_production, production_llm_config
+     ):
+@@ -168,6 +169,7 @@ class TestCompleteIntelligentWorkflows:
+             f"Analysis too verbose for business context: {total_words} words"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_intelligent_multi_agent_collaboration(
+         self, kaizen_production, production_llm_config
+     ):
+@@ -313,6 +315,7 @@ class TestCompleteIntelligentWorkflows:
+             "Multi-agent workflow lacks topic coherence across all outputs"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_intelligent_chain_of_thought_reasoning_e2e(
+         self, kaizen_production, production_llm_config
+     ):
+@@ -456,6 +459,7 @@ class TestCompleteIntelligentWorkflows:
+             f"CoT reasoning too superficial: {total_reasoning_words} words"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_intelligent_react_pattern_e2e(
+         self, kaizen_production, production_llm_config
+     ):
+@@ -592,6 +596,7 @@ class TestCompleteIntelligentWorkflows:
+ class TestIntelligentEnterpriseWorkflows:
+     """Test enterprise-grade intelligent workflows."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_enterprise_multi_signature_intelligence(
+         self, kaizen_production, production_llm_config
+     ):
+@@ -748,6 +753,7 @@ class TestIntelligentEnterpriseWorkflows:
+             f"Executive summary must reference technical assessment: {executive_result}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_intelligent_performance_monitoring(
+         self, kaizen_production, production_llm_config
+     ):
+diff --git a/packages/kailash-kaizen/tests/integration/test_intelligent_responses_integration.py b/packages/kailash-kaizen/tests/integration/test_intelligent_responses_integration.py
+index 77740a479..2b1fe3a39 100644
+--- a/packages/kailash-kaizen/tests/integration/test_intelligent_responses_integration.py
++++ b/packages/kailash-kaizen/tests/integration/test_intelligent_responses_integration.py
+@@ -49,6 +49,7 @@ def real_llm_config():
+ class TestRealLLMProviderIntegration:
+     """Test agents with real LLM provider API calls."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_openai_integration_basic_intelligence(self, real_llm_config):
+         """Test basic intelligent responses using real OpenAI API."""
+         kaizen = Kaizen()
+@@ -83,6 +84,7 @@ class TestRealLLMProviderIntegration:
+             f"Simple answer should be concise, got {word_count} words: {answer}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_mathematical_reasoning(self, real_llm_config):
+         """Test mathematical reasoning with real LLM provider."""
+         kaizen = Kaizen()
+@@ -122,6 +124,7 @@ class TestRealLLMProviderIntegration:
+             f"Must calculate correctly (3.00): {answer}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_domain_knowledge(self, real_llm_config):
+         """Test domain-specific knowledge with real LLM."""
+         kaizen = Kaizen()
+@@ -174,6 +177,7 @@ class TestRealLLMProviderIntegration:
+             f"Key concepts lack scientific terms: {key_concepts}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_response_consistency(self, real_llm_config):
+         """Test that real LLM responses are consistent but not identical."""
+         kaizen = Kaizen()
+@@ -214,6 +218,7 @@ class TestRealLLMProviderIntegration:
+         assert len(unique_responses) >= 1, "At least one response should exist"
+         # Note: With very low temperature, responses might be identical - that's acceptable
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_error_handling(self, real_llm_config):
+         """Test error handling with real LLM provider."""
+         kaizen = Kaizen()
+@@ -240,6 +245,7 @@ class TestRealLLMProviderIntegration:
+         )
+         assert len(answer) > 0, "Must have some response despite truncation"
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_timeout_handling(self, real_llm_config):
+         """Test timeout handling with real LLM provider."""
+         kaizen = Kaizen()
+@@ -279,6 +285,7 @@ class TestRealLLMProviderIntegration:
+ class TestRealLLMSignatureIntegration:
+     """Test signature-based programming with real LLM providers."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_complex_signature_real_intelligence(self, real_llm_config):
+         """Test complex signatures produce real intelligent structured responses."""
+         kaizen = Kaizen(config={"signature_programming_enabled": True})
+@@ -361,6 +368,7 @@ class TestRealLLMSignatureIntegration:
+             f"Recommendations lack actionable advice: {result['recommendations']}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_signature_pattern_integration_real_llm(self, real_llm_config):
+         """Test signature patterns (CoT, ReAct) with real LLM."""
+         kaizen = Kaizen()
+@@ -426,6 +434,7 @@ class TestRealLLMSignatureIntegration:
+ class TestRealLLMPerformanceIntegration:
+     """Test performance characteristics with real LLM providers."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_response_time_benchmarks(self, real_llm_config):
+         """Test response time benchmarks with real LLM."""
+         kaizen = Kaizen()
+@@ -454,6 +463,7 @@ class TestRealLLMPerformanceIntegration:
+ 
+         print(f"Real LLM response time: {response_time:.2f}s")
+ 
++    @pytest.mark.requires_real_llm
+     def test_real_llm_batch_processing(self, real_llm_config):
+         """Test batch processing with real LLM provider."""
+         kaizen = Kaizen()
+@@ -504,6 +514,7 @@ class TestRealLLMPerformanceIntegration:
+ class TestRealLLMWorkflowIntegration:
+     """Test workflow integration with real LLM providers."""
+ 
++    @pytest.mark.requires_real_llm
+     def test_agent_workflow_compilation_real_llm(self, real_llm_config):
+         """Test that agent workflow compiles correctly for real LLM execution."""
+         kaizen = Kaizen()
+@@ -554,6 +565,7 @@ class TestRealLLMWorkflowIntegration:
+             f"Response should acknowledge greeting: {intelligent_response}"
+         )
+ 
++    @pytest.mark.requires_real_llm
+     def test_multi_step_workflow_intelligence(self, real_llm_config):
+         """Test multi-step workflows with real LLM intelligence."""
+         kaizen = Kaizen()
+### _provider_env ###
+"""Shared env-first provider-detection fallback.
+
+Single source of truth for the narrow "which provider gets dispatched when
+none was explicitly configured" fallback used across the Agent deployment
+surface (`kaizen/core/agents.py`, `kaizen/core/base_agent.py`,
+`kaizen/signatures/core.py`, `kaizen/integrations/nexus/base.py`). Extracted
+after the SAME openai/anthropic/mock env-check logic was found duplicated
+across 3-4 LLMAgentNode-param-building sites during the provider-gate
+hardening sweep (rules/security.md "Multi-Site Kwarg Plumbing" — a helper
+this widely duplicated drifts silently unless consolidated).
+
+This is intentionally NOT `kaizen.config.providers.auto_detect_provider()`:
+that function checks 7 providers (openai/azure/anthropic/google/perplexity/
+ollama/docker) and RAISES `ConfigurationError` when none is available — a
+different, fail-loud contract used by a different call path. Every site this
+module serves currently defaults to the mock/test provider when no real key
+is present (a deliberate, existing, lenient-construction contract), so this
+helper mirrors ONLY `Agent._get_provider_for_config()`'s narrower 3-way
+order. Changing that contract (e.g. raising instead of defaulting to mock)
+is out of scope for this fix — see the LLMAgentNode provider `default="mock"`
+fail-loud change tracked as a separate, higher-blast-radius follow-up.
+"""
+
+import os
+
+
+def detect_provider_from_env() -> str:
+    """
+    Env-first provider fallback: openai -> anthropic -> mock.
+
+    Returns:
+        "openai" if OPENAI_API_KEY is set, else "anthropic" if
+        ANTHROPIC_API_KEY is set, else "mock". Mirrors
+        `Agent._get_provider_for_config()`'s exact fallback order — callers
+        with an explicit provider configured MUST check that first and only
+        fall back to this helper when none was given, so a real API key is
+        never silently ignored in favor of LLMAgentNode's own "mock"
+        parameter default.
+    """
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "anthropic"
+    return "mock"
+### regression test ###
+"""Regression test — mock-upgrade substitution MUST be provider-gated.
+
+``kaizen.core.agents.Agent`` ships a test-harness "mock-upgrade" mechanism:
+``_extract_intelligent_response`` (direct-LLM / CoT / ReAct paths) and
+``_apply_intelligent_mock_conversion_to_llm_result`` (signature-based path)
+both classify LLM output as ``is_mock_response`` via an unconditional
+``startswith()`` check against three generic openers —
+
+    "I understand you want me to work with"
+    "Regarding your question about"
+    "Based on the provided data and context"
+
+— plus the substring "Mock vision response for testing". On a match, the
+REAL response content was silently discarded and replaced with
+``_generate_intelligent_mock_response()``: a hardcoded keyword-lookup table
+("2+2" -> "4", "capital of france" -> "Paris", plus a catch-all filler
+paragraph). This classifier ran on the PRODUCTION response path with NO
+provider guard — so a genuine real-provider answer to an analytical/RAG
+query that happens to *open* with "Based on the provided data and
+context..." (a phrasing real models commonly produce) was misclassified as
+mock, its real content dropped, and a fabricated lookup answer substituted
+in its place and returned to the user as if it were the model's answer.
+
+This is a zero-tolerance Rule 2 (hardcoded mock responses on a production
+path) + Rule 3 (silent fallback discarding real output) violation. The three
+openers originate ONLY from the mock transport
+(``kaizen/llm/testing/mock_transport.py``) and ``LLMAgentNode``'s built-in
+mock fallback (``kaizen/nodes/ai/llm_agent.py::_mock_llm_response``), which
+is itself only ever dispatched when ``provider == "mock"``
+(``kaizen/nodes/ai/llm_agent.py::run``). So the fix is a PROVIDER GATE, not
+LLM reasoning and not removal of the test-harness behavior: both
+``is_mock_response`` classifier sites now additionally require
+``Agent._is_mock_provider_active()`` (True only when
+``_get_provider_for_config() == "mock"`` — the SAME provider-resolution
+method used to build the ``provider`` param actually dispatched to
+``LLMAgentNode``).
+
+Scope of THIS file's coverage: within the two classifier functions covered
+here (``_extract_intelligent_response`` and
+``_apply_intelligent_mock_conversion_to_llm_result``), a REAL provider's
+output is now returned verbatim regardless of what it happens to open
+with. Genuine mock-provider output through those same two functions is
+still upgraded to an intelligent mock answer (existing test-harness
+behavior preserved). Every mock-upgrade firing now emits a WARN-level,
+grep-able ``mode=fake`` log line per rules/observability.md Rule 3 (with
+the payload itself fingerprinted, never logged raw, per rules/security.md
+"No secrets in logs").
+
+This file does NOT cover the whole-``Agent`` surface. Two adjacent gaps,
+each covered by a SEPARATE regression test class in this same file:
+(1) the ``_signature_workflow`` cache in ``_execute_with_signature`` bakes
+``provider`` in ONCE and can dispatch under a STALE provider even after
+``update_config()``/``set_signature()``/``reset()`` change it live — see
+``TestSignatureWorkflowCacheInvalidation``; (2) ``_execute_with_pattern``
+(``execute_cot``/``execute_react``) never set ``provider`` at all and
+silently fell back to ``LLMAgentNode``'s own ``"mock"`` default — see
+``TestPatternExecutionProviderPropagation``.
+
+These are Tier 1 unit tests: `Agent` is constructed with an explicit
+``provider`` config value (never relying on ambient ``OPENAI_API_KEY`` /
+``ANTHROPIC_API_KEY`` env-var auto-detection), and the private classifier
+methods are called directly with deterministic inputs — no network call, no
+env-var mutation, so no env-var lock (rules/testing.md § Env-Var Lock
+Discipline) is required. Per rules/env-models.md, the model identifier is
+resolved from env via the module's own ``_resolve_default_model()`` helper
+— never a hardcoded literal.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from typing import Iterator
+
+import pytest
+
+from kaizen.core.agents import Agent, _fingerprint_payload, _resolve_default_model
+
+pytestmark = pytest.mark.regression
+
+_AGENT_LOGGER_NAME = "kaizen.core.agents"
+
+# Module-scope env lock per rules/testing.md § "Serialize Env-Var-Mutating
+# Tests Via Module Lock" — matches the established lock domain used by
+# tests/regression/test_issue_fnew5_provider_intrinsic_defaults.py for the
+# SAME env surface (OPENAI_API_KEY / ANTHROPIC_API_KEY).
+_ENV_LOCK = threading.Lock()
+
+# Every env var `_get_provider_for_config()` / `_create_llm_agent_params`
+# consult. Cleared before the one test in this file that mutates env, so
+# ambient .env (or this repo's root-conftest LLM cost-guard scrub) never
+# leaks into the assertion either way.
+_PROVIDER_ENV_VARS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+
+
+@pytest.fixture
+def _env_serialized(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    with _ENV_LOCK:
+        for var in _PROVIDER_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        yield
+
+
+# Real-looking answers that happen to OPEN with one of the mock-transport's
+# generic templates. A genuine model can plausibly produce prose starting
+# this way (especially the RAG/analytical opener); none of these strings
+# were ever really produced by a mock-only transport in this test — they are
+# stand-ins for "real provider output that collides with a mock template".
+_COLLIDING_REAL_CONTENTS = [
+    # Collides with "Based on the provided data and context" opener.
+    "Based on the provided data and context, the Q3 revenue decline of 12% "
+    "correlates with three factors: increased customer acquisition cost, "
+    "elevated churn in the enterprise segment, and delayed feature releases "
+    "in the analytics product line.",
+    # Collides with "Regarding your question about" opener.
+    "Regarding your question about the merger timeline, the due-diligence "
+    "phase typically spans eight to twelve weeks depending on regulatory "
+    "review requirements.",
+    # Collides with "I understand you want me to work with" opener.
+    "I understand you want me to work with the uploaded spreadsheet to "
+    "produce a quarterly variance report broken out by region.",
+    # Collides with the "Mock vision response for testing" substring.
+    "I can see the image(s) you've provided. Based on my analysis, "
+    "[Mock vision response for testing]",
+]
+
+_REAL_PROVIDERS = ["openai", "anthropic"]
+
+# Deterministic mock-upgrade fixture: `_generate_intelligent_mock_response`
+# hardcodes "2+2" -> "4" (kaizen/core/agents.py `_generate_intelligent_mock_response`).
+_DETERMINISTIC_MOCK_INPUTS = {"question": "What is 2+2?"}
+_DETERMINISTIC_MOCK_ANSWER = "4"
+
+
+def _make_agent(provider: str) -> Agent:
+    """Build an ``Agent`` with an EXPLICIT provider (never env-detected).
+
+    ``_get_provider_for_config()`` returns ``self.config["provider"]``
+    verbatim whenever the key is present, before ever consulting
+    ``OPENAI_API_KEY`` / ``ANTHROPIC_API_KEY`` — so this fully controls the
+    provider gate without touching the environment.
+    """
+    return Agent(
+        "mock_upgrade_provider_gate_test_agent",
+        {"provider": provider, "model": _resolve_default_model()},
+    )
+
+
+class TestIsMockProviderActiveGate:
+    """Direct coverage of the shared gate predicate."""
+
+    @pytest.mark.parametrize("provider", _REAL_PROVIDERS + ["google", "ollama"])
+    def test_real_and_other_non_mock_providers_are_not_mock(self, provider):
+        agent = _make_agent(provider)
+        assert agent._is_mock_provider_active() is False
+
+    def test_mock_provider_is_mock(self):
+        agent = _make_agent("mock")
+        assert agent._is_mock_provider_active() is True
+
+
+class TestExtractIntelligentResponseProviderGate:
+    """``_extract_intelligent_response`` — direct-LLM / CoT / ReAct paths."""
+
+    @pytest.mark.parametrize("provider", _REAL_PROVIDERS)
+    @pytest.mark.parametrize("content", _COLLIDING_REAL_CONTENTS)
+    def test_real_provider_content_returned_verbatim(self, provider, content):
+        """A REAL provider's answer MUST survive unmodified, even when it
+        happens to open with a mock-transport template string."""
+        agent = _make_agent(provider)
+        llm_result = {"content": content}
+
+        result = agent._extract_intelligent_response(
+            llm_result, _DETERMINISTIC_MOCK_INPUTS
+        )
+
+        assert result["answer"] == content.strip()
+        assert result["response"] == content.strip()
+        # MUST NOT have been silently swapped for the fabricated lookup answer.
+        assert result["answer"] != _DETERMINISTIC_MOCK_ANSWER
+
+    @pytest.mark.parametrize("provider", _REAL_PROVIDERS)
+    def test_real_provider_emits_no_fake_mode_warning(self, provider, caplog):
+        agent = _make_agent(provider)
+        llm_result = {"content": _COLLIDING_REAL_CONTENTS[0]}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._extract_intelligent_response(llm_result, _DETERMINISTIC_MOCK_INPUTS)
+
+        assert not any("mode=fake" in rec.getMessage() for rec in caplog.records)
+
+    @pytest.mark.parametrize("content", _COLLIDING_REAL_CONTENTS)
+    def test_mock_provider_still_upgrades(self, content):
+        """Existing test-harness behavior is PRESERVED: genuine mock-provider
+        output is still substituted with an intelligent mock answer derived
+        from the original inputs."""
+        agent = _make_agent("mock")
+        llm_result = {"content": content}
+
+        result = agent._extract_intelligent_response(
+            llm_result, _DETERMINISTIC_MOCK_INPUTS
+        )
+
+        assert result["answer"] == _DETERMINISTIC_MOCK_ANSWER
+        assert result["answer"] != content.strip()
+
+    def test_mock_provider_emits_fake_mode_warning(self, caplog):
+        agent = _make_agent("mock")
+        llm_result = {"content": _COLLIDING_REAL_CONTENTS[0]}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._extract_intelligent_response(llm_result, _DETERMINISTIC_MOCK_INPUTS)
+
+        fake_records = [
+            rec
+            for rec in caplog.records
+            if "mode=fake" in rec.getMessage() and rec.levelno == logging.WARNING
+        ]
+        assert fake_records, "Expected a WARN-level mode=fake log line on mock-upgrade"
+
+    def test_mock_provider_warning_fingerprints_inputs_not_raw(self, caplog):
+        """rules/security.md "No secrets in logs" + rules/observability.md
+        Rule 4/8: the WARN line MUST carry a fingerprint, never the raw
+        caller-supplied ``original_inputs`` payload verbatim."""
+        agent = _make_agent("mock")
+        llm_result = {"content": _COLLIDING_REAL_CONTENTS[0]}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._extract_intelligent_response(llm_result, _DETERMINISTIC_MOCK_INPUTS)
+
+        warn_messages = [
+            rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING
+        ]
+        assert warn_messages, "Expected at least one WARN record"
+        expected_fingerprint = _fingerprint_payload(_DETERMINISTIC_MOCK_INPUTS)
+        assert any(expected_fingerprint in msg for msg in warn_messages)
+        # The raw input dict MUST NOT appear verbatim in ANY WARN line.
+        raw_dump = str(_DETERMINISTIC_MOCK_INPUTS)
+        assert not any(raw_dump in msg for msg in warn_messages)
+
+
+class TestApplyIntelligentMockConversionProviderGate:
+    """``_apply_intelligent_mock_conversion_to_llm_result`` — signature path."""
+
+    @pytest.mark.parametrize("provider", _REAL_PROVIDERS)
+    @pytest.mark.parametrize("content", _COLLIDING_REAL_CONTENTS)
+    def test_real_provider_content_returned_verbatim(self, provider, content):
+        agent = _make_agent(provider)
+        llm_result = {"content": content}
+
+        result = agent._apply_intelligent_mock_conversion_to_llm_result(llm_result)
+
+        assert result["content"] == content
+        assert result["content"] != _DETERMINISTIC_MOCK_ANSWER
+
+    @pytest.mark.parametrize("provider", _REAL_PROVIDERS)
+    def test_real_provider_emits_no_fake_mode_warning(self, provider, caplog):
+        agent = _make_agent(provider)
+        llm_result = {"content": _COLLIDING_REAL_CONTENTS[0]}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._apply_intelligent_mock_conversion_to_llm_result(llm_result)
+
+        assert not any("mode=fake" in rec.getMessage() for rec in caplog.records)
+
+    @pytest.mark.parametrize("content", _COLLIDING_REAL_CONTENTS)
+    def test_mock_provider_still_upgrades(self, content):
+        agent = _make_agent("mock")
+        agent._current_execution_inputs = _DETERMINISTIC_MOCK_INPUTS
+        llm_result = {"content": content}
+
+        result = agent._apply_intelligent_mock_conversion_to_llm_result(llm_result)
+
+        assert result["content"] == _DETERMINISTIC_MOCK_ANSWER
+        assert result["content"] != content
+
+    def test_mock_provider_emits_fake_mode_warning(self, caplog):
+        agent = _make_agent("mock")
+        agent._current_execution_inputs = _DETERMINISTIC_MOCK_INPUTS
+        llm_result = {"content": _COLLIDING_REAL_CONTENTS[0]}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._apply_intelligent_mock_conversion_to_llm_result(llm_result)
+
+        fake_records = [
+            rec
+            for rec in caplog.records
+            if "mode=fake" in rec.getMessage() and rec.levelno == logging.WARNING
+        ]
+        assert fake_records, "Expected a WARN-level mode=fake log line on mock-upgrade"
+
+    def test_mock_provider_warning_fingerprints_content_not_raw(self, caplog):
+        """rules/security.md "No secrets in logs" + rules/observability.md
+        Rule 4/8: the WARN line MUST carry a fingerprint, never the raw
+        LLM ``response_content`` payload verbatim."""
+        agent = _make_agent("mock")
+        agent._current_execution_inputs = _DETERMINISTIC_MOCK_INPUTS
+        content = _COLLIDING_REAL_CONTENTS[0]
+        llm_result = {"content": content}
+
+        with caplog.at_level(logging.WARNING, logger=_AGENT_LOGGER_NAME):
+            agent._apply_intelligent_mock_conversion_to_llm_result(llm_result)
+
+        warn_messages = [
+            rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING
+        ]
+        assert warn_messages, "Expected at least one WARN record"
+        expected_fingerprint = _fingerprint_payload(content)
+        assert any(expected_fingerprint in msg for msg in warn_messages)
+        # The raw response content MUST NOT appear verbatim in ANY WARN line.
+        assert not any(content in msg for msg in warn_messages)
+
+
+class _RecordingKaizenStub:
+    """Stub ``kaizen_instance`` for ``_execute_with_signature`` that records
+    the dispatched ``provider`` read off each built workflow's node config,
+    and returns a FIXED canned response regardless of what provider was
+    dispatched. Returning a fixed response (rather than branching on the
+    dispatched provider) isolates the cache-invalidation correctness
+    property (FIX 1) from the classifier gate (already covered by the
+    classes above): the SAME colliding content is dispatched on every call,
+    so any divergence in ``result["answer"]`` between calls is caused
+    SOLELY by the live gate (``_is_mock_provider_active()``) agreeing or
+    disagreeing with whatever provider was actually recorded as dispatched.
+    """
+
+    def __init__(self, agent_id: str, response_content: str) -> None:
+        self._agent_id = agent_id
+        self._response_content = response_content
+        self.dispatched_providers: list = []
+
+    def execute(self, built_workflow, parameters=None):
+        # `built_workflow.nodes[id]` is a `kailash.workflow.graph.NodeInstance`
+        # (pydantic model) exposing its params via a `.config` dict attribute
+        # — NOT subscriptable itself.
+        node_config = built_workflow.nodes[self._agent_id].config
+        self.dispatched_providers.append(node_config.get("provider"))
+        return ({self._agent_id: {"content": self._response_content}}, "run-id")
+
+
+class TestSignatureWorkflowCacheInvalidation:
+    """FIX 1 — the ``_signature_workflow`` cache built by
+    ``_execute_with_signature`` bakes ``provider`` into the node config
+    ONCE and reused it forever, even after ``update_config()`` /
+    ``set_signature()`` / ``reset()`` changed the LIVE config. Because the
+    provider-gate predicate (``_is_mock_provider_active()``) reads
+    ``self.config["provider"]`` LIVE, a stale cache made dispatch and gate
+    disagree — exactly the failure mode this PR's provider gate exists to
+    prevent, reintroduced one layer up. ``update_config``/``set_signature``/
+    ``reset`` now invalidate the cache so the NEXT execute() rebuilds the
+    node config under the CURRENT provider.
+    """
+
+    def test_update_config_provider_change_reaches_second_dispatch(self):
+        """Switching config provider "openai" -> "mock" MUST reach the
+        SECOND dispatch (not the stale first-build value) — and because
+        both dispatch AND gate now agree on "mock", the genuine mock-upgrade
+        fires (existing test-harness behavior), not a gate/dispatch
+        disagreement."""
+        real_content = (
+            "Based on the provided data and context, quarterly revenue grew "
+            "8% driven by expansion in the enterprise segment."
+        )
+        stub = _RecordingKaizenStub("cache_invalidation_agent_1", real_content)
+        agent = Agent(
+            "cache_invalidation_agent_1",
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+
+        # First dispatch: provider="openai" (real). Gate agrees (real);
+        # content matches a trigger phrase but MUST still survive verbatim.
+        result1 = agent.execute(question="What changed this quarter?")
+        # `execute()` returns Dict in signature-mode, Tuple in workflow-mode
+        # (agents.py:2571 idiom) — narrow for pyright before subscripting.
+        assert isinstance(result1, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        assert stub.dispatched_providers == ["openai"]
+        assert result1["answer"] == real_content
+
+        # The documented mutator for changing provider on a live agent.
+        agent.update_config({"provider": "mock"})
+
+        # Second dispatch MUST reflect the NEW provider, not the stale
+        # cached "openai" — this is FIX 1's core correctness property.
+        result2 = agent.execute(question="What changed this quarter?")
+        assert isinstance(result2, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        assert stub.dispatched_providers == ["openai", "mock"], (
+            "second dispatch used a STALE cached provider instead of the "
+            "live config — update_config() silently failed to propagate"
+        )
+        # Dispatch and gate now agree ("mock" both places) -> genuine
+        # mock-upgrade fires; the real-looking content is intentionally
+        # replaced because the agent is NOW actually mock-configured.
+        assert result2["answer"] != real_content
+
+    def test_update_config_real_to_real_provider_change_stays_verbatim(self):
+        """Switching between two REAL providers MUST leave trigger-phrase
+        content verbatim on BOTH dispatches — the gate must never misfire
+        due to a stale cached provider disagreeing with the live config."""
+        real_content = (
+            "Based on the provided data and context, quarterly revenue grew "
+            "8% driven by expansion in the enterprise segment."
+        )
+        stub = _RecordingKaizenStub("cache_invalidation_agent_2", real_content)
+        agent = Agent(
+            "cache_invalidation_agent_2",
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+
+        result1 = agent.execute(question="What changed this quarter?")
+        assert isinstance(result1, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        assert stub.dispatched_providers == ["openai"]
+        assert result1["answer"] == real_content
+
+        agent.update_config({"provider": "anthropic"})
+
+        result2 = agent.execute(question="What changed this quarter?")
+        assert isinstance(result2, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        assert stub.dispatched_providers == ["openai", "anthropic"]
+        # Both dispatches real -> gate never fires -> verbatim both times.
+        assert result2["answer"] == real_content
+
+    def test_set_signature_invalidates_cache(self):
+        from kaizen.signatures import Signature as _Signature
+
+        stub = _RecordingKaizenStub("sig_invalidate_agent", "irrelevant content")
+        agent = Agent(
+            "sig_invalidate_agent",
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+        agent.execute(question="warm the cache")
+        assert hasattr(agent, "_signature_workflow")
+
+        agent.set_signature(_Signature(inputs=["question"], outputs=["answer"]))
+        assert not hasattr(agent, "_signature_workflow")
+
+    def test_reset_invalidates_cache(self):
+        stub = _RecordingKaizenStub("reset_invalidate_agent", "irrelevant content")
+        agent = Agent(
+            "reset_invalidate_agent",
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+        agent.execute(question="warm the cache")
+        assert hasattr(agent, "_signature_workflow")
+
+        agent.reset()
+        assert not hasattr(agent, "_signature_workflow")
+
+
+class _PatternRecordingKaizenStub:
+    """Stub ``kaizen_instance`` for ``execute_cot``/``execute_react`` that
+    records the dispatched ``provider`` off the pattern-executor's built
+    workflow node (``f"{agent_id}_{pattern}"``)."""
+
+    def __init__(self, node_id: str, response_content: str) -> None:
+        self._node_id = node_id
+        self._response_content = response_content
+        self.dispatched_providers: list = []
+
+    def execute(self, built_workflow, parameters=None):
+        # See `_RecordingKaizenStub.execute` above re: `NodeInstance.config`.
+        node_config = built_workflow.nodes[self._node_id].config
+        self.dispatched_providers.append(node_config.get("provider"))
+        return ({self._node_id: {"content": self._response_content}}, "run-id")
+
+
+class TestPatternExecutionProviderPropagation:
+    """FIX 4 — ``_execute_with_pattern`` (``execute_cot``/``execute_react``)
+    built its node params with NO ``provider`` key at all. Neither
+    ``compile_to_workflow_params()`` nor the pattern executors'
+    ``get_enhanced_parameters()`` ever injected one either, so
+    ``LLMAgentNode`` fell through to its OWN parameter default
+    (``"mock"`` — see ``kaizen/nodes/ai/llm_agent.py::get_parameters``),
+    meaning every CoT/ReAct execution silently mock-dispatched regardless
+    of the agent's actually configured provider. Fixed by setting
+    ``base_params["provider"] = self._get_provider_for_config()`` — the
+    SAME env-first resolution used by every other execute path.
+    """
+
+    def test_execute_cot_dispatches_configured_real_provider(self):
+        agent_id = "cot_provider_propagation_agent"
+        node_id = f"{agent_id}_chain_of_thought"
+        stub = _PatternRecordingKaizenStub(
+            node_id, "Step 1: multiply. Final Answer: 42"
+        )
+        agent = Agent(
+            agent_id,
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="problem -> reasoning, answer",
+            kaizen_instance=stub,
+        )
+
+        agent.execute_cot(problem="What is 6 * 7?")
+
+        assert stub.dispatched_providers == ["openai"]
+        assert "mock" not in stub.dispatched_providers
+
+    def test_execute_react_dispatches_configured_real_provider(self):
+        agent_id = "react_provider_propagation_agent"
+        node_id = f"{agent_id}_react"
+        stub = _PatternRecordingKaizenStub(
+            node_id, "Thought: research. Final Answer: done"
+        )
+        agent = Agent(
+            agent_id,
+            {"provider": "anthropic", "model": _resolve_default_model()},
+            signature="task -> thought, action, observation",
+            kaizen_instance=stub,
+        )
+
+        agent.execute_react(task="Research topic X")
+
+        assert stub.dispatched_providers == ["anthropic"]
+        assert "mock" not in stub.dispatched_providers
+
+
+class TestDirectConfigMutationDoesNotDesyncGateFromDispatch:
+    """PART A — a direct ``agent.config["provider"] = "mock"`` mutation (the
+    idiom used at ``tests/unit/test_agents_comprehensive.py:307``) bypasses
+    the 3 cache-invalidating mutators (``update_config``/``set_signature``/
+    ``reset``) entirely — it writes straight into the dict those mutators
+    guard. Before PART A, the classifier gate re-derived provider LIVE from
+    `self.config` at classification time, so this direct mutation alone
+    would desync the gate from whatever was ACTUALLY dispatched, silently
+    discarding real output. Threading `dispatched_provider` through the
+    classifier closes this: the gate uses the value ACTUALLY placed in the
+    dispatched node config, which a later direct-dict mutation cannot
+    retroactively change.
+
+    FIX 15 note (Round 5): the 3rd test in this class
+    (``test_direct_mutation_now_reaches_second_dispatch_after_fix15``)
+    exercises the REAL `_execute_with_signature` cache, not the classifier
+    function directly. FIX 15 made that cache provider-aware, so a direct
+    mutation now reaches the very next dispatch instead of leaving it
+    stale — PART A's dispatched-provider-threading remains valid
+    defense-in-depth (the first 2 tests below, which call the classifier
+    directly with an explicit `dispatched_provider`, are unaffected), but
+    the 3rd test's expected OUTCOME changed: the cache no longer goes
+    stale in the first place, so there is nothing left to "correctly
+    survive despite staleness" — the mutation takes effect immediately.
+    """
+
+    def test_direct_mutation_after_dispatch_leaves_gate_using_dispatched_value(self):
+        """Simulates the exact race PART A closes: a REAL dispatch happens
+        under "openai", then — AFTER dispatch-build but BEFORE
+        classification — something mutates `agent.config["provider"]`
+        directly to "mock" (bypassing every cache-invalidating mutator).
+        The classifier MUST still treat this as a REAL-provider result
+        because `dispatched_provider="openai"` was threaded from the
+        ACTUAL dispatch, not re-derived from the (now-mutated) live config.
+        """
+        agent = _make_agent("openai")
+        content = _COLLIDING_REAL_CONTENTS[0]
+        llm_result = {"content": content}
+
+        # Direct dict-write idiom — bypasses update_config()'s invalidation
+        # entirely (there is nothing here for it to invalidate; the point is
+        # the LIVE config now disagrees with what was already dispatched).
+        agent.config["provider"] = "mock"
+
+        # `dispatched_provider="openai"` represents the provider value that
+        # was ACTUALLY placed in the node config at dispatch-build time,
+        # BEFORE the mutation above.
+        result = agent._extract_intelligent_response(
+            llm_result, _DETERMINISTIC_MOCK_INPUTS, dispatched_provider="openai"
+        )
+
+        assert result["answer"] == content.strip(), (
+            "gate must follow the DISPATCHED provider, not the live "
+            "(direct-mutated) config — real content was wrongly discarded"
+        )
+        assert result["answer"] != _DETERMINISTIC_MOCK_ANSWER
+
+    def test_direct_mutation_reaches_fallback_gate_when_no_dispatched_provider(self):
+        """Contrast case: WITHOUT a `dispatched_provider`, the classifier
+        falls back to `_is_mock_provider_active()` (live re-derivation), so
+        the SAME direct mutation DOES flip the gate — this is the
+        documented, intentional fallback behavior for callers that cannot
+        supply the dispatched value, not a bug."""
+        agent = _make_agent("openai")
+        content = _COLLIDING_REAL_CONTENTS[0]
+        llm_result = {"content": content}
+
+        agent.config["provider"] = "mock"
+
+        result = agent._extract_intelligent_response(
+            llm_result, _DETERMINISTIC_MOCK_INPUTS
+        )
+
+        assert result["answer"] == _DETERMINISTIC_MOCK_ANSWER
+        assert agent._is_mock_provider_active() is True
+
+    def test_direct_mutation_now_reaches_second_dispatch_after_fix15(self):
+        """End-to-end variant through the REAL `_execute_with_signature`
+        path. Historically (pre-FIX-15), this test asserted the OPPOSITE
+        of what it asserts now: a direct `agent.config["provider"] =
+        "mock"` mutation (NOT `update_config()`) left the cached
+        `_signature_workflow` — and therefore the ACTUAL dispatch — on the
+        ORIGINAL "openai" provider forever, because the cache was guarded
+        by a bare `hasattr` check with no provider-freshness tracking.
+
+        FIX 15 (Round 5 final-sweep finding — the SAME class of gap as
+        FIX 12/13) closed that: the cache now re-reads
+        `_get_provider_for_config()` (which itself reads LIVE off
+        `self.config`) on every call, so a direct dict mutation is picked
+        up on the very NEXT dispatch, exactly like `update_config()`
+        already was. The SECOND dispatch therefore genuinely occurs under
+        "mock" — and because the dispatched content collides with a known
+        mock-response pattern AND the dispatch is now GENUINELY "mock",
+        the mock-upgrade classifier correctly substitutes it. That is the
+        gate working AS DESIGNED (a genuine mock-provider dispatch with
+        mock-pattern-colliding content SHOULD be substituted) — not the
+        bug the classifier-threading (PART A) fix was closing."""
+        real_content = _COLLIDING_REAL_CONTENTS[0]
+        stub = _RecordingKaizenStub("direct_mutation_agent", real_content)
+        agent = Agent(
+            "direct_mutation_agent",
+            {"provider": "openai", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+
+        # Warm the cache — first dispatch under the real "openai" provider.
+        result1 = agent.execute(question="What changed this quarter?")
+        assert isinstance(result1, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        assert stub.dispatched_providers == ["openai"]
+        assert result1["answer"] == real_content
+
+        # Direct dict mutation — bypasses update_config()'s explicit
+        # invalidation call, but FIX 15's provider-aware memo check picks
+        # up the drift anyway (it re-derives the LIVE resolved provider on
+        # every call, not just at the 3 named mutator call sites).
+        agent.config["provider"] = "mock"
+
+        result2 = agent.execute(question="What changed this quarter?")
+        assert isinstance(result2, dict), (
+            "execute() with a signature MUST return Dict (signature-mode)"
+        )
+        # FIX 15: the cache rebuilds, so the SECOND dispatch genuinely
+        # occurs under "mock" — no longer stuck on the stale "openai".
+        assert stub.dispatched_providers == ["openai", "mock"], (
+            "FIX 15 MUST make a direct provider mutation reach the very "
+            "next dispatch, not leave _signature_workflow stale"
+        )
+        # Content collides with a known mock pattern AND the dispatch is
+        # genuinely "mock" now -> the mock-upgrade gate correctly fires.
+        assert result2["answer"] != real_content
+
+
+class TestCommunicateWithProviderPropagation:
+    """PART B — `communicate_with()` never set `provider` in
+    `communication_params` at all, so every inter-agent communication
+    silently mock-dispatched regardless of the RECEIVING agent's actually
+    configured provider — and (unlike every other LLMAgentNode-param site)
+    this path has NO mock-upgrade gating, so the raw mock template would be
+    returned verbatim as the inter-agent reply. Fixed by setting
+    `communication_params["provider"] = target_agent._get_provider_for_config()`.
+    """
+
+    def test_communicate_with_dispatches_target_agents_real_provider(self):
+        sender = Agent(
+            "comm_sender_agent",
+            {"provider": "mock", "model": _resolve_default_model()},
+        )
+        receiver = Agent(
+            "comm_receiver_agent",
+            {"provider": "openai", "model": _resolve_default_model()},
+        )
+
+        dispatched_providers: list = []
+
+        class _CommRecordingKaizenStub:
+            def execute(self, built_workflow, parameters=None):
+                node_id = f"comm_response_{receiver.name}"
+                node_config = built_workflow.nodes[node_id].config
+                dispatched_providers.append(node_config.get("provider"))
+                return (
+                    {node_id: {"response": {"content": "Acknowledged."}}},
+                    "run-id",
+                )
+
+        sender.kaizen = _CommRecordingKaizenStub()
+
+        response = sender.communicate_with(receiver, "What's your analysis?")
+
+        assert dispatched_providers == ["openai"], (
+            "communicate_with() MUST dispatch under the RECEIVING agent's "
+            "configured provider, not silently fall back to mock"
+        )
+        assert response["message"] == "Acknowledged."
+
+
+class TestCompileWorkflowProviderPropagation:
+    """PART B — `compile_workflow()`'s `node_params` never set `provider`
+    unless `self.config` happened to already carry an explicit key, so an
+    agent relying on env-detected provider resolution (the common case)
+    would silently compile a mock-dispatching node regardless of real API
+    keys present. Fixed by setting `node_params["provider"] =
+    self._get_provider_for_config()` explicitly.
+    """
+
+    def test_compile_workflow_node_carries_real_provider(self):
+        """No explicit `provider` in config — the common case, where
+        `_get_provider_for_config()` auto-detects from ambient API keys.
+        This is precisely the scenario the fix addresses: the pre-fix code
+        only added `provider` to `node_params` via the loop over
+        `self.config.items()` — which only fires when `self.config`
+        ALREADY has an explicit "provider" key. An agent relying on
+        auto-detection (no explicit key) got a `node_params` with NO
+        "provider" key at all, silently falling through to LLMAgentNode's
+        own "mock" parameter default regardless of real API keys present.
+        Asserting `"provider" in node_config` (rather than pinning a
+        specific provider string) keeps this test environment-independent:
+        it fails pre-fix regardless of which/whether an API key happens to
+        be configured in the ambient environment.
+        """
+        agent = Agent(
+            "compile_workflow_provider_agent",
+            {"model": _resolve_default_model()},  # NO explicit "provider"
+        )
+        expected_provider = agent._get_provider_for_config()
+
+        workflow = agent.compile_workflow()
+
+        # `workflow` is an UNBUILT `WorkflowBuilder` — `.nodes[id]` is a
+        # dict-shaped spec (`{"type": ..., "config": ...}`), NOT the
+        # pydantic `NodeInstance` a BUILT `Workflow.nodes[id]` would be
+        # (see `_RecordingKaizenStub` above re: that distinction).
+        node_config = workflow.nodes[agent.agent_id]["config"]
+        assert "provider" in node_config, (
+            "compile_workflow() node_params MUST carry an explicit "
+            "'provider' key even when self.config has none — omitting it "
+            'silently falls through to LLMAgentNode\'s own "mock" default'
+        )
+        assert node_config["provider"] == expected_provider
+
+
+class TestMultiModalSignatureCompilerProviderPropagation:
+    """ADDITIONAL sibling finding (same class, discovered during the Part B
+    LLMAgentNode-param-building sweep, fixed in the SAME PR per
+    rules/security.md "Multi-Site Kwarg Plumbing"):
+    `SignatureCompiler._create_llm_agent_params` (used by
+    `compile_to_workflow_config()` / `Agent.compile_to_workflow()` for
+    multi-modal signatures) hardcoded `config.get("provider", "mock")` — a
+    signature config with NO explicit "provider" key silently
+    mock-dispatched regardless of real API keys present. Fixed to mirror
+    `Agent._get_provider_for_config()`'s env-first detection.
+    """
+
+    def test_create_llm_agent_params_uses_env_detected_provider(
+        self, monkeypatch, _env_serialized
+    ):
+        """Deterministic regardless of ambient environment: this repo's root
+        ``conftest.py`` actively SCRUBS ``OPENAI_API_KEY``/``ANTHROPIC_API_KEY``
+        from ``os.environ`` for every bare test run (LLM cost-guard) — so
+        asserting against whatever the ambient env happens to hold would
+        pass identically for BOTH the buggy hardcoded-"mock" code and the
+        fixed env-detecting code (both resolve to "mock" when no key is
+        visible). Injecting a fake key via ``monkeypatch.setenv`` AFTER
+        collection — when the test body actually runs — makes the key
+        genuinely visible to `os.environ.get(...)`, giving the assertion
+        real discriminating power between fixed and buggy behavior.
+        """
+        from kaizen.signatures.core import Signature, SignatureCompiler
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-fake-key")
+
+        compiler = SignatureCompiler()
+        config = {"model": _resolve_default_model()}  # NO explicit "provider"
+
+        node_params = compiler._create_llm_agent_params(
+            signature_obj=Signature(inputs=["question"], outputs=["answer"]),
+            config=config,
+        )
+
+        assert node_params["provider"] == "anthropic"
+
+    def test_create_llm_agent_params_explicit_provider_wins(self):
+        from kaizen.signatures.core import Signature, SignatureCompiler
+
+        compiler = SignatureCompiler()
+        config = {"model": _resolve_default_model(), "provider": "anthropic"}
+
+        node_params = compiler._create_llm_agent_params(
+            signature_obj=Signature(inputs=["question"], outputs=["answer"]),
+            config=config,
+        )
+
+        assert node_params["provider"] == "anthropic"
+
+
+class _FakeNexusAgentConfig:
+    """Minimal stand-in for the config object `NexusDeploymentMixin.to_workflow()`
+    reads (`llm_provider`, `model`, `temperature`) — avoids depending on the
+    full `BaseAgentConfig` dataclass construction path for a mixin-only test.
+    """
+
+    def __init__(self, llm_provider=None, model=None, temperature=0.7):
+        self.llm_provider = llm_provider
+        self.model = model
+        self.temperature = temperature
+
+
+class TestNexusDeploymentMixinProviderKey:
+    """FIX 5 — `NexusDeploymentMixin.to_workflow()` (kaizen/integrations/
+    nexus/base.py) passed `"llm_provider"` to `add_node("LLMAgentNode",
+    ...)`. LLMAgentNode's declared NodeParameter is named `"provider"` — it
+    never reads `"llm_provider"` — so even an EXPLICITLY configured real
+    provider was silently ignored and the node fell through to
+    LLMAgentNode's own `"mock"` parameter default. A publicly-exported
+    deployment mixin serving mock output to real requests. Fixed to emit
+    `"provider"`, falling back to the same openai/anthropic/mock env-first
+    order `Agent._get_provider_for_config()` uses when `llm_provider` is
+    unset (never leaves an unset/None provider — that re-defaults to mock).
+    """
+
+    class _NexusOnlyAgent:
+        """Uses ONLY the mixin's `to_workflow()` via explicit delegation —
+        NOT via inheriting `NexusDeploymentMixin` alongside `BaseAgent`.
+        A class combining `(BaseAgent, NexusDeploymentMixin)` resolves
+        `to_workflow()` to `BaseAgent`'s own (separately-fixed, already
+        correct) implementation via MRO, masking this exact bug — see
+        `tests/unit/integrations/test_nexus_base_classes.py
+        ::test_workflow_preserves_llm_config`, which unintentionally
+        exercises `BaseAgent.to_workflow()`, never the mixin's.
+        """
+
+        def __init__(self, config):
+            self.config = config
+            self.signature = None
+
+        def _build_system_prompt(self):
+            from kaizen.integrations.nexus.base import NexusDeploymentMixin
+
+            return NexusDeploymentMixin._build_system_prompt(self)
+
+        def to_workflow(self):
+            from kaizen.integrations.nexus.base import NexusDeploymentMixin
+
+            return NexusDeploymentMixin.to_workflow(self)
+
+    @staticmethod
+    def _llm_agent_node_config(agent) -> dict:
+        # Deliberately do NOT `.build()`: the BUILT `Workflow.nodes[id]` is a
+        # pydantic `NodeInstance` that auto-fills every declared NodeParameter
+        # default (including "provider": "mock") for keys the raw params dict
+        # never set — which would make a MISSING "provider" key
+        # indistinguishable from an explicit one and defeat this exact
+        # regression check. The UNBUILT `WorkflowBuilder.nodes[id]["config"]`
+        # is the raw dict passed to `add_node(...)`, with no auto-fill.
+        workflow = agent.to_workflow()
+        node_id = next(iter(workflow.nodes))
+        assert workflow.nodes[node_id]["type"] == "LLMAgentNode"
+        return workflow.nodes[node_id]["config"]
+
+    def test_explicit_provider_uses_provider_key_not_llm_provider(self):
+        agent = self._NexusOnlyAgent(_FakeNexusAgentConfig(llm_provider="anthropic"))
+
+        node_config = self._llm_agent_node_config(agent)
+
+        assert node_config.get("provider") == "anthropic", (
+            "NexusDeploymentMixin.to_workflow() MUST pass the real provider "
+            "under the 'provider' key — LLMAgentNode never reads 'llm_provider'"
+        )
+        assert "llm_provider" not in node_config
+
+    def test_unset_provider_falls_back_to_env_detection(self):
+        agent = self._NexusOnlyAgent(_FakeNexusAgentConfig(llm_provider=None))
+
+        node_config = self._llm_agent_node_config(agent)
+
+        assert "provider" in node_config, (
+            "the RAW (unbuilt) node params MUST carry an explicit 'provider' "
+            "key even when llm_provider is unset — omitting it silently "
+            "falls through to LLMAgentNode's own 'mock' parameter default"
+        )
+        assert node_config["provider"] is not None, (
+            "an unset llm_provider MUST resolve via env-detection, never "
+            "leave provider=None (which re-defaults to LLMAgentNode's mock)"
+        )
+        assert "llm_provider" not in node_config
+
+
+class TestBaseAgentToWorkflowProviderKey:
+    """FIX 6 — `BaseAgent.to_workflow()` (kaizen/core/base_agent.py) set
+    `node_config["provider"]` ONLY when `self.config.llm_provider is not
+    None`. `BaseAgentConfig` (kaizen/core/config.py, NOT agent_config.py)
+    has NO provider auto-detection of its own, so `BaseAgent(model="...")`
+    constructed with no explicit provider omitted the "provider" key
+    entirely, silently falling through to LLMAgentNode's own "mock"
+    parameter default. Reachable in production via Nexus
+    `deploy_as_api`/`deploy_as_cli`/`deploy_as_mcp`
+    (`kaizen/integrations/nexus/deployment.py`). Fixed to always emit an
+    explicit "provider" key, env-detecting when unset.
+    """
+
+    @staticmethod
+    def _llm_agent_node_config(agent) -> dict:
+        # Deliberately do NOT `.build()` — see the identical comment in
+        # `TestNexusDeploymentMixinProviderKey._llm_agent_node_config`: the
+        # BUILT `NodeInstance` auto-fills LLMAgentNode's declared "provider"
+        # NodeParameter default ("mock") for any key the raw params dict
+        # never set, which would make a MISSING "provider" key
+        # indistinguishable from an explicit one.
+        workflow = agent.to_workflow()
+        node_id = next(iter(workflow.nodes))
+        assert workflow.nodes[node_id]["type"] == "LLMAgentNode"
+        return workflow.nodes[node_id]["config"]
+
+    def test_no_explicit_provider_still_emits_provider_key(self):
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.config import BaseAgentConfig
+
+        config = BaseAgentConfig(llm_provider=None, model=_resolve_default_model())
+        agent = BaseAgent(config=config)
+
+        node_config = self._llm_agent_node_config(agent)
+
+        assert "provider" in node_config, (
+            "BaseAgent.to_workflow() MUST always emit an explicit 'provider' "
+            "key, even with no configured llm_provider — omitting it "
+            "silently falls through to LLMAgentNode's own 'mock' default"
+        )
+        assert node_config["provider"] is not None
+
+    def test_explicit_provider_is_preserved(self):
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.config import BaseAgentConfig
+
+        config = BaseAgentConfig(
+            llm_provider="anthropic", model=_resolve_default_model()
+        )
+        agent = BaseAgent(config=config)
+
+        node_config = self._llm_agent_node_config(agent)
+
+        assert node_config["provider"] == "anthropic"
+
+
+class TestDeploymentCacheKeyProviderResolution:
+    """FIX 8 — `DeploymentCache.create_cache_key` (kaizen/integrations/nexus/
+    deployment_cache.py) hashed the RAW `llm_provider` attribute, not the
+    RESOLVED provider `to_workflow()` would actually dispatch to.
+    `deploy_as_api`/`deploy_as_cli`/`deploy_as_mcp` (deployment.py, default
+    `use_cache=True`) check the cache key BEFORE ever calling
+    `agent.to_workflow()` — on a cache hit, `to_workflow()` never runs at
+    all. When `llm_provider` is None (the common auto-detect case FIX5/
+    FIX6 target), the OLD key was IDENTICAL regardless of ambient key
+    availability. Scenario this closes: process starts with no keys ->
+    deploy caches a `provider="mock"` workflow under a `llm_provider=None`
+    key -> real keys are injected into the SAME long-lived process later
+    -> a re-deploy hits the SAME stale key -> serves mock to real requests
+    forever. Fixed by hashing the RESOLVED provider (`llm_provider or
+    detect_provider_from_env()` — the SAME resolution `to_workflow()`
+    uses), so the key changes the moment ambient key availability changes.
+    """
+
+    class _FakeAgent:
+        """Minimal stand-in exposing exactly what `create_cache_key` reads
+        (`agent.config.llm_provider`, `agent.config.model`,
+        `agent.signature`) — avoids depending on the full `BaseAgentConfig`
+        construction path for a cache-key-only test."""
+
+        def __init__(self, llm_provider=None, model=None):
+            self.config = _FakeNexusAgentConfig(llm_provider=llm_provider, model=model)
+            self.signature = None
+
+    def test_cache_key_differs_when_ambient_provider_availability_changes(
+        self, monkeypatch, _env_serialized
+    ):
+        from kaizen.integrations.nexus.deployment_cache import DeploymentCache
+
+        agent = self._FakeAgent(llm_provider=None, model=_resolve_default_model())
+
+        # No real API keys present (cleared by `_env_serialized`) -> the
+        # resolved provider is "mock".
+        key_no_keys = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        # Inject a real key AFTER the first key was computed — the SAME
+        # agent object, SAME `llm_provider=None` — now resolves to "openai".
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        key_with_openai_key = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        assert key_no_keys != key_with_openai_key, (
+            "cache key MUST change when ambient provider availability "
+            "changes for an agent with no explicit llm_provider — "
+            "otherwise a cache hit serves a stale mock-dispatching "
+            "workflow forever after real keys are injected into the "
+            "same long-lived process"
+        )
+
+    def test_cache_key_stable_when_explicit_provider_set_regardless_of_env(
+        self, monkeypatch, _env_serialized
+    ):
+        """Contrast case: an EXPLICIT `llm_provider` MUST NOT be
+        second-guessed by ambient env — the cache key stays stable
+        regardless of what keys happen to be present, matching
+        `to_workflow()`'s own explicit-wins precedence."""
+        from kaizen.integrations.nexus.deployment_cache import DeploymentCache
+
+        agent = self._FakeAgent(
+            llm_provider="anthropic", model=_resolve_default_model()
+        )
+
+        key_no_keys = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+        key_with_openai_key = DeploymentCache.create_cache_key(agent, "my_workflow")
+
+        assert key_no_keys == key_with_openai_key
+
+
+class TestToNodeConfigProviderKey:
+    """FIX 9 — `Agent.to_node_config()` (kaizen/core/agents.py) returned
+    ``{"config": self.config.copy(), ...}`` with NO provider resolution —
+    the SAME LLMAgentNode-param-building bug class as the 6+ sites already
+    fixed elsewhere in the Agent surface. A consumer feeding this dict
+    straight to `add_node(...)` would silently mock-dispatch a
+    real-provider agent. Fixed via
+    ``resolved.setdefault("provider", self._get_provider_for_config())``.
+    """
+
+    def test_to_node_config_carries_explicit_provider(self):
+        agent = _make_agent("anthropic")
+
+        node_config = agent.to_node_config()
+
+        assert "provider" in node_config["config"]
+        assert node_config["config"]["provider"] == "anthropic"
+
+    def test_to_node_config_consumer_built_node_dispatches_real_provider(self):
+        """Mirrors `TestCompileWorkflowProviderPropagation`: a consumer
+        that feeds `to_node_config()`'s output straight into
+        `add_node(...)` MUST see the real resolved provider, not silently
+        fall through to LLMAgentNode's own "mock" default."""
+        from kailash.workflow.builder import WorkflowBuilder
+
+        agent = _make_agent("anthropic")
+        node_config = agent.to_node_config()
+
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            node_config["type"], node_config["agent_id"], node_config["config"]
+        )
+
+        built_node_config = workflow.nodes[node_config["agent_id"]]["config"]
+        assert built_node_config["provider"] == "anthropic"
+
+    def test_to_node_config_no_explicit_provider_env_detects(self):
+        """No explicit "provider" in config — the auto-detect case FIX 9
+        targets. Asserts against `agent._get_provider_for_config()`
+        (computed the SAME way, at the SAME env state) rather than a
+        pinned literal, so the test stays environment-independent (this
+        repo's root conftest actively scrubs OPENAI_API_KEY/
+        ANTHROPIC_API_KEY for a bare test run)."""
+        agent = Agent(
+            "to_node_config_no_provider_agent",
+            {"model": _resolve_default_model()},  # NO explicit "provider"
+        )
+        expected_provider = agent._get_provider_for_config()
+
+        node_config = agent.to_node_config()
+
+        assert "provider" in node_config["config"]
+        assert node_config["config"]["provider"] == expected_provider
+
+
+class TestBaseAgentToWorkflowMemoRebuildsOnProviderDrift:
+    """FIX 12 — `BaseAgent.to_workflow()` (kaizen/core/base_agent.py)
+    memoized `self._workflow` on first build with the THEN-resolved
+    provider baked in, and `self._workflow` was only reset by `cleanup()`
+    — never by a config OR ambient-env change. Because provider resolution
+    is env-dependent (FIX 6: `llm_provider or detect_provider_from_env()`),
+    the memo could go stale: process starts with no keys -> to_workflow()
+    builds+memoizes provider="mock" -> a real key is injected into the
+    SAME long-lived process -> the SAME agent's NEXT to_workflow() call
+    returned the STALE mock-dispatching memo — even through
+    `deploy_as_api`, even after `clear_deployment_cache()` (FIX 8 alone
+    cannot fix this; it only makes the CACHE KEY track the resolved
+    provider, it does not make `to_workflow()` itself re-resolve). Fixed
+    by tracking `self._workflow_provider` (the provider the memo was BUILT
+    with) and trusting the memo ONLY when it still matches the CURRENT
+    resolved provider.
+    """
+
+    @staticmethod
+    def _llm_agent_node_config(workflow) -> dict:
+        node_id = next(iter(workflow.nodes))
+        assert workflow.nodes[node_id]["type"] == "LLMAgentNode"
+        return workflow.nodes[node_id]["config"]
+
+    def test_memo_rebuilds_when_ambient_provider_drifts(
+        self, monkeypatch, _env_serialized
+    ):
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.config import BaseAgentConfig
+
+        config = BaseAgentConfig(llm_provider=None, model=_resolve_default_model())
+        agent = BaseAgent(config=config)
+
+        # No real keys present (cleared by `_env_serialized`) -> resolves
+        # to "mock" and memoizes it.
+        wf1 = agent.to_workflow()
+        node1 = self._llm_agent_node_config(wf1)
+        assert node1["provider"] == "mock"
+
+        # Inject a real key AFTER the first build — the SAME agent
+        # instance, SAME llm_provider=None (no `update_config`/config
+        # mutation of any kind — purely an ambient env change).
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+
+        wf2 = agent.to_workflow()
+        node2 = self._llm_agent_node_config(wf2)
+        assert node2["provider"] == "openai", (
+            "to_workflow() MUST rebuild (not return the stale memo) when "
+            "the resolved provider drifts due to an ambient env change"
+        )
+        assert wf1 is not wf2, (
+            "a provider-drifted call MUST NOT reuse the old memo object"
+        )
+
+    def test_memo_reused_when_provider_stable(self, monkeypatch, _env_serialized):
+        """Perf-benefit check (no regression): the memo IS still reused
+        (SAME object, no rebuild) across repeated calls when the resolved
+        provider does NOT change."""
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.config import BaseAgentConfig
+
+        config = BaseAgentConfig(
+            llm_provider="anthropic", model=_resolve_default_model()
+        )
+        agent = BaseAgent(config=config)
+
+        wf1 = agent.to_workflow()
+        wf2 = agent.to_workflow()
+        wf3 = agent.to_workflow()
+
+        assert wf1 is wf2 is wf3, (
+            "stable-provider case MUST still memoize (no perf regression) — "
+            "the fix rebuilds ONLY on provider drift, not on every call"
+        )
+
+
+class TestCompileWorkflowMemoRebuildsOnProviderDrift:
+    """FIX 13 — the SAME class of gap as FIX 12, one layer up:
+    `Agent.compile_workflow()` (kaizen/core/agents.py) — and the `.workflow`
+    property, which used to bypass `compile_workflow()`'s check entirely
+    once `_is_compiled` was True — trusted the `_is_compiled`/`_workflow`
+    memo regardless of whether the resolved provider had drifted since the
+    memo was built. `update_config()`/`set_signature()`/`reset()` already
+    invalidated the memo for EXPLICIT config changes; this closes the
+    AMBIENT-env-drift path those mutators cannot see. Fixed via the same
+    `self._workflow_provider` tracking pattern as FIX 12, and by making
+    `.workflow` ALWAYS route through `compile_workflow()` instead of
+    returning `self._workflow` directly.
+    """
+
+    @staticmethod
+    def _llm_agent_node_config(agent, workflow) -> dict:
+        return workflow.nodes[agent.agent_id]["config"]
+
+    def test_compile_workflow_rebuilds_when_ambient_provider_drifts(
+        self, monkeypatch, _env_serialized
+    ):
+        agent = Agent(
+            "compile_workflow_drift_agent",
+            {"model": _resolve_default_model()},  # NO explicit "provider"
+        )
+
+        wf1 = agent.compile_workflow()
+        node1 = self._llm_agent_node_config(agent, wf1)
+        assert node1["provider"] == "mock"
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+
+        wf2 = agent.compile_workflow()
+        node2 = self._llm_agent_node_config(agent, wf2)
+        assert node2["provider"] == "openai", (
+            "compile_workflow() MUST rebuild (not return the stale memo) "
+            "when the resolved provider drifts due to an ambient env change"
+        )
+        assert wf1 is not wf2
+
+    def test_workflow_property_rebuilds_when_ambient_provider_drifts(
+        self, monkeypatch, _env_serialized
+    ):
+        """Same scenario through the `.workflow` property specifically —
+        it used to short-circuit straight to `self._workflow` once
+        `_is_compiled` was True, bypassing any memo check at all."""
+        agent = Agent(
+            "workflow_property_drift_agent",
+            {"model": _resolve_default_model()},
+        )
+
+        wf1 = agent.workflow
+        node1 = self._llm_agent_node_config(agent, wf1)
+        assert node1["provider"] == "mock"
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+
+        wf2 = agent.workflow
+        node2 = self._llm_agent_node_config(agent, wf2)
+        assert node2["provider"] == "openai", (
+            "the .workflow property MUST rebuild on provider drift, not "
+            "short-circuit to the stale self._workflow"
+        )
+
+    def test_compile_workflow_memo_reused_when_provider_stable(self):
+        """Perf-benefit check (no regression): repeated calls with a
+        STABLE resolved provider reuse the SAME memo object."""
+        agent = _make_agent("anthropic")
+
+        wf1 = agent.compile_workflow()
+        wf2 = agent.compile_workflow()
+        wf3 = agent.workflow
+
+        assert wf1 is wf2 is wf3, (
+            "stable-provider case MUST still memoize (no perf regression)"
+        )
+
+
+class TestExecuteWithSignatureCacheRebuildsOnProviderDrift:
+    """FIX 15 — a THIRD memoization site with the SAME class of gap as
+    FIX 12/13, surfaced by Round 5's mandated FINAL EXHAUSTIVE RE-SWEEP:
+    `Agent._execute_with_signature()`'s `self._signature_workflow` cache
+    (kaizen/core/agents.py) was guarded by a bare `hasattr(self,
+    "_signature_workflow")` check — "was a signature-workflow already
+    built", never "is it still valid". `update_config()`/`set_signature()`/
+    `reset()` already invalidate it for EXPLICIT config mutations (Round 2
+    FIX 1), but an AMBIENT env-provider change (a real key injected into a
+    long-lived process, with NO explicit mutator call) left the cache
+    trusted forever — not merely a mock-upgrade-gate misclassification
+    (PART A's `dispatched_provider` threading already keeps that gate
+    honest against whatever's dispatched), but every subsequent
+    signature-execution DISPATCH itself never advancing past the provider
+    resolved at first build. Fixed via the same `self.
+    _signature_workflow_provider` tracking pattern as FIX 12/13.
+    """
+
+    def test_execute_with_signature_rebuilds_when_ambient_provider_drifts(
+        self, monkeypatch, _env_serialized
+    ):
+        real_content = "Quarterly revenue increased 8 percent due to expanded partner integrations and reduced customer churn."
+        stub = _RecordingKaizenStub("ambient_drift_signature_agent", real_content)
+        agent = Agent(
+            "ambient_drift_signature_agent",
+            {"model": _resolve_default_model()},  # NO explicit "provider"
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+
+        # No real keys present (cleared by `_env_serialized`) -> resolves
+        # to "mock" and memoizes `_signature_workflow` under "mock".
+        result1 = agent.execute(question="What changed?")
+        assert stub.dispatched_providers == ["mock"]
+        assert result1["answer"] == real_content
+
+        # Inject a real key AFTER the first dispatch — the SAME agent
+        # instance, NO explicit update_config()/set_signature()/reset()
+        # call — purely an ambient env change.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake-key")
+
+        result2 = agent.execute(question="What changed?")
+        assert stub.dispatched_providers == ["mock", "openai"], (
+            "_execute_with_signature() MUST rebuild the stale "
+            "_signature_workflow cache (not keep dispatching under the "
+            "provider resolved at first build) when the resolved "
+            "provider drifts due to an ambient env change"
+        )
+        assert result2["answer"] == real_content
+
+    def test_execute_with_signature_cache_reused_when_provider_stable(self):
+        """Perf-benefit check (no regression): repeated calls with a
+        STABLE resolved provider reuse the SAME cached signature-workflow
+        object (no rebuild on every call)."""
+        real_content = "Quarterly revenue increased 8 percent due to expanded partner integrations and reduced customer churn."
+        stub = _RecordingKaizenStub("stable_signature_agent", real_content)
+        agent = Agent(
+            "stable_signature_agent",
+            {"provider": "anthropic", "model": _resolve_default_model()},
+            signature="question -> answer",
+            kaizen_instance=stub,
+        )
+
+        agent.execute(question="q1")
+        cached_workflow_after_first = agent._signature_workflow
+        agent.execute(question="q2")
+        cached_workflow_after_second = agent._signature_workflow
+
+        assert cached_workflow_after_first is cached_workflow_after_second, (
+            "stable-provider case MUST still reuse the cached "
+            "_signature_workflow (no perf regression)"
+        )
+        assert stub.dispatched_providers == ["anthropic", "anthropic"]

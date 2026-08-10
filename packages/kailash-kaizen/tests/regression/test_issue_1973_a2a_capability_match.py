@@ -324,10 +324,17 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
     successful match (``zero-tolerance.md`` Rule 3), and CACHING it so the
     transient failure became permanent for the process.
 
-    The score contract is unchanged (0.0 is still returned — the bridges
-    deliberately absorb a single judge failure rather than sink a whole
-    selection round). What changes is that the degradation is now loud and
-    uncached. The underlying structured-output gap is a separate defect.
+    #1981 SUPERSEDED the RETURN half of this contract: a degraded judgment now
+    raises ``ReasoningDegradedError`` instead of returning a fabricated 0.0. A
+    WARN line is not reachable by a caller, so 0.0 stayed indistinguishable
+    from a genuine no-match and ranking stayed arbitrary — the very defect the
+    paragraph above describes.
+
+    What this class still pins is the OBSERVABILITY half: the degradation is
+    loud (a ``*.degraded`` WARN carrying the underlying error) and is NOT
+    cached, so a transient failure never becomes permanent for the process.
+    Those assertions are the teeth of this class and are unchanged. The return
+    contract now lives in ``test_issue_1981_reasoning_structured_output.py``.
     """
 
     @pytest.fixture
@@ -355,7 +362,11 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
     def test_unparseable_capability_response_warns_and_is_not_cached(
         self, monkeypatch, caplog, _clear_cache
     ):
-        from kaizen.llm.reasoning import _CACHE, llm_capability_match
+        from kaizen.llm.reasoning import (
+            _CACHE,
+            ReasoningDegradedError,
+            llm_capability_match,
+        )
 
         config = self._stub_agent(
             monkeypatch,
@@ -367,14 +378,15 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
         )
 
         with caplog.at_level(logging.WARNING, logger="kaizen.llm.reasoning"):
-            score = llm_capability_match(
-                capability_name="python",
-                capability_description="writes python",
-                requirement="build an API",
-                config=config,
-            )
+            # #1981: the degradation is RAISED, not returned as a fake 0.0.
+            with pytest.raises(ReasoningDegradedError):
+                llm_capability_match(
+                    capability_name="python",
+                    capability_description="writes python",
+                    requirement="build an API",
+                    config=config,
+                )
 
-        assert score == 0.0  # contract unchanged
         degraded = [
             r
             for r in caplog.records
@@ -393,22 +405,21 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
     def test_missing_score_key_is_also_treated_as_degraded(
         self, monkeypatch, caplog, _clear_cache
     ):
-        from kaizen.llm.reasoning import llm_capability_match
+        from kaizen.llm.reasoning import ReasoningDegradedError, llm_capability_match
 
         # No explicit "error" key — just an absent match_score. Still degraded.
         config = self._stub_agent(
             monkeypatch, "get_capability_match_agent", {"response": "some prose"}
         )
         with caplog.at_level(logging.WARNING, logger="kaizen.llm.reasoning"):
-            assert (
+            # #1981: an absent match_score raises rather than fabricating 0.0.
+            with pytest.raises(ReasoningDegradedError):
                 llm_capability_match(
                     capability_name="python",
                     capability_description="writes python",
                     requirement="build an API",
                     config=config,
                 )
-                == 0.0
-            )
         assert [
             r
             for r in caplog.records
@@ -442,13 +453,19 @@ class TestReasoningHelpersDoNotReportDegradedAsOk:
     ):
         # Multi-site parity: the two helpers share one failure shape and must
         # not drift (security.md § Multi-Site Kwarg Plumbing).
-        from kaizen.llm.reasoning import _CACHE, llm_text_similarity
+        from kaizen.llm.reasoning import (
+            _CACHE,
+            ReasoningDegradedError,
+            llm_text_similarity,
+        )
 
         config = self._stub_agent(
             monkeypatch, "get_text_similarity_agent", {"error": "JSON_PARSE_FAILED"}
         )
         with caplog.at_level(logging.WARNING, logger="kaizen.llm.reasoning"):
-            assert llm_text_similarity(text_a="a", text_b="b", config=config) == 0.0
+            # #1981: sibling parity — the similarity helper raises too.
+            with pytest.raises(ReasoningDegradedError):
+                llm_text_similarity(text_a="a", text_b="b", config=config)
 
         assert [
             r

@@ -23,7 +23,12 @@ from .buffer import BufferMemory
 
 # Conversation memory
 from .conversation_base import KaizenMemory
-from .enterprise import EnterpriseMemorySystem, MemoryMonitor, MemorySystemConfig
+from .enterprise import (
+    GLOBAL_SCOPE,
+    EnterpriseMemorySystem,
+    MemoryMonitor,
+    MemorySystemConfig,
+)
 from .knowledge_graph import KnowledgeGraphMemory
 
 # Persistence backends
@@ -45,6 +50,7 @@ __all__ = [
     "ColdMemoryTier",
     "TierManager",
     "EnterpriseMemorySystem",
+    "GLOBAL_SCOPE",
     "MemorySystemConfig",
     "MemoryMonitor",
     # Individual conversation memory

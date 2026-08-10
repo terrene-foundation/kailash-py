@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-nexus"
-version = "2.15.0"
+version = "2.16.0"
 description = "Zero-configuration multi-channel workflow orchestration platform"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -36,7 +36,12 @@ dependencies = [
     # Tag-push CI installs `kailash` from PyPI before the new release is
     # published, so `kailash[server]` would silently drop the extra.
     # Direct declaration is dialect-stable across the release boundary.
-    "kailash>=2.62.0",  # WorkflowServer.deregister_workflow (nexus 2.15.0 redeploy, #1959)
+    # 2.63.0 for kailash.utils.secure_logging.safe_callable_name /
+    # safe_exception_frames: the resolver + endpoint-registration log sinks
+    # import them, so an older kailash makes `import nexus` fail at startup
+    # rather than degrade. ONE shared helper, not a per-package copy — a
+    # security helper duplicated across packages is guaranteed to drift.
+    "kailash>=2.63.0",  # safe_callable_name/safe_exception_frames; WorkflowServer.deregister_workflow (#1959)
     # Server middleware stack (matches kailash[server] contents).
     "fastapi>=0.104.0",
     "starlette>=0.36.0",

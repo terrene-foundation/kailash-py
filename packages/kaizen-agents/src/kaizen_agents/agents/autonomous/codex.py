@@ -61,6 +61,7 @@ from typing import Any
 
 from kaizen.signatures import Signature
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 logger = logging.getLogger(__name__)
@@ -327,7 +328,7 @@ class CodexAgent(BaseAutonomousAgent):
             return content
 
         except Exception as e:
-            logger.error(f"Error loading AGENTS.md: {e}")
+            logger.error(f"Error loading AGENTS.md: {scrub_remote_error(e)}")
             return ""
 
     async def _test_and_iterate(self) -> bool:
@@ -672,9 +673,11 @@ class CodexAgent(BaseAutonomousAgent):
                     inputs["observation"] = cycle_result["observation"]
 
             except Exception as e:
-                logger.error(f"Error in cycle {self.cycle_count}: {e}")
+                logger.error(
+                    f"Error in cycle {self.cycle_count}: {scrub_remote_error(e)}"
+                )
                 final_result = {
-                    "error": str(e),
+                    "error": scrub_remote_error(e),
                     "status": "failed",
                     "cycle": self.cycle_count,
                 }

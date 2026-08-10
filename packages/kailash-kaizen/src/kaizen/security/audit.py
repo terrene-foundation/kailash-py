@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,11 +169,27 @@ class AuditTrailProvider:
                     resource=f"kaizen.security:{event_id}",
                     details={"result": result, **(metadata or {})},
                 )
-            except Exception:
+            except Exception as exc:
+                # ``exc_info`` DROPPED, scrubbed detail added in its place.
+                # The message was already clean (an event id), but the failing
+                # call is a WRITE to the canonical audit STORE -- a driver or
+                # transport error there embeds the store's DSN, and the
+                # traceback rendered it verbatim.
+                #
+                # An audit sink is the worst place to leave this: it is the one
+                # surface whose whole purpose is to be retained, shipped and
+                # read widely, so a credential here has the longest half-life
+                # and the least chance of being noticed.
+                #
+                # The scrubbed message REPLACES the traceback rather than
+                # merely removing it -- dropping ``exc_info`` with nothing in
+                # its place would trade a leak for a blind spot on the forward
+                # path (zero-tolerance.md Rule 3 cuts both ways).
                 logger.warning(
-                    "audit.canonical_forward_failed event_id=%s",
+                    "audit.canonical_forward_failed event_id=%s error=%s error_type=%s",
                     event_id,
-                    exc_info=True,
+                    scrub_remote_error(exc),
+                    type(exc).__name__,
                 )
 
         return event_id

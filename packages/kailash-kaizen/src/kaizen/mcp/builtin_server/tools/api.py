@@ -175,6 +175,11 @@ def _make_http_request(
             - error (str, optional): Error message if request failed
             - warning (str, optional): Warning if response was truncated
     """
+    # Imported lazily (not at module scope) so loading the builtin MCP server
+    # does not drag in the whole ``kaizen.nodes.ai`` package __init__ — the
+    # graceful-degradation constraint documented at core/agent_loop.py:29.
+    from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
     headers = headers or {}
 
     # Security validation: URL
@@ -236,13 +241,17 @@ def _make_http_request(
 
             return result
 
+    # The caller supplies `headers` (commonly `Authorization: Bearer ...`) and a
+    # URL that may embed userinfo/query credentials; urllib echoes both into its
+    # exception text. Every `error` field below crosses back to the MCP client,
+    # so each routes through the sanitizer (#1970 sweep).
     except HTTPError as e:
         return {
             "status_code": e.code,
             "body": e.read().decode("utf-8") if e.fp else "",
             "headers": dict(e.headers) if e.headers else {},
             "success": False,
-            "error": str(e),
+            "error": sanitize_provider_error(e, "HTTP request"),
         }
 
     except URLError as e:
@@ -251,7 +260,7 @@ def _make_http_request(
             "body": "",
             "headers": {},
             "success": False,
-            "error": str(e.reason),
+            "error": sanitize_provider_error(e, "HTTP request"),
         }
 
     except Exception as e:
@@ -260,7 +269,7 @@ def _make_http_request(
             "body": "",
             "headers": {},
             "success": False,
-            "error": str(e),
+            "error": sanitize_provider_error(e, "HTTP request"),
         }
 
 

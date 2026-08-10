@@ -22,6 +22,8 @@ from kailash.nodes.auth.enterprise_auth_provider import (
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -254,7 +256,9 @@ Example output:
 
         except Exception as e:
             logger.warning(
-                f"AI fraud detection failed for {user_id}, falling back to rule-based: {e}"
+                "AI fraud detection failed for %s, falling back to rule-based: %s",
+                user_id,
+                sanitize_provider_error(e, "LLM"),
             )
             # Fallback to Core SDK rule-based assessment
             return await super()._ai_risk_assessment(

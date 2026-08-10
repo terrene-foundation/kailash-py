@@ -214,7 +214,13 @@ class TestMCPServer:
             assert test_function() == "test"
 
     def test_tool_decorator_with_permission(self):
-        """Test tool decorator with permission requirements."""
+        """Test tool decorator with permission requirements.
+
+        The registry stores permissions as a normalized tuple (never a bare
+        string), so both a single-permission tool and a multi-permission
+        tool share one representation enforced by AuthManager._authorize
+        checking every entry.
+        """
         server = MCPServer("test-server")
 
         @server.tool(required_permission="admin.execute")
@@ -223,7 +229,7 @@ class TestMCPServer:
 
         # Check that permission info was stored
         tool_info = server._tool_registry["test_function"]
-        assert tool_info["required_permission"] == "admin.execute"
+        assert tool_info["required_permission"] == ("admin.execute",)
 
     def test_resource_decorator_basic(self):
         """Test basic resource decorator functionality."""

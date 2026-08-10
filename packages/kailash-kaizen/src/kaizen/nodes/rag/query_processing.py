@@ -28,6 +28,9 @@ from kailash.nodes.code.python import PythonCodeNode  # noqa: F401
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
+from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 # Module-scope import retained as the monkeypatch target for the
 # integration test fixture `deterministic_llm` at
 # tests/integration/rag/test_query_processing_nodes.py — the fixture
@@ -39,7 +42,6 @@ from kailash.workflow.graph import Workflow
 # namespace. The static-analyzer "unused import" finding is a known
 # false-positive for monkeypatch-target imports.
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
-from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -1733,7 +1735,14 @@ class QueryIntentClassifierNode(Node):
             # routing_decision contract surfaces a stable strategy fallback
             # + a public error_class discriminator; full diagnostic stays in
             # the logger.
-            logger.exception("Query intent classification failed")
+            # The comment above deliberately keeps the full diagnostic in the
+            # logger while sanitizing the returned dict, and that intent is
+            # preserved -- but ``logger.exception`` put the RAW provider error
+            # there, and observability.md Rule 6.3 requires the redaction to
+            # cover every surface the value reaches, not only the return.
+            logger.error(
+                "Query intent classification failed: %s", scrub_remote_error(e)
+            )
             fallback_routing = {
                 "intent_analysis": {
                     "query_type": "factual",

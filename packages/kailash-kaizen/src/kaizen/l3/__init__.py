@@ -24,6 +24,14 @@ Subpackages:
 
 from __future__ import annotations
 
+# Context (Spec 02)
+from kaizen.l3.context import (
+    ContextScope,
+    ContextValue,
+    DataClassification,
+    ScopeProjection,
+)
+
 # Envelope (Spec 01)
 from kaizen.l3.envelope import (
     EnvelopeEnforcer,
@@ -33,13 +41,16 @@ from kaizen.l3.envelope import (
     Verdict,
 )
 
-# Context (Spec 02)
-from kaizen.l3.context import (
-    ContextScope,
-    ContextValue,
-    DataClassification,
-    ScopeProjection,
+# Factory (Spec 04)
+from kaizen.l3.factory import (
+    AgentFactory,
+    AgentInstance,
+    AgentInstanceRegistry,
+    AgentSpec,
 )
+
+## Integration (cross-primitive wiring)
+from kaizen.l3.integration import L3Runtime
 
 # Messaging (Spec 03)
 from kaizen.l3.messaging import (
@@ -48,14 +59,6 @@ from kaizen.l3.messaging import (
     MessageEnvelope,
     MessageRouter,
     MessageType,
-)
-
-# Factory (Spec 04)
-from kaizen.l3.factory import (
-    AgentFactory,
-    AgentInstance,
-    AgentInstanceRegistry,
-    AgentSpec,
 )
 
 # Plan (Spec 05)
@@ -67,9 +70,6 @@ from kaizen.l3.plan import (
     apply_modification,
     apply_modifications,
 )
-
-## Integration (cross-primitive wiring)
-from kaizen.l3.integration import L3Runtime
 
 __all__ = [
     # Envelope (Spec 01)

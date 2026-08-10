@@ -56,6 +56,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 if TYPE_CHECKING:
     from kaizen_agents.journey.intent import IntentDetector
 
@@ -258,9 +260,15 @@ class ConditionTrigger(BaseTrigger):
             # Fail-safe: return False on any exception
             # This prevents condition errors from crashing the journey
             # Log the error for debugging purposes
+            # ``exc_info`` DROPPED: ``self.condition`` is a caller-supplied
+            # predicate, so ``e`` is whatever it raised, and the traceback's
+            # final line renders that raw -- re-leaking exactly what
+            # ``scrub_remote_error`` removed from the message on the same call.
+            # ``self.description`` is retained: it names which trigger failed,
+            # which is the diagnostic, and it is author-written text rather
+            # than exception content.
             logger.warning(
-                f"ConditionTrigger evaluation failed for '{self.description}': {e}",
-                exc_info=True,
+                f"ConditionTrigger evaluation failed for '{self.description}': {scrub_remote_error(e)}"
             )
             return False
 

@@ -86,13 +86,22 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.autonomy.hooks import HookManager
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.llm.reasoning import llm_text_similarity
+from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
 from kaizen.memory.shared_memory import SharedMemoryPool
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
 # Set availability flag for AsyncLocalRuntime
 ASYNC_RUNTIME_AVAILABLE = True
+
+# Execution modes `_build_workflow_from_agents` implements. Anything else
+# raises rather than silently degrading to "parallel".
+#
+# "sequential" and "hybrid" were previously DOCUMENTED here but neither ever
+# worked (see `_build_workflow_from_agents`), so restricting the set removes no
+# working behaviour — it replaces two broken paths with one actionable error.
+_WORKFLOW_BUILD_MODES = frozenset({"parallel"})
 
 # Optional imports (may not be available in all versions)
 try:
@@ -536,6 +545,11 @@ class OrchestrationRuntime:
         Returns:
             Selected agent or None if no agents available
 
+        Raises:
+            ReasoningDegradedError: SEMANTIC strategy only — every candidate
+                capability degraded (#1981), so no ranking exists. See
+                `_route_semantic`.
+
         Example:
             agent = await runtime.route_task("Analyze sales data", strategy="semantic")
         """
@@ -566,15 +580,23 @@ class OrchestrationRuntime:
 
         # Route based on strategy
         if strategy == RoutingStrategy.SEMANTIC and self.config.enable_semantic_routing:
-            return await self._route_semantic(task, healthy_agents)
+            chosen = await self._route_semantic(task, healthy_agents)
         elif strategy == RoutingStrategy.LEAST_LOADED:
-            return await self._route_least_loaded(healthy_agents)
+            chosen = await self._route_least_loaded(healthy_agents)
         elif strategy == RoutingStrategy.RANDOM:
-            return await self._route_random(healthy_agents)
+            chosen = await self._route_random(healthy_agents)
         else:  # ROUND_ROBIN
-            return await self._route_round_robin(healthy_agents)
+            chosen = await self._route_round_robin(healthy_agents)
 
-    async def _route_semantic(self, task: str, agents: list[tuple]) -> BaseAgent | None:
+        # The strategy helpers return the (agent_id, metadata) CANDIDATE TUPLE
+        # rather than the agent object. That is what lets `_route_task` recover
+        # the ID without a reverse lookup: mapping an agent OBJECT back to an ID
+        # is ambiguous when two ids share one instance, and doing so collapsed
+        # round-robin to a single agent. This surface's own contract is
+        # unchanged — it still returns the agent.
+        return chosen[1].agent if chosen is not None else None
+
+    async def _route_semantic(self, task: str, agents: list[tuple]) -> tuple | None:
         """Route using A2A capability matching (best-fit selection).
 
         Capability scoring is delegated to the LLM via
@@ -582,9 +604,25 @@ class OrchestrationRuntime:
         and `kaizen.llm.reasoning.llm_text_similarity` (for plain-string
         capability names). Deterministic word-overlap scoring was removed to
         comply with `rules/agent-reasoning.md` MUST Rule 1.
+
+        Degraded judgments (#1981): a capability the judge could not score is
+        SKIPPED, never scored at a fabricated 0.0. An agent all of whose
+        capabilities degraded has UNKNOWN fit and takes no part in the
+        ranking.
+
+        Raises:
+            ReasoningDegradedError: Every candidate capability degraded, so
+                nothing was scoreable. Falling through to round-robin here
+                would hide a total judge failure behind a plausible-looking
+                assignment — the arbitrary order #1981 exists to eliminate.
+                A round where capabilities WERE scored but all scored 0.0 is
+                a genuine no-match and keeps the round-robin fallback.
         """
         best_agent = None
         best_score = 0.0
+        scored_capabilities = 0
+        degraded_agents: list[str] = []
+        degraded_model = "unknown"
 
         reasoning_config = self._resolve_reasoning_config(agents)
 
@@ -611,16 +649,86 @@ class OrchestrationRuntime:
                 continue
 
             # Calculate capability match score via LLM (not keyword overlap)
+            agent_scored = 0
+            agent_degraded = 0
             for cap in capabilities:
-                score = await self._score_capability(
-                    cap, task, reasoning_config, agent_id=agent_id
-                )
+                try:
+                    score = await self._score_capability(
+                        cap, task, reasoning_config, agent_id=agent_id
+                    )
+                except ReasoningDegradedError as exc:
+                    # This capability's fit is UNKNOWN, not zero.
+                    agent_degraded += 1
+                    degraded_model = exc.model
+                    continue
+
+                agent_scored += 1
+                scored_capabilities += 1
                 if score > best_score:
-                    best_agent = metadata.agent
+                    best_agent = (agent_id, metadata)
                     best_score = score
+
+            if agent_degraded and agent_scored == 0:
+                degraded_agents.append(agent_id)
+
+        if degraded_agents:
+            if scored_capabilities == 0:
+                raise ReasoningDegradedError(
+                    "runtime.route_semantic",
+                    model=degraded_model,
+                    correlation_id=f"route_semantic_{uuid.uuid4().hex[:8]}",
+                    error=(
+                        f"the capability judge degraded for all "
+                        f"{len(degraded_agents)} candidate agent(s): "
+                        f"{', '.join(degraded_agents)}"
+                    ),
+                )
+            logger.warning(
+                "route_semantic.degraded",
+                extra={
+                    "candidates": len(agents),
+                    "scored_capabilities": scored_capabilities,
+                    "degraded_agents": degraded_agents,
+                },
+            )
 
         # Fallback to round-robin if no match found
         if best_agent is None:
+            if scored_capabilities == 0 and not degraded_agents:
+                # NOT the #1981 degradation case — nothing degraded, there was
+                # nothing to rank on: no candidate carried an `a2a_card`, or
+                # every card's capability list was empty, so the judge was
+                # never consulted at all.
+                #
+                # The two neighbouring outcomes are both loud — an
+                # all-degraded round raises, a partially-degraded one WARNs —
+                # while this one returned a round-robin pick indistinguishable
+                # from a ranked result. The caller asked for SEMANTIC routing
+                # and received positional selection with no signal, which is
+                # the silent-fallback mode `rules/zero-tolerance.md` Rule 3
+                # blocks.
+                #
+                # WARN rather than raise: unlike a judge failure this is a
+                # registration-shape issue the operator fixes by populating the
+                # cards, and raising would break a documented
+                # `BaseAgent | None` surface. The ranking genuinely cannot be
+                # performed either way — the defect was the silence, not the
+                # fallback.
+                logger.warning(
+                    "route_semantic.no_capability_data",
+                    extra={
+                        "candidates": len(agents),
+                        "reason": (
+                            "SEMANTIC routing requested but no candidate agent "
+                            "exposed capabilities to rank; falling back to "
+                            "round-robin (positional, not semantic)"
+                        ),
+                        "remedy": (
+                            "populate primary_capabilities on the agents' A2A "
+                            "cards, or select a non-SEMANTIC routing strategy"
+                        ),
+                    },
+                )
             return await self._route_round_robin(agents)
 
         return best_agent
@@ -659,9 +767,15 @@ class OrchestrationRuntime:
             - Legacy test mocks with a single-positional `matches_requirement`
             - Plain strings (capability name only) — scored via LLM similarity
 
-        Returns 0.0 on any exception so a single LLM failure cannot sink the
-        entire routing decision; a WARN log captures the failure so
-        `rules/observability.md` MUST Rule 5 still triages it.
+        Returns 0.0 on any INFRASTRUCTURE exception so a single LLM failure
+        cannot sink the entire routing decision; a WARN log captures the
+        failure so `rules/observability.md` MUST Rule 5 still triages it.
+
+        Raises:
+            ReasoningDegradedError: The judge returned no usable score
+                (#1981). Deliberately NOT flattened to 0.0 — the caller
+                (`_route_semantic`) skips the capability instead, so a
+                degraded judgment can never out-rank or tie a real one.
         """
         correlation_id = f"route_{agent_id or 'unknown'}"
 
@@ -673,13 +787,25 @@ class OrchestrationRuntime:
                     config=reasoning_config,
                     correlation_id=correlation_id,
                 )
+            except ReasoningDegradedError as exc:
+                logger.warning(
+                    "route_semantic.similarity_degraded",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                raise
             except Exception as exc:
                 logger.warning(
                     "route_semantic.similarity_failed",
                     extra={
                         "correlation_id": correlation_id,
                         "agent_id": agent_id,
-                        "error": str(exc),
+                        "error": scrub_remote_error(exc),
                     },
                 )
                 return 0.0
@@ -704,18 +830,45 @@ class OrchestrationRuntime:
             if inspect.iscoroutine(result):
                 return await result
             return float(result)
+        except ReasoningDegradedError as exc:
+            # `Capability.matches_requirement` delegates to
+            # `llm_capability_match`, so the typed signal reaches here too.
+            # Ordered BEFORE the generic handler so it is not flattened.
+            logger.warning(
+                "route_semantic.capability_match_degraded",
+                extra={
+                    "correlation_id": correlation_id,
+                    "agent_id": agent_id,
+                    "helper": exc.helper,
+                    "model": exc.model,
+                    "error": exc.error,
+                },
+            )
+            raise
         except TypeError:
             # Legacy sync mock with single-arg signature
             try:
                 result = matcher(task)
                 return float(result)
+            except ReasoningDegradedError as exc:
+                logger.warning(
+                    "route_semantic.legacy_capability_match_degraded",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                raise
             except Exception as exc:
                 logger.warning(
                     "route_semantic.capability_match_failed",
                     extra={
                         "correlation_id": correlation_id,
                         "agent_id": agent_id,
-                        "error": str(exc),
+                        "error": scrub_remote_error(exc),
                     },
                 )
                 return 0.0
@@ -725,28 +878,42 @@ class OrchestrationRuntime:
                 extra={
                     "correlation_id": correlation_id,
                     "agent_id": agent_id,
-                    "error": str(exc),
+                    "error": scrub_remote_error(exc),
                 },
             )
             return 0.0
 
-    async def _route_least_loaded(self, agents: list[tuple]) -> BaseAgent:
-        """Route to agent with fewest active tasks."""
-        agent_id, metadata = min(agents, key=lambda x: x[1].active_tasks)
-        return metadata.agent
+    async def _route_least_loaded(self, agents: list[tuple]) -> tuple | None:
+        """Route to agent with fewest active tasks. Returns the CANDIDATE TUPLE."""
+        return min(agents, key=lambda x: x[1].active_tasks)
 
-    async def _route_random(self, agents: list[tuple]) -> BaseAgent:
+    async def _route_random(self, agents: list[tuple]) -> tuple:
         """Route to random agent."""
         import random
 
-        agent_id, metadata = random.choice(agents)
-        return metadata.agent
+        return random.choice(agents)
 
-    async def _route_round_robin(self, agents: list[tuple]) -> BaseAgent:
+    async def _route_round_robin(self, agents: list[tuple]) -> tuple:
         """Route using round-robin distribution."""
-        agent_id, metadata = agents[self._round_robin_index]
-        self._round_robin_index = (self._round_robin_index + 1) % len(agents)
-        return metadata.agent
+        # Normalise on READ, not only on write. `_round_robin_index` is
+        # RUNTIME-scoped and persists across calls, while `agents` is a
+        # PER-CALL candidate list whose length varies — a deregistration, or
+        # the health monitor marking an agent UNHEALTHY, shrinks the pool
+        # below an index a previous larger-pool call already stored.
+        #
+        # Writing `(index + 1) % len(agents)` only bounds the index against
+        # the length seen on THIS call; the very next call with a shorter list
+        # indexes out of range and raises IndexError, aborting the whole
+        # routing call rather than degrading. Reproduced with no forced state:
+        # 3 agents, two ordinary ROUND_ROBIN routes (index -> 2), deregister
+        # one, third route -> IndexError.
+        #
+        # This guard already existed in `_route_task`'s now-deleted private
+        # round-robin copy and was missing here, in the live path — the
+        # duplicate-implementation drift that clause is about.
+        index = self._round_robin_index % len(agents)
+        self._round_robin_index = (index + 1) % len(agents)
+        return agents[index]
 
     # ========================================================================
     # Workflow Execution (AsyncLocalRuntime Integration)
@@ -838,7 +1005,7 @@ class OrchestrationRuntime:
                 "run_id": None,
                 "status": "failed",
                 "execution_time": execution_time,
-                "error": str(e),
+                "error": scrub_remote_error(e),
             }
 
     # ========================================================================
@@ -869,6 +1036,13 @@ class OrchestrationRuntime:
         Returns:
             Workflow results dictionary with completion status and task results
 
+        Raises:
+            ReasoningDegradedError: `error_handling="fail-fast"` ONLY, and
+                only when SEMANTIC routing degraded for a task (#1981). Under
+                the default `"graceful"` mode the degradation is recorded as a
+                failed task carrying `degraded: True` instead — mirroring how
+                the execution phase below already honours `error_handling`.
+
         Example:
             results = await runtime.execute_multi_agent_workflow(
                 tasks=["Analyze data", "Generate code", "Write documentation"],
@@ -883,17 +1057,73 @@ class OrchestrationRuntime:
         workflow_status = WorkflowStatus(
             workflow_id=workflow_id, total_tasks=len(tasks)
         )
-        self.workflows[workflow_id] = workflow_status
 
-        # Route tasks to agents
-        selected_agents = []
+        # INVARIANT: `self.workflows` only ever holds workflows whose ROUTING
+        # phase completed.
+        #
+        # `route_task` below can raise (`ReasoningDegradedError`, #1981) and
+        # `error_handling="fail-fast"` re-raises it. Publishing the status
+        # object BEFORE the fallible routing loop left a phantom entry behind
+        # on that path: `get_workflow_status()` reported it as perpetually
+        # in-flight (total_tasks=N, completed=0, failed=0) and NOTHING could
+        # ever clear it, because the caller never received the generated
+        # `workflow_id` — the function raised before returning it. Publishing
+        # AFTER routing is chosen over rolling back on the error path because
+        # it has no rollback race and loses no observability: the id is not
+        # knowable to any caller until this method returns.
+        # (`workflow_status` is a local until then, so the routing loop's own
+        # bookkeeping below is unaffected.)
+
+        # Route tasks to agents. Pair each agent WITH its task so a task that
+        # fails to route cannot shift the agent->task mapping of the tasks
+        # that follow it.
+        routed: list[tuple[BaseAgent, str]] = []
         for task in tasks:
-            agent = await self.route_task(
-                task,
-                strategy=(
-                    RoutingStrategy(routing_strategy) if routing_strategy else None
-                ),
-            )
+            try:
+                agent = await self.route_task(
+                    task,
+                    strategy=(
+                        RoutingStrategy(routing_strategy) if routing_strategy else None
+                    ),
+                )
+            except ReasoningDegradedError as exc:
+                # #1981 second-order: SEMANTIC routing raises when the
+                # capability judge degraded for EVERY candidate, rather than
+                # handing back an arbitrarily-ordered agent. Honour the same
+                # `error_handling` policy the execution phase below uses.
+                logger.warning(
+                    "execute_multi_agent_workflow.routing_degraded",
+                    extra={
+                        "workflow_id": workflow_id,
+                        "error_handling": error_handling,
+                        "correlation_id": exc.correlation_id,
+                        "helper": exc.helper,
+                        "model": exc.model,
+                        "error": exc.error,
+                    },
+                )
+                if error_handling == "fail-fast":
+                    # Nothing was published to `self.workflows`, so the
+                    # invariant above holds with no cleanup needed.
+                    raise
+                # Graceful: this task failed, the workflow continues. The
+                # `degraded` marker is what keeps a total judge failure
+                # distinguishable from the genuine "No agents available"
+                # no-match recorded below — the same float/`[]`/`None`
+                # collision #1981 exists to eliminate.
+                workflow_status.failed_tasks += 1
+                workflow_status.results.append(
+                    {
+                        "task": task,
+                        "status": "failed",
+                        "degraded": True,
+                        "error": scrub_remote_error(exc),
+                        "degraded_helper": exc.helper,
+                        "degraded_model": exc.model,
+                        "correlation_id": exc.correlation_id,
+                    }
+                )
+                continue
 
             if agent is None:
                 # No agents available for this task
@@ -902,14 +1132,16 @@ class OrchestrationRuntime:
                     {"task": task, "status": "failed", "error": "No agents available"}
                 )
             else:
-                selected_agents.append(agent)
+                routed.append((agent, task))
+
+        # Routing completed — the workflow is now admitted and observable.
+        self.workflows[workflow_id] = workflow_status
+
+        selected_agents = [agent for agent, _task in routed]
 
         # Build workflow from agents (enables level-based parallelism)
         if selected_agents:
-            # Filter tasks to only those with assigned agents
-            assigned_tasks = [
-                task for i, task in enumerate(tasks) if i < len(selected_agents)
-            ]
+            assigned_tasks = [task for _agent, task in routed]
 
             workflow = self._build_workflow_from_agents(
                 selected_agents,
@@ -967,7 +1199,7 @@ class OrchestrationRuntime:
                             "task": task,
                             "agent_id": agent.agent_id,
                             "status": "failed",
-                            "error": str(e),
+                            "error": scrub_remote_error(e),
                         }
                     )
 
@@ -1095,7 +1327,7 @@ class OrchestrationRuntime:
                     return {
                         "task": task,
                         "status": "failed",
-                        "error": str(e),
+                        "error": scrub_remote_error(e),
                         "agent_id": (
                             agent_metadata.agent_id if agent_metadata else "unknown"
                         ),
@@ -1401,7 +1633,7 @@ class OrchestrationRuntime:
                                     "status": "failed",
                                     "timestamp": datetime.now().isoformat(),
                                     "duration_seconds": duration,
-                                    "error": str(e),
+                                    "error": scrub_remote_error(e),
                                     "attempts": attempt + 1,
                                 }
                             )
@@ -1452,75 +1684,91 @@ class OrchestrationRuntime:
 
     async def _route_task(self, task: str, available_agents: list[str]) -> str | None:
         """
-        Internal routing helper for tests.
+        Route a task within an explicit candidate subset, returning the agent ID.
+
+        ID-returning adapter over the SAME strategy helpers the public
+        `route_task` uses, so each strategy has exactly ONE implementation.
+
+        This method previously carried its own inline copy of all four
+        strategies, and that duplication is what let the SEMANTIC copy drift
+        onto a card attribute that does not exist. It read
+        `getattr(a2a_card, "capabilities", [])`, but `A2AAgentCard` declares
+        `primary_capabilities` / `secondary_capabilities` /
+        `emerging_capabilities` and no `capabilities` at all — and for the dict
+        card shape `getattr` never sees dict KEYS either. So the list was `[]`
+        for BOTH shapes, the scoring loop never executed, the judge was invoked
+        ZERO times, and every SEMANTIC route returned `available_agents[0]`:
+        deterministic, unreasoned, and completely silent.
+
+        That mattered beyond this method, because `_route_task` has no
+        production caller — its only consumer is the #1981 regression suite. A
+        vacuous oracle meant #1981's second-order assertions were passing
+        against a fixture shape (`SimpleNamespace(capabilities=[...])`) that no
+        production path can emit, so the guard on a closed CRITICAL was not
+        actually guarding.
+
+        Delegating removes the second implementation rather than patching the
+        accessor in it: patching would fix this instance and leave the
+        divergence that produced it.
 
         Args:
             task: Task description
-            available_agents: List of available agent IDs
+            available_agents: List of candidate agent IDs
 
         Returns:
-            Selected agent ID or None
+            Selected agent ID, or None when no candidate is ACTIVE.
+
+        Raises:
+            ReasoningDegradedError: SEMANTIC strategy only — every candidate
+                capability degraded (#1981), so no ranking exists. Raised by
+                `_route_semantic`, which now owns this contract outright.
         """
         if not available_agents:
             return None
 
-        # Filter to only active agents from available list
-        active_agents = [
-            agent_id
+        candidates = [
+            (agent_id, self.agents[agent_id])
             for agent_id in available_agents
             if agent_id in self.agents
             and self.agents[agent_id].status == AgentStatus.ACTIVE
         ]
 
-        if not active_agents:
+        if not candidates:
             return None
 
-        # Use appropriate routing based on strategy
         strategy = self.config.default_routing_strategy
         if isinstance(strategy, str):
             strategy = RoutingStrategy(strategy)
 
-        if strategy == RoutingStrategy.ROUND_ROBIN:
-            # Round-robin: cycle through available agents
-            selected = active_agents[self._round_robin_index % len(active_agents)]
-            self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
-            return selected
-        elif strategy == RoutingStrategy.RANDOM:
-            # Random: pick a random agent
-            import random
-
-            return random.choice(active_agents)
+        # Same dispatch as `route_task`, including the `enable_semantic_routing`
+        # gate. That gate is NEW here: the inline copy ignored it, so disabling
+        # semantic routing left this path still attempting it. Aligning is the
+        # point of the delegation — a config flag that binds one routing entry
+        # point and not the other is the same divergence in miniature.
+        if strategy == RoutingStrategy.SEMANTIC and self.config.enable_semantic_routing:
+            selected = await self._route_semantic(task, candidates)
         elif strategy == RoutingStrategy.LEAST_LOADED:
-            # Least loaded: pick agent with fewest active tasks
-            return min(active_agents, key=lambda aid: self.agents[aid].active_tasks)
-        elif strategy == RoutingStrategy.SEMANTIC:
-            # Semantic routing: LLM-first scoring (no keyword overlap)
-            best_score = -1.0
-            best_agent = active_agents[0]  # fallback
-            reasoning_tuples = [(aid, self.agents[aid]) for aid in active_agents]
-            reasoning_config = self._resolve_reasoning_config(reasoning_tuples)
-            for agent_id in active_agents:
-                metadata = self.agents[agent_id]
-                if not metadata.a2a_card:
-                    continue
-
-                # Check capabilities
-                capabilities = getattr(metadata.a2a_card, "capabilities", [])
-                if isinstance(capabilities, dict):
-                    capabilities = capabilities.get("capabilities", [])
-                for cap in capabilities:
-                    score = await self._score_capability(
-                        cap, task, reasoning_config, agent_id=agent_id
-                    )
-                    if score > best_score:
-                        best_score = score
-                        best_agent = agent_id
-            return best_agent
+            selected = await self._route_least_loaded(candidates)
+        elif strategy == RoutingStrategy.RANDOM:
+            selected = await self._route_random(candidates)
         else:
-            # Default: round-robin
-            selected = active_agents[self._round_robin_index % len(active_agents)]
-            self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
-            return selected
+            selected = await self._route_round_robin(candidates)
+
+        if selected is None:
+            # `_route_semantic` returns None on a genuine no-match (everything
+            # scored, nothing scored above zero). Preserve the documented
+            # `str | None` contract rather than inventing a positional pick.
+            return None
+
+        # The helpers hand back the (agent_id, metadata) tuple, so the ID is
+        # carried directly. An earlier revision reverse-mapped the returned
+        # agent OBJECT to an id by identity (`metadata.agent is selected`);
+        # that is ambiguous when two ids share ONE agent instance, and it
+        # silently collapsed round-robin to the first matching id
+        # (['a1','a1','a1','a1'] where the deleted implementation gave
+        # ['a1','a2','a1','a2']). Carrying the id removes the ambiguity
+        # instead of tie-breaking it.
+        return selected[0]
 
     async def _execute_agent_task(
         self, agent, inputs: dict[str, Any]
@@ -1575,6 +1823,86 @@ class OrchestrationRuntime:
             history = history[-limit:]
         return history
 
+    @staticmethod
+    def _llm_node_config_for(agent: BaseAgent, task: str) -> dict[str, Any]:
+        """Map one agent + its task onto ``LLMAgentNode``'s declared parameters.
+
+        ``BaseAgent.to_workflow()`` is the SINGLE source of truth for the
+        agent -> ``LLMAgentNode`` config mapping (provider, model,
+        system_prompt, generation_config, provider_config, response_format,
+        ungoverned). This method reuses it rather than re-deriving the mapping,
+        so there is exactly ONE implementation of that contract.
+
+        The task is conveyed as the node's ``messages`` parameter — the OpenAI
+        conversation shape ``LLMAgentNode.get_parameters()`` declares and
+        ``_prepare_conversation()`` consumes. It MUST NOT be passed as a
+        ``task`` key: ``task`` is not a declared node parameter, so the runtime
+        drops it with only a ``WARNING [NODE] Unknown parameter(s)`` line and
+        the node then runs with ``messages=[]`` — an LLM call carrying NO
+        instruction, whose mock/provider response still returns
+        ``success: True``. ``execute_multi_agent_workflow`` counts that as a
+        completed task, reporting a 100% success rate for a workflow that never
+        conveyed any work (``rules/zero-tolerance.md`` Rule 2, "fake
+        integration via a missing handoff field").
+
+        Args:
+            agent: Agent whose config supplies provider/model/system_prompt.
+            task: Task description conveyed to the LLM as the user turn.
+
+        Returns:
+            Node config dict using only parameters ``LLMAgentNode`` declares.
+
+        Raises:
+            TypeError: ``agent`` does not expose ``to_workflow()`` (e.g. the
+                deprecated ``kaizen.core.agents.Agent``, which is not a
+                ``BaseAgent`` and exposes ``compile_to_workflow()`` instead).
+            ValueError: ``agent.to_workflow()`` does not map onto exactly one
+                ``LLMAgentNode``, so no level-parallel node can be built for it.
+        """
+        # Typed guard rather than an opaque `AttributeError: 'X' object has no
+        # attribute 'to_workflow'` from the line below
+        # (`rules/zero-tolerance.md` Rule 3a). `register_agent` is typed
+        # `BaseAgent`; the deprecated `kaizen.core.agents.Agent` is a separate
+        # class hierarchy with `compile_to_workflow()` and no `to_workflow()`.
+        if not hasattr(agent, "to_workflow"):
+            raise TypeError(
+                f"Agent {getattr(agent, 'agent_id', agent)!r} of type "
+                f"{type(agent).__name__} does not expose to_workflow(); "
+                "OrchestrationRuntime requires a kaizen.core.base_agent."
+                "BaseAgent to derive its LLMAgentNode configuration."
+            )
+
+        agent_workflow = agent.to_workflow()
+        llm_specs = [
+            spec
+            for spec in agent_workflow.nodes.values()
+            if spec.get("type") == "LLMAgentNode"
+        ]
+        if len(llm_specs) != 1:
+            raise ValueError(
+                f"Agent {agent.agent_id!r} does not map onto exactly one "
+                f"LLMAgentNode (to_workflow() produced {len(llm_specs)}); "
+                "OrchestrationRuntime cannot build a level-parallel workflow "
+                "node for it."
+            )
+
+        # Copy: WorkflowBuilder.add_node stores the config dict BY REFERENCE and
+        # to_workflow() memoizes its builder, so mutating it in place would
+        # corrupt the agent's own workflow with this task's messages.
+        node_config = dict(llm_specs[0].get("config") or {})
+
+        # Provider/model are whatever `to_workflow()` resolved from the agent's
+        # config and the environment. No hardcoded fallbacks here: a literal
+        # provider would silently override an agent configured for another one
+        # (`agent.config` exposes `llm_provider`, never `provider`, so the old
+        # `hasattr(agent.config, "provider")` probe was ALWAYS False and every
+        # agent was forced onto "openai"), and a literal model name is BLOCKED
+        # by `rules/env-models.md`. An unresolvable provider stays None and
+        # reaches LLMAgentNode's typed #1947 ConfigurationError, which the
+        # caller's `error_handling` policy then reports per task.
+        node_config["messages"] = [{"role": "user", "content": task}]
+        return node_config
+
     def _build_workflow_from_agents(
         self, agents: list[BaseAgent], tasks: list[str], mode: str = "parallel"
     ) -> WorkflowBuilder:
@@ -1587,11 +1915,15 @@ class OrchestrationRuntime:
         Args:
             agents: List of BaseAgent instances
             tasks: List of task descriptions (1:1 with agents)
-            mode: Execution mode - "parallel" (no dependencies),
-                  "sequential" (chain nodes), "hybrid" (batch parallelism)
+            mode: Execution mode. Only ``"parallel"`` (no dependencies between
+                agent nodes) is implemented; any other value raises.
 
         Returns:
             WorkflowBuilder instance with nodes for each agent
+
+        Raises:
+            ValueError: ``mode`` is not a supported mode, or an agent does not
+                map onto exactly one ``LLMAgentNode``.
 
         Example:
             workflow = self._build_workflow_from_agents(
@@ -1603,38 +1935,59 @@ class OrchestrationRuntime:
                 workflow.build(), inputs={}
             )
         """
+        # Fail loud on an unsupported mode. Two modes were previously
+        # advertised in this docstring and neither ever worked:
+        #
+        #   "hybrid"     — its entire implementation was the comment
+        #                  `# hybrid mode: implement batch-based connections
+        #                  (future enhancement)`, so it silently behaved as
+        #                  "parallel": a deferred-implementation placeholder
+        #                  (`rules/zero-tolerance.md` Rule 2) presenting as a
+        #                  silent fallback (Rule 3). No batch-size parameter
+        #                  exists on this signature or on
+        #                  OrchestrationRuntimeConfig to give it a meaning, so
+        #                  it is rejected rather than guessed at.
+        #
+        #   "sequential" — chained via
+        #                  `add_connection(prev, node_id, "output", "input")`,
+        #                  but WorkflowBuilder.add_connection's signature is
+        #                  (from_node, from_output, to_node, to_input). That
+        #                  call therefore asked for a node literally named
+        #                  "output" and raised WorkflowValidationError
+        #                  ("Target node 'output' not found in workflow") on
+        #                  every use since introduction. Correcting the
+        #                  argument order alone does NOT make it work: the only
+        #                  declared LLMAgentNode input that could receive a
+        #                  prior agent's turn is `messages` (a list), while the
+        #                  node emits `response` (a dict) — a field-mapped
+        #                  connection between them would deliver a dict where
+        #                  `_prepare_conversation()` extends a list, producing
+        #                  garbage. Real chaining needs a transform node
+        #                  between the two agents, which no caller specifies.
+        #
+        # Both call sites pass mode="parallel". Restricting the set removes no
+        # working behaviour; it replaces a broken build and a silent alias with
+        # one actionable error. A typo ("squential") is now loud too.
+        if mode not in _WORKFLOW_BUILD_MODES:
+            raise ValueError(
+                f"Unsupported workflow build mode {mode!r}. "
+                f"Supported modes: {sorted(_WORKFLOW_BUILD_MODES)}. "
+                "('sequential' and 'hybrid' were previously documented but "
+                "never implemented — see the comment in "
+                "_build_workflow_from_agents.)"
+            )
+
         workflow = WorkflowBuilder()
 
-        # Create LLMAgentNode for each agent
+        # Create LLMAgentNode for each agent. parallel mode adds no
+        # connections: the nodes execute independently, which is what gives
+        # AsyncLocalRuntime its level-based concurrency.
         for i, (agent, task) in enumerate(zip(agents, tasks, strict=False)):
             node_id = f"agent_{i}_{agent.agent_id}"
-
-            # Configure node with agent and task
             workflow.add_node(
                 "LLMAgentNode",
                 node_id,
-                {
-                    "agent": agent,
-                    "task": task,
-                    "provider": (
-                        agent.config.provider
-                        if hasattr(agent.config, "provider")
-                        else "openai"
-                    ),
-                    "model": (
-                        agent.config.model
-                        if hasattr(agent.config, "model")
-                        else "gpt-4o-mini"
-                    ),
-                },
+                self._llm_node_config_for(agent, task),
             )
-
-            # Connect nodes based on mode
-            if mode == "sequential" and i > 0:
-                # Chain: previous node output feeds into current node
-                prev_node_id = f"agent_{i - 1}_{agents[i - 1].agent_id}"
-                workflow.add_connection(prev_node_id, node_id, "output", "input")
-            # parallel mode: no connections (nodes execute independently)
-            # hybrid mode: implement batch-based connections (future enhancement)
 
         return workflow

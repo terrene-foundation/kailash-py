@@ -185,6 +185,17 @@ result = {
     @pytest.mark.e2e
     def test_data_scientist_progressive_enhancement(self, docker_env):
         """Test data scientist adding features progressively."""
+        # The /metrics route enable_monitoring() registers requires the
+        # optional [metrics] extra. Without prometheus_client it logs
+        # "monitoring.metrics_endpoint.unavailable" and registers no route, so
+        # the 200 asserted below is genuinely unreachable and skipping is
+        # honest. Same gate as
+        # tests/regression/test_enable_monitoring_registers_nexus_metrics.py.
+        pytest.importorskip(
+            "prometheus_client",
+            reason="/metrics requires the optional kailash-nexus[metrics] extra",
+        )
+
         from nexus import Nexus
 
         from kailash.workflow.builder import WorkflowBuilder
@@ -217,14 +228,25 @@ result = {
             # 3. Add monitoring
             n.enable_monitoring()
 
-            # Metrics endpoint may not be available in enterprise gateway by default
+            # ``enable_monitoring()`` registers GET /metrics via
+            # ``nexus.metrics.register_metrics_endpoint`` (core.py). There is no
+            # legitimate "the gateway might not expose it" branch: with
+            # prometheus_client installed the route MUST be there, and a 404
+            # means monitoring did not wire up. The previous `assert True` in an
+            # else-branch reported success under BOTH "monitoring works" and
+            # "the endpoint does not exist", so it could never fail.
             metrics_response = requests.get(f"http://localhost:{api_port}/metrics")
-            if metrics_response.status_code == 200:
-                assert len(metrics_response.text) > 0
-            else:
-                # Enterprise gateway may not expose metrics endpoint by default
-                # Just verify monitoring was enabled without error
-                assert True
+            assert metrics_response.status_code == 200, (
+                f"enable_monitoring() must register GET /metrics, but it "
+                f"returned {metrics_response.status_code}. Either "
+                f"register_metrics_endpoint() was not called (see "
+                f"Nexus.enable_monitoring in nexus/core.py) or the route was "
+                f"registered on a different app instance."
+            )
+            assert len(metrics_response.text) > 0, (
+                "/metrics returned 200 with an empty body -- no collectors are "
+                "registered, so monitoring is enabled in name only."
+            )
 
             # 4. Add auth later
             n.enable_auth()
@@ -540,7 +562,13 @@ text = 'Kailash Nexus provides a zero-configuration platform for workflow orches
 # Simple keyword extraction
 import re
 words = re.findall(r'\\b\\w{4,}\\b', text.lower())
-keywords = list(set(words))[:5]
+# sorted(), not list(set(...)): set iteration order depends on
+# PYTHONHASHSEED, so list(set(words))[:5] picked an arbitrary 5 of the 11
+# unique words -- a different 5 in every process. Only 5 of the 11 are
+# words the assertion below accepts, so the test failed whenever the
+# random subset missed all of them: measured 2/200 hash seeds (~1%),
+# matching C(6,5)/C(11,5). It looked like load-sensitivity and was not.
+keywords = sorted(set(words))[:5]
 result = {'keywords': keywords}
 """
             },
@@ -570,14 +598,19 @@ result = {'keywords': keywords}
                 json={"parameters": {}},  # Empty parameters since we use hardcoded data
             )
             summary_result = summary_response.json()
-            if "outputs" in summary_result:
-                summary_data = (
-                    summary_result.get("outputs", {})
-                    .get("summarize", {})
-                    .get("result", {})
-                )
-                summary = summary_data.get("summary", "")
-                assert "Kailash Nexus" in summary
+            # assert, not `if`: a conditional here silently skips every
+            # assertion in the block when the response shape changes, so the
+            # test would report success having checked nothing.
+            assert "outputs" in summary_result, (
+                f"summarize-text response has no 'outputs' key: {summary_result}"
+            )
+            summary_data = (
+                summary_result.get("outputs", {})
+                .get("summarize", {})
+                .get("result", {})
+            )
+            summary = summary_data.get("summary", "")
+            assert "Kailash Nexus" in summary
 
             # Extract keywords
             keywords_response = requests.post(
@@ -585,20 +618,22 @@ result = {'keywords': keywords}
                 json={"parameters": {}},  # Empty parameters since we use hardcoded data
             )
             keywords_result = keywords_response.json()
-            if "outputs" in keywords_result:
-                keywords_data = (
-                    keywords_result.get("outputs", {})
-                    .get("extract", {})
-                    .get("result", {})
-                )
-                keywords = keywords_data.get("keywords", [])
-                assert len(keywords) > 0
-                # Check for "kailash" or any meaningful keyword
-                assert any(
-                    word
-                    in ["kailash", "nexus", "platform", "workflow", "orchestration"]
-                    for word in keywords
-                )
+            assert "outputs" in keywords_result, (
+                f"extract-keywords response has no 'outputs' key: {keywords_result}"
+            )
+            keywords_data = (
+                keywords_result.get("outputs", {})
+                .get("extract", {})
+                .get("result", {})
+            )
+            keywords = keywords_data.get("keywords", [])
+            assert len(keywords) > 0
+            # Check for "kailash" or any meaningful keyword
+            assert any(
+                word
+                in ["kailash", "nexus", "platform", "workflow", "orchestration"]
+                for word in keywords
+            )
 
         finally:
             n.stop()

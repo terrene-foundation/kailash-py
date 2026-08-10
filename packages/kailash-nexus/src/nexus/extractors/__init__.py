@@ -37,6 +37,7 @@ resolution of the extractor types.
 
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Tuple
 
+from kailash.utils.secure_logging import safe_callable_name
 from starlette.datastructures import UploadFile
 from starlette.requests import Request
 
@@ -83,9 +84,26 @@ class Depends:
             )
         self.dependency = dependency
 
-    def __repr__(self) -> str:  # pragma: no cover - debug aid
-        name = getattr(self.dependency, "__qualname__", repr(self.dependency))
-        return f"Depends({name})"
+    def __repr__(self) -> str:
+        # NOT `repr(self.dependency)` as a fallback. `dependency` is
+        # caller-supplied and typed as a CALLABLE, not as a function, so
+        # anything without `__qualname__` hit that fallback -- and on a
+        # dependency-injection surface those are exactly the objects holding
+        # config. `Depends(functools.partial(get_db, dsn="postgres://svc:…"))`
+        # is the IDIOMATIC way to pre-bind a connection string, and a partial
+        # has no `__qualname__`.
+        #
+        # This is not one leak SINK, it is an AMPLIFIER: `__repr__` emits
+        # nothing by itself, it makes every future consumer of a `Depends`
+        # emit -- a debug log, an f-string in someone else's error path,
+        # pytest assertion output on a failing test. None of those is a site
+        # a sweep would think to visit, and all of them inherited the
+        # credential from here.
+        #
+        # `safe_callable_name` emits only source-level identifiers, and keeps
+        # the resolution that makes the repr useful: a partial still reports
+        # the wrapped function's own name rather than a bare "partial".
+        return f"Depends({safe_callable_name(self.dependency)})"
 
 
 # Multipart is a typed alias for a list of uploaded files. The HTTP-transport

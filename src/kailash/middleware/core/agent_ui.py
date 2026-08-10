@@ -373,15 +373,6 @@ class AgentUIMiddleware:
             self._owns_runtime = True
         self.node_registry = NodeRegistry()
 
-    def close(self) -> None:
-        """Release runtime reference."""
-        if hasattr(self, "runtime") and self.runtime is not None:
-            if self._owns_runtime:
-                self.runtime.close()
-            else:
-                self.runtime.release()
-            self.runtime = None
-
         # Session management
         self.sessions: Dict[str, WorkflowSession] = {}
         self.shared_workflows: Dict[str, Workflow] = {}  # For shared/template workflows
@@ -396,6 +387,24 @@ class AgentUIMiddleware:
         self.sessions_created = 0
         self.workflows_executed = 0
         self.events_emitted = 0
+
+    def close(self) -> None:
+        """Release runtime reference.
+
+        Releases ONLY the runtime. This method previously carried the tail of
+        `__init__` -- the session, execution-tracking and performance-counter
+        initialisation had been swallowed into it, so `AgentUIMiddleware(...)`
+        returned an object with no `self.sessions` at all and the first
+        session call raised `AttributeError: 'AgentUIMiddleware' object has no
+        attribute 'sessions'`. Symmetrically, `close()` RECREATED that state
+        instead of releasing anything. Do not move initialisation back here.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
     def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for middleware operations."""
@@ -746,7 +755,22 @@ class AgentUIMiddleware:
         # Create runtime with config
         runtime = LocalRuntime(enable_async=True, debug=True, max_concurrency=10)
 
-        # Execute with SDK runtime - it handles everything!
+        # DELIBERATELY RAW -- do NOT bind the `parameters` envelope here, and
+        # see AUDITED_RAW_INPUT_SITES in
+        # tests/regression/test_workflow_input_envelope_entry_points.py.
+        #
+        # This looks like a caller-facing entry point with one arguments slot,
+        # which under the structural rule would bind. It is not: AgentUI's
+        # `inputs` is NODE-SCOPED, keyed by node ID
+        # (`{"input_receiver": {"credentials": ...}}`), not a flat mapping of
+        # caller arguments. There is no caller-level argument mapping to put
+        # in an envelope.
+        #
+        # Binding was tried and MEASURED, not reasoned about: it made the
+        # runtime inject a workflow-level `parameters` key alongside the
+        # node-scoped ones, and PythonCodeNode then failed with
+        # `RecursionError: maximum recursion depth exceeded`, turning
+        # test_agent_ui_middleware_input_passing from pass to fail.
         results, run_id = await runtime.execute_async(
             workflow, task_manager=task_manager, parameters=inputs or {}
         )

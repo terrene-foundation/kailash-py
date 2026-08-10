@@ -7,6 +7,8 @@ eliminates the DoS vector from unbounded runtime creation.
 Tier 1 (Unit) - Fast, isolated, uses mocks for external services only.
 """
 
+import asyncio
+import json
 import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,6 +17,22 @@ import pytest
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+
+
+def _stub_workflow():
+    """Build a real single-node Workflow for MCP tool-registration tests.
+
+    A ``MagicMock`` workflow would satisfy every attribute access
+    ``_register_workflow_as_mcp_tool`` performs, which is exactly how the
+    previous version of these tests passed against a registration path that
+    recorded nothing.  The runtime is patched out in the tests that execute
+    the tool, so this workflow is never actually run.
+    """
+    from kailash.workflow.builder import WorkflowBuilder
+
+    builder = WorkflowBuilder()
+    builder.add_node("PythonCodeNode", "test_node", {"code": "result = {}"})
+    return builder.build()
 
 
 class TestNexusSharedRuntime:
@@ -84,36 +102,56 @@ class TestNexusSharedRuntime:
 
 
 class TestNexusMCPToolClosure:
-    """Test that _register_workflow_as_mcp_tool uses self.runtime, not a new one."""
+    """Test that _register_workflow_as_mcp_tool uses self.runtime, not a new one.
 
-    def test_workflow_tool_closure_uses_shared_runtime(self):
-        """The closure created by _register_workflow_as_mcp_tool must use self.runtime.
+    These tests run against the REAL ``kailash_mcp.MCPServer`` that
+    ``Nexus.__init__`` builds — not an injected mock.  A bare ``MagicMock``
+    auto-satisfies ``hasattr(server, "tool") and callable(server.tool)``, so
+    the decorator branch in ``_register_workflow_as_mcp_tool`` "succeeds"
+    against it while recording nothing.  Every assertion below would then be
+    vacuous.  The real server is what production uses and is cheap to build
+    (no FastMCP, no network) — see ``Nexus._initialize_mcp_server``.
+    """
 
-        Note: In WebSocket-only mode (default), _mcp_server is None since the
-        old Nexus MCPServer was removed.  This test manually injects a mock
-        server to verify the closure wiring.
+    def test_workflow_tool_registers_in_tool_registry_not_tools_dict(self):
+        """Registration MUST land in ``_tool_registry`` — the dict tools/list reads.
+
+        ``MCPServer._handle_list_tools`` (kailash_mcp/server.py:2837) iterates
+        ``_tool_registry``.  The FastMCP fallback shim's ``_tools`` dict
+        (kailash_mcp/server.py:1338) is invisible to it, so a workflow
+        registered by a direct ``_tools`` write is silently undiscoverable
+        over the WebSocket JSON-RPC channel.  That direct write is what
+        ``_register_workflow_as_mcp_tool`` did before the guard landed
+        (commit 9504d5f9c); this test is the tripwire for reintroducing it.
         """
         from nexus import Nexus
 
         app = Nexus()
+        try:
+            # Production wiring: the real Core SDK MCPServer, as built by
+            # Nexus._initialize_mcp_server.
+            assert (
+                app._mcp_server is not None
+            ), "Nexus must build a real MCPServer; the closure test is vacuous without one"
 
-        # In WebSocket-only mode, _mcp_server is None.
-        # Inject a mock to test the closure behaviour.
-        app._mcp_server = MagicMock()
-        app._mcp_server._tools = {}
+            workflow = _stub_workflow()
+            app._register_workflow_as_mcp_tool("test_workflow", workflow)
 
-        # Create a mock workflow
-        mock_workflow = MagicMock()
-        mock_workflow.nodes = {"test_node": MagicMock()}
-        mock_workflow.metadata = None
+            # The tool MUST be in the registry tools/list reads from.
+            assert "test_workflow" in app._mcp_server._tool_registry, (
+                "workflow tool missing from _tool_registry — tools/list will not "
+                "surface it over WebSocket"
+            )
 
-        app._register_workflow_as_mcp_tool("test_workflow", mock_workflow)
-
-        # The registered tool function should exist
-        assert "test_workflow" in app._mcp_server._tools
-
-        # Cleanup
-        app.close()
+            # And it MUST be reachable through the JSON-RPC surface an MCP
+            # client actually calls, not merely present in a dict.
+            listed = asyncio.run(app._mcp_server._handle_list_tools({}, request_id=1))
+            names = [tool["name"] for tool in listed["result"]["tools"]]
+            assert (
+                "test_workflow" in names
+            ), f"tools/list did not advertise the workflow tool; got {names}"
+        finally:
+            app.close()
 
     @pytest.mark.asyncio
     async def test_workflow_tool_does_not_create_new_runtime(self):
@@ -121,33 +159,106 @@ class TestNexusMCPToolClosure:
         from nexus import Nexus
 
         app = Nexus()
+        try:
+            workflow = _stub_workflow()
+            app._register_workflow_as_mcp_tool("test_workflow", workflow)
 
-        # Inject mock server (WebSocket-only mode has no server by default)
-        app._mcp_server = MagicMock()
-        app._mcp_server._tools = {}
+            # Reach the closure through the same registry tools/call dispatch
+            # uses, so a regression that stops populating _tool_registry fails
+            # here too rather than silently testing a detached function.
+            tool_func = app._mcp_server._tool_registry["test_workflow"][
+                "original_function"
+            ]
 
-        # Create a mock workflow
-        mock_workflow = MagicMock()
-        mock_workflow.nodes = {"test_node": MagicMock()}
-        mock_workflow.metadata = None
+            # Patch AsyncLocalRuntime to detect if it gets called
+            with patch("nexus.core.AsyncLocalRuntime") as mock_runtime_cls:
+                app.runtime.execute_workflow_async = AsyncMock(
+                    return_value=({"test_node": {"result": "ok"}}, "run-123")
+                )
 
-        app._register_workflow_as_mcp_tool("test_workflow", mock_workflow)
-        tool_func = app._mcp_server._tools["test_workflow"]
+                result = await tool_func(input_data="test")
 
-        # Patch AsyncLocalRuntime to detect if it gets called
-        with patch("nexus.core.AsyncLocalRuntime") as mock_runtime_cls:
-            # Mock the runtime's execute_workflow_async
-            app.runtime.execute_workflow_async = AsyncMock(
-                return_value=({"test_node": {"result": "ok"}}, "run-123")
-            )
+                # AsyncLocalRuntime() should NOT have been called (no new runtime)
+                mock_runtime_cls.assert_not_called()
 
-            await tool_func(input_data="test")
+                # The shared runtime is the one that actually ran the workflow.
+                app.runtime.execute_workflow_async.assert_awaited_once()
+                called_workflow = app.runtime.execute_workflow_async.await_args.args[0]
+                assert called_workflow is workflow
 
-            # AsyncLocalRuntime() should NOT have been called (no new runtime)
-            mock_runtime_cls.assert_not_called()
+                # tools/call wraps the return value in str(); it must be JSON.
+                # A single node whose ``result`` is a scalar is surfaced as
+                # ``{"result": <scalar>, "run_id": ...}`` — see the payload
+                # branch in ``Nexus._register_workflow_as_mcp_tool``.
+                assert json.loads(result) == {"result": "ok", "run_id": "run-123"}
+        finally:
+            app.close()
 
-        # Cleanup
-        app.close()
+    def test_registration_raises_when_no_registry_surface_exists(self):
+        """No ``tool()`` and no ``_tools`` MUST raise, not warn-and-continue.
+
+        The two tests above pin the HAPPY path: the decorator lands the tool in
+        ``_tool_registry``.  They cannot see the FAILURE path, where neither
+        registration surface is reachable — the pre-fix code logged a warning
+        and returned, so ``register()`` went on to log "Workflow registered
+        successfully!" for a tool ``tools/list`` would never advertise.  That
+        is the same silent-undiscoverability defect reached through the error
+        branch (zero-tolerance Rule 3).
+        """
+        from nexus import Nexus
+
+        class NoRegistrySurfaceServer:
+            """MCP server exposing neither registration surface.
+
+            Written as an explicit class rather than a ``MagicMock`` because a
+            MagicMock auto-creates BOTH ``tool`` and ``_tools``, so the branch
+            under test would never be reached and the assertion would be
+            vacuous — the exact false green this module was ported to remove.
+            """
+
+        app = Nexus()
+        real_server = app._mcp_server
+        try:
+            app._mcp_server = NoRegistrySurfaceServer()
+            with pytest.raises(RuntimeError) as exc_info:
+                app._register_workflow_as_mcp_tool("test_workflow", _stub_workflow())
+
+            message = str(exc_info.value)
+            assert "NoRegistrySurfaceServer" in message
+            assert "tools/list" in message
+        finally:
+            # Put the real server back BEFORE close(): close() releases the
+            # runtime refs held by whatever ``_mcp_server`` points at, so
+            # leaving the stub in place strands the real server's acquired
+            # reference (tests/regression/test_issue_1285_close_cascades_runtime.py
+            # is the global detector for exactly that leak).
+            app._mcp_server = real_server
+            app.close()
+
+    def test_registration_raises_when_tool_decorator_fails_with_no_fallback(self):
+        """A failing ``tool()`` with no ``_tools`` fallback MUST surface the cause.
+
+        The decorator's exception is caught so the ``_tools`` fallback can be
+        tried; when that fallback does not exist either, the original failure
+        MUST reach the caller rather than being left in a log line.
+        """
+        from nexus import Nexus
+
+        class FailingToolServer:
+            def tool(self, *args, **kwargs):
+                raise ValueError("registry is sealed")
+
+        app = Nexus()
+        real_server = app._mcp_server
+        try:
+            app._mcp_server = FailingToolServer()
+            with pytest.raises(RuntimeError, match="registry is sealed"):
+                app._register_workflow_as_mcp_tool("test_workflow", _stub_workflow())
+        finally:
+            # See the sibling test above: restore before close() or the real
+            # server's acquired runtime reference is stranded.
+            app._mcp_server = real_server
+            app.close()
 
     # NOTE: TestMCPServerSharedRuntime was removed along with the old
     # nexus.mcp.server.MCPServer class.  The shared runtime pattern is now

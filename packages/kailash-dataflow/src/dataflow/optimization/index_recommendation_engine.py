@@ -52,6 +52,23 @@ def _quote_for(dialect: SQLDialect, name: str) -> str:
     return helper.quote_identifier(name)
 
 
+def _fit_for(dialect: SQLDialect, name: str) -> str:
+    """Fit a GENERATED index name to *dialect*'s identifier-length budget.
+
+    Issue #1971: the recommended index names below are DERIVED from a table
+    name that may already consume the whole budget (PostgreSQL 63), so
+    ``idx_{table}_{columns}`` overflows by construction and ``_quote_for``
+    raises — the recommendation engine then cannot emit an advisory statement
+    for exactly the tables that most need one. Fitting produces a name the
+    operator can paste and execute; the budget is dialect-owned, so a name
+    legal on SQLite (128) is left byte-identical.
+    """
+    helper = _DIALECT_BY_SQLDIALECT.get(
+        dialect, _DIALECT_BY_SQLDIALECT[SQLDialect.POSTGRESQL]
+    )
+    return helper.normalize_identifier(name)
+
+
 class IndexType(Enum):
     """Types of database indexes."""
 
@@ -1064,7 +1081,8 @@ class IndexRecommendationEngine:
         table_q = _quote_for(self.dialect, table)
         columns_q = [_quote_for(self.dialect, c) for c in columns]
         columns_str = ", ".join(columns_q)
-        index_name = f"idx_{table}_{'_'.join(columns)}"
+        # Issue #1971: fit the GENERATED name to the dialect budget first.
+        index_name = _fit_for(self.dialect, f"idx_{table}_{'_'.join(columns)}")
         index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL:
@@ -1101,7 +1119,8 @@ class IndexRecommendationEngine:
         # construction if invalid).
         table_q = _quote_for(self.dialect, table)
         column_q = _quote_for(self.dialect, column)
-        index_name = f"idx_{table}_{column}_partial"
+        # Issue #1971: fit the GENERATED name to the dialect budget first.
+        index_name = _fit_for(self.dialect, f"idx_{table}_{column}_partial")
         index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL:
@@ -1124,7 +1143,10 @@ class IndexRecommendationEngine:
         table_q = _quote_for(self.dialect, table)
         index_cols_q = [_quote_for(self.dialect, c) for c in index_columns]
         index_cols_str = ", ".join(index_cols_q)
-        index_name = f"idx_{table}_{'_'.join(index_columns)}_covering"
+        # Issue #1971: fit the GENERATED name to the dialect budget first.
+        index_name = _fit_for(
+            self.dialect, f"idx_{table}_{'_'.join(index_columns)}_covering"
+        )
         index_q = _quote_for(self.dialect, index_name)
 
         if self.dialect == SQLDialect.POSTGRESQL and include_columns:

@@ -40,9 +40,12 @@ Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
+import logging
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -58,6 +61,8 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+logger = logging.getLogger(__name__)
 
 
 class EnsemblePipeline(Pipeline):
@@ -160,6 +165,22 @@ class EnsemblePipeline(Pipeline):
                 if top_agents:
                     return top_agents
 
+        except ReasoningDegradedError as exc:
+            # #1981: EVERY agent's capability scoring degraded, so the
+            # first-top_k fallback below is an unjudged pick. `run()` is a sync
+            # public contract that must not start raising, so the fallback
+            # stands — but the total judge failure MUST be observable rather
+            # than swallowed by the generic handler
+            # (`rules/zero-tolerance.md` Rule 3).
+            logger.warning(
+                "ensemble.discover_agents.degraded",
+                extra={
+                    "correlation_id": exc.correlation_id,
+                    "model": exc.model,
+                    "error": exc.error,
+                    "fallback": "first_top_k_agents",
+                },
+            )
         except Exception:
             # Fall through to fallback
             pass
@@ -233,14 +254,33 @@ class EnsemblePipeline(Pipeline):
 
                     perspectives.append(
                         {
-                            "error": str(e),
+                            # Same asymmetry the other three patterns carried:
+                            # the `error` key was scrubbed while the
+                            # `traceback` key in the same dict rendered the
+                            # exception in full, final line included. This
+                            # perspective dict is handed to the SYNTHESIZER and
+                            # then returned to the caller, so an unscrubbed
+                            # traceback here also becomes model input.
+                            #
+                            # Scrubbed rather than dropped: the traceback is a
+                            # string built here (unlike the `exc_info=True` log
+                            # sinks 689f9ebd8 had to drop), so the same
+                            # scrubber keeps the frame trail and removes the
+                            # credential.
+                            "error": scrub_remote_error(e),
                             "agent_id": (
                                 agent.agent_id
                                 if hasattr(agent, "agent_id")
                                 else "unknown"
                             ),
                             "status": "failed",
-                            "traceback": traceback.format_exc(),
+                            # From the exception object rather than
+                            # `format_exc()`'s ambient `sys.exc_info()`; see
+                            # `parallel._execute_parallel_async`, where the
+                            # ambient form rendered no exception at all.
+                            "traceback": scrub_remote_error(
+                                "".join(traceback.format_exception(e))
+                            ),
                         }
                     )
 
@@ -289,9 +329,17 @@ class EnsemblePipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    # `self.synthesizer.run` is another provider dispatch, so
+                    # this guard is the sibling of the per-agent one above and
+                    # gets the same treatment. It is also the pattern's TOP
+                    # LEVEL return -- `run` hands this dict straight back --
+                    # which is what makes the raw traceback here the most
+                    # directly caller-visible of the nine.
+                    "error": scrub_remote_error(e),
                     "status": "synthesis_failed",
-                    "traceback": traceback.format_exc(),
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                     "perspectives": perspectives,  # Include original perspectives
                 }
 

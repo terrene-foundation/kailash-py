@@ -21,11 +21,13 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
+    get_type_hints,
     runtime_checkable,
 )
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
+from kailash.utils.secure_logging import safe_callable_name
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 from nexus.background import BackgroundService
@@ -41,6 +43,114 @@ from nexus.transports.mcp import MCPTransport
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Hard cap on distinct client IPs tracked by ONE endpoint's in-memory rate
+# limiter. The limiter keys per client IP, and only the CURRENT minute bucket is
+# ever read, so a stale entry has no enforcement value -- but nothing evicted the
+# outer key, so every IP ever seen persisted for the process lifetime. An
+# attacker rotating source addresses (trivial over IPv6) grew it without bound.
+#
+# The cap makes that growth bounded rather than unbounded. Eviction fails OPEN
+# for the evicted IP (its counter restarts), which grants an attacker NOTHING
+# they do not already have -- rotating to a fresh IP already yields a fresh
+# counter -- while replacing a whole-process memory exhaustion with a bounded,
+# per-IP allowance reset. ~10k IPs/endpoint is well beyond legitimate concurrent
+# clients and costs single-digit MB.
+_MAX_RATE_LIMIT_TRACKED_CLIENTS = 10_000
+
+# Minute buckets older than this many windows are unreachable by the limit check.
+_RATE_LIMIT_STALE_BUCKET_AGE = 5
+
+
+class _Unset:
+    """Sentinel for "the caller did not supply this argument".
+
+    ``rate_limit=None`` is DOCUMENTED as "unlimited", but None was also doing
+    duty as the not-supplied marker, so the documented value could never reach
+    its documented behaviour -- it fell through to the configured default
+    instead. A kwarg accepted at the public surface with no effect on the body
+    is the silent-fallback mode at the API surface (zero-tolerance Rule 3c).
+    Separating the two meanings is the only fix that keeps BOTH: an explicit
+    None means unlimited, and omitting the argument still inherits the config.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostic only
+        return "<not supplied>"
+
+
+_UNSET = _Unset()
+
+
+def _coerce_rate_limit(value: Any, source: str) -> Optional[int]:
+    """Normalise a configured rate limit, rejecting misconfiguration loudly.
+
+    Args:
+        value: The raw limit -- ``None``, an int, or an integral float.
+        source: Where it came from, named verbatim in the error message
+            (``"rate_limit"`` for the decorator kwarg,
+            ``"rate_limit_config['default_rate_limit']"`` for the constructor
+            config) so the operator knows which one to edit.
+
+    Returns:
+        The limit in requests per minute, or None for unlimited.
+
+    Raises:
+        ValueError: For any value that cannot be a request count.
+
+    Every rejection below replaces a behaviour that was silent, and three of
+    the four failed OPEN:
+
+    * ``bool`` -- ``isinstance(True, int)`` is True in Python, so ``True``
+      registered as a limit of ONE request per minute and ``False`` as zero,
+      i.e. unlimited. A boolean in an int-typed config field is always a
+      mistake, and neither reading of it was announced.
+    * negative -- failed the ``> 0`` guard and resolved to unlimited, so a
+      typo'd minus sign silently removed rate limiting altogether.
+    * non-integral float -- ``int(0.5)`` is 0, which is unlimited, so coercing
+      every float would import the same fail-open.
+
+    An INTEGRAL float is ACCEPTED rather than rejected. Configuration loaded
+    from JSON, YAML, or an env-var pipeline routinely arrives as ``50.0``, and
+    a limit of "fifty point zero" is unambiguous; raising there took the whole
+    application down at import time for a value whose meaning was never in
+    doubt. Rejecting it would be choosing a startup outage over a lossless
+    conversion.
+
+    ``0`` keeps its pre-existing meaning of unlimited (from the original
+    ``rate_limit > 0`` guard) and is documented as such on ``endpoint()``. The
+    other reading -- zero requests allowed, therefore reject everything --
+    would convert an existing ``0`` config into a total outage on upgrade.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{source} must be an int or None (None = unlimited); got bool "
+            f"{value!r}. A bool passes Python's int check, so this would "
+            f"otherwise mean {'a limit of 1 request per minute' if value else 'unlimited'}."
+        )
+    if isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(
+                f"{source} must be a whole number of requests per minute; got "
+                f"{value!r}. Rounding it would silently change the limit."
+            )
+        value = int(value)
+    if not isinstance(value, int):
+        raise ValueError(
+            f"{source} must be an int or None (None = unlimited); got "
+            f"{type(value).__name__}"
+        )
+    if value < 0:
+        raise ValueError(
+            f"{source} must not be negative; got {value}. A negative limit "
+            f"previously resolved to unlimited, i.e. it silently disabled "
+            f"rate limiting. Use 0 or None for unlimited."
+        )
+    # 0 is unlimited -- see the docstring above for why that is preserved.
+    return value or None
 
 
 class NexusConfig:
@@ -101,6 +211,41 @@ class MountInfo:
     subapp: Any
     name: Optional[str]
     added_at: datetime
+
+
+@dataclass
+class _RegistrationSnapshot:
+    """Pre-mutation state captured by :meth:`Nexus.register` for rollback.
+
+    ``register()`` writes several stores in sequence and any of them can
+    fail partway through. This records enough of the prior state to undo
+    those writes: whether the name was already registered (so a failed
+    RE-registration restores the previous entry instead of deleting it),
+    and the ``metadata`` attribute of the caller's ``Workflow`` object,
+    which ``register()`` reassigns.
+
+    Attributes:
+        name: The workflow name being registered.
+        workflow: The built ``Workflow`` object passed to the registry.
+        was_registered: True if ``name`` already had a registry entry.
+        prior_workflow: The ``Workflow`` previously registered under
+            ``name``, or None when there was none.
+        had_registry_metadata: True if the registry held a metadata entry
+            for ``name`` (distinct from holding an empty dict).
+        prior_registry_metadata: The registry's prior metadata dict.
+        had_workflow_metadata_attr: True if the workflow object had a
+            ``metadata`` attribute before registration.
+        prior_workflow_metadata: The workflow object's prior ``metadata``.
+    """
+
+    name: str
+    workflow: Any
+    was_registered: bool
+    prior_workflow: Any
+    had_registry_metadata: bool
+    prior_registry_metadata: Optional[Dict[str, Any]]
+    had_workflow_metadata_attr: bool
+    prior_workflow_metadata: Any
 
 
 @runtime_checkable
@@ -246,6 +391,15 @@ class Nexus:
     Like FastAPI, provides a clear instance with optional enterprise features
     configurable at construction time or via attributes.
     """
+
+    # Class-level defaults for ``__del__`` safety. ``__init__`` can raise before
+    # ``self.runtime`` is bound (invalid preset, port validation, gateway
+    # construction failure) and CPython still finalizes the partially-built
+    # object. Without a class-level default the finalizer would raise
+    # ``AttributeError`` from inside GC, which Python can only print as
+    # "Exception ignored in: <function Nexus.__del__>" — hiding the real
+    # constructor error. Same pattern as ``WebSocketTransport``.
+    runtime: Any = None
 
     def __init__(
         self,
@@ -519,7 +673,20 @@ class Nexus:
         self.mcp = NexusConfig()
 
         # Apply enterprise options (store rate_limit for endpoint decorator)
-        self._rate_limit = rate_limit
+        #
+        # COERCED, like the other two surfaces. This one was a bare assignment,
+        # so `Nexus(rate_limit=...)` accepted values the decorator and the config
+        # default both reject -- and the consumers read it raw:
+        # `sse.py::_rate_limit_exceeded` treats anything failing `> 0` as "no
+        # limit configured", so a typo'd minus sign silently disabled the SSE
+        # limiter, and `True` is an int subclass so it registered as ONE request
+        # per minute. Measured before the fix, through the transport:
+        #     rate_limit=-5   -> [200,200,200,200,200,200]  fail-OPEN
+        #     rate_limit=True -> [200,429,429,429,429,429]  1/min
+        #     rate_limit=2    -> [200,200,429,...]          control, limiter wired
+        # Those are verbatim the two failures `_coerce_rate_limit`'s own
+        # docstring says it exists to reject; it simply never ran here.
+        self._rate_limit = _coerce_rate_limit(rate_limit, "Nexus(rate_limit=...)")
         if enable_auth:
             self._auth_enabled = True
         if enable_monitoring:
@@ -1361,32 +1528,6 @@ Check the documentation or explore available resources.
 
         logger.debug(f"Workflow '{name}' registered as MCP resource at {uri}")
 
-    def _create_mock_mcp_server(self):
-        """Create a simple mock MCP server for testing."""
-
-        class MockMCPServer:
-            def __init__(self):
-                self._tools = {}
-                self._resources = {}
-                self._prompts = {}
-
-            def tool(self, name=None, **kwargs):
-                def decorator(func):
-                    tool_name = name or func.__name__
-                    self._tools[tool_name] = func
-                    return func
-
-                return decorator
-
-            def resource(self, pattern):
-                def decorator(func):
-                    self._resources[pattern] = func
-                    return func
-
-                return decorator
-
-        return MockMCPServer()
-
     def _create_sdk_mcp_server(self):
         """Create production-ready MCP server using Core SDK.
 
@@ -1509,10 +1650,23 @@ Check the documentation or explore available resources.
         ``tool()`` decorator path, which populates ``_tool_registry`` —
         the dict ``_handle_list_tools`` reads to answer ``tools/list``.
 
-        Direct writes to ``_mcp_server._tools`` are BLOCKED: that dict only
-        exists on the FastMCP fallback shim (kailash_mcp/server.py:236) and
-        is invisible to the MCPServer's JSON-RPC handlers, so tools added
-        that way never appear in ``tools/list`` over WebSocket.
+        Direct writes to ``_mcp_server._tools`` are BLOCKED, and no branch
+        below performs one. That dict exists only on the FastMCP fallback
+        SHIM (``kailash_mcp/server.py:1333-1348`` — ``FallbackMCPServer``,
+        whose ``__init__`` creates ``_tools`` at line 1338 and whose own
+        ``tool()`` decorator populates it at line 1348). ``MCPServer``
+        assigns that shim to ``self._mcp`` (``server.py:1327``, and the
+        sibling construction at ``server.py:612``), never to itself, so
+        ``_mcp_server._tools`` does not exist on any server type this
+        package builds. Even where it did exist it is invisible to the
+        MCPServer's JSON-RPC handlers: ``_handle_list_tools``
+        (``kailash_mcp/server.py:2832-2837``) iterates ``_tool_registry``,
+        so a tool added by a direct ``_tools`` write would never appear in
+        ``tools/list`` over WebSocket — a registration that reports success
+        and advertises nothing. A fallback that writes ``_tools`` therefore
+        cannot make a tool reachable; it can only convert a loud failure
+        into a silent one (zero-tolerance Rule 3), which is why the failure
+        path raises instead.
 
         Uses self.runtime (server-level shared runtime) instead of creating
         a new AsyncLocalRuntime per invocation (M3-001 fix).
@@ -1524,11 +1678,31 @@ Check the documentation or explore available resources.
             """Execute workflow with given parameters.
 
             Args from MCP ``tools/call`` arrive as kwargs in ``params``.
-            They are wrapped under the ``parameters`` key when forwarded to
-            the runtime — Kailash workflow nodes (esp. PythonCodeNode) read
-            their inputs as ``parameters.get(...)`` from the executing
-            namespace, so the workflow's ``parameters`` variable is the
-            on-wire convention shared with the HTTP /execute endpoint.
+            They are forwarded to the runtime in BOTH shapes — each key at
+            workflow level AND the whole mapping under the ``parameters``
+            key — because Kailash workflow nodes (esp. PythonCodeNode) may
+            read their inputs either as ``parameters.get(...)`` or as bare
+            top-level names, and the SAME registered workflow must behave
+            identically on every channel.
+
+            The binding comes from
+            ``kailash.workflow.input_envelope.bind_parameter_envelope``, the
+            one place that decision is made for every entry point — HTTP,
+            CLI, WebSocket, the Core SDK channels, and here. This path used to
+            open-code the same mapping instead: equivalent that day, and a
+            guarantee that the NEXT change to the envelope contract would land
+            on the other channels and skip the busiest one, re-opening the
+            API/CLI/MCP divergence the helper exists to close. Collision
+            precedence is the helper's, not this call site's: an inner key
+            literally named ``parameters`` loses to the envelope, and a key
+            matching a NODE ID is scoped to that node by the runtime on every
+            channel alike.
+
+            Historical note: this previously forwarded ONLY
+            ``{"parameters": params}`` while the HTTP endpoint UNWRAPPED its
+            envelope, so a ``parameters.get(...)`` workflow returned 200 over
+            MCP and HTTP 500 over API/CLI. The docstring asserted the two
+            shared a convention; they did not.
 
             Returns a JSON string. ``MCPServer._handle_call_tool`` wraps
             the return value with ``str(result)`` into a text content
@@ -1539,8 +1713,10 @@ Check the documentation or explore available resources.
             """
             import json
 
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
             execution_result = await shared_runtime.execute_workflow_async(
-                workflow, inputs={"parameters": params}
+                workflow, inputs=bind_parameter_envelope(params)
             )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
@@ -1579,34 +1755,72 @@ Check the documentation or explore available resources.
         workflow_tool.__doc__ = f"Execute workflow '{name}'"
 
         # Register via the proper @tool() decorator path — this writes to
-        # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from.
-        if hasattr(self._mcp_server, "tool") and callable(
-            getattr(self._mcp_server, "tool")
-        ):
+        # ``_tool_registry`` which JSON-RPC ``tools/list`` reads from. It is
+        # the ONLY surface that makes the tool reachable, so it is also the
+        # only surface attempted.
+        tool_decorator = getattr(self._mcp_server, "tool", None)
+        if callable(tool_decorator):
             try:
-                self._mcp_server.tool()(workflow_tool)
-                logger.info(
-                    f"Workflow '{name}' registered as MCP tool (WebSocket mode)"
-                )
-                return
+                tool_decorator()(workflow_tool)
             except Exception as e:
-                logger.warning(
-                    f"MCPServer.tool() registration for '{name}' failed: {e}; "
-                    f"falling back to direct registry write"
-                )
+                # No usable fallback exists (see the ``_tools`` discussion in
+                # the docstring), so the failure is surfaced rather than
+                # downgraded to a warning: register() would otherwise report
+                # "registered successfully" for a tool ``tools/list`` will
+                # never advertise.
+                raise RuntimeError(
+                    f"Could not register workflow '{name}' as an MCP tool: the "
+                    f"MCP server ({type(self._mcp_server).__name__}) tool() "
+                    f"decorator failed with: {e}. The tool would be invisible "
+                    f"to tools/list."
+                ) from e
+            logger.info(f"Workflow '{name}' registered as MCP tool (WebSocket mode)")
+            return
 
-        # Fallback: write to the FastMCP-shim _tools dict for compatibility
-        # with simple/mock MCP servers used in tests.
-        if hasattr(self._mcp_server, "_tools"):
-            self._mcp_server._tools[name] = workflow_tool
-            logger.info(
-                f"Workflow '{name}' registered as MCP tool via fallback _tools dict"
-            )
-        else:
-            logger.warning(
-                f"Could not register workflow '{name}' as MCP tool - "
-                f"neither tool() decorator nor _tools attribute available"
-            )
+        # No registration surface the JSON-RPC handlers read.
+        raise RuntimeError(
+            f"Could not register workflow '{name}' as an MCP tool: the MCP "
+            f"server ({type(self._mcp_server).__name__}) exposes no callable "
+            f"tool() decorator, so the tool would be invisible to tools/list."
+        )
+
+    def _precheck_mcp_tool_surface(self, name: str) -> None:
+        """Raise if MCP tool registration for ``name`` cannot possibly land.
+
+        :meth:`register` writes several stores in sequence, and the MCP tool
+        is the LAST of them. Whether a tool-registration surface exists at
+        all is a property of the SERVER, not of this workflow, so it is
+        checkable before any store is touched. Checking it here turns
+        "registry entry + gateway route land, then the MCP step raises" into
+        a clean up-front rejection.
+
+        Mirrors the branch conditions in :meth:`register` exactly: an
+        MCPChannel owns its own registration surface, and a server exposing
+        ``register_workflow`` handles the tool itself.
+
+        Raises:
+            RuntimeError: If the configured MCP server exposes no callable
+                ``tool()`` decorator, so a registered tool would never be
+                advertised by ``tools/list``.
+        """
+        if getattr(self, "_mcp_channel", None):
+            return
+
+        server = getattr(self, "_mcp_server", None)
+        if server is None:
+            return
+
+        if hasattr(server, "register_workflow"):
+            return
+
+        if callable(getattr(server, "tool", None)):
+            return
+
+        raise RuntimeError(
+            f"Could not register workflow '{name}' as an MCP tool: the MCP "
+            f"server ({type(server).__name__}) exposes no callable tool() "
+            f"decorator, so the tool would be invisible to tools/list."
+        )
 
     def _get_api_keys(self) -> Dict[str, str]:
         """Get API keys for authentication.
@@ -1653,69 +1867,137 @@ Check the documentation or explore available resources.
         Zero-config registration: Single registration → Multi-channel exposure (API, CLI, MCP)
         Leverages the enterprise gateway's built-in multi-channel support.
 
+        **Failure contract.** Registration writes seven stores across three
+        subsystems — registry, gateway, MCP server (see
+        :meth:`_remove_from_all_channels` for the full enumeration).
+        Everything checkable up front is checked before the first store is
+        touched: the name here, the MCP server's tool-registration surface
+        here, and the caller's metadata inside
+        :meth:`HandlerRegistry.register_workflow`, which validates it
+        before its own (first) write. Anything that can only fail
+        mid-sequence is undone by a compensating rollback, so:
+
+        * registering a NEW name either succeeds completely or leaves
+          nothing behind in any store — no registry entry, no gateway
+          route, no half-registered MCP tool or ``workflow://`` resource;
+        * re-registering an EXISTING name that fails (the enterprise
+          gateway raises ``ValueError: Workflow '<name>' already
+          registered``) restores the previous registry entry rather than
+          leaving the new workflow half-installed over it. The channel
+          artifacts already installed under that name address the same
+          name and keep serving the previous registration; use
+          :meth:`deregister` before re-registering.
+
+        Rollback is compensating, not transactional: the MCP stores belong
+        to a third-party server object with no transaction support, so the
+        undo is the same best-effort removal :meth:`deregister` performs.
+
         Args:
             name: Workflow identifier
             workflow: Workflow instance or WorkflowBuilder
             metadata: Optional structured metadata (version, author, tags, description, etc.)
+
+        Raises:
+            ValueError: If ``name`` is not addressable on every channel
+                (see :func:`nexus.validation.validate_workflow_name`), if
+                ``metadata`` is not JSON-serializable or exceeds the registry
+                size cap, or if the gateway already has this name registered.
+            RuntimeError: If the configured MCP server exposes no
+                tool-registration surface, so the workflow could never be
+                advertised by ``tools/list``.
         """
         import time
 
-        registration_start = time.time()
+        from nexus.validation import validate_workflow_name
+
+        # ----- Phase 1: validate everything BEFORE any store is mutated ----
+        #
+        # The execute route (``_execute_workflow``) and the handler
+        # registration path (``register_handler``) already ran this
+        # validator; register() was the one registration surface that
+        # skipped it, so a name it rejects could be registered and then 400
+        # on every execute request forever.
+        validate_workflow_name(name)
 
         # Handle WorkflowBuilder
         if hasattr(workflow, "build"):
             workflow = workflow.build()
 
-        # Store internally via HandlerRegistry FIRST so metadata
-        # validation (JSON-serializable, size cap) runs before we touch
-        # the workflow object. If validation fails, the caller's
-        # workflow is left untouched and the ValueError surfaces
-        # cleanly — no half-mutated state to clean up.
-        self._registry.register_workflow(name, workflow, metadata=metadata)
+        # Whether an MCP tool can be registered at all is a property of the
+        # server, not of this workflow, so it is checkable now — before the
+        # registry entry and gateway route land and have to be unwound.
+        self._precheck_mcp_tool_surface(name)
 
-        # Merge caller-supplied metadata into the Workflow object itself
-        # so downstream consumers that read workflow.metadata (MCP
-        # workflow:// resource, OpenAPI schema derivation, etc.) see the
-        # supplied fields without a second lookup. Caller values take
-        # precedence over existing keys. We assign a NEW dict rather
-        # than mutating in place: the same Workflow instance may be
-        # registered under multiple names (shared builder output), and
-        # in-place mutation would leak metadata across registrations.
-        if metadata and hasattr(workflow, "metadata"):
-            existing = workflow.metadata if workflow.metadata else {}
-            workflow.metadata = {**existing, **metadata}
+        registration_start = time.time()
 
-        # Validate PythonCodeNode sandbox issues at registration time
-        self._validate_workflow_sandbox(name, workflow)
+        # ----- Phase 2: mutate stores under a compensating rollback --------
+        snapshot = self._snapshot_registration(name, workflow)
+        try:
+            # Store internally via HandlerRegistry FIRST so metadata
+            # validation (JSON-serializable, size cap) runs before we touch
+            # the workflow object. If validation fails, the caller's
+            # workflow is left untouched and the ValueError surfaces
+            # cleanly — no half-mutated state to clean up.
+            self._registry.register_workflow(name, workflow, metadata=metadata)
 
-        # Register with enterprise gateway - this automatically exposes on all channels
-        if self._http_transport.gateway:
+            # Merge caller-supplied metadata into the Workflow object itself
+            # so downstream consumers that read workflow.metadata (MCP
+            # workflow:// resource, OpenAPI schema derivation, etc.) see the
+            # supplied fields without a second lookup. Caller values take
+            # precedence over existing keys. We assign a NEW dict rather
+            # than mutating in place: the same Workflow instance may be
+            # registered under multiple names (shared builder output), and
+            # in-place mutation would leak metadata across registrations.
+            if metadata and hasattr(workflow, "metadata"):
+                existing = workflow.metadata if workflow.metadata else {}
+                workflow.metadata = {**existing, **metadata}
+
+            # Validate PythonCodeNode sandbox issues at registration time
+            self._validate_workflow_sandbox(name, workflow)
+
+            # Register with enterprise gateway - this automatically exposes on all channels
+            if self._http_transport.gateway:
+                try:
+                    self._http_transport.register_workflow(name, workflow)
+                    logger.info(f"Workflow '{name}' registered with enterprise gateway")
+                except Exception as e:
+                    logger.error(f"Failed to register workflow '{name}': {e}")
+                    raise
+
+            # Register with MCP channel for full protocol support
+            if hasattr(self, "_mcp_channel") and self._mcp_channel:
+                # MCPChannel automatically exposes workflow as tool
+                self._mcp_channel.register_workflow(name, workflow)
+                logger.info(f"Workflow '{name}' registered with enhanced MCP channel")
+                # Also register as a workflow:// resource so resources/list
+                # surfaces the workflow descriptor for AI-agent discovery.
+                self._register_workflow_as_mcp_resource(name, workflow)
+            elif hasattr(self, "_mcp_server") and self._mcp_server:
+                # Register workflow as MCP tool when using WebSocket wrapper
+                # Core SDK MCPServer uses decorators, so we register dynamically
+                if hasattr(self._mcp_server, "register_workflow"):
+                    # Simple MCP server has register_workflow method
+                    self._mcp_server.register_workflow(name, workflow)
+                else:
+                    # Core SDK MCPServer - register as tool manually
+                    self._register_workflow_as_mcp_tool(name, workflow)
+                # Register as workflow:// resource for resources/list discovery.
+                self._register_workflow_as_mcp_resource(name, workflow)
+        except BaseException:
+            # BaseException, not Exception: a KeyboardInterrupt landing
+            # between two store writes leaves exactly the half-registered
+            # state this block exists to prevent.
             try:
-                self._http_transport.register_workflow(name, workflow)
-                logger.info(f"Workflow '{name}' registered with enterprise gateway")
-            except Exception as e:
-                logger.error(f"Failed to register workflow '{name}': {e}")
-                raise
-
-        # Register with MCP channel for full protocol support
-        if hasattr(self, "_mcp_channel") and self._mcp_channel:
-            # MCPChannel automatically exposes workflow as tool
-            self._mcp_channel.register_workflow(name, workflow)
-            logger.info(f"Workflow '{name}' registered with enhanced MCP channel")
-            # Also register as a workflow:// resource so resources/list
-            # surfaces the workflow descriptor for AI-agent discovery.
-            self._register_workflow_as_mcp_resource(name, workflow)
-        elif hasattr(self, "_mcp_server") and self._mcp_server:
-            # Register workflow as MCP tool when using WebSocket wrapper
-            # Core SDK MCPServer uses decorators, so we register dynamically
-            if hasattr(self._mcp_server, "register_workflow"):
-                # Simple MCP server has register_workflow method
-                self._mcp_server.register_workflow(name, workflow)
-            else:
-                # Core SDK MCPServer - register as tool manually
-                self._register_workflow_as_mcp_tool(name, workflow)
-            # Register as workflow:// resource for resources/list discovery.
-            self._register_workflow_as_mcp_resource(name, workflow)
+                self._rollback_registration(snapshot)
+            except Exception as rollback_error:  # pragma: no cover - defensive
+                # Never let a rollback failure mask the original error; log
+                # it loudly and re-raise what actually went wrong.
+                logger.error(
+                    f"Rollback after a failed register('{name}') did not "
+                    f"complete: {type(rollback_error).__name__}: "
+                    f"{rollback_error}"
+                )
+            raise
 
         # Track performance metric
         registration_time = time.time() - registration_start
@@ -1734,6 +2016,81 @@ Check the documentation or explore available resources.
             f"   🤖 MCP Tool: workflow_{name}\n"
             f"   💻 CLI Command: nexus execute {name}\n"
             f"   ⏱️  Registration time: {registration_time:.3f}s"
+        )
+
+    def _snapshot_registration(self, name: str, workflow) -> _RegistrationSnapshot:
+        """Capture the state :meth:`register` is about to overwrite.
+
+        Reads only; performs no mutation. Taken AFTER a ``WorkflowBuilder``
+        has been built so the snapshot refers to the same object the
+        registry will hold.
+
+        Args:
+            name: Workflow name about to be registered.
+            workflow: The built ``Workflow`` about to be registered.
+
+        Returns:
+            The pre-mutation snapshot :meth:`_rollback_registration` needs.
+        """
+        registry = self._registry
+        return _RegistrationSnapshot(
+            name=name,
+            workflow=workflow,
+            was_registered=name in registry._workflows,
+            prior_workflow=registry._workflows.get(name),
+            had_registry_metadata=name in registry._workflow_metadata,
+            prior_registry_metadata=registry._workflow_metadata.get(name),
+            had_workflow_metadata_attr=hasattr(workflow, "metadata"),
+            prior_workflow_metadata=getattr(workflow, "metadata", None),
+        )
+
+    def _rollback_registration(self, snapshot: _RegistrationSnapshot) -> None:
+        """Undo the store writes of a :meth:`register` call that raised.
+
+        Two cases, because "undo" means different things for each:
+
+        * **New name** — remove it from every store
+          (:meth:`_remove_from_all_channels`), so a failed registration
+          leaves nothing behind: no registry entry, no gateway route, no
+          MCP tool, no ``workflow://`` resource.
+        * **Existing name** (a re-registration that failed) — restore the
+          previous registry entry. The channel artifacts installed under
+          that name belong to the PREVIOUS registration and were never
+          removed by this call, so they stay and keep serving it; deleting
+          them here would turn a rejected re-registration into an outage
+          for a workflow that was working.
+
+        Always restores the ``metadata`` attribute on the caller's
+        ``Workflow`` object, which :meth:`register` reassigns.
+
+        Args:
+            snapshot: State captured by :meth:`_snapshot_registration`.
+        """
+        name = snapshot.name
+
+        # The caller's Workflow object is theirs; a failed register() must
+        # not leave merged metadata on it.
+        if snapshot.had_workflow_metadata_attr:
+            snapshot.workflow.metadata = snapshot.prior_workflow_metadata
+
+        if snapshot.was_registered:
+            self._registry._workflows[name] = snapshot.prior_workflow
+            if snapshot.had_registry_metadata:
+                self._registry._workflow_metadata[name] = (
+                    snapshot.prior_registry_metadata
+                )
+            else:
+                self._registry._workflow_metadata.pop(name, None)
+            logger.warning(
+                f"register('{name}') failed; restored the previous "
+                f"registration for that name"
+            )
+            return
+
+        self._remove_from_all_channels(name)
+        logger.warning(
+            f"register('{name}') failed; rolled back the partial registration "
+            f"so no channel is left advertising it"
         )
 
     def deregister(self, name: str) -> bool:
@@ -1756,6 +2113,42 @@ Check the documentation or explore available resources.
         """
         existed = name in self._registry.list_workflows()
 
+        self._remove_from_all_channels(name)
+
+        if existed:
+            logger.info(f"Workflow '{name}' deregistered from all channels")
+        return existed
+
+    def _remove_from_all_channels(self, name: str) -> None:
+        """Drop ``name`` from every store :meth:`register` writes.
+
+        The write set register() covers, in the order register() fills it:
+
+        1. ``HandlerRegistry._workflows[name]`` — the registry Nexus owns
+           and every channel reads through.
+        2. ``HandlerRegistry._workflow_metadata[name]`` — caller metadata.
+        3. The enterprise gateway's ``/workflows/{name}`` mount plus the
+           per-workflow ``WorkflowAPI`` runtime behind it.
+        4. The MCP tool, in TWO stores — ``server._tool_registry`` (the
+           wrapper dict ``tools/list`` reads) AND
+           ``server._mcp._tool_manager._tools`` (FastMCP).
+        5. The ``workflow://{name}`` resource, likewise in TWO stores —
+           ``server._resource_registry`` AND
+           ``server._mcp._resource_manager._resources``.
+
+        Items 4 and 5 are the "four backing stores" the MCP surface keeps
+        per workflow; :meth:`_deregister_workflow_mcp` clears all four.
+
+        Shared by :meth:`deregister` (the public path) and
+        :meth:`_rollback_registration` (the failure path), so the undo can
+        never drift from what registration installed.
+
+        Removal is best-effort per store and never raises: this runs on the
+        failure path, where an exception would mask the original error.
+
+        Args:
+            name: Workflow identifier to remove from every store.
+        """
         # Internal registry (name -> Workflow + metadata).
         self._registry._workflows.pop(name, None)
         self._registry._workflow_metadata.pop(name, None)
@@ -1786,10 +2179,6 @@ Check the documentation or explore available resources.
         # MCP server (WebSocket wrapper): drop the tool + workflow:// resource
         # so a re-register re-installs a fresh handler rather than colliding.
         self._deregister_workflow_mcp(name)
-
-        if existed:
-            logger.info(f"Workflow '{name}' deregistered from all channels")
-        return existed
 
     def _deregister_workflow_mcp(self, name: str) -> None:
         """Best-effort removal of a workflow's MCP tool + resource.
@@ -1926,7 +2315,7 @@ Check the documentation or explore available resources.
         self,
         path: str,
         methods: Optional[List[str]] = None,
-        rate_limit: Optional[int] = None,
+        rate_limit: Any = _UNSET,
         **fastapi_kwargs,
     ):
         """Decorator to register custom REST endpoint (API-only).
@@ -1937,7 +2326,16 @@ Check the documentation or explore available resources.
         Args:
             path: URL path pattern (e.g., "/api/conversations/{conversation_id}")
             methods: HTTP methods (default: ["GET"])
-            rate_limit: Requests per minute limit (default: 100, None=unlimited)
+            rate_limit: Requests per minute limit. Accepts an int, an integral
+                float (``50.0`` -- config from JSON/YAML/env commonly yields
+                one), or None. ``None`` means UNLIMITED. ``0`` also means
+                unlimited, preserved from the original ``> 0`` guard. OMITTING
+                the argument is distinct from passing None: it inherits
+                ``rate_limit_config["default_rate_limit"]``, which itself
+                defaults to 100. A bool, a negative number, or a fractional
+                float raises at registration -- see :func:`_coerce_rate_limit`
+                for why each of those was previously silent, and mostly
+                fail-open.
             **fastapi_kwargs: Additional FastAPI route parameters
                 - status_code: int - HTTP status code for successful response
                 - response_model: Type - Pydantic model for response validation
@@ -1961,10 +2359,149 @@ Check the documentation or explore available resources.
         if methods is None:
             methods = ["GET"]
 
-        # Use global rate limit config or endpoint-specific limit
-        if rate_limit is None:
-            # Check if global rate limit is configured
-            rate_limit = self.rate_limit_config.get("default_rate_limit", 100)
+        # Resolve the limit. NOT-SUPPLIED falls back to the config; an
+        # explicit None is the documented "unlimited" and must not.
+        #
+        # `rate_limit_config` is Dict[str, Any], so an explicit
+        # {"default_rate_limit": None} resolves to None here rather than to the
+        # 100 default -- and the raw value was then compared with `> 0` inside
+        # the request wrapper, raising "TypeError: '>' not supported between
+        # instances of 'NoneType' and 'int'" on EVERY request to the endpoint
+        # (an unconditional HTTP 500 on a public constructor kwarg).
+        #
+        # Both origins are normalised through ONE helper so that a value
+        # arriving from the constructor kwarg and the same value passed to the
+        # decorator cannot be validated differently -- they were, and the
+        # config path was the looser of the two. The helper raises at
+        # REGISTRATION, where an operator can act on it, rather than letting a
+        # misconfiguration become a per-request TypeError or a silent
+        # fail-open.
+        if isinstance(rate_limit, _Unset):
+            effective_rate_limit = _coerce_rate_limit(
+                self.rate_limit_config.get("default_rate_limit", 100),
+                "rate_limit_config['default_rate_limit']",
+            )
+        else:
+            effective_rate_limit = _coerce_rate_limit(rate_limit, "rate_limit")
+
+        def _declares_fastapi_request(handler: Any) -> bool:
+            """True when ``handler`` declares a FastAPI ``Request`` parameter.
+
+            The rate-limit wrapper below can only engage when it finds a
+            ``Request`` instance among the handler's args/kwargs, so this is
+            the registration-time predicate for "will rate limiting actually
+            run for this handler".
+
+            The annotation is RESOLVED rather than name-matched. A quoted
+            annotation -- which is what every annotation in a ``from __future__
+            import annotations`` module is -- previously matched on its bare
+            name, so ANY class called ``Request`` satisfied it: a Pydantic BODY
+            model named ``Request`` is the common case. The runtime resolves by
+            ``isinstance(arg, fastapi.Request)`` and would never find one, so
+            the predicate reported ENFORCED and stayed silent over a completely
+            unlimited endpoint whose registration log still advertised the
+            limit. Two different tests for the same question is the defect;
+            resolving the annotation makes them one test.
+            """
+            from fastapi import Request
+
+            try:
+                signature = inspect.signature(handler)
+            except (TypeError, ValueError):
+                # Un-introspectable callable: cannot prove the parameter is
+                # absent, so stay silent rather than emit a false warning.
+                return True
+
+            try:
+                hints = get_type_hints(handler)
+            except Exception as exc:
+                # The annotations exist but do not resolve here (a forward
+                # reference to a name not importable at registration time, an
+                # exotic callable). "Cannot prove absence" is not "absent", so
+                # the inert-limit WARN stays silent -- but the failure itself
+                # is reported, because a security control whose verification
+                # did not run must not look identical to one that passed.
+                # TWO caller-supplied payloads used to reach this ONE record,
+                # so fixing either alone would still have shipped the other.
+                #
+                # (1) The identity fallback was `repr(handler)`, and `handler`
+                #     is caller-supplied. `functools.partial(dashboard,
+                #     dsn="postgres://svc:<credential>@host/db")` — pre-binding
+                #     config at registration — has no `__name__`, so its bound
+                #     kwargs rendered verbatim.
+                # (2) `exc` interpolated the SAME repr right back in: the
+                #     `get_type_hints` refusal that lands here reads
+                #     `TypeError: functools.partial(<function dashboard>,
+                #     dsn='…') is not a module, class, method, or function`.
+                #     The exception's own message embeds the repr.
+                #
+                # RETAIN A SCALAR, NEVER A RENDERING. The exception's MESSAGE
+                # is a rendering, so it is not retained at all -- not even
+                # filtered. What the operator actually needs from the common
+                # failure (a forward reference to a name not importable at
+                # registration) is the SYMBOL that would not resolve, and
+                # `NameError.name` carries exactly that as a bare identifier:
+                # `NoSuchTypeAnywhere`, never the sentence quoting it. The
+                # partial refusal is a TypeError with no `.name`, so there is
+                # no scalar to retain and none is invented -- the type name
+                # plus the handler's safe name is the whole diagnostic there.
+                #
+                # The WARN's purpose is unchanged: a security control whose
+                # verification did not run must not look identical to one that
+                # passed.
+                unresolved_symbol = getattr(exc, "name", None)
+                exc_detail = (
+                    f"{type(exc).__name__}: {unresolved_symbol}"
+                    if isinstance(unresolved_symbol, str) and unresolved_symbol
+                    else type(exc).__name__
+                )
+                logger.warning(
+                    "nexus.endpoint.rate_limit_unverifiable: could not resolve "
+                    "the annotations of handler %r for %s %s (%s), so "
+                    "whether rate limiting engages could NOT be verified at "
+                    "registration. If the handler declares no `request: "
+                    "Request` parameter, rate_limit=%s has no effect.",
+                    safe_callable_name(handler),
+                    "/".join(methods),
+                    path,
+                    exc_detail,
+                    effective_rate_limit,
+                )
+                return True
+
+            for name in signature.parameters:
+                hint = hints.get(name)
+                # `issubclass` covers a user-defined Request subclass, which
+                # FastAPI injects exactly as it injects Request itself.
+                #
+                # A type-only test is SUFFICIENT, and that was checked rather
+                # than assumed. An audit proposed unwrapping unions here, on the
+                # theory that `Request | None` / `Optional[Request]` resolve to
+                # a `types.UnionType` / `typing.Union` -- not a `type` -- so
+                # this test would false-negative and emit a bogus
+                # `rate_limit_inert` WARN for an endpoint that does enforce.
+                #
+                # The premise is false: FastAPI REJECTS those annotations at
+                # registration, so such a handler cannot exist to be warned
+                # about. Driving one raises, before this predicate is ever
+                # reached:
+                #
+                #   FastAPIError: Invalid args for response field! Hint: check
+                #   that starlette.requests.Request | None is a valid Pydantic
+                #   field type.
+                #
+                # FastAPI special-cases a bare `Request` for injection; wrapped
+                # in a union it is treated as a body field instead and fails
+                # schema generation. `Annotated[Request, ...]` is likewise
+                # unaffected -- `get_type_hints` strips `Annotated` metadata
+                # unless `include_extras=True`, so it arrives here as the bare
+                # class. Pinned by
+                # test_fastapi_rejects_a_union_request_annotation_at_registration.
+                if hint is Request or (
+                    isinstance(hint, type) and issubclass(hint, Request)
+                ):
+                    return True
+            return False
 
         def decorator(func):
             # Validate gateway initialized
@@ -1975,30 +2512,95 @@ Check the documentation or explore available resources.
 
             # SECURITY: Add rate limiting wrapper
             import time
-            from collections import defaultdict
+            from collections import OrderedDict
             from functools import wraps
             from typing import Dict as TypingDict
 
-            # Simple in-memory rate limiter (per client IP)
-            request_counts: TypingDict[str, TypingDict[str, int]] = defaultdict(
-                lambda: defaultdict(int)
-            )
+            # A configured `rate_limit=` that cannot engage is a documented
+            # kwarg with zero effect on the body -- the silent-fallback mode at
+            # the API surface (zero-tolerance Rule 3c). The wrapper below can
+            # only rate-limit when it finds a FastAPI `Request` among the
+            # handler's args/kwargs, so a handler declaring none is never
+            # limited no matter what `rate_limit=` says.
+            #
+            # Enforcement behaviour is deliberately UNCHANGED for every
+            # existing endpoint -- making limiting unconditional would alter
+            # security behaviour repo-wide. What ends is the SILENCE: this is
+            # security.md's secure-default pattern, where on-by-default is
+            # infeasible for backward-compat so a loud one-time WARN at
+            # registration names the OFF protection and its exact wiring.
+            if effective_rate_limit is not None and not _declares_fastapi_request(func):
+                logger.warning(
+                    "nexus.endpoint.rate_limit_inert: rate_limit=%s is configured "
+                    "for %s %s but the handler %r declares no FastAPI Request "
+                    "parameter, so NO rate limiting will be applied to it. "
+                    "Fix: add a `request: Request` parameter to the handler "
+                    "(import `Request` from `fastapi`); the value is supplied "
+                    "by the framework and the handler need not use it.",
+                    effective_rate_limit,
+                    "/".join(methods),
+                    path,
+                    # `func` is caller-supplied. This WARN fires when the
+                    # annotations DO resolve but declare no Request -- which a
+                    # configured callable object satisfies, and its
+                    # dataclass-generated `__repr__` renders every field
+                    # including a credential one. Confirmed reachable by
+                    # execution, not inferred.
+                    safe_callable_name(func),
+                )
+
+            # Simple in-memory rate limiter (per client IP).
+            #
+            # Inner key is the minute bucket -- always an int
+            # (`int(time.time() // rate_limit_window)`), never a str. This dict
+            # is function-local and never escapes the closure, so those are the
+            # only keys it can ever hold; the previous `str` annotation made
+            # the bucket-eviction comparison below read as `str < int`.
+            #
+            # An OrderedDict in least-recently-used order, NOT a plain dict:
+            # it is what makes the outer bound cost O(1) per request. The
+            # eviction site below records what the alternative cost.
+            request_counts: "OrderedDict[str, TypingDict[int, int]]" = OrderedDict()
             rate_limit_window = 60  # 1 minute window
 
             @wraps(func)
             async def rate_limited_func(*args, **kwargs):
                 from fastapi import HTTPException, Request
 
-                # Extract FastAPI Request object (not Pydantic models)
+                # Extract the FastAPI Request object (never a Pydantic model).
+                #
+                # Resolution is by TYPE, not by parameter NAME. FastAPI invokes
+                # the endpoint as `dependant.call(**values)`, so `args` is empty
+                # on that path and every declared parameter arrives in `kwargs`
+                # under ITS OWN name -- `req: Request` lands in `kwargs["req"]`,
+                # never `kwargs["request"]`.
+                #
+                # Matching only the literal key `"request"` therefore left every
+                # idiomatically-named handler (`req`, `http_request`, ...)
+                # completely UNLIMITED while the registration log still
+                # advertised `rate_limit=N/min`, and the inert-limit WARN stayed
+                # silent because ITS test is the ANNOTATION, which is
+                # name-agnostic. Predicate and runtime disagreed, so the warning
+                # added to end that silence could not fire on the broken case.
+                # Scanning by isinstance makes the two the same test.
                 request = None
 
-                # Check kwargs first
-                if "request" in kwargs:
-                    arg = kwargs["request"]
-                    if isinstance(arg, Request):
-                        request = arg
+                # Conventional name first, so a handler declaring more than one
+                # Request-typed parameter resolves deterministically to the one
+                # callers expect rather than to dict-ordering.
+                conventional = kwargs.get("request")
+                if isinstance(conventional, Request):
+                    request = conventional
 
-                # If not found in kwargs, check args
+                # Any other parameter name -- the case the literal-key check missed.
+                if request is None:
+                    for arg in kwargs.values():
+                        if isinstance(arg, Request):
+                            request = arg
+                            break
+
+                # Positional args: retained for non-FastAPI callers that invoke
+                # the wrapped function directly rather than through the router.
                 if request is None:
                     for arg in args:
                         if isinstance(arg, Request):
@@ -2009,30 +2611,74 @@ Check the documentation or explore available resources.
                 if (
                     request is not None
                     and isinstance(request, Request)
-                    and rate_limit > 0
+                    and effective_rate_limit is not None
                 ):
-                    # Get client IP
-                    client_ip = request.client.host if request.client else "unknown"
+                    # Get client IP — the ORIGINATING client under the operator's
+                    # trusted-proxy posture, not the immediate peer (#2007).
+                    # Local import matches this module's convention for
+                    # nexus.extractors.* (see validate_trusted_proxy_cidrs above).
+                    from nexus.extractors.proxy import client_key_for_request
+
+                    client_ip = client_key_for_request(request)
                     current_minute = int(time.time() // rate_limit_window)
 
+                    # Touch this client, moving it to the MOST-recently-used
+                    # end. Everything below depends on that ordering.
+                    buckets = request_counts.get(client_ip)
+                    if buckets is None:
+                        buckets = {}
+                        request_counts[client_ip] = buckets
+
+                        # Bound the outer map. This has to bound BOTH levels:
+                        # the inner minute buckets for this client (below), AND
+                        # the outer per-client-IP dict (here). Only the inner
+                        # half existed originally, so every IP ever seen
+                        # retained an entry for the process lifetime --
+                        # unbounded under source-address rotation, which is
+                        # trivial over IPv6.
+                        #
+                        # The bound costs O(1) amortised: LRU order means the
+                        # coldest client is always at the front, so a single
+                        # popitem evicts it. The first version of this bound
+                        # instead scanned every entry computing max() over its
+                        # buckets and then SORTED all of them, to delete
+                        # exactly one -- and because a flood keeps the map full,
+                        # that ran on EVERY new client, forever, not amortised.
+                        # Measured: 2.5 us/request below the cap, 17,660
+                        # us/request at it. Those 17.66 ms are synchronous CPU
+                        # inside an `async def` with no await point, so they
+                        # block the event loop for the entire process, every
+                        # endpoint -- a whole-server DoS reachable by rotating
+                        # source addresses, i.e. by the exact traffic the bound
+                        # was added to survive.
+                        #
+                        # The in-flight client is never the victim: it was just
+                        # moved to the most-recently-used end, and popitem
+                        # takes from the other one. Eviction fails OPEN for the
+                        # client dropped (its counter restarts), which grants
+                        # an attacker nothing they did not already have --
+                        # rotating to a fresh address already yields a fresh
+                        # counter.
+                        while len(request_counts) > _MAX_RATE_LIMIT_TRACKED_CLIENTS:
+                            request_counts.popitem(last=False)
+                    else:
+                        request_counts.move_to_end(client_ip)
+
                     # Check rate limit
-                    if request_counts[client_ip][current_minute] >= rate_limit:
+                    if buckets.get(current_minute, 0) >= effective_rate_limit:
                         raise HTTPException(
                             status_code=429,
-                            detail=f"Rate limit exceeded. Maximum {rate_limit} requests per minute.",
+                            detail=f"Rate limit exceeded. Maximum {effective_rate_limit} requests per minute.",
                         )
 
                     # Increment counter
-                    request_counts[client_ip][current_minute] += 1
+                    buckets[current_minute] = buckets.get(current_minute, 0) + 1
 
-                    # Cleanup old entries (prevent memory leak)
-                    old_minutes = [
-                        m
-                        for m in request_counts[client_ip].keys()
-                        if m < current_minute - 5
-                    ]
-                    for old_minute in old_minutes:
-                        del request_counts[client_ip][old_minute]
+                    # Bound the inner level: minute buckets old enough that the
+                    # limit check can never read them again.
+                    stale_before = current_minute - _RATE_LIMIT_STALE_BUCKET_AGE
+                    for old_minute in [m for m in buckets if m < stale_before]:
+                        del buckets[old_minute]
 
                 # Call original function
                 return await func(*args, **kwargs)
@@ -2066,7 +2712,11 @@ Check the documentation or explore available resources.
 
             # Log registration
             methods_str = ", ".join(methods)
-            rate_limit_str = f", rate_limit={rate_limit}/min" if rate_limit > 0 else ""
+            rate_limit_str = (
+                f", rate_limit={effective_rate_limit}/min"
+                if effective_rate_limit is not None
+                else ""
+            )
             logger.info(
                 f"✅ Custom endpoint registered: {methods_str} {path} (API-only{rate_limit_str})"
             )
@@ -2222,7 +2872,13 @@ Check the documentation or explore available resources.
         # loop and surface as a "coroutine expected" error at request time.
         # inspect.iscoroutinefunction — see note on _wrap_with_guard.
         if not inspect.iscoroutinefunction(func):
-            func_name = getattr(func, "__name__", repr(func))
+            # `func` is caller-supplied, and this branch fires for exactly the
+            # shapes that lack `__name__`: a `functools.partial` wrapping a
+            # sync middleware renders its bound kwargs verbatim into the
+            # message below, which then rides the TypeError into whatever logs
+            # it. The name is interpolated TWICE here, so a repr would have
+            # been emitted twice.
+            func_name = safe_callable_name(func)
             raise TypeError(
                 f"use_middleware expects an async function, got sync "
                 f"function {func_name!r}. Define with "
@@ -3302,7 +3958,20 @@ Check the documentation or explore available resources.
             for fname in flat_names
         ]
         _params.append(_inspect.Parameter("kwargs", _inspect.Parameter.VAR_KEYWORD))
-        _extractor_wrapper.__signature__ = _inspect.Signature(_params)
+        # PEP 362 sanctions overriding `inspect.signature()` by assigning
+        # `__signature__` on a callable, and `_derive_params_from_signature`
+        # (kailash/nodes/handler.py) depends on exactly that. typeshed does not
+        # declare `__signature__` on `types.FunctionType`, so a direct
+        # attribute assignment is a checker error even though the runtime
+        # contract is correct. `setattr` states that the attribute is set
+        # dynamically, which is what is happening, without changing runtime
+        # behaviour. NOT a suppression: the alternative type-level fixes were
+        # tried and rejected -- a Protocol-typed alias fails structurally (a
+        # plain function has no `__signature__` to satisfy the protocol at bind
+        # time), and converting the wrapper to a callable class would make
+        # `inspect.iscoroutinefunction` False for it, silently changing the
+        # async detection this handler path relies on.
+        setattr(_extractor_wrapper, "__signature__", _inspect.Signature(_params))
         _extractor_wrapper.__name__ = getattr(func, "__name__", name)
         _extractor_wrapper.__doc__ = description or getattr(func, "__doc__", "")
 
@@ -3555,6 +4224,30 @@ Check the documentation or explore available resources.
                 logger.error(f"Background task failed: {e}", exc_info=True)
 
         task = asyncio.create_task(_safe_wrapper())
+
+        def _close_if_never_started(_task: asyncio.Task) -> None:
+            """Release ``coro`` when the task finished without ever awaiting it.
+
+            The TASK wraps ``_safe_wrapper``, not ``coro``. A ``cancel()``
+            landing before the loop first schedules the wrapper cancels it at
+            its very first step -- throwing into a not-yet-started coroutine
+            propagates without executing its body, so ``_safe_wrapper``'s own
+            ``except`` never runs and ``await coro`` never happens. ``coro`` is
+            then left un-started and CPython emits "RuntimeWarning: coroutine
+            ... was never awaited" from its finalizer at an arbitrary later GC,
+            attributed to whatever code triggered collection.
+
+            A done-callback is the only hook that still fires in that path.
+            The CORO_CREATED guard keeps this a no-op whenever the coroutine
+            did start, so a running or completed coroutine is never touched.
+            """
+            if (
+                inspect.iscoroutine(coro)
+                and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
+            ):
+                coro.close()
+
+        task.add_done_callback(_close_if_never_started)
         return task
 
     @staticmethod
@@ -3603,7 +4296,6 @@ Check the documentation or explore available resources.
             HTTPException: If workflow not found, input invalid, or execution fails
         """
         from fastapi import HTTPException
-
         from nexus.validation import validate_workflow_inputs, validate_workflow_name
 
         # P0-5: Validate workflow name (prevent path traversal)
@@ -3633,9 +4325,29 @@ Check the documentation or explore available resources.
 
             # Execute using runtime (consistent with SDK patterns)
             from kailash.runtime import get_runtime
+            from kailash.workflow.input_envelope import bind_parameter_envelope
 
+            # Bind through the shared binder, like every other entry point.
+            # This method offers the caller ONE arguments slot, so there is no
+            # choice for a raw pass-through to express -- and "it is not
+            # route-registered" protected nothing, because
+            # skills/03-nexus/nexus-api-patterns.md teaches custom endpoints to
+            # call `await app._execute_workflow(name, body)` directly. That
+            # makes the CALLER's route the entry point, so a workflow reading
+            # `parameters.get(...)` -- the documented convention every other
+            # channel binds for -- raised NameError inside the SDK's own worked
+            # example and surfaced as an opaque 500.
+            #
+            # AFTER validate_workflow_inputs, deliberately: that validator
+            # enforces the size cap and the dangerous-key/dunder rules against
+            # TOP-LEVEL keys only, so it has to see the caller's actual
+            # mapping. Enveloping first would halve the effective size limit
+            # (the payload is measured twice) and drop the caller's keys below
+            # the only level those rules inspect.
             runtime = get_runtime("async")
-            execution_result = await runtime.execute_workflow_async(workflow, inputs)
+            execution_result = await runtime.execute_workflow_async(
+                workflow, bind_parameter_envelope(inputs)
+            )
             if isinstance(execution_result, tuple):
                 results, run_id = execution_result
             else:
@@ -3857,6 +4569,13 @@ Check the documentation or explore available resources.
         Closes child servers first (they hold acquired references to the
         runtime), then releases the Nexus-level runtime reference.
         Idempotent: safe to call multiple times.
+
+        Best-effort per child: one failing child MUST NOT strand the remaining
+        runtime references. Every swallowed error is logged at DEBUG (teardown
+        failures are expected and non-actionable for the caller, but a silent
+        swallow leaves no trace at all — ``rules/zero-tolerance.md`` Rule 3).
+        This method is caller-driven only; it is NOT reachable from ``__del__``
+        (see the finalizer's docstring for why that matters).
         """
         # Close MCP servers first — they hold acquired runtime refs
         for attr in ("_mcp_server", "_ws_server"):
@@ -3864,8 +4583,13 @@ Check the documentation or explore available resources.
             if server is not None and hasattr(server, "close"):
                 try:
                     server.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Error closing %s during Nexus.close(): %s: %s",
+                        attr,
+                        type(exc).__name__,
+                        exc,
+                    )
 
         # Close the HTTP gateway (EnterpriseWorkflowServer). It acquires a
         # reference to self.runtime at construction and owns the per-workflow
@@ -3875,8 +4599,12 @@ Check the documentation or explore available resources.
         if gateway is not None and hasattr(gateway, "close"):
             try:
                 gateway.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Error closing gateway during Nexus.close(): %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
 
         # Release runtime refs held by transports (MCP/WS lazily acquire a
         # _shared_runtime on tool invocation and release it only in async
@@ -3887,8 +4615,13 @@ Check the documentation or explore available resources.
             if hasattr(transport, "close"):
                 try:
                     transport.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Error closing %s during Nexus.close(): %s: %s",
+                        type(transport).__name__,
+                        type(exc).__name__,
+                        exc,
+                    )
 
         # Release or close the runtime itself
         if hasattr(self, "runtime") and self.runtime is not None:
@@ -3896,16 +4629,57 @@ Check the documentation or explore available resources.
             self.runtime = None
 
     def __del__(self, _warnings=warnings):
+        """Emit a ``ResourceWarning`` for a leaked Nexus — and do nothing else.
+
+        This finalizer MUST NOT call ``close()`` (nor anything that can emit a
+        log line or touch an event loop). ``__del__`` runs at an arbitrary GC
+        point, including from inside Python's logging machinery while the root
+        logging lock is held by this very thread. ``Nexus.close()`` reaches at
+        least three logging/event-loop sites:
+
+        * ``WebSocketTransport.close()`` → ``logger.info("WebSocketTransport
+          stopped")`` (``nexus/transports/websocket.py``);
+        * ``EnterpriseWorkflowServer.close()`` → ``WorkflowServer.close()`` →
+          ``logger.debug("Error closing WorkflowAPI …")``;
+        * ``self.runtime.release()`` → ``LocalRuntime.close()`` →
+          ``_cleanup_event_loop()`` → ``logger.debug``/``logger.warning`` plus
+          ``loop.run_until_complete(...)`` and lazy ``import`` of
+          ``AsyncSQLDatabaseNode``.
+
+        Re-entering ``logging`` (or the import lock) from a finalizer that was
+        itself triggered by ``logging`` deadlocks the interpreter — the
+        2026-04-16 "DataFlow unit suite hangs" incident. See ``rules/patterns.md``
+        § "Async Resource Cleanup".
+
+        Real cleanup is the caller's responsibility: ``app.close()``,
+        ``app.stop()``, or ``with Nexus(...) as app:``.
+
+        ``_warnings`` is bound as a default argument so the finalizer still
+        works during interpreter shutdown, when module globals are torn down.
+        """
+        # `getattr`, NOT `self.runtime`: a finalizer runs on PARTIALLY
+        # CONSTRUCTED instances too. If `__init__` raises before it binds
+        # `runtime`, a bare attribute access raises AttributeError INSIDE
+        # `__del__` -- and an exception in a finalizer surfaces as an
+        # unraisable at whatever unrelated point GC happens to fire, reddening
+        # a ROTATING set of tests that have nothing to do with Nexus. `main`
+        # carried this guard; it was lost on this branch, and the symptom was
+        # two runs of the nexus suite failing 7 tests in one file and 1 in
+        # another, neither reproducible.
+        #
+        # Warn-only body is deliberate and MUST NOT be reverted to `main`'s
+        # form, which also called `self.close()`: per `patterns.md` § Async
+        # Resource Cleanup, calling close() from a finalizer deadlocks when
+        # __del__ fires from inside logging's GC pass.
         if getattr(self, "runtime", None) is not None:
             _warnings.warn(
-                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                f"Unclosed {type(self).__name__}. Call app.close() explicitly, "
+                f"or use 'with {type(self).__name__}(...) as app:' — the shared "
+                "runtime and gateway are NOT released by garbage collection.",
                 ResourceWarning,
                 source=self,
+                stacklevel=2,
             )
-            try:
-                self.close()
-            except Exception:
-                pass
 
     def __enter__(self):
         return self
@@ -3970,7 +4744,25 @@ Check the documentation or explore available resources.
 
         for name, workflow in discovered.items():
             if name not in self._workflows:
-                self.register(name, workflow)
+                try:
+                    self.register(name, workflow)
+                except ValueError as exc:
+                    # #1972 made register() reject names outside the MCP
+                    # tool-name charset. Discovery derives names from FILENAMES
+                    # (`file_path.stem`), and a filename may legally contain a
+                    # space, parenthesis or non-ASCII character that is not a
+                    # legal workflow name. Without this guard ONE such file
+                    # aborts the whole loop, so every OTHER discovered workflow
+                    # silently fails to register — a far worse outcome than
+                    # skipping the one that cannot be named.
+                    logger.warning(
+                        "Skipped auto-discovered workflow with an invalid name: "
+                        "%s (%s). Rename the file to use only letters, digits, "
+                        "underscore, dash or dot.",
+                        name,
+                        exc,
+                    )
+                    continue
                 logger.info(f"Auto-registered workflow: {name}")
 
     def health_check(self) -> Dict[str, Any]:
@@ -4038,6 +4830,30 @@ Check the documentation or explore available resources.
                 logger.info("Monitoring enabled via enterprise gateway")
             except Exception as e:
                 logger.error(f"Failed to enable monitoring: {e}")
+
+        # Expose the nexus_* Prometheus series. The enterprise gateway's own
+        # /metrics route renders only the Core SDK's kailash_* collectors, so
+        # without this call the nexus.metrics collectors are never initialised
+        # into the default registry and MonitoringPlugin's advertised "metrics
+        # collection" is a no-op at this facade (the plugin only sets
+        # _monitoring_enabled / _metrics, which no production path reads).
+        # register_metrics_endpoint is idempotent: it guards collector creation
+        # behind _metrics_initialized and replaces any existing /metrics route.
+        from .metrics import register_metrics_endpoint
+
+        try:
+            register_metrics_endpoint(self)
+        except ImportError:
+            # prometheus_client is the optional [metrics] extra. Its absence is
+            # a real, named degradation -- the nexus_* series stay unexposed --
+            # so it WARNs with the exact wiring rather than passing silently.
+            logger.warning(
+                "monitoring.metrics_endpoint.unavailable: prometheus_client is "
+                "not installed, so the nexus_* Prometheus series are NOT "
+                "exposed on /metrics. Install it with: "
+                "pip install kailash-nexus[metrics]"
+            )
+
         return self.use_plugin("monitoring")  # Fallback to plugin
 
     def use_plugin(self, plugin_name: str):

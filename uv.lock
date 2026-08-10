@@ -1786,7 +1786,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.62.0"
+version = "2.63.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -2119,7 +2119,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "rl-bridge", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.19.1"
+version = "2.20.0"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "asyncpg" },
@@ -2187,7 +2187,7 @@ provides-extras = ["postgres-sync", "mysql", "sqlite", "mongo", "redis", "api", 
 
 [[package]]
 name = "kailash-kaizen"
-version = "2.45.0"
+version = "2.46.0"
 source = { editable = "packages/kailash-kaizen" }
 dependencies = [
     { name = "aiohttp" },
@@ -2252,7 +2252,7 @@ requires-dist = [
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12" },
     { name = "kailash", specifier = ">=2.56.0" },
     { name = "kailash-kaizen", extras = ["providers-azure", "providers-google", "providers-tokens", "providers-http", "server", "observability", "db", "cache", "rag", "research-validator"], marker = "extra == 'all'" },
-    { name = "kailash-mcp", specifier = ">=0.2.4" },
+    { name = "kailash-mcp", specifier = ">=0.5.0" },
     { name = "networkx", marker = "extra == 'rag'", specifier = ">=3.0" },
     { name = "numpy", marker = "extra == 'rag'", specifier = ">=1.24.0" },
     { name = "opentelemetry-api", marker = "extra == 'observability'", specifier = ">=1.20.0" },
@@ -2288,7 +2288,7 @@ provides-extras = ["providers-azure", "providers-google", "providers-tokens", "p
 
 [[package]]
 name = "kailash-mcp"
-version = "0.4.3"
+version = "0.5.0"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "aiohttp" },
@@ -2326,7 +2326,7 @@ provides-extras = ["http", "sse", "websocket", "auth-jwt", "auth-oauth", "server
 
 [[package]]
 name = "kailash-ml"
-version = "2.2.2"
+version = "2.2.3"
 source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2431,7 +2431,7 @@ provides-extras = ["dl", "dl-gpu", "rl", "rl-offline", "rl-envpool", "rl-distrib
 
 [[package]]
 name = "kailash-nexus"
-version = "2.15.0"
+version = "2.16.0"
 source = { editable = "packages/kailash-nexus" }
 dependencies = [
     { name = "aiofiles" },
@@ -2521,7 +2521,7 @@ provides-extras = ["api", "execution", "dev", "all"]
 
 [[package]]
 name = "kaizen-agents"
-version = "0.12.0"
+version = "0.13.0"
 source = { editable = "packages/kaizen-agents" }
 dependencies = [
     { name = "anthropic" },
@@ -2540,7 +2540,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "kailash", specifier = ">=2.14.0" },
-    { name = "kailash-kaizen", specifier = ">=2.36.0" },
+    { name = "kailash-kaizen", specifier = ">=2.46.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "openai", specifier = ">=1.30.0" },
     { name = "platformdirs", specifier = ">=4.0" },

@@ -3615,16 +3615,17 @@ class NodeGenerator:
                     # every interpolated identifier against the strict allowlist
                     # BEFORE the dialect builds SQL (same defense as the bulk
                     # path in features/bulk.py::bulk_upsert).
+                    from kailash.db.dialect import DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
                     from kailash.db.dialect import _validate_identifier as _vid
 
-                    _vid(table_name)
+                    _vid(table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
                     for _col in (
                         set(conflict_columns)
                         | set(where.keys())
                         | set(insert_data.keys())
                         | set(update_data.keys())
                     ):
-                        _vid(_col)
+                        _vid(_col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
 
                     # Get SQL dialect for database-specific query generation
                     from ..sql.dialects import SQLDialectFactory

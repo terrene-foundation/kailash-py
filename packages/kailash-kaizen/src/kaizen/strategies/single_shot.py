@@ -206,11 +206,18 @@ class SingleShotStrategy:
                             self._execute_mcp_tool_sync(agent, tool_name, tool_args)
                         )
                     except Exception as exc:
+                        # An MCP tool call crosses a credentialed transport; its
+                        # exception can echo the bearer token onto the log
+                        # surface (#1970 sweep).
+                        from kaizen.nodes.ai.error_sanitizer import (
+                            sanitize_provider_error,
+                        )
+
                         logger.warning(
                             "tool_call_loop.tool_error",
                             extra={
                                 "tool": tool_name,
-                                "error": str(exc),
+                                "error": sanitize_provider_error(exc, "MCP tool"),
                             },
                         )
                         tool_content = json.dumps(
@@ -278,7 +285,15 @@ class SingleShotStrategy:
 
         except Exception as e:
             # Task 2.10: Error handling - propagate real errors, only use skeleton for missing providers
+            # ``error_msg`` stays RAW for the internal classification below (the
+            # substring probes need the untouched provider text); every surface
+            # that LEAVES this frame uses ``sanitized`` instead — a provider
+            # exception can echo an API key into the returned dict / log
+            # (#1970 sweep; rules/security.md "No secrets in logs").
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
             error_msg = str(e)
+            sanitized = sanitize_provider_error(e, "LLM")
 
             # Only use skeleton fallback for truly missing providers (e.g., in unit tests without API keys)
             # NOT for API errors which should be propagated to reveal real issues
@@ -295,12 +310,12 @@ class SingleShotStrategy:
                 import logging
 
                 logging.getLogger(__name__).warning(
-                    f"Using skeleton result due to missing provider: {error_msg}"
+                    "Using skeleton result due to missing provider: %s", sanitized
                 )
                 return self._generate_skeleton_result(agent, inputs)
 
             # For all other errors (including API errors), return error info to reveal issues
-            return {"error": error_msg, "status": "failed"}
+            return {"error": sanitized, "status": "failed"}
 
     def build_workflow(self, agent: Any) -> WorkflowBuilder:
         """
@@ -342,10 +357,17 @@ class SingleShotStrategy:
             workflow = agent.workflow_generator.generate_signature_workflow()
             return workflow
         except Exception as e:
-            # Log the actual error to prevent silent failures
+            # Log the actual error to prevent silent failures.
+            # (Workflow generation can invoke an LLM whose error carries a
+            # credential; sanitize — sibling of async_single_shot.build_workflow,
+            # #1970 sweep / #1720 creds-in-logs.)
             import logging
 
-            logging.getLogger(__name__).error(f"Workflow generation failed: {e}")
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            logging.getLogger(__name__).error(
+                "Workflow generation failed: %s", sanitize_provider_error(e, "LLM")
+            )
             return None
 
     # Task 2.11: Extension Points

@@ -279,9 +279,26 @@ class ServerRegistrar:
         """Discover server capabilities by examining registered tools."""
         capabilities = []
 
-        # Get tools from server registry
+        # Get tools from server registry.
+        #
+        # This is a FOURTH reader of ``_tool_registry`` alongside ``tools/list``,
+        # the stdio ``tools/list`` branch and ``completion/complete``. It read
+        # ``.keys()`` directly, so it advertised tools that ``disable_tool()``
+        # had turned OFF to the service-discovery backend — where they are
+        # published to every client doing discovery, even though
+        # ``_execute_tool`` and ``tools/call`` both refuse to run them. That also
+        # broke ``_public_tool_view``'s stated contract that EVERY surface
+        # enumerating the registry for a caller routes through it.
+        #
+        # Only names are emitted here (a capability list, not a schema), so this
+        # is not a schema leak; it is a disabled-tool inventory leak, and the
+        # ``disabled`` filter is the half of the projection that applies.
         if hasattr(self.server, "_tool_registry"):
-            capabilities.extend(self.server._tool_registry.keys())
+            capabilities.extend(
+                name
+                for name, info in self.server._tool_registry.items()
+                if not (isinstance(info, dict) and info.get("disabled", False))
+            )
 
         # Get resources
         if hasattr(self.server, "_resource_registry"):

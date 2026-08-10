@@ -48,6 +48,7 @@ from collections.abc import AsyncGenerator, Callable
 from typing import TYPE_CHECKING, Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.events import (
@@ -625,7 +626,13 @@ class Delegate:
                 yield _pending_events.pop(0)
 
         except Exception as exc:
-            logger.error("Delegate run failed: %s", exc, exc_info=True)
+            # The ``ErrorEvent`` yielded below already withholds the exception
+            # text from the caller (it emits only the class name), while this
+            # log line shipped the raw ``exc`` AND its traceback -- the same
+            # protected-return / unprotected-log split as print_mode.py and
+            # loop.py, fixed across all three in one change so the delegate
+            # module family cannot drift.
+            logger.error("Delegate run failed: %s", scrub_remote_error(exc))
             yield ErrorEvent(
                 error=f"Delegate execution failed ({type(exc).__name__})",
                 details={"exception_type": type(exc).__name__},

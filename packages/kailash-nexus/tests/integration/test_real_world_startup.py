@@ -32,6 +32,70 @@ def find_free_port(start_port: int = 8000) -> int:
     raise RuntimeError(f"Could not find free port starting from {start_port}")
 
 
+# Readiness ceiling for a cold-started server subprocess. Each test below spawns
+# a fresh interpreter that imports the whole kailash + nexus + MCP stack from
+# source before uvicorn binds; measured cold start is ~13s on a developer
+# machine and is dominated by import time, not by Nexus. The previous fixed
+# budgets (a bare ``time.sleep(3)``, or 10 x 0.5s polls) were BELOW that, so
+# these tests failed on server-is-still-starting rather than on the v1.0.7 bug
+# they exist to catch. This is a TIMEOUT CEILING, not a startup-speed
+# assertion -- startup latency is asserted in-process by
+# ``tests/e2e/test_production_scenarios.py::test_startup_performance``. Per
+# ``rules/testing.md`` a readiness poll replaces an absolute wall-clock
+# threshold, which otherwise ratchets upward on every slower machine.
+_STARTUP_TIMEOUT_SECONDS = 60.0
+_POLL_INTERVAL_SECONDS = 0.25
+
+
+def _wait_until_healthy(
+    process: subprocess.Popen,
+    api_port: int,
+    timeout: float = _STARTUP_TIMEOUT_SECONDS,
+) -> None:
+    """Block until the server subprocess answers ``GET /health`` with 200.
+
+    Preserves the v1.0.7 regression check these tests exist for: if the
+    process EXITS while we are waiting, that is the daemon-thread bug (server
+    returns immediately and dies) and fails immediately with the subprocess's
+    captured output rather than after the full timeout.
+
+    Args:
+        process: The spawned server process.
+        api_port: Port the server was told to bind.
+        timeout: Ceiling on cold start, not an assertion about its speed.
+
+    Raises:
+        pytest.fail.Exception: If the process exits early or never answers.
+    """
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            pytest.fail(
+                f"Server process exited prematurely (v1.0.7 bug detected!)\n"
+                f"Exit code: {process.returncode}\n"
+                f"STDOUT:\n{stdout}\n"
+                f"STDERR:\n{stderr}"
+            )
+
+        try:
+            response = requests.get(f"http://localhost:{api_port}/health", timeout=1)
+            if response.status_code == 200:
+                return
+        except requests.RequestException:
+            # Not listening yet, or still starting up -- keep polling.
+            pass
+
+        time.sleep(_POLL_INTERVAL_SECONDS)
+
+    pytest.fail(
+        f"Server did not answer /health on port {api_port} within {timeout}s. "
+        "Process is still alive, so this is a startup hang rather than the "
+        "v1.0.7 premature-exit bug."
+    )
+
+
 @pytest.mark.integration
 def test_real_world_server_startup():
     """Test that Nexus server starts in a real process and accepts requests.
@@ -92,42 +156,9 @@ app.start()
     )
 
     try:
-        # Wait for server to start
-        max_wait = 10
-        started = False
-
-        for i in range(max_wait):
-            time.sleep(1)
-
-            # Check if process exited prematurely (v1.0.7 bug)
-            if process.poll() is not None:
-                stdout, stderr = process.communicate()
-                pytest.fail(
-                    f"Server process exited prematurely (v1.0.7 bug detected!)\n"
-                    f"Exit code: {process.returncode}\n"
-                    f"STDOUT:\n{stdout}\n"
-                    f"STDERR:\n{stderr}"
-                )
-
-            try:
-                response = requests.get(
-                    f"http://localhost:{api_port}/health", timeout=1
-                )
-                if response.status_code == 200:
-                    started = True
-                    break
-            except requests.exceptions.ConnectionError:
-                # Server not ready yet
-                continue
-            except requests.exceptions.Timeout:
-                # Server not responding
-                continue
-
-        # Verify server started
-        assert started, (
-            f"Server did not start within {max_wait} seconds. "
-            f"This indicates the v1.0.7 bug where daemon threads are killed."
-        )
+        # Wait for server to start (fails loudly if the process exits first --
+        # that exit IS the v1.0.7 bug this test guards).
+        _wait_until_healthy(process, api_port)
 
         # Verify server accepts requests
         response = requests.get(f"http://localhost:{api_port}/workflows", timeout=2)
@@ -143,15 +174,15 @@ app.start()
                 json={"inputs": {}},
                 timeout=10,
             )
-            assert response.status_code == 200, (
-                f"Workflow execution failed: {response.status_code}"
-            )
+            assert (
+                response.status_code == 200
+            ), f"Workflow execution failed: {response.status_code}"
 
             result = response.json()
             # Check for either run_id or workflow_id (both indicate successful execution)
-            assert "workflow_id" in result or "run_id" in result, (
-                f"No workflow_id/run_id in response: {result}"
-            )
+            assert (
+                "workflow_id" in result or "run_id" in result
+            ), f"No workflow_id/run_id in response: {result}"
             # Verify the workflow executed successfully
             assert "outputs" in result, f"No outputs in response: {result}"
         except requests.exceptions.ReadTimeout:
@@ -215,28 +246,23 @@ app.start()
     )
 
     try:
-        # Wait for startup
-        time.sleep(3)
+        # Wait for startup. _wait_until_healthy fails with the subprocess's
+        # captured output if the process exits first, which is the v1.0.7
+        # premature-exit check this test previously did via a bare
+        # `assert process.poll() is None` after a fixed 3-second sleep.
+        _wait_until_healthy(process, api_port)
 
-        # Verify process is still running (v1.0.7 bug check)
+        # Verify process is STILL running after it answered -- the v1.0.8
+        # contract is that start() blocks until Ctrl+C, not just long enough
+        # to serve one request.
         assert process.poll() is None, (
-            "Process exited prematurely - v1.0.7 bug detected! "
+            "Process exited right after binding - v1.0.7 bug detected! "
             "Server should stay running until Ctrl+C."
         )
 
-        # Read available output (non-blocking)
-        # Note: In v1.0.8, we expect "Press Ctrl+C to stop" message
-        # In v1.0.7, process exits before we can check
-
-        # Just verify server is responsive
-        try:
-            response = requests.get(f"http://localhost:{api_port}/health", timeout=2)
-            assert response.status_code == 200
-        except requests.exceptions.ConnectionError:
-            pytest.fail(
-                "Server not responding - indicates v1.0.7 bug where "
-                "daemon thread dies before binding port"
-            )
+        # Confirm it is genuinely serving, not merely holding the port open.
+        response = requests.get(f"http://localhost:{api_port}/health", timeout=2)
+        assert response.status_code == 200
 
     finally:
         process.send_signal(signal.SIGINT)
@@ -287,30 +313,19 @@ app.start()  # Must block here in v1.0.8
     )
 
     try:
-        # Wait for port binding
-        port_bound = False
+        # Wait for the server to come up (fails with captured subprocess output
+        # if it exits before binding -- the v1.0.7 bug).
+        _wait_until_healthy(process, api_port)
 
-        for i in range(10):
-            time.sleep(0.5)
-
-            # Check if process died (v1.0.7 bug)
-            if process.poll() is not None:
-                pytest.fail("Process exited before port could bind (v1.0.7 bug)")
-
-            # Try to connect to port
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.settimeout(1)
-                    result = s.connect_ex(("localhost", api_port))
-                    if result == 0:
-                        port_bound = True
-                        break
-            except Exception:
-                continue
-
-        assert port_bound, (
-            f"Port {api_port} never became bound. This indicates v1.0.7 bug where "
-            "daemon thread dies before uvicorn can bind port."
+        # Verify the port is genuinely bound at the socket layer, not merely
+        # that an HTTP response arrived -- this test's distinctive assertion.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(2)
+            connect_result = s.connect_ex(("localhost", api_port))
+        assert connect_result == 0, (
+            f"Port {api_port} is not bound (connect_ex returned "
+            f"{connect_result}). This indicates the v1.0.7 bug where the "
+            "daemon thread dies before uvicorn can bind the port."
         )
 
         # Verify server actually responds (not just port open)
@@ -367,23 +382,9 @@ app.start()
     )
 
     try:
-        # Wait for startup
-        started = False
-        for i in range(10):
-            time.sleep(0.5)
-            if process.poll() is not None:
-                pytest.fail("Process exited during startup")
-            try:
-                response = requests.get(
-                    f"http://localhost:{api_port}/health", timeout=1
-                )
-                if response.status_code == 200:
-                    started = True
-                    break
-            except:
-                continue
-
-        assert started, "Server did not start"
+        # Wait for startup (fails with captured subprocess output if the
+        # process exits first -- the v1.0.7 bug).
+        _wait_until_healthy(process, api_port)
 
         # Make multiple requests over time
         for i in range(3):  # Reduced to 3 to speed up test

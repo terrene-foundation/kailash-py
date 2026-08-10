@@ -483,13 +483,23 @@ class MultiCycleStrategy:
 
             except Exception as e:
                 # Task 2.15: Error termination
+                # A cycle drives an LLM call; its exception can echo a credential
+                # into the returned dict and onto stdout (#1970 sweep). The
+                # traceback.print_exc() that used to run here is dropped for the
+                # same reason exc_info is dropped at the sibling sanitize sites
+                # (agent.py, llm_agent.py): the traceback's final line is the RAW
+                # exception message, so printing it re-leaks what we just redacted.
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+                sanitized = sanitize_provider_error(e, "LLM")
                 print(f"\n❌ DEBUG: Exception caught in cycle {cycle_num + 1}:")
                 print(f"   Exception type: {type(e).__name__}")
-                print(f"   Exception message: {str(e)}")
-                import traceback
-
-                traceback.print_exc()
-                final_result = {"error": str(e), "status": "failed", "cycle": cycle_num}
+                print(f"   Exception message: {sanitized}")
+                final_result = {
+                    "error": sanitized,
+                    "status": "failed",
+                    "cycle": cycle_num,
+                }
                 break
 
         # If no explicit termination, use last cycle result
@@ -573,10 +583,17 @@ class MultiCycleStrategy:
             workflow = agent.workflow_generator.generate_signature_workflow()
             return workflow
         except Exception as e:
-            # Log the actual error to prevent silent failures
+            # Log the actual error to prevent silent failures.
+            # (Workflow generation can invoke an LLM whose error carries a
+            # credential; sanitize — sibling of async_single_shot.build_workflow,
+            # #1970 sweep / #1720 creds-in-logs.)
             import logging
 
-            logging.getLogger(__name__).error(f"Workflow generation failed: {e}")
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            logging.getLogger(__name__).error(
+                "Workflow generation failed: %s", sanitize_provider_error(e, "LLM")
+            )
             return None
 
     # Task 2.11: Extension Points

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 
@@ -72,7 +73,7 @@ class FileEditTool(Tool):
         except PermissionError:
             return ToolResult.failure(f"Permission denied: {file_path}")
         except OSError as exc:
-            return ToolResult.failure(f"Error reading file: {exc}")
+            return ToolResult.failure(f"Error reading file: {scrub_local_error(exc)}")
 
         count = content.count(old_string)
 
@@ -99,7 +100,7 @@ class FileEditTool(Tool):
         except PermissionError:
             return ToolResult.failure(f"Permission denied: {file_path}")
         except OSError as exc:
-            return ToolResult.failure(f"Error writing file: {exc}")
+            return ToolResult.failure(f"Error writing file: {scrub_local_error(exc)}")
 
         replacements = count if replace_all else 1
         return ToolResult.success(

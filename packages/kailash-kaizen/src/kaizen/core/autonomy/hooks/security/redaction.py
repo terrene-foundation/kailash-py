@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Optional, Set
 
+from kaizen.utils.credential_scrub import scrub_credentials
+
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
 
@@ -25,7 +27,27 @@ class SensitiveDataRedactor:
     - Configurable redaction markers
     """
 
-    # Patterns for sensitive data
+    # Patterns for sensitive data.
+    #
+    # SCOPE: this list owns the NON-CREDENTIAL classes — PII and payment data
+    # (credit card, SSN, email, IP) plus the two field-shaped forms
+    # (`password: ...`, `Bearer ...`). The VENDOR-CREDENTIAL classes are NOT
+    # owned here; `redact_string` delegates those to
+    # `kaizen.utils.credential_scrub.scrub_credentials`.
+    #
+    # WHY: this list had drifted from the shared scrubber on 9 of 10 measured
+    # vendor shapes — it caught `sk-`/`pk-` and MISSED AWS AKIA/ASIA, GitHub
+    # `ghp_`, HuggingFace `hf_`, Fireworks `fw_`, Slack `xoxb-`, Stripe
+    # `sk_live_`, Azure SAS `sig=` and URL-embedded DSN credentials. That
+    # matters more here than almost anywhere: this redactor is on a LOGGING
+    # path (`hooks/builtin/logging_hook.py`), which is where credentials
+    # actually leak.
+    #
+    # `api_key` below is RETAINED deliberately even though the shared scrubber
+    # also claims `sk-`: the shared rule requires 20+ chars after the prefix,
+    # while this one additionally accepts the `pk` prefix and `_` separator.
+    # Keeping it costs one redundant pass and loses no coverage; removing it
+    # would silently narrow the `pk_`/`sk_` shapes.
     PATTERNS = {
         "api_key": re.compile(r"(sk|pk)[-_][a-zA-Z0-9]{20,}"),
         "bearer_token": re.compile(r"Bearer\s+[a-zA-Z0-9\-_\.]+"),
@@ -85,8 +107,36 @@ class SensitiveDataRedactor:
         Returns:
             Redacted string
         """
+        # Vendor credentials and URL-embedded DSNs go through the SHARED
+        # scrubber, so this surface cannot drift from it again. Two lists that
+        # "must agree" is the defect; one shared implementation is the fix —
+        # the same reasoning `credential_scrub.py` was created on, applied to
+        # the third list nobody had noticed.
+        #
+        # Runs FIRST so the local patterns below see already-redacted text and
+        # cannot partially re-match a credential the shared pass replaced.
+        text = scrub_credentials(text, placeholder=self.redaction_marker)
+
+        # Local list owns the non-credential classes (PII, payment data, and
+        # the two field-shaped forms). See PATTERNS for the scope split.
+        #
+        # CALLABLE, not the marker string, for the reason documented at
+        # `scrub_credentials`: `re.sub`'s string replacement is a TEMPLATE that
+        # expands `\1` / `\g<0>` / `\g<name>`. `redaction_marker` is
+        # OPERATOR-SETTABLE (see `__init__` and `RedactionConfig`), so passing
+        # it as the template let a marker of `\g<0>` replace every matched SSN,
+        # card number and PII field WITH ITSELF — this loop returning its input
+        # while reporting a redaction. A callable's return value is used
+        # literally, so the marker can no longer be read as syntax.
+        #
+        # The shared `scrub_credentials` call above rejects such a marker
+        # outright, so in practice it raises before reaching here — but this
+        # loop must not depend on the ordering of a call it does not own.
+        def _literal_marker(_match: re.Match) -> str:
+            return self.redaction_marker
+
         for pattern_name, pattern in self.PATTERNS.items():
-            text = pattern.sub(self.redaction_marker, text)
+            text = pattern.sub(_literal_marker, text)
 
         return text
 
@@ -118,9 +168,7 @@ class SensitiveDataRedactor:
                     (
                         self.redact_dict(item)
                         if isinstance(item, dict)
-                        else self.redact_string(item)
-                        if isinstance(item, str)
-                        else item
+                        else self.redact_string(item) if isinstance(item, str) else item
                     )
                     for item in value
                 ]

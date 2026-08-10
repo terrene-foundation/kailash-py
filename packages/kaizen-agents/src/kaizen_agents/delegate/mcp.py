@@ -23,6 +23,8 @@ import signal
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 logger = logging.getLogger(__name__)
 
 # Timeout for individual JSON-RPC requests (seconds)
@@ -110,11 +112,33 @@ class McpClient:
         cmd = [self._config.command] + self._config.args
 
         # Security: log MCP server being started (command comes from config,
-        # which could be project-level .kz/config.toml in a cloned repo)
+        # which could be project-level .kz/config.toml in a cloned repo).
+        #
+        # ``args`` VALUES ARE NOT LOGGED, and that is the whole point of this
+        # shape. The reasoning above was already right about the config being
+        # untrusted, and ``env`` was deliberately withheld two lines up -- but
+        # ``args`` is the SAME surface, and it is where the canonical MCP
+        # server configurations actually put the credential:
+        # ``server-github`` takes ``--token <pat>``, ``server-postgres`` takes
+        # a DSN as a positional. Joining them into the message published a
+        # live token at INFO on every start.
+        #
+        # Retained: ``name`` and ``command`` -- scalar identifiers, and
+        # together they are the diagnostic this line exists for (WHICH server
+        # started, and WHICH binary served it). Reduced to a count: ``args``,
+        # because an argument count still distinguishes "started with the
+        # config I expected" from "started with something else" without
+        # rendering any value.
+        #
+        # Redacting arg VALUES while keeping flag names was considered and
+        # rejected: it requires guessing which tokens are flags and which are
+        # values (``--token X`` vs ``--token=X`` vs a bare positional DSN),
+        # and a wrong guess publishes the secret. A count cannot be wrong.
         logger.info(
-            "Starting MCP server %r: %s",
+            "Starting MCP server %r: %s (%d args)",
             self._config.name,
-            " ".join(cmd),
+            self._config.command,
+            len(self._config.args),
         )
 
         try:
@@ -131,7 +155,7 @@ class McpClient:
             ) from exc
         except OSError as exc:
             raise RuntimeError(
-                f"MCP server {self._config.name!r}: failed to start: {exc}"
+                f"MCP server {self._config.name!r}: failed to start: {scrub_remote_error(exc)}"
             ) from exc
 
         # Start background reader for stdout
@@ -172,7 +196,7 @@ class McpClient:
         except Exception as exc:
             await self.stop()
             raise RuntimeError(
-                f"MCP server {self._config.name!r}: initialize failed: {exc}"
+                f"MCP server {self._config.name!r}: initialize failed: {scrub_remote_error(exc)}"
             ) from exc
 
     async def stop(self) -> None:
@@ -416,11 +440,16 @@ class McpClient:
         except asyncio.CancelledError:
             pass
         except Exception as exc:
+            # Was leaking twice (raw ``exc`` argument + ``exc_info`` traceback)
+            # and was the ONLY un-scrubbed sink left in this module -- the
+            # start-failure and initialize-failure sinks above already route
+            # through ``scrub_remote_error``. An MCP server is launched with
+            # credentials in its environment and this reader drains its pipe,
+            # so a decode/transport failure can surface that material verbatim.
             logger.error(
                 "MCP server %r: reader error: %s",
                 self._config.name,
-                exc,
-                exc_info=True,
+                scrub_remote_error(exc),
             )
             # Fail all pending futures
             for future in self._pending.values():

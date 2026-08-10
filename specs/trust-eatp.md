@@ -803,6 +803,6 @@ pairs (audit anchors, timestamp tokens, CRL metadata, message envelopes)
 follow in subsequent shards per the inventory at
 `workspaces/issues-604-607/01-analysis/issue-604-signed-record-sites.md`.
 
-Cross-SDK: `esperie/kailash-rs#33`. Wire format: pending mint **ISS-31**.
+Cross-SDK: the Rust SDK (parity vector #33). Wire format: pending mint **ISS-31**.
 
 Origin: terrene-foundation/kailash-py#604.

@@ -43,6 +43,7 @@ from contextlib import contextmanager
 from typing import Callable, Dict, Iterator, Optional
 from uuid import uuid4
 
+from kailash.utils.secure_logging import safe_callable_name
 from nexus.context import get_current_request
 
 __all__ = [
@@ -199,10 +200,17 @@ class DependencyOverrideMap:
         if request is None:
             return
 
+        # `real` is the caller's DEPENDENCY callable, so the `repr` fallback
+        # this used to carry rendered bound kwargs verbatim:
+        # `DependencyOverrideMap.set(functools.partial(<function get_db>,
+        # dsn='postgres://svc:<credential>@…')) called during active request`.
+        # The message rides a raised `DependencyOverrideRuntimeMutationError`
+        # into whatever logs the failure, so it is a credential surface even
+        # though it is not a log call. `safe_callable_name` still names WHICH
+        # dependency the caller tried to mutate, resolving a partial to the
+        # wrapped function rather than a bare "partial".
         callable_name = (
-            getattr(real, "__qualname__", repr(real))
-            if real is not None
-            else "<all overrides>"
+            safe_callable_name(real) if real is not None else "<all overrides>"
         )
         correlation_id = _request_correlation_id(request)
         raise DependencyOverrideRuntimeMutationError(

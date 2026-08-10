@@ -289,10 +289,34 @@ class CLIChannel(Channel):
             raise
 
     async def stop(self) -> None:
-        """Stop the CLI channel."""
+        """Stop the CLI channel.
+
+        Returns only once the CLI loop task has actually finished; the channel
+        is then ``STOPPED`` and its runtime reference has been released.
+
+        If THIS coroutine is cancelled while it waits -- a shutdown deadline
+        expiring, a supervising task group tearing down -- the
+        ``CancelledError`` propagates to the caller rather than being absorbed.
+        The channel is left ``STOPPING``, which is the truthful record: the CLI
+        loop was not established as stopped. Call ``stop()`` again to finish (or
+        ``close()`` to release the runtime alone).
+
+        ``_cleanup`` and ``close`` run on EVERY exit path including that one.
+        ``_cleanup`` cancels ``_running_task`` -- a DIFFERENT task from
+        ``_main_task`` -- and ``close`` releases the runtime reference; the
+        dominant real trigger for the cancelled path is a task group or
+        ``asyncio.timeout`` tearing down, where nobody calls ``stop()`` a second
+        time. Skipping them there orphans a pending task AND strands the
+        runtime, which is a LEAK introduced in the act of fixing the swallowed
+        cancellation.
+        """
         if self.status == ChannelStatus.STOPPED:
             return
 
+        # See the sibling comment in api_channel: the guard below MUST key on
+        # whether cleanup already ran, not on `status is not STOPPED`, which a
+        # normal-return-but-incomplete stop now also satisfies.
+        cleanup_ran = False
         try:
             self.status = ChannelStatus.STOPPING
             self._running = False
@@ -308,26 +332,103 @@ class CLIChannel(Channel):
                 )
             )
 
-            # Cancel main task
+            # Cancel the main task and establish that it stopped.
+            #
+            # ``await self._main_task`` inside ``except CancelledError: pass``
+            # cannot tell two different events apart, because both arrive at
+            # that await as the same exception type:
+            #
+            #   1. the CLI loop ending in the cancellation we just requested --
+            #      expected, and the reason the handler exists;
+            #   2. THIS coroutine being cancelled by somebody else while it
+            #      waits -- a shutdown deadline, a task group tearing down.
+            #
+            # Case 2 was therefore swallowed and the caller received a clean
+            # ``STOPPED`` for a stop that never finished. Worse, ``await task``
+            # makes the CLI loop the awaited future, so cancelling the caller
+            # only re-requested cancellation of a task that already ignored it
+            # -- nothing reached this frame and the caller could be stranded
+            # indefinitely.
+            #
+            # ``asyncio.wait`` observes the task's completion without re-raising
+            # what the task ended with, and parks on its own future, so only a
+            # cancellation aimed at THIS coroutine surfaces here -- and it
+            # propagates. Same shape as the monitoring-stop fix in
+            # ``kailash/visualization/api.py`` (bb8a3f966).
             if self._main_task and not self._main_task.done():
-                self._main_task.cancel()
-                try:
-                    await self._main_task
-                except asyncio.CancelledError:
-                    pass
+                task = self._main_task
+                task.cancel()
+                await asyncio.wait({task})
+                # A task that died of a REAL error still surfaces, exactly as
+                # it did when this awaited the task directly; observing
+                # completion must not turn a crash into a silent clean stop.
+                if not task.cancelled():
+                    loop_error = task.exception()
+                    if loop_error is not None:
+                        raise loop_error
 
-            await self._cleanup()
+            # STOPPED only when cleanup actually COMPLETED -- see the sibling
+            # comment in api_channel. An event task that ignored cancellation
+            # is still live, so STOPPING is the truthful record.
+            cleaned = await self._cleanup()
+            cleanup_ran = True
 
             self.close()
 
-            self.status = ChannelStatus.STOPPED
+            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
-            logger.info(f"CLI channel {self.name} stopped")
+            if cleaned:
+                logger.info(f"CLI channel {self.name} stopped")
+            else:
+                logger.warning(
+                    "CLI channel %s stop did NOT complete; channel is STOPPING "
+                    "and can be stopped again",
+                    self.name,
+                )
 
         except Exception as e:
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping CLI channel {self.name}: {e}")
             raise
+        finally:
+            # The success path already ran both above and reached ``STOPPED``;
+            # anything else left this frame early -- a propagating
+            # ``CancelledError``, or an error re-raised as ERROR -- with
+            # ``_running_task`` live and the runtime still referenced.
+            # Cancelling is synchronous, so the cancel lands even when the
+            # subsequent await is itself cancelled.
+            if not cleanup_ran:
+                try:
+                    await self._cleanup()
+                except Exception:
+                    # See the sibling comment in api_channel: an unguarded
+                    # re-raise here REPLACES the propagating CancelledError.
+                    logger.warning(
+                        "CLI channel %s: cleanup failed during an interrupted "
+                        "stop; the original cancellation is preserved",
+                        self.name,
+                    )
+                finally:
+                    # MUST run even when ``_cleanup`` raised. Unguarded, a
+                    # raising ``_cleanup`` skipped this and stranded the
+                    # runtime reference -- defeating the stated goal of the
+                    # very block it sits in.
+                    #
+                    # And guarded in turn: ``close()`` calls
+                    # ``self.runtime.release()`` into another object, so it can
+                    # raise too -- and a raise from THIS ``finally`` replaces
+                    # the propagating CancelledError, which is the third
+                    # instance of that same shape in this method. Low
+                    # likelihood, identical consequence.
+                    try:
+                        self.close()
+                    except Exception:
+                        logger.warning(
+                            "CLI channel %s: releasing the runtime failed "
+                            "during an interrupted stop; the original "
+                            "cancellation is preserved",
+                            self.name,
+                        )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a CLI request.
@@ -625,8 +726,12 @@ class CLIChannel(Channel):
 
         start_time = time.monotonic()
         try:
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
+            # The CLI's --input JSON is the caller's workflow arguments, the
+            # same role the `parameters` envelope fills on every other channel.
             results, run_id = await self.runtime.execute_async(
-                workflow, parameters=inputs
+                workflow, parameters=bind_parameter_envelope(inputs)
             )
         except Exception as e:
             logger.error(f"Workflow execution failed for '{workflow_name}': {e}")

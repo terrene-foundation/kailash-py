@@ -23,6 +23,8 @@ from kailash.nodes.security.audit_log import AuditLogNode
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai import LLMAgentNode
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -594,7 +596,10 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 )
             except Exception as e:
                 # Fallback to rule-based analysis if AI fails
-                self.logger.warning(f"AI analysis failed, using rule-based only: {e}")
+                self.logger.warning(
+                    "AI analysis failed, using rule-based only: %s",
+                    sanitize_provider_error(e, "LLM"),
+                )
                 ai_insights = None
 
         # Calculate compliance score
@@ -1580,7 +1585,10 @@ Format your response as JSON with keys: risk_level, legal_implications, best_pra
             return None
 
         except Exception as e:
-            self.logger.warning(f"AI compliance analysis failed: {e}")
+            self.logger.warning(
+                "AI compliance analysis failed: %s",
+                sanitize_provider_error(e, "LLM"),
+            )
             return None
 
     def _parse_ai_compliance_response(self, response: str) -> Optional[Dict[str, Any]]:
@@ -1817,7 +1825,9 @@ Format your response as JSON with keys: risk_level, legal_implications, best_pra
             self.audit_log_node.execute(**audit_entry)
         except Exception as e:
             self.log_with_context(
-                "WARNING", f"Failed to audit data subject request: {e}"
+                "WARNING",
+                "Failed to audit data subject request: "
+                f"{sanitize_provider_error(e, 'audit store')}",
             )
 
     def _get_consent_status(self, user_id: str) -> Dict[str, Any]:

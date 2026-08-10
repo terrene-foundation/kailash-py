@@ -47,7 +47,10 @@ FailedDDLRecord = _namedtuple(
 # __init__ rather than silently degrading to fail-fast.
 _AUTO_MIGRATE_WARN = "warn"
 
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # Conservative SQL type allowlist for dynamic ALTER TABLE ... TYPE statements
@@ -88,10 +91,10 @@ from .config import (
     MonitoringConfig,
     SecurityConfig,
 )
-from .events import DataFlowEventMixin
 from .credential_provider import (  # Issue #1741: single-connection token auth
     open_credentialed_connection,
 )
+from .events import DataFlowEventMixin
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -5318,7 +5321,9 @@ class DataFlow(DataFlowEventMixin):
                 # one before interpolating into PRAGMA DDL so a future refactor
                 # that reads table names from a different (user-influenced)
                 # source cannot silently reopen an injection vector.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
 
                 # Get columns for this table using PRAGMA table_info
                 columns_query = f"PRAGMA table_info({table_name})"
@@ -5341,7 +5346,9 @@ class DataFlow(DataFlowEventMixin):
                 # Get foreign keys using PRAGMA foreign_key_list
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
                 fk_query = f"PRAGMA foreign_key_list({table_name})"
                 fk_result = await adapter.execute_query(fk_query)
 
@@ -5370,7 +5377,9 @@ class DataFlow(DataFlowEventMixin):
                 # Get indexes using PRAGMA index_list and index_info
                 # Defense-in-depth: table_name was validated above, but keep
                 # the call local so the audit reads linearly.
-                _validate_identifier(table_name)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
                 indexes_query = f"PRAGMA index_list({table_name})"
                 indexes_result = await adapter.execute_query(indexes_query)
 
@@ -6729,8 +6738,25 @@ class DataFlow(DataFlowEventMixin):
                     fields = index_config.get("fields", [])
                     if not fields:
                         continue
-                    index_name = index_config.get(
-                        "name", f"idx_{table_name}_{fields[0]}"
+                    # Issue #1971: an explicit ``name`` is the user's own
+                    # identifier and is passed through unchanged (an
+                    # over-length one fails loudly at validate_identifier /
+                    # the server). The DERIVED default is DataFlow-generated
+                    # and MUST be fitted to the dialect's budget: table_name
+                    # already consumes the whole budget, so
+                    # ``idx_{table_name}_{field}`` overflows by construction
+                    # and PostgreSQL truncates it server-side at 63 bytes —
+                    # collapsing every index on that table to ONE identifier,
+                    # which the ``IF NOT EXISTS`` clause then silently skips.
+                    # ``is None`` (not truthiness): an explicitly-supplied
+                    # empty name MUST keep failing loudly at
+                    # validate_identifier rather than being silently replaced
+                    # by the derived default.
+                    explicit_index_name = index_config.get("name")
+                    index_name = (
+                        self._fit_identifier_to_dialect(f"idx_{table_name}_{fields[0]}")
+                        if explicit_index_name is None
+                        else explicit_index_name
                     )
                     unique = index_config.get("unique", False)
 
@@ -6760,7 +6786,11 @@ class DataFlow(DataFlowEventMixin):
             if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
                 foreign_key = rel_info["foreign_key"]
                 _validate_id(foreign_key)
-                index_name = f"idx_{table_name}_{foreign_key}"
+                # Issue #1971: DataFlow-generated, so fit to the dialect
+                # budget (see the custom-index branch above).
+                index_name = self._fit_identifier_to_dialect(
+                    f"idx_{table_name}_{foreign_key}"
+                )
                 _validate_id(index_name)
                 # MySQL rejects IF NOT EXISTS on CREATE INDEX (see above).
                 if_not_exists = (
@@ -6798,7 +6828,14 @@ class DataFlow(DataFlowEventMixin):
                 target_table = rel_info["target_table"]
                 target_key = rel_info.get("target_key", "id")
 
-                constraint_name = f"fk_{table_name}_{foreign_key}"
+                # Issue #1971: DataFlow-generated constraint name derived from
+                # an already-budget-consuming table_name. PostgreSQL truncates
+                # an over-length constraint name server-side, so two FKs on the
+                # same long table collide on ONE constraint identifier and the
+                # second ALTER TABLE fails with a duplicate-object error.
+                constraint_name = self._fit_identifier_to_dialect(
+                    f"fk_{table_name}_{foreign_key}"
+                )
 
                 # Defense-in-depth (rules/dataflow-identifier-safety.md MUST 1):
                 # validate every identifier before interpolation into DDL.
@@ -6807,11 +6844,21 @@ class DataFlow(DataFlowEventMixin):
                 # `foreign_key` / `target_table` / `target_key` come from
                 # model-relationship metadata which is model-registry-derived
                 # today but may be caller-influenced after a future refactor.
-                _validate_identifier(table_name)
-                _validate_identifier(constraint_name)
-                _validate_identifier(foreign_key)
-                _validate_identifier(target_table)
-                _validate_identifier(target_key)
+                _validate_identifier(
+                    table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    constraint_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    foreign_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    target_table, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
+                _validate_identifier(
+                    target_key, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
 
                 sql = (
                     f"ALTER TABLE {table_name} "
@@ -8084,13 +8131,17 @@ class DataFlow(DataFlowEventMixin):
         # interpolation. table_name comes from the migration framework but
         # MigrationOperation.details may carry caller-influenced column names
         # and types — refuse anything that fails the allowlist.
-        _validate_identifier(table_name)
+        _validate_identifier(
+            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
 
         if operation_type == "ADD_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
             # Get the field info for this column from the model
             # issue #1573 (sibling of #1541): match the physical ``table_name``
@@ -8123,14 +8174,18 @@ class DataFlow(DataFlowEventMixin):
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
             return f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
 
         elif operation_type == "MODIFY_COLUMN":
             column_name = details.get("column_name")
             if not column_name:
                 return ""
-            _validate_identifier(column_name)
+            _validate_identifier(
+                column_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
             # Get new type from changes or details
             changes = details.get("changes", {})
@@ -10933,7 +10988,55 @@ class DataFlow(DataFlowEventMixin):
 
         # Apply proper English pluralization
         table_name = self._pluralize(snake_case)
-        return table_name
+
+        # Issue #1971: fit the GENERATED identifier to the target dialect's
+        # length budget. This is the single generator for DataFlow-derived
+        # table names — registration (``_register_model``), the
+        # ``_get_table_name`` fallback, bulk operations and express all route
+        # through here, so DDL and DML agree on the same physical name.
+        return self._fit_identifier_to_dialect(table_name)
+
+    def _fit_identifier_to_dialect(self, identifier: str) -> str:
+        """Fit a DataFlow-GENERATED identifier to the target dialect's limit.
+
+        Identifier length limits are dialect-owned: PostgreSQL 63, MySQL 64,
+        SQLite 128. A 69-char table name is legal on SQLite and illegal on
+        PostgreSQL, so the budget MUST come from the connection's dialect —
+        never from a hardcoded constant on a shared path.
+
+        Over-budget names are truncated with a deterministic digest suffix
+        (see ``SQLDialect.normalize_identifier``). Without this, PostgreSQL
+        truncates server-side at NAMEDATALEN-1 and two models whose names
+        share the first 63 chars silently resolve to ONE physical table.
+
+        Scope: DataFlow-GENERATED names only. An explicit ``__tablename__``
+        is the user's own identifier and is passed through unchanged — an
+        over-length one still raises ``InvalidIdentifierError`` at
+        ``quote_identifier``, which is the correct loud failure for a name
+        the user chose.
+        """
+        from ..adapters.dialect import DialectManager
+
+        database_type = self._detect_database_type()
+        try:
+            dialect = DialectManager.get_dialect(database_type)
+        except ValueError as exc:
+            # Non-SQL target (e.g. mongodb, which ConnectionParser detects but
+            # DialectManager has no SQL dialect for): SQL identifier length
+            # budgets do not apply. This is a documented pass-through, not a
+            # swallowed error — the collection name goes to the document store
+            # unchanged by design, and the reason is logged.
+            logger.debug(
+                "engine.identifier_fit_skipped_non_sql_dialect",
+                extra={
+                    "database_type": database_type,
+                    "identifier_length": len(identifier),
+                    "reason": str(exc),
+                },
+            )
+            return identifier
+
+        return dialect.normalize_identifier(identifier)
 
     def _foreign_key_to_relationship_name(self, foreign_key_column: str) -> str:
         """Convert foreign key column name to relationship name."""
@@ -11752,6 +11855,32 @@ class DataFlow(DataFlowEventMixin):
                 "Using SQLite :memory: database for testing. Production requires PostgreSQL."
             )
             # Show detailed async limitation warning if in async context
+            warn_sqlite_async_limitation(url)
+            return True
+
+        # SQLite's own URI-filename form (https://sqlite.org/uri.html):
+        # ``file:<path-or-name>[?<params>]``. This is the shape issue #1502
+        # injects for a bare ``:memory:`` instance
+        # (``file:df_mem_<id>?mode=memory&cache=shared``) and the shape a user
+        # supplies directly to reach SQLite's URI-only options (``mode=ro``,
+        # ``cache=shared``, ``immutable=1``). It carries no ``://``, so the
+        # scheme table below never sees it and the bare-path heuristic that
+        # follows rejects it — this branch is checked first.
+        #
+        # Enforcement-surface parity with
+        # ``ConnectionParser.detect_database_type`` (``rules/security.md``
+        # § Enforcement-Surface Parity): both validators MUST recognise the
+        # same set of legitimate SQLite forms. This is an EXPLICIT allowlist
+        # entry, not a fallback — every other unrecognised scheme still falls
+        # through to the fail-closed paths below.
+        # Case-INSENSITIVE: URI schemes are case-insensitive per RFC 3986 §3.1,
+        # the scheme table below is matched case-insensitively (``SQLITE:///x``
+        # validates), and ``ConnectionParser.detect_database_type`` lowercases
+        # before lookup — so a case-SENSITIVE test here would accept ``file:``
+        # while rejecting ``FILE:`` that the parser had just classified as
+        # SQLite, which is the exact surface DIVERGENCE the parity note above
+        # exists to prevent.
+        if url.lower().startswith("file:"):
             warn_sqlite_async_limitation(url)
             return True
 

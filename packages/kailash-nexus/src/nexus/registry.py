@@ -82,9 +82,22 @@ class HandlerRegistry:
                 ``_METADATA_MAX_BYTES``.
 
         Raises:
-            ValueError: If ``metadata`` is not JSON-serializable or
-                exceeds the size cap.
+            ValueError: If ``name`` fails workflow-name validation, or if
+                ``metadata`` is not JSON-serializable or exceeds the size cap.
         """
+        # #1972 enforcement-surface parity: ``HandlerRegistry`` is PUBLICLY
+        # exported (``nexus/__init__.py``), so it is an INDEPENDENT registration
+        # surface — validating only ``Nexus.register()`` would leave a supported
+        # path that still admits a name the execute route later rejects, which is
+        # exactly the register/execute asymmetry #1972 closed.
+        # Per security.md § Enforcement-Surface Parity a new fail-closed
+        # dimension MUST land at EVERY independent validation surface, and the
+        # check runs BEFORE any state mutation so a rejected name leaves nothing
+        # half-registered.
+        from nexus.validation import validate_workflow_name
+
+        validate_workflow_name(name)
+
         if metadata is not None:
             import json
 

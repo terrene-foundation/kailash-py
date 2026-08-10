@@ -30,14 +30,18 @@ class TestSessionFilePermissions:
         mode = stat.S_IMODE(os.stat(sessions_dir).st_mode)
         assert mode == 0o700, f"Expected 0o700, got {oct(mode)}"
 
-    def test_save_session_creates_file_with_600_permissions(self, tmp_path: object) -> None:
+    def test_save_session_creates_file_with_600_permissions(
+        self, tmp_path: object
+    ) -> None:
         """Saved session files must be owner-only (rw-------)."""
         mgr = SessionManager(tmp_path / "sessions")  # type: ignore[operator]
         path = mgr.save_session("test")
         mode = stat.S_IMODE(os.stat(path).st_mode)
         assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
 
-    def test_fork_session_creates_file_with_600_permissions(self, tmp_path: object) -> None:
+    def test_fork_session_creates_file_with_600_permissions(
+        self, tmp_path: object
+    ) -> None:
         """Forked session files must also be owner-only (rw-------)."""
         mgr = SessionManager(tmp_path / "sessions")  # type: ignore[operator]
         mgr.save_session("original")
@@ -46,14 +50,18 @@ class TestSessionFilePermissions:
         mode = stat.S_IMODE(os.stat(result).st_mode)
         assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
 
-    def test_auto_save_creates_file_with_600_permissions(self, tmp_path: object) -> None:
+    def test_auto_save_creates_file_with_600_permissions(
+        self, tmp_path: object
+    ) -> None:
         """Auto-saved session files must be owner-only (rw-------)."""
         mgr = SessionManager(tmp_path / "sessions")  # type: ignore[operator]
         path = mgr.auto_save()
         mode = stat.S_IMODE(os.stat(path).st_mode)
         assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
 
-    def test_overwritten_session_retains_600_permissions(self, tmp_path: object) -> None:
+    def test_overwritten_session_retains_600_permissions(
+        self, tmp_path: object
+    ) -> None:
         """Re-saving to same name must still enforce 0o600."""
         mgr = SessionManager(tmp_path / "sessions")  # type: ignore[operator]
         mgr.save_session("dup")

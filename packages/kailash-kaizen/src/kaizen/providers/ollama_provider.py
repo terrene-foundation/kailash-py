@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterator, Optional
 
 from kailash.utils.url_credentials import mask_error_text
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
 @dataclass
@@ -66,7 +67,7 @@ class OllamaProvider:
         except Exception as e:
             raise RuntimeError(
                 "Ollama not available. Please install and start Ollama: "
-                f"{mask_error_text(str(e))}\n"
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}\n"
                 "Install: https://ollama.ai/download"
             )
 
@@ -111,7 +112,10 @@ class OllamaProvider:
             }
 
         except Exception as e:
-            raise RuntimeError(f"Ollama generation failed: {mask_error_text(str(e))}")
+            raise RuntimeError(
+                "Ollama generation failed: "
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
+            )
 
     def generate_stream(
         self, prompt: str, system: Optional[str] = None, **kwargs
@@ -151,7 +155,10 @@ class OllamaProvider:
                         yield content
 
         except Exception as e:
-            raise RuntimeError(f"Ollama streaming failed: {mask_error_text(str(e))}")
+            raise RuntimeError(
+                "Ollama streaming failed: "
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
+            )
 
     def generate_vision(
         self, prompt: str, image_path: str, system: Optional[str] = None, **kwargs
@@ -202,5 +209,6 @@ class OllamaProvider:
 
         except Exception as e:
             raise RuntimeError(
-                f"Ollama vision generation failed: {mask_error_text(str(e))}"
+                "Ollama vision generation failed: "
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
             )

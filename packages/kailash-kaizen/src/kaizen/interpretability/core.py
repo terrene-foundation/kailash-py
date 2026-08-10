@@ -235,6 +235,16 @@ def _resolve_device(preferred: Optional[str] = None) -> str:
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return "mps"
     except Exception:  # noqa: BLE001 — defensive fallback
+        # ``exc_info`` DELIBERATELY KEPT (audited 2026-08-08 against the
+        # credential-leak sweep that stripped it across kaizen/kaizen-agents).
+        # What raises here is torch device probing -- ``torch.cuda.is_available``
+        # and the MPS backend check. Those exceptions carry driver and build
+        # information, never a credential: nothing in this function touches a
+        # provider, a DSN, a config value or caller-supplied code, so there is
+        # no channel by which a secret could reach the traceback. It is also
+        # DEBUG, not WARN/ERROR. The traceback IS the diagnostic for a
+        # device-detection failure, and stripping it here would trade real
+        # debuggability for nothing (zero-tolerance.md Rule 3 cuts both ways).
         logger.debug(
             "interpretability.device_resolver_failed",
             exc_info=True,
@@ -421,6 +431,11 @@ class InterpretabilityDiagnostics:
             # Cleanup failures are benign (torch may already be torn
             # down during interpreter shutdown). Zero-tolerance Rule 3
             # cleanup-path carve-out.
+            # ``exc_info`` DELIBERATELY KEPT -- same audit and same reasoning as
+            # the device-resolver guard above: a torch cache-clear failure at
+            # interpreter shutdown carries no credential channel, it is DEBUG,
+            # and the traceback is the only useful signal for a teardown-order
+            # problem.
             logger.debug(
                 "interp.close.cache_clear_failed",
                 exc_info=True,

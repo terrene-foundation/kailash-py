@@ -14,17 +14,15 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import shutil
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator
 
 from kailash.db.connection import ConnectionManager
-from kailash.db.dialect import _validate_identifier
 
 logger = logging.getLogger(__name__)
 

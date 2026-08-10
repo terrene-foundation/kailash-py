@@ -349,9 +349,23 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                 if self._async_runtime is None:
                     raise RuntimeError("Async runtime not initialized")
 
+                # Bind BOTH shapes, like every other caller-facing entry
+                # point. This route takes ONE caller-arguments slot
+                # (`inputs`), so under the structural rule in
+                # `kailash/workflow/input_envelope.py` it binds -- the opt-out
+                # exists only where a caller can choose between an `inputs`
+                # and a `parameters` slot, and there is nothing here to pick.
+                # Passing `resolved_inputs` raw bound only bare top-level
+                # names, so a workflow reading `parameters.get(...)` -- the
+                # documented convention -- raised NameError on this public
+                # route while succeeding on every channel.
+                from kailash.workflow.input_envelope import (
+                    bind_parameter_envelope,
+                )
+
                 result = await self._async_runtime.execute_async(
                     workflow_obj,
-                    parameters=resolved_inputs,
+                    parameters=bind_parameter_envelope(resolved_inputs),
                 )
 
                 # Create response

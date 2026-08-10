@@ -425,7 +425,7 @@ Pre-auth read paths (login lookup, password-reset lookup, invite-accept lookup) 
 
 **Identifier safety:** every user-supplied identifier (function, schema, role, table, column, param name) routes through `PostgreSQLDialect.quote_identifier()`. PG type strings are validated against `ALLOWED_PG_TYPES`.
 
-**Cross-SDK byte-shape parity:** the same builder chain produces byte-identical SQL in kailash-py and kailash-rs. The shared fixture `packages/kailash-dataflow/tests/fixtures/security_definer_vectors.json` is the contract; both SDKs run regression tests against the fixture (cross-SDK pairing: `esperie-enterprise/kailash-rs#579` + `#590`).
+**Cross-SDK byte-shape parity:** the same builder chain produces byte-identical SQL in kailash-py and the Rust SDK. The shared fixture `packages/kailash-dataflow/tests/fixtures/security_definer_vectors.json` is the contract; both SDKs run regression tests against the fixture (cross-SDK pairing: parity vectors #579 + #590 on the Rust SDK).
 
 **Caller discipline (T7 timing-close compare):** the helper returns 0 rows in constant time whether the user exists or not. The application MUST run `bcrypt(candidate, DUMMY_HASH)` on the 0-row branch to equalize latency. The pattern is documented at `packages/kailash-dataflow/docs/advanced/rls-security-definer-preauth-carveout.md`.
 

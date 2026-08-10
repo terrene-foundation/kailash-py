@@ -65,10 +65,31 @@ def test_missing_credential_includes_source_hint() -> None:
 
 
 def test_provider_error_truncates_long_body() -> None:
-    big = "x" * 500
+    # The body MUST be credential-FREE prose for this test to isolate
+    # truncation. A long contiguous run (the former `"x" * 500`) is claimed by
+    # the shared scrubber's 40-char `[A-Za-z0-9/+]{40,}` AWS-secret rule and
+    # collapses to a single sentinel, leaving nothing to truncate — that is the
+    # documented over-redaction posture, not a truncation bug. Whitespace-
+    # separated prose is also the realistic shape of a long provider error.
+    big = "the upstream model provider rejected this request. " * 12  # 612 chars
+    assert len(big) > ProviderError._SNIPPET_LIMIT
     err = ProviderError(status=500, body_snippet=big)
     assert len(err.body_snippet) <= 300  # 256 + truncation suffix
     assert "truncated" in err.body_snippet
+
+
+def test_provider_error_long_contiguous_run_is_redacted_not_truncated() -> None:
+    """Pins the interaction the truncation test above must not be confused with.
+
+    A 40+ char contiguous `[A-Za-z0-9/+]` run is an AWS-secret-shaped token, and
+    the shared scrubber deliberately over-redacts it (see the
+    false-positive-vs-sensitivity decision in
+    `kaizen.utils.credential_scrub`). Because the scrub runs BEFORE truncation,
+    such a body collapses to the sentinel and never reaches the 256-char window.
+    """
+    err = ProviderError(status=500, body_snippet="x" * 500)
+    assert err.body_snippet == "[REDACTED-CRED]"
+    assert "truncated" not in err.body_snippet
 
 
 # --- round-1 redteam M1 (security): credential scrub in ProviderError ---

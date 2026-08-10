@@ -5,6 +5,8 @@ Tests for enhanced MCP server functionality without mocking external packages.
 
 from unittest.mock import Mock, patch
 
+import builtins
+
 import pytest
 from kailash_mcp.server import MCPServer
 
@@ -41,6 +43,13 @@ class TestMCPServer:
         """Test that MCP initialization provides required interface."""
         server = MCPServer("interface-test")
 
+        # Capture the REAL __import__ before patching. The fall-through below
+        # must not resolve `__import__` through the patch, or it re-enters the
+        # mock and recurses until RecursionError. That latency was always here;
+        # kailash-mcp 0.5.0 exposed it by scrubbing the ImportError message via
+        # `mask_error_text`, which imports inside the patched region.
+        real_import = builtins.__import__
+
         # Mock the FastMCP import to avoid timeout issues
         with patch("builtins.__import__") as mock_import:
 
@@ -56,7 +65,7 @@ class TestMCPServer:
                     mock_fastmcp_class.return_value = Mock()
                     return mock_fastmcp_module
                 else:
-                    return __import__(name, *args, **kwargs)
+                    return real_import(name, *args, **kwargs)
 
             mock_import.side_effect = side_effect
             server._init_mcp()

@@ -1,0 +1,30 @@
+8ea48617b fix(f10): the scanner could not see a traceback nested inside the scrub
+a0c704f9a merge(f13): channel lifecycle defect-contracts
+697e20092 merge(f11): close the core and nexus caller-repr half
+3e91a970b merge(f11): close the caller-repr leak in kaizen and add the sink scanner
+ca44c941b merge(f10): scrubber vocabulary, child reaping, and the enumeration receipt
+06461f26e merge(f10): teach _SinkScan the %r interpolation shape
+3f5378af4 merge(f10): scrub the remaining kaizen-agents log and error-return sinks
+06e85c933 fix(kaizen): de-number a drifted pin, add a missing enumeration receipt
+9c1e2b193 fix(core): delete the duplicate callback-name helper that re-opened the leak
+7c907625f fix(channels): stop() swallowed a cancellation aimed at its own caller
+84d3dafcf fix(visualization): start endpoint reported started over an uncertified task
+59be56114 fix(nexus): close the Depends repr amplifier and the override mutation guard
+a39c4477d fix(core,nexus): close the last three sites — the node sink, and both endpoint WARNs
+d56b8a6c5 fix(core,nexus): retain scalars only — drop the exception message, not just its repr
+2cea09877 test(kaizen): a sink scanner for kailash-kaizen, plus the one finding it made me revise
+a4ac02a17 fix(nexus): keep the unresolved-symbol diagnostic while dropping the object repr
+376b7a988 fix(kaizen-agents): three more F10 sinks, each blind for a different reason
+71a54aaa1 fix(kaizen-agents): teach _SinkScan %r interpolation, narrowed to callables
+318df97bc fix(core,nexus): the handler-identity fallback rendered a caller-supplied repr
+920f5d98e fix(kaizen): scrub the Agent-fallback traceback; replace a false rationale
+e035ffe17 style(kaizen): black-format the F11 regression suite
+90c5bda79 fix(kaizen): isolation.py imported no scrubber, so caller exception text logged raw
+8a4820a26 fix(kaizen): caller-supplied callables reached eight log sinks via their repr
+f630851dc fix(kaizen-agents): satisfy configured ruff, and correct the hook record
+305e689a6 fix(kaizen-agents): teach _SinkScan repr() of a non-exception value
+57661325e fix(kaizen-agents): reap the timed-out hook child in HookManager
+11a7cb31a fix(kaizen-agents): reap the Claude Code child on every stream exit path
+bf164efc1 fix(kaizen-agents): teach _SinkScan the four shapes it was blind to
+66a786e16 fix(kaizen): scrub secret_key and passphrase credential keys
+bcd446068 fix(kaizen-agents): the patterns returned the traceback they had just scrubbed the message of

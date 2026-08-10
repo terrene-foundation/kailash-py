@@ -28,6 +28,7 @@ from collections import deque
 from typing import Any, Dict, List, Optional
 
 from kaizen.mcp.catalog_server.registry import MemoryRegistry
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -517,9 +518,12 @@ class CatalogMCPServer:
                     "isError": True,
                 },
             )
-        except Exception:
-            # Unexpected errors — sanitize to avoid leaking internals
-            logger.exception("Tool %s failed", tool_name)
+        except Exception as exc:
+            # The RESPONSE below was already sanitized "to avoid leaking
+            # internals" while this line shipped the full traceback -- the same
+            # protected-return / unprotected-log split found across the
+            # delegate module last shard. Both surfaces now agree.
+            logger.error("Tool %s failed: %s", tool_name, scrub_remote_error(exc))
             return self._ok(
                 req_id,
                 {

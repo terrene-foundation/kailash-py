@@ -1553,7 +1553,10 @@ class BulkOperations:
             # (drivers cannot bind identifiers), so every one MUST pass the
             # strict allowlist validator before interpolation. A conflict-target
             # column absent from the record set is a caller error.
-            from kailash.db.dialect import _validate_identifier
+            from kailash.db.dialect import (
+                DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+                _validate_identifier,
+            )
 
             # rules/dataflow-identifier-safety.md MUST-1 (redteam CRITICAL):
             # table_name AND every column name are interpolated as bare
@@ -1564,9 +1567,13 @@ class BulkOperations:
             # otherwise reach the SET/INSERT clause as raw SQL. Validate ALL of
             # them against the strict allowlist BEFORE interpolation, mirroring
             # the workflow node (nodes/bulk_upsert.py).
-            _validate_identifier(table_name)
+            _validate_identifier(
+                table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
             for col in columns:
-                _validate_identifier(col)
+                _validate_identifier(
+                    col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
 
             for col in conflict_columns:
                 if col not in columns:

@@ -1614,7 +1614,9 @@ class LLMAgentNode(Node):
 
                     except TimeoutError as e:
                         self.logger.warning(
-                            f"MCP server '{server_config.get('name', 'unknown')}' timed out after 30 seconds: {e}"
+                            "MCP server '%s' timed out after 30 seconds: %s",
+                            server_config.get("name", "unknown"),
+                            sanitize_provider_error(e, "MCP"),
                         )
                         # Fall back to mock for this server
                         context_data.append(
@@ -2456,16 +2458,29 @@ Final Answer: 6 hours"""
             )
 
             # is_available() gate parity (invariant #1): a None deployment means
-            # the credential / base_url could not be resolved — the four-axis
+            # the required CREDENTIAL could not be resolved — the four-axis
             # equivalent of legacy ``is_available() is False``. Match legacy:
-            # raise the same RuntimeError rather than silently succeeding.
+            # raise a RuntimeError rather than silently succeeding.
             # resolve_deployment_for already tried the per-request api_key
             # override AND the provider's own env var before returning None, so
             # this branch is exactly "no credential AND no per-request key".
+            # (Keyless local runtimes — ollama / docker — never reach here:
+            # they resolve on endpoint configuration alone.)
+            #
+            # rules/zero-tolerance.md Rule 3: name WHICH precondition failed.
+            # A bare "not available" hides whether the cause is a missing key,
+            # a missing endpoint, or an unknown provider name, and forces the
+            # operator to bisect the resolver to find out. The reason is
+            # rendered by the resolver from the same tables its resolve path
+            # branches on, so it cannot drift from the actual behaviour.
             if deployment is None:
+                from kaizen.llm.deployment_resolver import (
+                    describe_unresolved_precondition,
+                )
+
                 raise RuntimeError(
-                    f"Provider {provider} is not available. "
-                    "Check dependencies and configuration."
+                    f"Provider {provider} is not available: "
+                    f"{describe_unresolved_precondition(provider)}."
                 )
 
             from kaizen.llm._legacy_shape import to_legacy_shape
@@ -3111,7 +3126,13 @@ Final Answer: 6 hours"""
 
             except (ValueError, json.JSONDecodeError) as e:
                 # Handle extraction errors specifically
-                self.logger.error(f"Tool call extraction failed: {e}")
+                # #1970: the try body dispatches ``_execute_mcp_tool_call`` /
+                # ``_execute_regular_tool`` — a ValueError from an MCP transport
+                # can carry a URL-embedded credential.
+                self.logger.error(
+                    "Tool call extraction failed: %s",
+                    sanitize_provider_error(e, "tool"),
+                )
                 # Try to get minimal info for error reporting
                 if isinstance(tool_call, dict):
                     tool_id = tool_call.get("id", "unknown")

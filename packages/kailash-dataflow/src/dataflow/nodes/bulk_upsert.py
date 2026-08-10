@@ -6,7 +6,10 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-from kailash.db.dialect import _validate_identifier
+from kailash.db.dialect import (
+    DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+    _validate_identifier,
+)
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -648,13 +651,17 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
             )
 
         # Identifier safety: validate BEFORE any interpolation.
-        _validate_identifier(self.table_name)
+        _validate_identifier(
+            self.table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
         for col in columns:
-            _validate_identifier(col)
+            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
         for col in conflict_on:
-            _validate_identifier(col)
+            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
         if self.version_control and self.version_field:
-            _validate_identifier(self.version_field)
+            _validate_identifier(
+                self.version_field, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
         params: List[Any] = []
         value_rows: List[str] = []
@@ -906,7 +913,7 @@ class DataFlowBulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
         """
         dialect = (self.database_type or "postgresql").lower()
         for col in conflict_on:
-            _validate_identifier(col)
+            _validate_identifier(col, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH)
 
         clauses: List[str] = []
         params: List[Any] = []

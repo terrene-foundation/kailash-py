@@ -66,13 +66,63 @@ class WorkflowRequest(BaseModel):
     )
 
     def get_inputs(self) -> dict[str, Any]:
-        """Get inputs, supporting both 'inputs' and 'parameters' format."""
+        """Get inputs, supporting both 'inputs' and 'parameters' format.
+
+        The ``parameters`` form binds BOTH shapes: every key is bound at
+        workflow level (the historical behaviour existing callers rely on)
+        AND the whole mapping is bound under the name ``parameters``.
+
+        Binding both is what makes multi-channel parity hold. Nexus' MCP
+        channel forwards ``inputs={..., "parameters": params}``, so a workflow
+        node reads its arguments as ``parameters.get(...)``; Nexus' CLI channel
+        POSTs ``{"parameters": {...}}`` to this endpoint
+        (``nexus/cli/main.py``). Returning ``self.parameters`` unwrapped the
+        envelope, so a node reading ``parameters.get(...)`` -- the documented
+        Nexus convention -- raised ``NameError: name 'parameters' is not
+        defined`` and the request became an HTTP 500 over HTTP and CLI while
+        the SAME registered workflow succeeded over MCP.
+
+        Precedence is FIXED, not incidental. When the caller's own parameters
+        contain a key literally named ``parameters``, the ENVELOPE wins (dict
+        literal ordering: the explicit key is applied after the splat). The
+        envelope binding is a contract every ``parameters.get(...)`` workflow
+        depends on, so it must not become conditional on caller data; the
+        caller's colliding value stays reachable at ``parameters["parameters"]``.
+
+        Known limitation, shared identically by every channel: the runtime
+        treats a workflow-level input whose key matches a NODE ID as
+        node-specific parameters and unwraps it into that node alone
+        (``runtime/async_local.py``). A workflow with a node literally named
+        ``parameters`` therefore does not receive the envelope as a
+        workflow-level input. That is pre-existing runtime scoping and it
+        affects MCP exactly as it affects HTTP, so parity is preserved.
+
+        ``inputs`` is the explicit low-level form and is returned untouched --
+        it is how a caller opts out of envelope binding entirely.
+
+        That opt-out is available HERE because this model offers the caller
+        BOTH slots, so choosing one carries meaning. It does NOT generalise by
+        field NAME: ``APIChannel.handle_request`` and
+        ``MCPChannel._handle_execute_workflow`` expose a single
+        caller-arguments slot that is also spelled ``inputs``, and they BIND
+        it -- that slot fills the role ``parameters`` fills here, not the role
+        ``inputs`` fills here. The rule is structural and is stated once in
+        ``kailash/workflow/input_envelope.py``: a choice is honoured, a single
+        arguments slot binds. The EQUIVALENT calls therefore agree -- a body
+        of ``{"parameters": P}`` here and ``inputs=P`` on those channels give
+        the same ``parameters`` view for the same registered workflow, which
+        ``test_issue_workflow_parameters_envelope_parity.py`` pins directly.
+        """
+        from kailash.workflow.input_envelope import bind_parameter_envelope
+
         if self.inputs is not None:
             return self.inputs
-        elif self.parameters is not None:
-            return self.parameters
-        else:
-            return {}
+        # Both the `parameters` form and a body-less request route through the
+        # ONE shared binder, so this endpoint cannot drift from the MCP, CLI,
+        # WebSocket and Core-SDK-channel entry points that call the same
+        # helper. A body-less request still binds an EMPTY envelope so a
+        # workflow reaches its own `parameters.get("x", default)` defaults.
+        return bind_parameter_envelope(self.parameters)
 
 
 class WorkflowResponse(BaseModel):

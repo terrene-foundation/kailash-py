@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.tools.base import Tool, ToolResult
 
 
@@ -79,7 +80,26 @@ class GrepTool(Tool):
         try:
             regex = re.compile(pattern_str, flags)
         except re.error as exc:
-            return ToolResult.failure(f"Invalid regex: {exc}")
+            # REMOTE, though `re.compile` raises in-process. `pattern_str` is a
+            # REQUIRED field of this tool's own `parameters_schema`, so it
+            # arrives verbatim from a model tool call — a remote-derived
+            # operand, which is the second of the two tests a LOCAL
+            # classification must pass.
+            #
+            # `re.error` DOES echo that operand, on the group-name branches
+            # specifically: `(?P=<name>)` raises "unknown group name '<name>'
+            # at position N". The positional branches ("missing )",
+            # "nothing to repeat") do not, which is exactly why sampling a
+            # couple of them concluded `re.compile` was echo-free and left
+            # this site LOCAL. Verified by probe, not by reading:
+            # `TestReCompileEchoesItsOperandOnGroupNameBranches`.
+            #
+            # NOT the filesystem-path carve-out: that one holds because
+            # `redact_paths=False` on BOTH presets, so switching a
+            # path-echoing site would redact nothing. A regex pattern is not a
+            # path, and the two shape-only rules the REMOTE preset turns ON
+            # are precisely what claims a prefix-less credential inside one.
+            return ToolResult.failure(f"Invalid regex: {scrub_remote_error(exc)}")
 
         base = Path(search_path) if search_path else Path.cwd()
 
@@ -98,7 +118,20 @@ class GrepTool(Tool):
         elif output_mode == "content":
             return self._content_mode(files, regex, context_lines, head_limit)
         else:
-            return ToolResult.failure(f"Unknown output_mode: {output_mode!r}")
+            # SCRUBBED for the same REASON as the `pattern` branch at :102 —
+            # `output_mode` is a declared property of this tool's own
+            # `parameters_schema`, so it arrives verbatim from a model tool
+            # call and is remote-derived by construction.
+            #
+            # NOT the same RISK, and the distinction is worth keeping: a
+            # credential inside a `command` is routine (`curl -H`, a `psql`
+            # DSN, an `export`), whereas a model putting one in an enum-valued
+            # `output_mode` is far-fetched. This is fixed because it is the
+            # same CLASS, swept when the class was being closed; claiming
+            # equal risk would be over-stating it.
+            return ToolResult.failure(
+                f"Unknown output_mode: {scrub_remote_error(output_mode)}"
+            )
 
     # ------------------------------------------------------------------
     # Output mode implementations

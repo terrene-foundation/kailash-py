@@ -349,7 +349,14 @@ class TaskAnalyzer:
                     analysis = llm_analysis
                     analysis.reasoning = f"LLM analysis: {analysis.reasoning}"
             except Exception as e:
-                logger.warning(f"LLM analysis failed, using heuristic: {e}")
+                # _llm_analyzer dispatches to an LLM provider; its exception can
+                # embed the API key on this WARN record (#1970 sweep).
+                from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+                logger.warning(
+                    "LLM analysis failed, using heuristic: %s",
+                    sanitize_provider_error(e, "LLM"),
+                )
 
         logger.debug(
             f"Task analysis: type={analysis.type.value}, "

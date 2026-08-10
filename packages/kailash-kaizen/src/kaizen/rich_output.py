@@ -276,14 +276,30 @@ class RichOutputManager:
         """
         Show error message.
 
+        The message is credential-scrubbed before printing. stdout and the
+        logger routinely land in the same aggregator (containers, CI, Nexus),
+        so printing ``str(error)`` raw here re-leaks exactly what the caller's
+        ``sanitize_provider_error`` just redacted on the log surface — the
+        sibling-surface failure ``rules/security.md`` § "Multi-Site Kwarg
+        Plumbing" and ``rules/observability.md`` Rule 6.3 both name (masking
+        only the log line is BLOCKED). Scrubbing at this sink rather than at
+        the one caller keeps every future caller covered.
+
         Args:
             error: Exception that occurred
         """
         if not self.enabled:
             return
 
+        # Function-local import: rich_output is constructed early in the agent
+        # lifecycle and credential_scrub pulls in the pattern table. Matches
+        # the sibling sanitize sites (strategies/multi_cycle.py).
+        from kaizen.utils.credential_scrub import scrub_credentials
+
         error_type = type(error).__name__
-        error_msg = str(error)
+        # `[REDACTED]` is the node-surface marker, matching the sanitized log
+        # line emitted by the caller for the same exception.
+        error_msg = scrub_credentials(str(error), placeholder="[REDACTED]")
 
         print(f"   ❌ Error: {error_type}: {error_msg}\n")
 

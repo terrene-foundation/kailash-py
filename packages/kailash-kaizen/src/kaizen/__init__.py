@@ -6,7 +6,7 @@ auto-optimization, and enhanced AI agent capabilities built on top of the
 proven Kailash SDK infrastructure.
 """
 
-__version__ = "2.45.0"
+__version__ = "2.46.0"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
@@ -51,12 +51,61 @@ def __getattr__(name: str) -> object:
 
             if _ilu.find_spec("kaizen_agents") is not None:
                 import logging as _logging
+                import traceback as _traceback
 
+                from kaizen.utils.credential_scrub import scrub_local_error
+
+                # THE TRACEBACK IS RETAINED AND SCRUBBED. It is the ENTIRE
+                # diagnostic -- "a broken kaizen_agents dependency" is
+                # unactionable without the import chain that failed -- so the
+                # question is not whether to keep it but what it can carry.
+                #
+                # THE PREVIOUS RATIONALE FOR `exc_info=True` WAS FALSE. It read
+                # "no provider, DSN or caller-supplied code is reachable from
+                # an import statement". An import statement executes the target
+                # module's top-level code and, transitively, every module that
+                # imports, so an ImportError message is whatever that code put
+                # in it. Demonstrated rather than argued: a module raising
+                # `ImportError(f"...{dsn}")` at import time placed a live DSN
+                # password into this log record verbatim.
+                #
+                # THE CHECKABLE CLAIM THAT REPLACES IT, verifiable mechanically
+                # by anyone reading this:
+                #
+                #   1. A rendered traceback contains the exception MESSAGE plus
+                #      each frame's file path, line number and SOURCE TEXT. It
+                #      never contains frame LOCALS. So the message is the only
+                #      caller-influenced channel.
+                #   2. That message goes through `scrub_local_error` below, so
+                #      every shape `_CREDENTIAL_PATTERNS` claims is redacted
+                #      before it reaches a handler.
+                #
+                # Both are pinned by
+                # `tests/regression/test_f10_agent_fallback_warning_is_scrubbed.py`,
+                # which reds if either stops holding.
+                #
+                # CONSERVATIVE PRESET, CHOSEN ON A MEASUREMENT. `redact_paths`
+                # is off on both presets, but `scrub_remote_error` additionally
+                # enables the 40+ char `[A-Za-z0-9/+]` rule, and a POSIX file
+                # path is exactly that shape: measured, it blanked
+                # `.../build/kailashpy/src/kaizen/utils/x.py` down to
+                # `[REDACTED].py`. The path IS the diagnostic here, so the
+                # aggressive preset would remove the credential and the reason
+                # for keeping the traceback with it. The conservative preset
+                # removed the DSN and left every path intact.
+                #
+                # NAMED RESIDUAL, per this module's posture of recording trades
+                # rather than asserting their absence: the conservative preset
+                # switches off the two SHAPE-ONLY rules, so a PREFIX-LESS
+                # credential (a bare AWS secret, a bare 32+ hex Azure api-key)
+                # interpolated into an ImportError message survives. Accepted:
+                # closing it costs every path, and this sink is reached only by
+                # a broken local dependency, which no attacker can steer.
                 _logging.getLogger(__name__).warning(
                     "kaizen.Agent: kaizen_agents is installed but its async Agent "
                     "could not be imported; falling back to the sync CoreAgent. "
-                    "This usually indicates a broken kaizen_agents dependency.",
-                    exc_info=True,
+                    "This usually indicates a broken kaizen_agents dependency.\n%s",
+                    scrub_local_error(_traceback.format_exc()),
                 )
             from kaizen.core.agents import Agent as _Agent  # CoreAgent fallback
         # Cache on the module so subsequent access is a plain attribute lookup

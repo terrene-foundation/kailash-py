@@ -58,6 +58,7 @@ from typing import (
 )
 
 from kailash.runtime._time_limits import _validate_limits
+from kailash.utils.secure_logging import safe_callable_name, safe_type_name
 
 # ExecutionMode — caller-explicit routing for DurableExecutionEngine.execute().
 # Default is None (auto-detect at build time: "both" with dispatcher,
@@ -535,7 +536,7 @@ def _redact_value(
             extra={
                 "node_id_hash": _hash_short(node_id),
                 "field_path_hash": _hash_short(field_path),
-                "error_type": type(exc).__name__,
+                "error_type": safe_type_name(exc),
             },
         )
         tag = "REDACT"
@@ -788,7 +789,7 @@ def _hash_pk(value: Any) -> str:
             "durable.redact.unhashable_pk_value",
             extra={
                 "value_type": type(value).__name__,
-                "error_type": type(exc).__name__,
+                "error_type": safe_type_name(exc),
             },
         )
         return "pk:unhashable"
@@ -912,7 +913,7 @@ class NodeCompletionHookRegistry:
                     "history_store.record_event.dropped",
                     extra={
                         "mode": "missing_run_id",
-                        "callback": _callback_name(cb),
+                        "callback": safe_callable_name(cb),
                         "node_id_hash": _hash_short(exc.node_id),
                         "workflow_id_hash": wf_hash,
                     },
@@ -939,15 +940,15 @@ class NodeCompletionHookRegistry:
                 # raw run_id is hashed via _hash_short to match every other WARN
                 # emission in this file (see specs/core-runtime.md §4.7.1
                 # hashing-symmetry contract).
-                failed.append((_callback_name(cb), type(exc).__name__))
+                failed.append((safe_callable_name(cb), safe_type_name(exc)))
                 run_id_hash = (
                     _hash_short(event.run_id) if event.run_id is not None else "None"
                 )
                 logger.warning(
                     "durable.on_node_complete.subscriber_failed",
                     extra={
-                        "callback": _callback_name(cb),
-                        "error_type": type(exc).__name__,
+                        "callback": safe_callable_name(cb),
+                        "error_type": safe_type_name(exc),
                         "node_id_hash": _hash_short(event.node_id),
                         "run_id_hash": run_id_hash,
                     },
@@ -964,12 +965,24 @@ class NodeCompletionHookRegistry:
             )
 
 
-def _callback_name(cb: NodeCompletionCallback) -> str:
-    """Best-effort label for a callback in WARN logs."""
-    name = getattr(cb, "__qualname__", None) or getattr(cb, "__name__", None)
-    if name:
-        return name
-    return repr(cb)
+# ``_callback_name`` was DELETED, not repaired. It duplicated
+# ``kailash.utils.secure_logging.safe_callable_name`` with one difference: its
+# final fallback was ``repr(cb)``, and ``cb`` is a caller-registered callback,
+# so a ``functools.partial`` pre-binding a connection string rendered its bound
+# kwargs verbatim into three WARN sinks (and, via the ``failed`` list, a
+# fourth).
+#
+# The duplication WAS the defect. A second private implementation of a
+# security-relevant helper is the drift this class keeps re-emerging from, so
+# the call sites now use the shared helper directly rather than a local wrapper
+# that could drift again. The shared helper is also strictly better here: it
+# resolves a partial to the wrapped function's own name instead of falling
+# through, so the WARN gains resolution rather than losing it.
+#
+# The spelling mattered too. This was `if name: ... else: repr(cb)` -- an
+# explicit branch, invisible to a sweep for the `getattr(x, "...", repr(x))`
+# idiom, to one for `%r`/`!r`, and to one for a raw `%s` of an exception. It
+# survived three widenings of the search for exactly this class.
 
 
 # ---------------------------------------------------------------------------

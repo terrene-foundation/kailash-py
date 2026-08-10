@@ -19,6 +19,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -257,12 +259,26 @@ class OpenAIStructuredAdapter:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {exc}.  Content: {content[:500]}"
+                # `content` IS the raw provider response body. The exception
+                # beside it is a local `JSONDecodeError` whose text is only a
+                # position ("Expecting value: line 1 column 1 (char 0)") and
+                # carries no credential — so scrubbing the exception while
+                # interpolating `content` RAW protected the half that was never
+                # at risk and left the whole risk in place. Both go through the
+                # REMOTE preset, which is the one that also claims the
+                # prefix-less shapes (bare AWS secret, bare 32+ hex Azure
+                # api-key) a provider body can echo back.
+                f"LLM response is not valid JSON: {scrub_remote_error(exc)}.  "
+                f"Content: {scrub_remote_error(content[:500])}"
             ) from exc
 
         if not isinstance(parsed, dict):
             raise ValueError(
-                f"Expected a JSON object, got {type(parsed).__name__}: {content[:500]}"
+                # Sibling of the branch above, and it had NO scrub call at all
+                # — so it was invisible to any sweep keyed on `scrub_*` call
+                # sites while interpolating exactly the same raw provider body.
+                f"Expected a JSON object, got {type(parsed).__name__}: "
+                f"{scrub_remote_error(content[:500])}"
             )
 
         return parsed
@@ -458,12 +474,26 @@ class AnthropicStructuredAdapter:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"LLM response is not valid JSON: {exc}.  Content: {content[:500]}"
+                # `content` IS the raw provider response body. The exception
+                # beside it is a local `JSONDecodeError` whose text is only a
+                # position ("Expecting value: line 1 column 1 (char 0)") and
+                # carries no credential — so scrubbing the exception while
+                # interpolating `content` RAW protected the half that was never
+                # at risk and left the whole risk in place. Both go through the
+                # REMOTE preset, which is the one that also claims the
+                # prefix-less shapes (bare AWS secret, bare 32+ hex Azure
+                # api-key) a provider body can echo back.
+                f"LLM response is not valid JSON: {scrub_remote_error(exc)}.  "
+                f"Content: {scrub_remote_error(content[:500])}"
             ) from exc
 
         if not isinstance(parsed, dict):
             raise ValueError(
-                f"Expected a JSON object, got {type(parsed).__name__}: {content[:500]}"
+                # Sibling of the branch above, and it had NO scrub call at all
+                # — so it was invisible to any sweep keyed on `scrub_*` call
+                # sites while interpolating exactly the same raw provider body.
+                f"Expected a JSON object, got {type(parsed).__name__}: "
+                f"{scrub_remote_error(content[:500])}"
             )
 
         return parsed

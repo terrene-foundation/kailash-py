@@ -1,0 +1,651 @@
+diff --git a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment.py b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment.py
+index d30de16e2..d67d88d8a 100644
+--- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment.py
++++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment.py
+@@ -50,6 +50,11 @@ def deploy_as_api(
+         - Initial deployment: ~500ms
+         - Cached deployment: ~50ms (90% faster)
+     """
++    # Idempotent redeploy: drop any prior registration under this name so a
++    # second deploy replaces it instead of raising "already registered". No-op
++    # when the name is not yet registered.
++    nexus_app.deregister(endpoint_name)
++
+     # Check cache first
+     if use_cache:
+         cache_key = _deployment_cache.create_cache_key(agent, endpoint_name)
+@@ -104,6 +109,11 @@ def deploy_as_cli(
+         - Initial deployment: ~500ms
+         - Cached deployment: ~50ms (90% faster)
+     """
++    # Idempotent redeploy: drop any prior registration under this name so a
++    # second deploy replaces it instead of raising "already registered". No-op
++    # when the name is not yet registered.
++    nexus_app.deregister(command_name)
++
+     # Check cache first
+     if use_cache:
+         cache_key = _deployment_cache.create_cache_key(agent, command_name)
+@@ -158,6 +168,11 @@ def deploy_as_mcp(
+         - Initial deployment: ~500ms
+         - Cached deployment: ~50ms (90% faster)
+     """
++    # Idempotent redeploy: drop any prior registration under this name so a
++    # second deploy replaces it instead of raising "already registered". No-op
++    # when the name is not yet registered.
++    nexus_app.deregister(tool_name)
++
+     # Check cache first
+     if use_cache:
+         cache_key = _deployment_cache.create_cache_key(agent, tool_name)
+diff --git a/packages/kailash-kaizen/src/kaizen/integrations/nexus/session_manager.py b/packages/kailash-kaizen/src/kaizen/integrations/nexus/session_manager.py
+index 9dce997cf..46e3a29df 100644
+--- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/session_manager.py
++++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/session_manager.py
+@@ -85,6 +85,7 @@ class CrossChannelSession:
+         self.expires_at = datetime.now() + timedelta(hours=1)
+ 
+         if channel:
++            # Record the channel's last-activity wall-clock time.
+             self.channel_activity[channel] = datetime.now()
+ 
+     def update_state(self, updates: Dict[str, Any], channel: str = None):
+@@ -188,7 +189,18 @@ class NexusSessionManager:
+             >>> session = manager.create_session(user_id="user-123", ttl_hours=2)
+             >>> print(session.user_id)
+             "user-123"
++
++        Raises:
++            ValueError: If ``user_id`` is empty. A session must be owned by an
++                identifiable user; an empty owner makes cross-channel state and
++                metrics unattributable.
+         """
++        if not user_id or not user_id.strip():
++            raise ValueError(
++                "user_id is required and must be a non-empty string; "
++                f"received {user_id!r}"
++            )
++
+         session = CrossChannelSession(
+             session_id=session_id or str(uuid4()),
+             user_id=user_id,
+diff --git a/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py b/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py
+index dd0c6ef1a..8e9c6ecf4 100644
+--- a/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py
++++ b/packages/kailash-kaizen/src/kaizen/nodes/ai/error_sanitizer.py
+@@ -31,8 +31,28 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
+     re.compile(r"AIza[a-zA-Z0-9_-]{30,}", re.ASCII),
+     # Perplexity keys (pplx-...)
+     re.compile(r"pplx-[a-zA-Z0-9]{20,}", re.ASCII),
+-    # Generic hex tokens (32+ chars, common in Azure/other services)
+-    re.compile(r"\b[a-f0-9]{32,}\b", re.ASCII),
++    # AWS access-key IDs (AKIA + 16 upper-alnum) — Bedrock provider path (#1960).
++    re.compile(r"AKIA[0-9A-Z]{16}", re.ASCII),
++    # Generic hex tokens (32+ chars, common in Azure/other services).
++    # #1960: case-INSENSITIVE ([a-fA-F0-9]) — the prior lowercase-only rule let
++    # uppercase/mixed-case hex (e.g. "A1B2C3...") slip through unredacted.
++    re.compile(r"\b[a-fA-F0-9]{32,}\b", re.ASCII),
++    # AWS 40-char base64 secret access keys ([A-Za-z0-9/+]{40}) — #1960.
++    #
++    # FALSE-POSITIVE-vs-SENSITIVITY DECISION: we deliberately ACCEPT broad
++    # over-redaction here rather than anchor to AWS-secret context. Rationale:
++    #   (1) A sanitizer MUST err toward over-redacting secrets — under-redaction
++    #       leaks a live credential (the strictly worse failure); over-redaction
++    #       only blanks a token in an error string a human still gets the gist of.
++    #   (2) A 40+ char contiguous run of [A-Za-z0-9/+] essentially never occurs
++    #       in legitimate human-readable error prose (words are space-separated,
++    #       ~<=20 chars). The only 40-char contiguous runs are tokens / secrets /
++    #       hashes / signed-URL query tokens — all safe (indeed desirable) to
++    #       redact. Negative-vector tests confirm normal error text is untouched.
++    #   (3) Anchoring to an "aws"/"secret" keyword would MISS a secret that
++    #       appears bare in a raw exception string — the common real case.
++    # {40,} is greedy, so it spans the whole run (no partial mid-token match).
++    re.compile(r"[A-Za-z0-9/+]{40,}", re.ASCII),
+     # Bearer tokens in error messages
+     re.compile(r"Bearer\s+[a-zA-Z0-9._-]+", re.ASCII),
+     # Partial key exposure (OpenAI style: "sk-tenA...B12C")
+@@ -42,6 +62,14 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
+ # URL-embedded credentials (user:pass@host)
+ _URL_WITH_AUTH = re.compile(r"(https?://)[^@\s]+:[^@\s]+@", re.ASCII)
+ 
++# Azure OpenAI endpoint hostname (#1960). The <resource> subdomain is the
++# customer's Azure resource name — sensitive infra identity that reveals the
++# tenant. Redact the resource while keeping the ".openai.azure.com" suffix so
++# the message still reads as "an Azure OpenAI endpoint".
++_AZURE_OPENAI_ENDPOINT = re.compile(
++    r"https://[A-Za-z0-9][A-Za-z0-9-]*\.openai\.azure\.com", re.ASCII
++)
++
+ # Internal file paths that could reveal infrastructure
+ _INTERNAL_PATH_PATTERNS: List[re.Pattern] = [
+     re.compile(r"/home/[a-zA-Z0-9_-]+/", re.ASCII),
+@@ -79,6 +107,11 @@ def sanitize_provider_error(
+     # Replace URL-embedded credentials
+     sanitized = _URL_WITH_AUTH.sub(r"\1[REDACTED]:[REDACTED]@", sanitized)
+ 
++    # Redact the resource name in Azure OpenAI endpoints (keep the suffix).
++    sanitized = _AZURE_OPENAI_ENDPOINT.sub(
++        "https://[REDACTED].openai.azure.com", sanitized
++    )
++
+     # Replace internal file paths
+     for pattern in _INTERNAL_PATH_PATTERNS:
+         sanitized = pattern.sub("[PATH]/", sanitized)
+diff --git a/packages/kailash-kaizen/src/kaizen/nodes/rag/federated.py b/packages/kailash-kaizen/src/kaizen/nodes/rag/federated.py
+index db9ed0dcf..b1bf3c243 100644
+--- a/packages/kailash-kaizen/src/kaizen/nodes/rag/federated.py
++++ b/packages/kailash-kaizen/src/kaizen/nodes/rag/federated.py
+@@ -722,10 +722,13 @@ class EdgeRAGNode(Node):
+         local_data = kwargs.get("local_data") or []
+         sync_with_cloud = kwargs.get("sync_with_cloud", False)
+ 
+-        # Check cache first
++        # Check cache first. ``cache_key`` is a truncated sha256 digest of the
++        # query, NOT the query text — it carries no user-query content, so it is
++        # safe to log. Emitted at DEBUG because a per-cache-hit line at INFO is
++        # hot-path noise for a RAG node (observability: no log-spam in hot loops).
+         cache_key = hashlib.sha256(query.encode()).hexdigest()[:8]
+         if cache_key in self.cache and self.power_mode != "performance":
+-            logger.info(f"Cache hit for query: {cache_key}")
++            logger.debug(f"Cache hit (key: {cache_key})")
+             return self.cache[cache_key]
+ 
+         # Resource tracking
+diff --git a/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py b/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
+index 7a48e162a..a1743c78e 100644
+--- a/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
++++ b/packages/kailash-kaizen/tests/integration/test_end_to_end_nexus.py
+@@ -94,12 +94,23 @@ class ReportAgent(BaseAgent):
+ 
+ @pytest.fixture
+ def nexus_app():
+-    """Create Nexus app for testing."""
++    """Create a started Nexus app for testing.
++
++    Brings the platform to a running (healthy) in-process state via the
++    non-blocking start so deployment + health-check flows exercise a genuinely
++    started platform. Non-blocking start applies the enterprise gateway
++    readiness without entering the serving loop or binding a socket, so tests
++    stay fast and port-free. Cleaned up on teardown.
++    """
+     if not NEXUS_AVAILABLE:
+         pytest.skip("Nexus not available")
+ 
+     app = Nexus(auto_discovery=False)
+-    yield app
++    app.start(blocking=False)
++    try:
++        yield app
++    finally:
++        app.stop()
+ 
+ 
+ @pytest.fixture
+@@ -175,8 +186,8 @@ class TestCompleteMultiChannelWorkflow:
+         assert final_state["status"] == "completed"
+ 
+         # Verify session activity tracking
+-        assert session.channel_activity["api"] > 0
+-        assert session.channel_activity["mcp"] > 0
++        assert "api" in session.channel_activity
++        assert "mcp" in session.channel_activity
+ 
+     def test_multi_step_workflow_with_sessions(
+         self, nexus_app, analysis_agent, report_agent, session_manager
+diff --git a/packages/kailash-kaizen/tests/regression/test_issue_1960_sanitizer_redaction_gaps.py b/packages/kailash-kaizen/tests/regression/test_issue_1960_sanitizer_redaction_gaps.py
+new file mode 100644
+index 000000000..fbf4ff40e
+--- /dev/null
++++ b/packages/kailash-kaizen/tests/regression/test_issue_1960_sanitizer_redaction_gaps.py
+@@ -0,0 +1,203 @@
++# Copyright 2026 Terrene Foundation
++# SPDX-License-Identifier: Apache-2.0
++
++"""Regression tests for issue #1960 — error_sanitizer.py credential-redaction gaps.
++
++Surfaced during the #1953 security redteam. ``sanitize_provider_error`` covered
++OpenAI/Anthropic/Google/Perplexity key prefixes, generic 32+ *lowercase*-hex
++tokens, ``Bearer`` tokens, ``user:pass@`` URLs, and home paths — but FOUR
++credential classes slipped through unredacted (pre-existing; affects every
++sanitized surface, since all 27+ call sites route through this one helper):
++
++1. AWS access-key IDs (``AKIA[0-9A-Z]{16}``) — no prefix pattern matched them.
++2. AWS 40-char base64 secret keys (``[A-Za-z0-9/+]{40}``) — the generic hex
++   rule was lowercase-hex-only, so a base64 secret was never touched.
++3. Uppercase / mixed-case hex tokens >=32 chars — the ``\\b[a-f0-9]{32,}\\b``
++   rule was lowercase-only, so ``A1B2C3...`` slipped past.
++4. Azure OpenAI endpoint hostnames (``https://<resource>.openai.azure.com``) —
++   the resource name is sensitive infra identity and had no pattern.
++
++Every vector below is a REALISTIC but FAKE credential — the AWS access-key ID
++and secret key are AWS's own PUBLICLY-DOCUMENTED example values
++(``AKIAIOSFODNN7EXAMPLE`` / ``wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY``), never
++a live secret. The tests are BEHAVIORAL: they call ``sanitize_provider_error``
++on an exception carrying the secret and assert the returned string does NOT
++contain the secret AND DOES contain the ``[REDACTED]`` marker.
++"""
++
++from __future__ import annotations
++
++import pytest
++
++from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
++
++pytestmark = pytest.mark.regression
++
++# Redaction marker the sanitizer substitutes in place of a credential match.
++REDACTION_MARKER = "[REDACTED]"
++
++
++def _sanitize(secret_message: str) -> str:
++    """Route a realistic error string through the sanitizer and return output."""
++    return sanitize_provider_error(RuntimeError(secret_message), "openai")
++
++
++# ---------------------------------------------------------------------------
++# Gap 1 — AWS access-key IDs (AKIA[0-9A-Z]{16})
++# ---------------------------------------------------------------------------
++
++# AWS's own documented example access-key ID (public, not a live credential).
++AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
++
++
++def test_aws_access_key_id_redacted() -> None:
++    msg = f"Bedrock auth failed for access key {AWS_ACCESS_KEY_ID} in us-east-1"
++    out = _sanitize(msg)
++    assert AWS_ACCESS_KEY_ID not in out
++    assert REDACTION_MARKER in out
++
++
++def test_aws_access_key_id_redacted_no_surrounding_context() -> None:
++    # The key alone, no "aws"/"access key" keywords nearby — the pattern must
++    # match on the AKIA prefix + shape, not on contextual keywords.
++    out = _sanitize(AWS_ACCESS_KEY_ID)
++    assert AWS_ACCESS_KEY_ID not in out
++    assert REDACTION_MARKER in out
++
++
++# ---------------------------------------------------------------------------
++# Gap 2 — AWS 40-char base64 secret keys ([A-Za-z0-9/+]{40})
++# ---------------------------------------------------------------------------
++
++# AWS's own documented example secret access key (public, not a live credential).
++AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
++
++
++def test_aws_secret_key_redacted() -> None:
++    assert len(AWS_SECRET_ACCESS_KEY) == 40  # sanity: this IS the 40-char class
++    msg = f"SignatureDoesNotMatch: computed with secret {AWS_SECRET_ACCESS_KEY}"
++    out = _sanitize(msg)
++    assert AWS_SECRET_ACCESS_KEY not in out
++    assert REDACTION_MARKER in out
++
++
++def test_generic_40char_base64_token_redacted() -> None:
++    # A 40-char base64 blob that is NOT hex (contains uppercase + '/' + '+').
++    token = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/Ab"
++    assert len(token) == 40
++    out = _sanitize(f"token rejected: {token}")
++    assert token not in out
++    assert REDACTION_MARKER in out
++
++
++# ---------------------------------------------------------------------------
++# Gap 3 — Uppercase / mixed-case hex tokens >= 32 chars
++# ---------------------------------------------------------------------------
++
++
++def test_uppercase_hex_token_redacted() -> None:
++    upper_hex = "A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6"  # 32 uppercase hex chars
++    assert len(upper_hex) == 32
++    out = _sanitize(f"Azure key auth failed: {upper_hex}")
++    assert upper_hex not in out
++    assert REDACTION_MARKER in out
++
++
++def test_mixed_case_hex_token_redacted() -> None:
++    mixed_hex = "DeadBeefCafe1234567890abcdefABCDEF01"  # 36 mixed-case hex chars
++    assert len(mixed_hex) == 36
++    out = _sanitize(f"digest mismatch {mixed_hex} on upload")
++    assert mixed_hex not in out
++    assert REDACTION_MARKER in out
++
++
++def test_lowercase_hex_still_redacted_after_broadening() -> None:
++    # Regression-guard: broadening to case-insensitive MUST NOT break the
++    # existing lowercase-hex behavior.
++    lower_hex = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"  # 32 lowercase hex chars
++    out = _sanitize(f"key {lower_hex} rejected")
++    assert lower_hex not in out
++    assert REDACTION_MARKER in out
++
++
++# ---------------------------------------------------------------------------
++# Gap 4 — Azure OpenAI endpoint hostnames (resource name is infra identity)
++# ---------------------------------------------------------------------------
++
++
++def test_azure_openai_endpoint_resource_redacted() -> None:
++    resource = "my-company-prod"
++    endpoint = f"https://{resource}.openai.azure.com"
++    out = _sanitize(f"Connection refused to {endpoint}/openai/deployments/gpt4")
++    # The sensitive resource name MUST be gone.
++    assert resource not in out
++    assert REDACTION_MARKER in out
++
++
++def test_azure_openai_endpoint_bare_host_redacted() -> None:
++    resource = "acme-eastus2-genai"
++    out = _sanitize(f"DNS lookup failed: https://{resource}.openai.azure.com")
++    assert resource not in out
++    assert REDACTION_MARKER in out
++
++
++# ---------------------------------------------------------------------------
++# Regression guards — the pre-existing patterns MUST still redact
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.parametrize(
++    "secret, message",
++    [
++        # OpenAI (sk-...)
++        ("sk-proj-abc123def456ghi789jkl012mno345", "OpenAI 401: key {s} invalid"),
++        # Anthropic (sk-ant-...)
++        ("sk-ant-api03-abc123def456ghi789jkl012mno", "Anthropic auth: {s}"),
++        # Google (AIza...)
++        ("AIzaSyD1234567890abcdefghijklmnopqrstuv", "Google API key {s} denied"),
++        # Perplexity (pplx-...)
++        ("pplx-abc123def456ghi789jkl012mnopqr", "Perplexity key {s} revoked"),
++        # Bearer token
++        ("Bearer sometokenvalue1234567890", "Authorization header: {s}"),
++    ],
++)
++def test_existing_prefix_patterns_still_redact(secret: str, message: str) -> None:
++    out = _sanitize(message.format(s=secret))
++    # The secret's distinctive tail MUST be gone; marker present.
++    assert secret not in out
++    assert REDACTION_MARKER in out
++
++
++def test_existing_url_with_auth_still_redacted() -> None:
++    out = _sanitize("Failed: https://admin:hunter2@db.internal.example.com/v1")
++    assert "hunter2" not in out
++    assert "admin:hunter2" not in out
++
++
++def test_existing_home_path_still_redacted() -> None:
++    out = _sanitize("Config not found at /Users/alice/secrets/kaizen.env")
++    assert "/Users/alice/" not in out
++    assert "alice" not in out
++
++
++# ---------------------------------------------------------------------------
++# Negative vectors — normal error text MUST pass through (no over-redaction)
++# ---------------------------------------------------------------------------
++
++
++@pytest.mark.parametrize(
++    "benign_message",
++    [
++        "Connection timeout after 30 seconds to the API endpoint",
++        "Rate limit exceeded: 429 Too Many Requests, retry after 5s",
++        "Model gpt-4o-mini is not available in your region",
++        "Invalid request: temperature must be between 0 and 2",
++        "Failed to reach https://api.openai.com/v1/chat/completions",
++    ],
++)
++def test_benign_messages_not_over_redacted(benign_message: str) -> None:
++    out = _sanitize(benign_message)
++    # No credential pattern should have fired: the marker MUST be absent and
++    # the original human-readable text MUST survive intact.
++    assert REDACTION_MARKER not in out
++    assert benign_message in out
+diff --git a/packages/kailash-nexus/src/nexus/core.py b/packages/kailash-nexus/src/nexus/core.py
+index 1ae2f1816..d2d4c2731 100644
+--- a/packages/kailash-nexus/src/nexus/core.py
++++ b/packages/kailash-nexus/src/nexus/core.py
+@@ -1736,6 +1736,91 @@ Check the documentation or explore available resources.
+             f"   ⏱️  Registration time: {registration_time:.3f}s"
+         )
+ 
++    def deregister(self, name: str) -> bool:
++        """Remove a previously registered workflow from all channels.
++
++        Reverses :meth:`register`: drops the workflow from the internal
++        registry and from the enterprise gateway (unmounting its
++        ``/workflows/{name}`` routes), plus best-effort removal from the MCP
++        tool/resource surface. This makes redeployment idempotent — a caller
++        can ``deregister(name)`` then ``register(name, ...)`` to replace an
++        existing registration instead of hitting
++        ``ValueError: Workflow '{name}' already registered``.
++
++        Args:
++            name: Workflow identifier to remove.
++
++        Returns:
++            True if a workflow was registered under ``name`` and removed,
++            False if none was registered (idempotent no-op).
++        """
++        existed = name in self._registry.list_workflows()
++
++        # Internal registry (name -> Workflow + metadata).
++        self._registry._workflows.pop(name, None)
++        self._registry._workflow_metadata.pop(name, None)
++
++        # Enterprise gateway: unmount /workflows/{name} and release its runtime.
++        gateway = self._http_transport.gateway
++        if gateway is not None and hasattr(gateway, "deregister_workflow"):
++            try:
++                gateway.deregister_workflow(name)
++            except Exception as e:
++                logger.warning(
++                    f"Failed to deregister workflow '{name}' from gateway: "
++                    f"{type(e).__name__}: {e}"
++                )
++
++        # MCP channel (enhanced MCP mode), if it exposes a removal hook.
++        if getattr(self, "_mcp_channel", None) is not None and hasattr(
++            self._mcp_channel, "deregister_workflow"
++        ):
++            try:
++                self._mcp_channel.deregister_workflow(name)
++            except Exception as e:
++                logger.warning(
++                    f"Failed to deregister workflow '{name}' from MCP channel: "
++                    f"{type(e).__name__}: {e}"
++                )
++
++        # MCP server (WebSocket wrapper): drop the tool + workflow:// resource
++        # so a re-register re-installs a fresh handler rather than colliding.
++        self._deregister_workflow_mcp(name)
++
++        if existed:
++            logger.info(f"Workflow '{name}' deregistered from all channels")
++        return existed
++
++    def _deregister_workflow_mcp(self, name: str) -> None:
++        """Best-effort removal of a workflow's MCP tool + resource.
++
++        The Core SDK ``MCPServer`` keeps tools in ``_tool_registry`` and
++        resources in a resource manager; the exact shape varies by MCP backend
++        (official FastMCP, WebSocket wrapper, mock). Removal is best-effort and
++        never raises: a stale tool/resource is a soft issue, whereas a raised
++        error here would abort an otherwise-valid redeploy.
++        """
++        server = getattr(self, "_mcp_server", None)
++        if server is None:
++            return
++
++        uri = f"workflow://{name}"
++        # Tool registries seen across backends: `_tool_registry` (Core SDK),
++        # `_tools` (FastMCP fallback shim).
++        for attr in ("_tool_registry", "_tools"):
++            registry = getattr(server, attr, None)
++            if isinstance(registry, dict):
++                registry.pop(name, None)
++                registry.pop(f"workflow_{name}", None)
++        # Resource registries: a `_resources` dict, or a resource manager.
++        resources = getattr(server, "_resources", None)
++        if isinstance(resources, dict):
++            resources.pop(uri, None)
++        manager = getattr(server, "_resource_manager", None)
++        mgr_resources = getattr(manager, "_resources", None)
++        if isinstance(mgr_resources, dict):
++            mgr_resources.pop(uri, None)
++
+     # Multi-channel registration is handled automatically by the enterprise gateway
+     # No need for custom channel registry - the gateway provides this natively
+ 
+@@ -3581,13 +3666,60 @@ Check the documentation or explore available resources.
+         except Exception as e:
+             logger.warning(f"MCP server error: {e}. Continuing with other channels.")
+ 
+-    def start(self):
++    def _start_transport_ready(self) -> None:
++        """Bring the HTTP transport to the ready state without a serving loop.
++
++        Applies any queued middleware/routers/endpoints and registers the
++        registry's workflows with the enterprise gateway (the async
++        :meth:`HTTPTransport.start`), running it to completion synchronously.
++        This does NOT bind a socket — it is the in-process readiness half of
++        ``start(blocking=False)``.
++        """
++        import asyncio
++
++        async def _ready() -> None:
++            await self._http_transport.start(self._registry)
++
++        try:
++            asyncio.get_running_loop()
++        except RuntimeError:
++            # No running loop (the common sync/embedding case): run inline.
++            asyncio.run(_ready())
++            return
++
++        # A loop is already running on this thread — run the readiness in a
++        # dedicated worker thread with its own loop rather than nesting.
++        box: Dict[str, BaseException] = {}
++
++        def _runner() -> None:
++            try:
++                asyncio.run(_ready())
++            except BaseException as exc:  # surface, never swallow
++                box["error"] = exc
++
++        worker = threading.Thread(target=_runner)
++        worker.start()
++        worker.join()
++        if "error" in box:
++            raise box["error"]
++
++    def start(self, blocking: bool = True):
+         """Start the Nexus platform using the enterprise gateway.
+ 
+         Zero-configuration startup that leverages the SDK's enterprise server
+         with built-in multi-channel support (API, CLI, MCP).
+ 
+-        This method blocks until the server is stopped (Ctrl+C or .stop() call).
++        Args:
++            blocking: When ``True`` (default) the HTTP server loop runs and this
++                method blocks until the platform is stopped (Ctrl+C or
++                :meth:`stop`). When ``False`` the platform is brought to a
++                ready/running state **in-process** — queued middleware, routers
++                and endpoints are applied, workflows are registered with the
++                gateway, and :meth:`health_check` reports ``"healthy"`` — then
++                control returns immediately. Non-blocking mode does NOT enter
++                the serving loop or bind the MCP socket; it is for embedding
++                Nexus inside another process or a test harness that drives
++                execution programmatically.
+         """
+         if self._running:
+             logger.warning("Nexus is already running")
+@@ -3605,13 +3737,26 @@ Check the documentation or explore available resources.
+         with self._shutdown_hooks_fired_lock:
+             self._shutdown_hooks_fired = False
+ 
+-        logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
+-
+         # Auto-discover workflows if enabled
+         if self._auto_discovery_enabled:
+             logger.info("🔍 Auto-discovering workflows...")
+             self._auto_discover_workflows()
+ 
++        if not blocking:
++            # In-process readiness: apply queued config + register workflows
++            # with the gateway, then mark running WITHOUT the serving loop or
++            # an MCP socket. The platform can execute workflows programmatically
++            # and reports healthy.
++            self._start_transport_ready()
++            self._running = True
++            logger.info(
++                "✅ Nexus ready (non-blocking, in-process) — "
++                f"{len(self._workflows)} workflow(s) registered"
++            )
++            return
++
++        logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
++
+         # Start MCP server in background thread
+         if hasattr(self, "_mcp_server"):
+             self._mcp_thread = threading.Thread(
+diff --git a/src/kailash/servers/workflow_server.py b/src/kailash/servers/workflow_server.py
+index c49981db5..2eec4043a 100644
+--- a/src/kailash/servers/workflow_server.py
++++ b/src/kailash/servers/workflow_server.py
+@@ -656,6 +656,55 @@ class WorkflowServer:
+ 
+         logger.info(f"Registered workflow '{name}' at {prefix}")
+ 
++    def deregister_workflow(self, name: str) -> bool:
++        """Remove a previously registered workflow from the server.
++
++        Reverses :meth:`register_workflow`: drops the registration, releases
++        the per-workflow ``WorkflowAPI`` runtime (issue #1285), and unmounts
++        the ``/workflows/{name}`` sub-application so the name is free to be
++        re-registered. This is what makes an idempotent redeploy possible —
++        without it, a second ``register_workflow(name, ...)`` raises
++        ``ValueError: Workflow '{name}' already registered``.
++
++        Args:
++            name: Workflow identifier to remove.
++
++        Returns:
++            True if a workflow was removed, False if none was registered
++            under ``name`` (idempotent no-op).
++        """
++        if name not in self.workflows:
++            return False
++
++        del self.workflows[name]
++
++        # Release the per-workflow API runtime so its AsyncLocalRuntime is
++        # closed rather than leaked (mirrors close(), issue #1285).
++        workflow_api = getattr(self, "_workflow_apis", {}).pop(name, None)
++        if workflow_api is not None:
++            try:
++                workflow_api.close()
++            except Exception as exc:  # pragma: no cover - teardown best-effort
++                logger.debug(
++                    "Error closing WorkflowAPI for '%s': %s: %s",
++                    name,
++                    type(exc).__name__,
++                    exc,
++                )
++
++        # Unmount the sub-application mounted at /workflows/{name}. Starlette
++        # keys a Mount by its (trailing-slash-stripped) path, so match the
++        # exact prefix to avoid removing sibling workflow mounts.
++        prefix = f"/workflows/{name}"
++        self.app.router.routes = [
++            route
++            for route in self.app.router.routes
++            if getattr(route, "path", None) != prefix
++        ]
++
++        logger.info(f"Deregistered workflow '{name}' from {prefix}")
++        return True
++
+     def register_mcp_server(self, name: str, mcp_server: Any):
+         """Register an MCP server with the workflow server.
+ 

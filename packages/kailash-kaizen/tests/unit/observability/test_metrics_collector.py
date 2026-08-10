@@ -9,6 +9,8 @@ Target: <2% performance overhead (NFR-1)
 """
 
 import asyncio
+import logging
+import statistics
 import time
 from datetime import datetime, timezone
 
@@ -493,34 +495,87 @@ class TestPerformanceOverhead:
 
     @pytest.mark.asyncio
     async def test_metrics_overhead_is_minimal(self):
-        """Test metrics collection adds <5% overhead (ADR-017 NFR-1 relaxed for test env)."""
+        """Instrumenting an operation must not materially slow it (ADR-017 NFR-1).
+
+        The two arms are INTERLEAVED, one sample each per iteration, so both
+        are measured inside the same load window. The previous version timed
+        1000 uninstrumented operations, then 1000 instrumented ones, and
+        compared the two phases — which measures how host load DRIFTED between
+        phase 1 and phase 2 at least as much as it measures instrumentation.
+        On this box (concurrent suites from other operators) that produced
+        readings from -4.5% to +50.7% against a 40% bound: a 55-point spread,
+        including NEGATIVE overhead, i.e. "adding instrumentation made the
+        operation faster". A reading that can come out negative is not
+        measuring the cost of instrumentation.
+
+        Interleaving plus a median over many samples divides the host out:
+        the same measurement on the same box moved to a ~6-point spread. That
+        is what makes the bound below meaningful rather than a number chosen
+        to stop a flake — per rules/testing.md, an absolute wall-clock or
+        drifting-phase bound must not simply be raised until it stops firing,
+        because each raise widens the window a real regression hides in.
+
+        The bound is a RATIO of contemporaneous medians, so it stays a
+        property of the instrumentation rather than of the machine.
+
+        The collector's log level is pinned to a production-like level for
+        the measurement. ``timer()`` emits two ``logger.debug`` calls per
+        invocation, and pytest captures at DEBUG, so an unpinned run measures
+        pytest's log-capture plumbing rather than the collector: the same
+        code measures ~12% with the logger at WARNING and ~69% under pytest's
+        DEBUG capture. NFR-1 is a statement about production, where DEBUG is
+        off, so pinning is what makes the arms comparable — it removes a
+        variable belonging to the ambient test config, not to the collector.
+        """
         collector = MetricsCollector()
 
-        # Baseline: operation without metrics (run 3 times, take median)
-        baseline_times = []
-        for _ in range(3):
-            start = time.perf_counter()
-            for i in range(1000):
-                await asyncio.sleep(0.0001)  # Simulate work
-            baseline_times.append(time.perf_counter() - start)
-        baseline_duration = sorted(baseline_times)[1]  # Median
+        samples = 1000
+        baseline_samples: list[float] = []
+        instrumented_samples: list[float] = []
 
-        # With metrics: operation with metrics collection (run 3 times, take median)
-        metric_times = []
-        for _ in range(3):
-            start = time.perf_counter()
-            for i in range(1000):
+        metrics_logger = logging.getLogger(MetricsCollector.__module__)
+        previous_level = metrics_logger.level
+        metrics_logger.setLevel(logging.WARNING)
+        try:
+            for _ in range(samples):
+                # Arm A: the bare operation.
+                start = time.perf_counter()
+                await asyncio.sleep(0.0001)
+                baseline_samples.append(time.perf_counter() - start)
+
+                # Arm B: the SAME operation, instrumented — sampled
+                # immediately after A so both see the same scheduler and load
+                # conditions.
+                start = time.perf_counter()
                 async with collector.timer("operation_ms"):
                     await asyncio.sleep(0.0001)
-            metric_times.append(time.perf_counter() - start)
-        with_metrics_duration = sorted(metric_times)[1]  # Median
+                instrumented_samples.append(time.perf_counter() - start)
+        finally:
+            metrics_logger.setLevel(previous_level)
 
-        # Calculate overhead
-        overhead = (with_metrics_duration - baseline_duration) / baseline_duration * 100
+        baseline_median = statistics.median(baseline_samples)
+        instrumented_median = statistics.median(instrumented_samples)
 
-        # Should be <40% overhead (relaxed for test environment variability)
-        # Production target is <2% but test environment has significant variance
-        # due to concurrent test execution, system load, and CI environments.
-        assert overhead < 40.0, (
-            f"Metrics overhead {overhead:.2f}% exceeds 40% test threshold"
+        # Anti-vacuity: a zero/absent baseline would make the ratio below
+        # meaningless (or raise), so the bound must not be read as satisfied
+        # unless real work was actually timed.
+        assert len(baseline_samples) == samples, "baseline arm did not run"
+        assert baseline_median > 0, (
+            f"baseline median is {baseline_median!r}; the timing loop measured "
+            "nothing, so the overhead ratio below would be meaningless"
+        )
+
+        overhead = (instrumented_median / baseline_median - 1) * 100
+
+        # Production target is <2% (NFR-1). The allowance here covers the
+        # residual scheduler jitter that survives interleaving on a loaded
+        # host; measured worst case across repeated runs was ~10%. If this
+        # fires, investigate the collector's per-operation cost — do NOT
+        # raise the bound without first re-checking the ratio, which is the
+        # step that distinguishes a real regression from load.
+        assert overhead < 30.0, (
+            f"Metrics overhead {overhead:.2f}% exceeds the 30% ratio bound "
+            f"(baseline median {baseline_median * 1e6:.1f}us, instrumented "
+            f"median {instrumented_median * 1e6:.1f}us over {samples} "
+            "interleaved samples)"
         )

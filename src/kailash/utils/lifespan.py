@@ -49,6 +49,12 @@ import inspect
 import logging
 from typing import TYPE_CHECKING
 
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
@@ -78,9 +84,15 @@ async def _drive_handlers(
     first_error: BaseException | None = None
 
     for handler in list(handlers):
-        handler_name = getattr(handler, "__qualname__", None) or getattr(
-            handler, "__name__", repr(handler)
-        )
+        # `handler` is CALLER-SUPPLIED (whatever was registered on
+        # `router.on_startup`), so anything without `__name__` used to reach a
+        # `repr(handler)` fallback. `functools.partial` is not an exotic case
+        # here -- it is the shape the docstring below explicitly anticipates,
+        # and it renders its bound kwargs verbatim. `safe_callable_name` emits a
+        # BOUNDED, structurally inert identifier. It is NOT payload-free -- a
+        # name is caller-settable and a short one survives intact -- but it
+        # cannot forge the record's grammar or drive log volume.
+        handler_name = safe_callable_name(handler)
         try:
             # Match the existing workflow_server.py pattern at lines 234-237:
             # call the handler, then await the result if it's a coroutine.
@@ -92,15 +104,29 @@ async def _drive_handlers(
             if inspect.iscoroutine(result):
                 await result
         except BaseException as exc:  # noqa: BLE001 — isolate per-handler failures
-            # exc_info=True attaches the full traceback to the log record so
-            # operators can see WHERE in the handler the failure happened, not
-            # just the exception class. Per observability.md Rule 7 the WARN
-            # MUST be structured (kwargs / extra), not f-string interpolated.
+            # Operators need WHERE in the handler the failure happened, not
+            # just the exception class — but `exc` is raised by a
+            # CALLER-SUPPLIED handler, so its message is caller-controlled. A
+            # startup hook failing on `could not connect to
+            # postgres://svc:<credential>@host/db` put that string straight
+            # into the record via `exc_info=True`, because `logging` renders
+            # the traceback by printing each exception's `str()`. That is the
+            # class 689f9ebd8 closed at eighteen kaizen sinks.
+            #
+            # `safe_exception_frames` keeps the location (path:line:function
+            # per frame, plus each exception TYPE in the chain) and drops only
+            # the messages, so the diagnostic survives without the payload.
+            # Per observability.md Rule 7 the WARN MUST be structured (kwargs /
+            # extra), not f-string interpolated.
             logger.warning(
                 "lifespan.%s.handler_failed",
                 phase,
-                exc_info=True,
-                extra={"handler": handler_name, "phase": phase},
+                extra={
+                    "handler": handler_name,
+                    "phase": phase,
+                    "exc_type": safe_type_name(exc),
+                    "exc_frames": safe_exception_frames(exc),
+                },
             )
             if first_error is None:
                 first_error = exc

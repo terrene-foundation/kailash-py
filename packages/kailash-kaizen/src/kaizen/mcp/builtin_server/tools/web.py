@@ -98,6 +98,11 @@ async def fetch_url(
             - success (bool): True if fetch succeeded
             - error (str, optional): Error message if failed
     """
+    # Imported lazily (not at module scope) so loading the builtin MCP server
+    # does not drag in the whole ``kaizen.nodes.ai`` package __init__ — the
+    # graceful-degradation constraint documented at core/agent_loop.py:29.
+    from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
     if user_agent is None:
         user_agent = "Kaizen-MCP/1.0 (compatible; bot)"
 
@@ -119,6 +124,14 @@ async def fetch_url(
                 "success": True,
             }
 
+    # A fetch URL can embed userinfo or a presigned-URL token, and urllib echoes
+    # it into the exception text; the `error` field crosses back to the MCP
+    # client, so ALL THREE handlers route through the sanitizer (#1970 sweep).
+    #
+    # HTTPError MUST be sanitized here rather than relying on the URLError arm
+    # below: HTTPError SUBCLASSES URLError, so it is caught by this first arm and
+    # never reaches it. Sibling `tools/api.py` sanitizes the same shape — this
+    # arm was the asymmetric one.
     except HTTPError as e:
         return {
             "content": "",
@@ -126,7 +139,7 @@ async def fetch_url(
             "content_type": "",
             "size": 0,
             "success": False,
-            "error": f"HTTP Error {e.code}: {e.reason}",
+            "error": sanitize_provider_error(e, "Web fetch"),
         }
 
     except URLError as e:
@@ -136,7 +149,7 @@ async def fetch_url(
             "content_type": "",
             "size": 0,
             "success": False,
-            "error": str(e.reason),
+            "error": sanitize_provider_error(e, "Web fetch"),
         }
 
     except Exception as e:
@@ -146,7 +159,7 @@ async def fetch_url(
             "content_type": "",
             "size": 0,
             "success": False,
-            "error": str(e),
+            "error": sanitize_provider_error(e, "Web fetch"),
         }
 
 

@@ -57,6 +57,7 @@ if TYPE_CHECKING:
     # break every ``Pipeline`` type annotation below (reportInvalidTypeForm).
     from kaizen_agents.patterns.pipeline import Pipeline
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.journey.behaviors import ReturnBehavior
 
 # Task-intrinsic default: a deliberately small model chosen for the low-latency
@@ -476,7 +477,7 @@ class Pathway(metaclass=PathwayMeta):
                 accumulated={},
                 next_pathway=None,
                 is_complete=False,
-                error=str(e),
+                error=scrub_remote_error(e),
             )
 
     def _resolve_agents(self) -> list["BaseAgent"]:

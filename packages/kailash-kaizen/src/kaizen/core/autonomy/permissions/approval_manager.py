@@ -18,6 +18,7 @@ from typing import Any
 from kaizen.core.autonomy.control.protocol import ControlProtocol
 from kaizen.core.autonomy.control.types import ControlRequest
 from kaizen.core.autonomy.permissions.context import ExecutionContext
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +146,23 @@ class ToolApprovalManager:
             return approved
 
         except TimeoutError as e:
+            # Same-function sibling: no exc_info here, but the raw `{e}` was
+            # the identical message-surface leak. Fixed alongside so the two
+            # branches of one function cannot disagree.
             logger.warning(
-                f"Approval request timed out after {timeout}s for '{tool_name}': {e}"
+                "Approval request timed out after %ss for %r: %s",
+                timeout,
+                tool_name,
+                scrub_remote_error(e),
             )
             return False  # Fail-closed on timeout
 
         except Exception as e:
+            # The approval transport is caller-configured; a failure here can
+            # carry its endpoint and token. `tool_name` is retained -- it is
+            # the diagnostic and is framework-supplied.
             logger.error(
-                f"Approval request failed for '{tool_name}': {e}", exc_info=True
+                "Approval request failed for %r: %s", tool_name, scrub_remote_error(e)
             )
             return False  # Fail-closed on error
 

@@ -392,11 +392,16 @@ class {self._class_name(migration_id)}(DataMigration):
         # Rule 1: validate every identifier the generator interpolates into a
         # generated migration file. Generated files inherit the rule contract
         # and MUST NOT ship bare f-string interpolation of a dynamic name.
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
         for op in operations:
             if op["type"] == "create_table":
-                _validate_identifier(op["table"])
+                _validate_identifier(
+                    op["table"], max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+                )
                 forward_ops.append(
                     f'await connection.execute("""{self._create_table_sql(op)}""")'
                 )
@@ -437,8 +442,13 @@ class {self._class_name(migration_id)}(Migration):
     def _create_table_sql(self, operation: Dict[str, Any]) -> str:
         """Generate CREATE TABLE SQL."""
         # Validate before templating per dataflow-identifier-safety.md §1+§5.
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
-        _validate_identifier(operation["table"])
+        _validate_identifier(
+            operation["table"], max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
         # Simplified example
         return f"CREATE TABLE {operation['table']} (id SERIAL PRIMARY KEY)"

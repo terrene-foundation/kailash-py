@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Dict, Optional
 from .deployment_cache import get_deployment_cache
 
 if TYPE_CHECKING:
-    from kaizen.core.base_agent import BaseAgent
     from nexus import Nexus
+
+    from kaizen.core.base_agent import BaseAgent
 
     from .session_manager import NexusSessionManager
 

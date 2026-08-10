@@ -27,6 +27,7 @@ from typing import Any
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
 
 logger = logging.getLogger(__name__)
@@ -308,13 +309,19 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             )
 
         except Exception as e:
-            logger.exception(f"Gemini execution failed: {e}")
+            # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+            # claude_code adapter guard; see that site for the full rationale.
+            # ``logger.exception`` always sets ``exc_info`` and the traceback's
+            # final line re-leaks the raw provider error the scrub removed.
+            # All four runtime adapters are fixed in one change so they cannot
+            # drift (rules/security.md § Multi-Site Kwarg Plumbing).
+            logger.error(f"Gemini execution failed: {scrub_remote_error(e)}")
             return ExecutionResult(
                 output="",
                 status=ExecutionStatus.ERROR,
                 runtime_name="gemini_cli",
                 session_id=context.session_id,
-                error_message=str(e),
+                error_message=scrub_remote_error(e),
                 error_type=type(e).__name__,
             )
 
@@ -548,7 +555,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             )
             return response is not None
         except Exception as e:
-            logger.warning(f"Gemini health check failed: {e}")
+            logger.warning(f"Gemini health check failed: {scrub_remote_error(e)}")
             return False
 
     def __repr__(self) -> str:

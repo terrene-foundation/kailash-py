@@ -1,5 +1,149 @@
 # Nexus Changelog
 
+## [2.16.0] - 2026-07-26 — Registration is fail-closed and all-or-nothing (#1972)
+
+### Fixed — `trusted_proxy_cidrs` now actually affects rate limiting (#2007)
+
+- **The trusted-proxy resolver was dead code.** `Nexus(trusted_proxy_cidrs=[...])` was
+  accepted, documented, and validated fail-fast, and the extractor middleware ran a full
+  RFC-7239 / `X-Forwarded-For` / `X-Real-IP` trust walk on every request — but nothing ever
+  read the result. Repo-wide, the resolved-client-host attribute had exactly one mention, and
+  it was the write. The setting changed no behaviour anywhere.
+- **All four rate limiters keyed on the immediate TCP peer instead.** `register_sse`, the
+  `endpoint()` rate limiter, the auth rate-limit middleware, and the `rate_limit` decorator
+  each re-derived `request.client.host` independently. Behind any reverse proxy, load
+  balancer, or ingress every caller presents the same peer address, so **all clients shared a
+  single rate-limit bucket** and one caller could exhaust the limit for everyone.
+- **Scoped honestly: this was never a bypass.** A TCP peer cannot be forged, so limits were
+  not evadable by sending a header — the previous keying erred fail-SAFE. The defect was
+  availability (a shared bucket) plus a configuration option that silently did nothing.
+- **Behaviour is unchanged for deployments that set no trusted CIDRs.** With the default
+  empty list, the resolver returns the peer, so the derived key is byte-identical to before.
+  An untrusted peer sending `X-Forwarded-For` still resolves to its own address and cannot
+  move itself into another caller's bucket; both properties are pinned by regression tests.
+- **Migration:** none required. Operators already passing `trusted_proxy_cidrs` will see rate
+  limits begin applying per originating client rather than per proxy — which is what the
+  setting always documented.
+
+### Changed (BREAKING) — workflow-name validation now runs at `register()` (#1972)
+
+- **`Nexus.register(name, workflow)` validates `name` before mutating any state.**
+  `register()` skipped `nexus.validation.validate_workflow_name` while
+  `_execute_workflow` (the `/workflows/{name}/execute` route) and
+  `Nexus.register_handler` already ran it. A name the validator rejects could
+  therefore be registered successfully and then return HTTP 400 on every execute
+  request forever. Names are now rejected up front, before the first store is
+  written.
+- **`HandlerRegistry.register_workflow(name, workflow)` validates `name` too.**
+  `HandlerRegistry` is publicly exported from `nexus` (it is in `nexus.__all__`),
+  making it an INDEPENDENT registration surface; validating only `Nexus.register()`
+  would have left a supported path that still admits a name the execute route later
+  rejects — the same asymmetry this change closes. Per the enforcement-surface-parity
+  discipline, a new fail-closed dimension lands at every independent validation
+  surface in the same change.
+- **The name charset is now an allowlist, not a blocklist of shell metacharacters.**
+  Permitted: `A-Z a-z 0-9 _ - .` — the MCP tool-name charset (SEP-986), which is also
+  safe as an HTTP path segment, as the authority in the `workflow://{name}` MCP
+  resource URI, and as a CLI argument. Path separators (`/`, `\`) keep their own
+  dedicated error message. The previous blocklist let through characters that are
+  equally fatal downstream: a space or `^` aborts `AnyUrl("workflow://<name>")`
+  inside MCP resource registration with an opaque pydantic `ValidationError`, and a
+  non-ASCII name is silently percent-encoded there (`workflow://café` becomes
+  `workflow://caf%C3%A9`) so the resource URI no longer round-trips to the registered
+  name. The error message names every offending character.
+
+  Accepted: `my_workflow`, `my-workflow.v2`, `wf123`.
+  Rejected: `my workflow` (space), `a&b`, `order#1`, `wf(1)`, `café`, `a/b`.
+
+  **Migration:** rename workflows to the SEP-986 charset. Names previously accepted
+  by `register()` but outside it now raise `ValueError` at registration instead of
+  failing later at execute or MCP-resource time. **Non-ASCII names break on
+  upgrade** — a workflow registered as `café` or `étude` in 2.15.x raises
+  `ValueError` at `register()` in 2.16.0 and must be renamed to ASCII. The same
+  applies to names containing spaces or `!@#$%^&*()`.
+
+- **MCP tool registration no longer falls back to a `_tools` dict write.**
+  `_register_workflow_as_mcp_tool` previously caught a failing `tool()` decorator and
+  wrote the tool into `_mcp_server._tools` instead. That write could never make a tool
+  reachable: `_tools` exists only on the FastMCP fallback shim
+  (`kailash_mcp/server.py:1333-1348`), which `MCPServer` assigns to `self._mcp` and
+  never to itself, and `MCPServer._handle_list_tools`
+  (`kailash_mcp/server.py:2832-2837`) iterates `_tool_registry`. The fallback could
+  therefore only convert a loud failure into a registration that reported success and
+  advertised nothing. It is removed; the `tool()` decorator is now the only tool
+  registration surface, and a failure raises `RuntimeError`. A custom or mock MCP
+  server that relied on the `_tools` fallback must expose a `tool()` decorator (or a
+  `register_workflow` method) instead.
+
+### Added (#1972)
+
+- **`Nexus.register()` is now all-or-nothing across every store it writes.**
+  Registration touches seven stores: the registry's `_workflows` and
+  `_workflow_metadata`, the gateway's `/workflows/{name}` mount, and the four MCP
+  backing stores (`_tool_registry`, `_resource_registry`, and the underlying FastMCP
+  `_tool_manager` / `_resource_manager`) — plus the `metadata` attribute of the
+  caller's own `Workflow` object. Every precondition that can be checked before the
+  first store is written now is — the name and the MCP server's tool-registration
+  surface in `register()` itself, and the caller's metadata inside
+  `HandlerRegistry.register_workflow`, which validates it before its own (first)
+  write — and anything that can only fail mid-sequence is undone by a compensating
+  rollback:
+
+  - registering a NEW name either succeeds completely or leaves nothing behind in any
+    of the seven stores, and hands the caller's `Workflow` object back with its
+    original `metadata`;
+  - re-registering an EXISTING name that fails — the gateway raises
+    `ValueError: Workflow '<name>' already registered` — now restores the previous
+    registry entry instead of leaving the new workflow half-installed over a
+    registration that was working. Use `deregister()` before re-registering.
+
+  Rollback is compensating, not transactional: the MCP stores belong to a third-party
+  server object with no transaction support, so the undo is the same best-effort
+  removal `deregister()` performs (`Nexus._remove_from_all_channels`, now shared by
+  both paths so the undo cannot drift from what registration installed).
+
+### Fixed (#1972)
+
+- **MCP tool registration no longer fails silently.** When the MCP server exposes no
+  callable `tool()` decorator, or that decorator raises,
+  `_register_workflow_as_mcp_tool` now raises `RuntimeError` naming the server type
+  and the `tools/list` consequence. It previously logged a warning and returned, so
+  `register()` went on to report "Workflow registered successfully!" for a tool that
+  `tools/list` would never advertise. The "no tool surface at all" case is detected
+  before any store is written, so it no longer costs a rollback.
+- **Auto-discovery survives an un-nameable file.** Discovery derives workflow names
+  from filenames (`file_path.stem`), and a filename may legally contain a space,
+  parenthesis or non-ASCII character that is not a legal workflow name. Tightening
+  `register()` made `_auto_discover_workflows` abort its loop on the first such file,
+  so every OTHER discovered workflow silently failed to register and `Nexus.start()`
+  aborted. Un-nameable files are now skipped individually with a `WARNING` naming the
+  file and the reason, and discovery continues.
+
+### Fixed — `Nexus.__del__` no longer risks a garbage-collection-time deadlock
+
+- **`Nexus.__del__` previously called `close()` directly** if a `Nexus` instance was
+  garbage-collected without the caller having cleaned it up explicitly. `close()` can
+  reach event-loop/selector initialization that itself emits a log line; because the
+  finalizer can run from inside Python's own logging machinery during GC, that log
+  call can try to re-acquire a logging lock the finalizer thread already holds, and
+  the process deadlocks. This is the same class of hazard already fixed for
+  `DataFlow.__del__` (2026-04-16 "DataFlow unit suite hangs" incident). `__del__` now
+  only emits a `ResourceWarning` naming the caller-facing cleanup call, and does
+  nothing else — real cleanup remains the caller's responsibility via `await
+nexus.close()`. **No API change**; this only removes an unsafe implicit cleanup
+  path that most callers never relied on (an object that is closed explicitly is
+  unaffected).
+
+### Fixed — MCP channel `parameters` envelope parity with HTTP/CLI
+
+- **A workflow registered via `Nexus.register()` and invoked over the MCP channel could 200 while the SAME workflow 500'd over HTTP/CLI, or vice versa.** The MCP `tools/call` execute path forwarded arguments to the runtime ONLY as `{"parameters": params}`; a workflow reading its inputs as bare top-level names (rather than `parameters.get(...)`) worked over HTTP/CLI (`kailash.api.workflow_api.WorkflowRequest.get_inputs()` binds both shapes — see the core `kailash` 2.63.0 CHANGELOG entry) but failed over MCP. Arguments are now forwarded in both shapes here too — every key at workflow level AND the whole mapping under `parameters` — matching `get_inputs()`'s collision precedence exactly (an inner key literally named `parameters` loses to the envelope).
+
+### Fixed — `rate_limit_config` and `/metrics` registration reliability
+
+- **`rate_limit_config={"default_rate_limit": None}` (the documented "unlimited" spelling) crashed every request to the endpoint with an unconditional HTTP 500.** `None` reached a `rate_limit > 0` comparison inside the request wrapper and raised `TypeError: '>' not supported between instances of 'NoneType' and 'int'` on every call — the documented `None` = unlimited behavior had never actually been implemented. A non-int, non-`None` configured value is now rejected loudly at registration (`ValueError`) instead of surfacing as a per-request `TypeError`.
+- **A configured `rate_limit=` silently did nothing on any handler whose FastAPI `Request` parameter was not literally named `request`.** The wrapper only checked `kwargs["request"]`, so a handler declaring `req: Request` (or any other name) was never rate-limited while the registration log still reported `rate_limit=N/min` as if it were active. Request detection is now by parameter TYPE, matching `Request` regardless of name; a handler that still cannot be rate-limited (declares no `Request`-typed parameter at all) now gets a one-time `nexus.endpoint.rate_limit_inert` WARNING at registration naming the handler and the exact fix, instead of silently advertising a protection it cannot enforce.
+- **`register_metrics_endpoint` could raise a bare `TypeError` instead of its documented `ImportError`-only contract** when `nexus.fastapi_app` (or the gateway's `app`) was a test stand-in without a real, mutable `routes` list — the route-replacement code path slice-assigns `app.routes`, which requires an actual list. A new `_route_bearing()` guard checks for a real `routes` list before attempting the FastAPI-app registration path, falling through to the `HTTPTransport` registration path (which does not need one) otherwise.
+
 ## [2.15.0] — 2026-07-25 — Deployment lifecycle: deregister + non-blocking start (#1959)
 
 ### Added

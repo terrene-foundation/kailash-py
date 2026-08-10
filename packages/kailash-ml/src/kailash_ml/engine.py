@@ -2176,9 +2176,14 @@ class MLEngine:
         # retries), then "model_<family>". Validated as an identifier
         # before being interpolated into SQL paths.
         model_name = name or self._synthesise_model_name(result)
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
-        _validate_identifier(model_name)
+        _validate_identifier(
+            model_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
 
         # Retrieve the actual model object. W33c canonical path:
         # every Trainable.fit() return site attaches `trainable=self`

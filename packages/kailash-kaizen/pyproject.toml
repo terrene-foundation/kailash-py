@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.45.0"
+version = "2.46.0"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -32,7 +32,18 @@ dependencies = [
     # scoped to optional subsystems behind extras.
     # ─────────────────────────────────────────────────────────────
     "kailash>=2.56.0",  # mask_error_text (ollama_provider.py) is new in core 2.56.0
-    "kailash-mcp>=0.2.4",       # core/base_agent.py:32 module-scope MCPClient
+    # FLOOR RAISED TO 0.5.0, FROM 0.2.4 — release-blocking, not housekeeping.
+    # kaizen constructs kailash_mcp.MCPServer directly (core/mcp_mixin.py:732,
+    # mcp/builtin_server/server.py's KaizenMCPServer subclass, mcp/catalog_server),
+    # so a kailash-mcp below 0.5.0 ships every permission-gated tool a kaizen
+    # user registers through those servers with: an unconditional no-credential
+    # auth bypass (14d9d8b31), gated-tool schema/description disclosure to
+    # unauthenticated callers (00ee6f474/19c8cfb33), cross-caller cache result
+    # sharing, and live credentials written into cache keys/Redis/logs
+    # (71eb63790/ee6d5b8bb). 0.2.4 was the module-scope MCPClient floor
+    # (core/base_agent.py:32); 0.5.0 is the first version carrying all of the
+    # above server-side fixes.
+    "kailash-mcp>=0.5.0",
     "pydantic>=2.0.0",          # llm/deployment.py + auth modules
     "typing-extensions>=4.5.0", # core/schema_factory.py
     "anyio>=4.0.0",             # autonomy observability/hooks/interrupts

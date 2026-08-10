@@ -895,7 +895,7 @@ performs zero authentication (§11.7); this surface supplies it.
 
 ### 12.1 Routes
 
-All six routes register through `Nexus.register_endpoint` (real FastAPI routes
+All six routes register through `Nexus.register_endpoint()` (real FastAPI routes
 with path params + HTTP verbs):
 
 | Method + path                           | Admin method       | Body         |

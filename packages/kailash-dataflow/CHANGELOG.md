@@ -1,5 +1,122 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Fixed — SQLite URI-filename (`file:`) connection strings are recognised again (#1502 regression)
+
+`ConnectionParser.detect_database_type` gained a fail-closed scheme allowlist in the
+#1971 work. The allowlist omitted `file:` — SQLite's own URI-filename scheme
+(<https://sqlite.org/uri.html>) — so every shared-cache in-memory connection string
+of the form `file:<name>?mode=memory&cache=shared` was rejected with:
+
+```
+AdapterError: Unsupported database scheme: file. Supported schemes: mariadb,
+mongodb, mysql, pgsql, postgres, postgresql, sqlite ...
+```
+
+That is the exact form #1502 injects for a bare `:memory:` instance — the one
+shared-cache database the DDL, CRUD and model-registry paths all open — so
+`DataFlow(":memory:")` broke on the shared-cache path, taking the model registry
+(`registry.initialize()` returning `False`) and registry pool disposal with it.
+
+`file:` is now an EXPLICIT allowlist entry mapping to SQLite in all THREE
+independent classifiers: `ConnectionParser.detect_database_type`, the `DataFlow`
+engine's URL validator, and `AdapterFactory.detect_database_type`.
+
+Six consuming surfaces already recognised the `file:` form and opened it with
+`uri=True` (`sync_ddl_executor._get_sqlite_connection`, `adapters/sqlite.py`,
+`migration_connection_manager`, `migration_test_framework`, and core
+`nodes/data/sql.py` + `nodes/data/async_sql.py`).
+
+**Correcting this entry's own first draft**, which claimed the fix "restores
+enforcement-surface parity" because "only the central detector they all consult
+had never learned it". That was wrong on both counts, and a review caught it:
+`AdapterFactory.detect_database_type` is a THIRD independent scheme ladder — it
+borrows `ConnectionParser.parse_connection_string` to split the URL, then
+dispatches on the scheme itself — so it did not inherit the fix. The two
+classifiers then disagreed INSIDE ONE FUNCTION, two lines apart:
+
+```
+utils/connection.py:116   ConnectionParser.detect_database_type -> "sqlite"
+utils/connection.py:125   factory.create_adapter -> detect_database_type
+                          -> UnsupportedDatabaseError: Unsupported database type: file
+```
+
+So a user supplying the `file:` form directly — to reach SQLite's URI-only
+options (`mode=ro`, `cache=shared`, `immutable=1`) — still failed at connection
+time after the first fix. CI could not see it: a bare `DataFlow(":memory:")`
+resolves to `sqlite:///:memory:` before either classifier runs, so the gap was
+user-facing only.
+
+A regression test now ENUMERATES the independent classifiers rather than
+asserting any one of them, so a fourth ladder added later fails the suite
+instead of being found by review.
+
+**The fail-closed posture is unchanged throughout.** Every genuinely unknown
+scheme still raises at every classifier — pinned by a companion test asserting
+each one rejects `gopher://` and names the rejected scheme.
+
+**The fail-closed posture is unchanged.** This is a positive allowlist entry, not a
+permissive fallback: every genuinely unknown scheme still raises rather than
+guessing an engine, because an incorrect engine emits SQL for the wrong database.
+
+## [2.20.0] — 2026-08-05 — Generated identifiers fitted to the connection's dialect; database-type detection fails closed (#1971)
+
+### Fixed — generated identifiers are fitted to the connection's dialect (#1971)
+
+- **DataFlow-GENERATED identifiers are now fitted to the target dialect's length
+  budget instead of a hardcoded constant.** Identifier limits are dialect-owned —
+  PostgreSQL 63, MySQL 64, SQLite 128 — so a 69-character table name is legal on
+  SQLite and illegal on PostgreSQL. The limits are now imported from
+  `kailash.db.dialect` (`POSTGRES_MAX_IDENTIFIER_LENGTH`, `MYSQL_…`, `SQLITE_…`)
+  rather than restated here, so the core SDK's `QueryDialect` hierarchy and
+  DataFlow's `SQLDialect` hierarchy cannot drift on the value that decides
+  whether an identifier is legal.
+- **Over-budget generated names are truncated with a deterministic digest suffix**
+  (`SQLDialect.normalize_identifier`): 8 hex characters of the SHA-256 of the FULL
+  original name. Previously an over-length name was handed to the server, and
+  PostgreSQL truncates at NAMEDATALEN-1 server-side — so two models whose names
+  shared the first 63 characters silently resolved to ONE physical table. The
+  digest uses SHA-256 rather than the per-process-randomised builtin `hash()`, so
+  the same model resolves to the same table in every process, on every host, in
+  every release.
+- **The fix covers derived index and foreign-key constraint names, not just table
+  names.** `idx_{table}_{field}` and `fk_{table}_{field}` are derived from a table
+  name that already consumes the whole budget, so they overflowed by construction.
+  On PostgreSQL every index on a long table collapsed to one identifier that
+  `CREATE INDEX IF NOT EXISTS` then silently skipped, and a second foreign key on
+  the same table failed with a duplicate-object error.
+- **Scope: DataFlow-generated names only.** An explicit `__tablename__`, or an
+  explicit `name` on an index config, is the user's own identifier and is passed
+  through unchanged — an over-length one still raises `InvalidIdentifierError`,
+  which is the correct loud failure for a name the user chose. An explicitly
+  supplied empty index name also still fails loudly rather than being silently
+  replaced by the derived default.
+
+  **Migration — read this if you have model names longer than your dialect's
+  limit.** On PostgreSQL, a model whose generated table name exceeded 63
+  characters was previously truncated server-side to the first 63 characters. It
+  now resolves to a name of the form `<truncated-head>_<8-hex-digest>`. That is a
+  DIFFERENT physical table. Affected deployments must rename the existing table to
+  the new generated name before upgrading, or pin the old name explicitly with
+  `__tablename__`. Models whose generated names are within the dialect budget are
+  unaffected — short names are returned unchanged, not rewritten.
+
+- **Database-type detection now fails closed on an unrecognized connection-string
+  scheme (HIGH), instead of silently defaulting to SQLite's loosest identifier
+  budget.** A connection string using a driver variant `ConnectionParser` didn't
+  special-case (e.g. `postgres+asyncpg://`, `mariadb://`) fell through a broad
+  exception handler straight to `"sqlite"` — with only a debug-level log — so an
+  ordinary PostgreSQL/MySQL connection could get SQLite's 128-character identifier
+  budget instead of PostgreSQL's 63 or MySQL's 64, generate an over-length name,
+  and have it silently truncated server-side, aliasing two differently-named
+  models onto one physical table. This is exactly the collision the fixes above
+  exist to prevent, reached by a different path (a mis-detected dialect budget,
+  rather than a bad truncation). Detection now recognizes the common
+  driver-qualified DSN forms for PostgreSQL and MySQL/MariaDB and raises a typed,
+  actionable error naming the supported schemes for anything it cannot map,
+  instead of guessing.
+
 ## [2.19.1] - 2026-07-21
 
 ### Docs
@@ -7,8 +124,6 @@
 - Genericized private cross-SDK repository references in shipped source
   docstrings (`classification/masking.py`, `migration/security_definer.py`) —
   disclosure hygiene, behavior-neutral.
-
-## [Unreleased]
 
 ## [2.19.0] — 2026-07-21 — FieldType.Vector(dim) embedding column type (#1846)
 
@@ -1929,7 +2044,7 @@ Patch release closing the merged-but-unreleased gap on `kailash-dataflow` main. 
 - Updated `specs/dataflow-ml-integration.md` § 4A.2 — replaced the "Caller is responsible for sanitizing" docstring contract with the emitter-redacted contract, referencing `format_error_for_event` and `rules/event-payload-classification.md` § 1.
 - Cross-spec re-derivation per `rules/specs-authority.md` § 5b: `kailash-core-ml-integration.md` § 3.4 (MLError discipline) lightly amended to clarify that the emitter-side helper is defense-in-depth, NOT a license to construct leaky MLError messages — the caller-construction discipline remains the primary gate. Other ml-_ and dataflow-ml-_ specs were re-derived but required no changes (no references to `emit_train_end` / `format_error_for_event` / caller-sanitization vocabulary).
 
-## [Unreleased] — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
+## [2.3.2] (cont.) — 2026-04-27 — DataFlow × ML error-name spec compliance + TenantTrustManager orphan removal (W6-003 / W6-006 / W6-017)
 
 ### Tests
 

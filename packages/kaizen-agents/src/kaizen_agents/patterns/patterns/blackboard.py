@@ -42,9 +42,12 @@ Created: 2025-10-27
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
+import logging
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.llm.reasoning import ReasoningDegradedError
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns._reasoning_bridge import (
     rank_agents_by_capability_sync,
     resolve_reasoning_config,
@@ -60,6 +63,8 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+logger = logging.getLogger(__name__)
 
 
 class BlackboardPipeline(Pipeline):
@@ -168,6 +173,22 @@ class BlackboardPipeline(Pipeline):
                 if best_specialist is not None and best_score > 0:
                     return best_specialist
 
+        except ReasoningDegradedError as exc:
+            # #1981: EVERY specialist's capability scoring degraded. The
+            # documented no-match return (None) stands — this method's sync
+            # contract must not start raising — but "no specialist matches"
+            # and "the judge could not tell" are opposite facts, so the
+            # degradation MUST be observable rather than swallowed by the
+            # generic handler (`rules/zero-tolerance.md` Rule 3).
+            logger.warning(
+                "blackboard.select_specialist.degraded",
+                extra={
+                    "correlation_id": exc.correlation_id,
+                    "model": exc.model,
+                    "error": exc.error,
+                    "fallback": "no_specialist",
+                },
+            )
         except Exception:
             # Fall through to None
             pass
@@ -250,14 +271,32 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    # The `error` key was scrubbed and the `traceback` key
+                    # beside it was not -- so the exception this dict is
+                    # careful not to render on one line was rendered IN FULL,
+                    # verbatim, on the next. The traceback's final line repeats
+                    # `str(e)` exactly, which is what the scrub above removed.
+                    #
+                    # Scrubbed rather than dropped: unlike the `exc_info=True`
+                    # log sinks 689f9ebd8 fixed by dropping, this traceback is
+                    # a string built here, so it can go through the same
+                    # scrubber and keep its frame trail. `specialist.run` is
+                    # arbitrary caller-supplied agent code holding its own
+                    # credentials, so REMOTE is the correct preset.
+                    "error": scrub_remote_error(e),
                     "agent_id": (
                         specialist.agent_id
                         if hasattr(specialist, "agent_id")
                         else "unknown"
                     ),
                     "status": "failed",
-                    "traceback": traceback.format_exc(),
+                    # From the exception object, not `format_exc()`'s ambient
+                    # `sys.exc_info()` -- see the note in
+                    # `parallel._execute_parallel_async`, where relying on
+                    # ambient state produced a traceback of no exception at all.
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                 }
 
     def _execute_controller(
@@ -296,9 +335,17 @@ class BlackboardPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    # Sibling of the specialist guard above, and the more
+                    # exposed of the two: `run` copies this dict's `error` onto
+                    # the blackboard it returns, so the controller's failure
+                    # travels further than the specialist's. The `traceback`
+                    # key was raw for the same reason it was raw there -- being
+                    # next to a scrubbed key is what made the file look swept.
+                    "error": scrub_remote_error(e),
                     "status": "controller_failed",
-                    "traceback": traceback.format_exc(),
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                     "is_complete": True,  # Stop iterating to avoid infinite loop
                     "next_needed_capability": None,
                 }

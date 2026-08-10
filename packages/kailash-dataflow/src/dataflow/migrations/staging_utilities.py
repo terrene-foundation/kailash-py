@@ -19,13 +19,85 @@ DESIGN PRINCIPLES:
 - Clear error messages and logging
 """
 
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from ..adapters.dialect import _IDENTIFIER_DIGEST_LENGTH
+
 logger = logging.getLogger(__name__)
+
+
+def _truncate_with_digest(name: str, max_length: int) -> str:
+    """Fit *name* into *max_length* WITHOUT aliasing two names onto one.
+
+    A bare prefix slice (``name[:max_length]``) maps every name sharing the
+    first *max_length* characters onto ONE identifier. For a database or
+    table name that is silent data loss: two staging environments, or two
+    sanitised identifiers, resolve to the same physical object and the
+    second silently operates on the first's data. Issue #1971 verified this
+    against real PostgreSQL 15.18 — a second ``CREATE TABLE`` sharing a
+    63-char prefix raises ``DuplicateTableError`` and ``SELECT`` through the
+    second name returns the FIRST model's rows.
+
+    This mirrors the canonical
+    ``dataflow.adapters.dialect.SQLDialect.normalize_identifier`` contract
+    (same SHA-256, same 8-hex-char suffix, same ``rstrip("_")`` handling) but
+    takes the budget as an argument, because the staging helpers accept a
+    caller-supplied ``max_length`` rather than binding one dialect.
+
+    The mapping is:
+
+    * **deterministic** — SHA-256 of the FULL original name, not the
+      per-process-randomised builtin ``hash()``, so the same input resolves
+      to the same identifier in every process and every release;
+    * **collision-resistant** — two names sharing a truncation prefix get
+      different digests;
+    * **injection-safe** — the output character set is a subset of the
+      input's plus ``[0-9a-f]``, so a name that passed an identifier
+      allowlist still passes it afterwards.
+
+    Args:
+        name: The identifier to fit. Returned UNCHANGED when already within
+            budget, so in-budget names stay byte-identical.
+        max_length: The budget to fit into.
+
+    Returns:
+        str: ``name`` unchanged, or ``<head>_<8-hex-digest>``.
+
+    Raises:
+        ValueError: If *max_length* cannot hold a digest suffix.
+    """
+    if len(name) <= max_length:
+        return name
+
+    # +1 for the "_" separator between the truncated head and the digest.
+    head_length = max_length - (_IDENTIFIER_DIGEST_LENGTH + 1)
+    if head_length < 1:
+        raise ValueError(
+            f"max_length ({max_length}) is too small to fit a "
+            f"{_IDENTIFIER_DIGEST_LENGTH}-char disambiguating digest"
+        )
+
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[
+        :_IDENTIFIER_DIGEST_LENGTH
+    ]
+    # rstrip("_") avoids a doubled separator when the cut lands on one.
+    head = name[:head_length].rstrip("_")
+    truncated = f"{head}_{digest}"
+
+    logger.warning(
+        "staging_utilities.identifier_truncated_to_length_budget",
+        extra={
+            "limit": max_length,
+            "original_length": len(name),
+            "truncated": truncated,
+        },
+    )
+    return truncated
 
 
 @dataclass
@@ -97,16 +169,18 @@ class StagingUtilities:
         else:
             staging_name = base_name
 
-        # Truncate if necessary
+        # Truncate if necessary. Both branches route through
+        # _truncate_with_digest so two production database names sharing a
+        # truncation prefix cannot resolve to ONE staging database.
         if len(staging_name) > max_length:
-            # Keep the timestamp if present, truncate the middle
+            # Keep the timestamp if present, truncate the base.
             if timestamp_suffix:
-                timestamp_part = f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                timestamp_part = f"_{timestamp}"
                 max_base_length = max_length - len(timestamp_part)
-                truncated_base = base_name[:max_base_length]
+                truncated_base = _truncate_with_digest(base_name, max_base_length)
                 staging_name = f"{truncated_base}{timestamp_part}"
             else:
-                staging_name = staging_name[:max_length]
+                staging_name = _truncate_with_digest(staging_name, max_length)
 
         logger.debug(
             "staging_utilities.generated_staging_database_name",
@@ -470,11 +544,13 @@ class StagingUtilities:
         if not re.match(r"^[a-zA-Z_]", sanitized):
             sanitized = f"_{sanitized}"
 
-        # Truncate to max length
-        if len(sanitized) > max_length:
-            sanitized = sanitized[:max_length]
+        # Truncate to max length. A bare prefix slice would ALIAS two
+        # distinct identifiers sharing the first ``max_length`` characters
+        # onto one physical object; the digest suffix keeps the mapping
+        # collision-resistant. In-budget names are returned byte-identical.
+        sanitized = _truncate_with_digest(sanitized, max_length)
 
-        # Ensure it doesn't end with underscore after truncation
+        # Ensure it doesn't end with underscore.
         sanitized = sanitized.rstrip("_")
 
         if not sanitized:

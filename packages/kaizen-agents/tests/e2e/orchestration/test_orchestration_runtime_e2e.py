@@ -139,10 +139,28 @@ def writing_agent_e2e(task_signature):
 
 @pytest.mark.asyncio
 @pytest.mark.e2e
+@pytest.mark.requires_real_llm
 async def test_multi_agent_workflow_execution_e2e(
     runtime, code_agent_e2e, data_agent_e2e, writing_agent_e2e
 ):
-    """Test complete multi-agent workflow with real OpenAI inference."""
+    """Test complete multi-agent workflow with real OpenAI inference.
+
+    Requires a real LLM judge (#1981). All three `route_task` calls below use
+    SEMANTIC routing, which delegates capability scoring to
+    `llm_capability_match`; the root conftest's cost-guard scrubs every
+    provider credential on a bare `pytest` run, so without the
+    `requires_real_llm` opt-in there is no OpenAI deployment to resolve and
+    the judge cannot run at all.
+
+    Before #1981 this test passed WITHOUT a judge: the degraded judgment was
+    flattened to a fabricated 0.0 and `_route_semantic` fell through to
+    ROUND-ROBIN, which satisfies the "an agent was selected" assertions below
+    while exercising zero semantic matching. The marker makes the real-LLM
+    precondition explicit instead of letting the fallback fake a pass.
+
+    Run deliberately with:
+        KAIZEN_ALLOW_REAL_LLM=1 .venv/bin/python -m pytest -m requires_real_llm
+    """
     # Register all agents
     await runtime.register_agent(code_agent_e2e)
     await runtime.register_agent(data_agent_e2e)

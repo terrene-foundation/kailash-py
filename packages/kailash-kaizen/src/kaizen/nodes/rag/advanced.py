@@ -26,6 +26,8 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 from ..ai.llm_agent import LLMAgentNode
 
 # Side-effect import: registers DenseRetrievalNode / SparseRetrievalNode with
@@ -546,13 +548,18 @@ Respond with JSON only:
             }
 
         except Exception as e:
-            logger.error(f"RAG execution failed at attempt {attempt + 1}: {e}")
+            # #1970: the RAG workflow dispatches embedding/generation calls to
+            # a credentialed provider; both surfaces below reach the caller.
+            sanitized = sanitize_provider_error(e, "RAG")
+            logger.error(
+                "RAG execution failed at attempt %s: %s", attempt + 1, sanitized
+            )
             return {
                 "query": query,
                 "retrieved_documents": [],
                 "scores": [],
-                "generated_response": f"Error during RAG processing: {str(e)}",
-                "error": str(e),
+                "generated_response": f"Error during RAG processing: {sanitized}",
+                "error": sanitized,
                 "attempt": attempt + 1,
             }
 
@@ -593,12 +600,13 @@ Respond with JSON only:
             return verification
 
         except Exception as e:
-            logger.error(f"Verification failed: {e}")
+            sanitized = sanitize_provider_error(e, "verifier LLM")
+            logger.error("Verification failed: %s", sanitized)
             return {
                 "retrieval_quality": 0.5,
                 "generation_quality": 0.5,
                 "confidence": 0.5,
-                "issues": [f"Verification error: {str(e)}"],
+                "issues": [f"Verification error: {sanitized}"],
                 "suggestions": ["Manual review recommended"],
                 "needs_refinement": True,
                 "reasoning": "Automated verification failed",
@@ -1000,12 +1008,13 @@ class RAGFusionNode(Node):
                 )
 
             except Exception as e:
-                logger.error(f"Query retrieval failed for '{query}': {e}")
+                sanitized = sanitize_provider_error(e, "retrieval")
+                logger.error("Query retrieval failed for '%s': %s", query, sanitized)
                 query_performances.append(
                     {
                         "query": query,
                         "is_original": i == 0,
-                        "error": str(e),
+                        "error": sanitized,
                         "results_count": 0,
                         "avg_score": 0.0,
                     }
@@ -1098,7 +1107,10 @@ Generate {self.num_query_variations} high-quality variations that will improve r
             return variations
 
         except Exception as e:
-            logger.error(f"Query variation generation failed: {e}")
+            logger.error(
+                "Query variation generation failed: %s",
+                sanitize_provider_error(e, "query generator LLM"),
+            )
             # Fallback to simple variations
             return self._generate_fallback_variations(original_query)
 
@@ -1509,9 +1521,16 @@ class HyDENode(Node):
                     }
                 )
             except Exception as e:
-                logger.error(f"HyDE retrieval failed for hypothesis {i}: {e}")
+                sanitized = sanitize_provider_error(e, "HyDE retrieval")
+                logger.error(
+                    "HyDE retrieval failed for hypothesis %s: %s", i, sanitized
+                )
                 hypothesis_results.append(
-                    {"hypothesis": hypothesis, "hypothesis_index": i, "error": str(e)}
+                    {
+                        "hypothesis": hypothesis,
+                        "hypothesis_index": i,
+                        "error": sanitized,
+                    }
                 )
 
         # Combine and rank results
@@ -1595,7 +1614,10 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
             return hypotheses
 
         except Exception as e:
-            logger.error(f"Hypothesis generation failed: {e}")
+            logger.error(
+                "Hypothesis generation failed: %s",
+                sanitize_provider_error(e, "hypothesis generator LLM"),
+            )
             # Fallback to simple hypothesis
             return [
                 f"A comprehensive answer to '{query}' would include detailed explanations and examples."
@@ -1940,7 +1962,10 @@ Generate a broader, more abstract version that would help retrieve relevant back
             return abstract_query
 
         except Exception as e:
-            logger.error(f"Abstract query generation failed: {e}")
+            logger.error(
+                "Abstract query generation failed: %s",
+                sanitize_provider_error(e, "abstraction generator LLM"),
+            )
             # Fallback to simple abstraction
             return self._generate_fallback_abstraction(specific_query)
 

@@ -11,7 +11,7 @@ import time
 from collections import defaultdict
 from typing import Any, Awaitable, Callable
 
-from ..manager import HookManager
+from ..manager import HookManager, safe_handler_name
 from ..protocol import HookHandler
 from ..types import HookEvent, HookPriority
 
@@ -115,7 +115,7 @@ class RateLimitedHookManager(HookManager):
 
         # Log successful registration for audit trail
         if self.enable_audit_logging:
-            handler_name = getattr(handler, "name", repr(handler))
+            handler_name = getattr(handler, "name", safe_handler_name(handler))
             logger.info(
                 f"Rate limit check passed: principal={principal_id}, "
                 f"handler={handler_name}, "
@@ -150,7 +150,11 @@ class RateLimitedHookManager(HookManager):
 
             # Audit log CRITICAL violation
             if self.enable_audit_logging:
-                handler_name = getattr(handler, "name", repr(handler))
+                # This site sees the RAW caller object: ``_check_rate_limit``
+                # runs BEFORE ``super().register()``, so no
+                # ``FunctionHookAdapter`` wrap has happened yet and a
+                # ``functools.partial`` reaches the fallback here.
+                handler_name = getattr(handler, "name", safe_handler_name(handler))
                 logger.critical(
                     f"SECURITY: Rate limit exceeded - principal={principal_id}, "
                     f"handler={handler_name}, "

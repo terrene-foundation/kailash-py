@@ -314,11 +314,16 @@ class StreamingExecutor:
 
         except Exception as e:
             # === ERROR Event ===
+            # The event stream crosses a process boundary to the Enterprise-App
+            # consumer; an agent/provider exception can echo a credential into
+            # ErrorEvent.message (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
             metrics.end_time = time.time()
             error_event = ErrorEvent(
                 session_id=session_id,
                 execution_id=execution_id,
-                message=str(e),
+                message=sanitize_provider_error(e, "Agent execution"),
                 error_type=type(e).__name__,
                 recoverable=self._is_recoverable(e),
             )

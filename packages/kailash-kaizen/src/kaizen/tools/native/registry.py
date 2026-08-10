@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -348,8 +349,13 @@ class KaizenToolRegistry:
             logger.debug(f"Tool '{tool_name}' executed: success={result.success}")
             return result
         except Exception as e:
+            # A native tool is arbitrary code holding its own credentials, so
+            # both the raw message and the traceback were unsafe. ``tool_name``
+            # is registry-supplied and is the diagnostic.
             logger.error(
-                f"Tool '{tool_name}' raised unexpected exception: {e}", exc_info=True
+                "Tool %r raised unexpected exception: %s",
+                tool_name,
+                scrub_remote_error(e),
             )
             return NativeToolResult.from_exception(e)
 

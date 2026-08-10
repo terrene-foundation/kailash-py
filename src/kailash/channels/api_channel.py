@@ -209,10 +209,36 @@ class APIChannel(Channel):
             raise
 
     async def stop(self) -> None:
-        """Stop the API channel server."""
+        """Stop the API channel server.
+
+        Returns only once the server task has actually finished; the channel is
+        then ``STOPPED``.
+
+        If THIS coroutine is cancelled while it waits -- a shutdown deadline
+        expiring, a supervising task group tearing down -- the
+        ``CancelledError`` propagates to the caller rather than being absorbed.
+        The channel is left ``STOPPING``, which is the truthful record: the
+        server task was not established as stopped. Call ``stop()`` again to
+        finish; the retained task handle is what makes that retry possible.
+
+        ``_cleanup`` runs on EVERY exit path including that one, because it
+        cancels ``_running_task`` -- a DIFFERENT task from ``_server_task`` --
+        and the dominant real trigger for the cancelled path is a task group or
+        ``asyncio.timeout`` tearing down, where nobody calls ``stop()`` a second
+        time. Skipping it there orphans a pending task ("Task was destroyed but
+        it is pending") and keeps the runtime reference alive, which is a
+        LEAK introduced in the act of fixing the swallowed cancellation.
+        """
         if self.status == ChannelStatus.STOPPED:
             return
 
+        # Tracks whether the try-path already ran cleanup. The guard below CANNOT
+        # key on `status is not STOPPED`: once the status became conditional, a
+        # normal return with incomplete cleanup leaves STOPPING, which satisfies
+        # that test and runs `_cleanup` a SECOND time -- re-cancelling, burning
+        # another bounded join, and emitting a duplicate WARN on a path that did
+        # not leave the frame early at all.
+        cleanup_ran = False
         try:
             self.status = ChannelStatus.STOPPING
 
@@ -231,23 +257,95 @@ class APIChannel(Channel):
             if self._server:
                 self._server.should_exit = True
 
-            # Cancel the server task
+            # Cancel the server task and establish that it stopped.
+            #
+            # ``await self._server_task`` inside ``except CancelledError: pass``
+            # cannot tell two different events apart, because both arrive at
+            # that await as the same exception type:
+            #
+            #   1. the server task ending in the cancellation we just
+            #      requested -- expected, and the reason the handler exists;
+            #   2. THIS coroutine being cancelled by somebody else while it
+            #      waits -- a shutdown deadline, a task group tearing down.
+            #
+            # Case 2 was therefore swallowed and the caller received a clean
+            # ``STOPPED`` for a stop that never finished. Worse, ``await task``
+            # makes the server task the awaited future, so cancelling the
+            # caller only re-requested cancellation of a task that already
+            # ignored it -- nothing reached this frame and the caller could be
+            # stranded indefinitely.
+            #
+            # ``asyncio.wait`` observes the task's completion without re-raising
+            # what the task ended with, and parks on its own future, so only a
+            # cancellation aimed at THIS coroutine surfaces here -- and it
+            # propagates. Same shape as the monitoring-stop fix in
+            # ``kailash/visualization/api.py`` (bb8a3f966).
             if self._server_task and not self._server_task.done():
-                self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    pass
+                task = self._server_task
+                task.cancel()
+                await asyncio.wait({task})
+                # A task that died of a REAL error still surfaces, exactly as
+                # it did when this awaited the task directly; observing
+                # completion must not turn a crash into a silent clean stop.
+                if not task.cancelled():
+                    server_error = task.exception()
+                    if server_error is not None:
+                        raise server_error
 
-            await self._cleanup()
-            self.status = ChannelStatus.STOPPED
+            # STOPPED only when cleanup actually COMPLETED. An event task that
+            # ignored its cancellation is still live, and a status field is a
+            # return value an orchestrator acts on -- STOPPING is then the
+            # truthful record, exactly as it is on the cancelled path above.
+            cleaned = await self._cleanup()
+            cleanup_ran = True
+            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
 
-            logger.info(f"API channel {self.name} stopped")
+            if cleaned:
+                logger.info(f"API channel {self.name} stopped")
+            else:
+                # The status says STOPPING; the log must not say "stopped".
+                # Gating the inner cleanup log and leaving this one one line
+                # away would be the same over-claiming shape, unfixed.
+                logger.warning(
+                    "API channel %s stop did NOT complete; channel is STOPPING "
+                    "and can be stopped again",
+                    self.name,
+                )
 
         except Exception as e:
+            # Deliberately ``Exception``, not ``BaseException``:
+            # ``CancelledError`` must pass through untouched so a caller
+            # cancelled mid-stop is not reclassified as a channel ERROR. The
+            # channel stays ``STOPPING``, which says the stop began and did not
+            # finish.
             self.status = ChannelStatus.ERROR
             logger.error(f"Error stopping API channel {self.name}: {e}")
             raise
+        finally:
+            # The success path already ran ``_cleanup`` above and reached
+            # ``STOPPED``; anything else left this frame early -- a propagating
+            # ``CancelledError``, or an error re-raised as ERROR -- with
+            # ``_running_task`` still live. Cancelling it is synchronous, so the
+            # cancel lands even when the subsequent await is itself cancelled.
+            if not cleanup_ran:
+                try:
+                    await self._cleanup()
+                except Exception:
+                    # ``_cleanup`` swallows only ``CancelledError`` (base.py),
+                    # so a ``_running_task`` that died of a REAL error re-raises
+                    # here -- out of the ``finally`` -- and REPLACES the
+                    # CancelledError this method exists to let through,
+                    # demoting it to ``__context__``. That is the swallowed-
+                    # cancellation defect F13 closed, reintroduced one layer
+                    # down inside its own fix. ``Exception``, not
+                    # ``BaseException``: a CancelledError raised by
+                    # ``_cleanup``'s own await IS the caller's cancellation
+                    # continuing and must replace nothing.
+                    logger.warning(
+                        "API channel %s: cleanup failed during an interrupted "
+                        "stop; the original cancellation is preserved",
+                        self.name,
+                    )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a request through the API channel.
@@ -288,8 +386,22 @@ class APIChannel(Channel):
             # Execute workflow
             if workflow_registration.type == "embedded":
                 workflow = workflow_registration.workflow
+                from kailash.workflow.input_envelope import bind_parameter_envelope
+
+                # Bind BOTH shapes: this channel serves the same registrations
+                # as the HTTP route, so a workflow reading `parameters.get(...)`
+                # must resolve here too. Passing `inputs` raw bound only bare
+                # top-level names and raised NameError for the convention.
+                #
+                # `inputs` here is NOT the opt-OUT form WorkflowRequest draws
+                # against `parameters`. Per the structural rule in
+                # `kailash/workflow/input_envelope.py`: WorkflowRequest offers
+                # the caller TWO slots so it can honour a choice; this handler
+                # offers ONE, so that slot is the arguments slot and binds.
+                # Reading the shared field NAME as the discriminator would
+                # leave this channel with no envelope path at all.
                 results, run_id = self.workflow_server.runtime.execute(
-                    workflow, parameters=inputs
+                    workflow, parameters=bind_parameter_envelope(inputs)
                 )
             else:
                 # Handle proxied workflows

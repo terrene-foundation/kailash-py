@@ -59,17 +59,19 @@ import base64
 import contextvars
 import functools
 import gzip
+import hashlib
 import inspect
 import json
 import logging
 import re
 import time
+import traceback
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 from kailash_mcp.advanced.features import (
@@ -78,11 +80,15 @@ from kailash_mcp.advanced.features import (
     ToolAnnotation,
 )
 from kailash_mcp.auth.providers import (
+    AuthenticationError as ProviderAuthenticationError,
+)
+from kailash_mcp.auth.providers import (
     AuthManager,
     AuthProvider,
     PermissionManager,
     RateLimiter,
 )
+from kailash_mcp.auth.providers import RateLimitError as ProviderRateLimitError
 from kailash_mcp.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -93,6 +99,7 @@ from kailash_mcp.errors import (
     ResourceError,
     RetryableOperation,
     ToolError,
+    ToolNotAvailableError,
     ValidationError,
 )
 from kailash_mcp.protocol.protocol import (
@@ -105,8 +112,18 @@ from kailash_mcp.utils import (
     CacheManager,
     ConfigManager,
     MetricsCollector,
+    build_input_schema,
     format_response,
 )
+
+# Credential scrubber for SERVER-SIDE diagnostics. kailash-mcp already depends
+# on it (``transports.py`` uses the same helper), so no new dependency: a driver
+# or client library routinely quotes the connection string it failed on, and the
+# raw text reaches a log file that is far more widely readable than the
+# database it names (observability.md § "No secrets in logs"). It is NOT the
+# caller-facing defence — nothing derived from an exception is returned to an
+# unauthenticated caller; see ``MCPServer._internal_error_envelope``.
+from kailash.utils.url_credentials import mask_error_text
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +156,9 @@ LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 
 # Content-block types permitted inside a sampling message (MCP 2025-11-25).
-# ``text`` / ``image`` / ``audio`` are the base SamplingMessage ContentBlock
-# types; ``tool_use`` / ``tool_result`` are the tool-enabled-sampling
-# additions. This is a SERVER-SIDE allowlist (rules/ui-backend-defense.md) —
+# ``text`` / ``image`` / ``audio`` are the base SamplingMessage
+# ContentBlock kinds; ``tool_use`` / ``tool_result`` are the
+# tool-enabled-sampling additions. A SERVER-SIDE allowlist (rules/ui-backend-defense.md) —
 # the client-supplied content ``type`` is validated against it, never trusted.
 SAMPLING_CONTENT_TYPES = frozenset(
     {"text", "image", "audio", "tool_use", "tool_result"}
@@ -479,6 +496,233 @@ def _annotations_to_mcp(annotations: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+# A Google-style structured docstring section header ("Args:", "Returns:", …).
+# Everything from here on describes the PARAMETERS, which is exactly the surface
+# a permission-gated tool must not disclose.
+#
+# The keyword must be the WHOLE line prefix up to the colon, but the colon does
+# NOT have to end the line: "Args: user_id (str) - the account to delete" is a
+# real (if non-conventional) one-line section, and requiring `$` let it through
+# with every parameter name intact. Anchoring the keyword at the line start is
+# what keeps ordinary prose safe — "deletion is irreversible: there is no
+# recycle bin" does not start with a section keyword.
+_DOCSTRING_SECTION_RE = re.compile(
+    r"^[ \t]*(args|arguments|params|parameters|keyword args|keyword arguments|"
+    r"other parameters|returns|return|yields|raises|attributes|examples?|"
+    r"notes?|warnings?|see also|references)[ \t]*:",
+    re.IGNORECASE,
+)
+
+# A reST/Sphinx (":param x:") or epytext ("@param x:") field. Sphinx's NATIVE
+# markup documents each parameter on its own line with NO section header at all,
+# so the section regex above never fires for it and every parameter name walked
+# straight into a gated tool's advertised description.
+_DOCSTRING_FIELD_RE = re.compile(
+    r"^[ \t]*[:@](param|parameter|arg|argument|key|keyword|type|raises?|"
+    r"except|exception|returns?|rtype|yields?|ivar|var|cvar)\b",
+    re.IGNORECASE,
+)
+
+# A NumPy-style underline ("Parameters" followed by "----------").
+_DOCSTRING_UNDERLINE_RE = re.compile(r"^[ \t]*[-=]{3,}[ \t]*$")
+
+# Heuristic: does this text still look like it names parameters? Used ONLY to
+# WARN a tool author that the trim did not fire on their docstring style — never
+# to gate. A false positive costs one log line; a false negative costs the
+# author the signal that their gated tool is publishing its argument surface.
+_LOOKS_LIKE_PARAMETER_DOC_RE = re.compile(
+    r"(^|\s)[:@](param|arg|type|keyword)\b|(^|\n)[ \t]*(args|arguments|params|"
+    r"parameters)[ \t]*:",
+    re.IGNORECASE,
+)
+
+# Credential-bearing kwargs that ``_extract_credentials_from_context`` consumes.
+# They are transport-level authentication material, NOT tool arguments, and MUST
+# be stripped before the tool body is called: forwarding them both leaks the
+# caller's credential into arbitrary tool code and raises TypeError on every
+# tool whose signature does not happen to accept them.
+#
+# ONE constant, read by every call site. It was previously inlined at two places
+# in the async wrapper and at NEITHER of the sync wrapper's two, so the sync path
+# forwarded credentials to the tool body while the async path did not — the same
+# two-wrappers-diverge class as the auth bypass, one field over.
+_CREDENTIAL_KWARGS = frozenset(
+    {
+        "api_key",
+        "token",
+        "username",
+        "password",
+        "jwt",
+        "authorization",
+        "mcp_auth",
+    }
+)
+
+
+def _strip_credential_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Return ``kwargs`` without any transport-level credential entries."""
+    return {k: v for k, v in kwargs.items() if k not in _CREDENTIAL_KWARGS}
+
+
+def _principal_cache_tag(user_id: Optional[str], client_id: Optional[str]) -> str:
+    """Return a stable, NON-SECRET digest of the principal making a request.
+
+    Cache keys are partitioned by PRINCIPAL, not by arguments alone, because a
+    tool body has a per-caller channel that does NOT travel through kwargs.
+    ``_CURRENT_TOOL_CLIENT`` is bound to the invoking ``client_id`` by
+    ``_handle_call_tool`` for the body's duration, and ``ElicitationSystem`` is
+    constructed with ``client_id_provider=lambda: _CURRENT_TOOL_CLIENT.get()``
+    — so a tool that elicits from its caller returns a per-CLIENT result. Keyed
+    on arguments alone, the FIRST caller's elicited answer is served from cache
+    to every later caller, and no elicitation is raised for them at all. That
+    bypasses the client-scoping FINDING 3 exists to establish, one layer above
+    where FINDING 3 enforces it.
+
+    This corrects the reasoning ``71eb63790`` recorded at the cache block —
+    "the stripped set is exactly the set the result can depend on". The result
+    can also depend on the invoking client, which is not in kwargs at all.
+
+    BOTH per-caller dimensions are folded in, because neither subsumes the
+    other: elicitation is scoped to the CLIENT, so keying on ``user_id`` alone
+    would still leak one shared service account's elicited answers between
+    genuinely different agents; and an authenticated identity is the stronger
+    principal wherever a transport multiplexes clients.
+
+    The tag is a DIGEST, never the raw identifier. This string reaches the same
+    DEBUG log lines and Redis key names that made the round-3 credential leak a
+    disclosure, and a ``user_id`` is itself sensitive — ``APIKeyAuth`` derives
+    it as ``f"api_key_{fingerprint_secret(api_key)}"``.
+    """
+    if not user_id and not client_id:
+        # No distinguishable principal (single-client stdio, unauthenticated
+        # direct dispatch): every caller IS the same principal, so they share
+        # one entry, exactly as before this change.
+        return "anon"
+    # Length-prefixed so the two fields cannot be re-partitioned: ("ab", "c")
+    # and ("a", "bc") produce different pre-images even though a plain
+    # concatenation would collide them onto one tag.
+    user_id = user_id or ""
+    client_id = client_id or ""
+    material = f"{len(user_id)}:{user_id}:{len(client_id)}:{client_id}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+# Keys accepted in a tool's ``rate_limit=`` config. They are forwarded as
+# keyword arguments to ``RateLimiter.check_rate_limit``, so this set and that
+# signature are ONE contract — an entry here without a parameter there is a
+# TypeError on every call to the tool.
+_RATE_LIMIT_KEYS = frozenset({"requests_per_minute"})
+
+
+def _warn_on_credential_kwarg_collision(func: Any, tool_name: str) -> None:
+    """WARN when a tool's own parameter is named like a transport credential.
+
+    ``_strip_credential_kwargs`` filters by exact name, unconditionally — it
+    cannot tell a caller's transport credential from a tool's genuine business
+    argument. A tool declaring ``api_key: str = ""`` therefore runs with
+    ``api_key=""`` on every call: no error, wrong result. (Declared WITHOUT a
+    default it is a loud ``TypeError``, which needs no warning.)
+
+    The collision is knowable HERE, where the original function is in hand, so
+    it is surfaced at registration — turning a silent wrong answer into a
+    startup signal. Advisory only: the strip is a security invariant and is
+    never relaxed for a colliding signature.
+    """
+    try:
+        parameters = inspect.signature(func).parameters
+    except (TypeError, ValueError):  # builtins / C callables carry no signature
+        return
+
+    collisions = [
+        name
+        for name, parameter in parameters.items()
+        if name in _CREDENTIAL_KWARGS
+        and parameter.kind
+        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    ]
+    if not collisions:
+        return
+
+    logger.warning(
+        "tool.parameter.collides_with_credential_kwarg",
+        extra={
+            "tool": tool_name,
+            "parameters": collisions,
+            "hint": (
+                f"tool {tool_name!r} declares parameter(s) {collisions!r} whose "
+                "name(s) match transport-level credential kwargs; every call "
+                "has them stripped before the tool body runs, so a parameter "
+                "with a default silently receives that default and one without "
+                "raises TypeError. Rename the parameter(s)."
+            ),
+        },
+    )
+
+
+# Auth denial can arrive from EITHER of two disjoint exception hierarchies:
+#
+#   * ``kailash_mcp.errors.AuthenticationError`` / ``AuthorizationError``
+#     (subclasses of MCPError) — raised by ``auth.oauth.ResourceServer``.
+#   * ``kailash_mcp.auth.providers.AuthenticationError`` (a bare Exception
+#     subclass, parent of that module's ``PermissionError`` and
+#     ``RateLimitError``) — raised by APIKeyAuth, BearerTokenAuth, JWTAuth,
+#     BasicAuth, PermissionManager and AuthManager, i.e. the common path.
+#
+# ``providers.AuthenticationError`` is NOT a subclass of the errors.py one
+# (verified: disjoint MROs), so the tool wrappers' ``except (AuthenticationError,
+# AuthorizationError)`` clause caught only the OAuth hierarchy. For every
+# ``providers.py`` provider the "Access denied" branch was DEAD: denials fell
+# through to the generic handler, which (a) never recorded the denial with the
+# error aggregator and (b) re-raised the provider's RAW message, so an anonymous
+# caller received "User lacks required permission: admin.purge" — disclosing the
+# permission namespace the gate exists to protect.
+_AUTH_DENIAL_ERRORS = (
+    AuthenticationError,
+    AuthorizationError,
+    ProviderAuthenticationError,
+)
+
+
+def _summary_before_sections(doc: str) -> str:
+    """Return the leading prose of ``doc``, stopping at the first section header.
+
+    Google (``Args:``) and NumPy (``Parameters`` + ``----------``) docstrings
+    both document each PARAMETER by name. For a permission-gated tool that text
+    is the same disclosure class as ``inputSchema``: withholding the schema
+    while shipping ``"Args: user_id (str): the account to delete"`` withholds
+    nothing. This trims to the summary so the conventional docstring style does
+    not silently re-open the argument surface through the description channel.
+    """
+    kept: List[str] = []
+    lines = doc.splitlines()
+    for index, line in enumerate(lines):
+        if _DOCSTRING_SECTION_RE.match(line):
+            break
+        # reST/Sphinx ``:param x:`` and epytext ``@param x:`` open the parameter
+        # surface with NO section header, so they need their own break.
+        if _DOCSTRING_FIELD_RE.match(line):
+            break
+        # NumPy style: the CURRENT line is the underline, so the PREVIOUS line
+        # was the section title and must be dropped along with it.
+        if index and _DOCSTRING_UNDERLINE_RE.match(line) and lines[index - 1].strip():
+            kept.pop()
+            break
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def _derive_tool_description(func: Callable[..., Any]) -> str:
+    """Derive a tool's ``description`` from its docstring.
+
+    Mirrors how ``input_schema`` is derived from the ORIGINAL function rather
+    than the enhanced wrapper — the wrapper carries ``functools.wraps`` metadata
+    but the original is the authoritative source. Returns ``""`` when the tool
+    is undocumented, which is what every consumer already defaulted to.
+    """
+    doc = inspect.getdoc(func)
+    return doc.strip() if doc else ""
+
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -670,7 +914,7 @@ class MCPServerBase(ABC):
             logger.info("Running FastMCP server in stdio mode")
             self._mcp.run()
         except Exception as e:
-            logger.error(f"Failed to start server: {e}")
+            logger.error(f"Failed to start server: {mask_error_text(str(e))}")
             raise
         finally:
             self._running = False
@@ -872,9 +1116,13 @@ class MCPServer:
                     "observability": enable_monitoring,
                 },
                 "auth": {
+                    # IDENTITY, not truthiness — and it MUST agree with the
+                    # enforcement guard below. See the comment there.
                     "enabled": auth_provider is not None,
                     "provider_type": (
-                        type(auth_provider).__name__ if auth_provider else None
+                        type(auth_provider).__name__
+                        if auth_provider is not None
+                        else None
                     ),
                 },
                 "rate_limiting": rate_limit_config or {},
@@ -884,8 +1132,18 @@ class MCPServer:
             }
         )
 
-        # Initialize authentication manager
-        if auth_provider:
+        # Initialize authentication manager.
+        #
+        # IDENTITY (``is not None``), never truthiness. ``AuthProvider`` is a
+        # public, user-subclassable ABC and nothing stops a provider from
+        # defining ``__len__`` or ``__bool__`` — an empty key-ring, a
+        # health-gated provider, a policy set mid-rotation. Under the previous
+        # ``if auth_provider:`` such a provider left ``auth_manager = None``
+        # while the config above reported ``auth.enabled = True``: reporting and
+        # enforcement disagreed, and ONE ``__len__`` value silently disabled
+        # authorization, rate limiting AND the ``tools/list`` schema suppression
+        # (all three guard on ``auth_manager``) on a server that said auth was on.
+        if auth_provider is not None:
             self.auth_manager = AuthManager(
                 provider=auth_provider,
                 permission_manager=PermissionManager(),
@@ -932,6 +1190,20 @@ class MCPServer:
         self._tool_registry: Dict[str, Dict[str, Any]] = {}
         self._resource_registry: Dict[str, Dict[str, Any]] = {}
         self._prompt_registry: Dict[str, Dict[str, Any]] = {}
+
+        # FastMCP registrations withheld by ``disable_tool`` (#1998). The
+        # ORIGINAL registration object is parked here rather than rebuilt on
+        # ``enable_tool``, so re-enabling restores the exact projection that was
+        # applied at registration instead of a re-derived approximation.
+        #
+        # INVARIANT: a name is parked here ONLY while it is ABSENT from the live
+        # FastMCP container, and the parked object is always the MOST RECENT
+        # registration for that name. Both halves are enforced at the three
+        # sites that can break them — ``_withhold_tool_from_fastmcp`` (keys on
+        # container membership, never on this dict), ``_restore_tool_to_fastmcp``
+        # (refuses to overwrite a live entry), and ``_register_tool_with_fastmcp``
+        # (drops the park in the same step that replaces the registration).
+        self._fastmcp_withheld_tools: Dict[str, Any] = {}
 
         # Client management for new handlers
         self.client_info: Dict[str, Dict[str, Any]] = {}
@@ -1313,7 +1585,9 @@ class MCPServer:
             self._mcp = FastMCP(self.name)
             logger.info(f"Initialized FastMCP server: {self.name}")
         except ImportError as e1:
-            logger.warning(f"Independent FastMCP not available: {e1}")
+            logger.warning(
+                f"Independent FastMCP not available: {mask_error_text(str(e1))}"
+            )
             try:
                 # Fallback to official MCP FastMCP (when fixed)
                 from mcp.server import FastMCP
@@ -1321,7 +1595,9 @@ class MCPServer:
                 self._mcp = FastMCP(self.name)
                 logger.info(f"Initialized official FastMCP server: {self.name}")
             except ImportError as e2:
-                logger.warning(f"Official FastMCP not available: {e2}")
+                logger.warning(
+                    f"Official FastMCP not available: {mask_error_text(str(e2))}"
+                )
                 # Final fallback: Create a minimal FastMCP-compatible wrapper
                 logger.info(f"Using low-level MCP Server fallback for: {self.name}")
                 self._mcp = self._create_fallback_server()
@@ -1332,6 +1608,12 @@ class MCPServer:
 
         class FallbackMCPServer:
             """Minimal FastMCP-compatible server for when FastMCP is unavailable."""
+
+            # Read by ``_fastmcp_serves_no_protocol`` (#1998). ``run()`` below
+            # raises NotImplementedError and nothing here derives a schema, so
+            # this object never advertises a tool to any caller and has no
+            # disclosure surface for the gated projection to rewrite.
+            _kailash_serves_no_protocol = True
 
             def __init__(self, name: str):
                 self.name = name
@@ -1387,6 +1669,297 @@ class MCPServer:
 
         return FallbackMCPServer(self.name)
 
+    # ------------------------------------------------------------------
+    # FastMCP registration projection (#1998)
+    #
+    # Tools are registered TWICE: once in ``_tool_registry`` (which every
+    # in-repo discovery surface reads through ``_public_tool_view``) and once
+    # with FastMCP (``self._mcp.tool()(enhanced_func)``), which builds its OWN
+    # tool list. The DEFAULT transport — sync ``run()`` with
+    # ``transport="stdio"`` — serves FastMCP's list, so the disclosure contract
+    # has to be applied to the FastMCP REGISTRATION, not filtered out of its
+    # enumeration: FastMCP owns that enumeration and there is no hook in it.
+    # ------------------------------------------------------------------
+
+    def _fastmcp_serves_no_protocol(self) -> bool:
+        """True when ``self._mcp`` cannot serve a protocol to any caller.
+
+        The only such object is ``_create_fallback_server``'s shim, whose
+        ``run()`` raises ``NotImplementedError``. It stores bare functions and
+        derives no schema, so it has NO disclosure surface to gate. Recognising
+        it explicitly (rather than letting the locator below fail soft) keeps
+        the unrecognised-FastMCP case loud.
+        """
+        return getattr(self._mcp, "_kailash_serves_no_protocol", False) is True
+
+    def _fastmcp_tool_container(self) -> Optional[Dict[str, Any]]:
+        """FastMCP's OWN mutable ``name -> registration`` mapping, or None.
+
+        Both supported FastMCP implementations keep their tools in a dict on a
+        tool manager; the shim keeps them on itself. Returning the live
+        container (rather than copying) is what lets ``disable_tool`` withhold a
+        registration and ``enable_tool`` put the SAME object back.
+
+        "Live" is PROVEN here, never assumed. An implementation whose ``_tools``
+        is a property returning a defensive COPY satisfies ``isinstance(...,
+        dict)`` exactly as the real container does — and then every withhold and
+        restore writes into an object FastMCP never reads. The gate would
+        silently not apply while every test that inspects the returned mapping
+        still passed, because the copy faithfully reflects the write. Fail-open
+        here is indistinguishable from working, so a candidate that cannot be
+        proven live is REJECTED and the caller raises.
+        """
+        manager = getattr(self._mcp, "_tool_manager", None)
+        for owner in (manager, self._mcp):
+            if owner is None:
+                continue
+            container = getattr(owner, "_tools", None)
+            if not isinstance(container, dict):
+                continue
+            if not self._fastmcp_tool_container_is_live(owner, container):
+                logger.warning(
+                    "tool.fastmcp_registration.container_not_live",
+                    extra={
+                        "owner": type(owner).__name__,
+                        "hint": (
+                            "this object's tool mapping is computed rather than "
+                            "stored, so it is a copy rather than the mapping "
+                            "FastMCP dispatches from; the disclosure gate "
+                            "cannot be applied through it"
+                        ),
+                    },
+                )
+                continue
+            return container
+        return None
+
+    def _fastmcp_tool_container_is_live(
+        self, owner: Any, container: Dict[str, Any]
+    ) -> bool:
+        """Prove ``container`` is the object ``owner``'s own methods read.
+
+        Both proofs are READS. An earlier version wrote a sentinel key into the
+        candidate and looked for it through ``get_tool``; that worked, but it
+        put a synthetic entry in the LIVE container for the duration, and
+        anything enumerating tools in that window observed it — confirmed, not
+        assumed: a reader inside the window saw
+        ``['__kailash_fastmcp_liveness_probe__', 'gated']``. Introducing a
+        disclosure on the very surface this machinery exists to gate is not a
+        trade worth making for a diagnostic, so liveness is now established
+        without mutating anything and the window does not exist to be raced.
+
+        THE WINDOW WAS REACHABLE WHILE SERVING — it was NOT registration-time
+        only, which is the reason a lock would have been required had the write
+        been kept. Container resolution also happens on ``disable_tool`` /
+        ``enable_tool``, which are public methods callable at any time; and on
+        a server with no GATED tool the projection early-returns before ever
+        resolving, so the FIRST resolution is that runtime call. Measured: a
+        server registering one ungated tool performs zero resolutions during
+        registration, then one from inside ``disable_tool`` (via
+        ``_withhold_tool_from_fastmcp`` -> ``_require_fastmcp_tool_container``).
+        Reads need no lock, so nothing here serialises.
+
+        1. The public read yields it — ``owner._tools is container``.
+        2. It is the STORED instance attribute, not a computed value —
+           ``vars(owner)["_tools"] is container``.
+
+        Together these are the identity comparison against the object FastMCP
+        dispatches from: every enumeration and lookup FastMCP performs
+        (``get_tool``, ``list_tools``, ``add_tool``) reads ``self._tools``, and
+        (2) establishes that such a read resolves to THIS object rather than to
+        a descriptor that rebuilds or caches a copy. A ``property`` returning
+        ``dict(self._store)`` fails (2) whether it rebuilds per access or hands
+        back one cached snapshot — the shape that defeats a naive identity
+        check, because a cached copy is identity-STABLE.
+
+        An owner with no instance ``__dict__`` (``__slots__``) cannot be proven
+        this way and is rejected: the caller then raises with an actionable
+        message, which is the required disposition for "cannot prove", not a
+        reason to relax the proof.
+        """
+        if getattr(owner, "_tools", None) is not container:
+            return False
+        instance_attrs = getattr(owner, "__dict__", None)
+        if not isinstance(instance_attrs, dict):
+            return False
+        return instance_attrs.get("_tools", None) is container
+
+    def _require_fastmcp_tool_container(self, tool_name: str) -> Dict[str, Any]:
+        """Locate the container or fail CLOSED with a loud, actionable error.
+
+        Reachable only under a FastMCP implementation whose registration layout
+        this code does not recognise. Continuing would mean serving that tool's
+        full argument surface — or a disabled tool — on the DEFAULT transport
+        with nothing recording that the gate did not apply, which is exactly the
+        #1998 failure this method exists to prevent.
+        """
+        container = self._fastmcp_tool_container()
+        if container is None:
+            raise MCPError(
+                "Cannot apply the tool-disclosure gate to the FastMCP "
+                f"registration for {tool_name!r}: this FastMCP implementation "
+                f"({type(self._mcp).__name__}) exposes no recognised tool "
+                "container. Refusing to register rather than serve a "
+                "permission-gated tool's full argument surface, or a disabled "
+                "tool, on the default (stdio) transport. See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+        return container
+
+    def _project_tool_onto_fastmcp(self, tool_name: str) -> None:
+        """Apply ``_public_tool_view``'s decision to the FastMCP registration.
+
+        Called once per tool at registration. Only a GATED tool is rewritten:
+        an ungated tool's FastMCP-derived advertisement already matches its
+        invocation contract, and overwriting it with the separately-derived
+        ``input_schema`` would make the two disagree for no security gain.
+
+        The rewrite touches the ADVERTISED fields only (``parameters`` is what
+        ``tools/list`` serialises as ``inputSchema``). Argument VALIDATION and
+        dispatch run off the registration's own function metadata, so
+        invocation — including ``required_permission`` enforcement inside the
+        enhanced wrapper — is unchanged. That is why #1998 is a disclosure bug
+        and not an authentication bypass.
+        """
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+
+        info = self._tool_registry[tool_name]
+        if not self._tool_is_gated(info):
+            return
+
+        view = self._public_tool_view(tool_name, info)
+        if view is None:
+            # Unreachable at registration: ``disabled`` is only ever set by
+            # ``disable_tool``, which owns the withhold on this surface.
+            self._withhold_tool_from_fastmcp(tool_name)
+            return
+
+        entry = self._require_fastmcp_tool_container(tool_name).get(tool_name)
+        if entry is None or not hasattr(entry, "parameters"):
+            raise MCPError(
+                "Cannot apply the tool-disclosure gate to the FastMCP "
+                f"registration for {tool_name!r}: the registration object "
+                f"({type(entry).__name__}) exposes no advertised-schema "
+                "attribute. Refusing to serve a permission-gated tool's full "
+                "argument surface on the default (stdio) transport. See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+
+        entry.parameters = view["inputSchema"]
+        entry.description = view["description"]
+        self._project_output_schema_onto_fastmcp(entry, tool_name, view)
+        logger.debug(
+            "tool.fastmcp_registration.gated_projection_applied",
+            extra={"tool": tool_name},
+        )
+
+    # Attribute names under which a FastMCP registration may hold the output
+    # schema it ADVERTISES. Both supported implementations use the first.
+    _FASTMCP_OUTPUT_SCHEMA_ATTRS = ("output_schema", "outputSchema")
+
+    def _project_output_schema_onto_fastmcp(
+        self, entry: Any, tool_name: str, view: Dict[str, Any]
+    ) -> None:
+        """Mirror the view's ``outputSchema`` decision onto the registration.
+
+        The projection has to carry EVERY advertised field the view decides, not
+        the ones that happened to be in hand. It set ``parameters`` and
+        ``description`` only, while FastMCP derives its OWN output schema from
+        the wrapped function's RETURN annotation — so a gated tool returning a
+        ``BaseModel`` / ``TypedDict`` / ``dict[str, ...]`` published its result
+        shape (field names included) on the default transport while
+        ``_public_tool_view`` withheld exactly that everywhere else.
+
+        Advertisement only: ``Tool.run`` converts results through
+        ``fn_metadata``, never through this field, so a credentialed caller's
+        result is unchanged.
+        """
+        if "outputSchema" in view:
+            # The view PUBLISHES a result shape for this tool — leave whatever
+            # the registration derived alone. Keyed on the view rather than on a
+            # re-derived "is gated" so the two cannot disagree.
+            return
+
+        for attr in self._FASTMCP_OUTPUT_SCHEMA_ATTRS:
+            if getattr(entry, attr, None) is not None:
+                setattr(entry, attr, None)
+
+        # Fail closed on an implementation that spells the field a third way:
+        # silently missing it would republish the exact surface this withholds.
+        leftover = [
+            name
+            for name in dir(entry)
+            if not name.startswith("__")
+            and "outputschema" in name.replace("_", "").lower()
+            and getattr(entry, name, None) is not None
+        ]
+        if leftover:
+            raise MCPError(
+                "Cannot withhold the result shape of permission-gated tool "
+                f"{tool_name!r}: its FastMCP registration still advertises an "
+                f"output schema via {leftover!r}. Refusing to publish a gated "
+                "tool's result shape on the default (stdio) transport. "
+                "See #1998.",
+                error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+            )
+
+    def _withhold_tool_from_fastmcp(self, tool_name: str) -> None:
+        """Remove a disabled tool's FastMCP registration (park it for re-enable).
+
+        Idempotent by construction rather than by an "already parked" guard.
+        That guard was the defect: after a tool was re-registered under the same
+        name, the parked entry still existed, so a second ``disable_tool``
+        returned early and left the NEW registration advertised — reopening the
+        #1998 disclosure on a tool the operator had just disabled. Popping the
+        container unconditionally is naturally idempotent (a second call finds
+        nothing and leaves the parked entry untouched) AND correct after
+        re-registration (it parks whatever is CURRENT).
+        """
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+        container = self._require_fastmcp_tool_container(tool_name)
+        entry = container.pop(tool_name, None)
+        if entry is not None:
+            self._fastmcp_withheld_tools[tool_name] = entry
+
+    def _restore_tool_to_fastmcp(self, tool_name: str) -> None:
+        """Put a re-enabled tool's ORIGINAL FastMCP registration back.
+
+        Refuses to overwrite a LIVE entry. ``tool()`` drops the park in the same
+        step that replaces a registration, so a park co-existing with a live
+        entry means some other path replaced it — and writing the parked (older)
+        object back would republish a PREVIOUS registration's advertised schema
+        AND dispatch its wrapper, which closes over that registration's
+        ``required_permission``. Discarding the stale park is the fail-closed
+        choice: the live entry is the one ``_tool_registry`` describes.
+
+        This is the third site holding the ``_fastmcp_withheld_tools``
+        invariant, and the only one that holds it against a caller neither of
+        the other two ever saw.
+        """
+        if self._mcp is None or self._fastmcp_serves_no_protocol():
+            return
+        entry = self._fastmcp_withheld_tools.pop(tool_name, None)
+        if entry is None:
+            return
+        container = self._require_fastmcp_tool_container(tool_name)
+        if tool_name in container:
+            logger.warning(
+                "tool.fastmcp_registration.stale_park_discarded",
+                extra={
+                    "tool": tool_name,
+                    "hint": (
+                        "a live registration already exists under this name, so "
+                        "the parked one is from a superseded registration; "
+                        "restoring it would reinstate that registration's "
+                        "advertised schema and its permission closure"
+                    ),
+                },
+            )
+            return
+        container[tool_name] = entry
+
     def tool(
         self,
         cache_key: Optional[str] = None,
@@ -1403,7 +1976,14 @@ class MCPServer:
         retryable: bool = True,
         stream_response: bool = False,
         output_schema: Optional[Dict[str, Any]] = None,
+        input_schema: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
         annotations: Optional[Any] = None,
+        # Appended, never inserted: this signature is public and a decorator
+        # argument may be passed positionally, so inserting a parameter beside
+        # the other cache_* options would silently re-bind every positional
+        # argument after it.
+        cache_shared_across_callers: bool = False,
     ):
         """
         Enhanced tool decorator with authentication, caching, metrics, and error handling.
@@ -1411,6 +1991,18 @@ class MCPServer:
         Args:
             cache_key: Optional cache key for caching results
             cache_ttl: Optional TTL override for this tool
+            cache_shared_across_callers: Let ONE cache entry serve EVERY caller.
+                Defaults to False, so cached results are partitioned by
+                principal (authenticated user + invoking client) and one
+                caller's result can never be served to another.
+
+                Set True ONLY for a tool whose result is genuinely independent
+                of who asked — a public rate table, a shared reference lookup.
+                It is NOT safe for a tool that elicits from its caller, reads
+                ``_CURRENT_TOOL_CLIENT``, or otherwise returns anything
+                caller-specific: those results would be served across
+                principals, which is the leak the per-principal default exists
+                to close. Has no effect unless ``cache_key`` is set.
             format_response: Optional response format ("json", "markdown", "table", etc.)
             required_permission: Single required permission for tool access
             required_permissions: List of required permissions (alternative to required_permission)
@@ -1422,6 +2014,36 @@ class MCPServer:
             output_schema: Optional JSON Schema. When set, ``tools/list`` advertises
                 it as ``outputSchema`` and ``tools/call`` validates the result,
                 emitting ``structuredContent`` alongside a text fallback.
+            input_schema: Optional JSON Schema advertised as ``inputSchema`` in
+                ``tools/list``. When omitted it is DERIVED from the decorated
+                function's signature
+                (:func:`kailash_mcp.utils.input_schema.build_input_schema`).
+                Pass it explicitly only when the signature cannot express the
+                contract — e.g. a generic ``**kwargs`` dispatcher whose real
+                parameters are known from another source. Before this existed,
+                no input schema was stored at all and ``tools/list`` advertised
+                ``{}`` for EVERY tool, so clients had no protocol-level way to
+                discover any tool's arguments.
+            description: Optional human-readable description advertised on every
+                discovery surface. When omitted it is DERIVED from the decorated
+                function's docstring. Before this existed, ``description`` was
+                never stored at ALL, so every consumer's
+                ``info.get("description", "")`` resolved to ``""`` and no tool
+                was discoverable by description — the same wrong-by-default
+                shape ``input_schema`` had, one field over.
+
+                SECURITY — a tool's description is author-controlled free text
+                that ships to callers who present NO credentials, including for
+                a ``required_permission`` tool (name + description are
+                deliberately retained so a legitimately credentialed client can
+                still discover the tool exists). Do NOT put parameter names,
+                argument formats, internal endpoints, or any other detail in a
+                gated tool's description that you would not publish anonymously:
+                the ``inputSchema`` withheld by ``_public_tool_view`` is worth
+                nothing if the description restates it. Structured docstring
+                sections (``Args:``, NumPy ``Parameters``) are trimmed from a
+                GATED tool's advertised description for exactly this reason, but
+                that trim cannot police free-form prose.
             annotations: Optional :class:`ToolAnnotation` (or MCP-hint dict)
                 advertised in ``tools/list``. ADVISORY ONLY — never gates access.
 
@@ -1449,23 +2071,71 @@ class MCPServer:
             # Get function name for registration
             tool_name = func.__name__
 
-            # Normalize permissions - support both singular and plural
-            normalized_permission = None
+            # Normalize permissions - support both singular and plural.
+            #
+            # Always a tuple: () means UNGATED, a non-empty tuple means EVERY
+            # listed permission is enforced on every call. Two fail-open modes
+            # lived here before:
+            #
+            #  * ``required_permissions=[]`` fell through every branch, leaving
+            #    ``normalized_permission = None`` — no invoke-time check AND a
+            #    fully published inputSchema — with no warning at all. An author
+            #    who writes ``[]`` is asking for a gate; silently producing a
+            #    completely ungated tool is the fail-OPEN reading, so it raises.
+            #  * ``len(...) > 1`` kept ONLY the first permission and dropped the
+            #    rest behind a ``logger.warning``, so a tool declaring two
+            #    permissions was enforced against one. All are enforced now.
+            normalized_permissions: Tuple[str, ...] = ()
             if required_permissions is not None and required_permission is not None:
                 raise ValueError(
                     "Cannot specify both required_permission and required_permissions"
                 )
             elif required_permissions is not None:
-                if len(required_permissions) == 1:
-                    normalized_permission = required_permissions[0]
-                elif len(required_permissions) > 1:
-                    # For now, take the first permission. Future enhancement could support multiple.
-                    normalized_permission = required_permissions[0]
-                    logger.warning(
-                        f"Tool {tool_name}: Multiple permissions specified, using first: {normalized_permission}"
+                if not required_permissions:
+                    raise ValueError(
+                        f"Tool {tool_name}: required_permissions must not be empty. "
+                        "An empty list produces a completely ungated tool (no "
+                        "invoke-time permission check and a fully published "
+                        "inputSchema), which is never what declaring the "
+                        "argument means. Omit required_permissions entirely for "
+                        "an intentionally public tool."
                     )
+                normalized_permissions = tuple(required_permissions)
             elif required_permission is not None:
-                normalized_permission = required_permission
+                if not required_permission:
+                    raise ValueError(
+                        f"Tool {tool_name}: required_permission must not be an "
+                        "empty string. It gated DISCOVERY (which tests "
+                        "``is not None``) but not INVOCATION (which tested "
+                        "truthiness), so the tool advertised no schema yet ran "
+                        "for anyone. Omit it entirely for a public tool."
+                    )
+                normalized_permissions = (required_permission,)
+
+            # The registry stores None-or-tuple; every consumer gates on
+            # ``is not None``, so an ungated tool must store None, not ().
+            normalized_permission = normalized_permissions or None
+
+            # Validate the per-tool rate-limit config HERE, at decoration.
+            # Unrecognised keys previously reached
+            # ``RateLimiter.check_rate_limit`` as stray keyword arguments and
+            # raised TypeError on EVERY call, surfacing as a generic
+            # "Tool execution failed" — a config typo became a permanently
+            # broken tool with a misleading error. Fail at registration instead.
+            if rate_limit:
+                unknown_keys = sorted(set(rate_limit) - _RATE_LIMIT_KEYS)
+                if unknown_keys:
+                    raise ValueError(
+                        f"Tool {tool_name}: unknown rate_limit key(s) "
+                        f"{unknown_keys}. Accepted key(s): "
+                        f"{sorted(_RATE_LIMIT_KEYS)}."
+                    )
+
+            # A tool parameter named like a transport credential is stripped
+            # from every call before the body runs. Surface it here, where the
+            # ORIGINAL function is in hand, rather than letting the argument
+            # silently resolve to its default at runtime.
+            _warn_on_credential_kwarg_collision(func, tool_name)
 
             # Create enhanced wrapper
             enhanced_func = self._create_enhanced_tool(
@@ -1480,7 +2150,18 @@ class MCPServer:
                 timeout,
                 retryable,
                 stream_response,
+                cache_per_principal=not cache_shared_across_callers,
             )
+
+            # A registration parked by ``disable_tool`` is STALE the moment this
+            # one replaces it, and must not outlive it. Left behind, a later
+            # ``enable_tool`` wrote the OLD entry back over this one — which,
+            # when the old tool was ungated and this one is gated, restored a
+            # wrapper closing over the old (empty) permission set and turned a
+            # disclosure bug into an authorization bypass on the default
+            # transport. Dropped BEFORE the new registration lands so no window
+            # exists where both are live.
+            self._fastmcp_withheld_tools.pop(tool_name, None)
 
             # Register with FastMCP
             mcp_tool = self._mcp.tool()(enhanced_func)  # type: ignore[union-attr]
@@ -1507,6 +2188,22 @@ class MCPServer:
                 "retryable": retryable,
                 "stream_response": stream_response,
                 "output_schema": output_schema,
+                # Derived from the ORIGINAL func, not the enhanced wrapper —
+                # the wrapper's signature is (*args, **kwargs), which would
+                # describe every tool as taking arbitrary arguments.
+                "input_schema": (
+                    input_schema
+                    if input_schema is not None
+                    else build_input_schema(func)
+                ),
+                # Same derivation contract as input_schema, from the ORIGINAL
+                # func. This key was never written before, so every consumer's
+                # `.get("description", "")` fell through to "" for EVERY tool.
+                "description": (
+                    description
+                    if description is not None
+                    else _derive_tool_description(func)
+                ),
                 "structured_tool": structured_tool,
                 "annotations": annotations,
                 "call_count": 0,
@@ -1514,15 +2211,166 @@ class MCPServer:
                 "last_called": None,
             }
 
+            # A GATED tool's description ships to anonymous callers, so it is
+            # trimmed at the first structured docstring section. The trim knows
+            # Google, NumPy, reST/Sphinx and epytext — but it cannot police
+            # free-form prose that happens to name parameters. WARN the author
+            # when the POST-trim text still looks like parameter documentation:
+            # that is the signal the trim did not fire on their style and the
+            # argument surface the inputSchema suppression closed is being
+            # re-opened through the description channel. Advisory only — never
+            # a gate (the description is author-controlled by design).
+            if normalized_permission is not None:
+                advertised = _summary_before_sections(
+                    self._tool_registry[tool_name]["description"] or ""
+                )
+                if _LOOKS_LIKE_PARAMETER_DOC_RE.search(advertised):
+                    logger.warning(
+                        "tool.gated_description.may_disclose_arguments",
+                        extra={
+                            "tool": tool_name,
+                            "hint": (
+                                "the advertised description of this "
+                                "permission-gated tool still looks like it "
+                                "names parameters after trimming; anonymous "
+                                "callers receive it verbatim, which defeats the "
+                                "withheld inputSchema"
+                            ),
+                        },
+                    )
+
+            # #1998 — FastMCP registered ``enhanced_func`` above and derived its
+            # OWN advertisement from it. ``functools.wraps`` makes
+            # ``inspect.signature`` follow ``__wrapped__``, so that
+            # advertisement carried the ORIGINAL function's full parameter set
+            # and its complete ``Args:`` docstring block. The DEFAULT transport
+            # serves that advertisement, so the gate has to be applied to the
+            # registration itself — do it now that the registry entry (which
+            # ``_public_tool_view`` reads) exists.
+            self._project_tool_onto_fastmcp(tool_name)
+
             logger.debug(
                 f"Registered enhanced tool: {tool_name} "
                 f"(cached: {cache_key is not None}, "
-                f"auth: {required_permission is not None}, "
+                f"auth: {normalized_permission is not None}, "
                 f"rate_limited: {rate_limit is not None})"
             )
             return mcp_tool  # type: ignore[reportReturnType]
 
         return decorator
+
+    # ------------------------------------------------------------------
+    # Caller-facing error envelopes
+    #
+    # These handlers answer callers that presented NO credentials — the stdio
+    # loop authenticates nothing at the transport and ``_dispatch_ws_method``
+    # routes to them with only ``(params, request_id)``. Returning ``str(e)``
+    # therefore published whatever the raised exception carried: absolute
+    # filesystem paths, internal module and class names, driver output, and any
+    # credential a driver quoted back out of a connection string.
+    # ------------------------------------------------------------------
+
+    def _log_and_correlate(self, exc: BaseException, event: str, **context: Any) -> str:
+        """Log an exception server-side (scrubbed) under a fresh correlation id.
+
+        Returns the id, which is the ONLY thing about the failure that goes back
+        to the caller. The operator joins the two by grepping the id, so the
+        detail is moved rather than lost.
+
+        THE ID IS IN THE RENDERED MESSAGE, not only in ``extra``. A stdlib
+        ``logging.Formatter`` renders extras only if the format string names
+        them, and no formatter in this package or in ``src/kailash/**`` does —
+        neither package depends on structlog or python-json-logger. So the id
+        went out to callers while the log line read ``completion.error`` and
+        nothing else, and grepping it over a real log found NOTHING. That is
+        worse than the leak this machinery replaced: the caller was handed a
+        reference to a record no operator could locate. The extras are kept for
+        structured sinks, which is where the scrubbed error and traceback still
+        go; the message carries the join key so the stdlib path works too.
+        """
+        correlation_id = uuid.uuid4().hex[:12]
+        # The traceback is formatted and scrubbed HERE rather than passed as
+        # ``exc_info=True``. The logging module renders exc_info by calling the
+        # exception's own ``__str__``, which would put the unscrubbed text —
+        # including any credential a driver quoted back — into the record's
+        # message body, defeating the scrub applied to the ``error`` field.
+        formatted = "".join(
+            traceback.format_exception(type(exc), exc, exc.__traceback__)
+        )
+        logger.error(
+            "%s correlation_id=%s error_type=%s",
+            event,
+            correlation_id,
+            type(exc).__name__,
+            extra={
+                "correlation_id": correlation_id,
+                "error_type": type(exc).__name__,
+                "error": mask_error_text(str(exc)),
+                "traceback": mask_error_text(formatted),
+                **context,
+            },
+        )
+        return correlation_id
+
+    def _internal_error_envelope(
+        self,
+        exc: BaseException,
+        *,
+        summary: str,
+        request_id: Any,
+        event: str,
+        code: int = -32603,
+        **context: Any,
+    ) -> Dict[str, Any]:
+        """A JSON-RPC error envelope that carries NO exception-derived text.
+
+        ``summary`` is a fixed, server-authored string naming the OPERATION that
+        failed (never the reason); the correlation id is what makes the failure
+        actionable — the caller quotes it, the operator greps it.
+        """
+        correlation_id = self._log_and_correlate(exc, event, **context)
+        return {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": f"{summary} (correlation id: {correlation_id})",
+                "data": {"correlationId": correlation_id},
+            },
+            "id": request_id,
+        }
+
+    def _refuse_if_disabled(self, tool_name: str) -> None:
+        """Refuse an invocation of a ``disable_tool()``'d tool.
+
+        Called by BOTH enhanced wrappers, which is what makes the refusal
+        transport-independent: the wrapper is the object every dispatch path
+        ultimately calls, so a path that never learned about the ``disabled``
+        flag still cannot run the tool. ``_execute_tool`` keeps its own check
+        for the same reason — it resolves handlers that predate the wrapper.
+        """
+        if self._tool_registry.get(tool_name, {}).get("disabled", False):
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' is currently disabled", tool_name=tool_name
+            )
+
+    def _cache_key_scope(
+        self, session_id: str, tool_name: str, per_principal: bool
+    ) -> str:
+        """Return the cache-key namespace for THIS call: tool, plus principal.
+
+        Both per-caller dimensions are read here rather than in the wrappers so
+        the sync and async paths cannot drift in how they derive the principal.
+
+        The authenticated identity is read from the session record rather than
+        from a local, because ``user_info`` is bound only inside the
+        authentication branch and is simply absent on an ungated tool.
+        """
+        if not per_principal:
+            # Explicit opt-in to cross-caller sharing (see ``tool()``).
+            return tool_name
+        user = self._active_sessions.get(session_id, {}).get("user") or {}
+        tag = _principal_cache_tag(user.get("user_id"), _CURRENT_TOOL_CLIENT.get())
+        return f"{tool_name}@{tag}"
 
     def _create_enhanced_tool(
         self,
@@ -1531,38 +2379,95 @@ class MCPServer:
         cache_key: Optional[str],
         cache_ttl: Optional[int],
         response_format: Optional[str],
-        required_permission: Optional[str],
+        required_permission: Union[str, Sequence[str], None],
         rate_limit: Optional[Dict[str, Any]],
         enable_circuit_breaker: bool,
         timeout: Optional[float],
         retryable: bool,
         stream_response: bool,
+        cache_per_principal: bool = True,
     ) -> F:
-        """Create enhanced tool function with authentication, caching, metrics, error handling, and more."""
+        """Create enhanced tool function with authentication, caching, metrics, error handling, and more.
+
+        ``required_permission`` accepts a single permission string or a sequence
+        of them. ALL listed permissions are enforced on every call — see
+        ``AuthManager._authorize``.
+
+        Both wrappers refuse a ``disable_tool()``'d tool before doing anything
+        else. That check used to live ONLY in ``_execute_tool``, so every
+        dispatch path that calls the wrapper directly — FastMCP's own
+        ``tools/call`` on the DEFAULT transport among them — executed a disabled
+        tool (#1998). Enforcing it in the wrapper binds EVERY path, including
+        any transport added later, because the wrapper is what gets registered.
+        """
+        # Normalise to a tuple ONCE, here, so both wrappers below close over the
+        # identical value and cannot drift in how they read it.
+        required_permissions: Tuple[str, ...]
+        if required_permission is None:
+            required_permissions = ()
+        elif isinstance(required_permission, str):
+            required_permissions = (required_permission,) if required_permission else ()
+        else:
+            required_permissions = tuple(required_permission)
 
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
+            # A disabled tool is not invocable on ANY path (#1998).
+            self._refuse_if_disabled(tool_name)
+
             # Generate session ID for tracking
             session_id = str(uuid.uuid4())
             start_time = time.time() if self.metrics.enabled else None
 
             try:
-                # Authentication check
-                if self.auth_manager and required_permission:
+                # Authentication check. IDENTITY on auth_manager — see __init__.
+                if self.auth_manager is not None and required_permissions:
                     # Extract credentials from kwargs or context
                     credentials = self._extract_credentials_from_context(kwargs)
                     try:
                         user_info = self.auth_manager.authenticate_and_authorize(
-                            credentials, required_permission
+                            credentials, required_permissions
                         )
                         # Add user info to session
                         self._active_sessions[session_id] = {
                             "user": user_info,
                             "tool": tool_name,
                             "start_time": start_time,
-                            "permission": required_permission,
+                            "permission": required_permissions,
                         }
-                    except (AuthenticationError, AuthorizationError) as e:
+                    except ProviderRateLimitError as e:
+                        # Rate limiting is NOT an authorization denial and must
+                        # keep its own type (and retry_after) for the caller.
+                        # providers.RateLimitError subclasses that module's
+                        # AuthenticationError, so it would otherwise be swallowed
+                        # by the denial clause below and reported as "Access
+                        # denied".
+                        #
+                        # A bare ``raise`` did NOT deliver that. providers.
+                        # RateLimitError subclasses Exception, NOT MCPError, so
+                        # it fell into this wrapper's own outer
+                        # ``except Exception`` and was rewrapped as
+                        # ToolError(TOOL_EXECUTION_FAILED) — the caller saw a
+                        # generic execution failure and retry_after was
+                        # reachable only through ``.cause``. Translating to the
+                        # errors.py RateLimitError (an MCPError) makes the outer
+                        # handler pass it through untouched, carrying
+                        # RATE_LIMITED and retry_after to the caller.
+                        #
+                        # The provider's own message is
+                        # f"Rate limit exceeded for user {user_id}", and
+                        # APIKeyAuth derives user_id from a FINGERPRINT OF THE
+                        # CALLER'S API KEY — so it is deliberately not
+                        # forwarded. The caller-visible message names the
+                        # throttled TOOL, which is the part the caller can act
+                        # on.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
+                    except _AUTH_DENIAL_ERRORS as e:
                         if self.error_aggregator:
                             self.error_aggregator.record_error(e)
                         raise ToolError(
@@ -1570,23 +2475,46 @@ class MCPServer:
                             tool_name=tool_name,
                         )
 
-                # Rate limiting check
-                if rate_limit and self.auth_manager:
-                    user_id = (
-                        self._active_sessions.get(session_id, {})
-                        .get("user", {})
-                        .get("id", "anonymous")
+                # Per-tool rate limiting (the decorator's ``rate_limit=`` arg).
+                #
+                # This block was broken three ways and made every tool
+                # declaring the documented rate_limit= argument unusable:
+                #
+                #   * it passed a user-id STRING plus a second positional plus
+                #     arbitrary keywords to check_rate_limit(user_info), which
+                #     takes one dict -> TypeError on EVERY call, reported to the
+                #     caller as a generic "Tool execution failed";
+                #   * it read the identity as ``["user"]["id"]`` while auth
+                #     providers return ``user_id``, so the identity was always
+                #     "anonymous" even when authenticated;
+                #   * the ``except RateLimitError`` named the errors.py class,
+                #     which this path cannot raise (RateLimiter raises the
+                #     providers one), so the handler was dead — the same
+                #     wrong-hierarchy defect as the auth clause above.
+                if (
+                    rate_limit
+                    and self.auth_manager is not None
+                    and self.auth_manager.rate_limiter is not None
+                ):
+                    user_info = (
+                        self._active_sessions.get(session_id, {}).get("user") or {}
                     )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id,
-                            tool_name,
-                            **rate_limit,  # type: ignore[reportCallIssue]
+                        self.auth_manager.rate_limiter.check_rate_limit(
+                            user_info,
+                            tool_name=tool_name,
+                            **rate_limit,
                         )
-                    except RateLimitError as e:
-                        if self.error_aggregator:
-                            self.error_aggregator.record_error(e)
-                        raise
+                    except ProviderRateLimitError as e:
+                        # Same translation as the authentication path: keep the
+                        # RATE_LIMITED code and retry_after, drop the provider's
+                        # user-id-bearing message.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
 
                 # Circuit breaker check
                 if enable_circuit_breaker and self.circuit_breaker:
@@ -1602,13 +2530,40 @@ class MCPServer:
                             self.error_aggregator.record_error(error)
                         raise error
 
+                # Strip transport-level credentials ONCE, here — BEFORE the
+                # cache block, because the cache key is derived from these
+                # kwargs too. See the module comment on _CREDENTIAL_KWARGS.
+                clean_kwargs = _strip_credential_kwargs(kwargs)
+
                 # Try cache first if enabled
                 cache = None
                 cache_lookup_key = None
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
+                    # Key on the STRIPPED kwargs. CacheManager._create_cache_key
+                    # interpolates its kwargs verbatim, the resulting key is
+                    # DEBUG-logged by UnifiedCache.get_or_compute AND used as a
+                    # Redis key name (redis_prefix + name + key) — so keying on
+                    # the raw set wrote the caller's api_key/password/token/jwt
+                    # into log lines, into `KEYS mcp:*`, into MONITOR, into the
+                    # slowlog and into RDB/AOF on disk (security.md § "No
+                    # secrets in logs").
+                    #
+                    # The kwargs are NOT the whole input, though. The tool body
+                    # can read the invoking client through _CURRENT_TOOL_CLIENT
+                    # (that is exactly what the elicitation system's
+                    # client_id_provider does), so its result can depend on the
+                    # PRINCIPAL as well as on the arguments. Keyed on arguments
+                    # alone, one caller's elicited answer was served from cache
+                    # to the next caller — with no elicitation raised for them
+                    # at all. Fold a non-secret principal digest into the key so
+                    # a cached result can never cross principals.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, kwargs
+                        self._cache_key_scope(
+                            session_id, tool_name, cache_per_principal
+                        ),
+                        args,
+                        clean_kwargs,
                     )
 
                     # For sync functions with Redis, we need to handle async operations
@@ -1618,8 +2573,30 @@ class MCPServer:
                             # Check if we're already in an async context
                             try:
                                 asyncio.get_running_loop()
-                                # We're in an async context, but this is a sync function
-                                # Fall back to memory cache behavior (no caching for now)
+                                # A SYNC tool executing ON the loop thread cannot
+                                # await and cannot asyncio.run(), so the Redis
+                                # cache is unreachable and this call is NOT
+                                # cached. `_execute_tool` invokes sync handlers
+                                # directly (no thread offload), so this is the
+                                # NORMAL path for a sync tool on an async
+                                # transport — measured: caching is skipped
+                                # entirely, the tool body runs on every call.
+                                # Announced once per cache rather than skipped
+                                # silently; closing it properly is an
+                                # architectural change (offload sync tools to a
+                                # thread, or make the tool async), not a local
+                                # fix — an async tool takes the get_or_compute
+                                # path below and is unaffected.
+                                cache._warn_sync_on_redis_once(
+                                    "tool-cache-read-in-running-loop",
+                                    "declare the tool `async def`",
+                                    detail=(
+                                        "a SYNC tool running inside an event loop "
+                                        "cannot reach Redis (asyncio.run is "
+                                        "unavailable), so every call executes the "
+                                        "tool body uncached"
+                                    ),
+                                )
                                 result = None
                             except RuntimeError:
                                 # Not in async context, we can use asyncio.run
@@ -1644,6 +2621,11 @@ class MCPServer:
                             result, response_format, stream_response
                         )
 
+                # clean_kwargs was computed above the cache block: the tool body
+                # must never receive transport-level credentials (it would leak
+                # the caller's api_key/token into arbitrary tool code and raise
+                # TypeError on every tool whose signature does not accept it).
+
                 # Execute function with timeout
                 if timeout:
                     import signal
@@ -1657,32 +2639,50 @@ class MCPServer:
                     signal.alarm(int(timeout))
 
                     try:
-                        result = func(*args, **kwargs)
+                        result = func(*args, **clean_kwargs)
                     finally:
                         signal.alarm(0)
                         signal.signal(signal.SIGALRM, old_handler)
                 else:
-                    result = func(*args, **kwargs)
+                    result = func(*args, **clean_kwargs)
 
                 # Cache result if enabled
                 if cache_key and self.cache.enabled:
                     # For sync functions with Redis, handle async operations
+                    stored = False
                     if cache.is_redis:  # type: ignore[reportOptionalMemberAccess]
                         try:
                             # Check if we're already in an async context
                             try:
                                 asyncio.get_running_loop()
-                                # We're in an async context, but this is a sync function
-                                # Fall back to memory cache behavior (no caching for now)
-                                pass
+                                # Mirror of the read site above: a SYNC tool on
+                                # the loop thread cannot write to Redis either,
+                                # so this result is NOT cached and the next
+                                # identical call will re-execute the tool.
+                                cache._warn_sync_on_redis_once(  # type: ignore[reportOptionalMemberAccess]
+                                    "tool-cache-write-in-running-loop",
+                                    "declare the tool `async def`",
+                                    detail=(
+                                        "a SYNC tool running inside an event loop "
+                                        "cannot write to Redis (asyncio.run is "
+                                        "unavailable), so results are never cached"
+                                    ),
+                                )
                             except RuntimeError:
                                 # Not in async context, we can use asyncio.run
                                 asyncio.run(cache.aset(cache_lookup_key, result))  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
+                                stored = True
                         except Exception as e:
                             logger.debug(f"Redis cache set error in sync context: {e}")
                     else:
                         cache.set(cache_lookup_key, result)  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
-                    logger.debug(f"Cached result for {tool_name}")
+                        stored = True
+                    # Only claim a store that actually happened. This line
+                    # previously fired unconditionally, so it reported "Cached
+                    # result" for the skipped-write path above — the same
+                    # false-confirmation class as the old clear_cache() log.
+                    if stored:
+                        logger.debug(f"Cached result for {tool_name}")
 
                 # Track success metrics
                 if self.metrics.enabled and start_time is not None:
@@ -1730,7 +2730,9 @@ class MCPServer:
                 self._tool_registry[tool_name]["error_count"] += 1
                 self._tool_registry[tool_name]["last_called"] = time.time()
 
-                logger.error(f"Error in tool {tool_name}: {mcp_error}")
+                logger.error(
+                    f"Error in tool {tool_name}: {mask_error_text(str(mcp_error))}"
+                )
                 raise mcp_error
 
             finally:
@@ -1740,70 +2742,141 @@ class MCPServer:
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs):
+            # A disabled tool is not invocable on ANY path (#1998).
+            self._refuse_if_disabled(tool_name)
+
             # Generate session ID for tracking
             session_id = str(uuid.uuid4())
             start_time = time.time() if self.metrics.enabled else None
 
             try:
-                # Authentication check
-                if self.auth_manager and required_permission:
+                # Authentication check. IDENTITY on auth_manager — see __init__.
+                #
+                # There is NO no-credential bypass here. This branch used to
+                # carry one:
+                #
+                #     if not credentials and not any(k.startswith("mcp_") ...):
+                #         user_info = None        # ... and then EXECUTED
+                #
+                # commented "allows direct calls for testing and development".
+                # Nothing scoped it to testing or development — it was the
+                # production async dispatch path, and its condition was chosen
+                # by the CALLER: send credentials and you are authenticated (and
+                # possibly denied); send none and the permission gate was skipped
+                # and the tool ran. Sending fewer credentials must never grant
+                # more access. The sync wrapper never had this branch, so the two
+                # wrappers enforced the same decorator argument differently.
+                #
+                # A tool invoked with no credentials now fails closed exactly as
+                # it does on the sync path. If a genuine no-auth affordance is
+                # ever needed it belongs behind an explicit constructor flag
+                # defaulting to False that WARNs at init naming the protection it
+                # disables (security.md § Secure-Default For A New Security
+                # Feature) — not behind an attacker-chosen input shape.
+                if self.auth_manager is not None and required_permissions:
                     # Extract credentials from kwargs or context
                     credentials = self._extract_credentials_from_context(kwargs)
-
-                    # Allow bypassing auth for direct calls when no credentials provided
-                    # This enables testing and development scenarios
-                    if not credentials and not any(
-                        k.startswith("mcp_") for k in kwargs.keys()
-                    ):
-                        logger.debug(
-                            f"Tool {tool_name}: No credentials provided, allowing direct call (development/testing)"
-                        )
-                        user_info = None
-                    else:
-                        try:
-                            # Async dispatch context (WebSocket): use the
-                            # async-aware path so an async auth_provider (e.g.
-                            # ResourceServer, whose authenticate() is a
-                            # coroutine) is actually awaited. The sync path
-                            # would leave the coroutine un-awaited and crash
-                            # with an AttributeError -> 500 instead of a clean
-                            # fail-closed AuthorizationError. Sync providers
-                            # work unchanged through this path.
-                            user_info = await self.auth_manager.authenticate_and_authorize_async(
-                                credentials, required_permission
-                            )
-                            # Add user info to session
-                            self._active_sessions[session_id] = {
-                                "user": user_info,
-                                "tool": tool_name,
-                                "start_time": start_time,
-                                "permission": required_permission,
-                            }
-                        except (AuthenticationError, AuthorizationError) as e:
-                            if self.error_aggregator:
-                                self.error_aggregator.record_error(e)
-                            raise ToolError(
-                                f"Access denied for {tool_name}: {str(e)}",
-                                tool_name=tool_name,
-                            )
-
-                # Rate limiting check
-                if rate_limit and self.auth_manager:
-                    user_id = (
-                        self._active_sessions.get(session_id, {})
-                        .get("user", {})
-                        .get("id", "anonymous")
-                    )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
-                            user_id,
-                            tool_name,
-                            **rate_limit,  # type: ignore[reportCallIssue]
+                        # Async dispatch context (WebSocket): use the
+                        # async-aware path so an async auth_provider (e.g.
+                        # ResourceServer, whose authenticate() is a coroutine)
+                        # is actually awaited. The sync path would leave the
+                        # coroutine un-awaited and crash with an AttributeError
+                        # -> 500 instead of a clean fail-closed
+                        # AuthorizationError. Sync providers work unchanged
+                        # through this path.
+                        user_info = (
+                            await self.auth_manager.authenticate_and_authorize_async(
+                                credentials, required_permissions
+                            )
                         )
-                    except RateLimitError as e:
+                        # Add user info to session
+                        self._active_sessions[session_id] = {
+                            "user": user_info,
+                            "tool": tool_name,
+                            "start_time": start_time,
+                            "permission": required_permissions,
+                        }
+                    except ProviderRateLimitError as e:
+                        # Rate limiting is NOT an authorization denial and must
+                        # keep its own type (and retry_after) for the caller.
+                        # providers.RateLimitError subclasses that module's
+                        # AuthenticationError, so it would otherwise be swallowed
+                        # by the denial clause below and reported as "Access
+                        # denied".
+                        #
+                        # A bare ``raise`` did NOT deliver that. providers.
+                        # RateLimitError subclasses Exception, NOT MCPError, so
+                        # it fell into this wrapper's own outer
+                        # ``except Exception`` and was rewrapped as
+                        # ToolError(TOOL_EXECUTION_FAILED) — the caller saw a
+                        # generic execution failure and retry_after was
+                        # reachable only through ``.cause``. Translating to the
+                        # errors.py RateLimitError (an MCPError) makes the outer
+                        # handler pass it through untouched, carrying
+                        # RATE_LIMITED and retry_after to the caller.
+                        #
+                        # The provider's own message is
+                        # f"Rate limit exceeded for user {user_id}", and
+                        # APIKeyAuth derives user_id from a FINGERPRINT OF THE
+                        # CALLER'S API KEY — so it is deliberately not
+                        # forwarded. The caller-visible message names the
+                        # throttled TOOL, which is the part the caller can act
+                        # on.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
+                    except _AUTH_DENIAL_ERRORS as e:
                         if self.error_aggregator:
                             self.error_aggregator.record_error(e)
-                        raise
+                        raise ToolError(
+                            f"Access denied for {tool_name}: {str(e)}",
+                            tool_name=tool_name,
+                        )
+
+                # Per-tool rate limiting (the decorator's ``rate_limit=`` arg).
+                #
+                # This block was broken three ways and made every tool
+                # declaring the documented rate_limit= argument unusable:
+                #
+                #   * it passed a user-id STRING plus a second positional plus
+                #     arbitrary keywords to check_rate_limit(user_info), which
+                #     takes one dict -> TypeError on EVERY call, reported to the
+                #     caller as a generic "Tool execution failed";
+                #   * it read the identity as ``["user"]["id"]`` while auth
+                #     providers return ``user_id``, so the identity was always
+                #     "anonymous" even when authenticated;
+                #   * the ``except RateLimitError`` named the errors.py class,
+                #     which this path cannot raise (RateLimiter raises the
+                #     providers one), so the handler was dead — the same
+                #     wrong-hierarchy defect as the auth clause above.
+                if (
+                    rate_limit
+                    and self.auth_manager is not None
+                    and self.auth_manager.rate_limiter is not None
+                ):
+                    user_info = (
+                        self._active_sessions.get(session_id, {}).get("user") or {}
+                    )
+                    try:
+                        self.auth_manager.rate_limiter.check_rate_limit(
+                            user_info,
+                            tool_name=tool_name,
+                            **rate_limit,
+                        )
+                    except ProviderRateLimitError as e:
+                        # Same translation as the authentication path: keep the
+                        # RATE_LIMITED code and retry_after, drop the provider's
+                        # user-id-bearing message.
+                        raise RateLimitError(
+                            f"Rate limit exceeded for {tool_name}",
+                            retry_after=(
+                                e.retry_after if e.retry_after is not None else 60.0
+                            ),
+                        ) from e
 
                 # Circuit breaker check
                 if enable_circuit_breaker and self.circuit_breaker:
@@ -1819,31 +2892,29 @@ class MCPServer:
                             self.error_aggregator.record_error(error)
                         raise error
 
+                # Strip transport-level credentials ONCE, here — BEFORE the
+                # cache block, because the cache key is derived from these
+                # kwargs too. See the module comment on _CREDENTIAL_KWARGS.
+                clean_kwargs = _strip_credential_kwargs(kwargs)
+
                 # Execute with caching and stampede prevention if enabled
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
+                    # Key on the STRIPPED kwargs AND the principal — same
+                    # contract as the sync wrapper; see the comment there for
+                    # why the raw set leaked the caller's credential into log
+                    # lines and Redis key names, and why the arguments alone are
+                    # not the whole input a cached result depends on.
                     cache_lookup_key = self.cache._create_cache_key(
-                        tool_name, args, kwargs
+                        self._cache_key_scope(
+                            session_id, tool_name, cache_per_principal
+                        ),
+                        args,
+                        clean_kwargs,
                     )
 
                     # Define the compute function for cache-or-compute
                     async def compute_result():
-                        # Filter out auth credentials from kwargs before calling the function
-                        clean_kwargs = {
-                            k: v
-                            for k, v in kwargs.items()
-                            if k
-                            not in [
-                                "api_key",
-                                "token",
-                                "username",
-                                "password",
-                                "jwt",
-                                "authorization",
-                                "mcp_auth",
-                            ]
-                        }
-
                         # Execute function with timeout
                         if timeout:
                             return await asyncio.wait_for(
@@ -1859,21 +2930,6 @@ class MCPServer:
                     logger.debug(f"Got result for {tool_name} (cached or computed)")
                 else:
                     # No caching - execute directly
-                    # Filter out auth credentials from kwargs before calling the function
-                    clean_kwargs = {
-                        k: v
-                        for k, v in kwargs.items()
-                        if k
-                        not in [
-                            "api_key",
-                            "token",
-                            "username",
-                            "password",
-                            "jwt",
-                            "authorization",
-                            "mcp_auth",
-                        ]
-                    }
 
                     # Execute function with timeout
                     if timeout:
@@ -1929,7 +2985,9 @@ class MCPServer:
                 self._tool_registry[tool_name]["error_count"] += 1
                 self._tool_registry[tool_name]["last_called"] = time.time()
 
-                logger.error(f"Error in tool {tool_name}: {mcp_error}")
+                logger.error(
+                    f"Error in tool {tool_name}: {mask_error_text(str(mcp_error))}"
+                )
                 raise mcp_error
 
             finally:
@@ -1971,7 +3029,7 @@ class MCPServer:
                 }
             return formatted
         except Exception as e:
-            logger.warning(f"Failed to format response: {e}")
+            logger.warning(f"Failed to format response: {mask_error_text(str(e))}")
             return result
 
     def _chunk_large_response(self, data: Any, chunk_size: int = 1000) -> List[str]:
@@ -1994,9 +3052,21 @@ class MCPServer:
         # Look for common credential patterns in kwargs
         credentials = {}
 
-        # Check for MCP-style authentication headers
-        if "mcp_auth" in kwargs:
-            credentials.update(kwargs["mcp_auth"])
+        # Check for MCP-style authentication headers.
+        #
+        # The type check is load-bearing for the same reason as the
+        # ``authorization`` one below, which this field previously lacked.
+        # ``dict.update`` raises ValueError/TypeError for a str/int/list/None,
+        # and BOTH wrappers call this helper OUTSIDE their inner ``try:`` — so a
+        # non-Mapping ``mcp_auth`` (a shape any client can put in ``arguments``)
+        # escaped credential EXTRACTION and surfaced as
+        # ToolError("Tool execution failed: …"). It failed closed, but it let a
+        # client choose whether an auth failure was reported as an internal
+        # error. A non-Mapping value carries no credentials, which is exactly
+        # what contributing nothing to the credential set expresses.
+        raw_mcp_auth = kwargs.get("mcp_auth")
+        if isinstance(raw_mcp_auth, Mapping):
+            credentials.update(raw_mcp_auth)
 
         # Check for common auth patterns
         auth_fields = ["api_key", "token", "username", "password", "jwt"]
@@ -2004,9 +3074,16 @@ class MCPServer:
             if field in kwargs:
                 credentials[field] = kwargs[field]
 
-        # Check for Authorization header pattern
-        if "authorization" in kwargs:
-            auth_header = kwargs["authorization"]
+        # Check for Authorization header pattern.
+        #
+        # The type check is load-bearing: ``.startswith`` ran OUTSIDE the try
+        # below, so a non-string ``authorization`` (int, list, dict, None from a
+        # JSON body) raised AttributeError out of credential EXTRACTION rather
+        # than yielding an empty credential set. That failed closed, but as an
+        # opaque crash instead of a clean deny. A non-string header carries no
+        # credentials, which is exactly what an empty dict expresses.
+        auth_header = kwargs.get("authorization")
+        if isinstance(auth_header, str):
             if auth_header.startswith("Bearer "):
                 credentials["token"] = auth_header[7:]
             elif auth_header.startswith("Basic "):
@@ -2018,8 +3095,17 @@ class MCPServer:
                         username, password = decoded.split(":", 1)
                         credentials["username"] = username
                         credentials["password"] = password
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 - fails closed below
+                    # A malformed Basic header yields NO credentials, so the
+                    # permission check downstream denies (fail-closed) — but it
+                    # denied SILENTLY, which is indistinguishable from "no
+                    # header was sent" when an operator is debugging a 403.
+                    # Log the failure WITHOUT the header (it carries the
+                    # credential) — see security.md § "No secrets in logs".
+                    logger.debug(
+                        "auth.basic_header.parse_failed",
+                        extra={"error_type": type(exc).__name__},
+                    )
 
         return credentials
 
@@ -2271,7 +3357,20 @@ class MCPServer:
         return health_status
 
     def clear_cache(self, cache_name: Optional[str] = None) -> None:
-        """Clear cache(s)."""
+        """Clear cache(s) on the memory backend.
+
+        On a Redis-backed server the underlying ``UnifiedCache.clear()`` RAISES
+        (Redis cannot be cleared from a sync method) and this propagates it —
+        await :meth:`aclear_cache` instead. Signature is unchanged: this stays
+        sync so no caller breaks, per ``zero-tolerance.md`` Rule 6a.
+
+        Every ``logger.info`` below sits AFTER the clear it reports, so a
+        refusal or failure can never emit a success line. That ordering is the
+        fix: this method previously logged "Cleared cache: <name>" while the
+        Redis branch of ``clear()`` executed ``pass``, handing the operator an
+        explicit confirmation of an invalidation that never happened — which
+        terminates the investigation that would have found the staleness.
+        """
         if cache_name:
             cache = self.cache.get_cache(cache_name)
             cache.clear()
@@ -2279,6 +3378,27 @@ class MCPServer:
         else:
             self.cache.clear_all()
             logger.info("Cleared all caches")
+
+    async def aclear_cache(self, cache_name: Optional[str] = None) -> int:
+        """Clear cache(s) on EITHER backend. Returns Redis keys deleted.
+
+        The working counterpart to :meth:`clear_cache`. Deletion is scoped to
+        each cache's own key namespace (never ``FLUSHDB``) — see
+        ``UnifiedCache.aclear``. The success line reports the ACTUAL number of
+        keys deleted rather than asserting that something happened, so the log
+        cannot claim more than the operation performed.
+        """
+        if cache_name:
+            cache = self.cache.get_cache(cache_name)
+            deleted = await cache.aclear()
+            logger.info(
+                "Cleared cache: %s (redis keys deleted=%d)", cache_name, deleted
+            )
+            return deleted
+
+        deleted = await self.cache.aclear_all()
+        logger.info("Cleared all caches (redis keys deleted=%d)", deleted)
+        return deleted
 
     def reset_circuit_breaker(self) -> None:
         """Reset circuit breaker to closed state."""
@@ -2301,9 +3421,18 @@ class MCPServer:
         return self._tool_registry.get(tool_name)
 
     def disable_tool(self, tool_name: str) -> bool:
-        """Temporarily disable a tool."""
+        """Temporarily disable a tool.
+
+        The flag alone only bound the surfaces that READ it. FastMCP keeps its
+        own registration and never consults it, so the DEFAULT transport both
+        listed and executed a disabled tool (#1998); the registration is
+        therefore withheld here as well. Invocation is refused independently by
+        both enhanced wrappers, so a transport this method cannot reach still
+        cannot run the tool.
+        """
         if tool_name in self._tool_registry:
             self._tool_registry[tool_name]["disabled"] = True
+            self._withhold_tool_from_fastmcp(tool_name)
             logger.info(f"Disabled tool: {tool_name}")
             return True
         return False
@@ -2312,18 +3441,30 @@ class MCPServer:
         """Re-enable a disabled tool."""
         if tool_name in self._tool_registry:
             self._tool_registry[tool_name]["disabled"] = False
+            self._restore_tool_to_fastmcp(tool_name)
             logger.info(f"Enabled tool: {tool_name}")
             return True
         return False
 
     def _execute_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Execute a tool directly (for testing purposes)."""
+        """Execute a tool directly (for testing purposes).
+
+        The three refusals below are the server's OWN availability decisions, so
+        they raise ``ToolNotAvailableError`` rather than a bare ``ValueError``.
+        That type — not the wording — is how ``run_stdio`` tells them apart from
+        a tool BODY that raised, and returns them verbatim while replacing any
+        body exception with a correlation id.
+        """
         if tool_name not in self._tool_registry:
-            raise ValueError(f"Tool '{tool_name}' not found in registry")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' not found in registry", tool_name=tool_name
+            )
 
         tool_info = self._tool_registry[tool_name]
         if tool_info.get("disabled", False):
-            raise ValueError(f"Tool '{tool_name}' is currently disabled")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' is currently disabled", tool_name=tool_name
+            )
 
         # Get the tool handler (the enhanced function)
         if "handler" in tool_info:
@@ -2331,7 +3472,9 @@ class MCPServer:
         elif "function" in tool_info:
             handler = tool_info["function"]
         else:
-            raise ValueError(f"Tool '{tool_name}' has no valid handler")
+            raise ToolNotAvailableError(
+                f"Tool '{tool_name}' has no valid handler", tool_name=tool_name
+            )
 
         # Update statistics
         tool_info["call_count"] = tool_info.get("call_count", 0) + 1
@@ -2401,14 +3544,22 @@ class MCPServer:
                 )
                 asyncio.run(self._run_websocket())
             else:
-                # Default to FastMCP (STDIO) server
+                # Default to FastMCP (STDIO) server.
+                #
+                # This serves FastMCP's OWN registry. That registry is taught
+                # ``_public_tool_view``'s decision at REGISTRATION time
+                # (``_project_tool_onto_fastmcp``) rather than filtered here,
+                # because FastMCP owns its enumeration and exposes no hook in
+                # it; ``disable_tool`` withholds the registration outright and
+                # both enhanced wrappers refuse a disabled tool at invoke. See
+                # #1998 for the gap this closed.
                 logger.info("Starting FastMCP server in STDIO mode...")
                 self._mcp.run()  # type: ignore[reportOptionalMemberAccess]
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
 
             # Record error if aggregator is enabled
             if self.error_aggregator:
@@ -2653,7 +3804,9 @@ class MCPServer:
                         await self._dispatch_ws_method(method, params, None, client_id)
                     except Exception as exc:  # notifications expect no response
                         logger.warning(
-                            "ws.notification.error method=%s error=%s", method, exc
+                            "ws.notification.error method=%s error=%s",
+                            method,
+                            mask_error_text(str(exc)),
                         )
                 return None
 
@@ -2675,16 +3828,18 @@ class MCPServer:
             return await self._dispatch_ws_method(method, params, request_id, client_id)
 
         except Exception as e:
-            logger.error(f"Error handling WebSocket message: {e}")
+            logger.error(f"Error handling WebSocket message: {mask_error_text(str(e))}")
             # A notification (absent id) never receives a response, even on
             # internal error.
             if request.get("id") is None:
                 return None
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
-                "id": request.get("id"),
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Internal error",
+                request_id=request.get("id"),
+                event="websocket.message.error",
+                method=request.get("method"),
+            )
 
     async def _dispatch_ws_method(
         self,
@@ -2829,33 +3984,132 @@ class MCPServer:
             "id": request_id,
         }
 
+    def _tool_is_gated(self, info: Dict[str, Any]) -> bool:
+        """Single owner of "is there a boundary this caller cannot cross?".
+
+        Fail closed: a permission boundary exists AND no caller can be
+        authorized against it at discovery time. Read by BOTH
+        ``_public_tool_view`` (the in-repo discovery surfaces) and
+        ``_project_tool_onto_fastmcp`` (the default transport's own
+        registration), so the two cannot drift on which tools are gated.
+
+        Gating applies ONLY when an ``auth_provider`` is configured. Without
+        one, ``required_permission`` is never enforced on the invoke path
+        either, so there is no boundary to protect and withholding would cost
+        discovery for no security gain.
+        """
+        return (
+            self.auth_manager is not None
+            and info.get("required_permission") is not None
+        )
+
+    def _public_tool_view(
+        self, name: str, info: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Single owner of what a tool discloses to an unauthenticated caller.
+
+        Returns ``None`` when the tool must not be advertised AT ALL (it is
+        disabled), otherwise the ONLY dict any discovery surface may serialise.
+
+        EVERY surface that enumerates ``_tool_registry`` for a caller MUST route
+        through here: ``tools/list`` (``_handle_list_tools``), the stdio
+        ``tools/list`` branch (``run_stdio``), and tool-reference completion
+        (``_handle_completion_complete``). They previously each hand-wrote the
+        projection, so a fix applied to one left the others disclosing the full
+        argument surface — ``completion/complete`` with an empty
+        ``argument.value`` substring-matched EVERY tool and returned each one's
+        ``inputSchema``, making the ``tools/list`` suppression decorative. Add a
+        new discovery surface by CALLING this, never by copying it.
+
+        THE DEFAULT TRANSPORT REACHES THIS DECISION BY A DIFFERENT ROUTE (#1998).
+        Tools are also registered with FastMCP
+        (``self._mcp.tool()(enhanced_func)``), and FastMCP builds its OWN tool
+        list from the wrapped function — it cannot be made to call this method,
+        because it owns that enumeration and exposes no hook in it. So the sync
+        ``run()`` with ``transport="stdio"`` (the DEFAULT), which serves
+        ``self._mcp.run()``, is bound at REGISTRATION instead:
+        ``_project_tool_onto_fastmcp`` rewrites the gated tool's advertised
+        schema and description to THIS view's values, ``disable_tool`` withholds
+        the registration entirely, and both enhanced wrappers refuse a disabled
+        tool at invoke. The shared decision both routes read is
+        ``_tool_is_gated``; keep it that way rather than re-deriving "is this
+        gated" in either place. Until that landed, the default transport
+        advertised a gated tool's full ``inputSchema`` and complete ``Args:``
+        block and both listed and executed a ``disable_tool()``'d tool.
+        Invocation authorization was never affected on either path (the
+        enhanced wrapper is what FastMCP holds).
+
+        Two independent suppressions:
+
+        * ``disabled`` -> ``None``. A disabled tool is not invocable
+          (``_execute_tool`` and ``_handle_call_tool`` both refuse it), so
+          advertising it leaks the deployment's tool inventory for no gain.
+        * ``gated`` -> no argument surface. The caller here is unauthenticated
+          on every transport (``WebSocketServerTransport.handle_client`` never
+          consults its ``auth_provider``, ``initialize`` authenticates nothing,
+          and these handlers receive neither ``client_id`` nor credentials), and
+          the permission model is per-CALL
+          (``_extract_credentials_from_context`` reads the tool's own kwargs).
+          So NO caller can be authorized at discovery time and the argument /
+          result surface must not be serialised to one. Name + description
+          remain so a legitimately credentialed client can still discover that
+          the tool exists.
+
+        Gating applies ONLY when an ``auth_provider`` is configured. Without
+        one, ``required_permission`` is never enforced on the invoke path either
+        (``if self.auth_manager and required_permission``), so there is no
+        boundary to protect and withholding would cost discovery for no security
+        gain.
+        """
+        if info.get("disabled", False):
+            return None
+
+        gated = self._tool_is_gated(info)
+
+        description = info.get("description", "")
+        if gated and description:
+            # A gated tool's description is author-controlled free text that
+            # ships to anonymous callers by design. Conventional Google/NumPy
+            # docstrings document every parameter BY NAME, which is the same
+            # disclosure class as the withheld inputSchema — trim to the
+            # summary so the docstring style cannot re-open it.
+            description = _summary_before_sections(description)
+
+        view: Dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "inputSchema": {} if gated else info.get("input_schema", {}),
+        }
+        # Advertise outputSchema when the tool declared one so clients can
+        # validate structuredContent (spec 2025-11-25). Withheld for gated
+        # tools — the result shape is the same disclosure class.
+        output_schema = None if gated else info.get("output_schema")
+        if output_schema:
+            view["outputSchema"] = output_schema
+        # Tool annotations (readOnlyHint / destructiveHint / …) are ADVISORY
+        # metadata for client UX. INVARIANT: they MUST NEVER gate authorization
+        # — access control is enforced solely by the auth/permission manager
+        # (see _create_enhanced_tool), never by these client-supplied-trust
+        # hints. Do not read them in any dispatch/authorization path.
+        mcp_annotations = _annotations_to_mcp(info.get("annotations"))
+        if mcp_annotations:
+            view["annotations"] = mcp_annotations
+        return view
+
     async def _handle_list_tools(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle tools/list request."""
+        """Handle tools/list request.
+
+        Disabled tools are withheld entirely and permission-gated tools are
+        advertised by NAME but WITHOUT their schemas. Both decisions belong to
+        ``_public_tool_view`` — see it for the full rationale.
+        """
         tools = []
         for name, info in self._tool_registry.items():
-            if not info.get("disabled", False):
-                tool_desc: Dict[str, Any] = {
-                    "name": name,
-                    "description": info.get("description", ""),
-                    "inputSchema": info.get("input_schema", {}),
-                }
-                # Advertise outputSchema when the tool declared one so clients
-                # can validate structuredContent (spec 2025-11-25).
-                output_schema = info.get("output_schema")
-                if output_schema:
-                    tool_desc["outputSchema"] = output_schema
-                # Tool annotations (readOnlyHint / destructiveHint / …) are
-                # ADVISORY metadata for client UX. INVARIANT: they MUST NEVER
-                # gate authorization — access control is enforced solely by the
-                # auth/permission manager (see _create_enhanced_tool), never by
-                # these client-supplied-trust hints. Do not read them in any
-                # dispatch/authorization path.
-                mcp_annotations = _annotations_to_mcp(info.get("annotations"))
-                if mcp_annotations:
-                    tool_desc["annotations"] = mcp_annotations
-                tools.append(tool_desc)
+            view = self._public_tool_view(name, info)
+            if view is not None:
+                tools.append(view)
 
         page, next_cursor, error = self._paginate(
             tools, params.get("cursor"), request_id
@@ -3335,11 +4589,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Resource read error: {str(e)}"},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Resource read error",
+                request_id=request_id,
+                event="resources.read.error",
+            )
 
     @staticmethod
     def _is_valid_resource_uri(uri: Any) -> bool:
@@ -3487,14 +4742,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"Prompt generation error: {str(e)}",
-                },
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Prompt generation error",
+                request_id=request_id,
+                event="prompts.get.error",
+            )
 
     async def _handle_subscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -3538,17 +4791,21 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
+            # The code selection reads the exception SERVER-side, which is
+            # fine; only the message crosses back to the caller.
             error_code = -32603
             if "permission" in str(e).lower() or "not authorized" in str(e).lower():
                 error_code = -32601
             elif "rate limit" in str(e).lower():
                 error_code = -32601
 
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": error_code, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Subscribe failed",
+                request_id=request_id,
+                event="subscribe.error",
+                code=error_code,
+            )
 
     async def _handle_unsubscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -3584,11 +4841,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Unsubscribe failed",
+                request_id=request_id,
+                event="unsubscribe.error",
+            )
 
     async def _handle_batch_subscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -3627,11 +4885,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Batch subscribe failed",
+                request_id=request_id,
+                event="batch_subscribe.error",
+            )
 
     async def _handle_batch_unsubscribe(
         self, params: Dict[str, Any], request_id: Any, client_id: str
@@ -3667,11 +4926,12 @@ class MCPServer:
                 "id": request_id,
             }
         except Exception as e:
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": str(e)},
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                e,
+                summary="Batch unsubscribe failed",
+                request_id=request_id,
+                event="batch_unsubscribe.error",
+            )
 
     async def _handle_connection_close(self, client_id: str):
         """Handle WebSocket connection close."""
@@ -3728,7 +4988,7 @@ class MCPServer:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to compress message: {e}")
+            logger.warning(f"Failed to compress message: {mask_error_text(str(e))}")
             return message
 
     def _decompress_message(self, compressed_message: Dict[str, Any]) -> Dict[str, Any]:
@@ -3752,13 +5012,18 @@ class MCPServer:
             return json.loads(decompressed_json.decode("utf-8"))
 
         except Exception as e:
-            logger.error(f"Failed to decompress message: {e}")
-            # Return a sensible error message
+            # This handler has no request id (the frame never decoded), so it
+            # cannot use the shared envelope; it applies the same contract.
+            correlation_id = self._log_and_correlate(e, "websocket.decompress.error")
             return {
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32603,
-                    "message": f"Failed to decompress message: {e}",
+                    "message": (
+                        "Failed to decompress message "
+                        f"(correlation id: {correlation_id})"
+                    ),
+                    "data": {"correlationId": correlation_id},
                 },
             }
 
@@ -3788,7 +5053,10 @@ class MCPServer:
                     f"Sent notification to client {client_id}: {notification['method']}"
                 )
             except Exception as e:
-                logger.error(f"Failed to send notification to client {client_id}: {e}")
+                logger.error(
+                    "Failed to send notification to client "
+                    f"{client_id}: {mask_error_text(str(e))}"
+                )
 
     async def _handle_logging_set_level(
         self, params: Dict[str, Any], request_id: Any
@@ -4180,19 +5448,22 @@ class MCPServer:
                         )
 
             elif ref_type == "tool":
-                # Search through registered tools
+                # Search through registered tools.
+                #
+                # This surface is reachable with NO credentials exactly as
+                # tools/list is (`_dispatch_ws_method` routes completion/complete
+                # with only `(params, request_id)`), and an EMPTY
+                # `argument.value` substring-matches EVERY tool — so it must
+                # apply the SAME disclosure policy. It previously hand-wrote its
+                # own projection with neither the `disabled` filter nor the
+                # `required_permission` gate, which made the tools/list
+                # suppression bypassable by one JSON-RPC method. Route through
+                # the single owner instead of re-deriving the projection here.
                 for name, tool_info in self._tool_registry.items():
                     if partial_value in name:
-                        collected.append(
-                            (
-                                name,
-                                {
-                                    "name": name,
-                                    "description": tool_info.get("description", ""),
-                                    "inputSchema": tool_info.get("inputSchema", {}),
-                                },
-                            )
-                        )
+                        view = self._public_tool_view(name, tool_info)
+                        if view is not None:
+                            collected.append((name, view))
 
             # Relevance-rank: exact match first, then prefix, then substring
             # (stable within a rank). Ranking precedes the cap so the top-100
@@ -4215,12 +5486,16 @@ class MCPServer:
             return {"jsonrpc": "2.0", "result": result, "id": request_id}
 
         except Exception as e:
-            logger.error(f"Completion error: {e}")
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": -32603, "message": f"Completion failed: {str(e)}"},
-                "id": request_id,
-            }
+            # This surface is reachable with NO credentials (see the ref_type
+            # == "tool" branch above), so nothing derived from the exception
+            # may appear in the response.
+            return self._internal_error_envelope(
+                e,
+                summary="Completion failed",
+                request_id=request_id,
+                event="completion.error",
+                ref_type=ref_type,
+            )
 
     async def _handle_sampling_create_message(
         self, params: Dict[str, Any], request_id: Any
@@ -4347,18 +5622,17 @@ class MCPServer:
             "target_client": target_client,
             "request_id": request_id,
         }
-        approval_error = await self._evaluate_sampling_approval(approval_context)
+        # Returns a COMPLETE envelope, not a (code, message) tuple: the
+        # exception arms build theirs through ``_internal_error_envelope`` so
+        # no approver-derived text reaches this unauthenticated caller, and
+        # that envelope carries a correlationId this layer must not flatten.
+        # The rejection is logged inside — logging it again HERE is what put
+        # the approver's raw exception text into a second ``extra`` field.
+        approval_error = await self._evaluate_sampling_approval(
+            approval_context, request_id
+        )
         if approval_error is not None:
-            code, message = approval_error
-            logger.warning(
-                "sampling.approval.rejected",
-                extra={"code": code, "reason": message},
-            )
-            return {
-                "jsonrpc": "2.0",
-                "error": {"code": code, "message": message},
-                "id": request_id,
-            }
+            return approval_error
 
         # (4) Dispatch the approved sampling request to the target client.
         sampling_params: Dict[str, Any] = {
@@ -4414,16 +5688,15 @@ class MCPServer:
                 fut.cancel()
             logger.warning(
                 "sampling.dispatch_failed",
-                extra={"sampling_id": sampling_id, "error": str(exc)},
+                extra={"sampling_id": sampling_id, "error": mask_error_text(str(exc))},
             )
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"failed to dispatch sampling request: {exc}",
-                },
-                "id": request_id,
-            }
+            return self._internal_error_envelope(
+                exc,
+                summary="failed to dispatch sampling request",
+                request_id=request_id,
+                event="sampling.dispatch.error",
+                sampling_id=sampling_id,
+            )
 
         try:
             completion = await asyncio.wait_for(fut, self._sampling_timeout)
@@ -4536,13 +5809,13 @@ class MCPServer:
                     ev_fut.cancel()
 
     async def _evaluate_sampling_approval(
-        self, context: Dict[str, Any]
-    ) -> Optional["tuple[int, str]"]:
+        self, context: Dict[str, Any], request_id: Any
+    ) -> Optional[Dict[str, Any]]:
         """Run the HITL approval gate for a sampling request.
 
         Returns ``None`` when the request is APPROVED (dispatch may proceed),
-        or a ``(json_rpc_error_code, message)`` tuple when it is NOT approved.
-        Fails CLOSED: when no approver is bound the request is rejected with
+        or a complete JSON-RPC error envelope when it is NOT approved. Fails
+        CLOSED: when no approver is bound the request is rejected with
         ``MCP_SAMPLING_REJECTED`` — the server never auto-approves
         model-generated content (security.md § HITL fail-closed).
 
@@ -4552,15 +5825,56 @@ class MCPServer:
           (``MCP_SAMPLING_DECLINED``);
         * raise ``asyncio.TimeoutError`` → review timeout
           (``MCP_SAMPLING_TIMEOUT``);
-        * raise ``MCPError`` → that error's code + message;
-        * raise any other exception → treated as a rejection
-          (``MCP_SAMPLING_REJECTED``), logged, never swallowed silently.
+        * raise ``MCPError`` → that error's CODE, with a correlation id in
+          place of its message (see below);
+        * raise any other exception → a rejection
+          (``MCP_SAMPLING_REJECTED``) carrying a correlation id.
+
+        NO EXCEPTION-DERIVED TEXT REACHES THE CALLER. ``sampling/createMessage``
+        is dispatched by ``_dispatch_ws_method``, which authenticates nothing,
+        so this handler answers an UNAUTHENTICATED caller exactly as every
+        other one does — and it was the only handler on that dispatch table
+        that did not route its exception arms through
+        ``_internal_error_envelope``. An approver is arbitrary
+        application-supplied code; ``f"sampling approval failed: {exc}"``
+        returned whatever it raised, verbatim. Observed: an approver raising a
+        connection error sent
+        ``postgresql://svc:<credential>@db.internal:5432/app`` plus an internal
+        filesystem path to a caller holding no credentials.
+
+        ``MCPError`` is NOT exempt, which is the non-obvious half. Its CODE is
+        server-authored — an enum member — and is preserved, because that is
+        how an approver signals WHICH refusal this is. Its MESSAGE is not
+        necessarily server-authored: the enhanced tool wrapper builds
+        ``ToolError(f"Tool execution failed: {e}")``, embedding foreign text in
+        an ``MCPError``. "It is an MCPError" is therefore not sufficient to
+        call a message caller-safe, which is why the stdio branch matches on a
+        dedicated ``ToolNotAvailableError`` type rather than on ``MCPError``.
+
+        The server-authored refusals below (no approver bound, timeout,
+        declined) are fixed strings this module wrote, carry nothing derived
+        from an exception, and are returned verbatim on purpose: they tell the
+        caller what to DO, and replacing them with a correlation id would cost
+        the operator a log lookup to recover text the server already knows.
         """
+
+        def _refusal(code: "MCPErrorCode", message: str) -> Dict[str, Any]:
+            """A server-authored refusal — safe to return verbatim."""
+            logger.warning(
+                "sampling.approval.rejected",
+                extra={"code": code.value, "reason": message},
+            )
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": code.value, "message": message},
+                "id": request_id,
+            }
+
         approver = self._sampling_approver
         if approver is None:
             # Fail closed — the default posture is deny, not auto-approve.
-            return (
-                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_REJECTED,
                 "sampling requires human-in-the-loop approval but no approver is "
                 "bound; the server fails closed and will not auto-approve "
                 "model-generated content (bind one via set_sampling_approver)",
@@ -4571,31 +5885,54 @@ class MCPServer:
             if inspect.isawaitable(decision):
                 decision = await decision
         except asyncio.TimeoutError:
-            return (
-                MCPErrorCode.MCP_SAMPLING_TIMEOUT.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_TIMEOUT,
                 "sampling approval timed out awaiting human review",
             )
         except MCPError as exc:
-            return (exc.error_code.value, exc.message)
-        except Exception as exc:  # noqa: BLE001 - surfaced as a rejection, logged
-            logger.warning(
-                "sampling.approval.error",
-                extra={"error": str(exc)},
+            # Keep the approver's CODE, drop its MESSAGE — see the docstring.
+            return self._internal_error_envelope(
+                exc,
+                summary="sampling approval failed",
+                request_id=request_id,
+                event="sampling.approval.error",
+                code=exc.error_code.value,
             )
-            return (
-                MCPErrorCode.MCP_SAMPLING_REJECTED.value,
-                f"sampling approval failed: {exc}",
+        except Exception as exc:  # noqa: BLE001 - surfaced as a rejection, logged
+            # ``_internal_error_envelope`` also replaces the unscrubbed
+            # ``extra={"error": str(exc)}`` this arm used to log: it routes
+            # through ``_log_and_correlate``, which applies ``mask_error_text``
+            # to both the message and the traceback. Scrubbing the caller path
+            # while leaving the log path raw would only relocate the credential
+            # to the structured sink.
+            return self._internal_error_envelope(
+                exc,
+                summary="sampling approval failed",
+                request_id=request_id,
+                event="sampling.approval.error",
+                code=MCPErrorCode.MCP_SAMPLING_REJECTED.value,
             )
 
         if not decision:
-            return (
-                MCPErrorCode.MCP_SAMPLING_DECLINED.value,
+            return _refusal(
+                MCPErrorCode.MCP_SAMPLING_DECLINED,
                 "sampling request declined by human reviewer",
             )
         return None
 
     async def run_stdio(self):
-        """Run the server using stdio transport for testing."""
+        """Run the server using stdio transport.
+
+        NOTE — this is NOT the loop the sync ``run()`` serves. ``run()`` with
+        ``transport="stdio"`` (the DEFAULT) calls ``self._mcp.run()``, i.e.
+        FastMCP's own server over FastMCP's own registry. This loop is reached
+        from ``run_async()``. The two stdio paths reach the SAME disclosure
+        decision by different routes: this one calls ``_public_tool_view``
+        directly, FastMCP's is bound at registration by
+        ``_project_tool_onto_fastmcp`` (#1998). A change to what a tool
+        discloses therefore belongs in ``_public_tool_view`` / ``_tool_is_gated``,
+        never in either route.
+        """
         if self._mcp is None:
             self._init_mcp()
 
@@ -4618,17 +5955,13 @@ class MCPServer:
 
                     # Handle different request types
                     if request.get("method") == "tools/list":
-                        # Return list of tools
+                        # Same disclosure policy as every other discovery
+                        # surface — see ``_public_tool_view``.
                         tools = []
                         for name, info in self._tool_registry.items():
-                            if not info.get("disabled", False):
-                                tools.append(
-                                    {
-                                        "name": name,
-                                        "description": info.get("description", ""),
-                                        "inputSchema": info.get("input_schema", {}),
-                                    }
-                                )
+                            view = self._public_tool_view(name, info)
+                            if view is not None:
+                                tools.append(view)
 
                         response = {"id": request.get("id"), "result": {"tools": tools}}
 
@@ -4639,13 +5972,19 @@ class MCPServer:
                         arguments = params.get("arguments", {})
 
                         if tool_name in self._tool_registry:
-                            handler = self._tool_registry[tool_name]["handler"]
                             try:
-                                # Execute tool
-                                if asyncio.iscoroutinefunction(handler):
-                                    result = await handler(**arguments)
-                                else:
-                                    result = handler(**arguments)
+                                # Route through the shared executor. This branch
+                                # used to read `["handler"]` — a key the tool
+                                # decorator never writes (it writes "function" /
+                                # "original_function"), so every
+                                # decorator-registered tool raised KeyError
+                                # here. `_execute_tool` resolves either shape AND
+                                # enforces the `disabled` check this branch also
+                                # lacked, which would otherwise have let stdio
+                                # invoke a tool `disable_tool()` had turned off.
+                                result = self._execute_tool(tool_name, arguments)
+                                if inspect.isawaitable(result):
+                                    result = await result
 
                                 response = {
                                     "id": request.get("id"),
@@ -4655,10 +5994,29 @@ class MCPServer:
                                         ]
                                     },
                                 }
-                            except Exception as e:
+                            except ToolNotAvailableError as e:
+                                # The server's OWN availability refusal —
+                                # authored here, embeds no foreign text, and is
+                                # the useful answer for a legitimate client.
                                 response = {
                                     "id": request.get("id"),
                                     "error": {"code": -32603, "message": str(e)},
+                                }
+                            except Exception as e:
+                                # A tool BODY raised. Its text may carry
+                                # internal paths, driver output, or a
+                                # credential, and this loop authenticates
+                                # nothing — return a correlation id instead.
+                                envelope = self._internal_error_envelope(
+                                    e,
+                                    summary="Tool execution failed",
+                                    request_id=request.get("id"),
+                                    event="stdio.tools_call.error",
+                                    tool=tool_name,
+                                )
+                                response = {
+                                    "id": envelope["id"],
+                                    "error": envelope["error"],
                                 }
                         else:
                             response = {
@@ -4695,7 +6053,7 @@ class MCPServer:
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
             raise
         finally:
             self._running = False
@@ -4759,7 +6117,7 @@ class MCPServer:
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
         except Exception as e:
-            logger.error(f"Server error: {e}")
+            logger.error(f"Server error: {mask_error_text(str(e))}")
 
             # Record error if aggregator is enabled
             if self.error_aggregator:

@@ -15,8 +15,8 @@ from __future__ import annotations
 from kaizen.l3.factory.errors import (
     EnvelopeNotTighter,
     FactoryError,
-    InsufficientBudget,
     InstanceNotFound,
+    InsufficientBudget,
     MaxChildrenExceeded,
     MaxDepthExceeded,
     RegistryError,

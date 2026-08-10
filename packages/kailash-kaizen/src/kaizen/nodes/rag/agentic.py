@@ -25,10 +25,12 @@ from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
+from kaizen.core._provider_env import detect_provider_from_env
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 # LLMAgentNode is imported for its @register_node side effect: the
 # sub-workflows reference it by the string "LLMAgentNode".
 from ..ai.llm_agent import LLMAgentNode  # noqa: F401
-from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -1344,8 +1346,11 @@ class ToolAugmentedRAGNode(Node):
                     tool_func = self.tool_registry[tool_name]
                     tool_outputs[tool_name] = tool_func(query, context)
                 except Exception as e:
-                    logger.error(f"Tool {tool_name} failed: {e}")
-                    tool_outputs[tool_name] = {"error": str(e)}
+                    # #1970: registry tools are arbitrary callables that may
+                    # call a credentialed external API.
+                    sanitized = sanitize_provider_error(e, f"tool {tool_name}")
+                    logger.error("Tool %s failed: %s", tool_name, sanitized)
+                    tool_outputs[tool_name] = {"error": sanitized}
 
         # Augment response with tool outputs
         augmented_answer = self._synthesize_with_tools(query, documents, tool_outputs)

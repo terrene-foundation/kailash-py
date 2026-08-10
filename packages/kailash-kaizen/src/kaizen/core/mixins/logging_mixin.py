@@ -14,6 +14,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 if TYPE_CHECKING:
     from kaizen.core.base_agent import BaseAgent
 
@@ -85,18 +87,40 @@ class LoggingMixin:
         def _log_failure(
             execution_id: str, duration_ms: float, error: Exception
         ) -> None:
-            """Log execution failure."""
+            """Log execution failure.
+
+            This mixin wraps EVERY agent's ``run``, so whatever an agent raises
+            arrives here: an LLM provider auth error naming the endpoint it
+            could not authenticate against, a DB driver error carrying a DSN, a
+            tool's own exception. It was leaking that on THREE surfaces at once
+            -- the f-string message, the ``error_message`` structured field, and
+            the ``exc_info`` traceback (which renders the raw exception AND its
+            chained ``__cause__`` on the final line, defeating a scrub applied
+            only to the other two).
+
+            All three now route through the one shared helper. ``exc_info`` is
+            dropped rather than scrubbed because a traceback cannot be redacted
+            in place -- ``logging`` formats it from the exception object at
+            emit time, downstream of anything this function does.
+
+            ``execution_id``, ``agent`` and ``error_type`` are retained: they
+            are the diagnostic, they are framework-generated rather than
+            exception-derived, and they carry no attacker- or config-controlled
+            text. Triage keeps the failing agent, the correlation id and the
+            exception class; it loses only the bytes.
+            """
+            safe_error = scrub_remote_error(error)
             agent._agent_logger.error(
-                f"Execution failed [{execution_id}] after {duration_ms:.2f}ms: {error}",
+                f"Execution failed [{execution_id}] after {duration_ms:.2f}ms: "
+                f"{safe_error}",
                 extra={
                     "execution_id": execution_id,
                     "agent": agent_name,
                     "duration_ms": duration_ms,
                     "error_type": type(error).__name__,
-                    "error_message": str(error),
+                    "error_message": safe_error,
                     "success": False,
                 },
-                exc_info=True,
             )
 
         if is_async:

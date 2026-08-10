@@ -32,6 +32,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from kailash.tracking.manager import TaskManager
+from kailash.tracking.models import TaskStatus
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
+from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 from pydantic import BaseModel
 
 # FastAPI is optional - import via importlib to avoid pyright errors on absent modules
@@ -55,12 +60,13 @@ BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
 CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
 FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
 
-from kailash.tracking.manager import TaskManager
-from kailash.tracking.models import TaskStatus
-from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
-from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
-
 logger = logging.getLogger(__name__)
+
+# How long the stop endpoint waits for the metrics broadcast task to actually
+# finish before refusing to report it stopped. Bounded because this runs inside
+# an HTTP handler; long enough that an ordinary iteration of the broadcast loop
+# can reach its next cancellation point.
+_BROADCAST_STOP_TIMEOUT_S = 5.0
 
 
 # Pydantic models for API requests/responses
@@ -290,8 +296,53 @@ class DashboardAPIServer:
 
         @self.app.post("/api/v1/monitoring/start")
         async def start_monitoring(request: RunRequest):
-            """Start real-time monitoring for a run."""
+            """Start real-time monitoring for a run.
+
+            Returns ``{"status": "started", ...}`` only when a metrics
+            broadcast task is actually running afterwards -- either one that
+            was already healthy, or a freshly created one.
+
+            Responds 409 instead when a previous stop request did not complete
+            and the broadcast task it could not stop is still alive. Nothing is
+            mutated in that case; retry ``POST /api/v1/monitoring/stop`` first.
+            """
             try:
+                # A retained handle does NOT mean a task is broadcasting.
+                #
+                # ``stop_monitoring`` below deliberately KEEPS the handle when
+                # the broadcast task refuses to stop -- it is the only thing
+                # that can observe or retry that task. So the old
+                # ``if not self._broadcast_task`` was false for a task nothing
+                # had certified as stopped: no task was created and the
+                # endpoint reported ``started`` over the very task the stop
+                # endpoint had just returned 500 about.
+                #
+                # ``cancelling()`` is the discriminator between the two live
+                # cases: a healthy broadcaster nobody has asked to stop reports
+                # 0, while a task a failed stop cancelled and could not kill
+                # reports >= 1. It is derived from the task itself, so it
+                # cannot drift out of step the way a parallel flag would.
+                #
+                # Checked BEFORE anything is mutated. ``dashboard._monitoring``
+                # is this task's own ``while`` condition (see
+                # ``_broadcast_metrics``), so re-arming it and only then
+                # refusing would leave a rejected request half-applied -- and
+                # would hand the wedged task its loop condition back.
+                existing = self._broadcast_task
+                if existing is not None and not existing.done():
+                    if existing.cancelling():
+                        raise HTTPException(
+                            status_code=409,
+                            detail=(
+                                "A previous stop request did not complete: the "
+                                "metrics broadcast task was asked to stop and "
+                                "is still running, so it may still be pushing "
+                                "to WebSocket clients. Retry POST "
+                                "/api/v1/monitoring/stop before starting "
+                                "monitoring again."
+                            ),
+                        )
+
                 # Update config if provided
                 if request.config:
                     for key, value in request.config.items():
@@ -301,13 +352,57 @@ class DashboardAPIServer:
                 # Start monitoring
                 self.dashboard.start_monitoring(request.run_id)
 
-                # Start WebSocket broadcasting if not already running
-                if not self._broadcast_task:
+                # Start WebSocket broadcasting unless it is already running.
+                #
+                # ``done()`` matters as much as ``is None``: a broadcast task
+                # that raised, or whose loop condition went false, leaves a
+                # truthy-but-dead handle, and only a SUCCESSFUL stop ever
+                # clears it. Under the old truthiness test that handle blocked
+                # task creation permanently, so every later start reported
+                # ``started`` with nothing broadcasting at all.
+                if existing is None or existing.done():
+                    if existing is not None and not existing.cancelled():
+                        previous_error = existing.exception()
+                        if previous_error is not None:
+                            # TYPE AND ORIGIN FRAMES, NEVER THE EXCEPTION
+                            # ITSELF. ``_broadcast_metrics`` reaches the task
+                            # manager and the dashboard's backing store, so
+                            # what surfaces here can be a driver or transport
+                            # error whose text carries a DSN or a token.
+                            #
+                            # A mask IS available to this tree --
+                            # ``kailash.utils.url_credentials.mask_error_text``
+                            # is plain core, already on this import path -- and
+                            # it is deliberately NOT used. Measured, it masks
+                            # TWO carriers and nothing else: URL userinfo (a
+                            # postgres:// or redis:// DSN) and sensitive QUERY
+                            # PARAMETERS (`?api_key=`, `?token=`, `?password=`).
+                            # A credential that arrives in neither carrier
+                            # passes through intact -- a BARE OpenAI key, a bare
+                            # JWT, a Slack token, a 32-char Mistral key, an
+                            # `Authorization: Basic` header.
+                            # So masking here would be a porous filter over
+                            # unbounded input, whereas the type plus the frame
+                            # list are BOUNDED and structurally inert (both go
+                            # through _safe_identifier) and are the whole
+                            # diagnostic an operator needs to find the task.
+                            # NOT payload-free: a caller-chosen class name
+                            # survives, bounded and de-fanged, by design.
+                            self.logger.warning(
+                                "Previous metrics broadcast task ended with an "
+                                "error; starting a replacement: %s at %s",
+                                safe_type_name(previous_error),
+                                safe_exception_frames(previous_error, limit=3),
+                            )
                     self._broadcast_task = asyncio.create_task(
                         self._broadcast_metrics()
                     )
 
                 return {"status": "started", "run_id": request.run_id}
+            except HTTPException:
+                # Already carries the precise reason; the handler below would
+                # replace it with str(exc) and downgrade a 409 to a 500.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to start monitoring: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
@@ -318,12 +413,58 @@ class DashboardAPIServer:
             try:
                 self.dashboard.stop_monitoring()
 
-                # Stop WebSocket broadcasting
+                # Stop WebSocket broadcasting.
+                #
+                # ``cancel()`` only REQUESTS cancellation -- it returns without
+                # establishing that the task stopped. The previous form
+                # discarded that, nulled the handle, and returned
+                # ``{"status": "stopped"}`` regardless, so a caller proceeded
+                # on a broadcast task that could still be pushing frames. A
+                # status field is a stronger claim than a log line: an
+                # orchestrator acts on it.
+                #
+                # Nulling the handle was the worse half. ``stop_monitoring()``
+                # above already clears ``dashboard._monitoring``, which is
+                # this task's own ``while`` condition (see
+                # ``_broadcast_metrics``), so once the handle is dropped the
+                # task is both unreachable and unobservable: a retry has
+                # nothing to act on, and ``start_monitoring``'s
+                # ``if not self._broadcast_task`` would spawn a SECOND
+                # broadcast task alongside a wedged first.
                 if self._broadcast_task:
-                    self._broadcast_task.cancel()
+                    task = self._broadcast_task
+                    task.cancel()
+                    # ``asyncio.wait`` reports completion without re-raising
+                    # the CancelledError the task ends with, so this observes
+                    # the outcome without swallowing a cancellation aimed at
+                    # THIS handler (which ``await task`` inside a try/except
+                    # CancelledError would).
+                    await asyncio.wait({task}, timeout=_BROADCAST_STOP_TIMEOUT_S)
+                    if not task.done():
+                        # Retain the handle: it is the only thing that can
+                        # observe or retry this task.
+                        self.logger.warning(
+                            "Broadcast task did not stop within %ss; retaining "
+                            "handle so a retry can act on it",
+                            _BROADCAST_STOP_TIMEOUT_S,
+                        )
+                        raise HTTPException(
+                            status_code=500,
+                            detail=(
+                                "Monitoring stopped, but the metrics broadcast "
+                                f"task did not stop within "
+                                f"{_BROADCAST_STOP_TIMEOUT_S}s and may still be "
+                                "pushing to WebSocket clients. Retry the stop "
+                                "request."
+                            ),
+                        )
                     self._broadcast_task = None
 
                 return {"status": "stopped"}
+            except HTTPException:
+                # Already carries the precise reason; re-wrapping below would
+                # replace it with str(exc) and lose the detail.
+                raise
             except Exception as e:
                 self.logger.error(f"Failed to stop monitoring: {e}")
                 raise HTTPException(status_code=500, detail=str(e))

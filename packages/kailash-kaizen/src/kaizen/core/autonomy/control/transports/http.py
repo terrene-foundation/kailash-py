@@ -65,10 +65,10 @@ See Also:
 """
 
 import logging
-import sys
 from typing import AsyncIterator
 
 import aiohttp
+
 from kaizen.core.autonomy.control.transport import Transport
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,14 @@ class HTTPTransport(Transport):
                     raise ConnectionError(f"HTTP error {response.status}: {error_text}")
 
         except aiohttp.ClientError as e:
-            raise ConnectionError(f"Failed to write to transport: {e}") from e
+            # aiohttp embeds the request URL in its exception text; the control
+            # base_url can carry userinfo or a query-string token (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise ConnectionError(
+                f"Failed to write to transport: "
+                f"{sanitize_provider_error(e, 'Control transport')}"
+            ) from e
 
     def read_messages(self) -> AsyncIterator[str]:
         """
@@ -347,9 +354,25 @@ class HTTPTransport(Transport):
                     continue
 
         except aiohttp.ClientError as e:
-            # Log error but don't crash
-            # In production, this would use proper logging
-            print(f"Error reading from SSE stream: {e}", file=sys.stderr)
+            # Log error but don't crash.
+            # aiohttp embeds the stream URL in its exception text; the control
+            # base_url can carry userinfo or a query-string token (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            # ERROR, not WARN: the read loop RETURNS here, so the caller's
+            # message stream ends silently. That is a failed operation the
+            # caller will notice, not a degraded-but-working path
+            # (rules/observability.md MUST Rule 3).
+            #
+            # `logger`, not `print`: this module already binds a logger at
+            # module scope and uses it above. A bare `print` to stderr is
+            # unstructured, unroutable and uncorrelated — it cannot be
+            # filtered, aggregated, or shipped to an aggregator, and it
+            # disappears on restart (rules/observability.md MUST Rule 1).
+            logger.error(
+                "control.sse.read_error: %s",
+                sanitize_provider_error(e, "Control transport"),
+            )
             return
 
     async def close(self) -> None:

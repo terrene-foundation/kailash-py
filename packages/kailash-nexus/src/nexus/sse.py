@@ -41,6 +41,8 @@ import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
 
+from nexus.extractors.proxy import client_key_for_request
+
 if TYPE_CHECKING:
     from nexus.core import Nexus
 
@@ -199,7 +201,10 @@ def register_sse(
         rate_limit = getattr(nexus, "_rate_limit", None)
         if not isinstance(rate_limit, int) or rate_limit <= 0:
             return False  # no limit configured
-        client_ip = request.client.host if request.client else "unknown"
+        # #2007 — the ORIGINATING client under the operator's trusted-proxy
+        # posture, not the immediate peer. Behind a reverse proxy every caller
+        # presents the same peer IP, so keying on it put them all in ONE bucket.
+        client_ip = client_key_for_request(request)
         current_window = int(time.time() // _rate_limit_window)
         per_client = _request_counts[client_ip]
         if per_client[current_window] >= rate_limit:

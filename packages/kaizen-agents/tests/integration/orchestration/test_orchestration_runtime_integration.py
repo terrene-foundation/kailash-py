@@ -238,8 +238,25 @@ async def test_random_routing_with_real_agents(
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+@pytest.mark.requires_real_llm
 async def test_semantic_routing_with_real_agents(runtime, code_agent, data_agent):
-    """Test semantic routing with real agents and A2A capability matching."""
+    """Test semantic routing with real agents and A2A capability matching.
+
+    Requires a real LLM judge (#1981). Semantic routing delegates capability
+    scoring to `llm_capability_match`; the root conftest's cost-guard scrubs
+    every provider credential on a bare `pytest` run, so without the
+    `requires_real_llm` opt-in the judge cannot run at all.
+
+    Before #1981 this test passed WITHOUT a judge: the degraded judgment was
+    flattened to a fabricated 0.0, no capability out-scored the initial 0.0,
+    and `_route_semantic` fell through to ROUND-ROBIN — which satisfies the
+    "an agent was selected" assertions below while exercising zero semantic
+    matching. The marker makes the real-LLM precondition explicit instead of
+    letting the fallback fake a pass.
+
+    Run deliberately with:
+        KAIZEN_ALLOW_REAL_LLM=1 .venv/bin/python -m pytest -m requires_real_llm
+    """
     # Register agents
     await runtime.register_agent(code_agent)
     await runtime.register_agent(data_agent)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.62.0"
+version = "2.63.0"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -137,8 +137,30 @@ data = [
 
 # ─────────────────────────────────────────────────────────────────
 # Sub-package framework extras (separate PyPI packages).
-# Pins are MINIMUM compatible versions — bumping to unreleased versions
-# breaks release CI which installs from PyPI before the new release publishes.
+# Pins are MINIMUM compatible versions — kept at currently-PUBLISHED
+# versions, never bumped ahead of what's actually live on PyPI.
+#
+# Why this matters, precisely: `[tool.uv.sources]` below is a uv-specific
+# extension, not PEP 621 `[project]` metadata — `pip` never reads it, and
+# it only governs how `uv sync`/`uv pip install -e .` resolves THIS repo's
+# own local checkout. It has no effect on the PUBLISHED `kailash` wheel: a
+# real `pip install kailash[kaizen]` resolves purely against what these
+# extras declare in the published metadata. So bumping a floor here to a
+# version not yet on PyPI creates a real, user-facing risk at the publish
+# boundary — if `kailash` core is tagged/published before the referenced
+# sub-package version is live, `kailash[kaizen]` etc. become uninstallable
+# ("no matching distribution") for every real user until the sub-package
+# catches up. (No current `.github/workflows/*.yml` job installs any of
+# these extras, so the risk is this publish-boundary case, not a CI job
+# failing today — confirmed by grep across the workflow directory.)
+#
+# DELIBERATELY NOT raised to match this branch's pending version bumps
+# (dataflow 2.20.0 / nexus 2.16.0 / kaizen 2.46.0 / kaizen-agents 0.13.0 /
+# ml 2.2.3). Raise these in a FOLLOW-UP commit once dataflow/nexus/kaizen/
+# kaizen-agents/ml have actually published to PyPI, and before the
+# `kailash` core tag — not in this release-prep commit. See
+# workspaces/issue-1720-llm-consolidation release-order notes for the
+# required publish sequence.
 # ─────────────────────────────────────────────────────────────────
 dataflow = ["kailash-dataflow>=2.19.1"]
 nexus    = ["kailash-nexus>=2.15.0"]
@@ -189,9 +211,23 @@ dev = [
     # inside a function-local try/except (security.py:666), so it lives in
     # [dev] here rather than the slim core. Per #890 audit.
     "networkx>=2.7",
+    # requests is imported at MODULE SCOPE by tests/conftest.py:17, so EVERY
+    # pytest run needs it — but it was declared only in [server] and
+    # [http-client]. A job installing `.[trust,...,dev]` (trust-plane on
+    # windows) therefore died at conftest import with ModuleNotFoundError
+    # before collecting a single test. `dependencies.md` Declared = Imported:
+    # the test surface must declare what the test surface imports.
+    "requests>=2.32.3",
     # Sub-packages required for test collection (pact/mcp tests import these)
     "kailash-pact>=0.18.0",
-    "kailash-mcp>=0.4.3",
+    # Raised 0.4.3 -> 0.5.0 so dev/CI test collection exercises the patched
+    # server (auth-bypass + cache-credential-leak + gated-tool-disclosure
+    # fixes; see kailash-mcp CHANGELOG [0.5.0]), not a vulnerable one.
+    # >=0.5.1: 0.5.0 shipped with an UNCAPPED `mcp[cli]>=1.23.0`, so a fresh
+    # resolve pulled upstream mcp 2.0.0 — which removed `mcp.client.websocket`
+    # (nine first-party import sites). 0.5.1 carries the `<2.0` cap. Floor is
+    # 0.5.1 rather than 0.5.0 so the cap is guaranteed, not incidental.
+    "kailash-mcp>=0.5.1",
     # psycopg2 is imported at module scope by 3 integration/e2e tests
     # (test_mcp_resource_flow, test_docker_infrastructure_validation,
     # test_mcp_subscriptions) — required for `pytest --collect-only`
@@ -233,6 +269,10 @@ all = [
     # encryption, Ed25519 audit signing, FastAPI gateway, etc.). Heavy ML /
     # fine-tuning stacks (torch, vllm, transformers training extras) remain
     # opt-in via kailash-ml[<extra>] / kailash-align[<extra>].
+    # Same DELIBERATELY-NOT-YET-RAISED disposition as the extras block above:
+    # these floors stay at currently-published versions in this release-prep
+    # commit; raise in the follow-up commit after dataflow/nexus/kaizen/
+    # kaizen-agents/ml publish, before the kailash core tag.
     "kailash-dataflow[security,monitoring,api]>=2.19.1",
     "kailash-nexus>=2.15.0",
     "kailash-kaizen[providers-azure,providers-google,observability,db,cache,rag]>=2.45.0",
@@ -278,6 +318,23 @@ known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 [tool.isort]
 profile = "black"
 known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+# Scaffold templates are NOT valid Python — they carry `{Placeholder}` substitution tokens
+# (e.g. `class Test{AgentName}Initialization:`), so every formatter fails to parse them.
+# Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /
+# `black .` skips them too. Without this, `black --check .` can never exit 0 (#1995).
+extend_skip_glob = ["*/docs/development/templates/*"]
+
+[tool.black]
+line-length = 88
+extend-exclude = '''
+/(
+    data/outputs
+  | outputs
+  | examples/outputs
+  | _build
+  | docs/development/templates
+)/
+'''
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore import ordering and undefined names in packages directory (separate packages)

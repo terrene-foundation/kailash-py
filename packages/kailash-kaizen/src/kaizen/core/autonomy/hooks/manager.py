@@ -5,6 +5,7 @@ Manages the lifecycle of hooks, including registration, execution, error handlin
 and performance tracking.
 """
 
+import functools
 import importlib.util
 import logging
 import sys
@@ -14,11 +15,72 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 import anyio
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 from .protocol import BaseHook, HookHandler
 from .types import HookContext, HookEvent, HookPriority, HookResult
 
 logger = logging.getLogger(__name__)
+
+# Bound on how far ``safe_handler_name`` will unwrap a partial chain. Deep
+# nesting is pathological, not idiomatic; the bound keeps the helper O(1) and
+# terminating on any custom ``partial`` subclass without changing the result
+# for real handlers.
+_MAX_PARTIAL_UNWRAP_DEPTH = 8
+
+
+def safe_handler_name(handler: object) -> str:
+    """Return a diagnostic identifier for a handler that cannot carry its state.
+
+    Every hook sink in this package logs WHICH handler it is acting on, which
+    is the whole diagnostic and is deliberately not scrubbed. The identifier
+    MUST therefore be one that cannot carry a payload in the first place --
+    ``repr(handler)`` is not, because ``handler`` is CALLER-SUPPLIED:
+
+    * ``functools.partial(post, url="https://u:pw@host")`` renders its bound
+      kwargs verbatim.
+    * a callable object with a dataclass-generated ``__repr__`` renders EVERY
+      field, including a credential one, without the call or the exception
+      ever mentioning it.
+
+    Resolution order:
+
+    1. ``functools.partial`` wrappers are unwrapped, because ``partial`` is the
+       idiomatic way to register a handler that needs bound config -- i.e. the
+       exact shape whose identity matters most -- and ``type(p).__name__`` is
+       the constant ``"partial"`` for every one of them, which would make them
+       mutually indistinguishable in a log.
+    2. ``__qualname__``, when present AND a string. A ``__qualname__`` is a
+       SOURCE-level identifier fixed at ``def``/``class`` time, not runtime
+       state, so unlike ``repr`` it cannot pick up a bound credential. It is
+       the same trust level as the ``handler.name`` these sites already read
+       and log unscrubbed.
+    3. ``type(handler).__name__``, which cannot carry a payload by
+       construction.
+
+    Preferred over scrubbing the repr because the credential scrubber's
+    coverage is porous by its own measurement (a prefix-less 32-39 char key,
+    ``token=``, a %40-encoded ``@`` all survive it), so a scrub here would be a
+    second porous surface rather than a closed one.
+
+    Args:
+        handler: Any callable or hook object, including caller-supplied ones.
+
+    Returns:
+        A short identifier such as ``"MyHook"``, ``"my_hook_fn"`` or
+        ``"partial(my_hook_fn)"``.
+    """
+    inner = handler
+    unwrapped = 0
+    while (
+        isinstance(inner, functools.partial) and unwrapped < _MAX_PARTIAL_UNWRAP_DEPTH
+    ):
+        inner = inner.func
+        unwrapped += 1
+
+    qualname = getattr(inner, "__qualname__", None)
+    base = qualname if isinstance(qualname, str) else type(inner).__name__
+    return f"partial({base})" if unwrapped else base
 
 
 class FunctionHookAdapter(BaseHook):
@@ -84,7 +146,7 @@ class HookManager:
         # Sort hooks by priority (stable sort preserves registration order within priority)
         self._hooks[event_type].sort(key=lambda x: x[0].value)
 
-        handler_name = getattr(handler, "name", repr(handler))
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
         logger.info(
             f"Registered hook for {event_type.value}: {handler_name} (priority={priority.name})"
         )
@@ -179,7 +241,7 @@ class HookManager:
             removed = original_count - len(self._hooks[event_type])
 
             if removed > 0:
-                handler_name = getattr(handler, "name", repr(handler))
+                handler_name = getattr(handler, "name", safe_handler_name(handler))
                 logger.info(f"Unregistered hook for {event_type.value}: {handler_name}")
 
             return removed
@@ -262,7 +324,11 @@ class HookManager:
         Returns:
             HookResult with success/failure status
         """
-        handler_name = getattr(handler, "name", repr(handler))
+        # ``handler_name`` reaches THREE sinks below -- two log lines, the
+        # returned ``HookResult.error``, and ``_update_stats``, where it
+        # becomes a dict KEY returned verbatim by the public ``get_stats()``.
+        # It must not be able to carry caller state; see ``safe_handler_name``.
+        handler_name = getattr(handler, "name", safe_handler_name(handler))
 
         try:
             # Execute with timeout
@@ -285,8 +351,14 @@ class HookManager:
             )
 
         except Exception as e:
-            error_msg = f"Hook error: {str(e)}"
-            logger.exception(f"Hook failed: {handler_name}")
+            # BOTH halves: `error_msg` is returned to the caller in the
+            # HookResult below AND `logger.exception` always sets exc_info,
+            # so the raw hook exception reached a return value and a
+            # traceback. Hooks are user-registered code holding their own
+            # credentials. `handler_name` is retained -- it names WHICH hook
+            # failed and is not exception-derived.
+            error_msg = f"Hook error: {scrub_remote_error(e)}"
+            logger.error("Hook failed: %s: %s", handler_name, scrub_remote_error(e))
             self._update_stats(handler_name, 0, success=False)
 
             # Call error handler if available
@@ -294,7 +366,10 @@ class HookManager:
                 try:
                     await handler.on_error(e, context)
                 except Exception as err_e:
-                    logger.error(f"Error handler failed: {err_e}")
+                    # ``handler.on_error`` is caller-supplied, same as the
+                    # handler itself; its failure carries whatever that code
+                    # touched.
+                    logger.error("Error handler failed: %s", scrub_remote_error(err_e))
 
             return HookResult(success=False, error=error_msg, duration_ms=0.0)
 
@@ -409,10 +484,30 @@ class HookManager:
                         logger.info(f"Loaded hook from {hook_file}: {attr_name}")
 
                     except Exception as e:
-                        logger.error(f"Failed to instantiate hook {attr_name}: {e}")
+                        # Hook INSTANTIATION runs a caller-supplied class's
+                        # ``__init__`` -- arbitrary code, which may open a DB
+                        # connection or an HTTP client, so a driver error
+                        # here carries a DSN or an endpoint credential. This
+                        # is the same channel the EXECUTION sink above cites;
+                        # 90899764a fixed that one and missed this, because
+                        # the grep that drove it looked for exc_info and
+                        # logger.exception, and this line has neither.
+                        logger.error(
+                            "Failed to instantiate hook %s: %s",
+                            attr_name,
+                            scrub_remote_error(e),
+                        )
 
             except Exception as e:
-                logger.error(f"Failed to load hook file {hook_file}: {e}")
+                # Loading imports a caller-supplied module, so module-level
+                # side effects run here. Sibling of the instantiate guard
+                # above; fixed in lockstep so the loading path cannot end up
+                # half-swept the way the file already was once.
+                logger.error(
+                    "Failed to load hook file %s: %s",
+                    hook_file,
+                    scrub_remote_error(e),
+                )
 
         logger.info(f"Discovered {discovered_count} hooks from {hooks_dir}")
         return discovered_count
@@ -422,4 +517,5 @@ class HookManager:
 __all__ = [
     "HookManager",
     "FunctionHookAdapter",
+    "safe_handler_name",
 ]

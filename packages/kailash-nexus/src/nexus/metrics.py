@@ -333,15 +333,32 @@ def register_metrics_endpoint(nexus: Nexus) -> None:
             media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 
+    def _route_bearing(app: object) -> bool:
+        """True when ``app`` exposes the mutable ``routes`` list this path needs.
+
+        The route-replacing branch below slice-assigns ``app.routes``, which
+        requires a real mutable sequence. ``fastapi_app`` is not guaranteed to
+        be one: on a Nexus whose gateway is a stand-in (a unit test patching
+        ``create_gateway``), attribute access yields further stand-ins, and the
+        slice assignment raises ``TypeError`` — breaking this function's
+        documented contract that it raises only ``ImportError``. Testing for
+        the list is the honest precondition; anything else falls through to the
+        HTTPTransport registration path below, which does not need one.
+        """
+        return isinstance(getattr(app, "routes", None), list)
+
     # Try to register on the FastAPI app directly so we can replace the
     # gateway's existing /metrics route.
     fastapi_app = getattr(nexus, "fastapi_app", None)
-    if fastapi_app is None:
+    if not _route_bearing(fastapi_app):
+        fastapi_app = None
         http = getattr(nexus, "_http_transport", None)
         if http is not None:
             gw = getattr(http, "gateway", None)
             if gw is not None:
-                fastapi_app = getattr(gw, "app", None)
+                candidate = getattr(gw, "app", None)
+                if _route_bearing(candidate):
+                    fastapi_app = candidate
 
     if fastapi_app is not None:
         # Remove any existing /metrics GET route registered by the gateway

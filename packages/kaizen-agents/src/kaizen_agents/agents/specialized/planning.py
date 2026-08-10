@@ -36,6 +36,7 @@ from typing import Any, NotRequired, TypedDict
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -575,12 +576,12 @@ class PlanningAgent(BaseAgent):
                 final_outputs.append(step_result["output"])
 
             except Exception as e:
-                logger.error(f"Error executing step {step_num}: {str(e)}")
+                logger.error(f"Error executing step {step_num}: {scrub_local_error(e)}")
                 step_result = {
                     "step": step_num,
                     "action": action,
                     "status": "failed",
-                    "error": str(e),
+                    "error": scrub_local_error(e),
                 }
                 execution_results.append(step_result)
 
@@ -645,11 +646,14 @@ class PlanningAgent(BaseAgent):
         try:
             plan = self._generate_plan(task=task.strip(), context=context)
         except Exception as e:
-            logger.error(f"Error generating plan: {str(e)}")
+            logger.error(f"Error generating plan: {scrub_remote_error(e)}")
             return {
                 "error": "PLAN_GENERATION_FAILED",
                 "plan": [],
-                "validation_result": {"status": "invalid", "reason": str(e)},
+                "validation_result": {
+                    "status": "invalid",
+                    "reason": scrub_remote_error(e),
+                },
                 "execution_results": [],
                 "final_result": "",
             }
@@ -666,7 +670,7 @@ class PlanningAgent(BaseAgent):
                     plan = self._generate_plan(task=task.strip(), context=context)
                     validation_result = self._validate_plan(plan)
                 except Exception as e:
-                    logger.error(f"Replanning failed: {str(e)}")
+                    logger.error(f"Replanning failed: {scrub_remote_error(e)}")
                     return {
                         "error": "REPLANNING_FAILED",
                         "plan": plan,
@@ -687,7 +691,7 @@ class PlanningAgent(BaseAgent):
         try:
             execution_results, final_result = self._execute_plan(plan)
         except Exception as e:
-            logger.error(f"Error executing plan: {str(e)}")
+            logger.error(f"Error executing plan: {scrub_remote_error(e)}")
             return {
                 "error": "EXECUTION_FAILED",
                 "plan": plan,

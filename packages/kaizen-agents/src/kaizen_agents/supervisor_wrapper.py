@@ -95,6 +95,18 @@ class SupervisorWrapper(WrapperBase):
         Uses ``LLMBased.select_best()`` to pick a worker for the task,
         delegates to the worker, and returns the worker's result.  Falls
         back to the inner agent when no workers are available.
+
+        Raises:
+            ReasoningDegradedError: EVERY worker candidate degraded (#1981),
+                so ``select_best`` has no ranking to return. Deliberately
+                PROPAGATED rather than folded into the ``worker is None``
+                inner-agent fallback above: that fallback means "the judge
+                looked and no worker fit", while a degradation means "the
+                judge could not tell". Routing a total judge failure into the
+                inner agent would present an unjudged delegation as a judged
+                one — the exact substitution #1981 exists to eliminate.
+                ``LLMBased.select_best`` has already logged the degradation
+                at WARN before it reaches here.
         """
         self._inner_called = True
         correlation_id = f"supwrap_{uuid.uuid4().hex[:8]}"
@@ -146,6 +158,12 @@ class SupervisorWrapper(WrapperBase):
 
         Uses ``LLMBased.select_best()`` to pick a worker for the task,
         delegates to the worker, and returns the worker's result.
+
+        Raises:
+            ReasoningDegradedError: Sibling contract of :meth:`run` -- EVERY
+                worker candidate degraded (#1981), so no ranking exists and
+                the inner-agent fallback would present an unjudged delegation
+                as a judged one. See :meth:`run` for the full rationale.
         """
         self._inner_called = True
         correlation_id = f"supwrap_{uuid.uuid4().hex[:8]}"

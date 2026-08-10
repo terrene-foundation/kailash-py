@@ -56,6 +56,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 if TYPE_CHECKING:
     from kaizen_agents.journey.transitions import IntentTrigger
@@ -290,7 +291,7 @@ class IntentDetector:
             return result
         except Exception as e:
             # LLM errors should not crash the detector
-            logger.warning(f"LLM classification error: {e}")
+            logger.warning(f"LLM classification error: {scrub_remote_error(e)}")
             return None
 
     async def _llm_classify(
@@ -408,7 +409,7 @@ class IntentDetector:
 
         except Exception as e:
             # Log error but don't fail - just return None
-            logger.warning(f"Intent classification failed: {e}")
+            logger.warning(f"Intent classification failed: {scrub_remote_error(e)}")
 
         return None
 

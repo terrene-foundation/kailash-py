@@ -96,6 +96,8 @@ from typing import (
     runtime_checkable,
 )
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -563,20 +565,45 @@ class OrchestrationRuntime:
                 )
             else:
                 result = await self._dispatch(input, run_id=run_id)
-        except asyncio.TimeoutError:
-            logger.exception(
+        except asyncio.TimeoutError as exc:
+            # ``logger.error``, NOT ``logger.exception``. A timeout looks like
+            # the one safe place to keep a traceback, and it is not: measured,
+            # ``asyncio.wait_for`` raises TimeoutError with the cancelled
+            # inner exception on ``__context__``, so the rendered traceback
+            # carries whatever the dispatched agent had raised -- provider
+            # auth errors included. The drop is empirical, not precautionary.
+            logger.error(
                 "orchestration.run.timeout",
                 extra={
                     "run_id": run_id,
                     "timeout_secs": self._config.timeout_secs,
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
                 },
             )
             raise
-        except OrchestrationError:
-            logger.exception("orchestration.run.error", extra={"run_id": run_id})
+        except OrchestrationError as exc:
+            logger.error(
+                "orchestration.run.error",
+                extra={
+                    "run_id": run_id,
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             raise
-        except Exception:
-            logger.exception("orchestration.run.error", extra={"run_id": run_id})
+        except Exception as exc:
+            # The broad arm sees whatever an agent raised; the traceback
+            # rendered it and its chained cause in full. ``run_id`` is the
+            # correlation diagnostic and is framework-generated.
+            logger.error(
+                "orchestration.run.error",
+                extra={
+                    "run_id": run_id,
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
             raise
 
         elapsed_ms = int((time.perf_counter() - start) * 1000)
@@ -845,10 +872,18 @@ class OrchestrationRuntime:
         )
         try:
             result = await self._agent_invoker(agent, input, self._coordinator)
-        except Exception:
-            logger.exception(
+        except Exception as exc:
+            # ``_agent_invoker`` runs the agent itself, so this is the closest
+            # sink to the provider call in this module. ``agent_name`` is
+            # retained: it names WHICH agent failed and is registry-supplied.
+            logger.error(
                 "orchestration.agent.error",
-                extra={"run_id": run_id, "agent_name": name},
+                extra={
+                    "run_id": run_id,
+                    "agent_name": name,
+                    "error": scrub_remote_error(exc),
+                    "error_type": type(exc).__name__,
+                },
             )
             raise
 

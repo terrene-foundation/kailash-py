@@ -66,6 +66,11 @@ from kailash.sdk_exceptions import (
     SoftTimeLimitExceeded,
     WorkflowCancelledError,
 )
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -247,7 +252,6 @@ class TaskQueue:
         """Lazily create and return a Redis client."""
         if self._client is None:
             import redis as redis_lib
-
             from kailash.utils.validation import validate_redis_url
 
             validate_redis_url(self._redis_url)
@@ -773,8 +777,16 @@ class DistributedRuntime(BaseRuntime):
                     "processing": tq.processing_length(),
                 }
             except Exception as exc:
+                # `exc` comes from the task-queue BACKEND, so its message is a
+                # provider rendering: a Redis connection failure names the URL
+                # it could not reach, credentials included. `%s` of it put that
+                # straight into the record. Retain scalars only -- the queue
+                # name, the exception TYPE, and the frame locations.
                 logger.warning(
-                    "get_queue_status: failed to read queue %r: %s", name, exc
+                    "get_queue_status: failed to read queue %r: %s (at %s)",
+                    name,
+                    safe_type_name(exc),
+                    safe_exception_frames(exc),
                 )
                 per_queue[name] = {"pending": -1, "processing": -1}
         return {
@@ -1069,7 +1081,6 @@ class Worker:
         """Get the Redis client for heartbeat operations."""
         if self._redis_client is None:
             import redis as redis_lib
-
             from kailash.utils.validation import validate_redis_url
 
             validate_redis_url(self._redis_url)
@@ -1161,13 +1172,30 @@ class Worker:
                 if inspect.isawaitable(result):
                     await result
             except Exception as exc:
+                # `handler` is CALLER-SUPPLIED and typed as a CALLABLE, not as
+                # a function, so anything without `__name__` used to reach a
+                # `repr(handler)` fallback: a `functools.partial` renders its
+                # bound kwargs verbatim, and a callable object's
+                # dataclass-generated `__repr__` renders every field including
+                # a credential one. `safe_callable_name` emits a
+                # BOUNDED, structurally inert identifier. It is NOT payload-free
+                # -- a name is caller-settable and a short one survives intact --
+                # but it cannot forge the record's grammar or drive log volume.
+                #
+                # `exc_info` is DROPPED for the same reason: `exc` comes from
+                # the caller's handler, so `logging` printing the chain's
+                # `str()` re-leaks a driver error naming its DSN even though
+                # the message above deliberately carries only the type name.
+                # That is the class 689f9ebd8 closed at eighteen kaizen sinks.
+                # The frames keep WHERE it failed without keeping WHAT it said.
                 logger.warning(
-                    "Worker '%s' lifecycle handler %r raised %s for task %s; continuing",
+                    "Worker '%s' lifecycle handler %r raised %s for task %s; "
+                    "continuing (at %s)",
                     self._worker_id,
-                    getattr(handler, "__name__", repr(handler)),
-                    type(exc).__name__,
+                    safe_callable_name(handler),
+                    safe_type_name(exc),
                     event.task_id,
-                    exc_info=True,
+                    safe_exception_frames(exc),
                 )
 
     @staticmethod

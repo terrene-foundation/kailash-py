@@ -38,6 +38,7 @@ from collections.abc import Callable
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns.pipeline import Pipeline
 
 
@@ -139,12 +140,44 @@ class ParallelPipeline(Pipeline):
                 import traceback
 
                 return {
-                    "error": str(e),
+                    # SANITIZED, both keys. This dict is RETURNED TO THE
+                    # CALLER, so it is the same disclosure surface a log record
+                    # is, and `agent.run` is the provider dispatch -- an auth
+                    # failure names the endpoint and can carry the key.
+                    #
+                    # The `traceback` key is scrubbed rather than dropped, and
+                    # that is a DELIBERATE divergence from 689f9ebd8, which
+                    # closed this same leak class at the LOG sinks by removing
+                    # `exc_info=True`. There the traceback is rendered inside
+                    # `logging` at format time, so the call site has no
+                    # interception point and dropping was the only move. Here
+                    # the traceback is a string this code materialises itself,
+                    # so it can be routed through the SAME scrubber -- which is
+                    # strictly better than dropping: the frame trail survives
+                    # for debugging while the credential does not. Consistent
+                    # in principle (no raw exception text reaches a caller),
+                    # different only where the mechanism differs.
+                    #
+                    # Scrubbing the WHOLE rendered traceback is what makes this
+                    # sound: the final line repeats `str(e)` verbatim -- which
+                    # is exactly what the scrub on the `error` key above
+                    # removed -- and each frame's SOURCE LINE is rendered too,
+                    # so a literal credential in a call expression is caught
+                    # by the same pass.
+                    "error": scrub_remote_error(e),
                     "agent_id": (
                         agent.agent_id if hasattr(agent, "agent_id") else "unknown"
                     ),
                     "status": "failed",
-                    "traceback": traceback.format_exc(),
+                    # Derived from the exception OBJECT, never from
+                    # `format_exc()`'s ambient `sys.exc_info()`. Correct either
+                    # way inside this handler, but the sibling site in
+                    # `_execute_parallel_async` proved ambient state is not
+                    # trustworthy here, and a reader cannot tell the two apart
+                    # by looking. One shape, always sound.
+                    "traceback": scrub_remote_error(
+                        "".join(traceback.format_exception(e))
+                    ),
                 }
 
     def _execute_parallel_sync(self, inputs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -194,7 +227,7 @@ class ParallelPipeline(Pipeline):
                         # Graceful: return error
                         results.append(
                             {
-                                "error": str(e),
+                                "error": scrub_remote_error(e),
                                 "status": "failed",
                             }
                         )
@@ -250,11 +283,37 @@ class ParallelPipeline(Pipeline):
                 if isinstance(result, Exception):
                     import traceback
 
+                    # TWO defects here, and the second hid the first.
+                    #
+                    # 1. `str(result)` was wholly unscrubbed. `result` is an
+                    #    agent exception `asyncio.gather(return_exceptions=True)`
+                    #    handed back AS A VALUE, so it can carry a provider key
+                    #    or a DSN exactly like the `except`-bound sibling in
+                    #    `_execute_agent_sync` -- but because there is no
+                    #    `except` clause anywhere in this function, no scanner
+                    #    keyed on a handler-bound exception name can see it.
+                    #    That is why it survived the sweeps that fixed the
+                    #    site forty lines up.
+                    #
+                    # 2. `traceback.format_exc()` was reading the WRONG
+                    #    exception. It renders `sys.exc_info()`, and gather
+                    #    RETURNED this exception rather than raising it, so no
+                    #    exception is active here: the call yielded the literal
+                    #    string "NoneType: None", or -- if this line is ever
+                    #    reached beneath an outer handler -- some UNRELATED
+                    #    exception's traceback, which is the worse outcome
+                    #    because it is a leak from a frame nobody was looking
+                    #    at. Scrubbing alone would have kept a field that is
+                    #    confidently wrong, so the traceback is derived from
+                    #    the exception object, which is the one thing here
+                    #    that genuinely describes this failure.
                     processed_results.append(
                         {
-                            "error": str(result),
+                            "error": scrub_remote_error(result),
                             "status": "failed",
-                            "traceback": traceback.format_exc(),
+                            "traceback": scrub_remote_error(
+                                "".join(traceback.format_exception(result))
+                            ),
                         }
                     )
                 else:

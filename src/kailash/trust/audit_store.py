@@ -706,9 +706,14 @@ class SqliteAuditStore:
         # quote_identifier(); the constructor-side _validate_identifier
         # is defense-in-depth per MUST Rule 5 so constructing the store
         # with an invalid name raises before any DDL runs.
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
-        _validate_identifier(table_name)
+        _validate_identifier(
+            table_name, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+        )
         self._pool = pool
         self._table_name = table_name
 

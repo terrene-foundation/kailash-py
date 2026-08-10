@@ -16,6 +16,7 @@ from kaizen.nodes.ai import (
     TextEmbedder,
     TextSummarizer,
 )
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 from ..signatures import Signature
 from .base import KaizenNode
@@ -121,7 +122,10 @@ class KaizenTextGenerationNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenTextGenerationNode execution failed: {e}")
+            logger.error(
+                "KaizenTextGenerationNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenTextGenerationNode"),
+            )
             raise
 
     def _apply_signature_optimization(
@@ -247,7 +251,10 @@ class KaizenTextClassificationNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenTextClassificationNode execution failed: {e}")
+            logger.error(
+                "KaizenTextClassificationNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenTextClassificationNode"),
+            )
             raise
 
     def _enhance_classification(
@@ -389,7 +396,10 @@ class KaizenTextSummarizationNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenTextSummarizationNode execution failed: {e}")
+            logger.error(
+                "KaizenTextSummarizationNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenTextSummarizationNode"),
+            )
             raise
 
     def _enhance_summary(
@@ -545,7 +555,10 @@ class KaizenTextEmbeddingNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenTextEmbeddingNode execution failed: {e}")
+            logger.error(
+                "KaizenTextEmbeddingNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenTextEmbeddingNode"),
+            )
             raise
 
     def _enhance_embedding(
@@ -796,7 +809,10 @@ class KaizenConversationNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenConversationNode execution failed: {e}")
+            logger.error(
+                "KaizenConversationNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenConversationNode"),
+            )
             raise
 
     def _build_conversation_context(self, window_size: int) -> str:
@@ -897,7 +913,10 @@ class KaizenSentimentAnalysisNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenSentimentAnalysisNode execution failed: {e}")
+            logger.error(
+                "KaizenSentimentAnalysisNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenSentimentAnalysisNode"),
+            )
             raise
 
     def _enhance_sentiment(
@@ -1040,7 +1059,10 @@ class KaizenEntityExtractionNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenEntityExtractionNode execution failed: {e}")
+            logger.error(
+                "KaizenEntityExtractionNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenEntityExtractionNode"),
+            )
             raise
 
     def _enhance_entity_extraction(
@@ -1201,7 +1223,10 @@ class KaizenQuestionAnsweringNode(KaizenNode):
             return outputs
 
         except Exception as e:
-            logger.error(f"KaizenQuestionAnsweringNode execution failed: {e}")
+            logger.error(
+                "KaizenQuestionAnsweringNode execution failed: %s",
+                sanitize_provider_error(e, "KaizenQuestionAnsweringNode"),
+            )
             raise
 
     def _calculate_answer_confidence(
@@ -1543,24 +1568,36 @@ class KaizenAIModelNode(KaizenNode):
             result["provider_used"] = provider
             result["fallback_used"] = False
         except Exception as e:
+            # #1970: a provider auth/rate-limit exception can embed the caller's
+            # API key in its message. EVERY surface below is user-visible (a
+            # returned dict field) or a log record, so each routes through
+            # ``sanitize_provider_error`` — return/log parity with the #1953
+            # folds in ``iterative_llm_agent.py``.
+            primary_error = sanitize_provider_error(e, provider)
             if use_fallback:
                 logger.warning(
-                    f"Primary provider {provider} failed: {e}, trying fallback"
+                    "Primary provider %s failed: %s, trying fallback",
+                    provider,
+                    primary_error,
                 )
                 try:
                     result = self._execute_with_provider(fallback_provider, inputs)
                     result["provider_used"] = fallback_provider
                     result["fallback_used"] = True
-                    result["primary_error"] = str(e)
+                    result["primary_error"] = primary_error
                 except Exception as fallback_error:
                     result = {
-                        "error": f"Both providers failed. Primary: {e}, Fallback: {fallback_error}",
+                        "error": (
+                            "Both providers failed. "
+                            f"Primary: {primary_error}, "
+                            f"Fallback: {sanitize_provider_error(fallback_error, fallback_provider)}"
+                        ),
                         "provider_used": None,
                         "fallback_used": True,
                     }
             else:
                 result = {
-                    "error": f"Provider {provider} failed: {e}",
+                    "error": f"Provider {provider} failed: {primary_error}",
                     "provider_used": provider,
                     "fallback_used": False,
                 }
@@ -1853,7 +1890,13 @@ class KaizenAIWorkflowNode(KaizenNode):
                     return {
                         "step_index": step_index,
                         "step_type": step_type,
-                        "error": str(e),
+                        # #1970: the step dispatches through
+                        # ``_execute_prompt_step`` -> ``_execute_ai_model``
+                        # (the provider seam), so this user-visible field can
+                        # carry a provider credential.
+                        "error": sanitize_provider_error(
+                            e, f"workflow step {step_type}"
+                        ),
                         "retries": retries - 1,
                         "success": False,
                     }

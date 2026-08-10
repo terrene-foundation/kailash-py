@@ -14,6 +14,8 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from nexus.extractors.proxy import client_key_for_request
+
 from kailash.trust.rate_limit.backends.base import RateLimitBackend
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 from kailash.trust.rate_limit.config import RateLimitConfig
@@ -118,8 +120,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if api_key:
             return f"apikey:{api_key[:8]}"  # Truncate for privacy
 
-        # Fall back to IP address
-        client_ip = request.client.host if request.client else "unknown"
+        # Fall back to IP address — the ORIGINATING client under the operator's
+        # trusted-proxy posture, not the immediate peer (#2007).
+        client_ip = client_key_for_request(request)
         return f"ip:{client_ip}"
 
     def _get_route_limit(self, path: str) -> Optional[dict]:

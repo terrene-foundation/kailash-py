@@ -87,7 +87,22 @@ class AdapterFactory:
                 return "postgresql"
             elif scheme.startswith("mysql"):
                 return "mysql"
-            elif scheme.startswith("sqlite"):
+            elif scheme.startswith("sqlite") or scheme == "file":
+                # ``file`` is SQLite's own URI-filename scheme
+                # (https://sqlite.org/uri.html) — the form issue #1502 injects
+                # for a bare ``:memory:`` instance
+                # (``file:df_mem_<id>?mode=memory&cache=shared``) and the form a
+                # user supplies directly to reach SQLite's URI-only options
+                # (``mode=ro``, ``cache=shared``, ``immutable=1``).
+                #
+                # This ladder is an INDEPENDENT re-implementation of
+                # ``ConnectionParser.detect_database_type`` — it does not
+                # delegate — so it has to learn every scheme that one learns.
+                # Until this line it did not: ``ConnectionManager`` classified
+                # a ``file:`` URL as sqlite at connection.py:116 and then
+                # RAISED ``UnsupportedDatabaseError`` two lines later at :125
+                # when ``create_adapter`` re-classified the same string through
+                # here. Same function, two lines apart, opposite answers.
                 return "sqlite"
             elif scheme.startswith("mongodb"):
                 return "mongodb"

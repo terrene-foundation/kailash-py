@@ -89,7 +89,10 @@ class PersistentDLQ:
         # construction time, BEFORE any subclass override of
         # `_initialize_schema` could bypass the validator. This is the
         # single enforcement point for every DDL/DML interpolation site.
-        from kailash.db.dialect import _validate_identifier
+        from kailash.db.dialect import (
+            DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
+            _validate_identifier,
+        )
 
         for ident in (
             "dlq",
@@ -97,7 +100,9 @@ class PersistentDLQ:
             "idx_dlq_next_retry",
             "idx_dlq_created",
         ):
-            _validate_identifier(ident)
+            _validate_identifier(
+                ident, max_length=DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH
+            )
 
         self._db_path = db_path
         self._base_delay = base_delay

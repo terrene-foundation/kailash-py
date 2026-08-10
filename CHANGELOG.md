@@ -2,10 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+**Versioning — read this before pinning.** This package is versioned in **lockstep with the
+Kailash monorepo** and does **NOT** follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+a **MINOR** release MAY contain breaking changes. Every one is labelled
+`### Changed (BREAKING)` in its entry below, with a migration note. If you need
+upgrade-safety guarantees, pin an exact version (`kailash==X.Y.Z`) rather than a range
+such as `>=2.0`.
 
 ## [Unreleased]
+
+## [2.63.0] — 2026-08-05 — Dialect identifier budgets are fail-closed; bare install no longer breaks on the trust-plane MCP import; workflow `parameters` envelope binding restored on HTTP/CLI (#1971, #1996)
+
+### Fixed
+
+- **`kailash.trust.plane.mcp_server` no longer breaks import on a bare `pip install kailash` (#1996).** `mcp` is an optional extra (`kailash[mcp]`), but this module imported `from mcp.server import FastMCP` and constructed the server at module import time — so any code path that imported it (directly, or transitively through the trust plane) raised a bare `ModuleNotFoundError: No module named 'mcp'` with no indication of which extra to install. The server is now built lazily on first use and raises a typed, actionable `ImportError` naming the missing package and the install command when `mcp` is absent. Existing callers of the module-level `mcp_server.mcp` attribute are unaffected. The five MCP tools this module registers are unchanged — verified byte-identical (same names, descriptions, JSON parameter schemas, async flags) before and after the refactor.
+- **`_validate_identifier`'s length budget no longer silently defaults to SQLite's limit (CRITICAL).** The internal identifier-length validator defaulted its `max_length` parameter to SQLite's 128-character budget, so every call site that didn't explicitly pass a dialect's own limit inherited the loosest one available — including `PostgresDialect.upsert()`, which accepted a 100-character identifier that the same dialect's `quote_identifier()` rejected one line away. `max_length` is now a required keyword argument with no default, so a call site can no longer silently under-validate by omission. Every internal call site across the core SDK (schema migrations, task-queue/worker-registry/DLQ infrastructure, trust audit store) now passes its dialect's real limit, or the explicit `DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH` sentinel for the (documented, non-default) case where no dialect is bound yet.
+- **A caller that never bound a database dialect now gets a one-time warning naming the call site**, instead of silently validating identifiers against the loosest possible budget with no signal at all. The warning fires once per call site (not once per identifier) so a migration validating hundreds of names in a loop doesn't flood the log. This is observability only — an identifier within the unbound budget still passes; the warning exists so an operator can find and fix the unbound site, not to block it.
+
+This closes the residual half of the identifier-collision class fixed in kailash-dataflow 2.19.0/2.19.1/2.20.0 (#1971): those releases fixed DataFlow's own generated-identifier path, but the underlying validator both DataFlow and the core SDK share had its own bug. A second, DataFlow-side fail-open path in database-type detection is fixed in kailash-dataflow's own CHANGELOG, not here — see kailash-dataflow 2.20.0.
+
+### Fixed — `parameters` envelope binding restored on `WorkflowRequest.get_inputs()`
+
+- **A workflow using the documented `parameters.get(...)` convention 500'd over HTTP and CLI while the SAME registered workflow succeeded over MCP.** `WorkflowRequest.get_inputs()` previously returned `self.parameters` unwrapped when the caller POSTed `{"parameters": {...}}` (the shape Nexus's CLI channel sends), so a node reading `parameters.get(...)` raised `NameError: name 'parameters' is not defined`. `get_inputs()` now binds BOTH shapes for the `parameters` form: every key is bound at workflow level (unchanged, existing-caller-compatible) AND the whole mapping is additionally bound under the literal key `parameters`. Precedence is fixed, not incidental — if the caller's own parameters happen to contain a key named `parameters`, the envelope binding wins (the caller's value stays reachable at `parameters["parameters"]`), so the documented convention cannot be silently defeated by caller data.
+- **A bodyless POST now binds an empty `parameters` envelope instead of nothing at all.** Previously a request with no body returned a bare `{}`, so a workflow written to the documented convention with its own defaults (e.g. `parameters.get("message", "test")`) still hit the same `NameError` — an argument-less call became a 500 exactly like the unwrapped-envelope case above. A bodyless POST now returns `{"parameters": {}}`.
+- **Who is affected:** every `PythonCodeNode` body now receives a bound local named `parameters` whenever the workflow's top-level inputs carry the envelope (`PythonCodeNode.execute_code` binds every key of its input dict as a local via `exec(code, namespace, local_namespace)`) — a body that already declared its own local named `parameters` for an unrelated purpose will now see it pre-bound. Separately, the runtime routes a workflow-level input whose key matches a node's own ID into that node exclusively (`runtime/async_local.py`); a workflow containing a node literally named `parameters` does not receive the envelope as a workflow-level input at all — this is pre-existing runtime scoping, unchanged by this fix, and affects every channel identically.
 
 ## [2.62.0] — 2026-07-25 — WorkflowServer workflow deregistration (#1959)
 

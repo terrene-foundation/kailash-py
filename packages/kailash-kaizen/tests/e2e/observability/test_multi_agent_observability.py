@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 import pytest
+from tests.utils.docker_config import get_jaeger_config
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -58,10 +59,21 @@ def openai_api_key():
 
 
 @pytest.fixture
-def jaeger_endpoint():
-    """Fixture providing Jaeger endpoint from environment."""
-    endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4317")
-    return endpoint
+def jaeger_config():
+    """Jaeger host + port for the OTLP exporter.
+
+    Was ``jaeger_config``, returning a URL ("http://localhost:4317") that
+    was passed as ``enable_observability(jaeger_config=...)`` -- a keyword
+    that signature does not accept. It takes ``jaeger_host`` and
+    ``jaeger_port``, and TracingManager builds the endpoint as
+    ``f"{jaeger_host}:{jaeger_port}"``, so a scheme-carrying URL could not
+    have been passed through as the host either.
+
+    Returns the same dict shape as the sibling suites (test_jaeger_ui.py,
+    test_tracing_integration.py) already use, so there is one Jaeger config
+    contract in this tree rather than two.
+    """
+    return get_jaeger_config()
 
 
 @pytest.fixture
@@ -80,7 +92,7 @@ class TestSupervisorWorkerObservability:
 
     @pytest.mark.asyncio
     async def test_supervisor_worker_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 1: Distributed tracing across supervisor and workers.
@@ -108,7 +120,8 @@ class TestSupervisorWorkerObservability:
         )
         supervisor = BaseAgent(config=supervisor_config, signature=TaskSignature())
         supervisor_obs = supervisor.enable_observability(
-            service_name="supervisor-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="supervisor-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         supervisor_obs.audit.storage = custom_storage
 
@@ -123,7 +136,8 @@ class TestSupervisorWorkerObservability:
             )
             worker = BaseAgent(config=worker_config, signature=TaskSignature())
             worker_obs = worker.enable_observability(
-                service_name=f"worker-agent-{i}", jaeger_endpoint=jaeger_endpoint
+                service_name=f"worker-agent-{i}", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
             )
             worker_obs.audit.storage = custom_storage
             workers.append(worker)
@@ -184,7 +198,7 @@ class TestConsensusObservability:
 
     @pytest.mark.asyncio
     async def test_consensus_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 2: Observability for consensus coordination.
@@ -212,7 +226,8 @@ class TestConsensusObservability:
             )
             agent = BaseAgent(config=config, signature=DecisionSignature())
             obs = agent.enable_observability(
-                service_name=f"voting-agent-{i}", jaeger_endpoint=jaeger_endpoint
+                service_name=f"voting-agent-{i}", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
             )
             obs.audit.storage = custom_storage
             agents.append(agent)
@@ -266,7 +281,7 @@ class TestSequentialHandoffObservability:
 
     @pytest.mark.asyncio
     async def test_handoff_observability(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 3: Observability for sequential agent handoffs.
@@ -295,7 +310,8 @@ class TestSequentialHandoffObservability:
             config=research_config, signature=AnalysisSignature()
         )
         research_obs = research_agent.enable_observability(
-            service_name="research-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="research-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         research_obs.audit.storage = custom_storage
 
@@ -308,7 +324,8 @@ class TestSequentialHandoffObservability:
         )
         code_agent = BaseAgent(config=code_config, signature=TaskSignature())
         code_obs = code_agent.enable_observability(
-            service_name="code-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="code-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         code_obs.audit.storage = custom_storage
 
@@ -321,7 +338,8 @@ class TestSequentialHandoffObservability:
         )
         review_agent = BaseAgent(config=review_config, signature=AnalysisSignature())
         review_obs = review_agent.enable_observability(
-            service_name="review-agent", jaeger_endpoint=jaeger_endpoint
+            service_name="review-agent", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         review_obs.audit.storage = custom_storage
 

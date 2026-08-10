@@ -23,6 +23,7 @@ from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any
 
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.a2a import SharedMemoryPoolNode
 from kaizen.nodes.ai.self_organizing import (
     AgentPoolManagerNode,
@@ -725,7 +726,12 @@ class MCPAgentNode(SelfOrganizingAgentNode):
             return result
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            # #1970: ``client.execute`` is an MCP tool call — a transport error
+            # can carry a URL-embedded credential or an auth header.
+            return {
+                "success": False,
+                "error": sanitize_provider_error(e, f"MCP tool {tool_name}"),
+            }
 
     def _cache_tool_result(self, tool_name: str, result: dict, cache_node_id: str):
         """Cache tool call result."""
@@ -2127,9 +2133,7 @@ class ConvergenceDetectorNode(Node):
                 "trend": (
                     "improving"
                     if improvement > 0
-                    else "declining"
-                    if improvement < 0
-                    else "stable"
+                    else "declining" if improvement < 0 else "stable"
                 ),
                 "rate": improvement,
                 "total_improvement": improvement,
@@ -2155,9 +2159,7 @@ class ConvergenceDetectorNode(Node):
             "trend": (
                 "improving"
                 if slope > 0.01
-                else "declining"
-                if slope < -0.01
-                else "stable"
+                else "declining" if slope < -0.01 else "stable"
             ),
             "rate": slope,
             "total_improvement": scores[-1] - scores[0],

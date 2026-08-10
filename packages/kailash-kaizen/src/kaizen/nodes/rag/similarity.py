@@ -21,6 +21,7 @@ import numpy as np
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
+
 from kaizen.core._provider_env import detect_provider_from_env
 
 logger = logging.getLogger(__name__)
@@ -419,7 +420,7 @@ class SparseRetrievalNode(Node):
                     "provider": detect_provider_from_env(),
                     "system_prompt": """You are a query expansion expert.
                     Generate 3-5 related terms or synonyms for the given query.
-                    Return as JSON: {"expanded_terms": ["term1", "term2", ...]}"""
+                    Return as JSON: {"expanded_terms": ["term1", "term2", ...]}""",
                 },
             )
 

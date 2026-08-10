@@ -2,7 +2,81 @@
 
 All notable changes to the Kaizen AI Agent Framework will be documented in this file.
 
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+**Versioning — read this before pinning.** This package is versioned in **lockstep with the
+Kailash monorepo** and does **NOT** follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
+a **MINOR** release MAY contain breaking changes. Every one is labelled
+`### Changed (BREAKING)` in its entry below, with a migration note. If you need
+upgrade-safety guarantees, pin an exact version (`kailash-kaizen==X.Y.Z`) rather than a
+range such as `>=2.0`.
+
 ## [Unreleased]
+
+### Fixed — `EnterpriseMemorySystem` no longer widens tenant scope on a falsy tenant id (#2005)
+
+`_build_tenant_key` resolved its scope with `tenant_id or self._current_tenant`.
+Truthiness cannot distinguish an ABSENT tenant from a BLANK one, so `tenant_id=""`
+(or `0`) silently produced an **un-namespaced key in the shared global namespace**
+instead of being rejected. In a multi-tenant deployment every caller that passed a
+blank tenant landed in that one namespace together.
+
+This was never a cross-tenant leak — `get`, `put` and the sibling call sites all
+route through `_build_tenant_key` symmetrically, so reaching `tenant:X:` still
+required the effective tenant to BE `X`. The defect is a fail-OPEN default: scope
+degraded to global, silently.
+
+**No-tenant remains a supported state** (`clear_tenant_context()` has always
+implied it) and **the key format is unchanged**, so no stored key is stranded:
+
+- explicit tenant → `tenant:<id>:<key>` (as before)
+- no tenant → bare `<key>` (as before)
+
+What changed:
+
+- **A blank or non-string `tenant_id` is now a caller error**, raising `ValueError`
+  / `TypeError` rather than silently widening scope. Resolution uses `is None`, not
+  truthiness. **This is the one behavioural break**: a caller that previously passed
+  `""` and received global scope now gets an exception. Pass `tenant_id=None` — or
+  the new `GLOBAL_SCOPE` sentinel — to request global scope deliberately.
+- **`GLOBAL_SCOPE`** is a new sentinel for callers that want the shared namespace
+  explicitly and silently — `from kaizen.memory import GLOBAL_SCOPE` (also
+  importable from `kaizen.memory.enterprise`). It subclasses `str`, so it
+  satisfies the existing `Optional[str]` annotation everywhere while staying
+  distinguishable — via `isinstance`, not equality — from a tenant literally
+  named `"__global__"`.
+
+  > **`GLOBAL_SCOPE` means two different things, and one of them is
+  > destructive.** On `get`/`put`/`delete`/`exists` it selects only the
+  > un-namespaced global entries. On **`clear()` it wipes every tier for every
+  > tenant** — the same as `clear()` with no argument — because `clear()` has
+  > never had a tenant-scoped implementation. `clear(GLOBAL_SCOPE)` is
+  > therefore NOT "clear the global namespace"; it is "clear everything".
+  > Deliberate and pinned by `test_global_scope_clear_wipes_all_tiers`, but
+  > called out here because reading the key-building sense above and applying
+  > it to `clear()` destroys all tenant data.
+  >
+  > Related, and also pre-existing: `clear("some-tenant")` returns `False` and
+  > clears **nothing** ("tenant-specific clear not fully implemented"). A caller
+  > that does not check the return value will believe an erasure happened when
+  > none did — relevant if you rely on it for a data-deletion obligation.
+
+- **A one-time (per-process) `WARNING`** is emitted the first time a
+  `multi_tenant_enabled=True` system builds a key with no tenant scope, naming the
+  protection that is off and how to wire it. `clear_tenant_context()` and
+  `tenant_id=GLOBAL_SCOPE` declare the intent and suppress it.
+- **`clear()` no longer widens on a blank tenant id.** It used the same truthiness
+  test, so `clear(tenant_id="")` fell through to the branch that clears EVERY tier
+  for EVERY tenant. It now validates first and additionally warns when called with
+  no tenant while a tenant context is set.
+
+The tenant-namespace boundary is now pinned by tests in all four directions
+(no-tenant↔no-tenant, no-tenant vs tenant-scoped, tenant-scoped vs no-tenant, and
+tenant A vs tenant B) — the coverage #2005 correctly identified as missing.
+
+## [2.46.0] — 2026-08-05 — Credential-sanitization hardening completed; A2A capability matching fixed (#1970, #1973, #1974, #1981)
+
+**Upgrade note: this release does NOT include the discovery-permission fail-open fix.** That fix lives in the separate `kaizen-agents` package (`UserFilteredAgentDiscovery`, not part of `kailash-kaizen`) and ships in `kaizen-agents` 0.13.0. `kaizen-agents` 0.12.0 declares `kailash-kaizen>=2.36.0` with no upper cap, so upgrading `kailash-kaizen` to 2.46.0 satisfies that floor and gives a dependency resolver no reason to also upgrade `kaizen-agents` — an environment can report `kailash-kaizen` upgraded while `kaizen-agents` silently stays on 0.12.0 with its fail-open permission checker still live. If your deployment uses `kaizen-agents`, upgrade it explicitly to `>=0.13.0` alongside this release; see the `kaizen-agents` CHANGELOG for the fix itself.
 
 ### Changed (behavior — potentially breaking)
 
@@ -28,14 +102,172 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
   with structured `error` / `error_type` fields (WARN, not ERROR — the operation
   still returns a usable result).
 - **Degraded capability/similarity judgments are no longer reported as successes
-  or cached (#1973).** When structured-output parsing fails, the score coerces to
-  `0.0`; `llm_capability_match` and `llm_text_similarity` previously logged
-  `*.ok` and cached that fabricated zero for the process lifetime. They now log
-  `*.degraded` at WARN with the underlying error and skip the cache. The `0.0`
-  return contract is unchanged — the bridges absorb one judge failure rather than
-  sink a selection round. The root cause (these agents do not enforce structured
-  output, so on providers without it every real score is `0.0` and A2A ranking is
-  arbitrary) is tracked separately in #1981 and is NOT fixed here.
+  or cached (#1973).** `llm_capability_match` and `llm_text_similarity`
+  previously logged `*.ok` and cached a fabricated zero for the process
+  lifetime. They now log `*.degraded` at WARN with the underlying error and skip
+  the cache.
+
+### Changed (BREAKING) — degraded reasoning judgments raise instead of returning `0.0` (#1981)
+
+- **`llm_capability_match` and `llm_text_similarity` now raise
+  `kaizen.llm.reasoning.ReasoningDegradedError`** when the judge returns no
+  usable score, instead of returning `0.0`. A returned `0.0` was
+  indistinguishable from a genuine no-match, so A2A ranking silently degraded to
+  arbitrary order — the defect #1981 exists to close. A WARN line is not
+  reachable by a caller, so observability alone could not fix it; the signal had
+  to reach the API surface.
+- **`ReasoningDegradedError` is exported** from `kaizen.llm.reasoning` (and
+  `kaizen.llm`) so callers can distinguish "could not judge" from "judged zero".
+- **Callers updated in the same change.** `A2AAgentCard.calculate_match_score` /
+  `_find_best_agents_for_task` and every `kaizen-agents` ranking surface
+  (`_reasoning_bridge`, `runtime`, `registry`, `llm_routing`,
+  `patterns/patterns/*`) now catch it PER CANDIDATE: a degraded candidate is
+  EXCLUDED from the ranking rather than scored `0.0`, and the error is re-raised
+  only when EVERY candidate degraded — so one judge failure never sinks a round,
+  and an all-degraded round never returns an arbitrary pick presented as a
+  judged one.
+- **Migration:** a caller that treated the return as always-numeric must now
+  handle `ReasoningDegradedError`. Catching it and substituting `0.0` restores
+  the old behaviour but reinstates the defect.
+
+### Fixed — credential sanitization (#1970, #1974)
+
+- **Provider exceptions are routed through `sanitize_provider_error` across the
+  kaizen surface (#1970)** — ~120 call sites — so a bad-key / rate-limit / auth
+  error cannot echo a credential into a user-visible dict field, a raised
+  message, or a log record.
+- **Log surfaces are sanitized at parity with raised messages.**
+  `observability/trace_exporter.py` and the `llm/reasoning.py` `.error` handlers
+  logged the raw exception via `logger.exception`'s traceback even where the
+  raised message was already scrubbed; both now log the sanitized text and drop
+  `exc_info`. In `trace_exporter` the raise is gated on `raise_on_error`
+  (`False` by default), so the log was the only surface that fired for the
+  default configuration.
+- **`error_sanitizer` pattern coverage broadened (#1974):** any RFC-3986 scheme
+  (not just `http(s)`), empty-userinfo DSNs (`redis://:pass@`), userinfo longer
+  than the DoS bound, userinfo with no password half (`scheme://token@host`),
+  Slack `xox[baprse]-`, bare three-segment JWTs, GitHub `ghp_`/`github_pat_`,
+  and Stripe `sk_live_`/`rk_test_`.
+
+### Changed — `ErrorEvent.message` is sanitized
+
+- `StreamingExecutor` emits `ErrorEvent.message` through
+  `sanitize_provider_error`, so the field is now prefixed
+  (`"Agent execution error (<Type>): <message>"`) rather than a bare `str(e)`.
+  The event stream crosses a process boundary to consumers, so an unsanitized
+  agent exception could ship a credential.
+
+### Added — caller-selectable credential scrub aggression
+
+- **`scrub_credentials(text, *, redact_opaque_tokens=True, redact_paths=True)`
+  gains two keyword-only flags**, both defaulting to the prior (aggressive)
+  behavior — fully backward-compatible for any existing caller. Turning both
+  off keeps only the rules anchored on a literal that cannot occur outside a
+  real credential (`sk-`, `AKIA`, `ghp_`, `hf_`, `fw_`, `xox?-`, `sk_live_`,
+  `sig=`, `Bearer`/`Basic`, bare JWTs, URL-userinfo/DSN credentials), and turns
+  off the two shape-only rules (`redact_opaque_tokens`: 32+/40+ char runs,
+  which also claim git SHAs, MD5 digests, and long identifiers) and the
+  internal-path rules (`redact_paths`: `$HOME` paths, Azure resource names).
+- **`scrub_local_error(text)`** is a new convenience wrapper applying that
+  conservative combination — for exception text from an in-process failure
+  (a filesystem error, a local tool result) where the redacted bytes ARE the
+  diagnostic a caller or an LLM agent needs to retry correctly, not a
+  disclosure risk. `scrub_remote_error(text)` is the paired wrapper for the
+  existing aggressive default, naming intent at call sites that handle a
+  provider/HTTP/subprocess boundary exception.
+
+### Fixed — further credential-sanitization gaps closed (#1970, #1974)
+
+The #1970/#1974 sweep above closed the majority of the credential-leak
+surface; this batch closes the residual gaps found by follow-up adversarial
+review, mostly on paths the first sweep's site-by-site approach could not see
+because the leak and its (correctly-scrubbed) sibling sat two lines apart.
+
+- **A third, independent credential scrubber existed on a logging path and had
+  drifted from the shared module on 9 of 10 vendor shapes.**
+  `SensitiveDataRedactor.PATTERNS` (`core/autonomy/hooks/security/redaction.py`,
+  reachable via the built-in logging hook) caught `sk-`/`pk-` and missed AWS
+  `AKIA`/`ASIA`, `ghp_`, `hf_`, `fw_`, Slack `xoxb-`, Stripe `sk_live_`, Azure
+  SAS `sig=`, and URL-embedded DSNs. It now delegates the vendor-credential
+  half to the shared scrubber and keeps its own list for the non-credential
+  PII classes (credit cards, SSNs, emails, IPs) that the shared module
+  doesn't cover, plus two field-shaped forms it deliberately retains
+  alongside the delegation (`password: ...`, `Bearer ...`, and the
+  `sk-`/`pk-`-prefixed `api_key` pattern — the latter kept because it also
+  accepts the `pk_` shape and a `_` separator the shared rule doesn't), with
+  a parity test in both directions so the two cannot drift again.
+- **`ProviderError.body_snippet`** (fed the full, unredacted provider response
+  body at its three construction sites) had its own independent scrubber that
+  never learned the #1974 pattern additions and leaked all eight vendor
+  credential shapes. It now delegates to the shared module.
+- **`FallbackResult.to_dict()` serialized the raw provider exception** even
+  though `FallbackRouter` had already sanitized the same exception into
+  `FallbackEvent.error_message` two lines earlier — one dict carried the same
+  credential twice, scrubbed under one key and raw under `error`. Also: the
+  regression suite covering this sweep never actually ran in CI (its autouse
+  fixture silently skipped without an ambient `.env`-provided model name), so
+  it reported green with zero real coverage for the file's entire life.
+- **Structured-output parse-failure messages interpolated the raw provider
+  response body unscrubbed** (`f"... Content: {content[:500]}"`) right next to
+  an already-scrubbed exception — the scrub protected the half of the message
+  that carried no credential and skipped the half that did.
+- **A regex compiled from a caller-supplied `grep_tool` pattern could leak a
+  prefix-less credential via CPython's "unknown group name" error message**,
+  which echoes the offending group name verbatim; this path was previously
+  (incorrectly) classified as safe because it raises in-process.
+- **Both credential-redaction URL rules (`Bearer`-only, and no `Basic`, no bare
+  `password=`/`api_key=` key-value pairs) missed HTTP Basic auth and bare
+  credential-announcing `key=value` literals** — `Authorization: Basic
+dXNlcjpwYXNzd29yZA==` (reversible base64, not a digest) and
+  `password=hunter2longenough` both passed through unredacted under the
+  conservative preset. Both are now covered on both presets.
+- **The key=value credential rule blanked ordinary diagnostic prose that
+  merely followed a credential-suggestive key name**, e.g. `invalid value for
+'api_key': expected string` and `api_key: Optional[str]` were fully redacted
+  even though neither carries a secret. The rule is now split by aggression: a
+  token-shape check (value must look like an issued key — 16+ alphanumeric, or
+  contains a digit/punctuation) runs on both presets; the original
+  unconstrained form is retained only under the aggressive preset for short
+  pure-alphabetic secrets.
+- **A compact-JSON provider error body could be over-redacted into invalid
+  JSON** — the URL-credential rules' greedy userinfo match, with no delimiter
+  other than whitespace, ran from the first `scheme://` to the LAST `@`
+  anywhere in a whitespace-free JSON body, swallowing an unrelated closing
+  brace and leaving a body a caller's `json.loads()` could no longer parse.
+  The userinfo match now stops at an unescaped quote followed by a JSON
+  structural delimiter (`,` `}` `]` `:`), closing the JSON-boundary crossing
+  while still catching every real credential shape, including one embedded
+  inside a JSON string value.
+- **The scrubber's vendor-prefix table was missing two first-class providers.**
+  Hugging Face (`hf_...`) and Fireworks (`fw_...`) API key shapes were not
+  claimed by any rule (both fall under the generic-hex length threshold and
+  contain an underscore, which defeats the word-boundary check other prefixed
+  rules rely on) and passed through unredacted in provider-error bodies.
+- **`show_error` printed the raw, unscrubbed exception the caller had just
+  logged in sanitized form one line above** — the same exception object was
+  handed to both, and only the log line was scrubbed. Fixed at the sink
+  (`rich_output.show_error`) rather than at the one known caller, so future
+  callers inherit the fix.
+- **The SSE stream's read-error handler wrote to `sys.stderr` via `print()`**
+  instead of the module's own logger — unstructured, unroutable, and gone on
+  process restart. It now logs at ERROR (the read loop returns and the
+  caller's message stream ends, which is a failed operation, not a degraded
+  one) through the existing credential-sanitized path.
+- **Keyless local providers (e.g. Ollama) were reported unavailable purely for
+  lacking an API key.** `resolve_deployment_for("ollama", ...)` gated
+  availability on credential presence, so a working local Ollama install with
+  no API key configured raised `"Provider ollama is not available"`.
+  Availability is now resolved declaratively so any keyless/local provider is
+  covered by the same property, not a hardcoded provider-name check.
+- **A degraded reasoning judgment (#1981) could abort an entire `A2ACoordinatorNode`
+  workflow** even though the node's own docstring promises "errors returned in
+  the result dictionary" — it had no exception handling around the new
+  `ReasoningDegradedError`. It's now caught (narrowly — a genuine
+  `RuntimeError` still propagates) and returned as `{"success": False,
+"degraded": True, ...}`. A related workflow-status bookkeeping fix: the
+  workflow's status is now published only after routing completes, so a
+  degraded route no longer leaves a permanently-queryable phantom workflow
+  entry that can never complete or clear.
 
 ## [2.45.0] — 2026-07-25 — Follow-up hardening: sanitizer redaction, Nexus lifecycle, RAG log hygiene
 
@@ -1578,11 +1810,6 @@ Minor release shipping the kailash-kaizen side of the kailash 2.18.0 / #890 slim
 
 - **Bare imports of moved subsystems on a slim install raise raw `ModuleNotFoundError`** — e.g. `from kaizen.observability import ...` requires `[observability]`. The migration table above is the authoritative recovery path.
 - This is a **packaging / install-shape change only** — every Python public-API symbol that existed in 2.20.0 still exists in 2.21.0 with the same signature and semantics. Users on `pip install 'kailash-kaizen[all]'` see no behavior change.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
 
 ## [2.20.0] — 2026-05-06 — LLM-first trait derivation per agent-reasoning.md Rule 1 (#829)
 

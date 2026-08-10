@@ -144,9 +144,11 @@ manager = AuthManager(
 
 user_info = manager.authenticate_and_authorize(
     credentials: Dict,
-    required_permission: Optional[str] = None,
+    required_permission: Union[str, Sequence[str], None] = None,
 )
 ```
+
+`required_permission` accepts a single permission string OR a sequence of them; when a sequence is passed, ALL entries are required (`_authorize` checks every permission in the sequence, not just the first).
 
 **Pipeline:** authenticate -> rate limit check -> permission check -> audit log.
 

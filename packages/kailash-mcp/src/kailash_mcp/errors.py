@@ -254,6 +254,27 @@ class ToolError(MCPError):
         super().__init__(message, **kwargs)
 
 
+class ToolNotAvailableError(ToolError):
+    """The server refuses to run a tool it knows about (disabled, no handler).
+
+    Distinct from ``ToolError`` so the JSON-RPC layer can tell the server's OWN
+    availability decision apart from a tool BODY that raised. That distinction
+    is load-bearing for disclosure: this class's message is authored here and
+    embeds no foreign text, so it is safe to return verbatim to an
+    unauthenticated caller, whereas a body exception's text may carry internal
+    paths, driver output, or credentials and MUST be replaced by a correlation
+    id (see ``MCPServer._internal_error_envelope``). Matching on the message
+    string instead would re-open the leak the moment a message is reworded.
+
+    Not retryable by default: retrying changes nothing until an operator calls
+    ``enable_tool`` or fixes the registration.
+    """
+
+    def __init__(self, message: str, tool_name: str = "", **kwargs):
+        kwargs.setdefault("retryable", False)
+        super().__init__(message, tool_name=tool_name, **kwargs)
+
+
 class ResourceError(MCPError):
     """Resource-related error."""
 

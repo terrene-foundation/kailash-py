@@ -171,7 +171,15 @@ class ImageField:
             self._size_bytes = len(self._data)
             self._detect_format()
         except Exception as e:
-            raise RuntimeError(f"Failed to load image from URL: {e}")
+            # `requests` echoes the request URL into its exception text, and an
+            # image source is routinely a presigned URL carrying a token in the
+            # query string or userinfo (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise RuntimeError(
+                f"Failed to load image from URL: "
+                f"{sanitize_provider_error(e, 'Image fetch')}"
+            ) from e
 
     def _load_from_base64(self, base64_str: str):
         """Load image from base64 string."""
@@ -416,7 +424,14 @@ class AudioField:
                 # Fallback to byte header detection
                 self._format = self._detect_format_from_bytes(self._data)
         except Exception as e:
-            raise RuntimeError(f"Failed to load audio from URL: {e}")
+            # Same class as the image path above: `requests` echoes the URL, and
+            # an audio source is routinely a presigned URL (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            raise RuntimeError(
+                f"Failed to load audio from URL: "
+                f"{sanitize_provider_error(e, 'Audio fetch')}"
+            ) from e
 
     def _load_from_base64(self, data_url: str):
         """Load audio from base64 data URL."""

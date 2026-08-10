@@ -12,6 +12,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 
@@ -99,10 +100,18 @@ class PrintRunner:
                     continue
                 full_text += chunk
         except Exception as exc:
-            logger.error("PrintRunner failed: %s", exc, exc_info=True)
+            # Was leaking TWICE: the raw ``exc`` as the ``%s`` argument AND the
+            # traceback via ``exc_info``. The author already knew the exception
+            # was unsafe -- the ``error_message`` three lines below scrubs the
+            # SAME object -- so the returned value was protected while the log
+            # line beside it shipped the credential in full. Both halves now
+            # route through the one helper (rules/security.md "No secrets in
+            # logs"; observability.md Rule 6.3 -- the redaction has to cover
+            # EVERY surface the value reaches, not just the convenient one).
+            logger.error("PrintRunner failed: %s", scrub_remote_error(exc))
             return PrintResult(
                 is_error=True,
-                error_message=str(exc),
+                error_message=scrub_remote_error(exc),
             )
 
         tools_used = self._extract_tools_used()

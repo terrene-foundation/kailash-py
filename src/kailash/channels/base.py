@@ -7,7 +7,19 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+
 logger = logging.getLogger(__name__)
+
+# How long ``_cleanup`` waits to CONFIRM that the task it just cancelled has
+# actually stopped. The cancel itself is synchronous and unconditional, so this
+# bounds only the observation. Deliberately short: ``_cleanup`` runs from
+# ``stop()``'s ``finally`` while a caller-aimed cancellation is propagating,
+# often under a shutdown deadline, so a long join here compounds the very
+# teardown it is trying not to obstruct. Long enough for a cooperative task to
+# unwind, short enough that a task which ignores cancellation cannot hold the
+# caller.
+_CLEANUP_JOIN_TIMEOUT = 1.0
 
 
 class ChannelType(Enum):
@@ -251,14 +263,88 @@ class Channel(ABC):
         if self.config.enable_event_routing:
             self._event_queue = asyncio.Queue(maxsize=self.config.event_buffer_size)
 
-    async def _cleanup(self) -> None:
-        """Clean up channel resources."""
+    async def _cleanup(self) -> bool:
+        """Clean up channel resources. Returns whether cleanup COMPLETED.
+
+        The return value is load-bearing: a caller that promotes an incomplete
+        cleanup to ``STOPPED`` reports a clean stop over a live task, which is
+        the false-success family this channel work exists to close.
+
+        ``False`` denotes TWO different conditions and a caller retrying on the
+        resulting ``STOPPING`` behaves differently in each. The event task is
+        STILL LIVE (it ignored its cancellation) -- a retry re-cancels, waits
+        again, and returns ``STOPPING`` again until the task genuinely dies. Or
+        the event task DIED OF AN ERROR -- the task is gone, the error has been
+        logged, and a retry clears to ``STOPPED`` immediately without having
+        addressed the error. The WARN text distinguishes them; the bool does
+        not.
+
+        THE JOIN IS BOUNDED AND DOES NOT RE-RAISE, for two reasons that both
+        surfaced when ``stop()`` began running this from a ``finally`` while a
+        caller-aimed ``CancelledError`` was propagating.
+
+        ``await self._running_task`` STRANDS the caller when that task ignores
+        cancellation -- the join never completes, so the ``finally`` never
+        completes, and the caller who asked to be cancelled never regains
+        control. That is a worse failure than the swallowed cancellation the
+        channel work set out to fix, and it re-opens one task over the exact
+        property ``test_stop_does_not_strand_a_caller_behind_an_unstoppable_task``
+        already pins for ``_server_task``.
+
+        ``await`` also RE-RAISES whatever the task died of. A real exception
+        escaping here replaces the in-flight ``CancelledError`` and demotes it
+        to ``__context__``, silently losing the cancellation -- the same defect
+        one layer down.
+
+        ``asyncio.wait`` fixes both: it observes completion without re-raising,
+        and it takes a timeout. ``cancel()`` above is SYNCHRONOUS and has
+        already landed, so the task is cancelled regardless of what the join
+        observes; only the CONFIRMATION is bounded, which is the right
+        semantics for a task that may never honour it.
+        """
+        complete = True
         if self._running_task and not self._running_task.done():
             self._running_task.cancel()
-            try:
-                await self._running_task
-            except asyncio.CancelledError:
-                pass
+            done, pending = await asyncio.wait(
+                {self._running_task}, timeout=_CLEANUP_JOIN_TIMEOUT
+            )
+            # THE TASK'S OWN ERROR STILL HAS TO SURFACE. `asyncio.wait` does not
+            # re-raise -- which is why it replaced the `await` that displaced
+            # the caller's CancelledError -- but discarding `done` trades that
+            # defect for the opposite one: a `_running_task` that died of a real
+            # error is now silently swallowed, and Python additionally emits an
+            # unstructured "Task exception was never retrieved" at GC. Retrieve
+            # it and log it. Cancellation is the EXPECTED outcome here and is
+            # not an error, so it is excluded.
+            for task in done:
+                if task.cancelled():
+                    continue
+                task_error = task.exception()
+                if task_error is not None:
+                    complete = False
+                    logger.warning(
+                        "Channel %s: event task failed during cleanup: %s at %s",
+                        self.name,
+                        safe_type_name(task_error),
+                        safe_exception_frames(task_error, limit=3),
+                    )
+            if pending:
+                # BOUNDING THE JOIN WITHOUT READING ITS RESULT WOULD TRADE A
+                # HANG FOR A LIE. `asyncio.wait` returns (done, pending) and
+                # nothing else distinguishes "the task stopped" from "the
+                # timeout elapsed and it is still running" -- so discarding the
+                # result lets cleanup log success and the caller record STOPPED
+                # over a live task. That is the false-success family this branch
+                # exists to close, and the sibling bounded join in
+                # `visualization/api.py` already shows the right shape: surface
+                # the timeout, refuse to claim success.
+                complete = False
+                logger.warning(
+                    "Channel %s: event task did not stop within %ss; cleanup is "
+                    "INCOMPLETE and the task is still live",
+                    self.name,
+                    _CLEANUP_JOIN_TIMEOUT,
+                )
 
         if self._event_queue:
             # Clear any remaining events
@@ -268,4 +354,6 @@ class Channel(ABC):
                 except asyncio.QueueEmpty:
                     break
 
-        logger.info(f"Cleaned up channel {self.name}")
+        if complete:
+            logger.info(f"Cleaned up channel {self.name}")
+        return complete

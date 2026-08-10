@@ -37,6 +37,7 @@ from typing import Any, NotRequired, TypedDict
 from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents._model_env import resolve_default_model
 
 logger = logging.getLogger(__name__)
@@ -328,11 +329,11 @@ class ToTAgent(BaseAgent):
                 "details": result,
             }
         except Exception as e:
-            logger.error(f"Error generating path {path_id}: {str(e)}")
+            logger.error(f"Error generating path {path_id}: {scrub_remote_error(e)}")
             return {
                 "path_id": path_id,
                 "reasoning": "",
-                "error": str(e),
+                "error": scrub_remote_error(e),
             }
 
     async def _generate_path_async(
@@ -383,7 +384,9 @@ class ToTAgent(BaseAgent):
                 # Run async generation
                 paths = asyncio.run(generate_all())
             except Exception as e:
-                logger.error(f"Error in parallel path generation: {str(e)}")
+                logger.error(
+                    f"Error in parallel path generation: {scrub_remote_error(e)}"
+                )
                 # Fallback to sequential
                 paths = [
                     self._generate_path(task, i)
@@ -557,7 +560,7 @@ class ToTAgent(BaseAgent):
             logger.info(f"Generating {self.tot_config.num_paths} reasoning paths")
             paths = self._generate_paths(task=task.strip())
         except Exception as e:
-            logger.error(f"Error generating paths: {str(e)}")
+            logger.error(f"Error generating paths: {scrub_remote_error(e)}")
             return {
                 "error": "PATH_GENERATION_FAILED",
                 "paths": [],
@@ -571,7 +574,7 @@ class ToTAgent(BaseAgent):
             logger.info(f"Evaluating {len(paths)} paths")
             evaluations = self._evaluate_paths(paths=paths, task=task.strip())
         except Exception as e:
-            logger.error(f"Error evaluating paths: {str(e)}")
+            logger.error(f"Error evaluating paths: {scrub_remote_error(e)}")
             return {
                 "error": "EVALUATION_FAILED",
                 "paths": paths,
@@ -584,7 +587,7 @@ class ToTAgent(BaseAgent):
         try:
             best_path = self._select_best_path(evaluations=evaluations)
         except Exception as e:
-            logger.error(f"Error selecting best path: {str(e)}")
+            logger.error(f"Error selecting best path: {scrub_remote_error(e)}")
             return {
                 "error": "SELECTION_FAILED",
                 "paths": paths,
@@ -597,7 +600,7 @@ class ToTAgent(BaseAgent):
         try:
             final_result = self._execute_path(path=best_path.get("path", {}))
         except Exception as e:
-            logger.error(f"Error executing best path: {str(e)}")
+            logger.error(f"Error executing best path: {scrub_remote_error(e)}")
             return {
                 "error": "EXECUTION_FAILED",
                 "paths": paths,

@@ -33,6 +33,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.events import (
     BudgetExhausted,
     ErrorEvent,
@@ -111,7 +112,11 @@ def _resolve_streaming_client(agent: BaseAgent) -> Any | None:
         # "cannot build a streaming client" case; fall back to batch (WARN).
         logger.warning(
             "streaming_agent.client_resolution_unsupported",
-            extra={"model": model, "provider": provider, "error": str(exc)},
+            extra={
+                "model": model,
+                "provider": provider,
+                "error": scrub_remote_error(exc),
+            },
         )
         return None
 
@@ -357,7 +362,7 @@ class StreamingAgent(WrapperBase):
             )
         except StreamTimeoutError as exc:
             yield ErrorEvent(
-                error=str(exc),
+                error=scrub_remote_error(exc),
                 details={"timeout_seconds": self._timeout_seconds},
             )
         except Exception as exc:
@@ -547,7 +552,7 @@ class StreamingAgent(WrapperBase):
             )
         except StreamTimeoutError as exc:
             yield ErrorEvent(
-                error=str(exc),
+                error=scrub_remote_error(exc),
                 details={"timeout_seconds": self._timeout_seconds},
             )
         except Exception as exc:

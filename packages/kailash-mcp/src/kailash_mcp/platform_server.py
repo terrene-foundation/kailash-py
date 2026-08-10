@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 _SERVER_START_TIME: float = time.monotonic()
 
 __all__ = [
+    "FASTMCP_IMPORT_ERROR_MESSAGE",
     "FRAMEWORK_CONTRIBUTORS",
     "TokenAuthMiddleware",
     "RateLimitMiddleware",
@@ -50,6 +51,15 @@ __all__ = [
     "get_health_status",
     "main",
 ]
+
+#: Actionable message raised when the optional third-party ``mcp`` package is
+#: absent. MUST stay byte-identical to
+#: ``kailash.mcp_compat.FASTMCP_IMPORT_ERROR_MESSAGE`` — the two are pinned
+#: together by ``tests/unit/mcp/test_fastmcp_accessor_parity.py``.
+FASTMCP_IMPORT_ERROR_MESSAGE = (
+    "Cannot import FastMCP from the third-party 'mcp' package. "
+    "Install it with: pip install 'mcp[cli]>=1.23.0'"
+)
 
 FRAMEWORK_CONTRIBUTORS: list[tuple[str, str]] = [
     ("kailash_mcp.contrib.core", "core"),
@@ -246,16 +256,27 @@ def get_health_status(server: Any) -> dict[str, Any]:
 
 
 def _get_fastmcp_class() -> type:
-    """Import FastMCP from the third-party ``mcp`` package."""
-    try:
-        from mcp.server.fastmcp import FastMCP
+    """Import FastMCP from the third-party ``mcp`` package.
 
-        return FastMCP
-    except ImportError:
-        raise ImportError(
-            "Cannot import FastMCP from the third-party 'mcp' package. "
-            "Install it with: pip install 'mcp[cli]>=1.23.0'"
-        )
+    Resolves FastMCP through ``mcp.server`` — the SAME path (and with the same
+    error message) as ``kailash.mcp_compat.get_fastmcp_class``, which the core
+    trust-plane server uses. The two accessors are held in lockstep by
+    ``tests/unit/mcp/test_fastmcp_accessor_parity.py``; they are deliberately
+    NOT a single shared function because this package's declared floor is
+    ``kailash>=2.56.0``, and importing ``kailash.mcp_compat`` (added later)
+    would break every install on a released core within that floor.
+
+    ``mcp.server`` rather than ``mcp.server.fastmcp``: both resolve to the same
+    class on ``mcp`` 1.x, but ``mcp`` 2.0.0 deletes the ``mcp.server.fastmcp``
+    submodule outright while ``mcp.server`` survives with an explicit
+    ``__all__``. See ``kailash.mcp_compat`` for the full rationale.
+    """
+    try:
+        from mcp.server import FastMCP
+    except ImportError as exc:
+        raise ImportError(FASTMCP_IMPORT_ERROR_MESSAGE) from exc
+
+    return FastMCP
 
 
 def _get_tool_names(server: Any) -> set[str]:

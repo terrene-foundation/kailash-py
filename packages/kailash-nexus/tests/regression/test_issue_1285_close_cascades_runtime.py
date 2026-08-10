@@ -33,13 +33,36 @@ import pytest
 from kailash.runtime.async_local import AsyncLocalRuntime
 
 
-def _leaked_runtimes():
-    """Return live AsyncLocalRuntime instances still holding a reference."""
+def _held_runtime_ids():
+    """ids of every live AsyncLocalRuntime that still holds a reference."""
+    gc.collect()
+    return {
+        id(o)
+        for o in gc.get_objects()
+        if isinstance(o, AsyncLocalRuntime) and getattr(o, "_ref_count", 0) > 0
+    }
+
+
+def _leaked_runtimes(baseline_ids):
+    """Live AsyncLocalRuntimes holding a ref that did NOT exist at ``baseline_ids``.
+
+    Scoped to runtimes created AFTER the baseline snapshot. An unscoped
+    ``gc.get_objects()`` scan makes this assertion a whole-PROCESS leak
+    detector: any earlier test in the same session that constructs a Nexus (or
+    any runtime) and keeps it referenced fails this test, even though nothing
+    about ``Nexus.close()`` regressed. That coupling is why the test passed
+    when the regression tier ran alone and failed when it ran after the unit
+    tier -- an order-dependent false failure, not a product defect. The
+    contract this file pins is "close() releases the refs THIS Nexus took",
+    so the delta is the correct population.
+    """
     gc.collect()
     return [
         o
         for o in gc.get_objects()
-        if isinstance(o, AsyncLocalRuntime) and getattr(o, "_ref_count", 0) > 0
+        if isinstance(o, AsyncLocalRuntime)
+        and getattr(o, "_ref_count", 0) > 0
+        and id(o) not in baseline_ids
     ]
 
 
@@ -50,6 +73,7 @@ class TestIssue1285CloseCascadesRuntime:
     def test_close_releases_all_runtime_refs(self):
         from nexus import Nexus
 
+        baseline_ids = _held_runtime_ids()
         app = Nexus(api_port=20101, mcp_port=20102, enable_durability=False)
 
         @app.handler("ping")
@@ -60,10 +84,10 @@ class TestIssue1285CloseCascadesRuntime:
         assert app.runtime.ref_count >= 1
         app.close()
 
-        leaked = _leaked_runtimes()
+        leaked = _leaked_runtimes(baseline_ids)
         assert not leaked, (
-            f"{len(leaked)} AsyncLocalRuntime(s) still held after Nexus.close(): "
-            f"{[(id(o), o._ref_count) for o in leaked]}"
+            f"{len(leaked)} AsyncLocalRuntime(s) created by this Nexus are still "
+            f"held after Nexus.close(): {[(id(o), o._ref_count) for o in leaked]}"
         )
 
     def test_close_emits_no_resource_warning(self):

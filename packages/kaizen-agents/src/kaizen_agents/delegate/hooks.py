@@ -40,6 +40,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from kaizen.utils.credential_scrub import scrub_local_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,7 +164,15 @@ class HookManager:
                 continue
 
             stem = path.stem  # e.g. "pre-tool-use" or "pre-tool-use-validate"
-            prefix = _normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)
+            # Was `_normalise_event_prefix(stem.split("-", maxsplit=3)[:3] and stem)`.
+            # That `and` was dead ceremony that only produced a type warning:
+            # `str.split()` NEVER returns a falsy list for ANY input (even
+            # `"".split("-")` is `['']`), so the left operand was always truthy
+            # and the expression always evaluated to `stem`. Verified across
+            # every stem shape this loop can reach before simplifying; the
+            # declared type was `list[str] | str` while the runtime value was
+            # invariably `str`.
+            prefix = _normalise_event_prefix(stem)
 
             # Match against known events
             # We match the longest prefix that is a valid event
@@ -314,10 +324,17 @@ class HookManager:
 
         except TimeoutError:
             logger.error("Hook %s timed out after %.1fs", script.name, self._timeout)
-            # Attempt to kill the process
+            # Kill the process AND reap it. `kill()` only DELIVERS SIGKILL;
+            # until something waits on the pid the kernel keeps the exit
+            # status, and `proc` is a local that is gone the moment this
+            # returns — so a kill without a wait leaks one zombie per hook
+            # timeout, in a manager that fires on six lifecycle events.
+            # Same pairing as `delegate/mcp.py` and `ClaudeCodeAdapter`.
             try:
                 proc.kill()  # type: ignore[possibly-undefined]
+                await proc.wait()  # type: ignore[possibly-undefined]
             except ProcessLookupError:
+                # Already exited and reaped between the timeout and the kill.
                 pass
             return HookResult(
                 event=event,
@@ -327,7 +344,13 @@ class HookManager:
             )
 
         except OSError as exc:
-            logger.error("Failed to spawn hook %s: %s", script.name, exc)
+            # A spawn OSError carries the path it failed on, which the
+            # conservative preset deliberately PRESERVES -- that path is the
+            # diagnostic. What it still claims is a literal-anchored
+            # credential, e.g. a token in a hook script argv.
+            logger.error(
+                "Failed to spawn hook %s: %s", script.name, scrub_local_error(exc)
+            )
             return HookResult(
                 event=event,
                 script=script,

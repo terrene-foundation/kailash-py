@@ -71,6 +71,11 @@ from kailash.runtime._time_limits import (
 from kailash.runtime.cancellation import CancellationToken
 from kailash.runtime.lifecycle_events import JobEvent, JobEventHandler
 from kailash.sdk_exceptions import HardTimeLimitExceeded, WorkflowCancelledError
+from kailash.utils.secure_logging import (
+    safe_callable_name,
+    safe_exception_frames,
+    safe_type_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -977,7 +982,6 @@ class WorkflowScheduler:
             >>> scheduler.update_cron(sid, "0 */2 * * *")  # every 2 hours
         """
         from apscheduler.triggers.cron import CronTrigger
-
         from kailash.sdk_exceptions import ScheduleNotFound
 
         if schedule_id not in self._schedules:
@@ -1374,7 +1378,7 @@ class WorkflowScheduler:
                         max_attempts,
                         run_id,
                         schedule_id,
-                        type(last_exc).__name__,
+                        safe_type_name(last_exc),
                         backoff_seconds,
                     )
                     await asyncio.sleep(backoff_seconds)
@@ -1405,7 +1409,7 @@ class WorkflowScheduler:
                 schedule_id,
                 max_attempts,
                 max_attempts,
-                type(last_exc).__name__,
+                safe_type_name(last_exc),
             )
         logger.exception(
             "Scheduled execution failed (final): run_id=%s schedule_id=%s",
@@ -1551,7 +1555,7 @@ class WorkflowScheduler:
                 "scheduler.dispatch.enqueue_failed schedule_id=%s task_id_hash=%s reason=%s",
                 schedule_id,
                 task_id_hash,
-                type(exc).__name__,
+                safe_type_name(exc),
             )
             raise
 
@@ -1660,13 +1664,29 @@ class WorkflowScheduler:
             try:
                 handler(event)
             except Exception as exc:
+                # `handler` is CALLER-SUPPLIED and typed as a CALLABLE, not as
+                # a function, so anything without `__name__` used to reach a
+                # `repr(handler)` fallback: a `functools.partial` renders its
+                # bound kwargs verbatim, and a callable object's
+                # dataclass-generated `__repr__` renders every field including
+                # a credential one. `safe_callable_name` emits a
+                # BOUNDED, structurally inert identifier. It is NOT payload-free
+                # -- a name is caller-settable and a short one survives intact --
+                # but it cannot forge the record's grammar or drive log volume.
+                #
+                # `exc_info` is DROPPED for the same reason: `exc` comes from
+                # the caller's handler, so `logging` printing the chain's
+                # `str()` re-leaks a driver error naming its DSN even though
+                # the message above deliberately carries only the type name.
+                # That is the class 689f9ebd8 closed at eighteen kaizen sinks.
+                # The frames keep WHERE it failed without keeping WHAT it said.
                 logger.warning(
                     "WorkflowScheduler lifecycle handler %r raised %s for "
-                    "schedule %s; continuing",
-                    getattr(handler, "__name__", repr(handler)),
-                    type(exc).__name__,
+                    "schedule %s; continuing (at %s)",
+                    safe_callable_name(handler),
+                    safe_type_name(exc),
                     event.schedule_id,
-                    exc_info=True,
+                    safe_exception_frames(exc),
                 )
 
     def _on_job_lifecycle_event(self, event: Any) -> None:

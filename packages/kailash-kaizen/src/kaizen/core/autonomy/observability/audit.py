@@ -23,6 +23,7 @@ from typing import Protocol
 import anyio
 
 from kaizen.core.autonomy.observability.types import AuditEntry, AuditResult
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -347,12 +348,19 @@ class AuditTrailManager:
                     resource=f"kaizen.observability:{agent_id}",
                     details={"result": str(result), **details, **(metadata or {})},
                 )
-            except Exception:
+            except Exception as exc:
+                # ``exc_info`` DROPPED, scrubbed detail added in its place --
+                # sibling of the identical forward sink in
+                # ``kaizen/security/audit.py``; see that site for the full
+                # rationale. Both audit forwards are fixed in one change so the
+                # pair cannot drift (security.md § Multi-Site Kwarg Plumbing).
                 logger.warning(
-                    "audit.canonical_forward_failed agent_id=%s action=%s",
+                    "audit.canonical_forward_failed agent_id=%s action=%s "
+                    "error=%s error_type=%s",
                     agent_id,
                     action,
-                    exc_info=True,
+                    scrub_remote_error(exc),
+                    type(exc).__name__,
                 )
 
         logger.info(

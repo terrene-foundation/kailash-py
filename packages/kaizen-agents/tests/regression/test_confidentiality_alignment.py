@@ -78,7 +78,14 @@ class TestConfidentialityAlignment:
         """_CLEARANCE_MAP covers all expected user-facing strings."""
         from kaizen_agents.supervisor import _CLEARANCE_MAP
 
-        expected_keys = {"public", "internal", "restricted", "confidential", "secret", "top_secret"}
+        expected_keys = {
+            "public",
+            "internal",
+            "restricted",
+            "confidential",
+            "secret",
+            "top_secret",
+        }
         assert set(_CLEARANCE_MAP.keys()) == expected_keys
 
     def test_clearance_map_values(self) -> None:
@@ -111,8 +118,12 @@ class TestConfidentialityAlignment:
         )
 
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("public", "hello", ConfidentialityLevel.PUBLIC))
-        enforcer.register_value(ClassifiedValue("secret", "sk-123", ConfidentialityLevel.SECRET))
+        enforcer.register_value(
+            ClassifiedValue("public", "hello", ConfidentialityLevel.PUBLIC)
+        )
+        enforcer.register_value(
+            ClassifiedValue("secret", "sk-123", ConfidentialityLevel.SECRET)
+        )
 
         visible = enforcer.filter_for_clearance(ConfidentialityLevel.RESTRICTED)
         assert "public" in visible

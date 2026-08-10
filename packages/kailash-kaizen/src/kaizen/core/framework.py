@@ -579,10 +579,16 @@ class Kaizen:
             )
             result = agent.run(role=role)
         except Exception as e:
+            # The underlying failure is an LLM provider error whose message can
+            # embed the very API key this hint tells the user to check — sanitize
+            # before it reaches the raised message (#1970 sweep).
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
             raise RuntimeError(
                 f"trait derivation failed (role_hash={role_hash}) — pass "
                 "behavior_traits=[...] in config to skip derivation, or "
-                f"verify .env has a working LLM provider key. Underlying: {e}"
+                "verify .env has a working LLM provider key. Underlying: "
+                f"{sanitize_provider_error(e, 'LLM')}"
             ) from e
 
         traits_csv = (result or {}).get("traits_csv", "") or ""

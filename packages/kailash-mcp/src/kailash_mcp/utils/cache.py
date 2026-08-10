@@ -7,6 +7,7 @@ Based on patterns from production MCP server implementations.
 
 import asyncio
 import functools
+import hashlib
 import json
 import logging
 import threading
@@ -165,29 +166,71 @@ class UnifiedCache:
         self._in_flight: Dict[str, asyncio.Future] = {}
         self._flight_lock = asyncio.Lock()
 
+        # One WARN per cache PER REASON when the sync surface degrades on
+        # Redis, so a hot-path caller does not flood the log on every call.
+        # Keyed by reason because the causes are distinct and an operator
+        # needs to see each: a sync `get`/`set` can never reach Redis, while
+        # a sync tool running INSIDE an event loop cannot use `asyncio.run`.
+        self._sync_degradation_warned: set = set()
+
     def _make_key(self, key: str) -> str:
         """Make cache key with name prefix."""
         if self.is_redis:
             return f"{self.redis_prefix}{self.name}:{key}"
         return key
 
+    def _warn_sync_on_redis_once(
+        self, method: str, replacement: str, detail: Optional[str] = None
+    ) -> None:
+        """Emit ONE loud WARN per cache PER REASON when the sync surface degrades.
+
+        A sync method cannot await, so ``get``/``set`` genuinely cannot reach
+        Redis; the result is NO caching (slow but correct), not wrong data.
+        Unlike :meth:`clear`, they do NOT raise: the sync half of the
+        ``cached()`` decorator wraps a sync function and therefore has no async
+        path to move to, so raising would make ``@cached`` unusable on Redis —
+        a harder break than the degradation it reports. Silence is still
+        BLOCKED (``zero-tolerance.md`` Rule 3), so the degradation is announced
+        once per cache, per distinct cause, with the replacement named.
+
+        De-duplication is keyed on ``method`` so a caller hitting two different
+        causes sees both: one WARN would otherwise hide whichever fired second.
+        """
+        if method in self._sync_degradation_warned:
+            return
+        self._sync_degradation_warned.add(method)
+        logger.warning(
+            "cache.sync.degraded_on_redis name=%s method=%s replacement=%s "
+            "detail=%s; this cache is serving NO cached values on that path",
+            self.name,
+            method,
+            replacement,
+            detail
+            or (f"sync {method} cannot reach Redis (every Redis op here is awaited)"),
+        )
+
     def get(self, key: str):
-        """Get value from cache."""
+        """Get value from cache.
+
+        On the Redis backend this always MISSES — a sync method cannot await —
+        and says so once via :meth:`_warn_sync_on_redis_once`. Await
+        :meth:`aget` for a working read.
+        """
         if self.is_redis:
-            # For Redis, we need async operations but this is called synchronously
-            # We'll implement async versions for the server to use
-            return None  # Fallback for now
-        else:
-            return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
+            self._warn_sync_on_redis_once("get", "aget")
+            return None
+        return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
 
     def set(self, key: str, value, ttl: Optional[int] = None):
-        """Set value in cache."""
+        """Set value in cache.
+
+        On the Redis backend this stores NOTHING — a sync method cannot await —
+        and says so once. Await :meth:`aset` for a working write.
+        """
         if self.is_redis:
-            # For Redis, we need async operations but this is called synchronously
-            # We'll implement async versions for the server to use
-            pass  # Fallback for now
-        else:
-            self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
+            self._warn_sync_on_redis_once("set", "aset")
+            return
+        self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
 
     async def aget(self, key: str):
         """Async get value from cache."""
@@ -275,13 +318,81 @@ class UnifiedCache:
             async with self._flight_lock:
                 self._in_flight.pop(key, None)
 
+    def _namespace_pattern(self) -> str:
+        """Return the SCAN MATCH pattern covering exactly this cache's keys.
+
+        Mirrors :meth:`_make_key` (``{prefix}{name}:{key}``) so the pattern can
+        never drift from the keys actually written. Glob metacharacters in the
+        prefix/name are ESCAPED: a cache named ``tools*`` would otherwise match
+        ``mcp:tools-internal:...`` and delete a sibling cache's keys.
+        """
+        literal = f"{self.redis_prefix}{self.name}:"
+        escaped = "".join("\\" + ch if ch in "*?[]\\" else ch for ch in literal)
+        return f"{escaped}*"
+
     def clear(self):
-        """Clear cache."""
+        """Clear cache.
+
+        The memory backend clears in place. The Redis backend CANNOT be cleared
+        from a sync method — every Redis operation on this class is awaited — so
+        this RAISES rather than silently doing nothing. It previously executed
+        ``pass``, which left the cache fully populated while every caller (and
+        ``MCPServer.clear_cache``'s "Cleared cache" log line) reported success;
+        a cache that reports a successful invalidation and serves the stale
+        entries indefinitely is worse than one that refuses. Await
+        :meth:`aclear` instead.
+        """
         if self.is_redis:
-            # For async operations, this would need to be implemented separately
-            pass
-        else:
+            raise RuntimeError(
+                "UnifiedCache.clear() cannot clear a Redis-backed cache: every "
+                "Redis operation on this class is async. Await aclear() instead "
+                f"(cache name={self.name!r})."
+            )
+        self.lru_cache.clear()  # type: ignore[reportOptionalMemberAccess]
+
+    async def aclear(self) -> int:
+        """Delete every key owned by THIS cache. Returns the number deleted.
+
+        Scoped to this cache's own namespace (``{prefix}{name}:*``) via
+        SCAN + DELETE. ``FLUSHDB`` is deliberately NOT used: the Redis database
+        is shared with every other :class:`UnifiedCache` instance and, in most
+        deployments, with non-MCP consumers — flushing it to clear one cache
+        would destroy their keys, a far worse defect than the no-op this
+        replaces.
+
+        A failure is logged AND re-raised rather than swallowed: a clear that
+        silently fails leaves stale entries served indefinitely, which is the
+        exact failure mode this method exists to close.
+        """
+        if not self.is_redis:
             self.lru_cache.clear()  # type: ignore[reportOptionalMemberAccess]
+            return 0
+
+        pattern = self._namespace_pattern()
+        deleted = 0
+        cursor: Any = 0
+        try:
+            while True:
+                cursor, keys = await self.redis_client.scan(  # type: ignore[reportOptionalMemberAccess]
+                    cursor=cursor, match=pattern, count=500
+                )
+                if keys:
+                    await self.redis_client.delete(*keys)  # type: ignore[reportOptionalMemberAccess]
+                    deleted += len(keys)
+                # redis-py returns int 0 to end the sweep; some clients echo "0".
+                if int(cursor) == 0:
+                    break
+        except Exception as e:
+            logger.error(
+                "cache.redis.clear.error name=%s pattern=%s deleted=%d error=%s",
+                self.name,
+                pattern,
+                deleted,
+                e,
+            )
+            raise
+        logger.info("cache.redis.clear.ok name=%s deleted=%d", self.name, deleted)
+        return deleted
 
     def stats(self):
         """Get cache statistics."""
@@ -395,8 +506,14 @@ class CacheManager:
                 # Create cache key from function name and arguments
                 cache_key = self._create_cache_key(func.__name__, args, kwargs)
 
-                # Try to get from cache
-                result = cache.get(cache_key)
+                # AWAIT the async surface. This wrapper previously called the
+                # SYNC `cache.get`/`cache.set`, which return None / store
+                # nothing on the Redis backend — so every `@cached` async
+                # function on a Redis-backed manager silently received NO
+                # caching at all, despite being in a context that can await.
+                # `aget`/`aset` fall through to the LRU on the memory backend,
+                # so this is a pure gain, not a backend-conditional path.
+                result = await cache.aget(cache_key)
                 if result is not None:
                     logger.debug(
                         "cache.async.hit func=%s key=%s",
@@ -412,7 +529,7 @@ class CacheManager:
                     cache_key,
                 )
                 result = await func(*args, **kwargs)
-                cache.set(cache_key, result)
+                await cache.aset(cache_key, result)
                 return result
 
             # Return appropriate wrapper based on function type
@@ -484,16 +601,58 @@ class CacheManager:
         return f"{prefix}{key}"
 
     def _create_cache_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
-        """Create a cache key from function name and arguments."""
-        # Convert args and kwargs to string representation
+        """Create a cache key from function name and arguments.
+
+        The arguments are folded into a DIGEST rather than interpolated
+        verbatim, because this string is not private: it is DEBUG-logged by
+        ``UnifiedCache.get_or_compute`` and by the ``cached`` decorator, and it
+        becomes a REDIS KEY NAME via ``UnifiedCache._make_key``. A verbatim key
+        therefore reaches log lines, ``KEYS mcp:*``, ``MONITOR``, the slowlog,
+        and RDB/AOF on disk.
+
+        The MCP server strips a fixed set of transport-credential kwargs before
+        reaching here, but that set is a fixed list of names and cannot be
+        complete: a tool taking ``github_token``, or a deployment spelling its
+        header ``x_api_key`` / ``auth_token`` / ``apikey``, still arrives with a
+        secret in a business argument. Lengthening the name list cannot fix
+        that — business arguments are exactly what the key must keep
+        distinguishing. Hashing closes the log surface, the Redis key-name
+        surface, and the unbounded-key-length surface at once, for every
+        argument, without weakening that discrimination.
+
+        ``func_name`` is kept as a readable prefix so a key remains
+        attributable to its tool when debugging or scanning Redis. Callers that
+        need per-principal partitioning pass an already-digested principal tag
+        as part of ``func_name`` (see ``MCPServer._cache_key_scope``), so no
+        raw identifier reaches the prefix either.
+        """
+        # Pre-image composition is unchanged from the verbatim form, so the same
+        # inputs that used to collide still collide and no call that used to be
+        # distinguished stops being distinguished.
         args_str = str(args) if args else ""
         kwargs_str = str(sorted(kwargs.items())) if kwargs else ""
-        return f"{func_name}:{args_str}:{kwargs_str}"
+        digest = hashlib.sha256(
+            f"{func_name}:{args_str}:{kwargs_str}".encode("utf-8")
+        ).hexdigest()
+        return f"{func_name}:{digest}"
 
     def clear_all(self) -> None:
-        """Clear all caches."""
+        """Clear all caches (memory backend).
+
+        On a Redis-backed manager each :meth:`UnifiedCache.clear` raises, because
+        Redis cannot be cleared synchronously — await :meth:`aclear_all` instead.
+        The raise is deliberate: this method previously reported success while
+        clearing nothing.
+        """
         for cache in self._caches.values():
             cache.clear()
+
+    async def aclear_all(self) -> int:
+        """Clear all caches on either backend. Returns total Redis keys deleted."""
+        deleted = 0
+        for cache in self._caches.values():
+            deleted += await cache.aclear()
+        return deleted
 
     def stats(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics for all caches."""
@@ -537,5 +696,16 @@ def get_cache_stats() -> Dict[str, Dict[str, Any]]:
 
 
 def clear_all_caches() -> None:
-    """Clear all caches in the global cache manager."""
+    """Clear all caches in the global cache manager (memory backend).
+
+    Raises on a Redis-backed manager — await :func:`aclear_all_caches` instead.
+    """
     _global_cache_manager.clear_all()
+
+
+async def aclear_all_caches() -> int:
+    """Clear all caches in the global cache manager on either backend.
+
+    Returns the number of Redis keys deleted (0 on the memory backend).
+    """
+    return await _global_cache_manager.aclear_all()

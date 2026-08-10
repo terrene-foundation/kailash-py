@@ -69,6 +69,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.journey.context import ContextAccumulator
 from kaizen_agents.journey.errors import (
     MaxPathwayDepthError,
@@ -465,7 +466,7 @@ class PathwayManager:
             return result
 
         except TimeoutError:
-            handler_name = getattr(handler, "__name__", repr(handler))
+            handler_name = getattr(handler, "__name__", type(handler).__name__)
             error_msg = f"Hook timeout: {handler_name}"
             logger.warning(error_msg)
             return JourneyHookResult(
@@ -475,9 +476,27 @@ class PathwayManager:
             )
 
         except Exception as e:
-            handler_name = getattr(handler, "__name__", repr(handler))
-            error_msg = f"Hook error ({handler_name}): {str(e)}"
-            logger.exception(error_msg)
+            handler_name = getattr(handler, "__name__", type(handler).__name__)
+            error_msg = f"Hook error ({handler_name}): {scrub_remote_error(e)}"
+            # ``logger.error``, NOT ``logger.exception``. ``handler`` is
+            # CALLER-SUPPLIED, so ``e`` is whatever that hook raised -- an HTTP
+            # client, a DB driver, an SDK -- and the traceback's final line
+            # renders it raw, re-leaking what the scrub on the line above just
+            # removed. ``handler_name`` is retained deliberately: it names the
+            # failing hook, which is the whole diagnostic.
+            #
+            # The fallback is ``type(handler).__name__``, NOT ``repr(handler)``.
+            # ``handler`` is caller-supplied and typed as a CALLABLE, not as a
+            # function, so anything without ``__name__`` hit the old ``repr``
+            # fallback: ``functools.partial(post, url="https://u:pw@host")``
+            # renders its bound kwargs verbatim, and a callable object's
+            # dataclass-generated ``__repr__`` renders every field including a
+            # credential one. That reached BOTH this log line and the returned
+            # ``JourneyHookResult.error``. The type name cannot carry a payload
+            # by construction, which is why it is preferred over scrubbing the
+            # repr -- the scrubber's coverage is porous (a prefix-less 32-39
+            # char key, ``token=``, a %40-encoded ``@`` all survive it).
+            logger.error(error_msg)
             return JourneyHookResult(
                 success=False,
                 error=error_msg,
@@ -1017,7 +1036,7 @@ class PathwayManager:
                     last_error = e
                     logger.warning(
                         f"Pathway execution attempt {attempt + 1}/{max_retries} "
-                        f"failed: {e}"
+                        f"failed: {scrub_remote_error(e)}"
                     )
                     if attempt < max_retries - 1:
                         # Exponential backoff: 0.1s, 0.2s, 0.4s, ...
@@ -1036,13 +1055,19 @@ class PathwayManager:
             try:
                 return await pathway.execute(context)
             except Exception as e:
-                logger.exception(f"Pathway execution error (graceful recovery): {e}")
+                # ``logger.error``, NOT ``logger.exception`` -- sibling of the
+                # hook-error guard above. ``pathway.execute`` runs arbitrary
+                # user-defined pathway steps, so the traceback can carry any
+                # credential those steps touched.
+                logger.error(
+                    f"Pathway execution error (graceful recovery): {scrub_remote_error(e)}"
+                )
                 return PathwayResult(
                     outputs={},
                     accumulated={},
                     next_pathway=None,
                     is_complete=False,
-                    error=f"Pathway execution error: {str(e)}",
+                    error=f"Pathway execution error: {scrub_remote_error(e)}",
                 )
 
     def _get_current_pathway(self) -> Optional["Pathway"]:

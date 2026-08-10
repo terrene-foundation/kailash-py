@@ -46,8 +46,10 @@ import logging
 
 import anyio
 from anyio.abc import TaskGroup
+
 from kaizen.core.autonomy.control.transport import Transport, TransportProtocol
 from kaizen.core.autonomy.control.types import ControlRequest, ControlResponse
+from kaizen.utils.credential_scrub import scrub_remote_error
 
 logger = logging.getLogger(__name__)
 
@@ -355,14 +357,20 @@ class ControlProtocol:
 
                 except Exception as e:
                     # Log unexpected errors but continue reading
-                    logger.error(f"Error processing message: {e}", exc_info=True)
+                    # Message processing runs over the control TRANSPORT; a
+                    # decode/framing failure can echo the peer's payload, and
+                    # the traceback rendered it in full.
+                    logger.error("Error processing message: %s", scrub_remote_error(e))
 
         except anyio.get_cancelled_exc_class():
             logger.info("Background message reader cancelled (protocol stopped)")
             raise  # Re-raise to properly cancel task
 
         except Exception as e:
-            logger.error(f"Background message reader error: {e}", exc_info=True)
+            # The reader drains the transport of a process launched with
+            # credentials in its environment -- the same shape as the MCP
+            # stdio reader in kaizen-agents, fixed there in the prior shard.
+            logger.error("Background message reader error: %s", scrub_remote_error(e))
 
         finally:
             logger.info("Background message reader exited")

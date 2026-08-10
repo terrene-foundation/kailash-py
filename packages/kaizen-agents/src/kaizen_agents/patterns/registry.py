@@ -56,7 +56,8 @@ from enum import StrEnum
 from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.llm.reasoning import llm_text_similarity
+from kaizen.llm.reasoning import ReasoningDegradedError, llm_text_similarity
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.patterns.runtime import AgentMetadata, AgentStatus
 
 logger = logging.getLogger(__name__)
@@ -433,17 +434,32 @@ class AgentRegistry:
         Jaccard word-overlap implementation (see
         `rules/agent-reasoning.md` MUST Rule 1).
 
+        Degraded judgments (#1981): an agent whose every capability the judge
+        failed to score has UNKNOWN fit and is EXCLUDED from the result. It
+        is NOT scored at a fabricated 0.0 — that zero was indistinguishable
+        from a genuine no-match, so a total judge failure returned `[]` and
+        every caller read it as "no agent has this capability".
+
         Args:
             capability: Capability to search for
             status_filter: Optional status filter (default: ACTIVE)
 
         Returns:
             List of matching agent metadata sorted by semantic relevance
+
+        Raises:
+            ReasoningDegradedError: Every candidate agent degraded, so no
+                ranking exists. An empty list would be read as a definitive
+                "no match" rather than "the judge could not tell".
         """
         async with self._query_semaphore:
             self._total_queries += 1
 
             matching_agents: list[tuple] = []
+            candidates = 0
+            scored_agents = 0
+            degraded_agents: list[str] = []
+            degraded_model = "unknown"
 
             # Resolve a reasoning config from any registered agent so the
             # LLM judge inherits the host model selection.
@@ -467,7 +483,10 @@ class AgentRegistry:
                 if not capabilities:
                     continue
 
+                candidates += 1
                 best_score = 0.0
+                agent_scored = 0
+                agent_degraded = 0
                 for cap in capabilities:
                     try:
                         score = llm_text_similarity(
@@ -476,21 +495,66 @@ class AgentRegistry:
                             config=reasoning_config,
                             correlation_id=f"registry_{agent_id}",
                         )
+                    except ReasoningDegradedError as exc:
+                        # UNKNOWN fit, not zero: skip this capability rather
+                        # than tie it with the genuine no-matches (#1981).
+                        agent_degraded += 1
+                        degraded_model = exc.model
+                        logger.warning(
+                            "registry.capability_similarity_degraded",
+                            extra={
+                                "agent_id": agent_id,
+                                "capability": capability,
+                                "helper": exc.helper,
+                                "model": exc.model,
+                                "error": exc.error,
+                            },
+                        )
+                        continue
                     except Exception as exc:
                         logger.warning(
                             "registry.capability_similarity_failed",
                             extra={
                                 "agent_id": agent_id,
                                 "capability": capability,
-                                "error": str(exc),
+                                "error": scrub_remote_error(exc),
                             },
                         )
                         score = 0.0
+
+                    agent_scored += 1
                     if score > best_score:
                         best_score = score
 
+                if agent_degraded and agent_scored == 0:
+                    degraded_agents.append(agent_id)
+                    continue
+
+                scored_agents += 1
                 if best_score > 0:
                     matching_agents.append((metadata, best_score))
+
+            if degraded_agents:
+                if scored_agents == 0:
+                    raise ReasoningDegradedError(
+                        "registry.find_agents_by_capability",
+                        model=degraded_model,
+                        correlation_id=f"registry_{capability}",
+                        error=(
+                            f"the capability judge degraded for all "
+                            f"{candidates} candidate agent(s): "
+                            f"{', '.join(degraded_agents)}"
+                        ),
+                    )
+                logger.warning(
+                    "registry.find_agents_by_capability.degraded",
+                    extra={
+                        "capability": capability,
+                        "candidates": candidates,
+                        "scored_agents": scored_agents,
+                        "degraded_agents": degraded_agents,
+                    },
+                )
 
             # Sort by match score (highest first)
             matching_agents.sort(key=lambda x: x[1], reverse=True)
@@ -631,8 +695,49 @@ class AgentRegistry:
                             await listener(event)
                         else:
                             listener(event)
-                    except Exception:
-                        pass  # Ignore listener errors
+                    except Exception as exc:
+                        # A broken listener must not sink the broadcast loop
+                        # for the other listeners — but swallowing it silently
+                        # is `rules/zero-tolerance.md` Rule 3 error-hiding:
+                        # a listener that has been raising for weeks looks
+                        # identical to one that never fires.
+                        logger.warning(
+                            "registry.event_listener_failed",
+                            extra={
+                                "event_type": getattr(
+                                    event.event_type, "value", str(event.event_type)
+                                ),
+                                # The fallback is ``type(listener).__name__``,
+                                # NOT ``repr(listener)``. ``listener`` is
+                                # caller-supplied and typed as a bare
+                                # ``Callable``, so anything without a
+                                # ``__qualname__`` hit the old repr fallback --
+                                # and that is precisely the set of objects
+                                # carrying payloads:
+                                # ``functools.partial(post, token="ghp_...")``
+                                # renders its bound kwargs verbatim, and a
+                                # callable object's dataclass-generated
+                                # ``__repr__`` renders every field.
+                                #
+                                # NOT scrubbed, deliberately, and this is the
+                                # line where that distinction matters: the
+                                # ``error`` key below scrubs an EXCEPTION,
+                                # which is the accepted contract here, while
+                                # scrubbing a caller-supplied object's REPR is
+                                # not — the scrubber's coverage is porous (a
+                                # prefix-less 32-39 char key, ``token=``, a
+                                # %40-encoded ``@`` all survive it). A type
+                                # name cannot carry a payload by construction,
+                                # so it needs no scrub. Same disposition
+                                # ``journey/manager.py`` reached for its hook
+                                # handler; the diagnostic — WHICH listener
+                                # failed — survives either way.
+                                "listener": getattr(
+                                    listener, "__qualname__", type(listener).__name__
+                                ),
+                                "error": scrub_remote_error(exc),
+                            },
+                        )
 
             except TimeoutError:
                 continue

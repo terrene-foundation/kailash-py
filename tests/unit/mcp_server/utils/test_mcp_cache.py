@@ -1,12 +1,22 @@
 """Unit tests for MCP cache functionality.
 
 Tests for the caching utilities in kailash_mcp.utils.cache.
-NO MOCKING of external dependencies - This is a unit test file (Tier 1)
-for isolated component testing.
+This is a unit test file (Tier 1) for isolated component testing, where
+mocking is permitted per rules/testing.md § 3-Tier Testing.
+
+It previously lived under ``tests/integration/mcp_server/utils/`` while
+mocking the Redis client with ``MagicMock`` — a Tier-2 tree forbids mocking
+outright, so the file was in the wrong tier, not merely mislabelled: its own
+docstring already said Tier 1. Moved here rather than re-pointed at a real
+Redis, because every test in it exercises in-process cache logic and none of
+them needs a server. A test that genuinely needs Redis belongs in
+``tests/integration/`` against the real thing.
 """
 
 import asyncio
 import json
+import logging
+import re
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -18,10 +28,90 @@ from kailash_mcp.utils.cache import (
     LRUCache,
     UnifiedCache,
     _global_cache_manager,
+    aclear_all_caches,
     cached_query,
     clear_all_caches,
     get_cache_stats,
 )
+
+
+class _FakeRedis:
+    """Deterministic in-process stand-in for ``redis.asyncio``.
+
+    NOT a mock: it holds real state and implements SCAN/DELETE/GET/SETEX
+    semantics, so a test can assert on the OBSERVABLE result (is the key gone?)
+    rather than on which methods were called. A ``MagicMock`` auto-satisfies
+    every attribute and returns truthy sentinels, which is exactly how the
+    original Redis-clear test managed to assert nothing at all.
+
+    Glob handling mirrors Redis: ``*`` is a wildcard and ``\\`` escapes the
+    following character, so the escaping in ``_namespace_pattern`` is exercised
+    for real instead of assumed.
+    """
+
+    def __init__(self, fail_on_scan: bool = False, page_size: int | None = None):
+        self.store: dict[str, str] = {}
+        self.flushdb_called = False
+        self.flushall_called = False
+        self.scan_calls = 0
+        self._fail_on_scan = fail_on_scan
+        # When set, SCAN returns at most `page_size` keys per call and a
+        # NON-ZERO continuation cursor — the multi-batch path. Without this the
+        # fake always answers in one page, so the caller's paging loop is
+        # structurally present but never actually driven round twice.
+        self._page_size = page_size
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def setex(self, key, ttl, value):
+        self.store[key] = value
+
+    async def delete(self, *keys):
+        removed = 0
+        for key in keys:
+            if self.store.pop(key, None) is not None:
+                removed += 1
+        return removed
+
+    async def scan(self, cursor=0, match=None, count=None):
+        if self._fail_on_scan:
+            raise RuntimeError("scan exploded")
+        self.scan_calls += 1
+        matching = [k for k in self.store if _redis_glob(match).fullmatch(k)]
+        if self._page_size is None:
+            return 0, matching
+        # Page from the FRONT of what is still present, not from a numeric
+        # offset: the caller DELETES each page before asking for the next, so
+        # an offset would skip exactly the keys the previous delete removed and
+        # the fake would under-report while looking correct. A non-zero cursor
+        # is returned while anything remains, so the caller's loop must go
+        # round again to finish.
+        page = matching[: self._page_size]
+        remaining = len(matching) - len(page)
+        return (1 if remaining else 0), page
+
+    async def flushdb(self):
+        self.flushdb_called = True
+        self.store.clear()
+
+    async def flushall(self):
+        self.flushall_called = True
+        self.store.clear()
+
+
+def _redis_glob(pattern: str) -> "re.Pattern[str]":
+    """Compile a Redis MATCH glob (``*`` wildcard, ``\\`` escape) to a regex."""
+    out, i = [], 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if ch == "\\" and i + 1 < len(pattern):
+            out.append(re.escape(pattern[i + 1]))
+            i += 2
+            continue
+        out.append(".*" if ch == "*" else "." if ch == "?" else re.escape(ch))
+        i += 1
+    return re.compile("".join(out))
 
 
 class TestLRUCache:
@@ -492,13 +582,247 @@ class TestUnifiedCache:
         result = cache.get("key1")
         assert result is None
 
-    def test_clear_redis_backend(self):
-        """Test clear operation with Redis backend."""
-        mock_redis = MagicMock()
-        cache = UnifiedCache(name="test_cache", redis_client=mock_redis)
+    def test_sync_clear_refuses_on_redis_instead_of_silently_no_opping(self):
+        """Sync ``clear()`` MUST refuse on Redis, not pretend to succeed.
 
-        # Should not raise exception
-        cache.clear()
+        The defect this replaces: ``clear()`` executed ``pass`` on the Redis
+        branch, so the cache reported a successful invalidation and went on
+        serving every stale entry. A cache that lies about invalidating is
+        worse than one that refuses, so the sync surface now raises and names
+        the async replacement.
+
+        The previous xfail-STRICT marker is REMOVED rather than left to
+        self-clear: it asserted that SYNC ``clear()`` issues a Redis command,
+        and the fix moves that contract to ``aclear()``, so the sync-shaped
+        assertion can never XPASS. Its contract lives on in the aclear tests
+        below.
+        """
+        cache = UnifiedCache(name="test_cache", redis_client=_FakeRedis())
+
+        with pytest.raises(RuntimeError) as exc_info:
+            cache.clear()
+
+        message = str(exc_info.value)
+        assert "aclear()" in message, (
+            "the refusal must name the working replacement, or the caller has "
+            f"no way forward: {message!r}"
+        )
+        assert "test_cache" in message, f"refusal does not name the cache: {message!r}"
+
+    @pytest.mark.asyncio
+    async def test_aclear_deletes_the_keys_it_wrote(self):
+        """The real contract: after ``aclear()`` the entry is GONE.
+
+        Read-back through the public ``aget`` surface, not the fake's internals
+        — a deletion that does not change what a caller reads is not a
+        deletion.
+        """
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="tools", redis_client=redis)
+
+        await cache.aset("k1", {"v": 1})
+        assert await cache.aget("k1") == {"v": 1}, "precondition: the key is cached"
+
+        deleted = await cache.aclear()
+
+        assert deleted == 1, f"aclear() reported {deleted} keys deleted, expected 1"
+        assert await cache.aget("k1") is None, "the entry survived aclear()"
+
+    @pytest.mark.asyncio
+    async def test_aclear_never_flushes_the_shared_database(self):
+        """FLUSHDB would destroy every other consumer's keys.
+
+        This is the destructive-fix guard: the cheap way to make the test above
+        pass is ``FLUSHDB``, which also wipes every sibling cache and every
+        non-MCP consumer sharing the database.
+        """
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="tools", redis_client=redis)
+        await cache.aset("k1", {"v": 1})
+
+        await cache.aclear()
+
+        assert not redis.flushdb_called, "aclear() issued FLUSHDB on a shared database"
+        assert not redis.flushall_called, "aclear() issued FLUSHALL"
+
+    @pytest.mark.asyncio
+    async def test_aclear_leaves_a_sibling_caches_keys_intact(self):
+        """Scoping is the whole safety property, so it is asserted directly."""
+        redis = _FakeRedis()
+        tools = UnifiedCache(name="tools", redis_client=redis)
+        prompts = UnifiedCache(name="prompts", redis_client=redis)
+
+        await tools.aset("k", {"owner": "tools"})
+        await prompts.aset("k", {"owner": "prompts"})
+
+        await tools.aclear()
+
+        assert await tools.aget("k") is None, "the target cache was not cleared"
+        assert await prompts.aget("k") == {
+            "owner": "prompts"
+        }, "aclear() deleted a SIBLING cache's keys — the namespace scope leaked"
+
+    @pytest.mark.asyncio
+    async def test_aclear_escapes_glob_metacharacters_in_the_cache_name(self):
+        """A cache named ``tools*`` must not match ``tools-internal:``.
+
+        Without escaping, the SCAN pattern ``mcp:tools*:*`` matches the sibling
+        namespace and deletes its keys — the same destructive class as FLUSHDB,
+        reached through the name instead of the command.
+        """
+        redis = _FakeRedis()
+        globby = UnifiedCache(name="tools*", redis_client=redis)
+        sibling = UnifiedCache(name="tools-internal", redis_client=redis)
+
+        await globby.aset("k", {"owner": "globby"})
+        await sibling.aset("k", {"owner": "sibling"})
+
+        await globby.aclear()
+
+        assert await sibling.aget("k") == {
+            "owner": "sibling"
+        }, "an unescaped glob in the cache name reached a sibling namespace"
+
+    @pytest.mark.asyncio
+    async def test_aclear_on_memory_backend_clears_and_reports_zero(self):
+        """``aclear()`` works on both backends so callers need no branch."""
+        cache = UnifiedCache(name="test_cache", lru_cache=LRUCache())
+        cache.set("key1", "value1")
+
+        deleted = await cache.aclear()
+
+        assert deleted == 0, "memory backend deletes no REDIS keys"
+        assert cache.get("key1") is None, "memory backend was not cleared"
+
+    @pytest.mark.asyncio
+    async def test_aclear_reraises_rather_than_swallowing_a_redis_failure(self):
+        """A silently-failed clear is the defect class this method closes."""
+        redis = _FakeRedis(fail_on_scan=True)
+        cache = UnifiedCache(name="tools", redis_client=redis)
+
+        with pytest.raises(RuntimeError, match="scan exploded"):
+            await cache.aclear()
+
+    @pytest.mark.asyncio
+    async def test_aclear_pages_until_the_cursor_returns_to_zero(self):
+        """The paging loop must go round more than once, not just look like it.
+
+        With a single-page fake the ``while True`` loop is structurally present
+        but only ever executes once, so a loop that broke after the first batch
+        would still pass. This fake returns a NON-ZERO cursor while keys
+        remain, so an early break leaves keys alive and the assertions RED.
+        """
+        redis = _FakeRedis(page_size=2)
+        cache = UnifiedCache(name="tools", redis_client=redis)
+        for i in range(5):
+            await cache.aset(f"k{i}", {"v": i})
+
+        deleted = await cache.aclear()
+
+        assert deleted == 5, f"paging stopped early: only {deleted} of 5 deleted"
+        assert redis.scan_calls > 1, (
+            "SCAN was called once, so the multi-batch path never ran and this "
+            "test is not exercising paging"
+        )
+        for i in range(5):
+            assert await cache.aget(f"k{i}") is None, f"k{i} survived a paged aclear()"
+
+
+class TestSyncSurfaceOnRedisIsLoudNotSilent:
+    """Sync ``get``/``set`` cannot reach Redis — they must SAY so, once.
+
+    They do NOT raise (unlike ``clear``): the sync half of ``cached()`` wraps a
+    sync function and has no async path to move to, so raising would make
+    ``@cached`` unusable on Redis. Silence is still blocked, so the degradation
+    is announced.
+    """
+
+    def test_sync_get_warns_once_naming_aget(self, caplog):
+        cache = UnifiedCache(name="tools", redis_client=_FakeRedis())
+
+        with caplog.at_level(logging.WARNING):
+            assert cache.get("k") is None
+            assert cache.get("k") is None
+            assert cache.get("k") is None
+
+        degraded = [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ]
+        assert len(degraded) == 1, (
+            "the degradation must be announced EXACTLY once per cache — "
+            f"0 is silence, >1 floods a hot path; got {len(degraded)}"
+        )
+        assert "aget" in degraded[0].getMessage(), "the WARN must name the replacement"
+
+    def test_sync_set_warns_and_stores_nothing(self, caplog):
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="tools", redis_client=redis)
+
+        with caplog.at_level(logging.WARNING):
+            cache.set("k", {"v": 1})
+
+        assert redis.store == {}, "sync set() must not appear to have stored anything"
+        degraded = [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ]
+        assert degraded, "sync set() degraded on Redis without saying so"
+        assert "aset" in degraded[0].getMessage()
+
+    def test_memory_backend_never_warns(self, caplog):
+        """The WARN is Redis-specific; the memory backend genuinely works."""
+        cache = UnifiedCache(name="tools", lru_cache=LRUCache())
+
+        with caplog.at_level(logging.WARNING):
+            cache.set("k", "v")
+            assert cache.get("k") == "v"
+
+        assert not [
+            r
+            for r in caplog.records
+            if "cache.sync.degraded_on_redis" in r.getMessage()
+        ], "the memory backend is not degraded and must not warn"
+
+
+class TestCachedDecoratorAsyncPathUsesTheAsyncSurface:
+    """``@cached`` on an async function must actually cache on Redis.
+
+    The async wrapper previously called the SYNC ``get``/``set``, so every
+    ``@cached`` async function on a Redis-backed manager received NO caching at
+    all — from a context that could have awaited the whole time.
+    """
+
+    @pytest.mark.asyncio
+    async def test_async_cached_function_hits_redis_on_second_call(self):
+        manager = CacheManager(enabled=True, backend="memory")
+        redis = _FakeRedis()
+        cache = UnifiedCache(name="calls", redis_client=redis)
+        manager._caches["calls"] = cache
+
+        calls = {"n": 0}
+
+        @manager.cached("calls")
+        async def compute(x):
+            calls["n"] += 1
+            return {"doubled": x * 2}
+
+        first = await compute(21)
+        assert first == {"doubled": 42}
+        assert calls["n"] == 1
+        assert redis.store, (
+            "nothing reached Redis — the async wrapper is still using the sync "
+            "surface, so this decorated function is uncached"
+        )
+
+        second = await compute(21)
+        assert second == {"doubled": 42}
+        assert calls["n"] == 1, (
+            f"the function ran {calls['n']} times: the cached value was not "
+            "read back, so @cached is a no-op on Redis"
+        )
 
     def test_stats_memory_backend(self):
         """Test stats operation with memory backend."""
@@ -664,24 +988,46 @@ class TestCacheManager:
         assert call_count == 2  # Only two unique calls
 
     def test_create_cache_key(self):
-        """Test cache key creation from function name and arguments."""
+        """Cache keys are ``<func_name>:<sha256>`` and discriminate their inputs.
+
+        This test previously pinned the four literal plaintext keys
+        (``"func::"``, ``"func:(1, 2, 3):"``, ...). That shape was retired
+        because the composed key was interpolated verbatim into DEBUG log lines
+        and used as a Redis key NAME, so any credential-shaped argument that the
+        7-name strip list does not cover landed in ``KEYS``/``MONITOR``/the
+        slowlog/RDB. The key is now hashed.
+
+        Asserting the digest literals would re-pin a value with no meaning and
+        would break again on the next composition change. The load-bearing
+        properties are asserted instead: readable prefix (invalidation and
+        debugging still work), opacity (no argument survives into the key), and
+        DISCRIMINATION -- distinct inputs must not collide, which is the
+        property a hash could actually get wrong.
+        """
         manager = CacheManager()
 
-        # Test with no arguments
-        key1 = manager._create_cache_key("func", (), {})
-        assert key1 == "func::"
+        cases = {
+            "no args": manager._create_cache_key("func", (), {}),
+            "positional": manager._create_cache_key("func", (1, 2, 3), {}),
+            "keyword": manager._create_cache_key("func", (), {"a": 1, "b": 2}),
+            "both": manager._create_cache_key("func", (1, 2), {"a": 1}),
+        }
 
-        # Test with positional arguments
-        key2 = manager._create_cache_key("func", (1, 2, 3), {})
-        assert key2 == "func:(1, 2, 3):"
+        for label, key in cases.items():
+            prefix, _, digest = key.partition(":")
+            assert prefix == "func", f"{label}: lost the readable prefix: {key!r}"
+            assert re.fullmatch(
+                r"[0-9a-f]{64}", digest
+            ), f"{label}: expected a sha256 digest, got {digest!r}"
+            # Opacity: no argument value may survive into the key.
+            for leaked in ("(1, 2", "'a'", "[('a'"):
+                assert leaked not in key, f"{label}: argument leaked into key: {key!r}"
 
-        # Test with keyword arguments
-        key3 = manager._create_cache_key("func", (), {"a": 1, "b": 2})
-        assert key3 == "func::[('a', 1), ('b', 2)]"
+        # Discrimination: four distinct inputs -> four distinct keys.
+        assert len(set(cases.values())) == len(cases), f"key collision: {cases}"
 
-        # Test with both
-        key4 = manager._create_cache_key("func", (1, 2), {"a": 1})
-        assert key4 == "func:(1, 2):[('a', 1)]"
+        # Determinism: the same input must reproduce the same key.
+        assert manager._create_cache_key("func", (1, 2), {"a": 1}) == cases["both"]
 
     def test_make_redis_key(self):
         """Test Redis key creation."""
@@ -884,20 +1230,36 @@ class TestGlobalCacheManager:
         assert len(stats) >= 1
 
     def test_clear_all_caches_global(self):
-        """Test clearing all global caches."""
+        """clear_all_caches() MUST drop the entries, forcing recomputation.
 
-        # Create some cached data
+        The previous version called ``clear_all_caches()`` under "# Should work
+        without errors" and closed with ``assert True`` — which passes whether
+        the caches were cleared, partially cleared, or not touched at all.
+        """
+        calls = []
+
         @cached_query("test_clear", ttl=300, enabled=True)
         def test_func(x):
+            calls.append(x)
             return x * 2
 
-        test_func(5)
+        assert test_func(5) == 10
+        assert test_func(5) == 10
+        # CONTROL: the decorator really is caching. Without this, the
+        # post-clear recomputation below is equally consistent with "the clear
+        # worked" and "nothing was ever cached".
+        assert len(calls) == 1, (
+            "the cached_query decorator did not cache; the clear assertion "
+            f"below would hold vacuously. calls={calls!r}"
+        )
 
-        # Clear all caches
         clear_all_caches()
 
-        # Should work without errors
-        assert True
+        assert test_func(5) == 10
+        assert len(calls) == 2, (
+            "clear_all_caches() returned but the entry was still served from "
+            f"cache — the function was not recomputed. calls={calls!r}"
+        )
 
     def test_global_cache_manager_singleton(self):
         """Test that global cache manager is a singleton."""

@@ -5,9 +5,14 @@
 (`kaizen.llm.deployment_resolver.resolve_deployment_for`), promoted from the
 module-private `llm_agent._shadow_deployment_for`.
 
-Covers every currently-mapped provider (api-key family + base-url family),
-the credential/base_url skip paths, and the unmapped-provider skip. Azure is
+Covers every currently-mapped provider (api-key family + keyless LOCAL
+family), the credential skip path, and the unmapped-provider skip. Azure is
 covered separately in `test_deployment_resolver_azure.py` (invariant #3).
+
+#1720: the LOCAL family (`ollama` / `docker`) has NO credential and resolves
+on endpoint configuration alone -- per-request `base_url`, else the
+provider-scoped endpoint env var, else the provider's canonical loopback
+default -- so it never returns `None`.
 
 Tier 1, fully offline: api-key providers are resolved with an EXPLICIT
 `api_key=` so no env is read; the env-fallback + missing-credential paths
@@ -132,14 +137,40 @@ def test_base_url_provider_resolves_with_base_url(provider, expected_preset):
     assert dep.default_model == "some-model"
 
 
-@pytest.mark.parametrize("provider", ["ollama", "docker"])
-def test_base_url_missing_returns_none_and_logs_skip(provider, caplog):
-    with caplog.at_level(logging.DEBUG, logger="kaizen.llm.deployment_resolver"):
-        dep = resolve_deployment_for(provider, "m")
-    assert dep is None
-    skipped = [r for r in caplog.records if r.message == "llm.dual_run.shadow_skipped"]
-    assert len(skipped) == 1
-    assert skipped[0].reason == "missing_base_url"
+@pytest.mark.parametrize(
+    "provider,expected_preset",
+    [("ollama", "ollama"), ("docker", "docker_model_runner")],
+)
+def test_base_url_missing_falls_back_to_provider_default(
+    provider, expected_preset, caplog, monkeypatch
+):
+    """#1720: a KEYLESS LOCAL runtime has no credential and publishes a
+    canonical loopback endpoint, so an absent `base_url` means "use the
+    provider's default" -- NOT "the provider is unavailable".
+
+    Supersedes the pre-#1720 `test_base_url_missing_returns_none_and_logs_skip`,
+    which pinned the defect: it asserted `None` here, which surfaced to users
+    as `Provider ollama is not available` while Ollama was running locally.
+    Full coverage in
+    `tests/regression/test_issue_1720_keyless_local_provider_resolution.py`.
+    """
+    with _ENV_LOCK:
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        monkeypatch.delenv("DOCKER_MODEL_RUNNER_URL", raising=False)
+        with caplog.at_level(logging.DEBUG, logger="kaizen.llm.deployment_resolver"):
+            dep = resolve_deployment_for(provider, "m")
+
+    assert isinstance(dep, LlmDeployment)
+    assert dep.preset_name == expected_preset
+    # The endpoint source is logged, so an operator can tell a configured
+    # endpoint from the built-in default.
+    resolved = [
+        r
+        for r in caplog.records
+        if r.message == "llm.deployment_resolver.local_endpoint_resolved"
+    ]
+    assert len(resolved) == 1
+    assert resolved[0].source == "provider_default"
 
 
 # ---------------------------------------------------------------------------

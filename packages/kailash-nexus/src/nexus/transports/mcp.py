@@ -164,8 +164,16 @@ class MCPTransport(Transport):
 
             Uses the shared runtime to avoid orphan connection pools (NX-01).
             """
+            from kailash.workflow.input_envelope import bind_parameter_envelope
+
             runtime = self._get_shared_runtime()
-            results, run_id = await runtime.execute_workflow_async(workflow, kwargs)
+            # Bind BOTH shapes so this MCP path behaves identically to the one
+            # in nexus/core.py for the SAME registered workflow -- passing
+            # `kwargs` raw left `parameters.get(...)` workflows raising
+            # NameError here while succeeding there.
+            results, run_id = await runtime.execute_workflow_async(
+                workflow, bind_parameter_envelope(kwargs)
+            )
             return {"results": results, "run_id": run_id}
 
         self._server.tool(name=tool_name, description=f"Execute {name} workflow")(

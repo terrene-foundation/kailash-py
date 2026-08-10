@@ -166,23 +166,31 @@ class TestTypeConfusionPrevention:
         Attackers may try to pass "infinity" or "999999999999999" as strings
         to bypass numeric parsing or cause overflow.
 
-        Expected: String values that Python's float() accepts are parsed.
-        Non-numeric strings should raise ValueError.
+        Expected: finite numeric strings parse; non-numeric strings raise
+        ValueError; NON-FINITE strings ("infinity", "inf", "nan") are REJECTED
+        at the parser.
 
-        Note: "infinity" parses to float('inf') - this is technically valid
-        but represents unlimited budget. System should limit constraint values
-        at the policy level, not the parser level.
+        Note: this test previously asserted that "infinity" parsed to float('inf')
+        and deferred the restriction to "the policy level". That is exactly the
+        NaN/Inf constraint-bypass class: NaN defeats every numeric comparison
+        (NaN <= limit is always False) and Inf means an unbounded budget. The
+        parser was hardened to fail closed (9a1595a4b, "R4 findings — isfinite on
+        EATP cost limits"; mandated by trust-plane-security.md Rule 3 and
+        MUST-NOT-5). The assertion is inverted here to pin the hardened behaviour
+        rather than the bypass.
         """
         # Valid numeric string should parse
         constraint = cost_dimension.parse("100.5")
         assert constraint.parsed == 100.5
 
-        # "infinity" parses to inf (Python float behavior)
-        # This is a known behavior - policy should restrict at higher level
-        constraint = cost_dimension.parse("infinity")
-        import math
-
-        assert math.isinf(constraint.parsed)
+        # Non-finite strings MUST be rejected at the parser (fail-closed).
+        for non_finite in ("infinity", "inf", "-inf", "nan"):
+            with pytest.raises(ValueError) as exc_info:
+                cost_dimension.parse(non_finite)
+            assert "must be finite" in str(exc_info.value), (
+                f"{non_finite!r} must be rejected as non-finite, "
+                f"got: {exc_info.value}"
+            )
 
         # Non-numeric string should raise ValueError
         with pytest.raises(ValueError) as exc_info:
@@ -957,6 +965,44 @@ class TestMetadataInjectionBlocked:
         # Should still validate normally based on known fields
         assert result.valid is True  # cost_limit is tightened
 
+    def test_metadata_injection_cannot_authorize_a_loosened_constraint(
+        self, validator: ConstraintValidator
+    ):
+        """The DISCRIMINATING vector for the test above.
+
+        That test feeds a child whose ``cost_limit`` is TIGHTENED (500 < 1000),
+        so ``valid is True`` is the expected answer whether the injected
+        ``_bypass_all`` / ``admin_override`` keys were ignored OR obeyed. It
+        cannot tell the two apart, which is the one thing an injection test
+        exists to do.
+
+        Here the child LOOSENS the limit (9999 > 1000) while carrying the same
+        injected keys. Now the two hypotheses give OPPOSITE answers: if the
+        injected fields are ignored, the loosening is caught and ``valid`` is
+        False; if any of them is honoured as a bypass, the loosening is waved
+        through and ``valid`` is True.
+        """
+        parent = {"cost_limit": 1000}
+        child = {
+            "cost_limit": 9999,  # LOOSENED — must be rejected on its own merits
+            "_bypass_all": True,
+            "__override__": {"cost_limit": 1},
+            "admin_override": True,
+        }
+
+        result = validator.validate_inheritance(parent, child)
+
+        assert result.valid is False, (
+            "a loosened cost_limit was accepted while the child carried "
+            "_bypass_all/admin_override/__override__ — the validator is "
+            f"honouring an injected metadata key as an authorization bypass: "
+            f"{result!r}"
+        )
+        assert ConstraintViolation.COST_LOOSENED in result.violations, (
+            "the constraint was rejected, but not for the loosening — check "
+            f"the injected keys are not causing an unrelated failure: {result.violations!r}"
+        )
+
     def test_metadata_injection_blocked_constraint_envelope_untampered(
         self, validator: ConstraintValidator
     ):
@@ -990,7 +1036,10 @@ class TestApprovalRequiredBlocking:
         Expected: Operations requiring approval should be blocked until approved.
         This tests the ApprovalStatus enum behavior.
         """
-        from kailash.trust.governance import ApprovalStatus
+        # ApprovalStatus is Kaizen-owned (kaizen/trust/governance/approval_manager.py),
+        # NOT a kailash.trust re-export — commit 45c4ab2f8 rewrote this import even
+        # though its own message lists governance/approval_manager as PRESERVED.
+        from kaizen.trust.governance import ApprovalStatus
 
         # Pending status should block
         assert ApprovalStatus.PENDING.value == "pending"
@@ -1018,7 +1067,9 @@ class TestApprovalRequiredBlocking:
         Expected: Rejected requests cannot be converted to approved.
         This is enforced in ApprovalManager.approve_request.
         """
-        from kailash.trust.governance import ApprovalRequest, ApprovalStatus
+        # Kaizen-owned symbols; see the sibling test above for why the import
+        # path is kaizen.trust.governance and not kailash.trust.governance.
+        from kaizen.trust.governance import ApprovalRequest, ApprovalStatus
 
         # Create a rejected request
         request = ApprovalRequest(

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from kaizen_agents.delegate.compact import CompactionResult
     from kaizen_agents.delegate.tools.hydrator import ToolHydrator
 
+from kaizen.utils.credential_scrub import scrub_remote_error
 from kaizen_agents.delegate.adapters.openai_stream import StreamResult
 from kaizen_agents.delegate.adapters.protocol import StreamingChatAdapter
 from kaizen_agents.delegate.config.loader import KzConfig
@@ -745,7 +746,12 @@ class AgentLoop:
                 logger.warning(error_msg)
                 return tc_id, name, json.dumps({"error": error_msg})
             except Exception as exc:
-                logger.error("Tool %s failed: %s", name, exc, exc_info=True)
+                # Same asymmetry print_mode.py had: ``safe_msg`` below already
+                # withholds the exception text from the caller, while this log
+                # line shipped both the raw ``exc`` AND its traceback. A tool
+                # is arbitrary user code holding its own credentials, so the
+                # message it raises is exactly the unsafe surface.
+                logger.error("Tool %s failed: %s", name, scrub_remote_error(exc))
                 safe_msg = f"Tool '{name}' failed with {type(exc).__name__}"
                 return tc_id, name, json.dumps({"error": safe_msg})
 
@@ -758,7 +764,27 @@ class AgentLoop:
                 # Inject a synthetic error result so the conversation stays valid.
                 # The model sent tool_calls but needs matching tool results for
                 # every call — missing results cause API errors on the next turn.
-                logger.error("Unexpected error in parallel tool execution: %s", result)
+                #
+                # SANITIZED for the same reason the ``except``-bound sink in
+                # ``_run_single`` above is: this is the SAME tool exception,
+                # reached by a different path. ``gather(return_exceptions=True)``
+                # RETURNS it rather than raising it, so it never passes through
+                # an ``except`` clause and no scanner keyed on a handler-bound
+                # name can see it — which is how it survived the sweep that
+                # scrubbed its sibling thirteen lines up. A tool is arbitrary
+                # user code holding its own credentials, so the message it
+                # raises is exactly the unsafe surface.
+                #
+                # The lazy ``%s`` form is kept: ``scrub_remote_error`` returns a
+                # ``str``, so the interpolation stays deferred to the handler
+                # exactly as before. ``BaseException`` (not ``Exception``) is
+                # what the narrowing above admits, and the scrubber takes
+                # ``object`` — it renders with ``str()``, which is defined for
+                # every ``BaseException``.
+                logger.error(
+                    "Unexpected error in parallel tool execution: %s",
+                    scrub_remote_error(result),
+                )
                 tc = tool_calls[idx]
                 tc_id = tc["id"]
                 tc_name = tc["function"]["name"]
@@ -835,7 +861,11 @@ class AgentLoop:
                 except Exception as exc:
                     display.finish_streaming()
                     display.show_error(f"Turn failed ({type(exc).__name__})")
-                    logger.error("Turn failed: %s", exc, exc_info=True)
+                    # ``run_turn`` is the provider-streaming call print_mode.py
+                    # iterates, so this sink sees the SAME exception one frame
+                    # before print_mode's -- scrubbing only the outer one would
+                    # have left the credential on this line.
+                    logger.error("Turn failed: %s", scrub_remote_error(exc))
 
             except KeyboardInterrupt:
                 self.interrupt()

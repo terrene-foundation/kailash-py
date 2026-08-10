@@ -54,6 +54,7 @@ from typing import Any, Awaitable, Callable, Dict, List
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from kailash.utils.secure_logging import safe_callable_name
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +111,14 @@ def fabric_handler_to_fastapi(
         except Exception:
             logger.exception(
                 "fabric.handler.error",
-                extra={
-                    "handler": getattr(fabric_handler, "__name__", repr(fabric_handler))
-                },
+                # ``getattr(fn, "__name__", repr(fn))`` is the F11 idiom, and
+                # the fallback fires for exactly the callables that carry
+                # payloads: ``fabric_handler`` is CALLER-registered, so a
+                # ``functools.partial`` pre-binding a DSN renders its bound
+                # arguments verbatim into this record. A plain ``def`` has
+                # ``__name__``, so the fallback never fires in testing, which
+                # is why the idiom reads as safe and is not.
+                extra={"handler": safe_callable_name(fabric_handler)},
             )
             raise
 

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from kailash.utils.url_credentials import mask_error_text
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
 from ..signatures.multi_modal import ImageField
 from .ollama_provider import OllamaConfig, OllamaProvider
 
@@ -165,7 +168,12 @@ class OllamaVisionProvider(OllamaProvider):
             }
 
         except Exception as e:
-            raise RuntimeError(f"Multi-image analysis failed: {e}")
+            # #1970: ``ollama.chat`` against a credentialed/proxied endpoint
+            # can raise with a key or Bearer token in the message.
+            raise RuntimeError(
+                "Multi-image analysis failed: "
+                f"{mask_error_text(sanitize_provider_error(e, 'Ollama'))}"
+            )
 
     def describe_image(
         self, image: Union[ImageField, str, Path], detail: str = "auto", **kwargs

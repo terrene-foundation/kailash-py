@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 
 import pytest
+from tests.utils.docker_config import get_jaeger_config
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -53,10 +54,21 @@ def openai_api_key():
 
 
 @pytest.fixture
-def jaeger_endpoint():
-    """Fixture providing Jaeger endpoint from environment."""
-    endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:4317")
-    return endpoint
+def jaeger_config():
+    """Jaeger host + port for the OTLP exporter.
+
+    Was ``jaeger_config``, returning a URL ("http://localhost:4317") that
+    was passed as ``enable_observability(jaeger_config=...)`` -- a keyword
+    that signature does not accept. It takes ``jaeger_host`` and
+    ``jaeger_port``, and TracingManager builds the endpoint as
+    ``f"{jaeger_host}:{jaeger_port}"``, so a scheme-carrying URL could not
+    have been passed through as the host either.
+
+    Returns the same dict shape as the sibling suites (test_jaeger_ui.py,
+    test_tracing_integration.py) already use, so there is one Jaeger config
+    contract in this tree rather than two.
+    """
+    return get_jaeger_config()
 
 
 @pytest.fixture
@@ -75,7 +87,7 @@ class TestOpenAIGPT35Observability:
 
     @pytest.mark.asyncio
     async def test_full_observability_openai_gpt35(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 1: Full observability stack with real OpenAI gpt-3.5-turbo calls.
@@ -105,7 +117,8 @@ class TestOpenAIGPT35Observability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="qa-agent-gpt35-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="qa-agent-gpt35-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage  # Override with temp storage
 
@@ -168,7 +181,7 @@ class TestOpenAIGPT4Observability:
 
     @pytest.mark.asyncio
     async def test_full_observability_openai_gpt4(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 2: Full observability with real OpenAI gpt-4 calls.
@@ -194,7 +207,8 @@ class TestOpenAIGPT4Observability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="qa-agent-gpt4-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="qa-agent-gpt4-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -245,7 +259,7 @@ class TestOpenAIStreamingObservability:
 
     @pytest.mark.asyncio
     async def test_streaming_observability_openai(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 3: Observability for streaming LLM responses.
@@ -275,7 +289,8 @@ class TestOpenAIStreamingObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="streaming-agent-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="streaming-agent-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -317,7 +332,7 @@ class TestOpenAIToolCallingObservability:
 
     @pytest.mark.asyncio
     async def test_tool_calling_observability_openai(
-        self, openai_api_key, jaeger_endpoint, temp_audit_dir
+        self, openai_api_key, jaeger_config, temp_audit_dir
     ):
         """
         E2E Test 4: Observability for tool-calling agents.
@@ -346,7 +361,8 @@ class TestOpenAIToolCallingObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="tool-agent-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="tool-agent-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 
@@ -386,7 +402,7 @@ class TestOpenAIErrorObservability:
     """E2E tests for error scenario observability."""
 
     @pytest.mark.asyncio
-    async def test_error_observability_openai(self, jaeger_endpoint, temp_audit_dir):
+    async def test_error_observability_openai(self, jaeger_config, temp_audit_dir):
         """
         E2E Test 5: Observability captures errors correctly.
 
@@ -416,7 +432,8 @@ class TestOpenAIErrorObservability:
         custom_storage = FileAuditStorage(audit_file)
 
         obs = agent.enable_observability(
-            service_name="error-agent-e2e", jaeger_endpoint=jaeger_endpoint
+            service_name="error-agent-e2e", jaeger_host=jaeger_config["host"],
+            jaeger_port=jaeger_config["grpc_port"]
         )
         obs.audit.storage = custom_storage
 

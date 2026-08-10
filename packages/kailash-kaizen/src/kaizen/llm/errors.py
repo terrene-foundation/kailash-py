@@ -34,10 +34,11 @@ idiom favours subclassing over a single sum-type.
 
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 from kailash.utils.url_credentials import fingerprint_secret
+
+from kaizen.utils.credential_scrub import scrub_credentials
 
 
 def _fingerprint(raw: str | bytes, length: int = 8) -> str:
@@ -58,39 +59,10 @@ def _fingerprint(raw: str | bytes, length: int = 8) -> str:
     return fingerprint_secret(raw, length=length)
 
 
-# Credential-pattern scrub applied defensively to `ProviderError.body_snippet`
-# before truncation. Providers occasionally echo the submitted Authorization
-# header in 4xx error bodies (OpenAI, Anthropic, various third-party wrappers).
-# The primary defense is caller-side redaction (per `ProviderError` docstring),
-# but a 256-char body window is wide enough for a full sk-proj-* key to fit
-# through, so a scrub here is the structural last-line defense. Round-1
-# redteam M1 (security).
-_CRED_PATTERNS = (
-    re.compile(r"sk-proj-[A-Za-z0-9_\-]{20,}"),  # OpenAI project keys first
-    re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}"),  # Anthropic
-    re.compile(r"sk-[A-Za-z0-9_\-]{20,}"),  # OpenAI standard (after the
-    # more-specific patterns so sk-proj-* / sk-ant-* aren't
-    # partially matched by the generic sk- rule)
-    re.compile(r"AIza[0-9A-Za-z\-_]{35}"),  # Google
-    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id
-    re.compile(r"ASIA[0-9A-Z]{16}"),  # AWS STS temporary
-    re.compile(r"Bearer\s+[A-Za-z0-9_\-.=]{20,}"),  # generic Bearer
-    # JWT — three base64url segments separated by dots. Azure Entra access
-    # tokens, Google OAuth2 id_tokens, and any HS256/RS256 bearer all match.
-    # Catches the under-match gap from round-2 security M-N2.
-    re.compile(r"eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"),
-    # Azure storage SAS token pattern (sig= parameter in a query string).
-    re.compile(r"sig=[A-Za-z0-9%+/=_\-]{20,}"),
-    # Generic opaque hex token (32+ chars, common in Azure/other services) --
-    # Azure Cognitive Services / AI Foundry API keys are typically bare
-    # 32+-char lowercase-hex strings with no vendor prefix (authenticated via
-    # the `api-key: <KEY>` header -- kaizen/llm/auth/azure.py), so none of the
-    # prefixed patterns above catch them. Mirrors the identical pattern +
-    # intent already in kaizen/nodes/ai/error_sanitizer.py::_CREDENTIAL_PATTERNS
-    # (second-layer LLMAgentNode scrub) so the four-axis LlmClient/LlmDeployment
-    # direct-use path (azure_ai_foundry, #1892) gets the same coverage.
-    re.compile(r"\b[a-f0-9]{32,}\b", re.ASCII),
-)
+# Sentinel substituted for a redacted credential on THIS surface. Distinct from
+# the node surface's `[REDACTED]` so a redaction in a log line can be attributed
+# to the `LlmClient` wire path rather than to `LLMAgentNode`.
+_CRED_PLACEHOLDER = "[REDACTED-CRED]"
 
 
 def _scrub_credentials(text: str) -> str:
@@ -99,10 +71,22 @@ def _scrub_credentials(text: str) -> str:
     Applied defensively before any body truncation so a provider that echoes
     the submitted token in its 4xx error body does not leak the full token
     into `ProviderError.body_snippet` / `str(err)` / tracing spans.
+
+    Delegates to `kaizen.utils.credential_scrub.scrub_credentials`, the single
+    scrub implementation shared with
+    `kaizen.nodes.ai.error_sanitizer.sanitize_provider_error`. This module
+    holds NO pattern list of its own — deliberately.
+
+    Until this delegation landed, this module carried a SECOND, independent
+    pattern tuple whose docstring claimed it "mirrors" the node-side sanitizer.
+    It did not, and the drift ran in BOTH directions: every #1974 / #1960
+    hardening (Slack, GitHub PAT, Stripe, Perplexity, uppercase hex, AWS
+    40-char secrets, and all three URL-embedded-DSN rules) was missing HERE,
+    while this module's own AWS-STS (`ASIA`) and Azure-SAS (`sig=`) rules were
+    missing THERE. A pattern list that must agree with another pattern list
+    will always drift; one implementation cannot.
     """
-    for pat in _CRED_PATTERNS:
-        text = pat.sub("[REDACTED-CRED]", text)
-    return text
+    return scrub_credentials(text, placeholder=_CRED_PLACEHOLDER)
 
 
 # ---------------------------------------------------------------------------
@@ -148,12 +132,27 @@ class RateLimited(LlmError):
 class ProviderError(LlmError):
     """The provider returned a non-2xx response.
 
-    `body_snippet` is defensively scrubbed for known credential patterns
-    (OpenAI / Anthropic / Google / AWS / Bearer) BEFORE truncation, and
-    truncated to 256 chars afterwards. Callers are still encouraged to
-    redact at the source; the scrub here is defense-in-depth for the
-    common case where a provider echoes the submitted Authorization header
-    in its 4xx error body.
+    `body_snippet` is defensively scrubbed BEFORE truncation and truncated to
+    256 chars afterwards.
+
+    The scrub is `kaizen.utils.credential_scrub.scrub_credentials` — the SAME
+    implementation `kaizen.nodes.ai.error_sanitizer.sanitize_provider_error`
+    uses, so this surface and the node surface redact an identical set of
+    shapes by construction rather than by two lists agreeing. That set is
+    enumerated at the shared module and currently covers vendor-prefixed keys
+    (OpenAI / Anthropic / Google / Perplexity / Slack / GitHub / Stripe), AWS
+    access-key IDs, STS temporary credentials and 40-char secret keys, bare and
+    `Bearer` JWTs, Azure SAS `sig=` tokens, bare 32+ char hex keys,
+    URL-embedded DSN credentials (postgres / redis / mongodb / any RFC-3986
+    scheme), Azure OpenAI resource names, and internal filesystem paths.
+
+    This is a STRUCTURAL last line of defense, not the only one: callers are
+    still expected to redact at the source. It matters because all three feed
+    sites hand this constructor the FULL, unredacted provider response body —
+    `kaizen/llm/client.py` (embeddings + completions, `resp.text`) and
+    `kaizen/llm/http_client.py` (streaming, `body.decode(...)`) — so whatever
+    the provider echoed back, including a submitted Authorization header,
+    arrives here verbatim.
     """
 
     _SNIPPET_LIMIT = 256

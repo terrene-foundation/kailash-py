@@ -10,6 +10,8 @@ from typing import Any, Awaitable, Callable
 
 import anyio
 
+from kaizen.utils.credential_scrub import scrub_remote_error
+
 from .types import InterruptMode, InterruptReason, InterruptSource, InterruptStatus
 
 logger = logging.getLogger(__name__)
@@ -205,7 +207,14 @@ class InterruptManager:
                 await callback()
                 logger.debug(f"Shutdown callback {i + 1} completed")
             except Exception as e:
-                logger.error(f"Shutdown callback {i + 1} failed: {e}", exc_info=True)
+                # Shutdown callbacks are CALLER-SUPPLIED, so `e` is whatever
+                # they raised -- an HTTP client, a DB driver, an SDK -- and the
+                # traceback rendered it plus its chained cause verbatim. The
+                # callback INDEX is retained: it names which callback failed,
+                # which is the diagnostic, and it is framework-generated.
+                logger.error(
+                    "Shutdown callback %d failed: %s", i + 1, scrub_remote_error(e)
+                )
 
         logger.info("All shutdown callbacks executed")
 
@@ -254,7 +263,11 @@ class InterruptManager:
                 logger.info(f"Checkpoint saved: {checkpoint_id}")
 
             except Exception as e:
-                logger.error(f"Failed to save checkpoint: {e}", exc_info=True)
+                # `save_checkpoint` reaches the state backend, whose driver
+                # errors embed a DSN. Direct sibling of the same sink in
+                # kaizen_agents/agents/autonomous/base.py, where this leak was
+                # demonstrated on a rendered record.
+                logger.error("Failed to save checkpoint: %s", scrub_remote_error(e))
 
         # Create interrupt status
         status = InterruptStatus(
@@ -441,7 +454,11 @@ class InterruptManager:
                     return False
 
         except Exception as e:
-            logger.error(f"Error executing PRE_INTERRUPT hooks: {e}", exc_info=True)
+            # PRE_INTERRUPT hooks are user-registered; the traceback carries
+            # whatever they touched.
+            logger.error(
+                "Error executing PRE_INTERRUPT hooks: %s", scrub_remote_error(e)
+            )
             # Continue with interrupt even if hooks fail
             pass
 
@@ -489,8 +506,10 @@ class InterruptManager:
                     },
                 )
             except Exception as e:
+                # Sibling of the PRE_INTERRUPT guard above; same user-hook
+                # surface, fixed in lockstep.
                 logger.error(
-                    f"Error executing POST_INTERRUPT hooks: {e}", exc_info=True
+                    "Error executing POST_INTERRUPT hooks: %s", scrub_remote_error(e)
                 )
                 # Don't fail shutdown if hooks fail
 

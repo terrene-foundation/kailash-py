@@ -208,7 +208,12 @@ class ColumnOnlyBackupHandler(BackupHandler):
         self, table_name: str, column_name: str, connection: asyncpg.Connection
     ) -> BackupInfo:
         """Create column-only backup."""
-        backup_table = (
+        # Issue #1971: the backup name is DataFlow-GENERATED from a table name
+        # that may already consume PostgreSQL's whole 63-char budget, so the
+        # concatenation overflows by construction and quote_identifier below
+        # raises. Fit it to the dialect budget (deterministic truncate + digest)
+        # so the suffix stays unique per (table, column, timestamp).
+        backup_table = _DIALECT.normalize_identifier(
             f"{table_name}__{column_name}_backup_{int(datetime.now().timestamp())}"
         )
 
@@ -295,7 +300,11 @@ class TableSnapshotBackupHandler(BackupHandler):
         self, table_name: str, column_name: str, connection: asyncpg.Connection
     ) -> BackupInfo:
         """Create full table backup."""
-        backup_table = f"{table_name}_backup_{int(datetime.now().timestamp())}"
+        # Issue #1971: see ColumnOnlyBackup.create_backup — the generated name
+        # overflows the dialect budget for any near-max-length table.
+        backup_table = _DIALECT.normalize_identifier(
+            f"{table_name}_backup_{int(datetime.now().timestamp())}"
+        )
 
         # Create full table backup — per
         # rules/dataflow-identifier-safety.md MUST Rule 1, every dynamic

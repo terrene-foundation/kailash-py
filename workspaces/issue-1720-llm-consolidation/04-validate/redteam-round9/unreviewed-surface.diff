@@ -1,0 +1,221 @@
+diff --git a/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py b/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
+index e86539e7d..37c468f0c 100644
+--- a/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
++++ b/packages/kaizen-agents/tests/regression/test_local_error_sinks_are_scrubbed.py
+@@ -865,6 +865,41 @@ class _SinkScan(ast.NodeVisitor):
+             if self._is_our_value(arg):
+                 self.bare.add(_key(arg))
+                 return
++        # Shape 8 — the exception as a VALUE inside ``extra={...}``. A
++        # structured-logging formatter renders that value with ``str()`` exactly
++        # as a lazy ``%s`` argument would, so it is the same sink wearing a dict.
++        # ``extra={"error": str(e)}`` was already caught by the string-context
++        # pass and ``extra={"tb": format_exc()}`` by the traceback pass; the BARE
++        # object slipped between them, because nothing inspected keyword dict
++        # VALUES.
++        #
++        # Found by a planted-shape sweep OF THIS SCANNER, not by a leak. A
++        # discriminating walk (control planted, control found) reports ZERO live
++        # instances in kaizen_agents, kailash-kaizen and src/kailash, so closing
++        # it moves no pinned count. It is closed as a LATENT gap: the day
++        # somebody writes it, the pin must not stay green over a real leak.
++        # DELIBERATELY ``_is_our_name`` AND NOT ``_is_scrubbable``. The first
++        # cut of this used the latter, which folds in Shape 6 — any ATTRIBUTE
++        # outside :data:`_SAFE_EXC_ATTRS`. Shape 6 over-flags on purpose, and
++        # that trade is sound where it already applies; importing it into a NEW
++        # surface is a different bargain and a bad one. It reddened nine files
++        # whose ``extra`` dicts carry STRUCTURED DIAGNOSTIC FIELDS on domain
++        # exceptions (``exc.helper``, ``exc.model``, ``exc.error`` on a
++        # ``ReasoningDegradedError``) — fields put there deliberately so a
++        # structured logger can index them, not raw exception text.
++        #
++        # The reported gap was the raw exception OBJECT as a dict value.
++        # ``str(e)``/``repr(e)`` there are already caught by the string-context
++        # pass, so the bare name is the whole of what was missing. Whether an
++        # attribute chain inside ``extra`` should flag is a real question with
++        # its own answer; it is not this one, and answering it here by accident
++        # would have moved nine files on no evidence.
++        for keyword in node.keywords:
++            if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
++                for value in keyword.value.values:
++                    if value is not None and self._is_our_name(value):
++                        self.bare.add(_key(value))
++                        return
+
+     def visit_Call(self, node: ast.Call) -> None:
+         func = node.func
+diff --git a/src/kailash/utils/secure_logging.py b/src/kailash/utils/secure_logging.py
+index fe316a92c..3fd59789b 100644
+--- a/src/kailash/utils/secure_logging.py
++++ b/src/kailash/utils/secure_logging.py
+@@ -40,9 +40,15 @@ _HOME_DIR = os.path.expanduser("~")
+ # Exceptions described per chain in safe_exception_frames. The `seen` set stops
+ # a CYCLE; nothing stopped a long ACYCLIC one, and a retry loop doing
+ # `raise X from prev` produced 5000 links in a single 175,000-character log
+-# record. Output is O(chain x limit), so the chain needs its own bound. The
+-# innermost links carry the original failure, so truncation drops the OUTER
+-# wrappers and says so rather than trimming silently.
++# record. Output is O(chain x limit), so the chain needs its own bound.
++#
++# The innermost links carry the original failure, so truncation drops the OUTER
++# wrappers and says how many, rather than trimming silently. NOTE FOR ANYONE
++# CHANGING THIS: the first implementation of that sentence did the opposite of
++# what it said -- it truncated during the walk, which keeps the outermost links
++# because `__cause__` walks INWARD. The behaviour is pinned by
++# `test_root_cause_survives_the_chain_cap`; if you rework the walk, that test is
++# the one that matters.
+ _MAX_CHAIN_LINKS = 10
+
+
+@@ -191,11 +197,17 @@ def safe_exception_frames(
+       that mint an exception class per server error name do exactly this.
+     * **function name** -- ``exec``/``compile`` with a data-derived identifier
+       (generated RPC stubs, ORM-generated methods).
+-    * **file BASENAME** -- ``compile(src, filename=<data>, ...)``. Jinja2
+-      compiles a template with the TEMPLATE NAME as the filename, so a
+-      data-derived template name reaches the frame. The DIRECTORY portion is
+-      safe: :func:`_relative_frame_path` falls back to the basename rather than
+-      emitting a path, so a credential in a full path does not survive.
++    * **file path** -- ``compile(src, filename=<data>, ...)``. Jinja2 compiles a
++      template with the TEMPLATE NAME as the filename, so a data-derived
++      template name reaches the frame, INCLUDING any directory structure in it.
++      An earlier revision of this paragraph said only the basename survives
++      because :func:`_relative_frame_path` "falls back to the basename". That is
++      true on only THREE branches -- ``relpath`` raised, a leading ``".."``, or
++      cwd at/above the home directory. On the COMMON branch (the file resolves
++      under cwd) it returns the relative path with directories intact, which
++      this repo's own negative control asserts. So the safe statement is
++      narrower: an ABSOLUTE path outside cwd collapses to its basename; a path
++      under cwd does not.
+
+     This is a far narrower channel than the exception MESSAGE it replaces -- a
+     message carries attacker data by default, whereas these carry it only when
+@@ -217,17 +229,59 @@ def safe_exception_frames(
+             nothing stopped a long ACYCLIC chain, and a retry loop doing
+             ``raise X from prev`` drove 5000 links to a single 175,000-character
+             log record -- the log-spam mode ``observability.md`` forbids, on an
+-            error path an attacker can drive.
++            error path an attacker can drive. **The INNERMOST links are kept**,
++            so the root cause always survives truncation and cannot be evicted
++            by an attacker who adds wrapping layers; the dropped OUTER count is
++            rendered at the head of the string.
+
+     Returns a string like
+     ``RuntimeError@svc/db.py:31:connect <- ValueError@svc/dsn.py:12:parse``.
+     """
+-    descriptions: List[str] = []
++    # WALK THE WHOLE CHAIN FIRST, THEN KEEP THE INNERMOST LINKS.
++    #
++    # Truncating DURING the walk kept the wrong end. ``exc`` is the OUTERMOST
++    # exception and ``__cause__``/``__context__`` walk INWARD, so appending as
++    # we go fills [outermost … innermost] and breaking at the cap keeps the ten
++    # outermost WRAPPERS while discarding the root cause -- the exact opposite
++    # of what this cap is for, and of what the comment beside it claimed.
++    # Measured: a ValueError root under 30 RuntimeError wrappers did not appear
++    # in the output at all.
++    #
++    # It was also attacker-driveable. Anything that adds >= _MAX_CHAIN_LINKS
++    # wrapping layers above the root -- a retry loop that re-wraps, a
++    # middleware stack wrapping per layer -- pushed the original failure past
++    # the cap and left ten generic wrappers behind. Keeping the innermost links
++    # removes that lever entirely.
++    #
++    # The walk is pointer-follows only and costs nothing; the O(chain x limit)
++    # work is the RENDER, which still happens at most _MAX_CHAIN_LINKS times.
++    #
++    # Honest trade, not a free win: for a RETRY-storm chain the outermost link
++    # is the most RECENT attempt and the innermost the oldest, so "innermost"
++    # is not unambiguously better there. For a wrapper chain -- the diagnostic
++    # case this helper exists to serve -- the root cause is what an operator
++    # needs, and it is also the half an attacker would otherwise evict.
++    links: List[BaseException] = []
+     seen: Set[int] = set()
+-    current: Optional[BaseException] = exc
++    walker: Optional[BaseException] = exc
++    while walker is not None and id(walker) not in seen:
++        seen.add(id(walker))
++        links.append(walker)
++        if not follow_chain:
++            break
++        walker = walker.__cause__ or walker.__context__
+
+-    while current is not None and id(current) not in seen:
+-        seen.add(id(current))
++    dropped = max(0, len(links) - _MAX_CHAIN_LINKS)
++    kept = links[-_MAX_CHAIN_LINKS:] if dropped else links
++
++    descriptions: List[str] = []
++    if dropped:
++        # Head, not tail: the dropped links are the OUTER ones, so the marker
++        # belongs where they were. Carries the count, so an 11-link chain and a
++        # 5000-link retry storm no longer render identically.
++        descriptions.append(f"<+{dropped} outer links dropped, cap reached>")
++
++    for current in kept:
+         # ``extract_tb`` defaults to ``lookup_lines=True``, so it reads the
+         # SOURCE for every frame -- before the slice below throws all but the
+         # innermost few away. The docstring above anticipates "thousands of
+@@ -248,16 +302,6 @@ def safe_exception_frames(
+         descriptions.append(
+             f"{type(current).__name__}@{rendered_frames or '<no-frames>'}"
+         )
+-        if not follow_chain:
+-            break
+-        current = current.__cause__ or current.__context__
+-        if len(descriptions) >= _MAX_CHAIN_LINKS and current is not None:
+-            # Say it was truncated. A silently-trimmed chain reads as a short
+-            # chain, and the reader cannot tell a two-link failure from a
+-            # five-thousand-link retry storm -- which is exactly the diagnostic
+-            # the cap must not destroy while bounding the record.
+-            descriptions.append(f"<+{_MAX_CHAIN_LINKS}-link cap reached>")
+-            break
+
+     return " <- ".join(descriptions)
+
+diff --git a/tests/regression/test_redteam_2026_08_09_integration_findings.py b/tests/regression/test_redteam_2026_08_09_integration_findings.py
+index fd5c3bb1c..d5efc208e 100644
+--- a/tests/regression/test_redteam_2026_08_09_integration_findings.py
++++ b/tests/regression/test_redteam_2026_08_09_integration_findings.py
+@@ -642,6 +642,42 @@ class TestSafeExceptionFramesIsBounded:
+         # one, and the reader cannot tell a 2-link failure from a retry storm.
+         assert "cap reached" in rendered
+
++    def test_root_cause_survives_the_chain_cap(self) -> None:
++        """The cap must evict the OUTER wrappers, not the original failure.
++
++        The first implementation truncated DURING the walk. ``__cause__`` walks
++        INWARD from the outermost exception, so that kept the ten outermost
++        WRAPPERS and discarded the root cause — the opposite of both the comment
++        beside it and the reason the cap exists. Measured at the time: a
++        ValueError root under 30 RuntimeError wrappers did not appear at all.
++
++        It was also an attacker's lever. Anything that adds >= _MAX_CHAIN_LINKS
++        wrapping layers above the root — a retry loop that re-wraps, a
++        middleware stack wrapping per layer — evicted the original failure and
++        left generic wrappers behind. Keeping the innermost links removes it.
++        """
++        from kailash.utils.secure_logging import (
++            _MAX_CHAIN_LINKS,
++            safe_exception_frames,
++        )
++
++        exc: BaseException = KeyError("ROOT_CAUSE_SENTINEL")
++        for i in range(_MAX_CHAIN_LINKS * 3):
++            try:
++                raise RuntimeError(f"wrapper-{i}") from exc
++            except RuntimeError as wrapped:
++                exc = wrapped
++
++        rendered = safe_exception_frames(exc, limit=1)
++
++        assert "KeyError" in rendered, (
++            "the root cause was evicted by the cap; truncation kept the outer "
++            f"wrappers instead of the original failure: {rendered[:160]}"
++        )
++        # The dropped COUNT is rendered, so 11 links and 5000 do not look alike.
++        assert "outer links dropped" in rendered
++        assert f"<+{_MAX_CHAIN_LINKS * 3 - _MAX_CHAIN_LINKS + 1} " in rendered
++
+     def test_limit_zero_and_negative_retain_no_frames(self) -> None:
+         """`limit=0` rendered EVERY frame — the opposite of a bound named limit."""
+         from kailash.utils.secure_logging import safe_exception_frames

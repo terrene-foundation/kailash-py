@@ -9,8 +9,8 @@ Provides DAG validation with optional schema compatibility checking
 and budget tracking queries.
 """
 
-import math
 import logging
+import math
 from typing import Any, Dict, List
 
 from kaizen.composition.dag_validator import validate_dag
