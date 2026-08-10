@@ -777,8 +777,16 @@ class FileSecretBackend(SecretBackend):
                 os.close(fd)
             try:
                 os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as cleanup_error:
+                # Not silent: a temp file left in the secrets directory holds
+                # a real (encrypted) secret and will not be cleaned up by
+                # anything else. The original failure still propagates.
+                logger.warning(
+                    "Could not remove partial secret file %s after a failed "
+                    "write: %s. Remove it manually.",
+                    tmp_path,
+                    cleanup_error,
+                )
             raise
 
     async def delete_secret(self, reference: str) -> None:
