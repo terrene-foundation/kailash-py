@@ -127,10 +127,22 @@ def create_user_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
+        # Validation is its own block, matching create_user above. Leaving
+        # the execute inside this `try` meant any ValueError SUBCLASS raised
+        # by DataFlow -- pydantic ValidationError, JSONDecodeError,
+        # UnicodeDecodeError -- was returned verbatim as a 400.
         try:
-            # Validate pagination
             offset, limit = validate_pagination_params(page, limit, max_limit=100)
+        except ValueError as e:
+            problem = ProblemDetail(
+                type=VALIDATION_ERROR,
+                title="Validation Error",
+                status=400,
+                detail=str(e),
+            )
+            return problem.to_response()
 
+        try:
             # Get user's organization from JWT
             user_claims = getattr(request.state, "user_claims", {})
             org_id = user_claims.get("org_id")
@@ -162,22 +174,12 @@ def create_user_router(db: DataFlow) -> APIRouter:
 
             return paginated_response(users, total, page, limit)
 
-        except ValueError as e:
-            # validate_pagination_params raises ValueError with a message
-            # written for the caller; kept verbatim as a genuine 400.
-            problem = ProblemDetail(
-                type=VALIDATION_ERROR,
-                title="Validation Error",
-                status=400,
-                detail=str(e),
-            )
-            return problem.to_response()
-
         except Exception as e:
-            # Everything else on this path is the database layer failing.
-            # Without this arm it either escaped as an unhandled 500 or, if
-            # the driver raised a ValueError subclass, was rendered into the
-            # 400 body above with its DSN intact.
+            # Everything reaching here is the database layer failing. There is
+            # deliberately no `except ValueError` arm ahead of this one: a
+            # ValueError subclass raised by DataFlow is an infrastructure
+            # fault, not a client mistake, and routing it to a 400 was how the
+            # driver's message reached the caller.
             problem = ProblemDetail(
                 type=INTERNAL_ERROR,
                 title="Internal Error",

@@ -31,12 +31,15 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from pydantic import BaseModel, Field
 
 from kailash.runtime.local import LocalRuntime
-from kailash.utils.http_errors import safe_http_detail
+from kailash.utils.http_errors import (
+    mask_exception_text,
+    mask_response_body,
+    safe_http_detail,
+)
 from kailash.utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
-from kailash.utils.url_credentials import mask_error_text
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
@@ -443,19 +446,21 @@ class WorkflowAPI:
                 # has no `status_code`) so the duck-typed contract type-checks.
                 typed_status: int = getattr(typed_exc, "status_code")
                 raw_body = getattr(typed_exc, "body", None)
+                # All three branches are allowlisted by the typed-status
+                # contract -- the handler authored this body for its caller --
+                # so the text is kept and only credential carriers are masked.
+                # Masking ONLY the third branch was worse than useless: a real
+                # NexusHandlerError carries a dict or str body, so the two
+                # branches that actually fire in production were the two that
+                # skipped the mask. `mask_response_body` walks the structure,
+                # so nested strings are covered, and preserves the response
+                # shape callers parse. No reference suffix, for that reason.
                 if isinstance(raw_body, dict):
-                    typed_body: Any = raw_body
+                    typed_body: Any = mask_response_body(raw_body)
                 elif isinstance(raw_body, str):
-                    typed_body = {"error": raw_body}
+                    typed_body = {"error": mask_response_body(raw_body)}
                 else:
-                    # Allowlisted by the typed-status contract (the handler
-                    # authored this message for its caller), so the text is
-                    # kept -- but masked, exactly as safe_http_detail treats
-                    # its own safe_types branch. A handler that accidentally
-                    # interpolates a DSN should not be the one place that
-                    # ships it. No reference suffix here: the typed body is a
-                    # published response shape and callers parse it.
-                    typed_body = {"error": mask_error_text(typed_exc)}
+                    typed_body = {"error": mask_exception_text(typed_exc)}
                 # Intent is logged server-side; the typed body is operator-facing
                 # by the handler's own design, so it is returned verbatim.
                 logger.warning(

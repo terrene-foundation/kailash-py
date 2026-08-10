@@ -25,7 +25,13 @@ type is explicitly named in ``safe_types``. Adding a type to that allowlist is
 a deliberate act asserting "this exception's message is written FOR end users",
 the same contract PACT's ``_sanitize_error`` applies to ``PactError``.
 
-Returns a plain ``str`` and raises nothing, deliberately. This is plain core:
+Returns a plain ``str`` and raises nothing, deliberately -- and that totality
+is ENFORCED here rather than assumed. ``mask_error_text`` calls ``str(value)``
+unguarded, so an exception whose ``__str__`` itself raises used to propagate
+straight out of this helper: a sanitizer called from an ``except`` block
+replacing the original fault with a second one, which is the worst possible
+failure mode for it. Every use of it below goes through ``mask_exception_text``. This
+is plain core:
 ``fastapi`` is not a required dependency (core requires only jsonschema /
 pydantic / pyyaml / click), and ``kailash-nexus`` depends on ``kailash``, so
 importing either here would add an optional dep to the core path or invert the
@@ -53,9 +59,50 @@ from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.utils.url_credentials import mask_error_text
 
 __all__ = [
+    "mask_exception_text",
+    "mask_response_body",
     "new_error_reference",
     "safe_http_detail",
 ]
+
+# Depth bound for ``mask_response_body``. A handler-authored body is data, and
+# data can be self-referential; recursing without a bound turns a sanitizer
+# into a stack overflow, which is a worse outcome than the leak it prevents.
+_MAX_BODY_DEPTH = 12
+
+
+def mask_exception_text(value: object) -> str:
+    """``mask_error_text`` that cannot raise.
+
+    ``url_credentials.mask_error_text`` calls ``str(value)`` unguarded, so an
+    object whose ``__str__`` raises propagates out of it. Every caller here is
+    already handling an exception, so a raise from the sanitizer would replace
+    the original fault with a confusing one and lose the diagnostic entirely.
+    """
+    try:
+        return mask_error_text(value)
+    except Exception:  # noqa: BLE001 -- last-resort: a sanitizer must not raise
+        return f"<unrenderable {type(value).__name__}>"
+
+
+def mask_response_body(value: object, _depth: int = 0) -> object:
+    """Recursively mask credential carriers in a handler-authored body.
+
+    Used where a body is returned to the caller because its author intended
+    it to be -- the masking is defense in depth over that intent, not a
+    replacement for it. Structure and non-string leaves are preserved so the
+    response shape callers parse is unchanged.
+    """
+    if _depth >= _MAX_BODY_DEPTH:
+        return "<truncated: max depth>"
+    if isinstance(value, str):
+        return mask_exception_text(value)
+    if isinstance(value, dict):
+        return {k: mask_response_body(v, _depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [mask_response_body(v, _depth + 1) for v in value]
+    return value
+
 
 # Kept generic on purpose: a per-status message must not narrate internal
 # state. "which run" / "which backend" / "which query" is the log's job.
@@ -116,7 +163,7 @@ def safe_http_detail(
         context,
         ref,
         safe_type_name(exc),
-        mask_error_text(exc),
+        mask_exception_text(exc),
         safe_exception_frames(exc, limit=5),
     )
 
@@ -125,7 +172,7 @@ def safe_http_detail(
         # Allowlisted: the message is designed for users. Still masked --
         # defense in depth costs nothing on a message that should not have
         # carried a credential in the first place.
-        return f"{mask_error_text(exc)} (reference: {ref})"
+        return f"{mask_exception_text(exc)} (reference: {ref})"
 
     generic = _GENERIC_BY_STATUS.get(status_code, _DEFAULT_GENERIC)
     return f"{generic} (reference: {ref})"

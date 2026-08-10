@@ -175,18 +175,20 @@ async def get_workflow_status(
     gateway: EnhancedDurableAPIGateway = Depends(get_gateway),
 ):
     """Get status of a workflow execution."""
+    # Scoped to the lookup ALONE. `safe_types=(ValueError,)` under an
+    # `except ValueError` was a no-op allowlist: every exception that could
+    # reach it was inside it by construction, so the fail-closed default was
+    # unreachable at this site. Worse, the old `try:` also spanned the
+    # `WorkflowResponseModel(...)` construction below, and
+    # `pydantic.ValidationError` subclasses `ValueError` -- a validation
+    # failure returned the offending INPUT VALUES to the caller as a 404.
     try:
         response = await gateway.get_workflow_status(request_id)
-        if response.workflow_id != workflow_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Request {request_id} is for workflow {response.workflow_id}, not {workflow_id}",
-            )
-        return WorkflowResponseModel(**response.to_dict())
     except ValueError as e:
-        # The gateway raises ValueError as its own not-found signal here, so
-        # the message is written for the caller and is allowlisted -- still
-        # masked, in case a backend error arrives wearing the same type.
+        # The gateway's own not-found signal (enhanced_gateway.py raises
+        # `ValueError(f"Request {request_id} not found")`). Nothing in that
+        # message is unknown to the caller, so nothing is allowlisted and
+        # the generic fail-closed 404 body is used instead.
         raise HTTPException(
             status_code=404,
             detail=safe_http_detail(
@@ -194,7 +196,23 @@ async def get_workflow_status(
                 logger=logger,
                 context="get workflow status",
                 status_code=404,
-                safe_types=(ValueError,),
+            ),
+        ) from e
+
+    if response.workflow_id != workflow_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Request {request_id} is for workflow {response.workflow_id}, not {workflow_id}",
+        )
+
+    try:
+        return WorkflowResponseModel(**response.to_dict())
+    except Exception as e:
+        # Serialization failure is a server fault, not a missing resource.
+        raise HTTPException(
+            status_code=500,
+            detail=safe_http_detail(
+                e, logger=logger, context="serialize workflow status"
             ),
         ) from e
 
