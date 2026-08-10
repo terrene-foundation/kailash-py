@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 from cryptography.fernet import Fernet
 
+from ..utils.file_permissions import OWNER_ONLY_MODE, restrict_to_owner
+
 logger = logging.getLogger(__name__)
 
 
@@ -206,16 +208,20 @@ class FileSecretBackend(SecretBackend):
         """Store secret in file."""
         file_path = os.path.join(self.secrets_dir, f"{reference}.json")
 
-        # Create with 0o600 up front rather than writing then chmod'ing: the
+        # Create restricted up front rather than writing then chmod'ing: the
         # latter leaves the secret world-readable for the whole write window.
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        fd = os.open(file_path, flags, 0o600)
+        fd = os.open(file_path, flags, OWNER_ONLY_MODE)
         try:
             # An existing file keeps its original mode, since the mode argument
-            # applies only on creation. fchmod acts on the open descriptor.
-            os.fchmod(fd, 0o600)
+            # applies only on creation, so re-apply on the open descriptor.
+            #
+            # NOTE: owner-only access is enforced on POSIX. On Windows the
+            # returned flag is False unless pywin32 is present, and the file is
+            # then NOT confidential -- see kailash.utils.file_permissions.
+            restrict_to_owner(file_path, fd=fd)
             f = os.fdopen(fd, "w")
         except Exception:
             os.close(fd)

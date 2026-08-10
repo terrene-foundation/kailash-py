@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import stat
+import sys
 
 import pytest
 
@@ -31,6 +32,7 @@ from kailash.gateway.security import FileSecretBackend
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.runtime.resource_manager import ResourceCoordinator
 from kailash.trust.plane.integration.cursor.hook import _log_verdict
+from kailash.utils.file_permissions import restrict_to_owner
 from kailash.utils.url_credentials import process_local_config_key
 
 PASSWORD = "sup3r-s3cret-p4ssw0rd"
@@ -246,14 +248,29 @@ def _mode(path) -> int:
     return stat.S_IMODE(os.stat(path).st_mode)
 
 
+# POSIX mode bits do not express "only the owner may READ" on Windows --
+# os.chmod there toggles the read-only attribute and nothing else. So the
+# 0o600 assertions below are POSIX-only by nature, not by convenience. The
+# cross-platform contract (the call must not raise, and must report honestly
+# whether it protected the file) is asserted separately in
+# TestRestrictToOwnerIsCrossPlatform, which runs everywhere.
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX mode bits do not restrict readers on Windows; see "
+    "kailash.utils.file_permissions and the cross-platform tests below",
+)
+
+
 @pytest.mark.regression
 class TestTrustAuditLogPermissions:
+    @posix_only
     def test_new_audit_log_is_owner_only(self, tmp_path) -> None:
         log_path = tmp_path / "audit.jsonl"
         _log_verdict(log_path, "Write", "/etc/passwd", "BLOCKED", "strict", {})
         assert log_path.exists()
         assert _mode(log_path) == 0o600, "trust audit log must not be world-readable"
 
+    @posix_only
     def test_preexisting_world_readable_log_is_tightened(self, tmp_path) -> None:
         """The mode argument to os.open applies only on creation, so a log
         written by an earlier version would otherwise stay 0o644 forever."""
@@ -281,6 +298,7 @@ class TestFileSecretBackendPermissions:
     """gateway/security.py — the secret was written under the umask (0o644)
     and only chmod'ed afterwards, leaving it world-readable mid-write."""
 
+    @posix_only
     def test_mode_is_owner_only_while_the_secret_is_being_written(
         self, tmp_path, monkeypatch
     ) -> None:
@@ -308,6 +326,7 @@ class TestFileSecretBackendPermissions:
             observed[0] == 0o600
         ), f"secret was world-readable during the write (mode {observed[0]:o})"
 
+    @posix_only
     def test_final_mode_and_content_are_preserved(self, tmp_path) -> None:
         manager = FileSecretBackend(str(tmp_path))
         asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
@@ -315,3 +334,114 @@ class TestFileSecretBackendPermissions:
         secret_file = tmp_path / "db-creds.json"
         assert _mode(secret_file) == 0o600
         assert json.loads(secret_file.read_text())["password"] == PASSWORD
+
+
+# ---------------------------------------------------------------------------
+# Cross-platform: os.fchmod is POSIX-only and crashed the hardened write path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+class TestRestrictToOwnerIsCrossPlatform:
+    """``os.fchmod`` does not exist on Windows.
+
+    The first version of this fix called it unguarded, so every hardened write
+    raised ``AttributeError`` on Windows -- and because the audit-log writer
+    catches only ``OSError``, that escaped as a crash rather than degrading to
+    best-effort. These tests run on every platform.
+    """
+
+    def test_writing_a_secret_does_not_raise_on_any_platform(self, tmp_path) -> None:
+        manager = FileSecretBackend(str(tmp_path))
+        asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
+        secret_file = tmp_path / "db-creds.json"
+        assert json.loads(secret_file.read_text())["password"] == PASSWORD
+
+    def test_writing_an_audit_log_does_not_raise_on_any_platform(
+        self, tmp_path
+    ) -> None:
+        log_path = tmp_path / "audit.jsonl"
+        _log_verdict(log_path, "Write", "/srv/x", "BLOCKED", "strict", {"why": "p"})
+        assert json.loads(log_path.read_text().strip())["verdict"] == "BLOCKED"
+
+    def test_the_posix_path_uses_the_descriptor_not_the_path(self, tmp_path) -> None:
+        """fd-based, so a symlink swapped in after the open cannot redirect it."""
+        if sys.platform == "win32":
+            pytest.skip("no fchmod on Windows; the DACL path is path-based")
+        target = tmp_path / "secret"
+        target.write_text("x")
+        seen: list[int] = []
+        real_fchmod = os.fchmod
+
+        def spying_fchmod(fd, mode):
+            seen.append(mode)
+            return real_fchmod(fd, mode)
+
+        fd = os.open(str(target), os.O_WRONLY)
+        try:
+            with pytest.MonkeyPatch.context() as mp:
+                mp.setattr(os, "fchmod", spying_fchmod)
+                assert restrict_to_owner(target, fd=fd) is True
+        finally:
+            os.close(fd)
+        assert seen == [0o600], "restrict_to_owner did not use the descriptor"
+
+    def test_reports_false_when_windows_cannot_enforce(self, tmp_path, caplog) -> None:
+        """The honest-failure contract: on Windows without pywin32 there is NO
+        mechanism to restrict readers, so the helper must say so rather than
+        let a caller believe the 0o600 in the source is in force.
+        """
+        import kailash.utils.file_permissions as fp
+
+        target = tmp_path / "secret"
+        target.write_text("x")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(fp.sys, "platform", "win32")
+            mp.setattr(fp, "_WARNED_NO_ACL", False)
+            # No pywin32 in this environment, so the import inside the helper
+            # raises ImportError -- the exact state a Windows user without the
+            # optional dependency is in.
+            with caplog.at_level(logging.WARNING):
+                applied = fp.restrict_to_owner(target)
+
+        assert applied is False, "helper claimed protection it did not apply"
+        assert "NOT access-controlled" in caplog.text
+        assert str(target) in caplog.text
+
+    def test_warns_only_once_per_process(self, tmp_path, caplog) -> None:
+        """A per-write warning on a busy audit log would flood the operator."""
+        import kailash.utils.file_permissions as fp
+
+        target = tmp_path / "secret"
+        target.write_text("x")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(fp.sys, "platform", "win32")
+            mp.setattr(fp, "_WARNED_NO_ACL", False)
+            with caplog.at_level(logging.WARNING):
+                fp.restrict_to_owner(target)
+                fp.restrict_to_owner(target)
+
+        assert caplog.text.count("NOT access-controlled") == 1
+
+    def test_both_write_paths_survive_an_os_without_fchmod(self, tmp_path) -> None:
+        """Reproduces the CI failure directly: Windows' ``os`` module simply
+        has no ``fchmod`` attribute, so removing it here is the same condition
+        rather than an approximation of it. Against the unguarded version this
+        raised ``AttributeError: module 'os' has no attribute 'fchmod'`` --
+        verbatim what Windows py3.11/3.12 reported.
+        """
+        with pytest.MonkeyPatch.context() as mp:
+            mp.delattr(os, "fchmod", raising=False)
+            assert not hasattr(os, "fchmod"), "the mutation did not take effect"
+
+            log_path = tmp_path / "audit.jsonl"
+            _log_verdict(log_path, "Write", "/srv/x", "BLOCKED", "strict", {"w": "p"})
+            assert json.loads(log_path.read_text().strip())["verdict"] == "BLOCKED"
+
+            manager = FileSecretBackend(str(tmp_path))
+            asyncio.run(manager.store_secret("creds", {"password": PASSWORD}))
+            assert json.loads((tmp_path / "creds.json").read_text())["password"] == (
+                PASSWORD
+            )

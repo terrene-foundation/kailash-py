@@ -81,6 +81,30 @@ from typing import Dict, List, Optional, Pattern, Union
 # (mongodb, mongodb+srv) drivers — every URL family the
 # DataFlow / kailash codebase passes through f-string log
 # interpolation.
+# Secret-bearing key names, as they appear in a QUOTED mapping key.
+#
+# Issue #2027: every key=value pattern in DEFAULT_SENSITIVE_PATTERNS requires
+# the key to be followed immediately by ``=``, ``:`` or whitespace, so none of
+# them match ``{'token': 'sk-live-...'}`` -- the key's own closing quote sits
+# between the name and the separator. That made
+# ``mask_sensitive_values(str(kwargs))`` a no-op on exactly the input it is
+# most often handed (a node's kwargs), so credentials passed as ordinary model
+# fields reached DEBUG logs verbatim. The value class ``[^\s,;"']+`` excluded
+# quoted values for the same reason, hence the separate value group here.
+#
+# Built with explicit ``+`` and kept OUT of the list literal on purpose: inside
+# a list, implicit adjacent-string concatenation is indistinguishable from a
+# missing comma, both to a reader and to CodeQL's py/implicit-concatenation-in-list.
+_SECRET_KEY_ALTERNATION = (
+    r"password|passwd|pwd|token|api[_-]?key|apikey|secret|secret[_-]?key|"
+    + r"private[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|"
+    + r"credentials?|authorization"
+)
+
+QUOTED_KEY_MAPPING_PATTERN = (
+    r"['\"](?:" + _SECRET_KEY_ALTERNATION + r")['\"]\s*:\s*['\"]([^'\"]*)['\"]"
+)
+
 DEFAULT_SENSITIVE_PATTERNS: List[str] = [
     # Database / cache / document URLs with credentials.
     # Captures ``user:password`` as group 1 — the replace_match
@@ -110,20 +134,9 @@ DEFAULT_SENSITIVE_PATTERNS: List[str] = [
     r"refresh[_-]?token[=:\s]+([^\s,;\"']+)",
     # Connection strings
     r"(password|pwd|passwd)[=:\s]+([^\s,;\"']+)",
-    # Quoted-key mapping form -- Python dict repr and JSON.
-    #
-    # Issue #2027: every pattern above requires the key to be followed
-    # immediately by ``=``, ``:`` or whitespace, so none of them match
-    # ``{'token': 'sk-live-...'}`` -- the key's own closing quote sits
-    # between the name and the separator. That made
-    # ``mask_sensitive_values(str(kwargs))`` a no-op on exactly the input it
-    # is most often handed (a node's kwargs), so credentials passed as model
-    # fields reached DEBUG logs verbatim. The value class is also excluded by
-    # ``[^\s,;\"']+``, which stops at the opening quote.
-    r"['\"](?:password|passwd|pwd|token|api[_-]?key|apikey|secret|"
-    r"secret[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|"
-    r"auth[_-]?token|credentials?|authorization)['\"]\s*:\s*"
-    r"['\"]([^'\"]*)['\"]",
+    # Quoted-key mapping form (Python dict repr and JSON) -- see
+    # QUOTED_KEY_MAPPING_PATTERN above.
+    QUOTED_KEY_MAPPING_PATTERN,
 ]
 
 # Default mask replacement string
