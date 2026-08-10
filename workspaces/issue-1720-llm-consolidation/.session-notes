@@ -46,10 +46,20 @@ modified. Not yet merged; CI not yet checked. Working tree clean, branch pushed.
   rate-limit identifier at WARN (`nexus rate_limit/middleware.py:184`), and a **world-readable
   trust audit log** (`trust/plane/integration/cursor/hook.py:139`, `0o644`).
 
+- **#2030 HIGH** — `BaseAgent` logs FULL agent inputs and results at INFO by default
+  (`base_agent.py:727` + `:735`, gated only by `logging_enabled` which defaults True).
+
 **CodeQL backlog: 2,353 open alerts — 1 critical, 35 high, 57 medium.** Of the 36 high/critical,
 **11 are real, 25 are false positives.** The 25 are NOT yet dismissed — deliberately. Dismissing a
 security alert on an un-reverified analysis is the failure this session spent its effort avoiding.
-Spot-verify the two generic logging sinks (#11249, #11244) first; being wrong there hides a real leak.
+
+**The two riskiest dismissals (#11249, #11244) WERE spot-verified — both are genuine pass-through
+sinks, safe to dismiss.** But verifying them found #2030: CodeQL flagged the harmless generic
+`logger.error` at `base_agent.py:744` and did NOT flag lines 727/735 two functions up, which
+unconditionally render whole agent I/O dicts at INFO. **Dismiss #11244 only alongside the #2030
+fix** — otherwise the file gets recorded as reviewed-and-clean while the real leak stands. This is
+the session's theme in miniature: the instrument reports on what its queries model, not on what is
+risky. The remaining 23 dismissals still need the same treatment before any bulk action.
 
 ## THE finding: five issues had wrong SPECIFICATIONS, not wrong code
 
