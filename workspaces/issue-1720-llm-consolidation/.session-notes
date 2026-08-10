@@ -9,6 +9,46 @@
 Four NEW security issues were filed that **outrank everything on the original list**.
 
 **UPDATE 12 (FINAL): main `aba8a0878`. ELEVEN issues closed, 20 PRs merged.**
+## ⚠ #2060 — #2035's IDENTITY-BINDING FIXES ARE NOT LIVE YET
+
+**Read #2035 with this caveat.** Its fixes are correct IN SOURCE but **unreachable at runtime**.
+`EnterpriseAuthProviderNode` has 14 `execute_async` call sites; **10 target collaborators that do
+not define it.** Verified by introspection on main:
+
+| node | `execute_async` | `async_run` |
+| --- | --- | --- |
+| `SessionManagementNode` | **False** | True |
+| `SSOAuthenticationNode` | **False** | True |
+| `DirectoryIntegrationNode` | **False** | True |
+| `SecurityEventNode` | **False** | **False** (needs a thread-offload either way) |
+
+Three collaborators expose the async surface under a DIFFERENT NAME; one has neither. Per #2060's
+repro, a correctly signed, unexpired, correct-issuer JWT dies in `_log_auth_event` before reaching
+the session step — so `authenticate` / `authorize` / `logout` / `validate` cannot complete for any
+action that logs an auth event.
+
+**Closing #2060 is what makes #2035's identity binding take effect.** Cross-linked from #2047,
+since the actor-model assessment depends on knowing the binding is not yet active.
+
+**Why it survived:** existing coverage tested helpers DIRECTLY rather than through the public
+surface. Same class as everything else here — correct code that never executes is
+indistinguishable from working code unless something drives the path.
+
+**Orchestrator boundary:** the mechanism above was confirmed by introspection; the
+"unconditional for every logging action" claim rests on #2060's repro, NOT on independent
+end-to-end execution.
+
+**Also in #2060:** the MFA audit sink is still unwired (`audit_log_node` is `None`), so admin-gated
+`revoke`/`disable`/`reset` complete with NO audit record. #2035 made this a loud one-time init
+warning instead of a per-operation message that read as transient, but did not wire it — that
+needs the deadlock it was disabled for re-investigated.
+
+**Nexus fail-open was a DUPLICATE of #2054** (17/17 passing on main), recorded as a comment rather
+than a new issue. Notable: it was found from a completely different direction — a lane working on
+`nodes/auth/` stubs tripped over it incidentally, which suggests it was reachable in ordinary use,
+not only under a targeted test.
+
+
 Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, #2026, + masker follow-up.
 **Both CRITICALs down.** All lane PRs merged; all worktrees retired except `lane-1c` (below).
 
