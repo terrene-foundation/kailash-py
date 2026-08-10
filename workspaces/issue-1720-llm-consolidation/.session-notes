@@ -8,6 +8,51 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 8 (latest): main `4e6eeea1d`. SIX issues closed** — #1995, #2015, #2014, #2027, #2004,
+plus the masker follow-up. #2049 merged (#2004): fix at the RAISE SITE (`basename#fingerprint`),
+closing message + `.data` + `to_dict()` at once, plus a FOURTH surface nobody had named
+(`channels/mcp/stdio._validate_command`, an independent copy of the same check with the identical
+`{command!r}` leak).
+
+## ⚠ #2039 ROOT CAUSE IS UNKNOWN — three hypotheses EXCLUDED, do not re-guess
+
+The isort mode disagreement is real and reproducible (`--files <f>` rewrites; `--all-files` leaves
+alone). **Three candidate causes have been experimentally excluded:**
+
+1. **Version skew** — both halves run through pre-commit at 5.13.2; a single version cannot
+   disagree with itself. (Hook pins 5.13.2; venv has 7.0.0 — real, but explains a DIFFERENT
+   observation: `.venv/bin/isort --diff` disagreeing with the hook.)
+2. **Batch membership** — three batch compositions produced BYTE-IDENTICAL output.
+3. **Invocation path** — `--files $(git ls-files '*.py')` (6124 files) == `--all-files`: Passed,
+   exit 0, 0 modified. Given the same file SET the two modes agree.
+
+**What remains is a NARROWING, not a mechanism:** classification changes with file-set size —
+1–2 files rewrite, 6124 do not; the flip is somewhere between. **No fourth cause has been named
+and none should be until measured.** #2039 carried two wrong causes before this, both authored by
+the orchestrator. "Cause unknown, three excluded" is the correct state.
+
+**Also separated:** harmonizing `src_paths` is a real config gap worth fixing on its own merits,
+but nothing measured supports it closing the mode disagreement. Two claims, not one.
+
+Workaround (independent of cause): ship the form `--all-files` accepts — keeps the repo-wide gate
+green and matches the tree. A documented `SKIP=isort` on an imports-only commit is acceptable;
+silent `--no-verify` is not.
+
+
+**⚠ CORRECTION TO TRAP 1 — the `pythonpath` ini key is WHITESPACE-separated, NOT colon-separated.**
+
+I briefed roughly eight lanes with `-o pythonpath="<a>:<b>"`. **That is wrong.** `pytest.ini`'s
+`pythonpath` takes a whitespace-separated list, so a colon-joined value is parsed as ONE bogus path,
+silently falls back, and resolves the package from the MAIN checkout — producing exactly the
+vacuous pass the trap warns about. Correct form:
+
+    pytest -o pythonpath="<worktree>/src <worktree>/packages/<pkg>/src"     # SPACES
+
+Caught by lane 2E, which confirmed it by printing `__file__` instead of trusting the flag. This is
+the trap reproducing itself one level up: a wrong instruction about how to verify, producing
+confident wrong results. **Always print the resolved `__file__`; never trust the flag alone.**
+
+
 **UPDATE 7 (burn-down, latest): main is `a0f8f3832`. FIVE PRs merged, THREE issues closed.**
 #2046 landed the masker's remaining key shapes — verified ON MAIN this time (see trap 7).
 
