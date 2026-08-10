@@ -28,6 +28,8 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
         "(fastapi). Install with: pip install 'kailash[server]'"
     ) from exc
 
+from kailash.utils.http_errors import safe_http_detail
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,10 +90,19 @@ class ConnectionMetricsProvider:
                         ),
                     }
             except Exception as e:
-                logger.warning("Failed to collect metrics from pool %s: %s", name, e)
+                # `results` is returned straight out of GET /metrics and
+                # GET /pools. A pool source failing is the single likeliest
+                # way a DSN reaches a response body in this codebase: the
+                # exception comes from the driver, and driver connect errors
+                # quote the connection string verbatim.
                 results[name] = {
                     "health_score": 0,
-                    "error": str(e),
+                    "error": safe_http_detail(
+                        e,
+                        logger=logger,
+                        context=f"collect metrics from pool {name!r}",
+                        status_code=503,
+                    ),
                 }
         return results
 
