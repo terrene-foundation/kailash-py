@@ -99,3 +99,40 @@ that discovers an in-scope defect in a held file reports it instead of colliding
 `f10-scanner`, `f10-scrubber`, `f10-sinks`, `f11-core-repr`, `f11-kaizen-repr`,
 `f13-lifecycle`. NOT touched by this session. Reconcile against merged state
 before any cleanup — do NOT bulk-remove (`feedback_no_bulk_worktree_discard`).
+
+## INCIDENT — worktree work loss via the SHARED stash (2026-08-10)
+
+**Lane 1E lost its source edits.** Sequence observed from the orchestrator side:
+its worktree went to ~145 files in unmerged (`UU`/`DU`/`UD`) state spanning
+`kailash-align`, `kailash-ml`, `kaizen`, `pact` and `uv.lock` — all far outside
+the lane's scope — then a `reset` returned it to a clean `a101c81f9` with the
+lane's own edits gone.
+
+**Root cause: `git stash` is SHARED across all worktrees.** The stash lives in
+the COMMON `.git`, not in the per-worktree tree. This repo carries 5 stashes from
+PRIOR sessions, two labelled "pre-existing cruft on T2/T3/T4 packages" — exactly
+the unrelated package set that appeared conflicted. A `stash pop`/`apply` in a
+worktree drops another session's changes on top of the lane's own work.
+
+**Blast radius — measured, and bounded:**
+
+- Lane 1E's regression test **SURVIVED** (`tests/regression/test_issue_2027_sensitive_value_sinks.py`,
+  10,932 B): a hard reset does not remove UNTRACKED files. Recovery started from it.
+- **All 5 prior stashes intact** — a conflicted `pop` does not drop the stash, so
+  no earlier session's work was destroyed.
+- Only lane 1E's own tracked-file edits were lost. No other lane affected
+  (verified individually).
+
+**Corrective action:** all 7 lanes were sent hard constraints — never
+`git stash`/`pop`/`apply`; never `git reset --hard` / `checkout -- .` /
+`clean -fd`; prefer `git reset --keep` (aborts on a dirty tree instead of
+silently destroying it); commit after each finished file.
+
+**CODIFY CANDIDATE (gap in the rule corpus).** `worktree-isolation.md` covers cwd
+drift (Rules 1/2/2a), placement (1/7), concurrency (4), merge-base (5) and branch
+naming (6) — but NOT the shared stash. `agents.md` § Worktree Orchestration gets
+adjacent ("in a SHARED tree restore ONLY from a `cp` backup; `git checkout --` /
+`git restore` are BLOCKED because they restore from the INDEX") but does not name
+the stash, which is the sharper trap: the stash is shared even between worktrees
+that are otherwise fully isolated, so "I am in my own worktree" is NOT protection.
+Worth a `/codify` clause with this incident as Origin.
