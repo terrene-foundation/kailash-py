@@ -1,5 +1,95 @@
 # Nexus Changelog
 
+## [Unreleased]
+
+### Changed (BREAKING) — `enable_auth=True` now installs real authentication, and requires a credential (#2013)
+
+- **`Nexus(enable_auth=True)` previously installed nothing.** It set three booleans
+  (`_enable_auth`, `_auth_enabled`, `HTTPTransport._enable_auth`) and logged
+  `✅ Authentication: ENABLED`. The two branches that looked like an install were
+  structural `hasattr` probes over names with **zero definitions anywhere** in this
+  repo or its dependencies — `hasattr(gateway, "set_auth_manager")` in `plugins.py`
+  and `hasattr(gw, "enable_auth")` in `core.py`. The gateway
+  (`EnterpriseWorkflowServer`) exposes no authentication surface at all, so both
+  resolved False permanently: the `MiddlewareAuthManager` the plugin constructed was
+  discarded, and every route stayed open. Measured before the fix: construct
+  `Nexus(enable_auth=True)`, then `GET /workflows` → **200**.
+- **Authentication is now a real Starlette middleware** (`nexus.auth.jwt.JWTMiddleware`)
+  installed on the gateway's FastAPI app, ahead of CORS so cross-origin preflight
+  still answers. Unauthenticated requests receive **401**. `app.enable_auth()` and
+  `use_plugin("auth")` install the same control and are idempotent.
+- **A credential source is now REQUIRED.** Set one of these (per `rules/env-models.md`,
+  `.env` is the single source of truth):
+
+  | Variable | Purpose |
+  | --- | --- |
+  | `NEXUS_JWT_SECRET` | HS256 bearer tokens. **Minimum 32 bytes** (RFC 7518 §3.2). |
+  | `NEXUS_JWT_PUBLIC_KEY` + `NEXUS_JWT_ALGORITHM` | RS256/ES256 verification. |
+  | `NEXUS_API_KEY_<NAME>` | `X-API-Key` header auth. Compared with `secrets.compare_digest`. |
+
+  Optional: `NEXUS_AUTH_EXEMPT_PATHS` (comma-separated) extends the exempt list.
+  Health endpoints (`/health`, `/health/*`, `/enterprise/health`) are exempt by
+  default so liveness probes answer without credentials; nothing else is.
+
+- **With no credential source, construction now RAISES `AuthNotConfiguredError`**
+  (a `RuntimeError` subclass) naming every accepted variable, instead of starting.
+  An under-length `NEXUS_JWT_SECRET` raises `InvalidAuthSecretError` (a `ValueError`
+  subclass). Both propagate unwrapped rather than being re-labelled as a gateway
+  failure. This mirrors the fix already made for the identical defect in
+  `APIGateway(enable_auth=True)` (#636).
+- **`NEXUS_ENV=prod` is now recognised as production, alongside `production`.** Three
+  hardening sites each compared against the long spelling only — auth auto-enable, the
+  CORS defaults, and the CORS `allow_origins=['*']` rejection — so a deployment setting
+  `prod` silently took the DEVELOPMENT branch at all three. They now share one
+  predicate.
+
+#### Migration
+
+**Read this if you set `enable_auth=True`, or run with `NEXUS_ENV=production` or
+`NEXUS_ENV=prod`.**
+
+Set a credential before upgrading:
+
+```bash
+# 32 bytes minimum — this generates 64
+export NEXUS_JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+```
+
+or, for API-key auth:
+
+```bash
+export NEXUS_API_KEY_PRIMARY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+```
+
+Without one, startup fails with an `AuthNotConfiguredError` naming these variables.
+To run deliberately without authentication, pass `Nexus(enable_auth=False)` explicitly.
+
+**Stated plainly: if this change breaks your deployment, that deployment was serving
+an unauthenticated API.** `enable_auth=True` installed no authentication, so every
+route was already open — the upgrade does not remove access control, it reveals that
+there was none. This converts a silent open API into a loud startup failure.
+
+Two further consequences worth checking:
+
+- **`NEXUS_ENV=prod` deployments** were getting no auth, permissive CORS defaults, and
+  `allow_origins=['*']` accepted. After upgrading, they need a credential, and a
+  wildcard CORS origin will now raise. Specify explicit origins.
+- **Auth must be enabled before the first request.** Starlette freezes its middleware
+  stack at startup, so `app.enable_auth()` after the app has served a request now
+  raises with that instruction rather than silently doing nothing. Prefer
+  `Nexus(enable_auth=True)` at construction.
+
+### Fixed — MCP workflow resources reported zero nodes for every workflow (#2013)
+
+- **`NexusResourceManager._extract_workflow_info` returned empty node and connection
+  lists for every real workflow.** It probed `hasattr(workflow, "_nodes")` /
+  `"_connections"` and read `node._config`; a built `Workflow` exposes `nodes` /
+  `connections`, and a node is a `NodeInstance` carrying `node_type` + `config`. Every
+  guard resolved False, so the MCP resource AI agents read to discover what a workflow
+  does described an empty workflow. The connection branch would additionally have
+  raised `AttributeError` (`conn.get(...)` on a pydantic `Connection`) had it ever been
+  entered. No migration required.
+
 ## [2.16.0] - 2026-07-26 — Registration is fail-closed and all-or-nothing (#1972)
 
 ### Fixed — `trusted_proxy_cidrs` now actually affects rate limiting (#2007)

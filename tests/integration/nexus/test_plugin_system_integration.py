@@ -4,6 +4,8 @@ Tests the plugin system with real plugin validation, loading, and lifecycle.
 Validates the stub fixes in plugins.py.
 """
 
+import os
+
 import pytest
 
 from nexus import Nexus
@@ -15,6 +17,19 @@ from nexus.plugins import (
     RateLimitPlugin,
     get_plugin_registry,
 )
+
+
+@pytest.fixture(autouse=True)
+def nexus_auth_credentials(monkeypatch):
+    """Supply a JWT secret so the auth plugin can install a real control.
+
+    Since #2013 the auth plugin installs Starlette middleware instead of
+    setting a flag, and refuses to report success when no credential source
+    exists. These tests exercise plugin lifecycle, not credential plumbing.
+    """
+    if not os.environ.get("NEXUS_JWT_SECRET"):
+        monkeypatch.setenv("NEXUS_JWT_SECRET", "t" * 64)
+    yield
 
 
 @pytest.mark.integration

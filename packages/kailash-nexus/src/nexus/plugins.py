@@ -84,34 +84,51 @@ class AuthPlugin(NexusPlugin):
         return "Enables authentication using SDK enterprise auth components"
 
     def apply(self, nexus_instance: Any) -> None:
-        """Apply authentication using SDK components."""
-        logger.info("Applying authentication plugin with SDK components")
+        """Install real HTTP authentication middleware on the Nexus app.
 
-        # Use SDK's enterprise authentication
-        http_transport = getattr(nexus_instance, "_http_transport", None)
-        gateway = getattr(http_transport, "gateway", None) if http_transport else None
-        if gateway is not None:
+        Before #2013 this built a ``MiddlewareAuthManager`` and then handed it
+        to the gateway behind ``if hasattr(gateway, "set_auth_manager")``.
+        ``set_auth_manager`` has ZERO definitions in this repo or any installed
+        dependency, so the guard was permanently False: the manager was
+        constructed, dropped on the floor, and the plugin reported "SDK-based
+        authentication enabled" over a completely open API. That is the
+        structural-``hasattr``-resolving-False silent fallback enumerated in
+        ``rules/zero-tolerance.md`` Rule 3d.
+
+        The install now goes through :func:`nexus.auth_bootstrap.
+        install_auth_middleware`, which adds a Starlette middleware that
+        actually rejects unauthenticated requests -- and raises when it cannot,
+        rather than reporting success.
+
+        Raises:
+            AuthNotConfiguredError: No credential source configured, or the
+                Nexus instance has no gateway to protect.
+        """
+        logger.info("Applying authentication plugin")
+
+        from nexus.auth_bootstrap import install_auth_middleware
+
+        install_auth_middleware(nexus_instance)
+
+        # Preserve the previously-published attribute for callers that read it.
+        # It is populated only when the optional middleware extra is present;
+        # the auth control itself no longer depends on it.
+        if getattr(nexus_instance, "_auth_manager", None) is None:
             try:
                 from kailash.middleware.auth.auth_manager import MiddlewareAuthManager
 
-                # Initialize SDK auth manager
-                auth_manager = MiddlewareAuthManager(
+                nexus_instance._auth_manager = MiddlewareAuthManager(
                     enable_api_keys=True, enable_audit=True
                 )
-
-                # Integrate with gateway (if supported)
-                if hasattr(gateway, "set_auth_manager"):
-                    gateway.set_auth_manager(auth_manager)
-
-                nexus_instance._auth_enabled = True
-                nexus_instance._auth_manager = auth_manager
-
-                logger.info("SDK-based authentication enabled")
-
             except ImportError as e:
-                logger.warning(f"SDK auth components not available: {e}")
-                # Fallback to simple flag
-                nexus_instance._auth_enabled = True
+                # Named degradation, not a silent pass: the HTTP auth layer is
+                # installed and enforcing either way, so this only affects the
+                # optional `_auth_manager` accessor.
+                logger.warning(
+                    "nexus._auth_manager unavailable (%s); HTTP authentication "
+                    "is installed and enforcing regardless.",
+                    e,
+                )
 
 
 class MonitoringPlugin(NexusPlugin):

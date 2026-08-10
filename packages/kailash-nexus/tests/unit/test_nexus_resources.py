@@ -74,22 +74,24 @@ class TestWorkflowResources:
     async def test_workflow_resource_found(
         self, mock_server, mock_nexus, resource_manager
     ):
-        """Test retrieving an existing workflow resource."""
-        # Add a mock workflow
-        mock_workflow = Mock()
-        mock_node = Mock(
-            __class__=Mock(__name__="TestNode"), _config={"param": "value"}
-        )
-        # Mock get_input_schema and get_output_schema to return proper dictionaries
-        mock_node.get_input_schema.return_value = {"input_param": {"type": "string"}}
-        mock_node.get_output_schema.return_value = {"output_param": {"type": "string"}}
-        mock_workflow._nodes = {"node1": mock_node}
-        mock_workflow._connections = [
-            {"source": "node1", "output": "out", "target": "node2", "input": "in"}
-        ]
-        # Fix metadata to support "in" operator
-        mock_workflow.metadata = {}
-        mock_nexus._workflows["test_workflow"] = mock_workflow
+        """Test retrieving an existing workflow resource.
+
+        Uses a REAL built workflow. The previous version handed the extractor
+        a Mock carrying `_nodes` / `_config` and dict-shaped connections --
+        attribute names a real `Workflow` does not have. It asserted the
+        extractor's output for a shape that never occurs in production, so it
+        stayed green while `_extract_workflow_info` returned empty lists for
+        every genuine workflow.
+        """
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        builder.add_node("PythonCodeNode", "node1", {"code": "result = {'a': 1}"})
+        builder.add_node("PythonCodeNode", "node2", {"code": "result = {'b': 2}"})
+        builder.add_connection("node1", "result", "node2", "incoming")
+        workflow = builder.build()
+        workflow.metadata = {}
+        mock_nexus._workflows["test_workflow"] = workflow
 
         # Get the resource handler
         handler = mock_server._resources["workflow://*"]
@@ -104,10 +106,16 @@ class TestWorkflowResources:
         content = json.loads(result["content"])
         assert content["name"] == "test_workflow"
         assert content["type"] == "workflow"
-        assert len(content["nodes"]) == 1
-        assert content["nodes"][0]["id"] == "node1"
-        assert content["nodes"][0]["type"] == "TestNode"
+        assert len(content["nodes"]) == 2
+        assert {n["id"] for n in content["nodes"]} == {"node1", "node2"}
+        assert content["nodes"][0]["type"] == "PythonCodeNode"
         assert len(content["connections"]) == 1
+        assert content["connections"][0] == {
+            "source": "node1",
+            "output": "result",
+            "target": "node2",
+            "input": "incoming",
+        }
 
     @pytest.mark.asyncio
     async def test_workflow_resource_not_found(
@@ -128,23 +136,24 @@ class TestWorkflowResources:
         self, mock_server, mock_nexus, resource_manager
     ):
         """Test workflow resource with metadata."""
-        # Create workflow with metadata
-        mock_workflow = Mock()
-        mock_workflow.metadata = {
+        from kailash.workflow.builder import WorkflowBuilder
+
+        builder = WorkflowBuilder()
+        builder.add_node("PythonCodeNode", "only", {"code": "result = {}"})
+        workflow = builder.build()
+        workflow.metadata = {
             "description": "Test workflow",
             "version": "1.0.0",
             "parameters": {"input": {"type": "string", "required": True}},
         }
-        mock_workflow._nodes = {}
-        mock_workflow._connections = []
-        mock_nexus._workflows["metadata_workflow"] = mock_workflow
+        mock_nexus._workflows["metadata_workflow"] = workflow
 
         handler = mock_server._resources["workflow://*"]
         result = await handler("workflow://metadata_workflow")
 
         content = json.loads(result["content"])
-        assert content["metadata"] == mock_workflow.metadata
-        assert content["schema"]["inputs"] == mock_workflow.metadata["parameters"]
+        assert content["metadata"] == workflow.metadata
+        assert content["schema"]["inputs"] == workflow.metadata["parameters"]
 
 
 class TestDocumentationResources:
