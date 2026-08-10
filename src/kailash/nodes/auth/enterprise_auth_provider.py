@@ -16,6 +16,7 @@ Unified authentication provider that orchestrates multiple authentication method
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import secrets
 import time
@@ -56,6 +57,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         session_config: Dict[str, Any] | None = None,
         jwt_config: Dict[str, Any] | None = None,
         api_key_store: Dict[str, Dict[str, Any]] | None = None,
+        api_key_pepper: str | None = None,
         user_permissions: Dict[str, List[str]] | None = None,
         default_permissions: List[str] | None = None,
         risk_assessment_enabled: bool = True,
@@ -86,10 +88,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # JWT verification material. Without a key, 'jwt' authentication fails
         # closed rather than trusting an unverified payload (issue #2026).
         self.jwt_config = jwt_config or {}
-        # Issued API keys, mapped by sha256(key) -> {"user_id": ..., optional
-        # "expires_at" (epoch seconds) and "revoked" (bool)}. Empty means
-        # 'api_key' authentication fails closed.
+        # Issued API keys, keyed by _api_key_digest(key) -> {"user_id": ...,
+        # optional "expires_at" (epoch seconds) and "revoked" (bool)}. Empty
+        # means 'api_key' authentication fails closed.
         self.api_key_store = api_key_store or {}
+        # Server-side secret mixed into the API-key lookup digest so a stolen
+        # api_key_store cannot be attacked by precomputation.
+        self.api_key_pepper = api_key_pepper or ""
         # Explicit user -> permissions mapping. Permissions are never inferred
         # from the text of a user_id (issue #2026); unlisted users get
         # default_permissions only.
@@ -566,6 +571,28 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         else:
             return {"authenticated": False, "error": "Invalid social token"}
 
+    def _api_key_digest(self, api_key: str) -> str:
+        """Derive the lookup digest for an issued API key.
+
+        Keyed HMAC-SHA256 rather than a bare digest: an attacker who obtains
+        ``api_key_store`` cannot precompute candidate digests without also
+        obtaining ``api_key_pepper``. A deliberately slow KDF (bcrypt/scrypt/
+        argon2) is NOT used here and is not appropriate: lookup compares the
+        presented key against every issued entry, so a slow hash would cost one
+        slow derivation per stored key per authentication. That trade is sound
+        because API keys are high-entropy values THIS SYSTEM generates, not
+        user-chosen passwords -- the offline-guessing attack a KDF defends
+        against does not apply.
+
+        Args:
+            api_key: The presented key.
+
+        Returns:
+            Hex digest used as the ``api_key_store`` lookup key.
+        """
+        pepper = str(self.api_key_pepper or "").encode("utf-8")
+        return hmac.new(pepper, api_key.encode("utf-8"), hashlib.sha256).hexdigest()
+
     async def _authenticate_api_key(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -579,7 +606,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # Log a DIGEST prefix, never key material: api_key[:6] on an "ak_"-
         # prefixed key exposed 3 real secret characters on every attempt.
-        key_digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        key_digest = self._api_key_digest(api_key)
         self.log_info(
             f"_authenticate_api_key - digest_prefix={key_digest[:8]}, "
             f"length={len(api_key)}"
@@ -599,7 +626,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "authenticated": False,
                 "error": (
                     "API key authentication is not configured. Provide "
-                    "api_key_store={<sha256(key)>: {'user_id': ...}} or remove "
+                    "api_key_store={<digest(key)>: {'user_id': ...}} or remove "
                     "'api_key' from enabled_methods."
                 ),
             }

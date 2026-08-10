@@ -35,6 +35,19 @@ class MFADeliveryError(NodeExecutionError):
     """
 
 
+def _phone_ref(phone: Optional[str]) -> str:
+    """Return a non-reversible reference to a phone number, for logs.
+
+    A phone number is subscriber PII. Logging even its last 4 digits puts part
+    of it in cleartext in every aggregator that ingests these logs, so a short
+    digest is used instead: it correlates log lines for the same destination
+    without disclosing any digit of it.
+    """
+    if not phone:
+        return "unknown"
+    return "sms:" + hashlib.sha256(str(phone).encode("utf-8")).hexdigest()[:10]
+
+
 def _send_sms(phone: str, message: str) -> bool:
     """Deliver an SMS through the module-level transport.
 
@@ -56,11 +69,13 @@ def _send_sms(phone: str, message: str) -> bool:
     """
     # Log delivery metadata only. The body is a credential (it contains the
     # OTP), so it is never written to logs -- see rules/security.md
-    # "No secrets in logs".
+    # "No secrets in logs". The destination is reduced to a digest rather than
+    # its last 4 digits: a digest still correlates entries for support without
+    # putting any part of the subscriber number in cleartext.
     logger.warning(
         "SMS delivery requested for %s (%d-char body) but no SMS transport is "
         "configured; nothing was sent.",
-        phone[-4:] if len(phone) > 4 else "****",
+        _phone_ref(phone),
         len(message),
     )
     raise MFADeliveryError(
@@ -1488,7 +1503,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                         try:
                             self.trusted_devices[user_id].remove(device)
                         except ValueError:
-                            pass
+                            # Already removed by a concurrent expiry cleanup.
+                            # The device is gone either way, which is the
+                            # outcome this branch exists to produce, so there
+                            # is nothing to recover from.
+                            self.log_with_context(
+                                "DEBUG",
+                                "Expired trusted device was already removed",
+                            )
                     return {
                         "success": True,
                         "trusted": False,
@@ -2309,7 +2331,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self.log_with_context(
                 "WARNING",
                 f"No SMS provider configured; no code was delivered to "
-                f"{phone[-4:] if len(phone) > 4 else '****'} for user {user_id}",
+                f"{_phone_ref(phone)} for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -2389,7 +2411,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 from_=self.sms_provider.get("from_number"),
                 to=phone,
             )
-            masked = phone[-4:] if phone and len(phone) > 4 else "****"
+            masked = _phone_ref(phone)
             self.log_with_context(
                 "INFO", f"SMS sent via Twilio to {masked} (SID: {message.sid})"
             )

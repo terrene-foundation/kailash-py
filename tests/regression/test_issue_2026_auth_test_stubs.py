@@ -33,6 +33,13 @@ import pytest
 pytestmark = pytest.mark.regression
 
 
+def _digest(raw: bytes) -> str:
+    """Mirror EnterpriseAuthProviderNode._api_key_digest with the default pepper."""
+    import hmac as _hmac
+
+    return _hmac.new(b"", raw, hashlib.sha256).hexdigest()
+
+
 class _FailingHTTPClient:
     """HTTP client double whose calls always fail — the attacker's easy path."""
 
@@ -160,7 +167,11 @@ def test_send_sms_raises_instead_of_returning_true():
 
 
 def test_send_sms_does_not_log_full_phone_number(caplog):
-    """Only the last 4 digits may appear — the pre-existing behaviour, kept."""
+    """No part of the subscriber number may reach the log.
+
+    The number is reduced to a non-reversible digest reference; even the last
+    4 digits are no longer written (CodeQL py/clear-text-logging-sensitive-data).
+    """
     from kailash.nodes.auth import mfa
 
     with caplog.at_level(logging.DEBUG, logger="kailash.nodes.auth.mfa"):
@@ -168,6 +179,7 @@ def test_send_sms_does_not_log_full_phone_number(caplog):
             mfa._send_sms("+15555550123", "body")
 
     assert "+15555550123" not in caplog.text
+    assert "0123" not in caplog.text, "the last 4 digits still reached the log"
 
 
 # ---------------------------------------------------------------------------
@@ -1275,9 +1287,7 @@ def test_api_key_rejects_a_self_minted_key(forged):
 
     node = EnterpriseAuthProviderNode(
         name="eap_test",
-        api_key_store={
-            hashlib.sha256(b"the-only-issued-key").hexdigest(): {"user_id": "svc"}
-        },
+        api_key_store={_digest(b"the-only-issued-key"): {"user_id": "svc"}},
     )
 
     result = asyncio.run(
@@ -1298,9 +1308,7 @@ def test_api_key_accepts_an_issued_key_and_uses_the_stored_identity():
     issued = "ak_" + "issued-key-material-0123456789ab"
     node = EnterpriseAuthProviderNode(
         name="eap_test",
-        api_key_store={
-            hashlib.sha256(issued.encode()).hexdigest(): {"user_id": "billing-svc"}
-        },
+        api_key_store={_digest(issued.encode()): {"user_id": "billing-svc"}},
     )
 
     result = asyncio.run(
@@ -1320,9 +1328,7 @@ def test_api_key_identity_is_not_derived_from_the_key_text():
     issued = "ak_" + "material-0123456789abcdef0123" + "_admin"
     node = EnterpriseAuthProviderNode(
         name="eap_test",
-        api_key_store={
-            hashlib.sha256(issued.encode()).hexdigest(): {"user_id": "lowpriv"}
-        },
+        api_key_store={_digest(issued.encode()): {"user_id": "lowpriv"}},
     )
 
     result = asyncio.run(
@@ -1360,11 +1366,11 @@ def test_api_key_honours_revocation_and_expiry():
     node = EnterpriseAuthProviderNode(
         name="eap_test",
         api_key_store={
-            hashlib.sha256(revoked.encode()).hexdigest(): {
+            _digest(revoked.encode()): {
                 "user_id": "svc",
                 "revoked": True,
             },
-            hashlib.sha256(expired.encode()).hexdigest(): {
+            _digest(expired.encode()): {
                 "user_id": "svc",
                 "expires_at": time.time() - 1,
             },
@@ -1435,7 +1441,7 @@ def test_api_key_record_without_a_user_id_does_not_authenticate():
     issued = "ak_" + "material-with-no-user-id-01234567"
     node = EnterpriseAuthProviderNode(
         name="eap_test",
-        api_key_store={hashlib.sha256(issued.encode()).hexdigest(): {"note": "oops"}},
+        api_key_store={_digest(issued.encode()): {"note": "oops"}},
     )
 
     result = asyncio.run(
