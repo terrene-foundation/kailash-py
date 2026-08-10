@@ -7,6 +7,7 @@ Tier 1 unit tests -- no torch, TRL, or GPU dependencies required.
 from __future__ import annotations
 
 import pytest
+
 from kailash_align.config import (
     AdapterSignature,
     AlignmentConfig,

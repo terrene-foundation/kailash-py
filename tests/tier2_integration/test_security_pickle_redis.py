@@ -11,10 +11,10 @@ These tests verify that:
 """
 
 import json
+
 import pytest
 
 from kailash.utils.redis_validation import validate_redis_url
-
 
 # ---------------------------------------------------------------------------
 # S1b-004 / S1b-005: Redis URL Validation Tests
@@ -97,6 +97,7 @@ class TestCacheNodePickleRemoval:
     def _cache_source() -> str:
         """Read cache module source without importing it (avoids @register_node issues)."""
         import pathlib
+
         import kailash
 
         cache_path = (
@@ -227,6 +228,7 @@ class TestAuditPickleUsage:
     def test_regression_detector_no_pickle_loads(self):
         """regression_detector.py should not call pickle.loads on untrusted data."""
         import inspect
+
         from kailash.migration import regression_detector
 
         source = inspect.getsource(regression_detector)

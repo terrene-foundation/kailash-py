@@ -24,9 +24,9 @@ import json
 import re
 import subprocess
 import sys
-import pytest
 from pathlib import Path
 
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "spec_drift_gate.py"

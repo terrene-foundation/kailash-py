@@ -75,7 +75,7 @@ FRAMEWORK_CONTRIBUTORS = [
 
 def create_server(project_root: Path) -> FastMCP:
     server = FastMCP("kailash-platform")
-    
+
     for module_path, namespace in FRAMEWORK_CONTRIBUTORS:
         try:
             mod = importlib.import_module(module_path)
@@ -83,7 +83,7 @@ def create_server(project_root: Path) -> FastMCP:
             logger.info("Loaded %s contributor (%d tools)", namespace, ...)
         except ImportError:
             logger.info("Framework %s not installed, skipping", namespace)
-    
+
     return server
 ```
 
@@ -94,7 +94,7 @@ Every contributor module implements exactly one function:
 ```python
 def register_tools(server: FastMCP, project_root: Path) -> None:
     """Register framework tools with the MCP server.
-    
+
     Args:
         server: FastMCP instance to register tools on.
         project_root: Absolute path to the project being introspected.

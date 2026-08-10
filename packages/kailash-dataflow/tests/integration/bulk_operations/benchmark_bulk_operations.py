@@ -12,11 +12,11 @@ import time
 from typing import Dict, List
 
 import pytest
+
+from dataflow import DataFlow
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -181,9 +181,9 @@ class TestBulkCreatePerformance:
         duration = time.time() - start_time
 
         create_result = results.get("bulk_create")
-        assert create_result.get("success"), (
-            f"Bulk create failed: {create_result.get('error')}"
-        )
+        assert create_result.get(
+            "success"
+        ), f"Bulk create failed: {create_result.get('error')}"
         assert create_result.get("inserted") == record_count
 
         print(f"\n\nbulk_create({record_count:,} records, batch_size={batch_size:,}):")

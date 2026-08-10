@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer, DependencyReport
 from dataflow.migrations.foreign_key_analyzer import FKImpactReport, ForeignKeyAnalyzer
 from dataflow.migrations.mitigation_strategy_engine import (
@@ -122,7 +123,7 @@ async def production_connection_manager(production_database_config):
             for conn in list(self._connections.values()):
                 try:
                     await self._pool.release(conn)
-                except:
+                except Exception:
                     pass
             self._connections.clear()
 

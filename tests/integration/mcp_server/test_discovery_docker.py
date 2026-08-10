@@ -161,7 +161,7 @@ class TestMCPServiceDiscoveryDocker(DockerIntegrationTestBase):
                         ) as resp:
                             if resp.status == 200:
                                 break
-                    except:
+                    except aiohttp.ClientError:
                         await asyncio.sleep(0.1)
 
         yield servers

@@ -27,7 +27,6 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from kailash.trust.signing.crypto import DualSignature
 from kailash.trust.hooks import (
     EATPHook,
     HookContext,
@@ -41,7 +40,7 @@ from kailash.trust.revocation.broadcaster import (
     RevocationType,
 )
 from kailash.trust.scoring import CombinedTrustScore, TrustScore
-
+from kailash.trust.signing.crypto import DualSignature
 
 # ---------------------------------------------------------------------------
 # Shared test hook implementations

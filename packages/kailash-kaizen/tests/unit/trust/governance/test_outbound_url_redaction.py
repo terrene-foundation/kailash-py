@@ -18,10 +18,6 @@ from __future__ import annotations
 
 import pytest
 
-from kaizen.trust.governance.outbound import (
-    GovernedHTTPClient,
-    redact_http_target,
-)
 from kailash.trust.pact.outbound import (
     EffectGovernor,
     OutboundEffect,
@@ -29,6 +25,7 @@ from kailash.trust.pact.outbound import (
     OutboundEffectRefused,
     OutboundVerdict,
 )
+from kaizen.trust.governance.outbound import GovernedHTTPClient, redact_http_target
 
 pytestmark = pytest.mark.regression
 

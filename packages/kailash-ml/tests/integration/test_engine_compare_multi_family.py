@@ -11,9 +11,8 @@ in the leaderboard carries a concrete ``device`` / ``accelerator`` /
 """
 from __future__ import annotations
 
-import pytest
-
 import polars as pl
+import pytest
 
 from kailash_ml import ComparisonResult, MLEngine, TrainingResult
 

@@ -20,7 +20,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

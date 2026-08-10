@@ -18,7 +18,6 @@ src_dir = current_dir.parent / "src"
 sys.path.insert(0, str(src_dir))
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite

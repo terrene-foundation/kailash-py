@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-
 from kailash.runtime.resource_manager import (
     AdaptiveRetryStrategy,
     CircuitBreaker,

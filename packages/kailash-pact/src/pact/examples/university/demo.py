@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from kailash.trust.pact.agent import GovernanceBlockedError, PactGovernedAgent
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -21,21 +22,17 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
+from kailash.trust.pact.decorators import governed_tool
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
+from kailash.trust.pact.testing import MockGovernedAgent
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.agent import GovernanceBlockedError, PactGovernedAgent
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.decorators import governed_tool
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.knowledge import KnowledgeItem
-from kailash.trust.pact.testing import MockGovernedAgent
-from kailash.trust.pact.explain import describe_address, explain_access
 
 logger = logging.getLogger(__name__)
 

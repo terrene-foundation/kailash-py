@@ -182,7 +182,7 @@ async def main():
 
         # Verify all agents are healthy
         print("\nAgent Health Status:")
-        for agent_id, metadata in registry.agents.items():
+        for _agent_id, metadata in registry.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
             status = metadata.status.value
             last_heartbeat = metadata.last_heartbeat
@@ -200,7 +200,7 @@ async def main():
 
         # Show agent status after failure
         print("\nAgent Status After Failure:")
-        for agent_id, metadata in registry.agents.items():
+        for _agent_id, metadata in registry.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
             status = metadata.status.value
             print(f"  - {agent_name}: {status}")
@@ -267,7 +267,7 @@ async def main():
 
         # Verify recovery
         print("\nAgent Status After Recovery:")
-        for agent_id, metadata in registry.agents.items():
+        for _agent_id, metadata in registry.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
             status = metadata.status.value
             print(f"  - {agent_name}: {status}")

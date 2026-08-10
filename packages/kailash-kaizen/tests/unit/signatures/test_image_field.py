@@ -10,8 +10,9 @@ import io
 import os
 
 import pytest
-from kaizen.signatures.multi_modal import ImageField
 from PIL import Image
+
+from kaizen.signatures.multi_modal import ImageField
 
 
 class TestImageFieldCreation:

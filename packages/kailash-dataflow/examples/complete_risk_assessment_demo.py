@@ -670,9 +670,7 @@ class CompleteRiskAssessmentDemo:
             scalability = (
                 "Excellent"
                 if result["total_time"] < 0.5
-                else "Good"
-                if result["total_time"] < 2.0
-                else "Acceptable"
+                else "Good" if result["total_time"] < 2.0 else "Acceptable"
             )
             print(
                 f"{result['scenario']:<12} {result['total_time']:<10.3f} {result['risk_score']:<6.1f} {result['strategies']:<10} {scalability}"

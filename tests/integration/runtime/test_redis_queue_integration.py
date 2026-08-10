@@ -66,11 +66,7 @@ class TestRedisEnqueueDequeueExecute:
 
     async def test_full_roundtrip(self, _flush_redis):
         """Build a simple workflow, enqueue it, dequeue with a worker, verify results."""
-        from kailash.runtime.distributed import (
-            DistributedRuntime,
-            TaskQueue,
-            Worker,
-        )
+        from kailash.runtime.distributed import DistributedRuntime, TaskQueue, Worker
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -132,11 +128,7 @@ class TestRedisEnqueueDequeueExecute:
 
     async def test_worker_executes_task(self, _flush_redis):
         """Worker dequeues and executes a task, storing the result in Redis."""
-        from kailash.runtime.distributed import (
-            DistributedRuntime,
-            TaskQueue,
-            Worker,
-        )
+        from kailash.runtime.distributed import DistributedRuntime, TaskQueue, Worker
         from kailash.workflow.builder import WorkflowBuilder
 
         # Build a trivial workflow

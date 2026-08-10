@@ -64,7 +64,6 @@ from types import TracebackType
 from typing import Any, Optional
 
 from kailash.diagnostics.protocols import TraceEvent, TraceEventStatus, TraceEventType
-
 from kaizen.ml._tracker_bridge import emit_metric, resolve_active_tracker
 from kaizen.observability.trace_exporter import TraceExporter, _hash_tenant_id
 

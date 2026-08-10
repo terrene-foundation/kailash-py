@@ -44,7 +44,6 @@ class TestWorkflowSerialization:
         instead of id for node identifiers in serialized format.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -114,7 +113,6 @@ class TestWorkflowSerialization:
         through execution, using the new _node_id field.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -179,7 +177,6 @@ class TestLegacyWorkflowCompatibility:
         node.id to get the node identifier.
         """
         from dataflow import DataFlow
-
         from kailash.workflow.builder import WorkflowBuilder
 
         db = DataFlow(test_suite.config.url, auto_migrate=True)
@@ -216,7 +213,6 @@ class TestLegacyWorkflowCompatibility:
         Ensures smooth migration for existing code.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -264,7 +260,6 @@ class TestComplexWorkflowScenarios:
         with string IDs (the original bug scenario).
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -348,7 +343,6 @@ class TestComplexWorkflowScenarios:
         without being confused with node identifiers.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -419,7 +413,6 @@ class TestComplexWorkflowScenarios:
         concurrent operations on different records.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -479,7 +472,6 @@ class TestNodeIdNamespaceIsolation:
         This is the ultimate validation that namespaces are properly separated.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -512,9 +504,9 @@ class TestNodeIdNamespaceIsolation:
         )
 
         # Record ID should be a database-generated value (typically int for auto-increment)
-        assert isinstance(record_id, (int, str)), (
-            f"Record ID has unexpected type: {type(record_id)}"
-        )
+        assert isinstance(
+            record_id, (int, str)
+        ), f"Record ID has unexpected type: {type(record_id)}"
 
         # If it's a string, it should NOT be the node identifier
         if isinstance(record_id, str):
@@ -531,7 +523,6 @@ class TestNodeIdNamespaceIsolation:
         user data and not reserved for internal use.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 

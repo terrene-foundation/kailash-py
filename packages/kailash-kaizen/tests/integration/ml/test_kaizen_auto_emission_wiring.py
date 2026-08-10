@@ -27,11 +27,7 @@ from typing import Any, Optional
 
 import pytest
 
-from kailash.diagnostics.protocols import (
-    TraceEvent,
-    TraceEventStatus,
-    TraceEventType,
-)
+from kailash.diagnostics.protocols import TraceEvent, TraceEventStatus, TraceEventType
 
 
 class _DeterministicTracker:

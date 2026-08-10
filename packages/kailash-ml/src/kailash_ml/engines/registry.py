@@ -48,12 +48,11 @@ list in the error message per §E11.2.
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import ClassVar, Literal, Optional
+from dataclasses import dataclass
+from typing import Literal, Optional
 
 from kailash_ml._version import __version__ as _KML_VERSION
 from kailash_ml.errors import MLError
-
 
 # --------------------------------------------------------------------------
 # Frozen dataclasses — per §E11.1

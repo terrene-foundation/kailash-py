@@ -33,7 +33,6 @@ from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegis
 from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
 
-
 # ---------------------------------------------------------------------------
 # Real infrastructure fixtures
 # ---------------------------------------------------------------------------

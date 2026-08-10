@@ -19,6 +19,7 @@ from typing import Dict, List
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     ConstraintDependency,
     DependencyAnalyzer,
@@ -31,7 +32,6 @@ from dataflow.migrations.dependency_analyzer import (
     ViewDependency,
 )
 from dataflow.migrations.migration_connection_manager import MigrationConnectionManager
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

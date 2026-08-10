@@ -19,6 +19,7 @@ import json
 import os
 
 import pytest
+
 from kaizen.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 
 # Skip if USE_REAL_PROVIDERS is not enabled

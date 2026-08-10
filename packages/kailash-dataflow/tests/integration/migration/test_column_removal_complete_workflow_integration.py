@@ -31,7 +31,6 @@ from typing import Any, Dict, List
 
 import asyncpg
 import pytest
-from kailash.runtime.local import LocalRuntime
 
 from dataflow.migrations.column_removal_manager import (
     BackupStrategy,
@@ -52,6 +51,7 @@ from dataflow.migrations.impact_reporter import (
     RecommendationType,
 )
 from dataflow.migrations.migration_connection_manager import MigrationConnectionManager
+from kailash.runtime.local import LocalRuntime
 
 # Import test infrastructure
 from tests.infrastructure.test_harness import IntegrationTestSuite

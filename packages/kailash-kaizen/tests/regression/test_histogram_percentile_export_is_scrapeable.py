@@ -28,8 +28,9 @@ that discriminates.
 """
 
 import pytest
-from kaizen.core.autonomy.observability.metrics import MetricsCollector
 from prometheus_client.parser import text_string_to_metric_families
+
+from kaizen.core.autonomy.observability.metrics import MetricsCollector
 
 pytestmark = pytest.mark.regression
 

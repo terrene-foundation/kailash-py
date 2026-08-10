@@ -13,9 +13,6 @@ Run:
     pytest examples/journey/healthcare_referral/tests/test_integration.py -v -m integration
 """
 
-import asyncio
-from typing import Any, Dict
-
 import pytest
 
 from examples.journey.healthcare_referral.agents import (
@@ -295,8 +292,6 @@ class TestMockDoctorDatabase:
 
         # Different symptoms should yield different primary results
         if back_doctors and headache_doctors:
-            back_specialties = [d["specialty"] for d in back_doctors[:2]]
-            headache_specialties = [d["specialty"] for d in headache_doctors[:2]]
             # Not necessarily different, but results should be returned
             assert len(back_doctors) > 0
             assert len(headache_doctors) > 0

@@ -6,6 +6,7 @@
 import json
 
 import pytest
+
 from kailash.trust.plane.project import TrustProject
 from kailash.trust.posture.postures import TrustPosture
 

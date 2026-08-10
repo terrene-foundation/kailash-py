@@ -10,8 +10,8 @@ TODO 7023: Deprecation markers for:
 
 from __future__ import annotations
 
-
 import pytest
+
 from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,

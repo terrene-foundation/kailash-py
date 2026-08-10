@@ -12,7 +12,6 @@ import pytest
 
 from kailash_ml.features import FeatureField, FeatureSchema
 
-
 # ---------------------------------------------------------------------------
 # FeatureField
 # ---------------------------------------------------------------------------

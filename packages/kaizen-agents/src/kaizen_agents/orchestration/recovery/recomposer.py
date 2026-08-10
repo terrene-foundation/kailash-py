@@ -21,9 +21,7 @@ from enum import Enum
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.orchestration.recovery.diagnoser import (
-    FailureDiagnosis,
-)
+from kaizen_agents.orchestration.recovery.diagnoser import FailureDiagnosis
 from kaizen_agents.types import (
     AgentSpec,
     EdgeType,

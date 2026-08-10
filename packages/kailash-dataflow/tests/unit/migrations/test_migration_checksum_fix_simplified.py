@@ -7,6 +7,7 @@ These tests focus on the core logic without trying to execute the full system.
 from unittest.mock import MagicMock, Mock
 
 import pytest
+
 from dataflow.migrations.auto_migration_system import (
     ColumnDefinition,
     PostgreSQLSchemaInspector,
@@ -85,9 +86,9 @@ class TestMigrationChecksumFix:
 
         for model_type, db_type, expected in test_cases:
             result = inspector._types_are_compatible(model_type, db_type)
-            assert result == expected, (
-                f"Type compatibility failed: {model_type} vs {db_type} should be {expected}"
-            )
+            assert (
+                result == expected
+            ), f"Type compatibility failed: {model_type} vs {db_type} should be {expected}"
 
     def test_column_definition_comparison(self):
         """Test column definition comparison logic."""
@@ -144,9 +145,9 @@ class TestMigrationChecksumFix:
         different_schema = "CREATE TABLE products (name varchar, price decimal)"
         checksum3 = hashlib.md5(different_schema.encode()).hexdigest()
 
-        assert checksum1 != checksum3, (
-            "Different schemas should generate different checksums"
-        )
+        assert (
+            checksum1 != checksum3
+        ), "Different schemas should generate different checksums"
 
         # Simulate migration history check
         applied_checksums = set([checksum1])  # First app applied this

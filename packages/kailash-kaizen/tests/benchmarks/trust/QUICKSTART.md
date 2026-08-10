@@ -15,7 +15,7 @@ pip install pytest-benchmark
 ### 1. Basic Run (All Benchmarks)
 
 ```bash
-cd 
+cd
 pytest tests/benchmarks/trust/benchmark_trust_operations.py -v --benchmark-only
 ```
 
@@ -183,7 +183,7 @@ pytest tests/benchmarks/trust/ --benchmark-only --benchmark-min-rounds=100
 **Solution**: Ensure you're in the correct directory
 
 ```bash
-cd 
+cd
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 pytest tests/benchmarks/trust/
 ```

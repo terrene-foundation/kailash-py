@@ -39,9 +39,8 @@ import pytest
 
 from kailash_mcp.auth.providers import (
     AuthenticationError as ProvidersAuthenticationError,
-    BearerTokenAuth,
-    JWTAuth,
 )
+from kailash_mcp.auth.providers import BearerTokenAuth, JWTAuth
 from kailash_mcp.errors import AuthenticationError as OAuthAuthenticationError
 
 # Tests against providers.* (BearerTokenAuth, JWTAuth) raise providers.AuthenticationError;

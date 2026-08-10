@@ -11,10 +11,10 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-
-from dataflow import DataFlow
 from templates.saas_starter.auth.jwt_auth import generate_access_token, hash_password
 from templates.saas_starter.security.api_keys import create_api_key
+
+from dataflow import DataFlow
 
 
 @pytest.fixture(scope="module")
@@ -229,7 +229,6 @@ class TestJWTAuthentication:
         import time
 
         import jwt
-
         from templates.saas_starter.auth.jwt_auth import JWT_SECRET
 
         expired_token = jwt.encode(
@@ -325,6 +324,7 @@ class TestRBAC:
         import time
 
         import jwt
+
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -376,6 +376,7 @@ class TestRBAC:
         import time
 
         import jwt
+
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 

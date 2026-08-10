@@ -93,7 +93,7 @@ def test_record_drift_alert_count_contract() -> None:
 
 
 def test_bucket_tenant_rejects_missing_tenant_id() -> None:
-    from kailash.observability.ml import _reset_bucketer_for_tests, _bucket_tenant
+    from kailash.observability.ml import _bucket_tenant, _reset_bucketer_for_tests
 
     _reset_bucketer_for_tests(top_n=2)
     with pytest.raises(ValueError, match="non-empty"):

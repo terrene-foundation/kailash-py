@@ -23,19 +23,12 @@ valid code path exercising the PACT bridge end-to-end.
 """
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
-from kailash.db.connection import ConnectionManager
-from kailash_ml.automl import (
-    AutoMLConfig,
-    AutoMLEngine,
-    ParamSpec,
-    Trial,
-    TrialOutcome,
-)
 
+from kailash.db.connection import ConnectionManager
+from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -32,11 +32,7 @@ import polars as pl
 import pytest
 
 from dataflow import DataFlow
-from dataflow.ml import (
-    TenantRequiredError,
-    ml_feature_source,
-    transform,
-)
+from dataflow.ml import TenantRequiredError, ml_feature_source, transform
 
 pytestmark = pytest.mark.integration
 

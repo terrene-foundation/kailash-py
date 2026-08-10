@@ -13,6 +13,7 @@ These tests use real infrastructure (NO MOCKING per Tier 3 policy).
 import time
 
 import pytest
+
 from dataflow import DataFlow
 
 
@@ -215,9 +216,9 @@ class TestCacheOverhead:
         print(f"  Overhead per entry: ~{overhead_per_entry:.1f} bytes")
 
         # Overhead should be reasonable (<1KB per entry)
-        assert overhead_per_entry < 1024, (
-            f"Overhead too high: {overhead_per_entry} bytes"
-        )
+        assert (
+            overhead_per_entry < 1024
+        ), f"Overhead too high: {overhead_per_entry} bytes"
 
     def test_cache_operation_overhead(self, db_with_cache, benchmark):
         """Measure overhead of cache operations."""
@@ -357,7 +358,7 @@ def test_performance_summary(db_with_cache):
     print("=" * 60)
 
     # Validate performance expectations
-    assert metrics["hit_rate_percent"] > 90, (
-        "Hit rate should be >90% for repeated operations"
-    )
+    assert (
+        metrics["hit_rate_percent"] > 90
+    ), "Hit rate should be >90% for repeated operations"
     assert metrics["hits"] >= 10, "Should have at least 10 cache hits"

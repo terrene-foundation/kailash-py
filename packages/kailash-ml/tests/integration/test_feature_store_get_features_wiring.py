@@ -25,9 +25,9 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from kailash_ml.features import FeatureField, FeatureSchema, FeatureStore
 
 from dataflow import DataFlow
+from kailash_ml.features import FeatureField, FeatureSchema, FeatureStore
 
 pytestmark = pytest.mark.integration
 

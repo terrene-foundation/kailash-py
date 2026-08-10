@@ -65,10 +65,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Union
 
-from kailash.diagnostics.protocols import (
-    TraceEvent,
-    compute_trace_event_fingerprint,
-)
+from kailash.diagnostics.protocols import TraceEvent, compute_trace_event_fingerprint
 
 if TYPE_CHECKING:  # pragma: no cover
     from kailash.trust.pact.audit import AuditAnchor  # noqa: F401

@@ -127,9 +127,7 @@ class DeviceReport:
                 "machine-parseable string."
             )
         if not isinstance(self.array_api, bool):
-            raise ValueError(
-                "DeviceReport.array_api must be a bool."
-            )
+            raise ValueError("DeviceReport.array_api must be a bool.")
 
     def as_log_extra(self) -> dict[str, Any]:
         """Return a dict suitable for ``logger.info(..., extra=...)``.

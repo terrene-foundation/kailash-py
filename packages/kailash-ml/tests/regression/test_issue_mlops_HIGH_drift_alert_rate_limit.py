@@ -22,12 +22,9 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+
 from kailash.db.connection import ConnectionManager
-from kailash_ml.drift.alerts import (
-    AlertConfig,
-    AlertRule,
-    DriftAlert,
-)
+from kailash_ml.drift.alerts import AlertConfig, AlertRule, DriftAlert
 from kailash_ml.engines.drift_monitor import DriftMonitor
 
 

@@ -17,7 +17,6 @@ from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
 from dataflow.features.express import DataFlowExpress
 
-
 # ============================================================================
 # Helpers — lightweight DataFlow stub for unit tests
 # ============================================================================

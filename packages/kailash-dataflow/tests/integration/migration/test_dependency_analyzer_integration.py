@@ -25,6 +25,7 @@ from typing import Dict, List
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     ConstraintDependency,
     DependencyAnalyzer,

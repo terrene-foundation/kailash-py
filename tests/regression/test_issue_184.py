@@ -18,10 +18,9 @@ async def test_issue_184_express_create_returns_timestamps_on_sqlite(
     tmp_path,
 ) -> None:
     """Express create() on SQLite must return created_at and updated_at."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_184.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)

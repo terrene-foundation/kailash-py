@@ -8,6 +8,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock
 
 import pytest
+
 from dataflow.debug.analysis_result import AnalysisResult
 from dataflow.debug.context_analyzer import ContextAnalyzer
 from dataflow.debug.error_capture import CapturedError, StackFrame

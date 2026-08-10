@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyAnalyzer,
     ForeignKeyDependency,
@@ -33,7 +34,6 @@ from dataflow.migrations.foreign_key_analyzer import (
     IntegrityValidation,
 )
 from dataflow.migrations.migration_connection_manager import MigrationConnectionManager
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

@@ -168,7 +168,6 @@ class TestWorkflowGeneratorApiKey:
     def test_workflow_generator_storescredential_ref_not_api_key(self):
         """WorkflowGenerator should store credential_ref, NOT api_key in node_config."""
         from kailash.workflow.credentials import get_credential_store
-
         from kaizen.core.workflow_generator import WorkflowGenerator
         from kaizen.signatures import InputField, OutputField, Signature
 
@@ -238,7 +237,6 @@ class TestRedTeamR1Fixes:
     def test_fallback_workflow_storescredential_ref_not_api_key(self):
         """generate_fallback_workflow must store credential_ref, NOT api_key."""
         from kailash.workflow.credentials import get_credential_store
-
         from kaizen.core.workflow_generator import WorkflowGenerator
 
         config = BaseAgentConfig(
@@ -349,7 +347,6 @@ class TestSerializationLeak:
         import json
 
         from kailash.workflow.credentials import get_credential_store
-
         from kaizen.core.config import BaseAgentConfig
         from kaizen.core.workflow_generator import WorkflowGenerator
         from kaizen.signatures import InputField, OutputField, Signature
@@ -489,10 +486,10 @@ class TestExportRedaction:
 
     def test_export_config_no_api_key(self):
         """Export data node config must not contain api_key."""
-        from kailash.workflow.credentials import SENSITIVE_KEYS
-
         # Simulate what export does
         from copy import deepcopy
+
+        from kailash.workflow.credentials import SENSITIVE_KEYS
 
         config = {"model": "gpt-4o", "api_key": "sk-secret", "temperature": 0.7}
         config_copy = deepcopy(config)

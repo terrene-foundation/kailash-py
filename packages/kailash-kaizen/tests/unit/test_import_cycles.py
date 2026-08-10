@@ -6,6 +6,7 @@ from __future__ import annotations
 """Verify no import cycles exist between new modules."""
 
 import importlib
+
 import pytest
 
 

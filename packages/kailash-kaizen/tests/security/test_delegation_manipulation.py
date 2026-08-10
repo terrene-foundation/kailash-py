@@ -31,6 +31,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -49,11 +50,7 @@ from kailash.trust.exceptions import (
     DelegationError,
     TrustChainNotFoundError,
 )
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
@@ -61,7 +58,6 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     OrganizationalAuthority,

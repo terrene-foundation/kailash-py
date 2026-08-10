@@ -292,7 +292,7 @@ async def main():
         print(
             f"\n✓ Completed {len(search_queries)} concurrent searches in {search_time:.3f}s"
         )
-        for query, agents in zip(search_queries, results):
+        for query, agents in zip(search_queries, results, strict=False):
             print(f"  '{query}': {len(agents)} agents")
 
         # Event summary

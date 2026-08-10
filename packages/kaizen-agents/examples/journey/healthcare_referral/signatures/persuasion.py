@@ -5,7 +5,7 @@ Addresses patient hesitation and highlights booking benefits
 while respecting their decision.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -50,12 +50,12 @@ class PersuasionSignature(Signature):
 
     # Inputs
     patient_message: str = InputField(desc="Patient's hesitant or uncertain message")
-    symptoms: List[str] = InputField(desc="Patient symptoms to personalize benefits")
-    hesitation_reason: Optional[str] = InputField(
+    symptoms: list[str] = InputField(desc="Patient symptoms to personalize benefits")
+    hesitation_reason: str | None = InputField(
         desc="Identified reason for hesitation if known (cost, time, fear, uncertainty)",
         default=None,
     )
-    current_context: Dict[str, Any] = InputField(
+    current_context: dict[str, Any] = InputField(
         desc="Current journey context including selected doctor info if any", default={}
     )
 
@@ -63,7 +63,7 @@ class PersuasionSignature(Signature):
     response: str = OutputField(
         desc="Empathetic response addressing concerns and offering support"
     )
-    concerns_addressed: List[str] = OutputField(
+    concerns_addressed: list[str] = OutputField(
         desc="List of concerns addressed in the response (e.g., ['cost', 'time_commitment'])"
     )
     ready_to_proceed: bool = OutputField(

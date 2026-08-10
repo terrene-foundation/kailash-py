@@ -12,6 +12,7 @@ from dataclasses import asdict
 from typing import Any, Dict
 
 import pytest
+
 from kaizen.providers.document.base_provider import (
     BaseDocumentProvider,
     ExtractionResult,

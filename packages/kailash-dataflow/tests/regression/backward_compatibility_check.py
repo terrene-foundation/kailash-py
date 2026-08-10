@@ -98,7 +98,6 @@ class BackwardCompatibilityChecker:
     def test_workflow_integration_compatibility(self):
         """Test that workflow integration patterns remain stable"""
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -128,7 +127,6 @@ class BackwardCompatibilityChecker:
     def test_crud_node_names_compatibility(self):
         """Test that generated CRUD node names remain stable"""
         from dataflow import DataFlow
-
         from kailash.workflow.builder import WorkflowBuilder
 
         db = DataFlow(":memory:")
@@ -164,7 +162,6 @@ class BackwardCompatibilityChecker:
     def test_node_parameter_compatibility(self):
         """Test that node parameter formats remain stable"""
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -270,7 +267,6 @@ class BackwardCompatibilityChecker:
     def test_error_handling_compatibility(self):
         """Test that error handling patterns remain stable"""
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -314,7 +310,6 @@ class BackwardCompatibilityChecker:
         from typing import Optional
 
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 

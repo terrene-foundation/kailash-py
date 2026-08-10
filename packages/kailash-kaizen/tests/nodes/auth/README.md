@@ -6,10 +6,10 @@
 
 ```bash
 # 1. Ensure OpenAI API key is set in .env
-echo "OPENAI_API_KEY=your-api-key-here" >> 
+echo "OPENAI_API_KEY=your-api-key-here" >>
 
 # 2. Navigate to test directory
-cd 
+cd
 ```
 
 ### Run All Tests
@@ -194,7 +194,7 @@ Using OpenAI gpt-4o-mini:
 ### "OPENAI_API_KEY not set" error
 ```bash
 # Add to .env file in app directory
-echo "OPENAI_API_KEY=your-key-here" >> 
+echo "OPENAI_API_KEY=your-key-here" >>
 
 # Or export directly
 export OPENAI_API_KEY=your-key-here

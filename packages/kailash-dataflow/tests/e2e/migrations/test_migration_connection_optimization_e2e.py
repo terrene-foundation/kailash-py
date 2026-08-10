@@ -10,6 +10,7 @@ import asyncio
 import time
 
 import pytest
+
 from dataflow.migrations.auto_migration_system import (
     AutoMigrationSystem,
     MigrationOperation,

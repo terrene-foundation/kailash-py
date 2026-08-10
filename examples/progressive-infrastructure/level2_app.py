@@ -30,12 +30,8 @@ import argparse
 import asyncio
 import sys
 
-from kailash import WorkflowBuilder, LocalRuntime
-from kailash.infrastructure import (
-    IdempotentExecutor,
-    StoreFactory,
-    create_task_queue,
-)
+from kailash import LocalRuntime, WorkflowBuilder
+from kailash.infrastructure import IdempotentExecutor, StoreFactory, create_task_queue
 
 
 def build_workflow(code: str, inputs: dict, output_type: str = "str"):

@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+
 from kaizen.core.autonomy.hooks import HookEvent, HookManager, HookPriority
 from kaizen.core.autonomy.hooks.security import (
     ADMIN_ROLE,
@@ -251,9 +252,9 @@ async def test_hipaa_access_control():
 
     # Test audit log tracks user actions
     audit_log = manager.get_audit_log(principal=user1)
-    assert any(log["principal"] == "user-001" for log in audit_log), (
-        "HIPAA: User actions must be tracked"
-    )
+    assert any(
+        log["principal"] == "user-001" for log in audit_log
+    ), "HIPAA: User actions must be tracked"
 
     logger.info("✅ HIPAA § 164.312(a)(1) (Access Control): PASSED")
 
@@ -380,13 +381,13 @@ async def test_gdpr_data_protection():
     )
 
     redacted = redactor.redact_context(context)
-    assert "alice@example.com" not in str(redacted.data), (
-        "GDPR: Email should be pseudonymized"
-    )
+    assert "alice@example.com" not in str(
+        redacted.data
+    ), "GDPR: Email should be pseudonymized"
     assert "123-45-6789" not in str(redacted.data), "GDPR: SSN should be pseudonymized"
-    assert "sk-1234567890abcdef" not in str(redacted.data), (
-        "GDPR: API key should be pseudonymized"
-    )
+    assert "sk-1234567890abcdef" not in str(
+        redacted.data
+    ), "GDPR: API key should be pseudonymized"
 
     logger.info("✅ GDPR Article 32(1)(a) (Pseudonymization): PASSED")
 
@@ -575,9 +576,9 @@ async def test_owasp_a03_injection():
 
     # Validation should detect SQL injection
     assert not validated_context.is_valid(), "OWASP: SQL injection should be detected"
-    assert "SQL injection" in str(validated_context.validation_errors), (
-        "OWASP: SQL injection should be flagged"
-    )
+    assert "SQL injection" in str(
+        validated_context.validation_errors
+    ), "OWASP: SQL injection should be flagged"
 
     logger.info("✅ OWASP A03:2021 (Injection): PASSED")
 
@@ -622,15 +623,15 @@ async def test_owasp_a05_security_misconfiguration():
     """
     # Test secure defaults
     manager = AuthorizedHookManager(require_authorization=True)
-    assert manager.require_authorization, (
-        "OWASP: Authorization should be required by default"
-    )
+    assert (
+        manager.require_authorization
+    ), "OWASP: Authorization should be required by default"
 
     # Test isolation defaults
     isolated_manager = IsolatedHookManager()
-    assert isolated_manager.enable_isolation, (
-        "OWASP: Isolation should be enabled by default"
-    )
+    assert (
+        isolated_manager.enable_isolation
+    ), "OWASP: Isolation should be enabled by default"
 
     logger.info("✅ OWASP A05:2021 (Security Misconfiguration): PASSED")
 

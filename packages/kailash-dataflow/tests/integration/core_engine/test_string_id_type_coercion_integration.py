@@ -15,7 +15,6 @@ import pytest
 
 # DataFlow and Kailash imports
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

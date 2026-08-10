@@ -24,7 +24,6 @@ from __future__ import annotations
 import pickle
 
 import numpy as np
-import polars as pl
 import pytest
 from sklearn.ensemble import RandomForestClassifier
 
@@ -37,7 +36,6 @@ from kailash_ml.errors import (
 )
 from kailash_ml.serving import InferenceServer, ServeHandle
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
-
 
 # ---------------------------------------------------------------------------
 # Real infrastructure fixtures

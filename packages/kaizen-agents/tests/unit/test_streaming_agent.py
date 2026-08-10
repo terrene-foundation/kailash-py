@@ -26,10 +26,7 @@ from kaizen_agents.events import (
     TextDelta,
     TurnComplete,
 )
-from kaizen_agents.streaming_agent import (
-    StreamingAgent,
-    _resolve_streaming_client,
-)
+from kaizen_agents.streaming_agent import StreamingAgent, _resolve_streaming_client
 
 # ---------------------------------------------------------------------------
 # Helpers

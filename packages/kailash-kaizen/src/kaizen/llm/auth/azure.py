@@ -39,10 +39,10 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 try:
-    from azure.identity import (  # type: ignore[import-not-found]
-        DefaultAzureCredential as _DefaultAzureCredential,
-        ManagedIdentityCredential as _ManagedIdentityCredential,
+    from azure.identity import (
+        DefaultAzureCredential as _DefaultAzureCredential,  # type: ignore[import-not-found]
     )
+    from azure.identity import ManagedIdentityCredential as _ManagedIdentityCredential
 except ImportError:  # pragma: no cover - optional-extra guard
     _DefaultAzureCredential = None  # type: ignore[assignment]
     _ManagedIdentityCredential = None  # type: ignore[assignment]

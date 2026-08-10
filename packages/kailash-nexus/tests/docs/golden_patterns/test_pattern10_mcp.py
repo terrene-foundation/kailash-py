@@ -4,10 +4,10 @@ Validates handler registration for MCP tool exposure.
 """
 
 import pytest
-from nexus import Nexus
 
 from kailash.nodes.handler import HandlerNode, make_handler_workflow
 from kailash.runtime import AsyncLocalRuntime
+from nexus import Nexus
 
 
 class TestGoldenPattern10MCP:

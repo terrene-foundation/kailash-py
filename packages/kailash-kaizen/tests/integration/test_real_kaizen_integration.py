@@ -36,7 +36,6 @@ from kailash.runtime.local import LocalRuntime
 
 # Import REAL Kaizen components
 from kaizen.core.framework import Kaizen
-
 from tests.fixtures.consolidated_test_fixtures import consolidated_fixtures
 
 # Import test base classes

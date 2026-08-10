@@ -20,6 +20,7 @@ from typing import Any, Dict, Set
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyReport,
     DependencyType,

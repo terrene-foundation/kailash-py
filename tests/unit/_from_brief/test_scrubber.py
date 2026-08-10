@@ -165,7 +165,10 @@ class TestIdempotency:
 # alternation, NOT a tame "abc123" placeholder. None of these are valid
 # upstream credentials.
 GITHUB_PAT_CLASSIC = "ghp_" + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-GITHUB_PAT_FINEGRAINED = "github_pat_" + "11ABCDEFG0aaaaaaaaaaaa_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+GITHUB_PAT_FINEGRAINED = (
+    "github_pat_"
+    + "11ABCDEFG0aaaaaaaaaaaa_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+)
 GOOGLE_API_KEY = "AIza" + "SyA-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # 4+35=39
 SLACK_BOT_TOKEN = "xoxb" + "-1234567890-abcdef"
 JWT_SAMPLE = (

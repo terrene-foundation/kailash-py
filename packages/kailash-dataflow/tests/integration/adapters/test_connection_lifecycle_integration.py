@@ -21,8 +21,8 @@ from dataflow.adapters.factory import AdapterFactory
 from dataflow.adapters.mysql import MySQLAdapter
 from dataflow.adapters.postgresql import PostgreSQLAdapter
 from dataflow.adapters.sqlite import SQLiteAdapter
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -31,12 +31,14 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     from kailash.runtime.local import LocalRuntime
 
     return LocalRuntime()
+
 
 class TestConnectionLifecycleBasic:
     """Test basic connection lifecycle operations."""
@@ -125,6 +127,7 @@ class TestConnectionLifecycleBasic:
             # Test operations after disconnect
             with pytest.raises(Exception):
                 await adapter.execute_query("SELECT 1", [])
+
 
 class TestConnectionPooling:
     """Test connection pooling functionality."""
@@ -249,6 +252,7 @@ class TestConnectionPooling:
 
         await adapter.disconnect()
 
+
 class TestConnectionRecovery:
     """Test connection recovery and error handling."""
 
@@ -313,6 +317,7 @@ class TestConnectionRecovery:
         assert result is not None
 
         await adapter.disconnect()
+
 
 class TestConcurrentConnectionManagement:
     """Test concurrent connection management scenarios."""
@@ -411,6 +416,7 @@ class TestConcurrentConnectionManagement:
 
         await adapter.disconnect()
 
+
 class TestConnectionMemoryManagement:
     """Test connection memory management and cleanup."""
 
@@ -481,6 +487,7 @@ class TestConnectionMemoryManagement:
         # Disconnect should clean up resources
         await adapter.disconnect()
         assert adapter.is_connected is False
+
 
 class TestConnectionFactoryIntegration:
     """Test connection lifecycle with factory pattern."""

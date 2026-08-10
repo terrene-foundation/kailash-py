@@ -23,7 +23,6 @@ from kailash.channels.mcp.sse import (
     _parse_sse_retry_field,
 )
 
-
 # ---------------------------------------------------------------------------
 # 1. Pure field parser - captures ASCII-digit milliseconds, rejects the rest
 # ---------------------------------------------------------------------------

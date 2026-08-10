@@ -9,7 +9,6 @@ import logging
 from typing import Callable, Optional
 
 from fastapi import Request, Response
-from nexus.auth.tenant.resolver import TenantResolver
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -21,6 +20,7 @@ from kailash.trust.auth.context import (
     TenantNotFoundError,
     _current_tenant,
 )
+from nexus.auth.tenant.resolver import TenantResolver
 
 logger = logging.getLogger(__name__)
 

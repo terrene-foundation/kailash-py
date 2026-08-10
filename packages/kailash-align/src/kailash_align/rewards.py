@@ -8,8 +8,8 @@ See ALN-220 and red team C2 for security rationale.
 """
 from __future__ import annotations
 
-import math
 import logging
+import math
 from typing import Any, Protocol, runtime_checkable
 
 from kailash_align.exceptions import AlignmentError
@@ -162,8 +162,7 @@ class RewardRegistry:
         if name not in self._registry:
             available = sorted(self._registry.keys())
             raise KeyError(
-                f"Reward function '{name}' not registered. "
-                f"Available: {available}"
+                f"Reward function '{name}' not registered. " f"Available: {available}"
             )
         return self._registry[name]
 
@@ -208,7 +207,9 @@ def exact_match_reward(
         raise RewardValidationError(
             f"expected has {len(expected)} items but got {len(completions)} completions"
         )
-    return [1.0 if c.strip() == e.strip() else 0.0 for c, e in zip(completions, expected)]
+    return [
+        1.0 if c.strip() == e.strip() else 0.0 for c, e in zip(completions, expected)
+    ]
 
 
 @reward_registry.register("contains_answer")

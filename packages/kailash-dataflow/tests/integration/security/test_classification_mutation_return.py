@@ -35,13 +35,8 @@ import uuid
 import pytest
 
 from dataflow import DataFlow
-from dataflow.classification import (
-    DataClassification,
-    MaskingStrategy,
-    classify,
-)
+from dataflow.classification import DataClassification, MaskingStrategy, classify
 from dataflow.core.agent_context import async_clearance_context
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -100,9 +95,7 @@ def _make_db_with_named_pii_model(db_url: str, model_name: str) -> DataFlow:
             "body": "",
         },
     )
-    cls = classify(
-        "body", DataClassification.PII, masking=MaskingStrategy.REDACT
-    )(cls)
+    cls = classify("body", DataClassification.PII, masking=MaskingStrategy.REDACT)(cls)
     db.model(cls)
     return db
 
@@ -138,9 +131,7 @@ async def test_create_redacts_classified_field_for_public_caller(
         db.close()
 
 
-async def test_create_unmasked_for_pii_clearance_caller(
-    test_suite, unique_model_name
-):
+async def test_create_unmasked_for_pii_clearance_caller(test_suite, unique_model_name):
     """create() return dict passes through raw values for a PII caller.
 
     Sanity check: the fix does not over-redact — callers with
@@ -155,7 +146,6 @@ async def test_create_unmasked_for_pii_clearance_caller(
                 {"title": "pii-title", "body": "visible-to-pii"},
             )
         assert returned["body"] == "visible-to-pii"
-
 
         # The raw value WAS persisted — the fix is at return, not at write.
         # Read back at high clearance to verify.
@@ -198,9 +188,9 @@ async def test_update_redacts_classified_field_for_public_caller(
             {"title": "updated-title", "body": "after"},
         )
         assert isinstance(updated, dict)
-        assert updated.get("body") == "[REDACTED]", (
-            "PUBLIC caller MUST NOT see plaintext 'body' on update() return"
-        )
+        assert (
+            updated.get("body") == "[REDACTED]"
+        ), "PUBLIC caller MUST NOT see plaintext 'body' on update() return"
     finally:
         db.close()
 
@@ -224,9 +214,9 @@ async def test_upsert_insert_branch_redacts_classified_field(
             {"id": new_id, "title": "ins", "body": "secret-ins"},
         )
         assert isinstance(returned, dict)
-        assert returned.get("body") == "[REDACTED]", (
-            "PUBLIC caller MUST NOT see plaintext 'body' on upsert() insert return"
-        )
+        assert (
+            returned.get("body") == "[REDACTED]"
+        ), "PUBLIC caller MUST NOT see plaintext 'body' on upsert() insert return"
     finally:
         db.close()
 
@@ -252,9 +242,9 @@ async def test_upsert_update_branch_redacts_classified_field(
             {"id": record_id, "title": "updated", "body": "updated-body"},
         )
         assert isinstance(returned, dict)
-        assert returned.get("body") == "[REDACTED]", (
-            "PUBLIC caller MUST NOT see plaintext 'body' on upsert() update return"
-        )
+        assert (
+            returned.get("body") == "[REDACTED]"
+        ), "PUBLIC caller MUST NOT see plaintext 'body' on upsert() update return"
     finally:
         db.close()
 
@@ -278,16 +268,16 @@ async def test_upsert_advanced_redacts_record_dict(test_suite, unique_model_name
         # Contract: {"created": bool, "action": str, "record": dict}
         assert isinstance(result, dict)
         if "record" in result and isinstance(result["record"], dict):
-            assert result["record"].get("body") == "[REDACTED]", (
-                "upsert_advanced() record.body MUST be redacted for PUBLIC caller"
-            )
+            assert (
+                result["record"].get("body") == "[REDACTED]"
+            ), "upsert_advanced() record.body MUST be redacted for PUBLIC caller"
         # Tolerate alternative shapes (node-layer variance): if the
         # return dict itself has the row fields, body MUST still be
         # redacted.
         if "body" in result:
-            assert result["body"] == "[REDACTED]", (
-                "upsert_advanced() top-level body MUST be redacted for PUBLIC"
-            )
+            assert (
+                result["body"] == "[REDACTED]"
+            ), "upsert_advanced() top-level body MUST be redacted for PUBLIC"
     finally:
         db.close()
 
@@ -337,9 +327,9 @@ async def test_bulk_create_redacts_returned_records(test_suite, unique_model_nam
             """
             if isinstance(obj, dict):
                 if "body" in obj and isinstance(obj["body"], str):
-                    assert not obj["body"].startswith("secret-"), (
-                        f"bulk_create() return leaked plaintext 'body'={obj['body']!r}"
-                    )
+                    assert not obj["body"].startswith(
+                        "secret-"
+                    ), f"bulk_create() return leaked plaintext 'body'={obj['body']!r}"
                 for v in obj.values():
                     _assert_no_plaintext_body(v)
             elif isinstance(obj, list):
@@ -355,25 +345,27 @@ async def test_bulk_create_redacts_returned_records(test_suite, unique_model_nam
             records_list = result
         elif isinstance(result, dict):
             records_list = (
-                result.get("records")
-                or result.get("items")
-                or result.get("data")
+                result.get("records") or result.get("items") or result.get("data")
             )
         if isinstance(records_list, list) and records_list:
             # Only assert when rows are actually echoed — the count-only
             # return shape is already covered by the walk above.
             for row in records_list:
                 if isinstance(row, dict) and "body" in row:
-                    assert row["body"] == "[REDACTED]", (
-                        "bulk_create() MUST redact 'body' on every returned row"
-                    )
+                    assert (
+                        row["body"] == "[REDACTED]"
+                    ), "bulk_create() MUST redact 'body' on every returned row"
 
         # Confirm writes actually persisted the raw value (the fix is at
         # return, not at write).
         async with async_clearance_context(DataClassification.PII):
             persisted = await db.express.list(unique_model_name, cache_ttl=0)
         persisted_bodies = {r.get("body") for r in persisted}
-        assert {"secret-1", "secret-2", "secret-3"} <= persisted_bodies, (
+        assert {
+            "secret-1",
+            "secret-2",
+            "secret-3",
+        } <= persisted_bodies, (
             "bulk_create() must have persisted raw values under PII clearance"
         )
     finally:
@@ -385,9 +377,7 @@ async def test_bulk_create_redacts_returned_records(test_suite, unique_model_nam
 # ---------------------------------------------------------------------------
 
 
-async def test_bulk_update_redacts_via_update_delegation(
-    test_suite, unique_model_name
-):
+async def test_bulk_update_redacts_via_update_delegation(test_suite, unique_model_name):
     """bulk_update() MUST redact 'body' on every returned row for PUBLIC.
 
     bulk_update delegates per-record to ``update()``; this test pins
@@ -419,9 +409,9 @@ async def test_bulk_update_redacts_via_update_delegation(
         # that EVERY returned row is redacted (zero tolerance for leaks).
         for row in rows:
             assert isinstance(row, dict)
-            assert row.get("body") == "[REDACTED]", (
-                "bulk_update() MUST redact 'body' on every returned row for PUBLIC"
-            )
+            assert (
+                row.get("body") == "[REDACTED]"
+            ), "bulk_update() MUST redact 'body' on every returned row for PUBLIC"
     finally:
         db.close()
 
@@ -431,9 +421,7 @@ async def test_bulk_update_redacts_via_update_delegation(
 # ---------------------------------------------------------------------------
 
 
-async def test_bulk_upsert_redacts_every_returned_record(
-    test_suite, unique_model_name
-):
+async def test_bulk_upsert_redacts_every_returned_record(test_suite, unique_model_name):
     """bulk_upsert() MUST redact 'body' on every ``records`` row for PUBLIC.
 
     The ``{"created", "updated", "total"}`` counts are scalar and
@@ -461,8 +449,8 @@ async def test_bulk_upsert_redacts_every_returned_record(
         for row in records_out:
             assert isinstance(row, dict)
             if "body" in row:
-                assert row["body"] == "[REDACTED]", (
-                    "bulk_upsert() MUST redact 'body' on every returned row for PUBLIC"
-                )
+                assert (
+                    row["body"] == "[REDACTED]"
+                ), "bulk_upsert() MUST redact 'body' on every returned row for PUBLIC"
     finally:
         db.close()

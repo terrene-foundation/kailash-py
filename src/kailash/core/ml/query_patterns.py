@@ -9,7 +9,9 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime
+from datetime import time as dt_time
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash._math_utils import mean, median

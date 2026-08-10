@@ -24,6 +24,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kailash.trust.pact.audit import AuditChain
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -32,9 +34,6 @@ from kailash.trust.pact.config import (
     VerificationGradientConfig,
     VerificationLevel,
 )
-from pact.examples.university.org import create_university_org
-from kailash.trust.pact.audit import AuditChain
-from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelope_adapter import (
     EnvelopeAdapterError,
@@ -52,6 +51,7 @@ from kailash.trust.plane.models import (
     FinancialConstraints,
     OperationalConstraints,
 )
+from pact.examples.university.org import create_university_org
 
 try:
     from pact.use.execution.approval import ApprovalQueue

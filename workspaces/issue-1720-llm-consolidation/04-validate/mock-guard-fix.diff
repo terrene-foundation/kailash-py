@@ -17,24 +17,24 @@ index 5f5292ee3..e035e6f8e 100644
 +(and un-guarded) whenever invoked via kailash-kaizen's own rootdir, exactly
 +as the un-scrubbed-secret gap this file's cost-guard half already closes.
  """
- 
+
 +import os
  import sys
  from pathlib import Path
- 
+
 +import pytest
 +
  from kailash.testing.env_cost_guard import install_cost_guard, scrub_provider_secrets
- 
+
  # Add src directory to sys.path
 @@ -24,7 +36,28 @@ if src_dir.exists() and str(src_dir) not in sys.path:
  # LLM calls even with a provider key in .env or exported in the shell.
  install_cost_guard(Path(__file__).resolve().parents[2] / ".env")
- 
+
 +_REAL_LLM_ENV_FLAG = "KAIZEN_ALLOW_REAL_LLM"
 +_REAL_LLM_MARKER = "requires_real_llm"
 +
- 
+
  def pytest_collection_finish(session):
      """Backstop: remove any provider secret re-injected during collection."""
      scrub_provider_secrets()
@@ -63,24 +63,24 @@ index 692c7eae0..9dd5e0f79 100644
 @@ -5,6 +5,7 @@ This module provides agent classes and management capabilities for signature-bas
  AI programming, built on Core SDK workflow patterns.
  """
- 
+
 +import hashlib
  import inspect
  import json
  import logging
 @@ -15,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
- 
+
  from kaizen.errors import EnvModelMissing
- 
+
 +from ._provider_env import detect_provider_from_env as _detect_provider_from_env
 +
  # PERFORMANCE OPTIMIZATION: Lazy loading for Kailash imports
  # WorkflowBuilder imports can bring heavy dependencies
- 
+
 @@ -42,6 +45,31 @@ def _resolve_default_model() -> str:
      )
- 
- 
+
+
 +def _fingerprint_payload(payload: Any) -> str:
 +    """Non-reversible ``len=<N> sha256=<8-hex>`` fingerprint for WARN logs.
 +
@@ -108,7 +108,7 @@ index 692c7eae0..9dd5e0f79 100644
 +
  if TYPE_CHECKING:
      from .framework import Kaizen
- 
+
 @@ -127,6 +155,12 @@ class Agent:
          # Agent state
          self._workflow: Optional[Any] = None
@@ -120,7 +120,7 @@ index 692c7eae0..9dd5e0f79 100644
 +        # the SAME class of gap FIX12 closed for `BaseAgent.to_workflow()`).
 +        self._workflow_provider: Optional[str] = None
          self._execution_history: List[Dict[str, Any]] = []
- 
+
          # MCP integration state
 @@ -204,7 +238,21 @@ class Agent:
              >>> workflow = agent.compile_workflow()
@@ -144,7 +144,7 @@ index 692c7eae0..9dd5e0f79 100644
 +        ):
              logger.debug(f"Using cached workflow for agent: {self.agent_id}")
              return self._workflow
- 
+
 @@ -215,7 +263,17 @@ class Agent:
          # Add LLM node using string-based pattern with Core SDK compatible parameters.
          # `_set_default_config` enforces `model` from KAIZEN_DEFAULT_MODEL env var
@@ -168,10 +168,10 @@ index 692c7eae0..9dd5e0f79 100644
          self._workflow = workflow
          self._is_compiled = True
 +        self._workflow_provider = current_provider
- 
+
          logger.info(f"Compiled workflow for agent: {self.agent_id}")
          return workflow
- 
+
      @property
      def workflow(self):  # Return type deferred due to lazy loading
 -        """Get the compiled workflow for this agent."""
@@ -187,7 +187,7 @@ index 692c7eae0..9dd5e0f79 100644
 +        workflow built under a since-drifted provider.
 +        """
 +        return self.compile_workflow()
- 
+
      def execute_workflow(
          self,
 @@ -340,6 +404,17 @@ class Agent:
@@ -206,7 +206,7 @@ index 692c7eae0..9dd5e0f79 100644
 +        if hasattr(self, "_signature_workflow_provider"):
 +            del self._signature_workflow_provider
          logger.info(f"Updated config for agent: {self.agent_id}")
- 
+
      def to_node_config(self) -> Dict[str, Any]:
 @@ -349,9 +424,18 @@ class Agent:
          Returns:
@@ -231,7 +231,7 @@ index 692c7eae0..9dd5e0f79 100644
 @@ -560,8 +644,24 @@ class Agent:
          # Store current execution inputs for intelligent mock conversion
          self._current_execution_inputs = inputs.copy()
- 
+
 -        # Compile signature to workflow parameters if needed
 -        if not hasattr(self, "_signature_workflow"):
 +        # Compile signature to workflow parameters if needed.
@@ -253,7 +253,7 @@ index 692c7eae0..9dd5e0f79 100644
 +            or getattr(self, "_signature_workflow_provider", None) != current_provider
 +        ):
              from ..signatures import SignatureCompiler
- 
+
              compiler = SignatureCompiler()
 @@ -576,7 +676,7 @@ class Agent:
              # Model defaulted from KAIZEN_DEFAULT_MODEL via `_set_default_config`
@@ -269,13 +269,13 @@ index 692c7eae0..9dd5e0f79 100644
              )
              self._signature_workflow = workflow
 +            self._signature_workflow_provider = current_provider
- 
+
          # Execute workflow
          if not self.kaizen:
 @@ -665,9 +766,17 @@ class Agent:
                      agent_result = node_result
                      break
- 
+
 -        # Parse LLM response to structured output based on signature
 +        # Parse LLM response to structured output based on signature.
 +        # PART A: `enhanced_params["provider"]` (read above from the — possibly
@@ -290,12 +290,12 @@ index 692c7eae0..9dd5e0f79 100644
 -            agent_result, signature
 +            agent_result, signature, dispatched_provider=enhanced_params.get("provider")
          )
- 
+
          # Track execution history
 @@ -747,8 +856,12 @@ class Agent:
          # Extract intelligent response from LLM results
          agent_result = results.get(self.agent_id, {})
- 
+
 -        # Handle different response formats from LLMAgentNode
 -        intelligent_response = self._extract_intelligent_response(agent_result, inputs)
 +        # Handle different response formats from LLMAgentNode.
@@ -304,12 +304,12 @@ index 692c7eae0..9dd5e0f79 100644
 +        intelligent_response = self._extract_intelligent_response(
 +            agent_result, inputs, dispatched_provider=llm_params["provider"]
 +        )
- 
+
          # Track execution history
          self._execution_history.append(
 @@ -919,7 +1032,10 @@ CRITICAL RULES:
          return schema
- 
+
      def _extract_intelligent_response(
 -        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
 +        self,
@@ -331,13 +331,13 @@ index 692c7eae0..9dd5e0f79 100644
 +                Callers SHOULD pass this; omitting it falls back to
 +                `_is_mock_provider_active()` (see its docstring for why
 +                that fallback can drift).
- 
+
          Returns:
              Structured intelligent response
 @@ -960,12 +1084,25 @@ CRITICAL RULES:
                              response_content = str(candidate["content"])
                              break
- 
+
 -            # Check if this is a mock response that needs intelligent conversion
 -            is_mock_response = response_content and (
 -                response_content.startswith("I understand you want me to work with")
@@ -364,7 +364,7 @@ index 692c7eae0..9dd5e0f79 100644
 +                    or "Mock vision response for testing" in response_content
 +                )
              )
- 
+
              if response_content and not is_mock_response:
 @@ -978,8 +1115,22 @@ CRITICAL RULES:
              else:
@@ -394,7 +394,7 @@ index 692c7eae0..9dd5e0f79 100644
 @@ -1019,16 +1170,75 @@ CRITICAL RULES:
          if "provider" in self.config:
              return self.config["provider"]
- 
+
 -        # Check for API keys to determine available providers
 -        import os
 -
@@ -474,12 +474,12 @@ index 692c7eae0..9dd5e0f79 100644
 +        if dispatched_provider is not None:
 +            return dispatched_provider == "mock"
 +        return self._is_mock_provider_active()
- 
+
      def _generate_intelligent_mock_response(self, inputs: Dict[str, Any]) -> str:
          """
 @@ -1208,18 +1418,29 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
                  return "I understand your question and I'm ready to provide a thoughtful, detailed response based on the information and context available."
- 
+
      def _parse_llm_response_to_signature_output(
 -        self, llm_result: Dict[str, Any], signature: Any
 +        self,
@@ -489,7 +489,7 @@ index 692c7eae0..9dd5e0f79 100644
      ) -> Dict[str, Any]:
          """
          Parse unstructured LLM response into structured output based on signature.
- 
+
          This uses the advanced parsing system to convert raw LLM responses
          to the structured format expected by signature-based programming.
 +
@@ -507,11 +507,11 @@ index 692c7eae0..9dd5e0f79 100644
 -            llm_result
 +            llm_result, dispatched_provider=dispatched_provider
          )
- 
+
          # Use the advanced structured output parser
 @@ -1229,7 +1450,7 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
          return parser.parse_signature_response(processed_llm_result, signature)
- 
+
      def _apply_intelligent_mock_conversion_to_llm_result(
 -        self, llm_result: Dict[str, Any]
 +        self, llm_result: Dict[str, Any], dispatched_provider: Optional[str] = None
@@ -519,7 +519,7 @@ index 692c7eae0..9dd5e0f79 100644
          """
          Apply intelligent mock conversion to LLM result if it contains mock responses.
 @@ -1238,6 +1459,13 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
- 
+
          Args:
              llm_result: Raw LLM result
 +            dispatched_provider: The provider value ACTUALLY placed in the
@@ -529,13 +529,13 @@ index 692c7eae0..9dd5e0f79 100644
 +                live config/env, so gate and dispatch can never disagree —
 +                even when the signature-execution workflow cache
 +                (`self._signature_workflow`) is stale.
- 
+
          Returns:
              LLM result with intelligent responses if mock was detected
 @@ -1269,18 +1497,42 @@ Final Answer: The top 3 programming languages for AI applications are: {", ".joi
          # logger.debug(f"LLM result structure: {result_copy}")
          # logger.debug(f"Extracted response content: {response_content}")
- 
+
 -        # Check if this is a mock response that needs intelligent conversion
 -        is_mock_response = response_content and (
 -            response_content.startswith("I understand you want me to work with")
@@ -559,7 +559,7 @@ index 692c7eae0..9dd5e0f79 100644
 +                or "Mock vision response for testing" in response_content
 +            )
          )
- 
+
          if is_mock_response:
              # We need to infer the original inputs from the LLM result context
 -            # For signature-based execution, we can extract from the mock response
@@ -579,12 +579,12 @@ index 692c7eae0..9dd5e0f79 100644
 +                ),
 +                _fingerprint_payload(response_content),
 +            )
- 
+
              # Use current execution inputs if available, otherwise extract from mock response
              if (
 @@ -1627,12 +1879,16 @@ Final Answer: [Your complete solution]
          """
- 
+
      def _extract_cot_response(
 -        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
 +        self,
@@ -601,10 +601,10 @@ index 692c7eae0..9dd5e0f79 100644
 +            llm_result, original_inputs, dispatched_provider=dispatched_provider
          )
          response_text = intelligent_response.get("answer", "")
- 
+
 @@ -1692,12 +1948,16 @@ Final Answer: [Your complete solution]
          return cot_structure
- 
+
      def _extract_react_response(
 -        self, llm_result: Dict[str, Any], original_inputs: Dict[str, Any]
 +        self,
@@ -621,32 +621,32 @@ index 692c7eae0..9dd5e0f79 100644
 +            llm_result, original_inputs, dispatched_provider=dispatched_provider
          )
          response_text = intelligent_response.get("answer", "")
- 
+
 @@ -1814,7 +2074,9 @@ Final Answer: [Your complete solution]
          agent_result = results.get(f"{self.agent_id}_cot", {})
- 
+
          # Handle different response formats and extract CoT structure
 -        cot_response = self._extract_cot_response(agent_result, inputs)
 +        cot_response = self._extract_cot_response(
 +            agent_result, inputs, dispatched_provider=llm_params["provider"]
 +        )
- 
+
          # Track execution history
          self._execution_history.append(
 @@ -1879,7 +2141,9 @@ Final Answer: [Your complete solution]
          agent_result = results.get(f"{self.agent_id}_react", {})
- 
+
          # Handle different response formats and extract ReAct structure
 -        react_response = self._extract_react_response(agent_result, inputs)
 +        react_response = self._extract_react_response(
 +            agent_result, inputs, dispatched_provider=llm_params["provider"]
 +        )
- 
+
          # Track execution history
          self._execution_history.append(
 @@ -2116,6 +2380,15 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
              from kaizen.config.providers import DEFAULT_OPENAI_MODEL
- 
+
              base_params = {
 +                # `provider` MUST be set explicitly — LLMAgentNode's own
 +                # parameter default is "mock" (see `get_parameters()` in
@@ -673,7 +673,7 @@ index 692c7eae0..9dd5e0f79 100644
 +        if hasattr(self, "_signature_workflow_provider"):
 +            del self._signature_workflow_provider
          logger.info(f"Set signature '{signature.name}' for agent: {self.agent_id}")
- 
+
      def get_execution_history(self) -> List[Dict[str, Any]]:
 @@ -2455,8 +2736,17 @@ Continue this Thought-Action-Observation cycle until you reach a final answer. E
          """Reset agent state and clear execution history."""
@@ -681,7 +681,7 @@ index 692c7eae0..9dd5e0f79 100644
          self._is_compiled = False
 +        self._workflow_provider = None
          self._execution_history.clear()
- 
+
 +        # Invalidate the cached signature-execution workflow — see the same
 +        # comment in `update_config`. Reset MUST NOT leave a stale cached
 +        # node config (with a stale `provider`) alive across the reset.
@@ -721,14 +721,14 @@ index bfdeb95c2..08cd324cd 100644
  from .config import BaseAgentConfig
 +from ._provider_env import detect_provider_from_env as _detect_provider
  from .mcp_mixin import MCPMixin
- 
+
  __all__ = ["BaseAgent", "BaseAgentConfig"]
 @@ -216,6 +217,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
          self._framework = None
          self._agent = None
          self._workflow = None
 +        self._workflow_provider = None  # provider `_workflow` was built with
- 
+
          # WorkflowGenerator
          from .workflow_generator import WorkflowGenerator
 @@ -583,7 +585,9 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
@@ -740,10 +740,10 @@ index bfdeb95c2..08cd324cd 100644
 +        current_provider = self.config.llm_provider or _detect_provider()
 +        if self._workflow is not None and self._workflow_provider == current_provider:
              return self._workflow
- 
+
          workflow = WorkflowBuilder()
 @@ -594,16 +598,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
- 
+
          if self.config.model is not None:
              node_config["model"] = self.config.model
 -        if self.config.llm_provider is not None:
@@ -766,18 +766,18 @@ index bfdeb95c2..08cd324cd 100644
              generation_config["temperature"] = self.config.temperature
 @@ -621,6 +620,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
          workflow.add_node("LLMAgentNode", "agent", node_config)
- 
+
          self._workflow = workflow
 +        self._workflow_provider = current_provider
          return workflow
- 
+
      def to_workflow_node(self) -> Node:
 @@ -1009,5 +1009,6 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
          self._framework = None
          self._agent = None
          self._workflow = None
 +        self._workflow_provider = None
- 
+
          logger.debug(f"Cleanup completed for agent {self.agent_id}")
 diff --git a/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py b/packages/kailash-kaizen/src/kaizen/integrations/nexus/base.py
 index 3c96de85c..268f9bb59 100644
@@ -786,7 +786,7 @@ index 3c96de85c..268f9bb59 100644
 @@ -45,6 +45,19 @@ class NexusDeploymentMixin:
          """
          from kailash.workflow.builder import WorkflowBuilder
- 
+
 +        # FIX 5: LLMAgentNode's NodeParameter is named "provider" — it never
 +        # reads "llm_provider". Passing "llm_provider" silently dropped the
 +        # configured provider and every deployment defaulted to LLMAgentNode's
@@ -802,7 +802,7 @@ index 3c96de85c..268f9bb59 100644
 +
          # Create workflow from agent's signature
          workflow = WorkflowBuilder()
- 
+
 @@ -53,7 +66,7 @@ class NexusDeploymentMixin:
              "LLMAgentNode",
              "agent_node",
@@ -817,18 +817,18 @@ index ae9e6ac48..2b12630d0 100644
 --- a/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
 +++ b/packages/kailash-kaizen/src/kaizen/integrations/nexus/deployment_cache.py
 @@ -56,7 +56,7 @@ class DeploymentCache:
- 
+
          The cache key is based on:
          - Workflow name
 -        - LLM provider
 +        - RESOLVED LLM provider (see FIX 8 note below)
          - Model name
          - Signature structure
- 
+
 @@ -71,10 +71,36 @@ class DeploymentCache:
          config = getattr(agent, "config", None)
          signature = getattr(agent, "signature", None)
- 
+
 +        # FIX 8: hash the RESOLVED provider, not the raw `llm_provider`
 +        # attribute, so the key CHANGES the moment ambient key availability
 +        # changes for an agent with no explicit `llm_provider` (the common
@@ -901,7 +901,7 @@ index ad71b5f16..653908e75 100644
 +            "provider": resolved_provider,
              "timeout": config.get("timeout", 30),
          }
- 
+
 diff --git a/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py b/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py
 index f2a27c462..efe610827 100644
 --- a/packages/kailash-kaizen/tests/e2e/test_intelligent_responses_e2e.py
@@ -909,7 +909,7 @@ index f2a27c462..efe610827 100644
 @@ -62,6 +62,7 @@ def kaizen_production():
  class TestCompleteIntelligentWorkflows:
      """Test complete end-to-end intelligent workflows."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_intelligent_business_analysis_workflow(
          self, kaizen_production, production_llm_config
@@ -917,7 +917,7 @@ index f2a27c462..efe610827 100644
 @@ -168,6 +169,7 @@ class TestCompleteIntelligentWorkflows:
              f"Analysis too verbose for business context: {total_words} words"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_intelligent_multi_agent_collaboration(
          self, kaizen_production, production_llm_config
@@ -925,7 +925,7 @@ index f2a27c462..efe610827 100644
 @@ -313,6 +315,7 @@ class TestCompleteIntelligentWorkflows:
              "Multi-agent workflow lacks topic coherence across all outputs"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_intelligent_chain_of_thought_reasoning_e2e(
          self, kaizen_production, production_llm_config
@@ -933,7 +933,7 @@ index f2a27c462..efe610827 100644
 @@ -456,6 +459,7 @@ class TestCompleteIntelligentWorkflows:
              f"CoT reasoning too superficial: {total_reasoning_words} words"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_intelligent_react_pattern_e2e(
          self, kaizen_production, production_llm_config
@@ -941,7 +941,7 @@ index f2a27c462..efe610827 100644
 @@ -592,6 +596,7 @@ class TestCompleteIntelligentWorkflows:
  class TestIntelligentEnterpriseWorkflows:
      """Test enterprise-grade intelligent workflows."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_enterprise_multi_signature_intelligence(
          self, kaizen_production, production_llm_config
@@ -949,7 +949,7 @@ index f2a27c462..efe610827 100644
 @@ -748,6 +753,7 @@ class TestIntelligentEnterpriseWorkflows:
              f"Executive summary must reference technical assessment: {executive_result}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_intelligent_performance_monitoring(
          self, kaizen_production, production_llm_config
@@ -961,7 +961,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -49,6 +49,7 @@ def real_llm_config():
  class TestRealLLMProviderIntegration:
      """Test agents with real LLM provider API calls."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_openai_integration_basic_intelligence(self, real_llm_config):
          """Test basic intelligent responses using real OpenAI API."""
@@ -969,7 +969,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -83,6 +84,7 @@ class TestRealLLMProviderIntegration:
              f"Simple answer should be concise, got {word_count} words: {answer}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_mathematical_reasoning(self, real_llm_config):
          """Test mathematical reasoning with real LLM provider."""
@@ -977,7 +977,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -122,6 +124,7 @@ class TestRealLLMProviderIntegration:
              f"Must calculate correctly (3.00): {answer}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_domain_knowledge(self, real_llm_config):
          """Test domain-specific knowledge with real LLM."""
@@ -985,7 +985,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -174,6 +177,7 @@ class TestRealLLMProviderIntegration:
              f"Key concepts lack scientific terms: {key_concepts}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_response_consistency(self, real_llm_config):
          """Test that real LLM responses are consistent but not identical."""
@@ -993,7 +993,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -214,6 +218,7 @@ class TestRealLLMProviderIntegration:
          assert len(unique_responses) >= 1, "At least one response should exist"
          # Note: With very low temperature, responses might be identical - that's acceptable
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_error_handling(self, real_llm_config):
          """Test error handling with real LLM provider."""
@@ -1001,7 +1001,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -240,6 +245,7 @@ class TestRealLLMProviderIntegration:
          )
          assert len(answer) > 0, "Must have some response despite truncation"
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_timeout_handling(self, real_llm_config):
          """Test timeout handling with real LLM provider."""
@@ -1009,7 +1009,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -279,6 +285,7 @@ class TestRealLLMProviderIntegration:
  class TestRealLLMSignatureIntegration:
      """Test signature-based programming with real LLM providers."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_complex_signature_real_intelligence(self, real_llm_config):
          """Test complex signatures produce real intelligent structured responses."""
@@ -1017,7 +1017,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -361,6 +368,7 @@ class TestRealLLMSignatureIntegration:
              f"Recommendations lack actionable advice: {result['recommendations']}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_signature_pattern_integration_real_llm(self, real_llm_config):
          """Test signature patterns (CoT, ReAct) with real LLM."""
@@ -1025,15 +1025,15 @@ index 77740a479..2b1fe3a39 100644
 @@ -426,6 +434,7 @@ class TestRealLLMSignatureIntegration:
  class TestRealLLMPerformanceIntegration:
      """Test performance characteristics with real LLM providers."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_response_time_benchmarks(self, real_llm_config):
          """Test response time benchmarks with real LLM."""
          kaizen = Kaizen()
 @@ -454,6 +463,7 @@ class TestRealLLMPerformanceIntegration:
- 
+
          print(f"Real LLM response time: {response_time:.2f}s")
- 
+
 +    @pytest.mark.requires_real_llm
      def test_real_llm_batch_processing(self, real_llm_config):
          """Test batch processing with real LLM provider."""
@@ -1041,7 +1041,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -504,6 +514,7 @@ class TestRealLLMPerformanceIntegration:
  class TestRealLLMWorkflowIntegration:
      """Test workflow integration with real LLM providers."""
- 
+
 +    @pytest.mark.requires_real_llm
      def test_agent_workflow_compilation_real_llm(self, real_llm_config):
          """Test that agent workflow compiles correctly for real LLM execution."""
@@ -1049,7 +1049,7 @@ index 77740a479..2b1fe3a39 100644
 @@ -554,6 +565,7 @@ class TestRealLLMWorkflowIntegration:
              f"Response should acknowledge greeting: {intelligent_response}"
          )
- 
+
 +    @pytest.mark.requires_real_llm
      def test_multi_step_workflow_intelligence(self, real_llm_config):
          """Test multi-step workflows with real LLM intelligence."""

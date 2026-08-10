@@ -128,12 +128,12 @@ def test_actor_id_required_rejects_none() -> None:
 
 def test_training_node_raises_on_missing_kailash_ml() -> None:
     """Per rules/dependencies.md § Optional Extras with Loud Failure."""
-    from kailash.workflow.nodes import ml as ml_nodes
-
     # Simulate missing kailash_ml at import-resolution time.
     # _require_kailash_ml does the import lazily so patching at
     # `builtins.__import__` is the cleanest injection point.
     import builtins
+
+    from kailash.workflow.nodes import ml as ml_nodes
 
     real_import = builtins.__import__
 

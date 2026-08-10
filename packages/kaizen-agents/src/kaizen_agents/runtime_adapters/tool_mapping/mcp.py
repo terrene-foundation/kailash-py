@@ -25,7 +25,6 @@ import logging
 from typing import Any
 
 from kaizen.core.tool_formatters import normalize_tool_input_schema
-
 from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     ToolMapper,

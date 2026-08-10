@@ -204,7 +204,7 @@ def _collect_strings(obj: Any, out: list[str]) -> None:
     elif isinstance(obj, dict):
         for value in obj.values():
             _collect_strings(value, out)
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, list | tuple):
         for item in obj:
             _collect_strings(item, out)
     else:

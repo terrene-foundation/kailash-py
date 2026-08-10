@@ -17,13 +17,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from kaizen.runtime.context import ExecutionContext, ExecutionStatus
 from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     ExecutionState,
     PermissionMode,
 )
-from kaizen.runtime.context import ExecutionContext, ExecutionStatus
 
 
 class TestCostCalculation:

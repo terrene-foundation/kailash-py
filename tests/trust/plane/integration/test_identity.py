@@ -15,18 +15,17 @@ import time
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kailash.trust.plane.identity import (
+    SUPPORTED_PROVIDERS,
     IdentityConfig,
     IdentityProvider,
+    JWKSError,
     JWKSProvider,
     OIDCVerifier,
-    SUPPORTED_PROVIDERS,
 )
-from kailash.trust.plane.identity import JWKSError
-
 
 # ---------------------------------------------------------------------------
 # Helpers: RSA key pair for test JWT signing/verification

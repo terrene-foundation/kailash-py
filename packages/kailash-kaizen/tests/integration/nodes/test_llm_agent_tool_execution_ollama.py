@@ -10,10 +10,10 @@ import time
 from typing import Any, Dict
 
 import pytest
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 from kailash.runtime import LocalRuntime
 from kailash.workflow import Workflow
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
 @pytest.mark.integration

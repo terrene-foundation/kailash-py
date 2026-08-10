@@ -6,6 +6,7 @@ Written BEFORE implementation (TDD).
 """
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
@@ -26,9 +27,9 @@ class TestBaseAgentDefaultStrategy:
         agent = BaseAgent(config=config)
 
         # CRITICAL: Default strategy must be AsyncSingleShotStrategy
-        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
-            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
-        )
+        assert isinstance(
+            agent.strategy, AsyncSingleShotStrategy
+        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
 
     def test_default_strategy_without_strategy_type(self):
         """
@@ -181,9 +182,9 @@ class TestAsyncStrategyProperties:
         # AsyncSingleShotStrategy.execute should be an async method
         import inspect
 
-        assert inspect.iscoroutinefunction(agent.strategy.execute), (
-            "AsyncSingleShotStrategy.execute must be async"
-        )
+        assert inspect.iscoroutinefunction(
+            agent.strategy.execute
+        ), "AsyncSingleShotStrategy.execute must be async"
 
     def test_async_strategy_builds_workflow(self):
         """

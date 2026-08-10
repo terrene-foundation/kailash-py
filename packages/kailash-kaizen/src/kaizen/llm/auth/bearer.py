@@ -25,9 +25,10 @@ import hmac
 from enum import Enum
 from typing import Any
 
-from kailash.utils.url_credentials import fingerprint_secret
 from pydantic import ConfigDict, SecretStr
 from pydantic.dataclasses import dataclass as pydantic_dataclass
+
+from kailash.utils.url_credentials import fingerprint_secret
 
 
 class ApiKeyHeaderKind(str, Enum):

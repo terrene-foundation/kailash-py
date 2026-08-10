@@ -16,7 +16,6 @@ import asyncio
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.orchestration import (
-    AgentStatus,
     OrchestrationRuntime,
     OrchestrationRuntimeConfig,
     RoutingStrategy,
@@ -119,7 +118,7 @@ async def main():
         # Display initial budget state
         print("\nInitial Budget State:")
         print(f"  Total runtime budget: ${runtime._total_budget_spent:.6f}")
-        for agent_id, metadata in runtime.agents.items():
+        for _agent_id, metadata in runtime.agents.items():
             print(
                 f"  {metadata.agent._a2a_card['name']}: "
                 f"${metadata.budget_spent_usd:.6f} / ${metadata.budget_limit_usd:.2f}"
@@ -156,7 +155,7 @@ async def main():
         print("Budget State After Routing:")
         print("=" * 70)
         print(f"  Total runtime budget: ${runtime._total_budget_spent:.6f}")
-        for agent_id, metadata in runtime.agents.items():
+        for _agent_id, metadata in runtime.agents.items():
             agent_name = metadata.agent._a2a_card["name"]
             budget_remaining = metadata.budget_limit_usd - metadata.budget_spent_usd
             budget_pct = (metadata.budget_spent_usd / metadata.budget_limit_usd) * 100

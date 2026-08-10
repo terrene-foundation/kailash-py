@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash_mcp.errors import AuthenticationError, AuthorizationError
 from kailash_mcp.auth.oauth import (
     AccessToken,
     AuthorizationCode,
@@ -23,6 +22,7 @@ from kailash_mcp.auth.oauth import (
     ResourceServer,
     TokenType,
 )
+from kailash_mcp.errors import AuthenticationError, AuthorizationError
 
 
 class TestOAuthClient:

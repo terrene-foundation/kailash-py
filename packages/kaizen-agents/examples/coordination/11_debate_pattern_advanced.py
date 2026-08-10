@@ -14,12 +14,12 @@ Learning Objectives:
 Estimated time: 10 minutes
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_debate_pattern
 
 
-def analyze_debate_strength(result: Dict[str, Any], judgment: Dict[str, Any]):
+def analyze_debate_strength(result: dict[str, Any], judgment: dict[str, Any]):
     """Analyze the strength of a debate."""
     print("Debate Strength Analysis:")
     print(f"  - Rounds completed: {result['rounds']}")

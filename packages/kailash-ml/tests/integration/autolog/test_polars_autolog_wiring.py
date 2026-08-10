@@ -18,13 +18,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from kailash_ml.autolog import autolog
 from kailash_ml.autolog._polars import (
     compute_dataframe_fingerprint,
     log_dataframe_fingerprint,
 )
 from kailash_ml.tracking import SqliteTrackerStore, track
-
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 

@@ -21,7 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 EXPECTED_DROP_TABLES = [
     "admin_audit_log",
     "user_sessions",

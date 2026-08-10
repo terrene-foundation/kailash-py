@@ -14,8 +14,8 @@ bounded, (2) the metric label bound still holds.
 
 import pytest
 
-from kailash.runtime.metrics import _WorkflowNameBucketer
 from kailash.observability.ml import _TenantBucketer
+from kailash.runtime.metrics import _WorkflowNameBucketer
 
 
 @pytest.mark.regression

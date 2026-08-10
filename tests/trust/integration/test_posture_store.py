@@ -16,6 +16,7 @@ import sqlite3
 import stat
 
 import pytest
+
 from kailash.trust.posture.posture_store import SQLitePostureStore, validate_agent_id
 from kailash.trust.posture.postures import (
     PostureTransition,

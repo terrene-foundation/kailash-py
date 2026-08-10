@@ -32,12 +32,7 @@ from kailash_ml._env import (
     DEFAULT_STORE_URL,
     LEGACY_TRACKER_DB_ENV,
 )
-from kailash_ml.engine import (
-    TargetInFeaturesError,
-    TargetNotFoundError,
-    _default_store_url,
-)
-
+from kailash_ml.engine import TargetNotFoundError, _default_store_url
 
 # ----------------------------------------------------------------------
 # Helpers

@@ -18,6 +18,7 @@ References:
 import time
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.mixins.batch_processing import BatchProcessingMixin
 from kaizen.mixins.error_handling import ErrorHandlingMixin

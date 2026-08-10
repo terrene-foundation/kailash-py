@@ -25,10 +25,10 @@ from typing import List
 
 import pytest
 from dotenv import load_dotenv
-from kaizen.core.base_agent import BaseAgent
-from kaizen_agents.patterns.pipeline import Pipeline
-from kaizen.signatures import InputField, OutputField, Signature
 
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
     async_retry_with_backoff,
@@ -244,9 +244,9 @@ async def test_complex_task_decomposition_into_subtasks():
     # Verify decomposition
     assert decomposition_result is not None, "Decomposition result should not be None"
     assert isinstance(decomposition_result, dict), "Result should be a dictionary"
-    assert "error" not in decomposition_result, (
-        f"Should not have error: {decomposition_result.get('error')}"
-    )
+    assert (
+        "error" not in decomposition_result
+    ), f"Should not have error: {decomposition_result.get('error')}"
 
     # Extract subtasks from result
     subtasks_text = decomposition_result.get(
@@ -302,9 +302,9 @@ async def test_complex_task_decomposition_into_subtasks():
         # Verify execution
         assert result is not None, f"Subtask {i + 1} result should not be None"
         assert isinstance(result, dict), "Result should be a dictionary"
-        assert "error" not in result, (
-            f"Subtask {i + 1} should not have error: {result.get('error')}"
-        )
+        assert (
+            "error" not in result
+        ), f"Subtask {i + 1} should not have error: {result.get('error')}"
 
     print(f"\n✓ Executed {len(subtask_results)} subtasks successfully")
 
@@ -332,9 +332,9 @@ async def test_complex_task_decomposition_into_subtasks():
     # Verify aggregation
     assert final_result is not None, "Final result should not be None"
     assert isinstance(final_result, dict), "Result should be a dictionary"
-    assert "error" not in final_result, (
-        f"Should not have error: {final_result.get('error')}"
-    )
+    assert (
+        "error" not in final_result
+    ), f"Should not have error: {final_result.get('error')}"
 
     final_output = final_result.get("final_result", final_result.get("output", ""))
     print(f"Final aggregated result: {final_output[:200]}...")

@@ -10,7 +10,7 @@ Demonstrates:
 Pattern: Nested composition for modular workflow design
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kaizen_agents.patterns.pipeline import Pipeline
 
@@ -22,7 +22,7 @@ from kaizen_agents.patterns.pipeline import Pipeline
 class DataCleaningPipeline(Pipeline):
     """Reusable data cleaning sub-pipeline."""
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Clean data through normalization and validation."""
         data = inputs.get("data", "")
 
@@ -49,7 +49,7 @@ class DataCleaningPipeline(Pipeline):
         """Remove special characters (simplified)."""
         return "".join(c for c in data if c.isalnum() or c.isspace())
 
-    def _validate(self, data: str) -> Dict[str, Any]:
+    def _validate(self, data: str) -> dict[str, Any]:
         """Validate cleaned data."""
         return {"is_valid": len(data) > 0, "length": len(data)}
 
@@ -62,7 +62,7 @@ class DataCleaningPipeline(Pipeline):
 class DataTransformationPipeline(Pipeline):
     """Reusable data transformation sub-pipeline."""
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Transform data through formatting and enrichment."""
         data = inputs.get("cleaned_data", "")
 
@@ -90,7 +90,7 @@ class DataTransformationPipeline(Pipeline):
         """Tokenize data."""
         return data.split()
 
-    def _enrich(self, tokens: list) -> Dict[str, Any]:
+    def _enrich(self, tokens: list) -> dict[str, Any]:
         """Enrich with metadata."""
         return {
             "token_count": len(tokens),
@@ -107,7 +107,7 @@ class DataTransformationPipeline(Pipeline):
 class DataAnalysisPipeline(Pipeline):
     """Reusable data analysis sub-pipeline."""
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Analyze enriched data."""
         enriched = inputs.get("enriched", {})
         tokens = inputs.get("tokens", [])
@@ -129,8 +129,8 @@ class DataAnalysisPipeline(Pipeline):
         }
 
     def _calculate_statistics(
-        self, enriched: Dict[str, Any], tokens: list
-    ) -> Dict[str, Any]:
+        self, enriched: dict[str, Any], tokens: list
+    ) -> dict[str, Any]:
         """Calculate statistics."""
         return {
             "total_tokens": enriched.get("token_count", 0),
@@ -140,7 +140,7 @@ class DataAnalysisPipeline(Pipeline):
             / max(enriched.get("token_count", 1), 1),
         }
 
-    def _generate_insights(self, stats: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_insights(self, stats: dict[str, Any]) -> dict[str, Any]:
         """Generate insights."""
         diversity = stats["diversity"]
         return {
@@ -152,7 +152,7 @@ class DataAnalysisPipeline(Pipeline):
             ),
         }
 
-    def _create_summary(self, stats: Dict[str, Any], insights: Dict[str, Any]) -> str:
+    def _create_summary(self, stats: dict[str, Any], insights: dict[str, Any]) -> str:
         """Create summary."""
         return (
             f"Analyzed {stats['total_tokens']} tokens "
@@ -188,7 +188,7 @@ class MasterDataPipeline(Pipeline):
         self.transformation_pipeline = DataTransformationPipeline()
         self.analysis_pipeline = DataAnalysisPipeline()
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Execute nested pipeline workflow."""
         print("\n🔹 Master Pipeline: Starting execution")
 

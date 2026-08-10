@@ -116,6 +116,7 @@ def test_component_config_identity_isolates_two_urlless_instances():
 
 # --- caplog helper -------------------------------------------------------
 
+
 class _CapLog:
     def __init__(self):
         self.records = []

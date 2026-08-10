@@ -181,10 +181,9 @@ async def test_append_only_workflow_mutation_node_construction_raises(test_suite
     proven, and we additionally assert build-time rejection so
     ``WorkflowBuilder`` callers see the typed exception before any
     runtime is invoked."""
-    from kailash.workflow.builder import WorkflowBuilder
-
     from dataflow import DataFlow
     from dataflow.exceptions import AppendOnlyViolationError
+    from kailash.workflow.builder import WorkflowBuilder
 
     db = DataFlow(test_suite.config.url, auto_migrate=True)
 

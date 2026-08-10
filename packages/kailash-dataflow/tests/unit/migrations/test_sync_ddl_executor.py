@@ -208,9 +208,7 @@ class TestIsBenignDDLObjectExists:
     def test_1061_inside_create_table_is_not_benign(self):
         """A 1061 'Duplicate key name' raised by a CREATE TABLE definition is a
         genuine schema bug — MUST surface (False), NOT be swallowed."""
-        from dataflow.migrations.sync_ddl_executor import (
-            _is_benign_ddl_object_exists,
-        )
+        from dataflow.migrations.sync_ddl_executor import _is_benign_ddl_object_exists
 
         err = "(1061, \"Duplicate key name 'idx_email'\")"
         sql = "CREATE TABLE `docs` (id INT, email VARCHAR(255), UNIQUE KEY `idx_email` (email), KEY `idx_email` (email))"
@@ -219,9 +217,7 @@ class TestIsBenignDDLObjectExists:
     def test_1061_on_create_index_is_benign(self):
         """A 1061 'Duplicate key name' raised by a re-run CREATE INDEX (MySQL has
         no IF NOT EXISTS) means the index already exists — benign (True)."""
-        from dataflow.migrations.sync_ddl_executor import (
-            _is_benign_ddl_object_exists,
-        )
+        from dataflow.migrations.sync_ddl_executor import _is_benign_ddl_object_exists
 
         err = "(1061, \"Duplicate key name 'idx_email'\")"
         sql = "CREATE UNIQUE INDEX `idx_email` ON `docs` (`email`)"
@@ -230,9 +226,7 @@ class TestIsBenignDDLObjectExists:
     def test_1064_syntax_on_create_index_is_not_benign(self):
         """A real 1064 syntax error on a CREATE INDEX is NOT an already-present
         signal — MUST surface (False) even though the statement is CREATE INDEX."""
-        from dataflow.migrations.sync_ddl_executor import (
-            _is_benign_ddl_object_exists,
-        )
+        from dataflow.migrations.sync_ddl_executor import _is_benign_ddl_object_exists
 
         err = "(1064, \"You have an error in your SQL syntax near 'ONN'\")"
         sql = "CREATE INDEX `idx_email` ONN `docs` (`email`)"
@@ -241,9 +235,7 @@ class TestIsBenignDDLObjectExists:
     def test_already_exists_on_create_table_is_benign(self):
         """PostgreSQL / SQLite 'already exists' on any object (here CREATE TABLE)
         is the canonical benign already-present signal (True)."""
-        from dataflow.migrations.sync_ddl_executor import (
-            _is_benign_ddl_object_exists,
-        )
+        from dataflow.migrations.sync_ddl_executor import _is_benign_ddl_object_exists
 
         err = 'relation "docs" already exists'
         sql = 'CREATE TABLE "docs" (id INTEGER PRIMARY KEY, email TEXT)'

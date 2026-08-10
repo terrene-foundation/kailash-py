@@ -22,7 +22,6 @@ from dataflow.nodes import DataFlowConnectionManager
 from dataflow.nodes.aggregate_operations import AggregateNode
 from dataflow.nodes.natural_language_filter import NaturalLanguageFilterNode
 from dataflow.nodes.smart_operations import SmartMergeNode
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite

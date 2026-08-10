@@ -11,9 +11,10 @@ Version: 0.6.4
 from typing import TypedDict
 
 import pytest
+from typing_extensions import NotRequired
+
 from kaizen.core.config import BaseAgentConfig
 from kaizen.core.schema_factory import SchemaFactory
-from typing_extensions import NotRequired
 
 
 # Test schemas

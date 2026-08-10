@@ -15,7 +15,6 @@ from kailash_ml.engines.preprocessing import (
     _identify_column_types,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -478,7 +477,7 @@ class TestTransform:
     def test_transform_preserves_shape_onehot(
         self, pipeline: PreprocessingPipeline, classification_df: pl.DataFrame
     ) -> None:
-        result = pipeline.setup(
+        pipeline.setup(
             classification_df,
             "target",
             categorical_encoding="onehot",
@@ -1445,9 +1444,7 @@ class TestPCA:
     def test_pca_transform_same_structure(self, wide_df: pl.DataFrame) -> None:
         """transform() on new data produces same PC column structure."""
         pipeline = PreprocessingPipeline()
-        result = pipeline.setup(
-            wide_df, "target", pca=True, pca_components=5, normalize=True
-        )
+        pipeline.setup(wide_df, "target", pca=True, pca_components=5, normalize=True)
         new_data = wide_df.head(10)
         transformed = pipeline.transform(new_data)
         pc_cols = [c for c in transformed.columns if c.startswith("pc_")]

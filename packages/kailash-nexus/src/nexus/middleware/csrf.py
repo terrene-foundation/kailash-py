@@ -101,7 +101,7 @@ class CSRFMiddleware:
         """
         self.app = app
         self._allowed_origins: Set[str] = set()
-        for origin in (allowed_origins or []):
+        for origin in allowed_origins or []:
             normalized = origin.rstrip("/").lower()
             self._allowed_origins.add(normalized)
 

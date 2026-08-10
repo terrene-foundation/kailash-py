@@ -30,9 +30,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Literal, Optional
 
-from dataflow.core.exceptions import (
+from dataflow.core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
+)
 
 logger = logging.getLogger(__name__)
 

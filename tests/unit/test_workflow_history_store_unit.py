@@ -528,8 +528,8 @@ async def test_get_run_events_payload_decode_failed_hashes_run_id(
     leak schema-adjacent information to log aggregators with broader
     access than the audit database.
     """
-    import logging
     import hashlib
+    import logging
 
     from kailash.infrastructure.history_store import _hash_short
     from kailash.runtime.metrics import get_metrics_bridge

@@ -10,9 +10,8 @@ import warnings
 
 import pytest
 
-from kaizen.strategies.single_shot import SingleShotStrategy
 from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
-
+from kaizen.strategies.single_shot import SingleShotStrategy
 
 EXPECTED_MESSAGE = (
     "Deprecated since v2.5.0: Use composition wrappers "

@@ -304,7 +304,7 @@ class TestAdminNodesPerformanceE2E:
             for future in as_completed(futures):
                 try:
                     future.result(timeout=5)
-                except:
+                except Exception:
                     pass
 
         cache_fill_time = time.time() - cache_fill_start
@@ -372,7 +372,7 @@ class TestAdminNodesPerformanceE2E:
             for future in as_completed(futures):
                 try:
                     future.result(timeout=1)
-                except:
+                except Exception:
                     pass
 
         post_eviction_cache_size = self._get_cache_size()
@@ -519,7 +519,7 @@ class TestAdminNodesPerformanceE2E:
             for future in long_operations:
                 try:
                     future.result(timeout=10)
-                except:
+                except Exception:
                     pass
 
         print("  Operations attempted while exhausted: 100")
@@ -542,7 +542,7 @@ class TestAdminNodesPerformanceE2E:
                     database_config=self.db_config,
                 )
                 recovery_success += 1
-            except:
+            except Exception:
                 pass
 
         recovery_time = time.time() - recovery_start
@@ -643,7 +643,7 @@ class TestAdminNodesPerformanceE2E:
                             sample_latencies.append(result["latency"])
                         else:
                             sample_errors += 1
-                    except:
+                    except Exception:
                         sample_errors += 1
 
             # Calculate sample metrics
@@ -919,7 +919,7 @@ class TestAdminNodesPerformanceE2E:
                 for future in as_completed(futures):
                     try:
                         future.result(timeout=1)
-                    except:
+                    except Exception:
                         pass
 
             # Force garbage collection

@@ -44,11 +44,7 @@ from kailash.trust.exceptions import (
     TrustError,
 )
 from kailash.trust.execution_context import ExecutionContext, HumanOrigin
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
 
 pytestmark = pytest.mark.regression

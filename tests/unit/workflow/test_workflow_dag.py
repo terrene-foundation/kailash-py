@@ -21,7 +21,6 @@ import pytest
 
 from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

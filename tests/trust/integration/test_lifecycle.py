@@ -27,7 +27,8 @@ from kailash.trust.chain import (
     CapabilityType,
     VerificationLevel,
 )
-from kailash.trust.signing.crypto import generate_keypair
+from kailash.trust.chain_store.filesystem import FilesystemStore
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.enforce.shadow import ShadowEnforcer
 from kailash.trust.enforce.strict import (
     EATPBlockedError,
@@ -43,19 +44,14 @@ from kailash.trust.interop.did import (
     generate_did,
     generate_did_key,
 )
-from kailash.trust.interop.jwt import export_chain_as_jwt, export_capability_as_jwt
+from kailash.trust.interop.jwt import export_capability_as_jwt, export_chain_as_jwt
 from kailash.trust.interop.w3c_vc import (
     export_as_verifiable_credential,
     export_capability_as_vc,
     verify_credential,
 )
-from kailash.trust.operations import (
-    CapabilityRequest,
-    TrustKeyManager,
-    TrustOperations,
-)
-from kailash.trust.chain_store.filesystem import FilesystemStore
-from kailash.trust.chain_store.memory import InMemoryTrustStore
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import generate_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -518,7 +514,9 @@ class TestFullLifecycleFilesystem:
         assert len(retrieved.capabilities) == 1
         assert retrieved.capabilities[0].capability == "analyze_data"
 
-    async def test_persistence_survives_close_and_reopen(self, registry, key_manager, tmp_path):
+    async def test_persistence_survives_close_and_reopen(
+        self, registry, key_manager, tmp_path
+    ):
         """Data persists after closing and reopening the FilesystemStore."""
         store_dir = str(tmp_path / "persist_test")
 
@@ -603,12 +601,20 @@ class TestFullLifecycleFilesystem:
         await fs_ops.establish(
             agent_id="list-agent-1",
             authority_id="org-acme",
-            capabilities=[CapabilityRequest(capability="read", capability_type=CapabilityType.ACCESS)],
+            capabilities=[
+                CapabilityRequest(
+                    capability="read", capability_type=CapabilityType.ACCESS
+                )
+            ],
         )
         await fs_ops.establish(
             agent_id="list-agent-2",
             authority_id="org-acme",
-            capabilities=[CapabilityRequest(capability="write", capability_type=CapabilityType.ACTION)],
+            capabilities=[
+                CapabilityRequest(
+                    capability="write", capability_type=CapabilityType.ACTION
+                )
+            ],
         )
 
         count = await fs_store.count_chains()
@@ -864,7 +870,9 @@ class TestEnforcementIntegration:
 
         result = await ops.verify(agent_id="valid-agent", action="read_data")
         enforcer = StrictEnforcer()
-        verdict = enforcer.enforce(agent_id="valid-agent", action="read_data", result=result)
+        verdict = enforcer.enforce(
+            agent_id="valid-agent", action="read_data", result=result
+        )
 
         assert verdict == Verdict.AUTO_APPROVED
 
@@ -895,7 +903,9 @@ class TestEnforcementIntegration:
         invalid_result = await ops.verify(agent_id="ghost-agent", action="anything")
 
         shadow = ShadowEnforcer()
-        verdict = shadow.check(agent_id="ghost-agent", action="anything", result=invalid_result)
+        verdict = shadow.check(
+            agent_id="ghost-agent", action="anything", result=invalid_result
+        )
 
         # Returns BLOCKED verdict but does NOT raise
         assert verdict == Verdict.BLOCKED

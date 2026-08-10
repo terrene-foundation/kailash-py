@@ -19,10 +19,9 @@ import threading
 
 import pytest
 
-from kaizen.l3.eatp_translator import EatpTranslator, _SEVERITY_MAP, _DEFAULT_SEVERITY
+from kaizen.l3.eatp_translator import _DEFAULT_SEVERITY, _SEVERITY_MAP, EatpTranslator
 from kaizen.l3.event_hooks import L3EventBus
 from kaizen.l3.events import L3Event, L3EventType
-
 
 # ---------------------------------------------------------------------------
 # Helper

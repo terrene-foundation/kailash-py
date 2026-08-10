@@ -27,9 +27,9 @@ from collections import OrderedDict
 from typing import Any, Dict, List
 
 import pytest
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
 from dataflow.nodes.bulk_upsert import DataFlowBulkUpsertNode
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

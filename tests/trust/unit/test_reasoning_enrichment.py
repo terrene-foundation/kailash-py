@@ -20,9 +20,9 @@ Written BEFORE implementation (TDD). Tests define the contract.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import pytest
-from datetime import datetime, timezone
 
 from kailash.trust.reasoning.traces import (
     ConfidentialityLevel,
@@ -36,7 +36,6 @@ from kailash.trust.signing.crypto import (
     sign_reasoning_trace,
     verify_reasoning_signature,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -172,7 +171,9 @@ class TestReasoningCompletenessScore:
 
     def test_signature_verified_adds_10_points(self, minimal_trace):
         """signature_verified=True adds exactly 10 points over base score."""
-        base_score = reasoning_completeness_score(minimal_trace, signature_verified=False)
+        base_score = reasoning_completeness_score(
+            minimal_trace, signature_verified=False
+        )
         sig_score = reasoning_completeness_score(minimal_trace, signature_verified=True)
         assert sig_score - base_score == 10
 

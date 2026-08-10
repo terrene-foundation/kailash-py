@@ -27,7 +27,6 @@ from kailash_ml import CatBoostTrainable, Trainable
 from kailash_ml._device import UnsupportedFamily
 from kailash_ml.trainable import TrainingContext
 
-
 # ---------------------------------------------------------------------------
 # Importability + protocol conformance
 # ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ import os
 from datetime import datetime
 
 import pytest
-from kaizen.security.audit import AuditTrailProvider
 
+from kaizen.security.audit import AuditTrailProvider
 from tests.utils.docker_config import get_postgres_connection_string
 
 

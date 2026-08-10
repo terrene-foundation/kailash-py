@@ -15,9 +15,9 @@ Estimated time: 5 minutes
 
 import os
 
+from kaizen.core.base_agent import BaseAgentConfig
 from kaizen_agents.patterns.patterns import create_sequential_pipeline
 from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
-from kaizen.core.base_agent import BaseAgentConfig
 
 
 def example_1_custom_model():
@@ -111,7 +111,8 @@ def example_4_pre_built_stages():
     )
 
     transform = PipelineStageAgent(
-        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.8), agent_id="transform"
+        config=BaseAgentConfig(model="gpt-4o-mini", temperature=0.8),
+        agent_id="transform",
     )
 
     load = PipelineStageAgent(
@@ -236,7 +237,9 @@ def main():
     print("    pipeline = create_sequential_pipeline()")
     print()
     print("  Level 2: Basic parameters")
-    print("    pipeline = create_sequential_pipeline(model='gpt-4o-mini', temperature=0.7)")
+    print(
+        "    pipeline = create_sequential_pipeline(model='gpt-4o-mini', temperature=0.7)"
+    )
     print()
     print("  Level 3: Stage-specific configs")
     print("    pipeline = create_sequential_pipeline(stage_configs=[{...}, {...}])")

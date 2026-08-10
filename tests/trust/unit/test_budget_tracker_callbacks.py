@@ -36,7 +36,6 @@ from kailash.trust.constraints.budget_tracker import (
     BudgetTrackerError,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper: collect events into a list (callable, thread-safe)
 # ---------------------------------------------------------------------------

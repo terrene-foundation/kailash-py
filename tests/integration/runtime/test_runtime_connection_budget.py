@@ -127,10 +127,10 @@ class TestDataFlowRuntimeSharing:
 
     def test_dataflow_creates_single_runtime(self):
         """DataFlow() creates exactly 1 runtime shared across subsystems."""
-        from dataflow import DataFlow
-
-        import tempfile
         import os
+        import tempfile
+
+        from dataflow import DataFlow
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "test.db")
@@ -154,10 +154,10 @@ class TestDataFlowRuntimeSharing:
 
     def test_dataflow_close_releases_all_refs(self):
         """DataFlow.close() releases all runtime references."""
-        from dataflow import DataFlow
-
-        import tempfile
         import os
+        import tempfile
+
+        from dataflow import DataFlow
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "test.db")
@@ -172,10 +172,10 @@ class TestDataFlowRuntimeSharing:
 
     def test_dataflow_context_manager(self):
         """DataFlow supports 'with' statement for automatic cleanup."""
-        from dataflow import DataFlow
-
-        import tempfile
         import os
+        import tempfile
+
+        from dataflow import DataFlow
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "test.db")
@@ -190,10 +190,10 @@ class TestDataFlowRuntimeSharing:
 
     def test_multiple_dataflow_instances_no_exhaustion(self):
         """Creating 15 DataFlow instances in rapid succession doesn't exhaust connections."""
-        from dataflow import DataFlow
-
-        import tempfile
         import os
+        import tempfile
+
+        from dataflow import DataFlow
 
         instances = []
         with tempfile.TemporaryDirectory() as tmpdir:

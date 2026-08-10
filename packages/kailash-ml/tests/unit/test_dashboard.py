@@ -18,7 +18,6 @@ from kailash_ml.dashboard.server import create_app
 from kailash_ml.engines.experiment_tracker import ExperimentTracker
 from kailash_ml.engines.model_registry import ModelRegistry
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

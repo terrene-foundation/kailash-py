@@ -26,9 +26,8 @@ import pytest
 import yaml
 
 try:
-    from docker.errors import APIError, BuildError
-
     import docker
+    from docker.errors import APIError, BuildError
 
     DOCKER_AVAILABLE = True
 except ImportError:
@@ -330,7 +329,7 @@ class MCPDeploymentValidator:
             try:
                 if self.docker_client:
                     self.docker_client.images.remove(image_tag, force=True)
-            except:
+            except Exception:
                 pass  # Ignore cleanup errors
 
             return True

@@ -35,6 +35,7 @@ fastapi = pytest.importorskip(
     "fastapi", reason="DashboardAPIServer requires the optional fastapi extra"
 )
 from fastapi import HTTPException  # noqa: E402
+
 from kailash.visualization.api import DashboardAPIServer, RunRequest  # noqa: E402
 
 

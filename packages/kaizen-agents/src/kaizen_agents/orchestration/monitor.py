@@ -33,9 +33,7 @@ from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.composer import PlanComposer, PlanValidator
 from kaizen_agents.orchestration.planner.decomposer import TaskDecomposer
 from kaizen_agents.orchestration.planner.designer import AgentDesigner, SpawnDecision
-from kaizen_agents.orchestration.recovery.diagnoser import (
-    FailureDiagnoser,
-)
+from kaizen_agents.orchestration.recovery.diagnoser import FailureDiagnoser
 from kaizen_agents.orchestration.recovery.recomposer import Recomposer, RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
@@ -356,7 +354,7 @@ class PlanMonitor:
 
                 # Extract cost tracking (NaN/Inf/negative → fail-closed)
                 node_cost = output.get("cost", 0.0)
-                if isinstance(node_cost, (int, float)):
+                if isinstance(node_cost, int | float):
                     if not math.isfinite(node_cost) or node_cost < 0:
                         node.state = PlanNodeState.FAILED
                         node.error = (

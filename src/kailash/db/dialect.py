@@ -12,8 +12,8 @@ This module has **zero** external dependencies — it generates SQL strings only
 from __future__ import annotations
 
 import logging
-import sys
 import re
+import sys
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple

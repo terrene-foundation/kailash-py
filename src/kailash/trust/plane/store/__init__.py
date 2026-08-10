@@ -275,8 +275,8 @@ from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore  # noqa: E402
 
 # Conditional import — PostgreSQL backend requires psycopg3.
 try:
-    from kailash.trust.plane.store.postgres import (
+    from kailash.trust.plane.store.postgres import (  # noqa: E402, F401
         PostgresTrustPlaneStore,
-    )  # noqa: E402, F401
+    )
 except ImportError:
     pass  # psycopg not installed — PostgresTrustPlaneStore unavailable

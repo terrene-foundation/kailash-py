@@ -41,7 +41,6 @@ from kailash.nodes.base import NodeMetadata
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.strategies.streaming import StreamingStrategy
-
 from kaizen_agents._model_env import resolve_default_model
 
 

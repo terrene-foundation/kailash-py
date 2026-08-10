@@ -25,17 +25,11 @@ are real; the dataset is synthetic polars.
 """
 from __future__ import annotations
 
-import asyncio
-
 import polars as pl
 import pytest
 
 import kailash_ml as km
-from kailash_ml import (
-    DashboardHandle,
-    MLEngine,
-    TrainingResult,
-)
+from kailash_ml import DashboardHandle, MLEngine, TrainingResult
 from kailash_ml._wrappers import _get_default_engine, _reset_default_engines
 
 

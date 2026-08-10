@@ -15,6 +15,7 @@ from unittest.mock import patch
 import pytest
 import respx
 from httpx import Response
+
 from kaizen.providers.document.base_provider import ExtractionResult
 from kaizen.providers.document.ollama_vision_provider import OllamaVisionProvider
 

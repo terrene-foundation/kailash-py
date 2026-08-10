@@ -11,23 +11,23 @@ Covers:
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import re
-import contextlib
+from datetime import date
 
 import pytest
 
 from spec_drift_gate import (
+    FIX_HINT_CATALOG,
     BaselineEntry,
     Finding,
-    fix_hint_for,
+    _emit_github,
     _emit_human,
     _emit_json,
-    _emit_github,
-    FIX_HINT_CATALOG,
+    fix_hint_for,
 )
-from datetime import date
 
 
 def _f(

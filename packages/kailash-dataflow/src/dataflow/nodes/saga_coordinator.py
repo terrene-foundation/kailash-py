@@ -13,9 +13,9 @@ from kailash.nodes.transaction.saga_coordinator import (
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
-from ..core.exceptions import (
+from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
+)
 
 
 class SagaState(Enum):

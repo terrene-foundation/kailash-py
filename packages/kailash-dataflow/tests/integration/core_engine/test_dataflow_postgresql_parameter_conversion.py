@@ -7,8 +7,8 @@ conversion failures in the AsyncSQLDatabaseNode → PostgreSQL adapter chain.
 """
 
 import pytest
-from dataflow import DataFlow
 
+from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite

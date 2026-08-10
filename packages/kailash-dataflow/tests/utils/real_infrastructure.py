@@ -47,7 +47,7 @@ class RealInfrastructure:
                 timeout=5,
             )
             return result.returncode == 0
-        except:
+        except (OSError, subprocess.TimeoutExpired):
             return False
 
     def stop_all(self):
@@ -57,7 +57,7 @@ class RealInfrastructure:
                 try:
                     container.stop(timeout=5)
                     container.remove()
-                except:
+                except Exception:
                     pass
 
     def get_postgres_url(self, port: int = 5434) -> str:

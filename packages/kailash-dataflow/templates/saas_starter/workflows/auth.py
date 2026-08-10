@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 import bcrypt
 import jwt
+
 from kailash.workflow.builder import WorkflowBuilder
 
 # JWT Configuration — secret MUST come from the environment. See

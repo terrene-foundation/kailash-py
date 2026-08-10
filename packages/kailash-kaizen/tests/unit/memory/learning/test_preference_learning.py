@@ -5,6 +5,7 @@ Tests feedback-based learning, behavior analysis, and confidence scoring.
 """
 
 import pytest
+
 from kaizen.memory.learning.preference_learning import PreferenceLearner
 from kaizen.memory.storage.base import MemoryType
 from kaizen.memory.storage.file_storage import FileStorage

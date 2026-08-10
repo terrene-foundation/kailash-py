@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import pytest
+
 from dataflow.platform.inspector import (
     Inspector,
     ModelMigrationStatus,

@@ -53,7 +53,6 @@ class TestDeleteNodeWithoutWorkaround:
         - This test ensures validation works correctly in both cases
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -92,7 +91,6 @@ class TestDeleteNodeWithoutWorkaround:
         overwritten by node_id.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -150,7 +148,6 @@ class TestDeleteNodeWithoutWorkaround:
         - AFTER FIX: String IDs work directly, preserved correctly
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -210,7 +207,6 @@ class TestDeleteNodeWithoutWorkaround:
         the Core SDK fix and workaround removal.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -263,7 +259,6 @@ class TestDeleteNodeParameterHandling:
         Tests that the alternative parameter name works correctly.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -310,7 +305,6 @@ class TestDeleteNodeParameterHandling:
         - AFTER FIX: _node_id="delete_node" is separate, user id preserved
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -363,7 +357,6 @@ class TestDeleteNodeWorkflowIntegration:
         Ensures the entire workflow works correctly with proper ID handling.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -420,7 +413,6 @@ class TestDeleteNodeWorkflowIntegration:
         without being overwritten by node identifiers.
         """
         from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 

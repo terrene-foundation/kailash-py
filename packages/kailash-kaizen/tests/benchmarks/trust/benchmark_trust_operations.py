@@ -30,6 +30,7 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
+
 from kailash.trust.cache import TrustChainCache
 from kailash.trust.chain import (
     ActionResult,
@@ -40,7 +41,6 @@ from kailash.trust.chain import (
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     AuthorityType,

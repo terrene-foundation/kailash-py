@@ -15,7 +15,6 @@ from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.feature_store import FeatureStore
 from kailash_ml.types import FeatureField, FeatureSchema
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

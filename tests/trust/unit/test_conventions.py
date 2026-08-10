@@ -114,7 +114,7 @@ class TestBoundedCollectionConvention:
 
         assert (
             not missing_bounds
-        ), f"Per-agent collections missing bounds declaration:\n" + "\n".join(
+        ), "Per-agent collections missing bounds declaration:\n" + "\n".join(
             f"  - {m}" for m in missing_bounds
         )
 
@@ -187,7 +187,7 @@ class TestBoundedCollectionConvention:
 
         assert (
             not warnings
-        ), f"Potentially unbounded per-agent dicts found:\n" + "\n".join(
+        ), "Potentially unbounded per-agent dicts found:\n" + "\n".join(
             f"  - {w}" for w in warnings
         )
 
@@ -279,6 +279,6 @@ class TestHmacCompareDigestConvention:
                             break
 
         assert not violations, (
-            f"Found == comparisons on crypto values (use hmac.compare_digest()):\n"
+            "Found == comparisons on crypto values (use hmac.compare_digest()):\n"
             + "\n".join(f"  - {path}:{line}: {code}" for path, line, code in violations)
         )

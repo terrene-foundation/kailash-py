@@ -14,7 +14,6 @@ Example Workflow:
 """
 
 from dataflow.platform.inspector import Inspector
-
 from kailash.workflow.builder import WorkflowBuilder
 
 

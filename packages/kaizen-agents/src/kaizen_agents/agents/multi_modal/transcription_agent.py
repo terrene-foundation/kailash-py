@@ -239,5 +239,5 @@ class TranscriptionAgent(BaseAgent):
         Returns:
             Dict with 'language', 'confidence'
         """
-        audio_path = audio if isinstance(audio, (str, Path)) else "/tmp/temp_audio.mp3"
+        audio_path = audio if isinstance(audio, str | Path) else "/tmp/temp_audio.mp3"
         return self.processor.detect_language(audio_path)

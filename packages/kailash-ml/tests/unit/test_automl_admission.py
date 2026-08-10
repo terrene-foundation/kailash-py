@@ -19,9 +19,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 import pytest
+
 from kailash_ml.automl.admission import (
     AdmissionDecision,
     PromotionRequiresApprovalError,

@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from kaizen.runtime.context import ExecutionContext, ExecutionStatus
 from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
@@ -25,7 +26,6 @@ from kaizen_agents.runtime_adapters.types import (
     ExecutionState,
     PlanningStrategy,
 )
-from kaizen.runtime.context import ExecutionContext, ExecutionStatus
 
 
 class MockLLMProvider:

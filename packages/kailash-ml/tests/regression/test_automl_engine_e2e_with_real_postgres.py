@@ -60,7 +60,6 @@ from kailash_ml.automl import (  # noqa: E402
     TrialOutcome,
 )
 
-
 # ---------------------------------------------------------------------------
 # Deterministic synthetic trial — Postgres lane stresses persistence,
 # not the trainer (covered by the LightGBM-trainer e2e file).

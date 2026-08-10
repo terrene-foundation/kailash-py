@@ -108,7 +108,11 @@ async def probe_remote_health(
         ok = 200 <= response.status_code < 300
         logger.info(
             "nexus.probe.remote_health.result",
-            extra={"url_fingerprint": _fp(url), "status": response.status_code, "ok": ok},
+            extra={
+                "url_fingerprint": _fp(url),
+                "status": response.status_code,
+                "ok": ok,
+            },
         )
         return ok
     except Exception as exc:

@@ -14,12 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from spec_drift_gate import (
-    SymbolIndex,
-    parse_overrides,
-    run_sweeps,
-    scan_sections,
-)
+from spec_drift_gate import SymbolIndex, parse_overrides, run_sweeps, scan_sections
 
 
 def _idx(*, all_exports: set[str]) -> SymbolIndex:

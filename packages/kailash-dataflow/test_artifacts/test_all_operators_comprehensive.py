@@ -7,7 +7,6 @@ Tests: $ne, $nin, $in, $not, $eq (and implicitly $or, $and via QueryBuilder)
 import sys
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

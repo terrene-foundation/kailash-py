@@ -9,10 +9,7 @@ import pytest
 
 from kaizen.llm.auth.azure import AzureEntra
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
-from kaizen.llm.presets import (
-    AZURE_OPENAI_DEFAULT_API_VERSION,
-    azure_openai_preset,
-)
+from kaizen.llm.presets import AZURE_OPENAI_DEFAULT_API_VERSION, azure_openai_preset
 
 
 def _api_key_auth() -> AzureEntra:

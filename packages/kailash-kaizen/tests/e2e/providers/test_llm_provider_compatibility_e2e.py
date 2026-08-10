@@ -16,6 +16,7 @@ import os
 from datetime import datetime
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature

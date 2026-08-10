@@ -20,10 +20,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.agent_mapping import AgentRoleMapping
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
-
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 # ---------------------------------------------------------------------------
 # Helper: build a small org with agent_id assignments

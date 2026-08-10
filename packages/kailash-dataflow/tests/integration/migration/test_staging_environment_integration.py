@@ -27,6 +27,7 @@ from typing import Dict, List
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyAnalyzer,
     DependencyReport,
@@ -56,7 +57,6 @@ from dataflow.migrations.staging_environment_manager import (
     StagingEnvironmentManager,
     StagingEnvironmentStatus,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

@@ -27,8 +27,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from kaizen_agents.agents.autonomous import ClaudeCodeAgent, ClaudeCodeConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous import ClaudeCodeAgent, ClaudeCodeConfig
 
 
 class CodingSignature(Signature):
@@ -60,7 +60,7 @@ async def demo_claude_code_tools():
     agent = ClaudeCodeAgent(config=config, signature=CodingSignature())
 
     print("✓ ClaudeCodeAgent created")
-    print(f"  - Available tools: {len(list(registry.list_tools()))}")
+    print("  - Tools: auto-connected via kaizen_builtin MCP server")
     print("  - File operations: read_file, write_file, delete_file, etc.")
     print("  - Search: glob_search, grep_search")
     print("  - Execution: bash_command")

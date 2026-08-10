@@ -19,7 +19,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
 from pathlib import Path
@@ -41,7 +40,6 @@ from kailash.trust.pact.exceptions import PactError
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
 from pact.engine import PactEngine
 from pact.work import WorkResult
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

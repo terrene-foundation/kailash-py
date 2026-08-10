@@ -32,9 +32,7 @@ try:
     KAILASH_MCP_AVAILABLE = True
 except ImportError:
     KAILASH_MCP_AVAILABLE = False
-    print(
-        "Warning: kailash_mcp not available. Install with: pip install kailash"
-    )
+    print("Warning: kailash_mcp not available. Install with: pip install kailash")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

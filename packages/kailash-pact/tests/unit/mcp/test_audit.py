@@ -17,7 +17,6 @@ import pytest
 
 from pact.mcp.audit import McpAuditEntry, McpAuditTrail
 
-
 # ---------------------------------------------------------------------------
 # McpAuditEntry
 # ---------------------------------------------------------------------------
@@ -38,17 +37,13 @@ class TestMcpAuditEntry:
         assert entry.decision == "auto_approved"
 
     def test_frozen(self) -> None:
-        entry = McpAuditEntry(
-            tool_name="t", agent_id="a", decision="blocked"
-        )
+        entry = McpAuditEntry(tool_name="t", agent_id="a", decision="blocked")
         with pytest.raises(AttributeError):
             entry.decision = "auto_approved"  # type: ignore[misc]
 
     def test_timestamp_auto_set(self) -> None:
         before = datetime.now(UTC)
-        entry = McpAuditEntry(
-            tool_name="t", agent_id="a", decision="blocked"
-        )
+        entry = McpAuditEntry(tool_name="t", agent_id="a", decision="blocked")
         after = datetime.now(UTC)
         assert before <= entry.timestamp <= after
 
@@ -205,8 +200,7 @@ class TestAuditTrailThreadSafety:
                 errors.append(str(exc))
 
         threads = [
-            threading.Thread(target=worker, args=(f"agent-{i}",))
-            for i in range(5)
+            threading.Thread(target=worker, args=(f"agent-{i}",)) for i in range(5)
         ]
         for t in threads:
             t.start()

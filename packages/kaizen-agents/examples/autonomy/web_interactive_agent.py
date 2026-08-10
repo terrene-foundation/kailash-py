@@ -40,6 +40,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from aiohttp import web
+
 from kaizen.core.autonomy.control.types import ControlRequest, ControlResponse
 
 
@@ -147,7 +148,7 @@ class WebInteractiveAgent:
                     await response.write(f"data: {message}\n\n".encode())
                     await response.drain()
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Send keep-alive comment
                     await response.write(b": keepalive\n\n")
                     await response.drain()
@@ -220,11 +221,11 @@ class WebInteractiveAgent:
             try:
                 response = await asyncio.wait_for(response_queue.get(), timeout=timeout)
                 return response
-            except asyncio.TimeoutError:
+            except TimeoutError as exc:
                 raise TimeoutError(
                     f"Request timeout: {request_type} "
                     f"(request_id={request.request_id}, timeout={timeout}s)"
-                )
+                ) from exc
         finally:
             # Cleanup
             self.response_queues.pop(request.request_id, None)

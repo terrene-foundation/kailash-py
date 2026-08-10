@@ -40,7 +40,7 @@ class TestBulkheadIntegration:
         if current_manager:
             try:
                 await current_manager.shutdown_all()
-            except:
+            except Exception:
                 pass
             bulkhead_module._bulkhead_manager = None
 

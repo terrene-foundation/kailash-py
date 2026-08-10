@@ -302,7 +302,7 @@ class TestSQLDatabaseNodePostgreSQL:
         # Create enum type
         try:
             node.execute(query="DROP TYPE IF EXISTS order_status CASCADE")
-        except:
+        except Exception:
             pass
 
         node.execute(

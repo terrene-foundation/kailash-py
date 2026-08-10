@@ -18,19 +18,10 @@ try:
     _HAS_LIGHTGBM = True
 except (ImportError, OSError):
     _HAS_LIGHTGBM = False
-from kailash_ml.engines.model_registry import (
-    LocalFileArtifactStore,
-    ModelRegistry,
-)
 from kailash_ml.engines.feature_store import FeatureStore
-from kailash_ml.engines.training_pipeline import (
-    EvalSpec,
-    ModelSpec,
-    TrainingPipeline,
-    TrainingResult,
-)
+from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
+from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec, TrainingPipeline
 from kailash_ml.types import FeatureField, FeatureSchema
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

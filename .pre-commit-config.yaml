@@ -32,34 +32,62 @@ repos:
         name: Lint with Ruff
         description: "Run Ruff linter"
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/)
+        # Scaffold templates carry `{Placeholder}` tokens and are not parseable
+        # Python — same carve-out black/isort take in pyproject.toml (#1995).
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/|packages/[^/]+/docs/development/templates/)
 
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
+      # `.claude/audit-fixtures/` and `tests/fixtures/` are TEST DATA, not source:
+      # the exact bytes ARE the fixture. end-of-file-fixer appending a trailing
+      # newline rewrote 304 of them (including `.expected` answer-key files), which
+      # silently alters what the detectors are measured against. Excluded so the
+      # eval harness keeps measuring the bytes it was pinned to (#1995).
+      # NOTE ON THE `exclude:` SHAPE — these were previously written `^(a/|b/)$`.
+      # pre-commit fullmatches `exclude` against the repo-relative path, so a
+      # `dir/` alternative under a `$` anchor can only match a path that IS
+      # literally "dir/" — every directory carve-out here silently never fired.
+      # Dropping the `$` makes them the prefix matches they were always meant
+      # to be. Verified by re-running the hook, not by reading the regex (#1995).
       - id: trailing-whitespace
         name: Trim trailing whitespace
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*\.html|.*_mermaid\.md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|\.claude/audit-fixtures/|tests/fixtures/|.*\.html$|.*_mermaid\.md$)
       - id: end-of-file-fixer
         name: Fix end of files
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*\.html|.*_mermaid\.md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|\.claude/audit-fixtures/|tests/fixtures/|.*\.html$|.*_mermaid\.md$)
       - id: check-yaml
+        # `.claude/.proposals/archive/` holds IMMUTABLE audit records of past
+        # codify cycles (artifact-flow.md § Proposal Lifecycle). Some use YAML
+        # complex keys (`?`) that this checker rejects; rewriting an archived
+        # record to satisfy a linter would falsify the audit trail (#1995).
         name: Check YAML syntax
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|packages/.*/deployment/kubernetes/.*\.yaml)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|\.claude/\.proposals/archive/|packages/.*/deployment/kubernetes/.*\.yaml$)
       - id: check-toml
         name: Check TOML syntax
       - id: check-json
+        # `.claude/audit-fixtures/` and `tests/fixtures/` contain DELIBERATELY
+        # malformed JSON (e.g. `06-structural-null-malformed-log/input.json`,
+        # `parser-differential/01-duplicate-keys.json`) — being un-parseable IS
+        # what those fixtures test. A syntax gate over them is measuring the
+        # wrong thing (#1995).
         name: Check JSON syntax
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*node_modules/.*)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|\.claude/audit-fixtures/|tests/fixtures/|.*node_modules/)
       - id: check-merge-conflict
         name: Check for merge conflicts
       - id: check-added-large-files
         name: Check for large files
         args: [--maxkb=1000]
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/)
       - id: debug-statements
         name: Check for debug statements
+        # Scaffold templates are NOT valid Python — they carry `{Placeholder}`
+        # substitution tokens (e.g. `class Test{AgentName}Initialization:`), so
+        # `ast.parse` raises SyntaxError. isort/black skip them via
+        # `extend_skip_glob` in pyproject.toml; this hook reads its own exclude,
+        # so the same carve-out is repeated here (#1995).
+        exclude: ^packages/[^/]+/docs/development/templates/
 
   # Python-specific checks
   - repo: https://github.com/pre-commit/pygrep-hooks

@@ -7,6 +7,7 @@ Tests FilesystemStorage operations: save, load, list, delete, exists.
 import tempfile
 
 import pytest
+
 from kaizen.core.autonomy.state import AgentState, FilesystemStorage
 
 

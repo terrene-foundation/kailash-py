@@ -27,9 +27,9 @@ structurally (adapter releases its runtime) and behaviourally (no
 from __future__ import annotations
 
 import pytest
-from kailash.runtime.async_local import AsyncLocalRuntime
 
 from dataflow import DataFlow
+from kailash.runtime.async_local import AsyncLocalRuntime
 
 pytestmark = [pytest.mark.regression]
 

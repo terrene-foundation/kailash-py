@@ -17,8 +17,9 @@ import logging
 import re
 from typing import Any, Dict, Type, TypedDict, get_args, get_origin, get_type_hints
 
-from kaizen.core.config import BaseAgentConfig
 from typing_extensions import NotRequired
+
+from kaizen.core.config import BaseAgentConfig
 
 logger = logging.getLogger(__name__)
 

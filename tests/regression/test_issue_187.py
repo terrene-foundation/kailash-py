@@ -16,10 +16,9 @@ import pytest
 @pytest.mark.regression
 def test_issue_187_express_sync_create_read_list_count(tmp_path) -> None:
     """express_sync provides working sync CRUD: create, read, list, count."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_187.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)
@@ -91,10 +90,9 @@ def test_issue_187_express_sync_create_read_list_count(tmp_path) -> None:
 @pytest.mark.regression
 def test_issue_187_express_sync_update(tmp_path) -> None:
     """express_sync.update modifies a record and persists the change."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_187_update.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)
@@ -140,10 +138,9 @@ def test_issue_187_express_sync_update(tmp_path) -> None:
 @pytest.mark.regression
 def test_issue_187_express_sync_find_one(tmp_path) -> None:
     """express_sync.find_one returns a single record by non-PK filter."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_187_find.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)

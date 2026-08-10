@@ -830,7 +830,7 @@ class TestDeadlockPrevention:
             ):
                 pass
             print("Short timeout context manager created successfully")
-        except:
+        except Exception:
             pass  # Expected if there's immediate contention
 
         try:
@@ -839,7 +839,7 @@ class TestDeadlockPrevention:
             ):
                 pass
             print("Long timeout context manager created successfully")
-        except:
+        except Exception:
             pass
 
         print("✓ Configurable timeout values working correctly")

@@ -17,9 +17,9 @@ from sqlparse import sql, tokens
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.tenancy.exceptions import QueryParsingError, TenantIsolationError
 from dataflow.tenancy.interceptor import QueryInterceptor
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
+
 
 @pytest.fixture
 async def test_suite():
@@ -28,10 +28,12 @@ async def test_suite():
     async with suite.session():
         yield suite
 
+
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
+
 
 class TestSQLQueryParsing:
     """Test SQL query parsing and analysis."""
@@ -123,6 +125,7 @@ class TestSQLQueryParsing:
         assert parsed.query_type == "SELECT"
         assert parsed.has_subqueries is True
         assert len(parsed.subqueries) >= 1
+
 
 class TestTenantConditionInjection:
     """Test injection of tenant isolation conditions."""
@@ -223,6 +226,7 @@ class TestTenantConditionInjection:
         assert "tenant_id" in modified_query
         assert "tenant_multi" in modified_params or "tenant_multi" in modified_query
 
+
 class TestJoinOperationHandling:
     """Test handling of JOIN operations in multi-tenant queries."""
 
@@ -307,6 +311,7 @@ class TestJoinOperationHandling:
         # Should add tenant conditions
         assert "tenant_id" in modified_query
         assert "tenant_self" in modified_params or "tenant_self" in modified_query
+
 
 class TestSubqueryTenantIsolation:
     """Test tenant isolation in subqueries."""
@@ -398,6 +403,7 @@ class TestSubqueryTenantIsolation:
             or "tenant_select_sub" in modified_query
         )
 
+
 class TestQueryPlanOptimization:
     """Test query plan optimization for tenant isolation."""
 
@@ -480,6 +486,7 @@ class TestQueryPlanOptimization:
             assert "optimization_recommendations" in complexity
             assert isinstance(complexity["complexity_score"], (int, float))
 
+
 class TestTenantIsolationSecurity:
     """Test security aspects of tenant isolation."""
 
@@ -545,6 +552,7 @@ class TestTenantIsolationSecurity:
         # Should validate that cross-tenant access is prevented
         validation = interceptor.validate_cross_tenant_access(modified_query, params)
         assert "cross_tenant_access_prevented" in validation
+
 
 class TestErrorHandlingAndEdgeCases:
     """Test error handling and edge cases in query interception."""

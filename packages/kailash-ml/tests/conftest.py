@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Marker registration (IT-1 — GPU CI runner acquisition)
 #

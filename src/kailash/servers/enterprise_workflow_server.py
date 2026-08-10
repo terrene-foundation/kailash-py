@@ -359,9 +359,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                 # names, so a workflow reading `parameters.get(...)` -- the
                 # documented convention -- raised NameError on this public
                 # route while succeeding on every channel.
-                from kailash.workflow.input_envelope import (
-                    bind_parameter_envelope,
-                )
+                from kailash.workflow.input_envelope import bind_parameter_envelope
 
                 result = await self._async_runtime.execute_async(
                     workflow_obj,

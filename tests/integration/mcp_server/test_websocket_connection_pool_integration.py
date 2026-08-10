@@ -194,7 +194,7 @@ class TestWebSocketConnectionPoolIntegration:
                             "result": {"tools": []},
                         }
                         await websocket.send(json.dumps(response))
-                except:
+                except Exception:
                     pass
 
             return handler
@@ -265,7 +265,7 @@ class TestWebSocketConnectionPoolIntegration:
             if hasattr(client, "_check_connection_health"):
                 try:
                     await client._check_connection_health(ws_url)
-                except:
+                except Exception:
                     pass  # Health check might fail, that's expected
 
             # Next operation should create new connection
@@ -447,7 +447,7 @@ class TestWebSocketConnectionPoolIntegration:
             # First attempt should fail
             try:
                 await client.discover_tools(ws_url)
-            except:
+            except Exception:
                 pass  # Expected to fail
 
             assert error_count == 1

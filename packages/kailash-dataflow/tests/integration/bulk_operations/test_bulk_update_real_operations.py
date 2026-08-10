@@ -5,11 +5,11 @@ Tests both filter-based and data-based bulk update modes with real PostgreSQL.
 """
 
 import pytest
+
+from dataflow import DataFlow
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -119,12 +119,12 @@ class TestBulkUpdateFilterBased:
 
         update_result = results.get("update_electronics")
         assert update_result is not None, "No result returned from bulk update"
-        assert update_result.get("success"), (
-            f"Update failed: {update_result.get('error')}"
-        )
-        assert update_result.get("processed") == 3, (
-            f"Expected 3 updated, got {update_result.get('processed')}"
-        )
+        assert update_result.get(
+            "success"
+        ), f"Update failed: {update_result.get('error')}"
+        assert (
+            update_result.get("processed") == 3
+        ), f"Expected 3 updated, got {update_result.get('processed')}"
 
         # Verify the updates
         verify_node = AsyncSQLDatabaseNode(
@@ -297,12 +297,12 @@ class TestBulkUpdateDataBased:
 
         update_result = results.get("update_by_ids")
         assert update_result is not None
-        assert update_result.get("success"), (
-            f"Update failed: {update_result.get('error')}"
-        )
-        assert update_result.get("processed") == 3, (
-            f"Expected 3 updated, got {update_result.get('processed')}"
-        )
+        assert update_result.get(
+            "success"
+        ), f"Update failed: {update_result.get('error')}"
+        assert (
+            update_result.get("processed") == 3
+        ), f"Expected 3 updated, got {update_result.get('processed')}"
 
         # Verify the updates
         verify_node = AsyncSQLDatabaseNode(

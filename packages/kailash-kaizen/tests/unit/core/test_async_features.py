@@ -5,6 +5,7 @@ Tests async configuration parameters without requiring node infrastructure.
 """
 
 import pytest
+
 from kaizen.core.config import BaseAgentConfig
 
 

@@ -41,7 +41,6 @@ from kaizen.manifest.errors import (  # noqa: E402
 from kaizen.manifest.governance import GovernanceManifest  # noqa: E402
 from kaizen.manifest.loader import load_app_manifest, load_manifest  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Sample TOML content for tests
 # ---------------------------------------------------------------------------

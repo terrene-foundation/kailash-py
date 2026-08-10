@@ -16,7 +16,6 @@ from kaizen.llm.deployment import EmbedOptions
 from kaizen.llm.errors import InvalidResponse
 from kaizen.llm.wire_protocols import ollama_embeddings, openai_embeddings
 
-
 # ---------------------------------------------------------------------------
 # OpenAI shaper — build_request_payload
 # ---------------------------------------------------------------------------

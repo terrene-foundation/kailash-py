@@ -340,7 +340,7 @@ class TestSagaPatternE2E:
         # This should fail partway through
         try:
             coordinator1.execute(operation="execute_saga")
-        except:
+        except Exception:
             pass  # Expected to fail
 
         # Simulate system restart - create new coordinator instance

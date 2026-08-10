@@ -419,13 +419,13 @@ class TestAPIKeyExpiration:
         """A key with expires_at < now MUST fail verification with
         an 'expired' error message.
         """
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.saas_starter.security.api_keys import (
             create_api_key,
             verify_api_key,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         # Create a normal key
         created = create_api_key(db, org_id, "Expired Key", ["read"])
@@ -460,13 +460,13 @@ class TestAPIKeyRateLimiting:
 
     def test_rate_limited_key_surfaces_rate_limit_on_verify(self, db, org_id):
         """A key with rate_limit set MUST return rate_limit on verify."""
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.saas_starter.security.api_keys import (
             create_api_key,
             verify_api_key,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         # Create a key + set rate_limit via APIKeyUpdateNode (the
         # create_api_key helper does not accept rate_limit as input;
@@ -516,13 +516,13 @@ class TestAPIKeyExpirationTimezoneSafety:
         NOT raise TypeError."""
         from datetime import timezone as _timezone
 
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.saas_starter.security.api_keys import (
             create_api_key,
             verify_api_key,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         created = create_api_key(db, org_id, "TZ-Aware Expired", ["read"])
         plain_key = created["key"]
@@ -555,13 +555,13 @@ class TestAPIKeyExpirationTimezoneSafety:
         (positive control proving the tz-aware path is exercised)."""
         from datetime import timezone as _timezone
 
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.saas_starter.security.api_keys import (
             create_api_key,
             verify_api_key,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         created = create_api_key(db, org_id, "TZ-Aware Future", ["read"])
         plain_key = created["key"]
@@ -607,13 +607,13 @@ class TestAPIKeyExpirationTimezoneSafety:
         """
         from datetime import timezone as _timezone
 
-        from kailash.runtime import LocalRuntime
-        from kailash.workflow.builder import WorkflowBuilder
-
         from templates.saas_starter.security.api_keys import (
             create_api_key,
             verify_api_key,
         )
+
+        from kailash.runtime import LocalRuntime
+        from kailash.workflow.builder import WorkflowBuilder
 
         created = create_api_key(db, org_id, "Naive String Expired", ["read"])
         plain_key = created["key"]

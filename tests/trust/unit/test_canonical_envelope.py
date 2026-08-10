@@ -25,6 +25,7 @@ import math
 import os
 
 import pytest
+
 from kailash.trust.envelope import (
     AgentPosture,
     CommunicationConstraint,

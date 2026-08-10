@@ -22,6 +22,7 @@ from typing import Dict, List
 
 import pytest
 import requests
+
 from kaizen.core.autonomy.hooks import HookContext, HookEvent
 
 # Kaizen imports - these will be implemented
@@ -377,9 +378,9 @@ class TestJaegerUIValidation:
             for span in trace.get("spans", []):
                 tags = {tag["key"]: tag["value"] for tag in span.get("tags", [])}
                 if tags.get("agent_id"):
-                    assert tags["agent_id"] == target_agent, (
-                        f"Found span from wrong agent: {tags['agent_id']}"
-                    )
+                    assert (
+                        tags["agent_id"] == target_agent
+                    ), f"Found span from wrong agent: {tags['agent_id']}"
 
     @pytest.mark.asyncio
     @pytest.mark.slow
@@ -464,9 +465,9 @@ class TestJaegerUIValidation:
 
         # Assert: All checkpoints recorded
         # Expected: 1 PRE_AGENT_LOOP + 10 PRE_TOOL_USE + 10 POST_TOOL_USE + 1 POST_AGENT_LOOP = 22 spans
-        assert len(spans) >= 20, (
-            f"Expected 20+ spans (start + 10 PRE checkpoints + 10 POST checkpoints + end), got {len(spans)}"
-        )
+        assert (
+            len(spans) >= 20
+        ), f"Expected 20+ spans (start + 10 PRE checkpoints + 10 POST checkpoints + end), got {len(spans)}"
 
         # Assert: Trace duration reflects long-running nature
         # Find start and end timestamps
@@ -475,9 +476,9 @@ class TestJaegerUIValidation:
         duration_seconds = duration_us / 1_000_000
 
         # Should be at least 10 seconds (our compressed timeline)
-        assert duration_seconds >= 9.0, (
-            f"Expected duration >=9s, got {duration_seconds:.2f}s"
-        )
+        assert (
+            duration_seconds >= 9.0
+        ), f"Expected duration >=9s, got {duration_seconds:.2f}s"
 
     @pytest.mark.asyncio
     async def test_error_span_visualization(self, tracing_hook):

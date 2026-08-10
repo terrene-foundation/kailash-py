@@ -297,7 +297,6 @@ class ModelExplainer:
         -------
         plotly.graph_objects.Figure
         """
-        import plotly.graph_objects as go
 
         max_display = kwargs.get("max_display", 20)
 

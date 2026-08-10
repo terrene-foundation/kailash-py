@@ -3,11 +3,11 @@
 Tests for enhanced MCP server functionality without mocking external packages.
 """
 
+import builtins
 from unittest.mock import Mock, patch
 
-import builtins
-
 import pytest
+
 from kailash_mcp.server import MCPServer
 
 

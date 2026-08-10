@@ -11,7 +11,6 @@ from kailash.nodes.transaction.node_executor import (
     RegistryNodeExecutor,
 )
 
-
 # ---------------------------------------------------------------------------
 # MockNodeExecutor tests
 # ---------------------------------------------------------------------------

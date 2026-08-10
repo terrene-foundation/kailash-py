@@ -22,6 +22,7 @@ import logging
 from typing import Any, Dict, List
 
 import pytest
+
 from kailash.trust.constraints.budget_tracker import (
     BudgetEvent,
     BudgetTracker,

@@ -215,12 +215,16 @@ class MultiDimensionEvaluator:
                 failed_dimensions.append(dimension_name)
 
         # Compute overall satisfaction based on mode
-        satisfied = self._compute_satisfaction(dimension_results, failed_dimensions, mode)
+        satisfied = self._compute_satisfaction(
+            dimension_results, failed_dimensions, mode
+        )
 
         # Run anti-gaming detection if enabled
         anti_gaming_flags: List[str] = []
         if self._enable_anti_gaming and agent_id:
-            anti_gaming_flags = self._check_anti_gaming(agent_id, constraints, context, dimension_results)
+            anti_gaming_flags = self._check_anti_gaming(
+                agent_id, constraints, context, dimension_results
+            )
 
         result = EvaluationResult(
             satisfied=satisfied,
@@ -316,7 +320,9 @@ class MultiDimensionEvaluator:
                 if result.used is not None:
                     usage_ratio = result.used / result.limit
                     if usage_ratio > 0.95:
-                        flags.append(f"boundary_pushing:{dim_name} (usage_ratio={usage_ratio:.2f})")
+                        flags.append(
+                            f"boundary_pushing:{dim_name} (usage_ratio={usage_ratio:.2f})"
+                        )
 
         # Check for constraint splitting
         # 8+ of last 10 evaluations have small ops (used/limit < 0.1)
@@ -332,7 +338,9 @@ class MultiDimensionEvaluator:
                                 break  # Count once per evaluation
 
             if small_ops_count >= 8:
-                flags.append(f"constraint_splitting:detected ({small_ops_count}/10 evaluations with small ops)")
+                flags.append(
+                    f"constraint_splitting:detected ({small_ops_count}/10 evaluations with small ops)"
+                )
 
         return flags
 

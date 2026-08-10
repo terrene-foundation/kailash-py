@@ -32,11 +32,9 @@ import logging
 import signal
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks import (
     BaseHook,
     HookContext,
@@ -46,6 +44,7 @@ from kaizen.core.autonomy.hooks import (
 )
 from kaizen.core.autonomy.state import AgentState, FilesystemStorage, StateManager
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 # Configure logging
 logging.basicConfig(
@@ -62,7 +61,7 @@ class ResearchSignature(Signature):
     analysis: str = OutputField(
         description="Analysis of research paper with key findings"
     )
-    key_concepts: List[str] = OutputField(description="List of key concepts identified")
+    key_concepts: list[str] = OutputField(description="List of key concepts identified")
     relevance_score: float = OutputField(
         description="Relevance score 0-1 for AI ethics research"
     )
@@ -81,7 +80,7 @@ class CheckpointMetricsHook(BaseHook):
 
     def __init__(self):
         super().__init__(name="checkpoint_metrics_hook")
-        self.checkpoint_log: List[Dict[str, Any]] = []
+        self.checkpoint_log: list[dict[str, Any]] = []
         self.stats = {
             "total_checkpoints": 0,
             "total_compressed_size_bytes": 0,
@@ -89,7 +88,7 @@ class CheckpointMetricsHook(BaseHook):
             "average_compression_ratio": 0.0,
         }
 
-    def supported_events(self) -> List[HookEvent]:
+    def supported_events(self) -> list[HookEvent]:
         """Hook into checkpoint save events."""
         return [HookEvent.POST_CHECKPOINT_SAVE]
 
@@ -131,7 +130,7 @@ class CheckpointMetricsHook(BaseHook):
             logger.error(f"Error in checkpoint metrics hook: {e}")
             return HookResult(success=False, error=str(e))
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get checkpoint metrics summary."""
         return {
             "total_checkpoints": self.stats["total_checkpoints"],
@@ -204,7 +203,7 @@ class ResearchAgent:
 
         signal.signal(signal.SIGINT, handle_interrupt)
 
-    async def analyze_papers(self, simulate_interrupt_at: Optional[int] = None):
+    async def analyze_papers(self, simulate_interrupt_at: int | None = None):
         """
         Analyze 100 research papers with automatic checkpointing.
 
@@ -316,7 +315,7 @@ class ResearchAgent:
 
         return {"status": "completed", "papers_analyzed": total_papers}
 
-    def _generate_paper_titles(self) -> List[str]:
+    def _generate_paper_titles(self) -> list[str]:
         """Generate 100 simulated research paper titles."""
         titles = [
             "Ethics in AI Systems: A Survey",

@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer
 from dataflow.migrations.table_rename_analyzer import (
@@ -32,7 +33,6 @@ from dataflow.migrations.table_rename_analyzer import (
     TableRenamePlan,
     TableRenameReport,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

@@ -17,10 +17,11 @@ Written BEFORE implementation (TDD). Tests define the contract.
 
 import hashlib
 import json
-
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 from kailash.trust.signing.crypto import (
     generate_keypair,
     hash_reasoning_trace,
@@ -30,8 +31,6 @@ from kailash.trust.signing.crypto import (
     verify_reasoning_signature,
     verify_signature,
 )
-from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -309,7 +308,9 @@ class TestSignReasoningTrace:
         sig2 = sign_reasoning_trace(minimal_trace, priv2)
         assert sig1 != sig2
 
-    def test_different_traces_different_signatures(self, minimal_trace, full_trace, keypair):
+    def test_different_traces_different_signatures(
+        self, minimal_trace, full_trace, keypair
+    ):
         """Signing different traces with the same key must produce different signatures."""
         private_key, _ = keypair
         sig1 = sign_reasoning_trace(minimal_trace, private_key)
@@ -522,7 +523,9 @@ class TestVerifyReasoningSignature:
         signature = sign_reasoning_trace(full_trace, private_key)
 
         reasoning_result = verify_reasoning_signature(full_trace, signature, public_key)
-        direct_result = verify_signature(full_trace.to_signing_payload(), signature, public_key)
+        direct_result = verify_signature(
+            full_trace.to_signing_payload(), signature, public_key
+        )
         assert reasoning_result == direct_result
         assert reasoning_result is True
 
@@ -586,7 +589,9 @@ class TestReasoningCryptoIntegration:
         hash_after = hash_reasoning_trace(restored)
         assert hash_before == hash_after
 
-    def test_signature_verifies_after_serialization_round_trip(self, full_trace, keypair):
+    def test_signature_verifies_after_serialization_round_trip(
+        self, full_trace, keypair
+    ):
         """Signature created before serialization must verify after deserialization."""
         private_key, public_key = keypair
         signature = sign_reasoning_trace(full_trace, private_key)

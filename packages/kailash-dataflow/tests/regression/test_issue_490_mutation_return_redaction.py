@@ -37,11 +37,7 @@ import uuid
 import pytest
 
 from dataflow import DataFlow
-from dataflow.classification import (
-    DataClassification,
-    MaskingStrategy,
-    classify,
-)
+from dataflow.classification import DataClassification, MaskingStrategy, classify
 from dataflow.core.agent_context import async_clearance_context
 
 pytestmark = pytest.mark.regression
@@ -79,18 +75,18 @@ async def test_issue_490_create_redacts_classified_field(sqlite_file_url):
         returned = await db.express.create(
             "_Person", {"id": 1, "name": "Alice", "email": "alice@x.io"}
         )
-        assert returned["email"] == "[REDACTED]", (
-            "Regression #490: create() MUST NOT echo plaintext classified fields"
-        )
+        assert (
+            returned["email"] == "[REDACTED]"
+        ), "Regression #490: create() MUST NOT echo plaintext classified fields"
         assert returned["name"] == "Alice", "non-classified field passes through"
 
         # Admin read confirms raw value WAS persisted (fix is at return, not write).
         async with async_clearance_context(DataClassification.HIGHLY_CONFIDENTIAL):
             admin_read = await db.express.read("_Person", "1", cache_ttl=0)
         assert admin_read is not None
-        assert admin_read["email"] == "alice@x.io", (
-            "Regression #490: write path is unaffected — raw value persisted"
-        )
+        assert (
+            admin_read["email"] == "alice@x.io"
+        ), "Regression #490: write path is unaffected — raw value persisted"
     finally:
         db.close()
 
@@ -118,9 +114,9 @@ async def test_issue_490_update_redacts_classified_field(sqlite_file_url):
             "_Person", "1", {"name": "Alice2", "email": "new@x.io"}
         )
         assert isinstance(updated, dict)
-        assert updated.get("email") == "[REDACTED]", (
-            "Regression #490: update() MUST NOT echo plaintext classified fields"
-        )
+        assert (
+            updated.get("email") == "[REDACTED]"
+        ), "Regression #490: update() MUST NOT echo plaintext classified fields"
     finally:
         db.close()
 
@@ -143,9 +139,9 @@ async def test_issue_490_upsert_insert_redacts_classified_field(sqlite_file_url)
             "_Person", {"id": 1, "name": "Alice", "email": "secret@x.io"}
         )
         assert isinstance(returned, dict)
-        assert returned.get("email") == "[REDACTED]", (
-            "Regression #490: upsert() INSERT MUST NOT echo plaintext classified fields"
-        )
+        assert (
+            returned.get("email") == "[REDACTED]"
+        ), "Regression #490: upsert() INSERT MUST NOT echo plaintext classified fields"
     finally:
         db.close()
 
@@ -174,9 +170,9 @@ async def test_issue_490_upsert_update_redacts_classified_field(sqlite_file_url)
             "_Person", {"id": 1, "name": "Alice2", "email": "updated@x.io"}
         )
         assert isinstance(returned, dict)
-        assert returned.get("email") == "[REDACTED]", (
-            "Regression #490: upsert() UPDATE MUST NOT echo plaintext classified fields"
-        )
+        assert (
+            returned.get("email") == "[REDACTED]"
+        ), "Regression #490: upsert() UPDATE MUST NOT echo plaintext classified fields"
     finally:
         db.close()
 
@@ -207,14 +203,14 @@ async def test_issue_490_upsert_advanced_redacts_record(sqlite_file_url):
         if "record" in result and isinstance(result["record"], dict):
             rec = result["record"]
             if "email" in rec:
-                assert rec["email"] == "[REDACTED]", (
-                    "Regression #490: upsert_advanced().record MUST redact PII"
-                )
+                assert (
+                    rec["email"] == "[REDACTED]"
+                ), "Regression #490: upsert_advanced().record MUST redact PII"
         # Fallback: if top-level dict has email, it MUST also be redacted.
         if "email" in result:
-            assert result["email"] == "[REDACTED]", (
-                "Regression #490: upsert_advanced() top-level MUST redact PII"
-            )
+            assert (
+                result["email"] == "[REDACTED]"
+            ), "Regression #490: upsert_advanced() top-level MUST redact PII"
     finally:
         db.close()
 
@@ -246,8 +242,8 @@ async def test_issue_490_bulk_upsert_redacts_records(sqlite_file_url):
         # "records" MUST have classified fields masked when non-empty.
         for row in result.get("records", []):
             if isinstance(row, dict) and "email" in row:
-                assert row["email"] == "[REDACTED]", (
-                    "Regression #490: bulk_upsert().records MUST redact PII"
-                )
+                assert (
+                    row["email"] == "[REDACTED]"
+                ), "Regression #490: bulk_upsert().records MUST redact PII"
     finally:
         db.close()

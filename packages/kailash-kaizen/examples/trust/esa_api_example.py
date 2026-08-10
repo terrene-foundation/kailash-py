@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from kailash.trust.chain import CapabilityType
 from kailash.trust.esa import APIESA, ESAResult, RateLimitConfig, SystemMetadata
 from kailash.trust.operations import CapabilityRequest, TrustOperations
-
 from kaizen.trust.authority import OrganizationalAuthorityRegistry
 from kaizen.trust.store import PostgresTrustStore
 

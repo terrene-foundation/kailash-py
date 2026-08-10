@@ -16,6 +16,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 import pytest_asyncio
+
 from kailash_ml.tracking import (
     AliasNotFoundError,
     AliasOccupiedError,
@@ -26,7 +27,6 @@ from kailash_ml.tracking import (
     ModelSignature,
     SqliteTrackerStore,
 )
-
 
 SIG = ModelSignature(
     inputs=(("x", "Float64", False, None),),

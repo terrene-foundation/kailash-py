@@ -10,14 +10,11 @@ real JudgeCallable) live in tests/integration/test_rag_diagnostics_wiring.py.
 """
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from kailash.diagnostics.protocols import JudgeInput, JudgeResult
 from kailash_ml.diagnostics import RAGDiagnostics
 from kailash_ml.diagnostics import rag as rag_mod
-
 
 # ---------------------------------------------------------------------------
 # __init__ validation

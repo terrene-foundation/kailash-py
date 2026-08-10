@@ -110,7 +110,7 @@ async def db_fixture():
     db.close()  # Also fails!
 ```
 
-#### The Fix 
+#### The Fix
 
 ```python
 # ✅ CORRECT - Use async methods in async context

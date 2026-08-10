@@ -16,6 +16,7 @@ from dataclasses import asdict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from dataflow.migrations.safety_validation import (
     ApplicationCompatibilityValidator,
     SafetyCheckResult,

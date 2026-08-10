@@ -39,9 +39,9 @@ from typing import Any, Dict, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
-from kailash.runtime.async_local import AsyncLocalRuntime
 
 from dataflow.core.model_registry import ModelRegistry, _normalize_runtime_result
+from kailash.runtime.async_local import AsyncLocalRuntime
 
 pytestmark = pytest.mark.regression
 

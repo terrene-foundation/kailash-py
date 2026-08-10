@@ -88,11 +88,11 @@ class TestRLOrphanState:
         # Allow `import kailash_ml.rl` from tests / users who opt in
         # directly; the assertion is only that the top-level __init__
         # does not advertise the orphan.
-        assert "\"rl\"" not in init or '"rl":' in init, (
+        assert '"rl"' not in init or '"rl":' in init, (
             "kailash_ml.__init__.__all__ appears to export 'rl'; if the "
             "wiring landed, update this test with a wiring assertion."
         )
-        assert "\"agents\"" not in init or '"agents":' in init, (
+        assert '"agents"' not in init or '"agents":' in init, (
             "kailash_ml.__init__.__all__ appears to export 'agents'; if "
             "the wiring landed, update this test with a wiring "
             "assertion."

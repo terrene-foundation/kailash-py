@@ -6,6 +6,7 @@ the required interface for their adapter type.
 """
 
 import pytest
+
 from dataflow.adapters import (
     BaseAdapter,
     DatabaseAdapter,

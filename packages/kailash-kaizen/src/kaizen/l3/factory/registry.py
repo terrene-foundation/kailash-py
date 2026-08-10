@@ -14,10 +14,7 @@ import logging
 from collections import deque
 
 from kaizen.l3.factory.errors import InstanceNotFound, RegistryError
-from kaizen.l3.factory.instance import (
-    AgentInstance,
-    AgentLifecycleState,
-)
+from kaizen.l3.factory.instance import AgentInstance, AgentLifecycleState
 
 __all__ = ["AgentInstanceRegistry"]
 

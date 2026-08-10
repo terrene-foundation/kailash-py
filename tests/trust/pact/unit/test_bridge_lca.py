@@ -30,7 +30,6 @@ from kailash.trust.pact.config import ConfidentialityLevel
 from kailash.trust.pact.engine import BridgeApproval, GovernanceEngine
 from kailash.trust.pact.exceptions import PactError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

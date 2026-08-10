@@ -16,7 +16,6 @@ import pytest
 
 from kailash.trust.pact.decorators import governed_tool
 
-
 # ---------------------------------------------------------------------------
 # Basic Decorator Tests
 # ---------------------------------------------------------------------------

@@ -787,9 +787,9 @@ class TestConcurrentAccessPerformance:
         execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
 
         # Verify performance requirement (<1000ms for unit tests)
-        assert execution_time < 1000, (
-            f"Lock manager operations took {execution_time:.2f}ms"
-        )
+        assert (
+            execution_time < 1000
+        ), f"Lock manager operations took {execution_time:.2f}ms"
 
     @pytest.mark.timeout(1)
     def test_queue_manager_performance(self):

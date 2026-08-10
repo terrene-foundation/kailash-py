@@ -24,13 +24,16 @@ import time
 # Suppress noisy logging during benchmarks
 logging.disable(logging.CRITICAL)
 
-from kailash.runtime.local import (
+# Deliberately after logging.disable() above — the kailash import chain emits
+# log lines at import time that this benchmark wants suppressed.
+# noqa: E402 is the guard, not an oversight.
+from kailash.runtime.local import (  # noqa: E402
     LocalRuntime,
     detect_success,
     should_stop_on_content_failure,
 )
-from kailash.tracking.metrics_collector import MetricsCollector
-from kailash.workflow.builder import WorkflowBuilder
+from kailash.tracking.metrics_collector import MetricsCollector  # noqa: E402
+from kailash.workflow.builder import WorkflowBuilder  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

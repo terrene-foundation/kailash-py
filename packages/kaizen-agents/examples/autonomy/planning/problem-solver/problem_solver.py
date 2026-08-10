@@ -27,12 +27,11 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
-from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import MemoryTransport
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookManager, HookResult
+from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
 
 
 class PathComparisonHook:
@@ -132,7 +131,7 @@ class ProblemSolver:
         print(f"📝 Comparison Logging: {enable_comparison_logging}")
         print("=" * 60 + "\n")
 
-    async def solve_problem(self, problem: str, context: Dict = None) -> Dict:
+    async def solve_problem(self, problem: str, context: dict = None) -> dict:
         """
         Solve problem using multi-path exploration.
 
@@ -269,7 +268,7 @@ class ProblemSolver:
                 )
             raise
 
-    def export_solution(self, result: Dict, output_dir: Path):
+    def export_solution(self, result: dict, output_dir: Path):
         """
         Export solution analysis to file.
 

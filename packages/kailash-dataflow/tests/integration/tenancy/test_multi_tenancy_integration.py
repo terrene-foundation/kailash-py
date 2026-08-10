@@ -10,6 +10,7 @@ import threading
 import time
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.core.database_registry import DatabaseConfig, DatabaseRegistry
 from dataflow.core.multi_tenancy import (
@@ -19,7 +20,6 @@ from dataflow.core.multi_tenancy import (
     TenantManager,
     TenantRegistry,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
@@ -497,9 +497,9 @@ class TestMultiTenancyIntegration:
 
         # Verify each thread created exactly 10 records
         for tenant_id, thread_id, count in results:
-            assert count == 10, (
-                f"Thread {thread_id} for {tenant_id} created {count} records, expected 10"
-            )
+            assert (
+                count == 10
+            ), f"Thread {thread_id} for {tenant_id} created {count} records, expected 10"
 
         # Dispose of the engine to release connections
         engine.dispose()
@@ -1145,9 +1145,9 @@ class TestMultiTenancyIntegration:
             beta_data = [row[0] for row in beta_result.fetchall()]
 
             # Verify tenant isolation
-            assert len(alpha_data) == 2, (
-                f"Expected 2 alpha records, got {len(alpha_data)}"
-            )
+            assert (
+                len(alpha_data) == 2
+            ), f"Expected 2 alpha records, got {len(alpha_data)}"
             assert "Alpha Secret 1" in alpha_data
             assert "Alpha Secret 2" in alpha_data
             assert "Beta Secret 1" not in alpha_data

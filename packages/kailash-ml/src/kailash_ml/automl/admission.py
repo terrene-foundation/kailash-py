@@ -243,8 +243,8 @@ def check_trial_admission(
     if engine is None:
         try:
             # Lazy optional-extra import — kailash-pact is the source of truth
-            from kailash_pact import (  # type: ignore[import-not-found,unused-ignore]
-                GovernanceEngine as _PactGovernanceEngine,
+            from kailash_pact import (
+                GovernanceEngine as _PactGovernanceEngine,  # type: ignore[import-not-found,unused-ignore]
             )
 
             # Construction signature / defaults are owned by W32 32c; until

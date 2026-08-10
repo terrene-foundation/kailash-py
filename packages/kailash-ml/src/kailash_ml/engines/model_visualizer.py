@@ -15,7 +15,6 @@ import logging
 from typing import Any
 
 import numpy as np
-
 import plotly.express as px
 
 from kailash_ml._decorators import experimental
@@ -83,9 +82,8 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
-        from sklearn.metrics import confusion_matrix as sk_confusion_matrix
-
         import plotly.graph_objects as go
+        from sklearn.metrics import confusion_matrix as sk_confusion_matrix
 
         y_true_np = _to_numpy(y_true)
         y_pred_np = _to_numpy(y_pred)
@@ -137,10 +135,9 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
+        import plotly.graph_objects as go
         from sklearn.metrics import auc as sk_auc
         from sklearn.metrics import roc_curve as sk_roc_curve
-
-        import plotly.graph_objects as go
 
         y_true_np = _to_numpy(y_true)
         y_scores_np = _to_numpy(y_scores)
@@ -195,10 +192,9 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
+        import plotly.graph_objects as go
         from sklearn.metrics import average_precision_score
         from sklearn.metrics import precision_recall_curve as sk_pr_curve
-
-        import plotly.graph_objects as go
 
         y_true_np = _to_numpy(y_true)
         y_scores_np = _to_numpy(y_scores)
@@ -331,9 +327,8 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
-        from sklearn.model_selection import learning_curve as sk_learning_curve
-
         import plotly.graph_objects as go
+        from sklearn.model_selection import learning_curve as sk_learning_curve
 
         if train_sizes is None:
             train_sizes = [0.1, 0.25, 0.5, 0.75, 1.0]
@@ -421,9 +416,8 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
-        from plotly.subplots import make_subplots
-
         import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
 
         y_true_np = _to_numpy(y_true).ravel()
         y_pred_np = _to_numpy(y_pred).ravel()
@@ -497,9 +491,8 @@ class ModelVisualizer:
         -------
         plotly.graph_objects.Figure
         """
-        from sklearn.calibration import calibration_curve as sk_calibration_curve
-
         import plotly.graph_objects as go
+        from sklearn.calibration import calibration_curve as sk_calibration_curve
 
         y_true_np = _to_numpy(y_true)
         y_proba_np = _to_numpy(y_proba)
@@ -647,9 +640,8 @@ class ModelVisualizer:
         Returns:
             A plotly Figure.
         """
-        import polars as pl
-
         import plotly.graph_objects as go
+        import polars as pl
 
         if not isinstance(data, pl.DataFrame):
             msg = "data must be a polars DataFrame"

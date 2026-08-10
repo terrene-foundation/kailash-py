@@ -37,9 +37,7 @@ from kailash.trust.exceptions import (
     TrustError,
     UnsupportedSigningPayloadVersionError,
 )
-from kailash.trust.signing.chain_state_signing import (
-    chain_state_canonical_payload_str,
-)
+from kailash.trust.signing.chain_state_signing import chain_state_canonical_payload_str
 from kailash.trust.signing.crypto import (
     generate_keypair,
     serialize_for_signing,

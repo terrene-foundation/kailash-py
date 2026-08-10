@@ -820,17 +820,17 @@ class TestMCPServerIntegrationAndEdgeCases:
                 # Execute tool with various outcomes
                 try:
                     server._execute_tool("error_prone_tool", {"operation": "success"})
-                except:
+                except Exception:
                     pass
 
                 try:
                     server._execute_tool("error_prone_tool", {"operation": "fail"})
-                except:
+                except Exception:
                     pass
 
                 try:
                     server._execute_tool("error_prone_tool", {"operation": "timeout"})
-                except:
+                except Exception:
                     pass
 
                 # Verify error aggregation was called

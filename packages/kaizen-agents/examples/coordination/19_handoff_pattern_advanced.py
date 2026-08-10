@@ -13,12 +13,12 @@ Learning Objectives:
 Estimated time: 10 minutes
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_handoff_pattern
 
 
-def analyze_handoff_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+def analyze_handoff_metrics(history: list[dict[str, Any]]) -> dict[str, Any]:
     """Analyze handoff metrics from history."""
     if not history:
         return {"error": "No history available"}
@@ -109,7 +109,7 @@ def main():
     print("-" * 70)
 
     # Strategy 1: Minimal tiers for simple tasks
-    fast_handoff = create_handoff_pattern(
+    _fast_handoff = create_handoff_pattern(
         num_tiers=2,
         tier_configs={
             1: {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 500},
@@ -118,7 +118,7 @@ def main():
     )
 
     # Strategy 2: More tiers for complex tasks
-    deep_handoff = create_handoff_pattern(
+    _deep_handoff = create_handoff_pattern(
         num_tiers=4,
         tier_configs={
             1: {"model": "gpt-4o-mini", "temperature": 0.3},
@@ -205,7 +205,7 @@ def main():
     # Different handoff patterns for different workloads
 
     # Customer Support (favor quick resolution)
-    support_handoff = create_handoff_pattern(
+    _support_handoff = create_handoff_pattern(
         num_tiers=3,
         tier_configs={
             1: {"temperature": 0.3},  # Deterministic responses
@@ -215,7 +215,7 @@ def main():
     )
 
     # Research & Analysis (favor thoroughness)
-    research_handoff = create_handoff_pattern(
+    _research_handoff = create_handoff_pattern(
         num_tiers=5,
         tier_configs={
             1: {"temperature": 0.5},

@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kailash.middleware.mcp.client_integration import (
+    _MCP_AVAILABLE,
     MCPClientConfig,
     MCPServerConnection,
     MiddlewareMCPClient,
-    _MCP_AVAILABLE,
 )
 
 

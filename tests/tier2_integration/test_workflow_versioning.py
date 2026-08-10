@@ -75,7 +75,10 @@ class TestVersionedWorkflow:
     def test_creation_with_migration_fn(self):
         """VersionedWorkflow should accept a migration function."""
         builder = MagicMock()
-        migration = lambda old: {**old, "new_key": True}
+
+        def migration(old):
+            return {**old, "new_key": True}
+
         vw = VersionedWorkflow(
             version="2.0.0",
             workflow_builder=builder,
@@ -335,7 +338,9 @@ class TestWorkflowVersionRegistry:
     def test_register_with_migration_fn(self):
         """register should store the migration function."""
         registry = WorkflowVersionRegistry()
-        migration = lambda old: {**old, "v2_flag": True}
+
+        def migration(old):
+            return {**old, "v2_flag": True}
 
         vw = registry.register("wf", "2.0.0", MagicMock(), migration_fn=migration)
 

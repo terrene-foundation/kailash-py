@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from kailash_mcp import MCPServer
-from kailash_mcp.auth.providers import APIKeyAuth
-from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
 from kailash.middleware.communication.realtime import ConnectionManager, SSEManager
 from kailash.middleware.gateway.event_store import EventStore
+from kailash_mcp import MCPServer
+from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
+from kailash_mcp.auth.providers import APIKeyAuth
 from tests.utils.docker_manager import DockerTestManager
 from tests.utils.test_helpers import wait_for_condition
 

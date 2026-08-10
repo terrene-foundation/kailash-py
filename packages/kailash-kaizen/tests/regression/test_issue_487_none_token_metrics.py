@@ -22,6 +22,7 @@ Reported by @vflores-io. against kailash-kaizen.
 from unittest.mock import MagicMock
 
 import pytest
+
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 

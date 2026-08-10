@@ -74,7 +74,6 @@ from dataflow.migrations.foreign_key_analyzer import (
     ForeignKeyAnalyzer,
     MigrationStep,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

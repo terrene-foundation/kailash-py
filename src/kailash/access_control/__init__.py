@@ -6,14 +6,12 @@ This package provides clean, testable access control components:
 - Backward compatibility with existing code
 """
 
+# Import core access control components directly
+import importlib.util
 import os
 
 # Import core types first (avoiding circular imports)
 from typing import Any, Dict, List
-
-# Import core access control components directly
-import importlib.util
-import os
 
 # Load the original access_control module to avoid import conflicts
 _spec = importlib.util.spec_from_file_location(

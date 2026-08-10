@@ -5,6 +5,7 @@ patterns and solutions from YAML files.
 """
 
 import pytest
+
 from dataflow.debug.knowledge_base import KnowledgeBase
 
 

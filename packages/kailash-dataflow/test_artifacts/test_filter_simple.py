@@ -8,7 +8,6 @@ import sqlite3
 import sys
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

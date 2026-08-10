@@ -373,7 +373,7 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
                         transaction_id=txn_id,
                         resource_id=resource,
                     )
-                except:
+                except Exception:
                     # Ignore if resource wasn't held
                     pass
 

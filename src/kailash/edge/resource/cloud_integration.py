@@ -34,8 +34,12 @@ except ImportError:
 
 try:
     from azure.identity import DefaultAzureCredential
-    from azure.mgmt.compute import ComputeManagementClient  # type: ignore[reportMissingImports]
-    from azure.mgmt.resource import ResourceManagementClient  # type: ignore[reportMissingImports]
+    from azure.mgmt.compute import (
+        ComputeManagementClient,  # type: ignore[reportMissingImports]
+    )
+    from azure.mgmt.resource import (
+        ResourceManagementClient,  # type: ignore[reportMissingImports]
+    )
 
     AZURE_AVAILABLE = True
 except ImportError:

@@ -122,9 +122,8 @@ class DataFlowEventMixin:
         if self._event_bus is None:
             return
 
-        from kailash.middleware.communication.domain_event import DomainEvent
-
         from dataflow.classification.event_payload import format_record_id_for_event
+        from kailash.middleware.communication.domain_event import DomainEvent
 
         policy = getattr(self, "_classification_policy", None)
         safe_record_id = format_record_id_for_event(

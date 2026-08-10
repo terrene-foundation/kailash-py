@@ -8,11 +8,12 @@ from datetime import datetime, timedelta, timezone
 
 import jwt as pyjwt
 import pytest
+from starlette.testclient import TestClient
+
+from kailash.trust.auth.jwt import JWTValidator
 from nexus import Nexus
 from nexus.auth.exceptions import ExpiredTokenError, InvalidTokenError
-from kailash.trust.auth.jwt import JWTValidator
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
-from starlette.testclient import TestClient
 
 SECRET = "integration-test-secret-key-at-least-32-chars"
 
@@ -324,6 +325,7 @@ class TestFastAPIDependencies:
     def test_get_current_user_with_valid_token(self):
         """get_current_user returns user from request state."""
         from fastapi import APIRouter, Depends, Request
+
         from nexus.auth.dependencies import get_current_user
 
         app = Nexus(enable_durability=False)
@@ -351,6 +353,7 @@ class TestFastAPIDependencies:
     def test_get_current_user_without_token(self):
         """get_current_user raises 401 without authentication."""
         from fastapi import APIRouter, Depends
+
         from nexus.auth.dependencies import get_current_user
 
         app = Nexus(enable_durability=False)
@@ -370,6 +373,7 @@ class TestFastAPIDependencies:
     def test_require_role_dependency(self):
         """RequireRole dependency checks roles."""
         from fastapi import APIRouter, Depends
+
         from nexus.auth.dependencies import RequireRole
 
         app = Nexus(enable_durability=False)
@@ -404,6 +408,7 @@ class TestFastAPIDependencies:
     def test_require_permission_dependency(self):
         """RequirePermission dependency checks permissions."""
         from fastapi import APIRouter, Depends
+
         from nexus.auth.dependencies import RequirePermission
 
         app = Nexus(enable_durability=False)

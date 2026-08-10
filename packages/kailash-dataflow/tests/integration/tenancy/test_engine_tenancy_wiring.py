@@ -18,11 +18,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
 from dataflow import DataFlow
 from dataflow.core.tenant_context import TenantContextSwitch, get_current_tenant_id
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.fixture

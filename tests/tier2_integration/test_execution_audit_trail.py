@@ -17,7 +17,6 @@ from kailash.tracking.storage.database import SQLiteStorage
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

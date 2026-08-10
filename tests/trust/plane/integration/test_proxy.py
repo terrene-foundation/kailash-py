@@ -14,7 +14,12 @@ import pytest
 
 from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints
 from kailash.trust.plane.project import TrustProject
-from kailash.trust.plane.proxy import ProxyConfig, ProxyResult, ProxyServerConfig, TrustProxy
+from kailash.trust.plane.proxy import (
+    ProxyConfig,
+    ProxyResult,
+    ProxyServerConfig,
+    TrustProxy,
+)
 
 
 @pytest.fixture

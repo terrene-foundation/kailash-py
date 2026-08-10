@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-
 from kaizen.config.providers import DEFAULT_OPENAI_MODEL, ConfigurationError
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
@@ -370,8 +369,8 @@ class LLMAgentNode(Node):
                 # #1947: default None (was "mock"). A missing provider no longer
                 # silently dispatches the mock provider — run() fails loud on an
                 # unresolved (None) provider instead. This structurally closes the
-                # silent-mock class: a forgotten/new construction site becomes a
-                # typed ConfigurationError, not fabricated content presented as real.
+                # silent-mock class: a forgotten/new construction site becomes a typed
+                # ConfigurationError, not fabricated content presented as real.
                 # The mock provider stays reachable when requested EXPLICITLY
                 # (provider="mock"). Construction surfaces that resolve the provider
                 # from the environment (Agent via _get_provider_for_config, the RAG

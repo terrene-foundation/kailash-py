@@ -23,15 +23,13 @@ Usage:
 """
 
 import asyncio
-import json
 import sys
 from pathlib import Path
-from typing import Dict, List
 
-from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 
 
 class DataAnalysisSignature(Signature):
@@ -39,8 +37,8 @@ class DataAnalysisSignature(Signature):
 
     api_url: str = InputField(description="API URL to fetch data from")
     analysis_report: str = OutputField(description="Statistical analysis report")
-    insights: List[str] = OutputField(description="Key insights from analysis")
-    data_summary: Dict = OutputField(description="Summary statistics")
+    insights: list[str] = OutputField(description="Key insights from analysis")
+    data_summary: dict = OutputField(description="Summary statistics")
 
 
 class DataAnalysisAgent(BaseAutonomousAgent):
@@ -57,7 +55,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
             state_manager=state_manager,
         )
 
-    async def analyze_data(self, api_url: str) -> Dict:
+    async def analyze_data(self, api_url: str) -> dict:
         """Fetch data from API and perform statistical analysis."""
         print(f"\n📊 Starting data analysis from: {api_url}\n")
 
@@ -110,7 +108,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
             print(f"\n❌ Error during analysis: {e}")
             raise
 
-    def _generate_sample_data(self) -> List[float]:
+    def _generate_sample_data(self) -> list[float]:
         """Generate sample data for demo purposes."""
         # In production, this would use http_get tool:
         # result = await self.execute_tool("http_get", {"url": api_url})
@@ -121,7 +119,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
         random.seed(42)
         return [random.gauss(100, 15) for _ in range(100)]
 
-    def _analyze_statistics(self, data: List[float]) -> Dict:
+    def _analyze_statistics(self, data: list[float]) -> dict:
         """Perform statistical analysis on data."""
         import statistics
 
@@ -143,7 +141,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
 
         return analysis
 
-    def _generate_insights(self, data: List[float], analysis: Dict) -> List[str]:
+    def _generate_insights(self, data: list[float], analysis: dict) -> list[str]:
         """Generate insights from statistical analysis."""
         insights = []
 
@@ -183,7 +181,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
         return insights
 
     def _create_report(
-        self, data: List[float], analysis: Dict, insights: List[str]
+        self, data: list[float], analysis: dict, insights: list[str]
     ) -> str:
         """Create comprehensive analysis report."""
         report_lines = [

@@ -22,13 +22,7 @@ from kaizen.l3.plan.suspension import (
     suspension_reason_label,
     suspension_reason_to_dict,
 )
-from kaizen.l3.plan.types import (
-    Plan,
-    PlanNode,
-    PlanNodeState,
-    PlanState,
-)
-
+from kaizen.l3.plan.types import Plan, PlanNode, PlanNodeState, PlanState
 
 # ---------------------------------------------------------------------------
 # Variant construction

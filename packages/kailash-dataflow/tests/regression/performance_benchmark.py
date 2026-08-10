@@ -168,7 +168,6 @@ class PerformanceBenchmark:
 
         def crud_workflow():
             from dataflow import DataFlow
-
             from kailash.runtime.local import LocalRuntime
             from kailash.workflow.builder import WorkflowBuilder
 
@@ -230,7 +229,6 @@ class PerformanceBenchmark:
 
         def generate_nodes():
             from dataflow import DataFlow
-
             from kailash.workflow.builder import WorkflowBuilder
 
             db = DataFlow(":memory:")

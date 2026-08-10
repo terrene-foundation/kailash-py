@@ -25,7 +25,6 @@ proves nothing.
 
 from __future__ import annotations
 
-import io
 import json
 import logging
 from pathlib import Path
@@ -33,13 +32,7 @@ from pathlib import Path
 import pytest
 
 from pact.conformance import cli
-from pact.conformance.cli import (
-    EXIT_FAILED_VECTORS,
-    EXIT_OK,
-    EXIT_USAGE_ERROR,
-    main,
-)
-
+from pact.conformance.cli import EXIT_FAILED_VECTORS, EXIT_OK, EXIT_USAGE_ERROR, main
 
 # ---------------------------------------------------------------------------
 # Vector JSON helpers

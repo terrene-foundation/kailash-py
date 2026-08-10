@@ -26,10 +26,10 @@ import logging
 import pytest
 
 from kailash.db.dialect import (
+    _UNKNOWN_BUDGET_WARNED_SITES,
     DIALECT_UNKNOWN_MAX_IDENTIFIER_LENGTH,
     POSTGRES_MAX_IDENTIFIER_LENGTH,
     SQLITE_MAX_IDENTIFIER_LENGTH,
-    _UNKNOWN_BUDGET_WARNED_SITES,
     _validate_identifier,
 )
 

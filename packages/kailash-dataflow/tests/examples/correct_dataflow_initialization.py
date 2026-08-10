@@ -9,6 +9,7 @@ ensuring that migration tables are created before using the ModelRegistry.
 import asyncio
 
 import pytest
+
 from dataflow.core.config import DatabaseConfig, DataFlowConfig
 from dataflow.core.engine import DataFlow
 from dataflow.core.models import Environment

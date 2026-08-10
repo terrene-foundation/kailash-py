@@ -12,9 +12,8 @@ from collections import defaultdict, deque
 from enum import Enum
 from typing import Any
 
-from kaizen.nodes.ai.a2a import A2AAgentNode
-
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kaizen.nodes.ai.a2a import A2AAgentNode
 
 
 class TeamFormationStrategy(Enum):

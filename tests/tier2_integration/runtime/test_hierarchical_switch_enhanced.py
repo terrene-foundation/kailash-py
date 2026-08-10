@@ -165,7 +165,7 @@ class TestHierarchicalSwitchEnhancements:
             metrics = executor.get_execution_metrics()
             if "total_errors" in metrics:
                 assert metrics["total_errors"] >= 0  # Could be 0 or more
-        except:
+        except Exception:
             pass  # Metrics may not be available after timeout
 
     @pytest.mark.asyncio

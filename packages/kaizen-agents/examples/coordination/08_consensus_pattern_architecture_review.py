@@ -21,7 +21,7 @@ Estimated time: 15 minutes
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_consensus_pattern
 
@@ -127,11 +127,11 @@ ARCHITECTURE_PROPOSALS = [
 
 
 def format_arb_report(
-    proposal: Dict[str, Any],
-    votes: List[Dict[str, Any]],
-    consensus: Dict[str, Any],
-    perspectives: List[str],
-) -> Dict[str, Any]:
+    proposal: dict[str, Any],
+    votes: list[dict[str, Any]],
+    consensus: dict[str, Any],
+    perspectives: list[str],
+) -> dict[str, Any]:
     """Format Architecture Review Board report."""
 
     # Count votes
@@ -172,9 +172,9 @@ def format_arb_report(
             "reject": rejections,
             "abstain": abstentions,
             "total": len(votes),
-            "approval_rate": f"{(approvals / len(votes) * 100):.1f}%"
-            if votes
-            else "0%",
+            "approval_rate": (
+                f"{(approvals / len(votes) * 100):.1f}%" if votes else "0%"
+            ),
         },
         "confidence_metrics": {
             "average": round(avg_confidence, 2),

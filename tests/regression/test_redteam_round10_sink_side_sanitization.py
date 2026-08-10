@@ -18,8 +18,9 @@ it was written to close. The pattern is worth naming: each fix hardened the laye
 it was looking at, and the next round found the same class one layer over.
 """
 
-import kailash.utils.secure_logging as sl
 import pytest
+
+import kailash.utils.secure_logging as sl
 from kailash.utils.secure_logging import safe_callable_name, safe_exception_frames
 
 try:

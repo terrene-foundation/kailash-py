@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, Optional
 
 import numpy as np
@@ -225,9 +225,11 @@ def diagnose_classifier(
     Raises:
         ValueError: when ``X`` has zero rows.
     """
+    from sklearn.metrics import accuracy_score
     from sklearn.metrics import (  # noqa: PLC0415 — lazy for import cost
-        accuracy_score,
         confusion_matrix as sk_confusion_matrix,
+    )
+    from sklearn.metrics import (
         f1_score,
         precision_recall_fscore_support,
         precision_score,

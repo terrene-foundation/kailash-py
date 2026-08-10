@@ -89,3 +89,12 @@ markers = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+# ruff resolves config from the NEAREST pyproject.toml, so this package was
+# silently opting out of the root `[tool.ruff.lint]` select/ignore set — F401 and
+# E402 fired here and nowhere else, on the re-export `__init__.py` and
+# optional-dependency guard patterns the root config deliberately ignores.
+# Mirrors the root selection so the monorepo lints consistently (#1995).
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E203", "E501", "F401", "F841"]

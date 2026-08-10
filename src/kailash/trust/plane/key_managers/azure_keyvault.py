@@ -39,7 +39,10 @@ __all__ = [
 try:
     from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
     from azure.keyvault.keys import KeyClient  # type: ignore[import-untyped]
-    from azure.keyvault.keys.crypto import CryptographyClient, SignatureAlgorithm  # type: ignore[import-untyped]
+    from azure.keyvault.keys.crypto import (  # type: ignore[import-untyped]
+        CryptographyClient,
+        SignatureAlgorithm,
+    )
 
     _AZURE_AVAILABLE = True
 except ImportError:

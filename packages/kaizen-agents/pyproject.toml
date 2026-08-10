@@ -114,7 +114,12 @@ line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# "I" (import sorting) is DELIBERATELY absent: isort already owns import order
+# repo-wide via the pre-commit isort hook. With "I" selected here, ruff --fix and
+# isort disagreed on first-party grouping and each undid the other's change, so
+# `pre-commit run --all-files` never reached a fixed point — it re-"fixed" the
+# same 83 files in this package on every pass. One tool owns import order (#1995).
+select = ["E", "F", "UP", "B", "SIM"]
 # Style-preference rules disabled at project level — kept the bug-class rules
 # (E*, F*, B9*, UP*, SIM118) and only suppress nested-if / contextlib.suppress
 # / negated-return / ternary-rewrite / dict-dispatch suggestions that frequently

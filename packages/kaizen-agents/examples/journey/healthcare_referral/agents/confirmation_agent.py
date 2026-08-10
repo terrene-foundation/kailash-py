@@ -9,7 +9,7 @@ import random
 import string
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from examples.journey.healthcare_referral.signatures.confirmation import (
     ConfirmationSignature,
@@ -73,7 +73,7 @@ class ConfirmationAgent(BaseAgent):
         "HC-20240112-AB3X"
     """
 
-    def __init__(self, config: Optional[ConfirmationAgentConfig] = None):
+    def __init__(self, config: ConfirmationAgentConfig | None = None):
         """
         Initialize ConfirmationAgent.
 
@@ -88,10 +88,10 @@ class ConfirmationAgent(BaseAgent):
 
     async def confirm_booking(
         self,
-        doctor: Dict[str, Any],
+        doctor: dict[str, Any],
         slot: str,
-        patient_info: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        patient_info: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Generate booking confirmation.
 
@@ -124,10 +124,10 @@ class ConfirmationAgent(BaseAgent):
 
     def confirm_booking_sync(
         self,
-        doctor: Dict[str, Any],
+        doctor: dict[str, Any],
         slot: str,
-        patient_info: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        patient_info: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Synchronous version of confirm_booking.
 

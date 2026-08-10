@@ -258,7 +258,9 @@ async def test_eviction_cost_per_request_does_not_explode_at_the_cap():
         # arriving at a full map, so each one takes the eviction path.
         measured = 500
         counts.entries_visited = 0
-        await drive(_MAX_RATE_LIMIT_TRACKED_CLIENTS, _MAX_RATE_LIMIT_TRACKED_CLIENTS + measured)
+        await drive(
+            _MAX_RATE_LIMIT_TRACKED_CLIENTS, _MAX_RATE_LIMIT_TRACKED_CLIENTS + measured
+        )
         per_request = counts.entries_visited / measured
 
         assert per_request <= _MAX_ENTRIES_VISITED_PER_REQUEST, (

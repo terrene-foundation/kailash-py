@@ -122,10 +122,7 @@ def _require_transformers() -> tuple[Any, Any]:
     does NOT require transformers — only methods that load the model do.
     """
     try:
-        from transformers import (  # noqa: PLC0415
-            AutoModelForCausalLM,
-            AutoTokenizer,
-        )
+        from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: PLC0415
     except ImportError as exc:
         raise ImportError(
             "InterpretabilityDiagnostics requires transformers. "

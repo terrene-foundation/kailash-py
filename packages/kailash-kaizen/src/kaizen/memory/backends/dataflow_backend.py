@@ -13,10 +13,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 try:
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 except ImportError:
     DataFlow = None
     WorkflowBuilder = None

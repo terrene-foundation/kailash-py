@@ -22,11 +22,10 @@ except ImportError:
     redis: Any = None  # type: ignore[no-redef]
     REDIS_AVAILABLE = False
 
+from kailash.utils.redis_validation import validate_redis_url
 from kailash_mcp.auth.providers import AuthManager
 from kailash_mcp.auth.providers import PermissionError as PermissionDeniedError
 from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
-
-from kailash.utils.redis_validation import validate_redis_url
 
 
 class SubscriptionError(Exception):

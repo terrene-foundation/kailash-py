@@ -8,7 +8,6 @@ import pytest
 
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 
-
 # Create a fake ldap3 module so that patch("ldap3.X") works even when
 # the real ldap3 package is not installed.
 _mock_ldap3 = MagicMock()

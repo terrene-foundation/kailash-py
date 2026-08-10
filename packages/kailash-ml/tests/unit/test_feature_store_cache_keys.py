@@ -16,11 +16,7 @@ from kailash_ml.features import (
     make_feature_cache_key,
     make_feature_group_wildcard,
 )
-from kailash_ml.features.cache_keys import (
-    FEATURE_KEY_VERSION,
-    validate_tenant_id,
-)
-
+from kailash_ml.features.cache_keys import FEATURE_KEY_VERSION, validate_tenant_id
 
 # ---------------------------------------------------------------------------
 # Happy path

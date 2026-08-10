@@ -47,7 +47,6 @@ from kaizen.l3.plan.types import (
     PlanState,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -472,6 +471,7 @@ class TestEnforcerPlanIntegration:
     @pytest.mark.asyncio
     async def test_executor_without_enforcer_works(self):
         """Backward compat: executor works without enforcer."""
+
         async def callback(node_id: str, spec_id: str) -> dict:
             return {"output": "ok", "error": None, "retryable": False}
 
@@ -671,8 +671,14 @@ class TestL3Runtime:
             ["task-1", "task-2"],
             edges=[("task-1", "task-2")],
             node_envelopes={
-                "task-1": {"estimated_cost": 1.0, "dimension_costs": {"financial": 1.0}},
-                "task-2": {"estimated_cost": 1.0, "dimension_costs": {"financial": 1.0}},
+                "task-1": {
+                    "estimated_cost": 1.0,
+                    "dimension_costs": {"financial": 1.0},
+                },
+                "task-2": {
+                    "estimated_cost": 1.0,
+                    "dimension_costs": {"financial": 1.0},
+                },
             },
         )
 
@@ -703,6 +709,7 @@ class TestBackwardCompatibility:
     @pytest.mark.asyncio
     async def test_async_executor_init_only_callback(self):
         """AsyncPlanExecutor(node_callback=...) works as before."""
+
         async def cb(nid: str, sid: str) -> dict:
             return {"output": "ok", "error": None, "retryable": False}
 
@@ -713,6 +720,7 @@ class TestBackwardCompatibility:
 
     def test_sync_executor_init_only_callback(self):
         """PlanExecutor(node_callback=...) works as before."""
+
         def cb(nid: str, sid: str) -> dict:
             return {"output": "ok", "error": None, "retryable": False}
 

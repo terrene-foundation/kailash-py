@@ -11,13 +11,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+
 from dataflow.migrations.migration_connection_manager import (
     ConnectionError,
     ConnectionPoolConfig,
     MigrationConnectionManager,
     RetryConfig,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

@@ -15,10 +15,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 from kailash.db.connection import ConnectionManager
 from kailash_ml import MLEngine, PredictionResult, ServeResult
-from kailash_ml.engines.model_registry import (
-    LocalFileArtifactStore,
-    ModelRegistry,
-)
+from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.types import FeatureField, FeatureSchema, ModelSignature
 
 

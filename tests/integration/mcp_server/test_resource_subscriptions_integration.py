@@ -14,10 +14,10 @@ import pytest
 import pytest_asyncio
 import websockets
 
+from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
 from kailash_mcp.auth.providers import APIKeyAuth, AuthManager
 from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
 from kailash_mcp.server import MCPServer
-from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
 
 
 class TestMCPResourceSubscriptionIntegration:

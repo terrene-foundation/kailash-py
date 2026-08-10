@@ -547,10 +547,7 @@ def test_conflict_target_classification_survives_sanitization():
     ``sanitize_db_error`` — so sanitizing the returned/logged error does NOT
     break conflict-target classification.
     """
-    from dataflow.core.exceptions import (
-        is_conflict_target_error,
-        sanitize_db_error,
-    )
+    from dataflow.core.exceptions import is_conflict_target_error, sanitize_db_error
 
     # The two canonical conflict-target driver messages (PostgreSQL + SQLite).
     pg_msg = (
@@ -995,9 +992,8 @@ async def test_transaction_commit_node_sanitizes_message_and_log(caplog):
     """A value-bearing COMMIT failure MUST NOT leak the column value into the
     raised ``NodeExecutionError`` message OR the ERROR log; the raw error
     survives only as ``__cause__``."""
-    from kailash.sdk_exceptions import NodeExecutionError
-
     from dataflow.nodes.transaction_nodes import TransactionCommitNode
+    from kailash.sdk_exceptions import NodeExecutionError
 
     node = TransactionCommitNode()
     node.set_workflow_context("active_transaction", _FailingCommitTxn())
@@ -1214,9 +1210,7 @@ async def test_two_phase_commit_concurrent_prepare_sanitizes_gather_error(
     real ``_prepare_phase`` gather branch; a value-bearing participant-prepare
     driver error MUST NOT reach the returned ``failed_participants`` /
     ``failure_reasons`` raw."""
-    from dataflow.nodes.two_phase_commit_coordinator import (
-        DataFlowTwoPhaseCommitNode,
-    )
+    from dataflow.nodes.two_phase_commit_coordinator import DataFlowTwoPhaseCommitNode
 
     # The node's __init__ reads ``self.node_id`` (injected by the runtime at
     # add_node time); provide a class-attr fallback so a direct unit construction

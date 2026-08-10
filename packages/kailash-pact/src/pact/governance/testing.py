@@ -46,13 +46,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, Sequence, Union, runtime_checkable
 
-from kailash.trust.pact.agent import (
-    GovernanceHeldError as _KailashGovernanceHeldError,
-    PactGovernedAgent,
-)
+from kailash.trust.pact.agent import GovernanceHeldError as _KailashGovernanceHeldError
+from kailash.trust.pact.agent import PactGovernedAgent
 from kailash.trust.pact.config import TrustPostureLevel
 from kailash.trust.pact.engine import GovernanceEngine
-
 from pact.engine import GovernanceHeldError as _PactEngineGovernanceHeldError
 from pact.governance.results import NegativeDrillResult
 

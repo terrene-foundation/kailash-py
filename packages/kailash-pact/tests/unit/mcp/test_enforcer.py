@@ -19,7 +19,6 @@ Covers:
 from __future__ import annotations
 
 import threading
-from collections import deque
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -32,7 +31,6 @@ from pact.mcp.types import (
     McpGovernanceConfig,
     McpToolPolicy,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

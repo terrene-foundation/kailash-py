@@ -24,7 +24,9 @@ import pytest
 # Skip entire module if pytest-benchmark is not installed
 pytest.importorskip("pytest_benchmark")
 
-from kailash.trust.chain import (
+# Deliberately after the importorskip guard above — noqa: E402 is the guard,
+# not an oversight.
+from kailash.trust.chain import (  # noqa: E402
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -33,26 +35,25 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.constraint_validator import ConstraintValidator
-from kailash.trust.constraints import (
+from kailash.trust.chain_store.memory import InMemoryTrustStore  # noqa: E402
+from kailash.trust.constraint_validator import ConstraintValidator  # noqa: E402
+from kailash.trust.constraints import (  # noqa: E402
     ConstraintDimensionRegistry,
     InteractionMode,
     MultiDimensionEvaluator,
 )
-from kailash.trust.constraints.builtin import (
+from kailash.trust.constraints.builtin import (  # noqa: E402
     CostLimitDimension,
     RateLimitDimension,
     register_builtin_dimensions,
 )
-from kailash.trust.signing.crypto import (
+from kailash.trust.signing.crypto import (  # noqa: E402
     generate_keypair,
     hash_chain,
     sign,
     verify_signature,
 )
-from kailash.trust.signing.merkle import MerkleTree
-from kailash.trust.chain_store.memory import InMemoryTrustStore
-
+from kailash.trust.signing.merkle import MerkleTree  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

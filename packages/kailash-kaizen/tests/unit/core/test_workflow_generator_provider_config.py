@@ -14,6 +14,7 @@ References:
 import warnings
 
 import pytest
+
 from kaizen.core.config import BaseAgentConfig
 from kaizen.core.workflow_generator import WorkflowGenerator
 from kaizen.signatures import InputField, OutputField, Signature

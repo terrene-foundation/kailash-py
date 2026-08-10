@@ -37,7 +37,6 @@ import uuid
 import pytest
 
 from kailash.nodes.data.async_sql import (
-    _AdapterTransactionContext,
     AsyncSQLDatabaseNode,
     DatabaseAdapter,
     DatabaseConfig,
@@ -49,8 +48,8 @@ from kailash.nodes.data.async_sql import (
     ProductionPostgreSQLAdapter,
     ProductionSQLiteAdapter,
     SQLiteAdapter,
+    _AdapterTransactionContext,
 )
-
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = pytest.mark.regression

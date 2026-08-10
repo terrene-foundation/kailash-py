@@ -31,7 +31,6 @@ from kaizen.judges import (
 )
 from kaizen.judges._judge import fingerprint_for_log
 
-
 # ---------------------------------------------------------------------------
 # Helper — deterministic Tier-1 delegate (NOT a mock)
 # ---------------------------------------------------------------------------

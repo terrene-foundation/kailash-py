@@ -5,15 +5,14 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from kailash_ml.engines.hyperparameter_search import (
     HyperparameterSearch,
     ParamDistribution,
     SearchConfig,
-    SearchResult,
     SearchSpace,
     TrialResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # SearchConfig validation
@@ -263,9 +262,8 @@ class TestSuccessiveHalvingSearch:
     @pytest.mark.asyncio
     async def test_successive_halving_prunes_trials(self) -> None:
         """Successive halving actually prunes poor trials (not all run to completion)."""
-        import asyncio
         from dataclasses import dataclass
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         @dataclass
         class FakeTrainResult:
@@ -279,7 +277,6 @@ class TestSuccessiveHalvingSearch:
         # Track how many train calls happen per trial
         call_log: list[str] = []
 
-        trial_metrics: dict[int, float] = {}
         call_counter = 0
 
         async def fake_train(

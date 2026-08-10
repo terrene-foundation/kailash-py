@@ -18,6 +18,7 @@ import time
 from dataclasses import dataclass
 
 import pytest
+
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookPriority
 from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
 from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (

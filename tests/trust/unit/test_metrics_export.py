@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 import pytest
+
 from kailash.trust.metrics import TrustMetricsCollector, export_prometheus
 from kailash.trust.posture.postures import TrustPosture
 

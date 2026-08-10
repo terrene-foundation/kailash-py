@@ -28,7 +28,6 @@ from typing import Any, Dict, List
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.core.deprecation import deprecated
 
 logger = logging.getLogger(__name__)

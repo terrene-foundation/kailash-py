@@ -9,7 +9,7 @@ Demonstrates:
 Pattern: Pipeline → Agent conversion for composability
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from kaizen_agents.patterns.pipeline import Pipeline
 
@@ -25,7 +25,7 @@ class DataProcessingPipeline(Pipeline):
     4. Validate data (quality checks)
     """
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Execute the pipeline steps."""
         raw_data = inputs.get("data", "")
 
@@ -67,7 +67,7 @@ class DataProcessingPipeline(Pipeline):
         # Example: Convert to title case
         return data.title()
 
-    def _enrich_data(self, text: str) -> Dict[str, Any]:
+    def _enrich_data(self, text: str) -> dict[str, Any]:
         """Enrich with metadata."""
         return {
             "data": text,
@@ -76,7 +76,7 @@ class DataProcessingPipeline(Pipeline):
             "language": "en",
         }
 
-    def _validate_data(self, enriched: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_data(self, enriched: dict[str, Any]) -> dict[str, Any]:
         """Validate data quality."""
         quality_score = min(1.0, enriched["word_count"] / 100)  # Arbitrary scoring
 

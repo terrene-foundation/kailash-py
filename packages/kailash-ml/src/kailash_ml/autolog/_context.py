@@ -22,23 +22,14 @@ import functools
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    Optional,
-    Sequence,
-    TypeVar,
-)
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence, TypeVar
 
 from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
     _REGISTERED_INTEGRATIONS,
+    FrameworkIntegration,
     registered_integration_names,
 )
 from kailash_ml.autolog.config import AutologConfig, AutologHandle
-
 
 __all__ = ["autolog", "autolog_fn"]
 

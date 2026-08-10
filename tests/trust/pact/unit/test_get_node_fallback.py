@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.engine import GovernanceEngine
 from pact.examples.university.org import create_university_org

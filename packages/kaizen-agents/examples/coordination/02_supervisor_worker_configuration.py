@@ -37,7 +37,7 @@ def example_2_custom_model():
     print("-" * 70)
 
     # Use GPT-4 instead of default gpt-3.5-turbo
-    pattern = create_supervisor_worker_pattern(
+    _pattern = create_supervisor_worker_pattern(
         num_workers=3, model="gpt-4o-mini", temperature=0.7
     )
 
@@ -54,7 +54,7 @@ def example_3_separate_configs():
 
     # Supervisor uses GPT-4 (more capable for coordination)
     # Workers use GPT-3.5-turbo (faster, cheaper for execution)
-    pattern = create_supervisor_worker_pattern(
+    _pattern = create_supervisor_worker_pattern(
         num_workers=4,
         supervisor_config={
             "model": "gpt-4o-mini",
@@ -90,7 +90,7 @@ def example_4_environment_variables():
     os.environ["KAIZEN_LLM_PROVIDER"] = "openai"
 
     # Create pattern - will use environment variables
-    pattern = create_supervisor_worker_pattern(num_workers=2)
+    _pattern = create_supervisor_worker_pattern(num_workers=2)
 
     print("✓ Pattern created using environment variables")
     print(f"  KAIZEN_MODEL: {os.environ.get('KAIZEN_MODEL')}")

@@ -7,10 +7,9 @@ Workflow nodes for vector similarity search using PostgreSQLVectorAdapter.
 import logging
 from typing import Any, Dict, List, Optional
 
+from dataflow.adapters import PostgreSQLVectorAdapter
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
-
-from dataflow.adapters import PostgreSQLVectorAdapter
 
 logger = logging.getLogger(__name__)
 

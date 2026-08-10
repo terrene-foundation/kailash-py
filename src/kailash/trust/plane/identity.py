@@ -38,7 +38,11 @@ except ImportError:
     )
 
 from kailash.trust._locking import atomic_write, safe_read_json
-from kailash.trust.plane.exceptions import IdentityError, JWKSError, TokenVerificationError
+from kailash.trust.plane.exceptions import (
+    IdentityError,
+    JWKSError,
+    TokenVerificationError,
+)
 
 logger = logging.getLogger(__name__)
 

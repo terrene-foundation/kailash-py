@@ -6,6 +6,7 @@ Tests timeout monitoring, warning thresholds, and interrupt triggering.
 
 import anyio
 import pytest
+
 from kaizen.core.autonomy.interrupts.handlers.timeout import TimeoutInterruptHandler
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import InterruptMode, InterruptSource

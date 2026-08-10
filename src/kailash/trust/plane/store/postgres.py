@@ -42,12 +42,10 @@ except ImportError:
 
 from kailash.trust._locking import validate_id
 from kailash.trust.plane.delegation import (
-    DelegationRecipient,
     DelegateStatus,
+    DelegationRecipient,
     ReviewResolution,
 )
-from kailash.trust.plane.holds import HoldRecord
-from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 from kailash.trust.plane.exceptions import (
     RecordNotFoundError,
     SchemaMigrationError,
@@ -56,6 +54,8 @@ from kailash.trust.plane.exceptions import (
     StoreQueryError,
     StoreTransactionError,
 )
+from kailash.trust.plane.holds import HoldRecord
+from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
 logger = logging.getLogger(__name__)
 

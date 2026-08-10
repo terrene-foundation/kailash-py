@@ -108,7 +108,7 @@ class TestAsyncSQLDatabaseNodePostgreSQL:
             # Clean up
             try:
                 await node.execute_async(query="DROP TABLE IF EXISTS test_batch_users")
-            except:
+            except Exception:
                 pass
             await node.disconnect()
 
@@ -171,7 +171,7 @@ class TestAsyncSQLDatabaseNodePostgreSQL:
                 await node.execute_async(
                     query="DROP TABLE IF EXISTS test_transaction_users"
                 )
-            except:
+            except Exception:
                 pass
             await node.disconnect()
 
@@ -285,7 +285,7 @@ class TestAsyncSQLDatabaseNodePostgreSQL:
             # Clean up
             try:
                 await node.execute_async(query="DROP TABLE IF EXISTS test_types")
-            except:
+            except Exception:
                 pass
             await node.disconnect()
 
@@ -345,7 +345,7 @@ class TestAsyncSQLDatabaseNodeMySQL:
             # Clean up
             try:
                 await node.execute_async(query="DROP TABLE IF EXISTS test_mysql_users")
-            except:
+            except Exception:
                 pass
             await node.disconnect()
 
@@ -487,6 +487,6 @@ class TestAsyncSQLDatabaseNodePerformance:
                 await node.execute_async(
                     query="DROP TABLE IF EXISTS test_performance_data"
                 )
-            except:
+            except Exception:
                 pass
             await node.disconnect()

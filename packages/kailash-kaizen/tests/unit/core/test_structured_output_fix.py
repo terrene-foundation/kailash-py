@@ -14,6 +14,7 @@ Test Strategy:
 from typing import Any, Dict
 
 import pytest
+
 from kaizen.core.structured_output import create_structured_output_config
 from kaizen.signatures import InputField, OutputField, Signature
 
@@ -60,9 +61,9 @@ class TestBug5Fix:
         )
 
         # Verify correct type
-        assert config["type"] == "json_object", (
-            "strict=False must use 'json_object' type."
-        )
+        assert (
+            config["type"] == "json_object"
+        ), "strict=False must use 'json_object' type."
 
     def test_strict_true_unchanged(self):
         """
@@ -74,9 +75,9 @@ class TestBug5Fix:
         config = create_structured_output_config(signature, strict=True)
 
         # Verify new format structure
-        assert config["type"] == "json_schema", (
-            "strict=True must use 'json_schema' type"
-        )
+        assert (
+            config["type"] == "json_schema"
+        ), "strict=True must use 'json_schema' type"
         assert "json_schema" in config, "strict=True must have 'json_schema' key"
 
         # Verify json_schema nested structure
@@ -106,14 +107,14 @@ class TestBug5Fix:
         )
 
         # Should fallback to correct legacy format
-        assert config == {"type": "json_object"}, (
-            f"Auto-fallback should return {{'type': 'json_object'}}, got {config}"
-        )
+        assert config == {
+            "type": "json_object"
+        }, f"Auto-fallback should return {{'type': 'json_object'}}, got {config}"
 
         # Verify no schema key after fallback
-        assert "schema" not in config, (
-            "Auto-fallback to strict=False should not include schema key"
-        )
+        assert (
+            "schema" not in config
+        ), "Auto-fallback to strict=False should not include schema key"
 
     def test_strict_false_explicit_parameter(self):
         """Test explicit strict=False parameter (not just default)."""
@@ -142,9 +143,9 @@ class TestBug5Fix:
         }
 
         # Our config should match OpenAI's expected format
-        assert config == expected_openai_format["response_format"], (
-            "Config format must match OpenAI API expectations"
-        )
+        assert (
+            config == expected_openai_format["response_format"]
+        ), "Config format must match OpenAI API expectations"
 
     def test_strict_false_with_complex_signature(self):
         """Test strict=False with complex signature types."""

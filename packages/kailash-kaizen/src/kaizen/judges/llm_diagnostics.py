@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
 
 import polars as pl
+
 from kailash.diagnostics.protocols import JudgeInput, JudgeResult
 from kaizen.judges._judge import LLMJudge
 from kaizen.judges._wrappers import (

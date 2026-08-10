@@ -159,7 +159,7 @@ async def wait_for_http_health(
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=2) as response:
                     return response.status == expected_status
-        except:
+        except aiohttp.ClientError:
             return False
 
     await wait_for_condition(
@@ -179,7 +179,7 @@ def wait_for_http_health_sync(
         try:
             response = requests.get(url, timeout=2)
             return response.status_code == expected_status
-        except:
+        except requests.exceptions.RequestException:
             return False
 
     wait_for_condition_sync(
@@ -331,7 +331,7 @@ async def wait_for_database_ready(connection_params, timeout=60):
             conn = await asyncpg.connect(**connection_params)
             await conn.close()
             return True
-        except:
+        except (OSError, asyncpg.PostgresError):
             return False
 
     await wait_for_condition(

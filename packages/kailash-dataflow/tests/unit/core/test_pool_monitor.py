@@ -45,7 +45,10 @@ class TestPoolMonitor:
     def _make_monitor(self, stats=None, **kwargs):
         if stats is None:
             stats = pool_stats_dict(active=0, idle=5, max_size=10)
-        provider = lambda: stats
+
+        def provider():
+            return stats
+
         defaults = {
             "interval_secs": 0.1,
             "leak_detection_enabled": False,

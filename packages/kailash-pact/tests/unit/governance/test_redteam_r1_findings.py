@@ -14,16 +14,11 @@ Findings:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-
 import pytest
 
 from kailash.trust.pact.compilation import RoleDefinition, compile_org
 from kailash.trust.pact.config import (
-    CommunicationConstraintConfig,
-    ConfidentialityLevel,
     ConstraintEnvelopeConfig,
-    DataAccessConstraintConfig,
     DepartmentConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
@@ -32,12 +27,8 @@ from kailash.trust.pact.config import (
     TemporalConstraintConfig,
 )
 from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import (
-    RoleEnvelope,
-    intersect_envelopes,
-)
+from kailash.trust.pact.envelopes import RoleEnvelope, intersect_envelopes
 from kailash.trust.pact.exceptions import PactError
-
 
 # ===========================================================================
 # R1 (CRITICAL): Multiple vacant ancestors -- interim envelopes must be
@@ -117,13 +108,6 @@ class TestR1MultipleVacantAncestorsIntersection:
             pytest.skip("Could not resolve all addresses")
 
         # Set envelopes: VP has wider envelope, Director has narrower
-        vp_env = ConstraintEnvelopeConfig(
-            id="vp-env",
-            financial=FinancialConstraintConfig(max_spend_usd=10000.0),
-            operational=OperationalConstraintConfig(
-                allowed_actions=["read", "write", "deploy", "approve"],
-            ),
-        )
         dir_env = ConstraintEnvelopeConfig(
             id="dir-env",
             financial=FinancialConstraintConfig(max_spend_usd=5000.0),

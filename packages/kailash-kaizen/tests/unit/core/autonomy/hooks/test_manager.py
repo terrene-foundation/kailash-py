@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from kaizen.core.autonomy.hooks import (
     BaseHook,
     HookContext,

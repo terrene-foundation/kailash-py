@@ -14,6 +14,7 @@ Written BEFORE implementation (TDD). Tests define the contract.
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.metrics import TrustMetricsCollector
 from kailash.trust.posture.postures import TrustPosture
 

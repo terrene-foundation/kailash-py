@@ -11,7 +11,6 @@ import time
 
 import pytest
 
-
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.metrics_collector import MetricsCollector, MetricsContext
 from kailash.workflow.builder import WorkflowBuilder

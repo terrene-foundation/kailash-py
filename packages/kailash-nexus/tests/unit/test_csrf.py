@@ -28,14 +28,11 @@ class TestOriginExtraction:
         assert _extract_origin("https://example.com") == "https://example.com"
 
     def test_origin_with_port(self):
-        assert (
-            _extract_origin("https://example.com:8080") == "https://example.com:8080"
-        )
+        assert _extract_origin("https://example.com:8080") == "https://example.com:8080"
 
     def test_full_url_extracts_origin(self):
         assert (
-            _extract_origin("https://example.com/path?query=1")
-            == "https://example.com"
+            _extract_origin("https://example.com/path?query=1") == "https://example.com"
         )
 
     def test_empty_string(self):
@@ -223,9 +220,7 @@ class TestCSRFUnsafeMethods:
     @pytest.mark.asyncio
     async def test_referer_fallback(self, csrf_check):
         """When Origin is missing, Referer is used as fallback."""
-        status = await csrf_check(
-            method="POST", referer="https://app.example.com/page"
-        )
+        status = await csrf_check(method="POST", referer="https://app.example.com/page")
         assert status == 200
 
     @pytest.mark.asyncio
@@ -295,9 +290,7 @@ class TestCSRFResponseBody:
             await send({"type": "http.response.start", "status": 200, "headers": []})
             await send({"type": "http.response.body", "body": b"ok"})
 
-        mw = CSRFMiddleware(
-            dummy_app, allowed_origins=["https://app.example.com"]
-        )
+        mw = CSRFMiddleware(dummy_app, allowed_origins=["https://app.example.com"])
 
         scope = {
             "type": "http",

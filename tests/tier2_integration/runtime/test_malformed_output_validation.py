@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState

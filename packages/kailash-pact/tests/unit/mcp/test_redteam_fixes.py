@@ -26,7 +26,6 @@ from pact.mcp.types import (
     McpToolPolicy,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -90,7 +89,9 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*max_cost"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*max_cost"
+        ):
             enforcer.register_tool(_policy("t", max_cost=20.0))
 
     def test_remove_max_cost_rejected(self) -> None:
@@ -99,7 +100,9 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*max_cost.*None"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*max_cost.*None"
+        ):
             enforcer.register_tool(_policy("t", max_cost=None))
 
     def test_tighten_max_cost_accepted(self) -> None:
@@ -127,7 +130,9 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*rate_limit"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*rate_limit"
+        ):
             enforcer.register_tool(_policy("t", max_cost=None, rate_limit=10))
 
     def test_remove_rate_limit_rejected(self) -> None:
@@ -136,7 +141,9 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*rate_limit.*None"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*rate_limit.*None"
+        ):
             enforcer.register_tool(_policy("t", max_cost=None, rate_limit=None))
 
     def test_tighten_rate_limit_accepted(self) -> None:
@@ -153,7 +160,9 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*allowed_args"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*allowed_args"
+        ):
             enforcer.register_tool(
                 _policy("t", max_cost=None, allowed_args=frozenset({"query", "extra"}))
             )
@@ -164,8 +173,12 @@ class TestC1MonotonicTightening:
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*allowed_args.*empty"):
-            enforcer.register_tool(_policy("t", max_cost=None, allowed_args=frozenset()))
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*allowed_args.*empty"
+        ):
+            enforcer.register_tool(
+                _policy("t", max_cost=None, allowed_args=frozenset())
+            )
 
     def test_subset_allowed_args_accepted(self) -> None:
         """Restricting allowed_args to a subset is tightening."""
@@ -179,11 +192,15 @@ class TestC1MonotonicTightening:
 
     def test_narrow_denied_args_rejected(self) -> None:
         """Removing denied args is a narrowing violation."""
-        policy = _policy("t", max_cost=None, denied_args=frozenset({"password", "secret"}))
+        policy = _policy(
+            "t", max_cost=None, denied_args=frozenset({"password", "secret"})
+        )
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        with pytest.raises(ValueError, match="Monotonic tightening violation.*denied_args"):
+        with pytest.raises(
+            ValueError, match="Monotonic tightening violation.*denied_args"
+        ):
             enforcer.register_tool(
                 _policy("t", max_cost=None, denied_args=frozenset({"password"}))
             )

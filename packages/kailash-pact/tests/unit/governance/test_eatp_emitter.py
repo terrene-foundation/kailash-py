@@ -7,13 +7,13 @@ Covers TODO-11 (PactEatpEmitter + GenesisRecord), TODO-10 (configurable deadline
 
 from __future__ import annotations
 
-import pytest
 from datetime import timedelta
+
+import pytest
 
 from kailash.trust.pact.config import OrgDefinition
 from kailash.trust.pact.eatp_emitter import InMemoryPactEmitter, PactEatpEmitter
 from kailash.trust.pact.engine import GovernanceEngine
-
 
 # ---------------------------------------------------------------------------
 # PactEatpEmitter protocol and InMemoryPactEmitter
@@ -28,8 +28,9 @@ class TestInMemoryPactEmitter:
 
     def test_bounded_collections(self) -> None:
         """Emitter respects maxlen bounds."""
-        from kailash.trust.chain import GenesisRecord, AuthorityType
         from datetime import UTC, datetime
+
+        from kailash.trust.chain import AuthorityType, GenesisRecord
 
         emitter = InMemoryPactEmitter(maxlen=3)
         for i in range(5):

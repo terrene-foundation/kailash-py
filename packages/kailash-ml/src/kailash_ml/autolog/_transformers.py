@@ -52,14 +52,20 @@ import logging
 import sys
 from collections import deque
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Deque, Dict, List, Optional
-from typing import Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Deque,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+)
 
 from kailash_ml.autolog._distribution import is_main_process
-from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
-    register_integration,
-)
+from kailash_ml.autolog._registry import FrameworkIntegration, register_integration
 
 if TYPE_CHECKING:
     from kailash_ml.autolog.config import AutologConfig

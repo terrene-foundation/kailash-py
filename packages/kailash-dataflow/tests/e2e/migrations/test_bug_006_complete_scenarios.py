@@ -12,8 +12,9 @@ import pytest
 psycopg2 = pytest.importorskip(
     "psycopg2", reason="psycopg2 required for PostgreSQL e2e tests"
 )
-from dataflow import DataFlow
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
+from dataflow import DataFlow
 
 
 @pytest.mark.e2e

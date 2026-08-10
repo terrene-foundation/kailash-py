@@ -522,7 +522,10 @@ class TestExceptionHierarchy:
     def test_all_exceptions_have_details(self):
         """Every TrustPlane exception should have a .details dict."""
         from kailash.trust.plane import exceptions as exc_mod
-        from kailash.trust.plane.exceptions import SchemaMigrationError, SchemaTooNewError
+        from kailash.trust.plane.exceptions import (
+            SchemaMigrationError,
+            SchemaTooNewError,
+        )
 
         # Map exception classes to their required constructor args
         special_constructors = {

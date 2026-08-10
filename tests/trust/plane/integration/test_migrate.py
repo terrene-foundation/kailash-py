@@ -9,8 +9,8 @@ import shutil
 import pytest
 
 from kailash.trust.plane.migrate import migrate_project
-from kailash.trust.plane.project import TrustProject
 from kailash.trust.plane.models import DecisionRecord, DecisionType
+from kailash.trust.plane.project import TrustProject
 
 
 @pytest.fixture

@@ -198,8 +198,7 @@ def test_reconciler_rejects_injection_column_identifier(tmp_path, database_type)
     is REJECTED, never interpolated raw (rules/dataflow-identifier-safety.md
     Rule 3). This pins the DDL-building path's identifier safety directly.
     """
-    from dataflow.adapters.dialect import DialectManager
-    from dataflow.adapters.dialect import InvalidIdentifierError
+    from dataflow.adapters.dialect import DialectManager, InvalidIdentifierError
 
     db = DataFlow(f"sqlite:///{tmp_path}/inj.db")
     dialect = DialectManager.get_dialect(database_type)

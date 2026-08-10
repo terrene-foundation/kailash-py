@@ -11,7 +11,6 @@ from datetime import datetime
 from kailash.trust.chain import CapabilityType
 from kailash.trust.esa import DatabaseESA, DatabaseType
 from kailash.trust.operations import CapabilityRequest, TrustOperations
-
 from kaizen.trust.authority import OrganizationalAuthorityRegistry
 from kaizen.trust.store import PostgresTrustStore
 

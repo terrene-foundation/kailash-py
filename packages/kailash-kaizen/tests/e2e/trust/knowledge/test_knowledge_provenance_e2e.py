@@ -16,6 +16,7 @@ These tests use REAL infrastructure (NO MOCKING):
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,

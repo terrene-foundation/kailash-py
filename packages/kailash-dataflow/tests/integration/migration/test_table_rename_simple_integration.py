@@ -19,6 +19,7 @@ import uuid
 
 import asyncpg
 import pytest
+
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer
 from dataflow.migrations.table_rename_analyzer import (
@@ -31,7 +32,6 @@ from dataflow.migrations.table_rename_analyzer import (
     TableRenameError,
     TableRenameReport,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

@@ -383,7 +383,7 @@ def _fmt(v: float | None) -> str:
 
 def _matrix_table(title: str, matrix: dict[str, dict[str, float | None]]) -> str:
     labels = list(matrix.keys())
-    header = "".join(f"<th>{html.escape(l)}</th>" for l in labels)
+    header = "".join(f"<th>{html.escape(label)}</th>" for label in labels)
     rows: list[str] = []
     for r in labels:
         cells_list: list[str] = []

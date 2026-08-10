@@ -86,7 +86,7 @@ def check_docker_services():
         # Check Ollama
         response = httpx.get(OLLAMA_CONFIG["base_url"] + "/api/version", timeout=1)
         ollama_available = response.status_code == 200
-    except:
+    except Exception:
         ollama_available = False
 
     try:
@@ -95,7 +95,7 @@ def check_docker_services():
         r = redis.Redis(**REDIS_CONFIG)
         r.ping()
         redis_available = True
-    except:
+    except Exception:
         redis_available = False
 
     try:
@@ -110,7 +110,7 @@ def check_docker_services():
         )
         conn.close()
         postgres_available = True
-    except:
+    except Exception:
         postgres_available = False
 
     return {

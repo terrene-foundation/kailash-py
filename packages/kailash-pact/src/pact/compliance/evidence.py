@@ -29,7 +29,6 @@ from typing import Any, Iterable, Optional, Sequence
 
 from kailash.trust.audit_store import AuditEvent, AuditFilter
 from kailash.trust.pact.exceptions import PactError
-
 from pact.compliance.vocabulary import CONTROL_SPECS, CriterionSpec
 
 logger = logging.getLogger(__name__)

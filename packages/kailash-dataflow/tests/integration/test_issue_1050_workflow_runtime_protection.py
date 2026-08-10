@@ -71,12 +71,11 @@ import pytest
 _wf = pytest.importorskip("kailash.workflow.builder")
 WorkflowBuilder = _wf.WorkflowBuilder
 
+from dataflow.core.protected_engine import ProtectedDataFlow
+from dataflow.core.protection import ProtectionViolation
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError
-
-from dataflow.core.protected_engine import ProtectedDataFlow
-from dataflow.core.protection import ProtectionViolation
 
 pytestmark = pytest.mark.integration
 

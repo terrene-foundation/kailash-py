@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyReport,
     DependencyType,
@@ -51,7 +52,6 @@ from dataflow.migrations.risk_assessment_engine import (
     RiskCategory,
     RiskLevel,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

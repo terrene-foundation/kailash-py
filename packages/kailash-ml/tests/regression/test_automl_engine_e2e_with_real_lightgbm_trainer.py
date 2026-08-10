@@ -36,12 +36,10 @@ silently no-op.
 """
 from __future__ import annotations
 
-import asyncio
 import importlib
 import os
 import uuid
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 
@@ -67,15 +65,17 @@ except ImportError as exc:  # pragma: no cover
         allow_module_level=True,
     )
 
-from kailash.db.connection import ConnectionManager
-from kailash_ml.automl import (
+# Deliberately after the lightgbm/numpy availability guards above (module-
+# level pytest.skip on ImportError) — noqa: E402 is the guard, not an
+# oversight.
+from kailash.db.connection import ConnectionManager  # noqa: E402
+from kailash_ml.automl import (  # noqa: E402
     AutoMLConfig,
     AutoMLEngine,
     ParamSpec,
     Trial,
     TrialOutcome,
 )
-
 
 _POSTGRES_URL = os.environ.get("POSTGRES_TEST_URL")
 _BACKEND_LABEL = "postgres" if _POSTGRES_URL else "sqlite"

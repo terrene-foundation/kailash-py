@@ -435,6 +435,6 @@ class SignatureAgent(BaseAgent):
 
 **Test This Example**:
 ```bash
-cd 
+cd
 python docs/developer-experience/signature_to_node_example.py
 ```

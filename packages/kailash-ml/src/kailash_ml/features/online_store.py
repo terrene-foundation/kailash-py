@@ -54,11 +54,11 @@ from datetime import time as _time
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import polars as pl
+
+from kailash.utils.url_credentials import mask_url
 from kailash_ml.errors import OnlineStoreUnavailableError
 from kailash_ml.features.cache_keys import make_feature_cache_key, validate_tenant_id
 from kailash_ml.features.schema import FeatureSchema
-
-from kailash.utils.url_credentials import mask_url
 
 if TYPE_CHECKING:  # avoid importing the optional redis dep on type-only paths
     import redis.asyncio as _redis_async_t

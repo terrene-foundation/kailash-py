@@ -22,7 +22,6 @@ from kailash.trust.pact.addressing import (
     NodeType,
 )
 
-
 # ---------------------------------------------------------------------------
 # NodeType enum
 # ---------------------------------------------------------------------------
@@ -97,7 +96,9 @@ class TestAddressSegment:
             ("T-5", "Sequence must be >= 1"),  # parses as int(-5), fails >= 1 check
         ],
     )
-    def test_parse_invalid_segments(self, bad_input: str, error_msg_fragment: str) -> None:
+    def test_parse_invalid_segments(
+        self, bad_input: str, error_msg_fragment: str
+    ) -> None:
         with pytest.raises(AddressError, match=error_msg_fragment):
             AddressSegment.parse(bad_input)
 
@@ -365,7 +366,14 @@ class TestAddressPrefixAndAncestorQueries:
         a = Address.parse("D1-R1-D3-R1-T1-R1-R2")
         ancs = a.ancestors()
         assert len(ancs) == 6
-        expected = ["D1", "D1-R1", "D1-R1-D3", "D1-R1-D3-R1", "D1-R1-D3-R1-T1", "D1-R1-D3-R1-T1-R1"]
+        expected = [
+            "D1",
+            "D1-R1",
+            "D1-R1-D3",
+            "D1-R1-D3-R1",
+            "D1-R1-D3-R1-T1",
+            "D1-R1-D3-R1-T1-R1",
+        ]
         for anc, exp in zip(ancs, expected):
             assert str(anc) == exp
 

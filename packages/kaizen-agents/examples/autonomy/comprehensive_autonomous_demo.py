@@ -29,7 +29,7 @@ Version: 1.0.0 (Production)
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -127,7 +127,7 @@ class ComprehensiveAutonomousDemo:
 
         print()
 
-    def phase1_research(self) -> Dict[str, Any]:
+    def phase1_research(self) -> dict[str, Any]:
         """
         Phase 1: Research with RAGResearchAgent.
 
@@ -193,7 +193,7 @@ Provide a concise summary (3-5 key points) of the most important best practices.
         self.results["research"] = result
         return result
 
-    def phase2_codegen(self, research_result: Dict[str, Any]) -> Dict[str, Any]:
+    def phase2_codegen(self, research_result: dict[str, Any]) -> dict[str, Any]:
         """
         Phase 2: Code generation with CodeGenerationAgent.
 
@@ -286,7 +286,7 @@ Generate a complete, production-ready Python script.
         self.results["codegen"] = result
         return result
 
-    def phase3_testing(self, codegen_result: Dict[str, Any]) -> Dict[str, Any]:
+    def phase3_testing(self, codegen_result: dict[str, Any]) -> dict[str, Any]:
         """
         Phase 3: Testing with ReActAgent.
 
@@ -470,7 +470,7 @@ def main():
         codegen_result = demo.phase2_codegen(research_result)
 
         # Phase 3: Testing
-        testing_result = demo.phase3_testing(codegen_result)
+        demo.phase3_testing(codegen_result)
 
         # Summary
         demo.print_summary()

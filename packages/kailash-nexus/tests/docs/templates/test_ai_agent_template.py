@@ -5,10 +5,10 @@ Tests agent handler patterns (no actual LLM calls).
 """
 
 import pytest
-from nexus import Nexus
 
 from kailash.nodes.handler import make_handler_workflow
 from kailash.runtime import AsyncLocalRuntime
+from nexus import Nexus
 
 
 class TestAIAgentTemplate:

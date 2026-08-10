@@ -8,14 +8,15 @@ from source data, evaluates them, and selects the best subset.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import polars as pl
-from kailash_ml.types import FeatureSchema
 
 from kailash_ml._decorators import experimental
+from kailash_ml.engines._shared import NUMERIC_DTYPES as _NUMERIC_DTYPES
+from kailash_ml.types import FeatureSchema
 
 logger = logging.getLogger(__name__)
 
@@ -150,13 +151,6 @@ class SelectedFeatures:
             n_generated=data["n_generated"],
             n_selected=data["n_selected"],
         )
-
-
-# ---------------------------------------------------------------------------
-# Numeric dtype helpers
-# ---------------------------------------------------------------------------
-
-from kailash_ml.engines._shared import NUMERIC_DTYPES as _NUMERIC_DTYPES
 
 
 # ---------------------------------------------------------------------------

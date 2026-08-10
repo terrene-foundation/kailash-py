@@ -143,7 +143,7 @@ class NodeValidator:
                             ValidationSuggestion(
                                 message=f"Parameter '{param_name}' expects {expected_type.__name__}, got {type(value).__name__}",
                                 code_example=f"{param_name}={cls._get_type_example(expected_type)}",
-                                doc_link=f".claude/skills/08-nodes-reference/nodes-quick-index.md",
+                                doc_link=".claude/skills/08-nodes-reference/nodes-quick-index.md",
                             )
                         )
         except Exception:

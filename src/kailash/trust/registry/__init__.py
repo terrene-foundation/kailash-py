@@ -60,7 +60,11 @@ from kailash.trust.registry.exceptions import (
     ValidationError,
 )
 from kailash.trust.registry.health import AgentHealthMonitor, HealthStatus
-from kailash.trust.registry.models import AgentMetadata, AgentStatus, RegistrationRequest
+from kailash.trust.registry.models import (
+    AgentMetadata,
+    AgentStatus,
+    RegistrationRequest,
+)
 from kailash.trust.registry.store import AgentRegistryStore, PostgresAgentRegistryStore
 
 __all__ = [

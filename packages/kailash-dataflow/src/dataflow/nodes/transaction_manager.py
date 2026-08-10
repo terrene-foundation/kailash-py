@@ -12,9 +12,9 @@ from kailash.nodes.transaction.distributed_transaction_manager import (
 )
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
-from ..core.exceptions import (
+from ..core.exceptions import (  # Issue #1552: redact driver-error VALUES
     sanitize_db_error,
-)  # Issue #1552: redact driver-error VALUES
+)
 
 
 @register_node()

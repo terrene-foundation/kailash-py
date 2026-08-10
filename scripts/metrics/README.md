@@ -134,20 +134,20 @@ gh auth login
 
 2. **Run your first report**:
 ```bash
-cd 
+cd
 ./github-metrics.sh
 ```
 
 3. **Set up daily tracking** (add to crontab):
 ```bash
 # Add to crontab for daily 9 AM reports
-0 9 * * * 
+0 9 * * *
 ```
 
 4. **Generate weekly summary** (run on Mondays):
 ```bash
 # Add to crontab for weekly Monday reports
-0 10 * * 1 
+0 10 * * 1
 ```
 
 ## 📈 Example Outputs

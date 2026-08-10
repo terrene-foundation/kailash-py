@@ -12,14 +12,9 @@ from dataflow.validation.dsl import (
     apply_validation_dict,
     one_of_validator,
 )
-from dataflow.validation.field_validators import (
-    email_validator,
-    length_validator,
-    one_of_validator as fv_one_of_validator,
-    pattern_validator,
-    range_validator,
-)
-
+from dataflow.validation.field_validators import email_validator, length_validator
+from dataflow.validation.field_validators import one_of_validator as fv_one_of_validator
+from dataflow.validation.field_validators import pattern_validator, range_validator
 
 # ---------------------------------------------------------------------------
 # Helpers

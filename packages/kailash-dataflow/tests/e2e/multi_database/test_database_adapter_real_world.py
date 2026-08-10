@@ -20,7 +20,6 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.adapters.exceptions import ConnectionError, QueryError
 from dataflow.adapters.factory import AdapterFactory
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 

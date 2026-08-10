@@ -411,9 +411,7 @@ class MigrationConnectionManager:
                         None,
                     )
                     if credential_provider is not None:
-                        from ..core.credential_provider import (
-                            resolve_fresh_credential,
-                        )
+                        from ..core.credential_provider import resolve_fresh_credential
 
                         password = resolve_fresh_credential(
                             credential_provider,

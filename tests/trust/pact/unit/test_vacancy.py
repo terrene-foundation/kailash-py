@@ -24,10 +24,8 @@ from typing import Any
 
 import pytest
 
-from kailash.trust.pact.compilation import (
-    RoleDefinition,
-    VacancyDesignation,
-)
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import RoleDefinition, VacancyDesignation
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -39,11 +37,9 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import RoleEnvelope
 from kailash.trust.pact.exceptions import PactError
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

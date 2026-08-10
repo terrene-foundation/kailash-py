@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from typing import Any, Dict
 
 import pytest
-from kaizen_agents.agents.specialized.planning import PlanningAgent
 
+from kaizen_agents.agents.specialized.planning import PlanningAgent
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
     OllamaHealthChecker,

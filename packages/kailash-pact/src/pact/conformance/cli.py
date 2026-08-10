@@ -43,11 +43,8 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from pact.conformance.runner import ConformanceRunner, RunnerReport, VectorStatus
-from pact.conformance.vectors import (
-    ConformanceVectorError,
-    load_vectors_from_dir,
-)
+from pact.conformance.runner import ConformanceRunner, RunnerReport
+from pact.conformance.vectors import ConformanceVectorError, load_vectors_from_dir
 
 logger = logging.getLogger(__name__)
 

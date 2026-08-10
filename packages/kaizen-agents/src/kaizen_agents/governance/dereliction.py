@@ -198,8 +198,8 @@ def _compute_dimension_ratios(
     parent_limit = parent_fin.get("limit", 0)
     child_limit = child_fin.get("limit", 0)
     if (
-        isinstance(parent_limit, (int, float))
-        and isinstance(child_limit, (int, float))
+        isinstance(parent_limit, int | float)
+        and isinstance(child_limit, int | float)
         and math.isfinite(float(parent_limit))
         and math.isfinite(float(child_limit))
         and parent_limit > 0

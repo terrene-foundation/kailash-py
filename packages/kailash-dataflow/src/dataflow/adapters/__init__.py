@@ -11,9 +11,6 @@ Multi-database support for DataFlow with tiered adapter hierarchy:
 
 from .base import DatabaseAdapter
 from .base_adapter import BaseAdapter
-from .mysql import MySQLAdapter
-from .postgresql import PostgreSQLAdapter
-from .sqlite import SQLiteAdapter
 
 # MongoDB + pgvector adapter modules import cleanly without their optional
 # driver packages (motor / pgvector) — the ImportError is deferred to
@@ -22,7 +19,10 @@ from .sqlite import SQLiteAdapter
 # rules/orphan-detection.md §6; the driver check still fires at first
 # connect for users without the optional extra.
 from .mongodb import MongoDBAdapter
+from .mysql import MySQLAdapter
+from .postgresql import PostgreSQLAdapter
 from .postgresql_vector import PostgreSQLVectorAdapter
+from .sqlite import SQLiteAdapter
 
 __all__ = [
     "BaseAdapter",

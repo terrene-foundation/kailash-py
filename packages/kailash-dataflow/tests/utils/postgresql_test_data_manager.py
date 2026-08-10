@@ -699,7 +699,7 @@ class PostgreSQLTestDataManager:
                         tag_id,
                     )
                     relationships_created += 1
-                except:
+                except asyncpg.UniqueViolationError:
                     # Ignore duplicate key errors
                     pass
 

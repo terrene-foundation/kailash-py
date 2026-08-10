@@ -24,10 +24,10 @@ from dataclasses import dataclass
 
 import pytest
 from dotenv import load_dotenv
-from kaizen.core.base_agent import BaseAgent
-from kaizen_agents.patterns.pipeline import Pipeline
-from kaizen.signatures import InputField, OutputField, Signature
 
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
     async_retry_with_backoff,

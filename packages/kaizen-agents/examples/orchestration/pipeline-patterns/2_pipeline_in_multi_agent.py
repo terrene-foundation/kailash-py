@@ -11,11 +11,11 @@ Pattern: Pipeline composability in multi-agent coordination
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
-from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # ============================================================================
 # Pipeline 1: Document Processing Pipeline
@@ -25,7 +25,7 @@ from kaizen.signatures import InputField, OutputField, Signature
 class DocumentProcessingPipeline(Pipeline):
     """Multi-step document processing workflow."""
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Process document through extraction, validation, enrichment."""
         document = inputs.get("document", "")
 
@@ -51,7 +51,7 @@ class DocumentProcessingPipeline(Pipeline):
         # Simplified extraction
         return document.strip()
 
-    def _validate_format(self, text: str) -> Dict[str, Any]:
+    def _validate_format(self, text: str) -> dict[str, Any]:
         """Validate document format."""
         return {
             "is_valid": len(text) > 0,
@@ -59,7 +59,7 @@ class DocumentProcessingPipeline(Pipeline):
             "size": len(text),
         }
 
-    def _enrich_metadata(self, validation: Dict[str, Any]) -> Dict[str, Any]:
+    def _enrich_metadata(self, validation: dict[str, Any]) -> dict[str, Any]:
         """Enrich with metadata."""
         return {
             "format": validation["format"],
@@ -76,7 +76,7 @@ class DocumentProcessingPipeline(Pipeline):
 class DataAnalysisPipeline(Pipeline):
     """Multi-step data analysis workflow."""
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Analyze data through cleaning, aggregation, insights."""
         data = inputs.get("data", "")
 
@@ -101,7 +101,7 @@ class DataAnalysisPipeline(Pipeline):
         """Clean the data."""
         return " ".join(data.split())
 
-    def _aggregate_stats(self, data: str) -> Dict[str, Any]:
+    def _aggregate_stats(self, data: str) -> dict[str, Any]:
         """Calculate statistics."""
         words = data.split()
         return {
@@ -110,7 +110,7 @@ class DataAnalysisPipeline(Pipeline):
             "avg_word_length": len(data) / max(len(words), 1),
         }
 
-    def _generate_insights(self, stats: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_insights(self, stats: dict[str, Any]) -> dict[str, Any]:
         """Generate insights from statistics."""
         return {
             "complexity": "high" if stats["avg_word_length"] > 10 else "low",
@@ -144,7 +144,7 @@ class SimpleQAAgent(BaseAgent):
     def __init__(self, config: QAConfig):
         super().__init__(config=config, signature=SimpleQASignature())
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """Answer questions (mock implementation)."""
         question = inputs.get("question", "")
         return {"answer": f"Mock answer for: {question}"}

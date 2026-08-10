@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 
 import pytest
+
 from kailash_ml.automl.cost_budget import (
     BudgetExceeded,
     CostRecord,
@@ -17,7 +18,6 @@ from kailash_ml.automl.cost_budget import (
     microdollars_to_usd,
     usd_to_microdollars,
 )
-
 
 # ---------------------------------------------------------------------------
 # USD <-> microdollar helpers

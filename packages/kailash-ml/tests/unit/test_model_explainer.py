@@ -67,9 +67,7 @@ class TestModelExplainerInit:
 
     def test_lazy_import_from_package(self) -> None:
         from kailash_ml import ModelExplainer
-        from kailash_ml.engines.model_explainer import (
-            ModelExplainer as DirectExplainer,
-        )
+        from kailash_ml.engines.model_explainer import ModelExplainer as DirectExplainer
 
         assert ModelExplainer is DirectExplainer
 

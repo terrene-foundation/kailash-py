@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.runner import WorkflowRunner
 from kailash.tracking import TaskManager

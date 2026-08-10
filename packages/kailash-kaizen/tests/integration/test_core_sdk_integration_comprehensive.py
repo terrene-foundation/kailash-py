@@ -16,6 +16,7 @@ IMPORTANT: Uses real Core SDK services - NO MOCKING ALLOWED in Tier 2.
 """
 
 import pytest
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.agents import Agent
@@ -95,9 +96,9 @@ class TestCoreSDKWorkflowBuilderIntegration:
         assert built_workflow is not None
 
         # Performance assertion (should be fast even with real services)
-        assert build_time < 1000, (
-            f"Workflow building took {build_time:.2f}ms, should be <1000ms"
-        )
+        assert (
+            build_time < 1000
+        ), f"Workflow building took {build_time:.2f}ms, should be <1000ms"
 
     def test_workflow_builder_state_independence(self, real_kaizen_framework):
         """Test workflow builders maintain independent state."""
@@ -551,9 +552,9 @@ class TestRealServiceValidation:
 
         # Performance should scale reasonably
         average_time = total_time / 5
-        assert average_time < 100, (
-            f"Average bulk operation time {average_time:.2f}ms per agent"
-        )
+        assert (
+            average_time < 100
+        ), f"Average bulk operation time {average_time:.2f}ms per agent"
 
 
 if __name__ == "__main__":

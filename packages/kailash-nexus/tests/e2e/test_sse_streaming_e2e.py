@@ -24,9 +24,9 @@ from typing import Any, Dict, List
 
 import pytest
 import requests
-from nexus import Nexus
 
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 def find_free_port(start_port: int = 8000) -> int:
@@ -257,9 +257,9 @@ class TestBrowserEventSourceCompatibility:
         assert len(events_with_ids) > 0, "Should receive events with IDs"
 
         # Verify last_event_id tracked
-        assert event_source.last_event_id is not None, (
-            "EventSource should track last event ID"
-        )
+        assert (
+            event_source.last_event_id is not None
+        ), "EventSource should track last event ID"
 
 
 class TestRealTimeChatStreaming:
@@ -360,9 +360,9 @@ result = {'response': response, 'tokens': len(response.split())}
 
         # First byte should arrive quickly (< 1 second in test environment)
         assert first_byte_time is not None
-        assert first_byte_time < 1.0, (
-            f"First byte took {first_byte_time:.3f}s, expected < 1s"
-        )
+        assert (
+            first_byte_time < 1.0
+        ), f"First byte took {first_byte_time:.3f}s, expected < 1s"
 
 
 class TestLongRunningWorkflows:
@@ -450,9 +450,9 @@ result = {'status': 'completed', 'duration': 5}
 
         # Connection should remain stable
         # (keepalive helps prevent timeouts)
-        assert "complete" in events_raw or "error" in events_raw, (
-            "Connection should remain stable until completion"
-        )
+        assert (
+            "complete" in events_raw or "error" in events_raw
+        ), "Connection should remain stable until completion"
 
 
 class TestConcurrentSSEConnections:
@@ -534,9 +534,9 @@ result = {'worker_id': random.randint(1, 100)}
 
         # Verify all connections succeeded
         success_count = sum(1 for r in results if r)
-        assert success_count >= 8, (
-            f"Expected >= 8/10 concurrent connections to succeed, got {success_count}"
-        )
+        assert (
+            success_count >= 8
+        ), f"Expected >= 8/10 concurrent connections to succeed, got {success_count}"
 
     def test_concurrent_connection_isolation(self, concurrent_server):
         """Test that concurrent connections don't interfere.

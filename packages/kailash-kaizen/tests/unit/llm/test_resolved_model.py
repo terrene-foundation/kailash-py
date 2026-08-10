@@ -141,7 +141,9 @@ def test_rejects_obvious_non_ascii_tld() -> None:
     from kaizen.llm.errors import InvalidEndpoint
 
     with pytest.raises(InvalidEndpoint):
-        Endpoint(base_url="https://\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444/v1")
+        Endpoint(
+            base_url="https://\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444/v1"
+        )
 
 
 def test_accepts_plain_ascii_hostname() -> None:

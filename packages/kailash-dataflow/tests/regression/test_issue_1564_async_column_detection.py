@@ -39,10 +39,10 @@ import tempfile
 import time
 
 import pytest
-from kailash.runtime.async_local import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
+from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 # ---------------------------------------------------------------------------

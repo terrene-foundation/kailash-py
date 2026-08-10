@@ -23,16 +23,15 @@ from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any
 
-from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+from kailash.nodes.base import Node, NodeParameter, register_node
 from kaizen.nodes.ai.a2a import SharedMemoryPoolNode
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.self_organizing import (
     AgentPoolManagerNode,
     SelfOrganizingAgentNode,
     SolutionEvaluatorNode,
     TeamFormationNode,
 )
-
-from kailash.nodes.base import Node, NodeParameter, register_node
 
 # MCP functionality is now built into LLM agents as a capability
 

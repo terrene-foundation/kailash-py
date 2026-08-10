@@ -12,7 +12,11 @@ IMPORTANT: NO MOCKING - Real infrastructure only (Tier 2 policy)
 import os
 
 import pytest
-from kaizen_agents.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+from kaizen_agents.agents.multi_modal import (
+    DocumentExtractionAgent,
+    DocumentExtractionConfig,
+)
 
 
 @pytest.mark.integration

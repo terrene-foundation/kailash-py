@@ -32,8 +32,9 @@ import sys
 import traceback
 import types
 
-import kaizen
 import pytest
+
+import kaizen
 
 pytestmark = pytest.mark.regression
 

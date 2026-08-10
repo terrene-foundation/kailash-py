@@ -380,9 +380,7 @@ class FallbackRouter(LLMRouter):
                     # execute_fn dispatches to an LLM provider; its exception can
                     # embed the API key. Sanitize before the message reaches the
                     # WARN log or any FallbackEvent below (#1970 sweep).
-                    from kaizen.nodes.ai.error_sanitizer import (
-                        sanitize_provider_error,
-                    )
+                    from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
                     error_message = sanitize_provider_error(
                         e, model, include_error_type=False
@@ -540,9 +538,7 @@ class FallbackRouter(LLMRouter):
                     # FallbackResult.fallback_events; execute_fn dispatches to an
                     # LLM provider whose exception can embed the API key
                     # (#1970 sweep — sibling of the async path above).
-                    from kaizen.nodes.ai.error_sanitizer import (
-                        sanitize_provider_error,
-                    )
+                    from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
                     event = FallbackEvent(
                         original_model=model,

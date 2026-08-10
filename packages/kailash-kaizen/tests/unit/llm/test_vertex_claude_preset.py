@@ -27,11 +27,7 @@ import pytest
 from kaizen.llm.auth.gcp import GcpOauth
 from kaizen.llm.deployment import Endpoint, LlmDeployment, WireProtocol
 from kaizen.llm.errors import ModelRequired
-from kaizen.llm.presets import (
-    get_preset,
-    list_presets,
-    vertex_claude_preset,
-)
+from kaizen.llm.presets import get_preset, list_presets, vertex_claude_preset
 
 
 def _service_account_dict() -> dict:

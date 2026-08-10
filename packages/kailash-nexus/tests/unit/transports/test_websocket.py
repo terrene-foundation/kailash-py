@@ -37,7 +37,6 @@ from nexus.transports.websocket import (
     _TrackedConnection,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -173,7 +172,7 @@ class TestConnectionLifecycle:
         await transport.start(registry)
 
         try:
-            async with connect(f"ws://127.0.0.1:18770/ws") as ws:
+            async with connect("ws://127.0.0.1:18770/ws") as ws:
                 raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
                 msg = json.loads(raw)
                 assert msg["event"] == "connected"

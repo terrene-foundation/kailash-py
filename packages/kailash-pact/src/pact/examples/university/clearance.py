@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import logging
 
-from kailash.trust.pact.config import ConfidentialityLevel
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.compilation import CompiledOrg
+from kailash.trust.pact.config import ConfidentialityLevel
 
 logger = logging.getLogger(__name__)
 

@@ -876,8 +876,6 @@ class Kaizen:
         Returns:
             AgentTeam: Created agent team
         """
-        from kaizen_agents.coordination.teams import AgentTeam
-
         # Resolve the team-agent model env-first (never a hardcoded obsolete
         # literal): OPENAI_PROD_MODEL / DEFAULT_LLM_MODEL, then the provider-
         # intrinsic default. Setting it explicitly here (rather than omitting it)
@@ -885,6 +883,7 @@ class Kaizen:
         import os
 
         from kaizen.config.providers import DEFAULT_OPENAI_MODEL
+        from kaizen_agents.coordination.teams import AgentTeam
 
         default_team_model = (
             os.environ.get("OPENAI_PROD_MODEL")

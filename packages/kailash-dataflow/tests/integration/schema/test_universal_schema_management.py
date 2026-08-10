@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from dataflow import DataFlow
 from dataflow.adapters.sqlite import SQLiteAdapter
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 

@@ -17,6 +17,7 @@ import asyncio
 
 import anyio
 import pytest
+
 from kaizen.core.autonomy.control.protocol import ControlProtocol
 from kaizen.core.autonomy.control.transports.memory import InMemoryTransport
 from kaizen.core.autonomy.control.types import ControlResponse

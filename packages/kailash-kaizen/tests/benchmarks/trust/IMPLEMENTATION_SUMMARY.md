@@ -155,7 +155,7 @@ This ensures regression detection in CI/CD pipelines.
 ### Quick Run
 
 ```bash
-cd 
+cd
 pytest tests/benchmarks/trust/benchmark_trust_operations.py -v --benchmark-only
 ```
 

@@ -7,11 +7,10 @@ Re-exports from kaizen_agents.agents.multi_modal.transcription_agent
 so that mock.patch targets resolve correctly.
 """
 
+# Re-import WhisperProcessor so patch("kaizen.agents.multi_modal.transcription_agent.WhisperProcessor") works
+from kaizen.audio.whisper_processor import WhisperProcessor  # noqa: F401
 from kaizen_agents.agents.multi_modal.transcription_agent import *  # noqa: F401, F403
 from kaizen_agents.agents.multi_modal.transcription_agent import (
     TranscriptionAgent,
     TranscriptionSignature,
 )
-
-# Re-import WhisperProcessor so patch("kaizen.agents.multi_modal.transcription_agent.WhisperProcessor") works
-from kaizen.audio.whisper_processor import WhisperProcessor  # noqa: F401

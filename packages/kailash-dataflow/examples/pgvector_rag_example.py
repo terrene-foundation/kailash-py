@@ -14,9 +14,6 @@ Prerequisites:
 
 import asyncio
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
 from dataflow import DataFlow
 from dataflow.adapters import PostgreSQLVectorAdapter
 from dataflow.nodes.vector_nodes import (
@@ -24,6 +21,8 @@ from dataflow.nodes.vector_nodes import (
     PgVectorHybridSearchNode,
     VectorSearchNode,
 )
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 # Mock embedding function (replace with real embedding model)

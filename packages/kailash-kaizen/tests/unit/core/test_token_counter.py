@@ -6,6 +6,7 @@ and fallback heuristics when tiktoken is unavailable.
 """
 
 import pytest
+
 from kaizen.core.token_counter import (
     MODEL_CONTEXT_SIZES,
     TIKTOKEN_AVAILABLE,

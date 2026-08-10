@@ -59,10 +59,7 @@ def test_quote_for_happy_path_quotes_valid_identifiers() -> None:
 @pytest.mark.regression
 def test_sql_query_optimizer_suggest_indexes_rejects_injection() -> None:
     """_suggest_indexes integration path rejects malicious table names."""
-    from dataflow.optimization.sql_query_optimizer import (
-        SQLDialect,
-        SQLQueryOptimizer,
-    )
+    from dataflow.optimization.sql_query_optimizer import SQLDialect, SQLQueryOptimizer
 
     opt = SQLQueryOptimizer(dialect=SQLDialect.POSTGRESQL)
     with pytest.raises(Exception):
@@ -76,10 +73,7 @@ def test_sql_query_optimizer_suggest_indexes_rejects_injection() -> None:
 @pytest.mark.regression
 def test_sql_query_optimizer_suggest_indexes_emits_quoted() -> None:
     """Happy path — valid identifiers produce double-quoted output."""
-    from dataflow.optimization.sql_query_optimizer import (
-        SQLDialect,
-        SQLQueryOptimizer,
-    )
+    from dataflow.optimization.sql_query_optimizer import SQLDialect, SQLQueryOptimizer
 
     opt = SQLQueryOptimizer(dialect=SQLDialect.POSTGRESQL)
     advisories = opt._suggest_indexes(

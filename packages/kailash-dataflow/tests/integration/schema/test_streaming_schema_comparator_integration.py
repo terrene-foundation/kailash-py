@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
-from kailash.runtime.local import LocalRuntime
 
 from dataflow.migrations.schema_state_manager import (
     DatabaseSchema,
@@ -20,6 +19,7 @@ from dataflow.migrations.schema_state_manager import (
     SchemaComparisonResult,
 )
 from dataflow.performance.migration_optimizer import OptimizedSchemaComparator
+from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 from tests.utils.real_infrastructure import real_infra
 

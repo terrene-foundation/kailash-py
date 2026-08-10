@@ -16,7 +16,6 @@ nn = pytest.importorskip("torch.nn")
 from kailash_ml.diagnostics import DLDiagnostics  # noqa: E402
 from kailash_ml.diagnostics import dl as dl_mod  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # __init__ validation
 # ---------------------------------------------------------------------------

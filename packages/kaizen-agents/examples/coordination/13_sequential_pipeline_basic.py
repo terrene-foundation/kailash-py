@@ -13,9 +13,9 @@ Learning Objectives:
 Estimated time: 5 minutes
 """
 
+from kaizen.core.base_agent import BaseAgentConfig
 from kaizen_agents.patterns.patterns import create_sequential_pipeline
 from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
-from kaizen.core.base_agent import BaseAgentConfig
 
 
 def main():

@@ -15,15 +15,13 @@ Covers:
 
 from __future__ import annotations
 
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 from kailash.trust.pact.agent_mapping import AgentRoleMapping
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
-
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 # ---------------------------------------------------------------------------
 # Helper: build a small org with agent_id assignments
@@ -238,8 +236,6 @@ class TestThreadSafety:
         mapping = AgentRoleMapping()
         for i in range(50):
             mapping.register(f"agent-{i}", f"D{i}-R1")
-
-        results: list[str] = []
 
         def resolver(agent_num: int) -> str:
             return mapping.resolve(f"agent-{agent_num}")

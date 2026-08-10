@@ -168,8 +168,8 @@ class MCPClient:
         # token is attached expiry-aware) so every outbound request carries the
         # current ``Authorization: Bearer <token>``. Per-server config may also
         # supply its own provider; the client-level hook is the default.
-        self._oauth_token_provider = None  # type: Optional[Any]
-        self._oauth_client = None  # type: Optional[Any]
+        self._oauth_token_provider: Optional[Any] = None
+        self._oauth_client: Optional[Any] = None
 
     def set_token_provider(self, provider: Any) -> None:
         """Register a client-level OAuth bearer-token provider.

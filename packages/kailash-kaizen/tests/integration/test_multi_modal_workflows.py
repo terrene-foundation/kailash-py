@@ -9,14 +9,6 @@ import pytest
 
 # Test infrastructure
 try:
-    from kaizen_agents.agents.multi_modal import (
-        MultiModalAgent,
-        MultiModalConfig,
-        TranscriptionAgent,
-        TranscriptionAgentConfig,
-        VisionAgent,
-        VisionAgentConfig,
-    )
     from kaizen.cost.tracker import CostTracker
     from kaizen.memory import SharedMemoryPool
     from kaizen.providers import OLLAMA_AVAILABLE
@@ -27,6 +19,14 @@ try:
         InputField,
         MultiModalSignature,
         OutputField,
+    )
+    from kaizen_agents.agents.multi_modal import (
+        MultiModalAgent,
+        MultiModalConfig,
+        TranscriptionAgent,
+        TranscriptionAgentConfig,
+        VisionAgent,
+        VisionAgentConfig,
     )
 
     IMPORTS_AVAILABLE = True

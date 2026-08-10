@@ -12,6 +12,7 @@ IMPORTANT: NO MOCKING - Real infrastructure only (Tier 2 policy)
 import os
 
 import pytest
+
 from kaizen.providers.document import (
     LandingAIProvider,
     OllamaVisionProvider,

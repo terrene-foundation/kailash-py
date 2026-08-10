@@ -267,14 +267,14 @@ class MultiModalAgent(BaseAgent):
         prompt = None
 
         for key, value in inputs.items():
-            if isinstance(value, (ImageField, Path)) or (
+            if isinstance(value, ImageField | Path) or (
                 isinstance(value, str)
                 and any(
                     value.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]
                 )
             ):
                 image_input = value
-            elif isinstance(value, (AudioField, Path)) or (
+            elif isinstance(value, AudioField | Path) or (
                 isinstance(value, str)
                 and any(value.endswith(ext) for ext in [".wav", ".mp3", ".m4a", ".ogg"])
             ):

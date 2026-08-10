@@ -35,7 +35,9 @@ class TestPresetRegistry:
 
     def test_presets_are_preset_configs(self):
         for name, preset in PRESETS.items():
-            assert isinstance(preset, PresetConfig), f"Preset '{name}' is not PresetConfig"
+            assert isinstance(
+                preset, PresetConfig
+            ), f"Preset '{name}' is not PresetConfig"
 
     def test_preset_names_match_keys(self):
         for key, preset in PRESETS.items():

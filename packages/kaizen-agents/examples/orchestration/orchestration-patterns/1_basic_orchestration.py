@@ -156,7 +156,7 @@ async def main():
 
         # Display routing results
         print("\nRouting Results:")
-        for i, (task, agent) in enumerate(zip(tasks, selected_agents), 1):
+        for i, (task, agent) in enumerate(zip(tasks, selected_agents, strict=False), 1):
             agent_name = agent._a2a_card["name"]
             print(f"{i}. '{task}' → {agent_name}")
 

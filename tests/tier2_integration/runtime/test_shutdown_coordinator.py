@@ -19,7 +19,6 @@ import pytest
 
 from kailash.runtime.shutdown import ShutdownCoordinator
 
-
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------

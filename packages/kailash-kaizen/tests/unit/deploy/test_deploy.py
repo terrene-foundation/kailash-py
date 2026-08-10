@@ -63,7 +63,6 @@ from kaizen.deploy.client import (  # noqa: E402
 from kaizen.deploy.introspect import introspect_agent  # noqa: E402
 from kaizen.deploy.registry import LocalRegistry  # noqa: E402
 
-
 # ===================================================================
 # LocalRegistry Tests
 # ===================================================================

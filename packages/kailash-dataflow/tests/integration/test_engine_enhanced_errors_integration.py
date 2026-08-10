@@ -10,6 +10,7 @@ All tests use real infrastructure (NO MOCKING) following Tier 2 testing policies
 """
 
 import pytest
+
 from dataflow import DataFlow
 from dataflow.exceptions import EnhancedDataFlowError  # Core ErrorEnhancer exception
 from dataflow.platform.errors import DataFlowError  # Platform ErrorEnhancer exception

@@ -9,7 +9,6 @@ import pytest
 
 from kailash_ml.engines.training_pipeline import EvalSpec, TrainingPipeline
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -202,9 +202,8 @@ def test_broadcast_error_dict_is_sanitized(monkeypatch, caplog):
 
 
 def test_trait_derivation_raise_is_sanitized(monkeypatch):
-    import kaizen.core.framework as framework
-
     import kaizen.core.base_agent as base_agent_mod
+    import kaizen.core.framework as framework
 
     # tests/unit/conftest.py installs an autouse fixture that replaces
     # Kaizen._generate_role_based_traits with an offline stub. That fixture and
@@ -525,7 +524,6 @@ def test_trace_exporter_raise_is_sanitized():
     from datetime import datetime, timezone
 
     from kailash.diagnostics.protocols import TraceEvent, TraceEventType
-
     from kaizen.observability.trace_exporter import TraceExporter, TraceExportError
 
     exporter = TraceExporter(sink=_raiser(), raise_on_error=True)

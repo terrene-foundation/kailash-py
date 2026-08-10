@@ -17,10 +17,7 @@ from datetime import UTC, datetime
 import pytest
 
 from kaizen.l3.messaging.dead_letters import DeadLetterReason, DeadLetterStore
-from kaizen.l3.messaging.types import (
-    DelegationPayload,
-    MessageEnvelope,
-)
+from kaizen.l3.messaging.types import DelegationPayload, MessageEnvelope
 
 
 def _envelope(

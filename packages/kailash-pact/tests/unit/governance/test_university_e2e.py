@@ -18,20 +18,19 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
 from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition
+from kailash.trust.pact.compilation import CompiledOrg
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.knowledge import KnowledgeItem
-
-# Import the university example modules
-from pact.examples.university.org import create_university_org
-from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
+from pact.examples.university.clearance import create_university_clearances
 
+# Import the university example modules
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures

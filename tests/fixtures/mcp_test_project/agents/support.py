@@ -3,7 +3,7 @@
 
 """Kaizen SupportAgent fixture for MCP integration tests."""
 
-from kaizen.core import BaseAgent, Signature, InputField, OutputField
+from kaizen.core import BaseAgent, InputField, OutputField, Signature
 
 
 class SupportAgent(BaseAgent):

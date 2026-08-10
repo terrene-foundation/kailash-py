@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
 if TYPE_CHECKING:
     import polars as pl  # noqa: F401 — referenced in forward-string annotations
 
+from kailash.utils.url_credentials import mask_url
 from kailash_ml._env import resolve_store_url
 from kailash_ml.errors import RunNotFoundError
 from kailash_ml.tracking.query import (
@@ -45,8 +46,6 @@ from kailash_ml.tracking.query import (
 from kailash_ml.tracking.runner import ExperimentRun
 from kailash_ml.tracking.runner import track as _track_async
 from kailash_ml.tracking.storage import AbstractTrackerStore, SqliteTrackerStore
-
-from kailash.utils.url_credentials import mask_url
 
 __all__ = ["ExperimentTracker"]
 

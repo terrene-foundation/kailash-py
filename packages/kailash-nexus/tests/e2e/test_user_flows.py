@@ -112,9 +112,8 @@ workflow = workflow.build()
             os.chdir(tmpdir)
 
             try:
-                from nexus import Nexus
-
                 from kailash.workflow.builder import WorkflowBuilder
+                from nexus import Nexus
 
                 # Use unique port for E2E test
                 api_port = find_free_port(9010)
@@ -196,9 +195,8 @@ result = {
             reason="/metrics requires the optional kailash-nexus[metrics] extra",
         )
 
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # 1. Start simple
         # Use unique port for E2E test
@@ -316,9 +314,8 @@ CMD ["python", "-m", "nexus"]
             os.chdir(deploy_dir)
 
             try:
-                from nexus import Nexus
-
                 from kailash.workflow.builder import WorkflowBuilder
+                from nexus import Nexus
 
                 # Use dynamic port for E2E test
                 api_port = find_free_port(9012)
@@ -439,9 +436,8 @@ class TestAIDeveloperFlow:
     @pytest.mark.e2e
     def test_ai_developer_mcp_integration(self, docker_env):
         """Test AI developer flow: create AI workflow → expose via MCP → test via API."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # 1. Create AI-powered workflow
         # Use dynamic port for E2E test (skip MCP for now, test via API)
@@ -524,9 +520,8 @@ result = {
     @pytest.mark.e2e
     def test_ai_developer_tool_composition(self, docker_env):
         """Test composing multiple tools for AI agents."""
-        from nexus import Nexus
-
         from kailash.workflow.builder import WorkflowBuilder
+        from nexus import Nexus
 
         # Use dynamic port for E2E test
         api_port = find_free_port(9015)
@@ -601,13 +596,11 @@ result = {'keywords': keywords}
             # assert, not `if`: a conditional here silently skips every
             # assertion in the block when the response shape changes, so the
             # test would report success having checked nothing.
-            assert "outputs" in summary_result, (
-                f"summarize-text response has no 'outputs' key: {summary_result}"
-            )
+            assert (
+                "outputs" in summary_result
+            ), f"summarize-text response has no 'outputs' key: {summary_result}"
             summary_data = (
-                summary_result.get("outputs", {})
-                .get("summarize", {})
-                .get("result", {})
+                summary_result.get("outputs", {}).get("summarize", {}).get("result", {})
             )
             summary = summary_data.get("summary", "")
             assert "Kailash Nexus" in summary
@@ -618,20 +611,17 @@ result = {'keywords': keywords}
                 json={"parameters": {}},  # Empty parameters since we use hardcoded data
             )
             keywords_result = keywords_response.json()
-            assert "outputs" in keywords_result, (
-                f"extract-keywords response has no 'outputs' key: {keywords_result}"
-            )
+            assert (
+                "outputs" in keywords_result
+            ), f"extract-keywords response has no 'outputs' key: {keywords_result}"
             keywords_data = (
-                keywords_result.get("outputs", {})
-                .get("extract", {})
-                .get("result", {})
+                keywords_result.get("outputs", {}).get("extract", {}).get("result", {})
             )
             keywords = keywords_data.get("keywords", [])
             assert len(keywords) > 0
             # Check for "kailash" or any meaningful keyword
             assert any(
-                word
-                in ["kailash", "nexus", "platform", "workflow", "orchestration"]
+                word in ["kailash", "nexus", "platform", "workflow", "orchestration"]
                 for word in keywords
             )
 

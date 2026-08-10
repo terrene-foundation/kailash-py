@@ -47,7 +47,6 @@ from dataflow.testing.performance_optimization import (
     get_performance_monitor,
     optimized_test_context,
 )
-
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
@@ -264,9 +263,9 @@ async def test_simple_crud_operations_benchmark(enhanced_tdd_context, benchmark_
     results = [
         r for r in benchmark_suite.benchmark_results if r["category"] == "simple_crud"
     ]
-    assert all(r["target_achieved"] for r in results), (
-        "Not all CRUD operations met the 50ms target"
-    )
+    assert all(
+        r["target_achieved"] for r in results
+    ), "Not all CRUD operations met the 50ms target"
 
 
 @pytest.mark.integration
@@ -380,9 +379,9 @@ async def test_complex_multi_model_workflow_benchmark(
     )
 
     # Validate workflow met the target
-    assert workflow_time < 100.0, (
-        f"Complex workflow exceeded target: {workflow_time:.2f}ms"
-    )
+    assert (
+        workflow_time < 100.0
+    ), f"Complex workflow exceeded target: {workflow_time:.2f}ms"
 
 
 @pytest.mark.integration
@@ -483,9 +482,9 @@ async def test_bulk_operations_benchmark(enhanced_tdd_context, benchmark_suite):
         for r in benchmark_suite.benchmark_results
         if r["category"] == "bulk_operations"
     ]
-    assert all(r["target_achieved"] for r in bulk_results), (
-        "Not all bulk operations met the 200ms target"
-    )
+    assert all(
+        r["target_achieved"] for r in bulk_results
+    ), "Not all bulk operations met the 200ms target"
 
 
 @pytest.mark.integration
@@ -575,15 +574,15 @@ async def test_concurrent_user_simulation_benchmark(
         )
 
     # Validate concurrent performance
-    assert successful_users == concurrent_users, (
-        f"Not all users completed successfully: {successful_users}/{concurrent_users}"
-    )
-    assert all(t < 100.0 for t in user_times), (
-        f"Some users exceeded 100ms target: max={max(user_times):.2f}ms"
-    )
-    assert concurrent_execution_time < concurrent_users * 20.0, (
-        f"Poor parallelization: {concurrent_execution_time:.2f}ms"
-    )
+    assert (
+        successful_users == concurrent_users
+    ), f"Not all users completed successfully: {successful_users}/{concurrent_users}"
+    assert all(
+        t < 100.0 for t in user_times
+    ), f"Some users exceeded 100ms target: max={max(user_times):.2f}ms"
+    assert (
+        concurrent_execution_time < concurrent_users * 20.0
+    ), f"Poor parallelization: {concurrent_execution_time:.2f}ms"
 
 
 @pytest.mark.integration
@@ -646,9 +645,9 @@ async def test_schema_operations_benchmark(cached_schema_models, benchmark_suite
     schema_results = [
         r for r in benchmark_suite.benchmark_results if r["category"] == "schema_ops"
     ]
-    assert all(r["target_achieved"] for r in schema_results), (
-        "Not all schema operations met the 30ms target"
-    )
+    assert all(
+        r["target_achieved"] for r in schema_results
+    ), "Not all schema operations met the 30ms target"
 
 
 @pytest.mark.integration
@@ -718,9 +717,9 @@ async def test_transaction_heavy_benchmark(enhanced_tdd_context, benchmark_suite
     )
 
     # Validate transaction operations
-    assert transaction_time < 100.0, (
-        f"Transaction scenario exceeded target: {transaction_time:.2f}ms"
-    )
+    assert (
+        transaction_time < 100.0
+    ), f"Transaction scenario exceeded target: {transaction_time:.2f}ms"
     assert rollback_time < 50.0, f"Rollback exceeded target: {rollback_time:.2f}ms"
 
 
@@ -782,19 +781,19 @@ async def test_comprehensive_performance_benchmark(
     )
 
     # Validate comprehensive performance
-    assert total_scenario_time < 100.0, (
-        f"Comprehensive scenario exceeded target: {total_scenario_time:.2f}ms"
-    )
-    assert benchmark_context.validate_performance_target(), (
-        "Failed to meet overall performance target"
-    )
+    assert (
+        total_scenario_time < 100.0
+    ), f"Comprehensive scenario exceeded target: {total_scenario_time:.2f}ms"
+    assert (
+        benchmark_context.validate_performance_target()
+    ), "Failed to meet overall performance target"
 
     # Generate and validate comprehensive report
     report = benchmark_context.get_comprehensive_report()
     assert report["target_achieved"], "Comprehensive benchmark did not achieve target"
-    assert all(opt for opt in report["optimizations"].values()), (
-        "Not all optimizations were enabled"
-    )
+    assert all(
+        opt for opt in report["optimizations"].values()
+    ), "Not all optimizations were enabled"
 
 
 def test_benchmark_suite_summary(benchmark_suite):

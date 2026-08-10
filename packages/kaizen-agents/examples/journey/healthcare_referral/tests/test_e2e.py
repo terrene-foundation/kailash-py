@@ -16,9 +16,7 @@ Cost Estimate:
     - Full test suite: ~$0.50
 """
 
-import asyncio
 import os
-from typing import Any, Dict
 
 import pytest
 
@@ -42,10 +40,7 @@ from examples.journey.healthcare_referral.agents import (
     PersuasionAgent,
     PersuasionAgentConfig,
 )
-from examples.journey.healthcare_referral.journey import (
-    HealthcareReferralJourney,
-    default_config,
-)
+from examples.journey.healthcare_referral.journey import HealthcareReferralJourney
 from kaizen.journey import JourneyConfig
 
 

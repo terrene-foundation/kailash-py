@@ -23,12 +23,8 @@ from kailash.trust.pact.config import (
     OrgDefinition,
 )
 from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import (
-    RoleEnvelope,
-    check_passthrough_envelope,
-)
+from kailash.trust.pact.envelopes import RoleEnvelope, check_passthrough_envelope
 from kailash.trust.pact.exceptions import PactError
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- minimal org (same pattern as test_eatp_emission_engine.py)

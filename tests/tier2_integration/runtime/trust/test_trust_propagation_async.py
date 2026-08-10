@@ -14,12 +14,8 @@ from kailash.runtime.trust.context import (
     get_runtime_trust_context,
     set_runtime_trust_context,
 )
-from kailash.runtime.trust.verifier import (
-    MockTrustVerifier,
-    TrustVerifierConfig,
-)
+from kailash.runtime.trust.verifier import MockTrustVerifier, TrustVerifierConfig
 from kailash.sdk_exceptions import WorkflowExecutionError
-
 
 # =============================================================================
 # Test AsyncLocalRuntime.execute_workflow_async() trust context propagation

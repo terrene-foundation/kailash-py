@@ -28,8 +28,8 @@ import time
 from pathlib import Path
 
 import pytest
-from kaizen.memory.persistent_tiers import WarmMemoryTier
 
+from kaizen.memory.persistent_tiers import WarmMemoryTier
 from tests.utils.cost_tracking import get_global_tracker
 
 # Mark all tests as E2E and async
@@ -120,9 +120,9 @@ async def test_warm_memory_operations():
 
         # Warm tier should be faster than 10ms on average
         # Note: First access might be slower due to DB setup, so we check max is reasonable
-        assert max_retrieval_time < 50.0, (
-            f"Warm tier too slow: {max_retrieval_time:.4f}ms > 50ms"
-        )
+        assert (
+            max_retrieval_time < 50.0
+        ), f"Warm tier too slow: {max_retrieval_time:.4f}ms > 50ms"
 
         # Test 3: Exists check
         print("\n4. Testing exists check...")

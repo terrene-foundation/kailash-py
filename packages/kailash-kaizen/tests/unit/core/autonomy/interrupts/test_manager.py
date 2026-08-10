@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import anyio
 import pytest
+
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import InterruptMode, InterruptSource
 

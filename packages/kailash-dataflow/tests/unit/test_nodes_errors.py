@@ -14,6 +14,7 @@ This test suite validates enhanced error messages from nodes.py:
 """
 
 import pytest
+
 from dataflow.platform.errors import DataFlowError, ErrorCode, ErrorEnhancer
 
 # ============================================================================

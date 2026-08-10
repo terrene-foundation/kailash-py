@@ -16,15 +16,8 @@ from kailash_ml.engines.model_registry import (
     LocalFileArtifactStore,
     ModelNotFoundError,
     ModelRegistry,
-    ModelVersion,
 )
-from kailash_ml.types import (
-    FeatureField,
-    FeatureSchema,
-    MetricSpec,
-    ModelSignature,
-)
-
+from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -108,7 +108,7 @@ class TestEnhancedClientDocker(DockerIntegrationTestBase):
                     async with session.get(f"http://localhost:{port}/health") as resp:
                         if resp.status == 200:
                             break
-                except:
+                except aiohttp.ClientError:
                     await asyncio.sleep(0.1)
 
         server_state["port"] = port

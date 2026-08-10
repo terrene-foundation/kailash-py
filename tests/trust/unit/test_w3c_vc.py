@@ -12,7 +12,7 @@ Tests cover:
 - Error handling for invalid inputs
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -25,7 +25,6 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kailash.trust.signing.crypto import generate_keypair, sign, serialize_for_signing
 from kailash.trust.interop.w3c_vc import (
     EATP_CONTEXT_URL,
     W3C_CREDENTIALS_V2_CONTEXT,
@@ -34,7 +33,7 @@ from kailash.trust.interop.w3c_vc import (
     import_from_verifiable_credential,
     verify_credential,
 )
-
+from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -175,7 +174,9 @@ class TestVCStructure:
         assert W3C_CREDENTIALS_V2_CONTEXT in vc["@context"]
         assert EATP_CONTEXT_URL in vc["@context"]
 
-    def test_type_includes_verifiable_credential_and_eatp(self, trust_chain, keypair, issuer_did):
+    def test_type_includes_verifiable_credential_and_eatp(
+        self, trust_chain, keypair, issuer_did
+    ):
         """VC type MUST include VerifiableCredential and EATPTrustChain."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -201,7 +202,9 @@ class TestVCStructure:
         parsed = datetime.fromisoformat(vc["validFrom"])
         assert parsed.tzinfo is not None
 
-    def test_valid_until_present_when_chain_expires(self, trust_chain, keypair, issuer_did):
+    def test_valid_until_present_when_chain_expires(
+        self, trust_chain, keypair, issuer_did
+    ):
         """VC MUST have validUntil when the chain has an expiration."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -238,7 +241,9 @@ class TestVCStructure:
 
         assert "validUntil" not in vc
 
-    def test_credential_subject_contains_chain_data(self, trust_chain, keypair, issuer_did):
+    def test_credential_subject_contains_chain_data(
+        self, trust_chain, keypair, issuer_did
+    ):
         """VC credentialSubject MUST contain EATP chain data."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -262,7 +267,9 @@ class TestVCStructure:
         assert "createdAt" in genesis
         assert "signatureAlgorithm" in genesis
 
-    def test_credential_subject_capabilities_fields(self, trust_chain, keypair, issuer_did):
+    def test_credential_subject_capabilities_fields(
+        self, trust_chain, keypair, issuer_did
+    ):
         """VC credentialSubject capabilities MUST contain all capability fields."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -276,7 +283,9 @@ class TestVCStructure:
         assert cap["attesterId"] == "authority-001"
         assert "attestedAt" in cap
 
-    def test_credential_subject_delegations_fields(self, trust_chain, keypair, issuer_did):
+    def test_credential_subject_delegations_fields(
+        self, trust_chain, keypair, issuer_did
+    ):
         """VC credentialSubject delegations MUST contain all delegation fields."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -401,7 +410,9 @@ class TestExportChainAsVC:
         with pytest.raises(ValueError, match="signing_key"):
             export_as_verifiable_credential(trust_chain, issuer_did, "not-a-valid-key")
 
-    def test_export_constraint_envelope_when_present(self, trust_chain, keypair, issuer_did):
+    def test_export_constraint_envelope_when_present(
+        self, trust_chain, keypair, issuer_did
+    ):
         """Exported VC should include constraint envelope data when present."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -418,7 +429,9 @@ class TestExportChainAsVC:
 class TestExportCapabilityAsVC:
     """Tests for export_capability_as_vc function."""
 
-    def test_export_single_capability(self, capability_attestation, keypair, issuer_did):
+    def test_export_single_capability(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """Exporting a single capability should produce a valid VC."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -435,7 +448,9 @@ class TestExportCapabilityAsVC:
         assert W3C_CREDENTIALS_V2_CONTEXT in vc["@context"]
         assert EATP_CONTEXT_URL in vc["@context"]
 
-    def test_capability_vc_credential_subject(self, capability_attestation, keypair, issuer_did):
+    def test_capability_vc_credential_subject(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """Capability VC credentialSubject MUST contain capability data."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -455,7 +470,9 @@ class TestExportCapabilityAsVC:
         assert "proof" in vc
         assert vc["proof"]["type"] == "Ed25519Signature2020"
 
-    def test_capability_vc_valid_from(self, capability_attestation, keypair, issuer_did):
+    def test_capability_vc_valid_from(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """Capability VC MUST have validFrom matching attested_at."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -464,7 +481,9 @@ class TestExportCapabilityAsVC:
         valid_from = datetime.fromisoformat(vc["validFrom"])
         assert valid_from == capability_attestation.attested_at
 
-    def test_capability_vc_valid_until_when_expires(self, capability_attestation, keypair, issuer_did):
+    def test_capability_vc_valid_until_when_expires(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """Capability VC MUST have validUntil when capability expires."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -495,7 +514,9 @@ class TestVerifyCredential:
 
         assert verify_credential(vc, public_key) is True
 
-    def test_verify_valid_capability_vc(self, capability_attestation, keypair, issuer_did):
+    def test_verify_valid_capability_vc(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """verify_credential MUST return True for a valid capability VC."""
         private_key, public_key = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -588,7 +609,10 @@ class TestImportFromVC:
         assert imported.genesis.agent_id == trust_chain.genesis.agent_id
         assert imported.genesis.authority_id == trust_chain.genesis.authority_id
         assert imported.genesis.authority_type == trust_chain.genesis.authority_type
-        assert imported.genesis.signature_algorithm == trust_chain.genesis.signature_algorithm
+        assert (
+            imported.genesis.signature_algorithm
+            == trust_chain.genesis.signature_algorithm
+        )
 
     def test_round_trip_capabilities(self, trust_chain, keypair, issuer_did):
         """Imported chain should have same capabilities."""
@@ -658,7 +682,9 @@ class TestImportFromVC:
         with pytest.raises(ValueError, match="type"):
             import_from_verifiable_credential(vc)
 
-    def test_import_raises_on_missing_credential_subject(self, trust_chain, keypair, issuer_did):
+    def test_import_raises_on_missing_credential_subject(
+        self, trust_chain, keypair, issuer_did
+    ):
         """import_from_verifiable_credential MUST raise when credentialSubject missing."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -790,7 +816,9 @@ class TestEdgeCases:
 
         assert len(vc["credentialSubject"]["delegations"]) == 2
 
-    def test_export_deterministic_for_same_input(self, trust_chain, keypair, issuer_did):
+    def test_export_deterministic_for_same_input(
+        self, trust_chain, keypair, issuer_did
+    ):
         """Two exports of the same chain should produce structurally equivalent VCs
         (proof values will differ due to timestamp)."""
         private_key, _ = keypair
@@ -816,14 +844,18 @@ class TestEdgeCases:
         imported = import_from_verifiable_credential(vc)
         assert imported.genesis.agent_id == "agent-alpha"
 
-    def test_capability_vc_scope_preserved(self, capability_attestation, keypair, issuer_did):
+    def test_capability_vc_scope_preserved(
+        self, capability_attestation, keypair, issuer_did
+    ):
         """Capability VC should preserve scope data in credentialSubject."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
 
         assert vc["credentialSubject"]["scope"] == {"tables": ["transactions"]}
 
-    def test_genesis_metadata_preserved_in_export(self, trust_chain, keypair, issuer_did):
+    def test_genesis_metadata_preserved_in_export(
+        self, trust_chain, keypair, issuer_did
+    ):
         """Genesis metadata should be preserved in the VC export."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -900,7 +932,10 @@ class TestReasoningTraceExport:
         assert "reasoning" in d
         reasoning = d["reasoning"]
         assert reasoning["decision"] == "Delegate financial analysis to agent-beta"
-        assert reasoning["rationale"] == "Agent-beta has verified financial analysis capabilities"
+        assert (
+            reasoning["rationale"]
+            == "Agent-beta has verified financial analysis capabilities"
+        )
         assert reasoning["confidentiality"] == "public"
         assert reasoning["methodology"] == "capability_matching"
         assert reasoning["confidence"] == 0.92
@@ -911,7 +946,9 @@ class TestReasoningTraceExport:
         assert d["reasoningTraceHash"] == "sha256-abc123"
         assert d["reasoningSignature"] == "sig-reasoning-001"
 
-    def test_export_delegation_with_restricted_reasoning_trace(self, keypair, issuer_did):
+    def test_export_delegation_with_restricted_reasoning_trace(
+        self, keypair, issuer_did
+    ):
         """Export MUST include full reasoning trace when confidentiality is RESTRICTED."""
         private_key, _ = keypair
         now = datetime.now(timezone.utc)
@@ -970,7 +1007,9 @@ class TestReasoningTraceExport:
         assert d["reasoningTraceHash"] == "sha256-restricted"
         assert d["reasoningSignature"] == "sig-reasoning-restricted"
 
-    def test_export_delegation_with_confidential_reasoning_trace(self, keypair, issuer_did):
+    def test_export_delegation_with_confidential_reasoning_trace(
+        self, keypair, issuer_did
+    ):
         """Export MUST include only hash for CONFIDENTIAL reasoning trace (selective disclosure)."""
         private_key, _ = keypair
         now = datetime.now(timezone.utc)
@@ -1089,7 +1128,9 @@ class TestReasoningTraceExport:
         assert d["reasoningTraceHash"] == "sha256-secret"
         assert d["reasoningSignature"] == "sig-reasoning-secret"
 
-    def test_export_delegation_with_top_secret_reasoning_trace(self, keypair, issuer_did):
+    def test_export_delegation_with_top_secret_reasoning_trace(
+        self, keypair, issuer_did
+    ):
         """Export MUST include only hash for TOP_SECRET reasoning trace."""
         private_key, _ = keypair
         now = datetime.now(timezone.utc)
@@ -1146,7 +1187,9 @@ class TestReasoningTraceExport:
         assert d["reasoningTraceHash"] == "sha256-topsecret"
         assert d["reasoningSignature"] == "sig-reasoning-topsecret"
 
-    def test_export_delegation_without_reasoning_trace(self, trust_chain, keypair, issuer_did):
+    def test_export_delegation_without_reasoning_trace(
+        self, trust_chain, keypair, issuer_did
+    ):
         """Export MUST NOT include reasoning fields when delegation has no trace."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -1337,7 +1380,9 @@ class TestReasoningTraceImport:
         assert imp_del.reasoning_trace_hash == "sha256-conf-hash"
         assert imp_del.reasoning_signature == "sig-conf"
 
-    def test_import_vc_without_reasoning_fields_backward_compat(self, trust_chain, keypair, issuer_did):
+    def test_import_vc_without_reasoning_fields_backward_compat(
+        self, trust_chain, keypair, issuer_did
+    ):
         """Import MUST handle VCs without reasoning fields (backward compatibility)."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -1422,11 +1467,19 @@ class TestReasoningTraceRoundTrip:
         assert imp_del.reasoning_trace is not None
         assert imp_del.reasoning_trace.decision == orig_del.reasoning_trace.decision
         assert imp_del.reasoning_trace.rationale == orig_del.reasoning_trace.rationale
-        assert imp_del.reasoning_trace.confidentiality == orig_del.reasoning_trace.confidentiality
+        assert (
+            imp_del.reasoning_trace.confidentiality
+            == orig_del.reasoning_trace.confidentiality
+        )
         assert imp_del.reasoning_trace.timestamp == orig_del.reasoning_trace.timestamp
-        assert imp_del.reasoning_trace.alternatives_considered == orig_del.reasoning_trace.alternatives_considered
+        assert (
+            imp_del.reasoning_trace.alternatives_considered
+            == orig_del.reasoning_trace.alternatives_considered
+        )
         assert imp_del.reasoning_trace.evidence == orig_del.reasoning_trace.evidence
-        assert imp_del.reasoning_trace.methodology == orig_del.reasoning_trace.methodology
+        assert (
+            imp_del.reasoning_trace.methodology == orig_del.reasoning_trace.methodology
+        )
         assert imp_del.reasoning_trace.confidence == orig_del.reasoning_trace.confidence
         assert imp_del.reasoning_trace_hash == orig_del.reasoning_trace_hash
         assert imp_del.reasoning_signature == orig_del.reasoning_signature

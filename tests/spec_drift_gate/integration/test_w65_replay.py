@@ -16,18 +16,18 @@ unit-test of an isolated function.
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from spec_drift_gate import (
+    ErrorsModule,
     Manifest,
     SymbolIndex,
-    ErrorsModule,
     parse_overrides,
     run_sweeps,
     scan_sections,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "spec_drift_gate"

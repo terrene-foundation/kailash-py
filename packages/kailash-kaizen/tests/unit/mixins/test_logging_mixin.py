@@ -17,6 +17,7 @@ import logging
 from unittest.mock import patch
 
 import pytest
+
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.mixins.logging import LoggingMixin

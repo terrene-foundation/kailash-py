@@ -96,7 +96,10 @@ class Test{AgentName}Initialization:
 
     def test_full_config_object_initialization(self):
         """Test initialization with full config object."""
-        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import (
+            {AgentName},
+            {AgentName}Config,
+        )
 
         config = {AgentName}Config(
             llm_provider="openai",
@@ -115,7 +118,10 @@ class Test{AgentName}Initialization:
 
     def test_config_object_overrides_kwargs(self):
         """Test that config object takes precedence over kwargs."""
-        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import (
+            {AgentName},
+            {AgentName}Config,
+        )
 
         config = {AgentName}Config(
             model="gpt-4",
@@ -359,8 +365,8 @@ class Test{AgentName}Signature:
 
     def test_signature_inherits_from_base(self):
         """Test that signature inherits from Signature base class."""
-        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
         from kaizen.signatures import Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         assert issubclass({AgentName}Signature, Signature)
 
@@ -386,8 +392,8 @@ class Test{AgentName}Signature:
 
     def test_signature_field_types(self):
         """Test that signature fields have correct types."""
-        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
         from kaizen.signatures import InputField, OutputField
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         sig = {AgentName}Signature()
 
@@ -553,9 +559,8 @@ class Test{AgentName}MultiCycle:
 
     def test_uses_multi_cycle_strategy(self):
         """Test that agent uses MultiCycleStrategy."""
-        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
-
         from kailash.strategies.multi_cycle import MultiCycleStrategy
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 

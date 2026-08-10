@@ -12,12 +12,13 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
 )
+
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
 class TestLLMAgentMCPPydanticBug:
@@ -445,9 +446,9 @@ class TestLLMAgentMCPPydanticBug:
         assert major >= 1, f"Expected OpenAI major version >= 1, got {major}"
 
         if major == 1:
-            assert minor >= 97, (
-                f"Expected OpenAI minor version >= 97 for v1.x, got {minor}"
-            )
+            assert (
+                minor >= 97
+            ), f"Expected OpenAI minor version >= 97 for v1.x, got {minor}"
 
         print(f"✅ Testing with OpenAI v{openai.__version__} (has Pydantic models)")
 

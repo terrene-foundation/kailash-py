@@ -37,7 +37,6 @@ from __future__ import annotations
 from typing import Optional
 
 from kailash.utils.url_credentials import fingerprint_secret
-
 from kaizen.utils.credential_scrub import scrub_credentials
 
 

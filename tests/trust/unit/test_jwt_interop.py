@@ -26,6 +26,8 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.crypto import hash_reasoning_trace
 
 # ---------------------------------------------------------------------------
 # Helpers: reusable fixtures
@@ -148,8 +150,20 @@ def _make_chain(
 
 jwt = pytest.importorskip("jwt", reason="pyjwt[crypto] required for JWT interop tests")
 
+# Deliberately after the importorskip guard above — noqa: E402 is the guard,
+# not an oversight.
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: E402
+    Ed25519PrivateKey,
+)
+from cryptography.hazmat.primitives.serialization import (  # noqa: E402
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
+
 # Import the module under test AFTER confirming jwt is available
-from kailash.trust.interop.jwt import (
+from kailash.trust.interop.jwt import (  # noqa: E402
     EATP_VERSION,
     export_capability_as_jwt,
     export_chain_as_jwt,
@@ -162,13 +176,6 @@ from kailash.trust.interop.jwt import (
 # HMAC algorithms are excluded from the safe list to prevent key-confusion attacks.
 # ---------------------------------------------------------------------------
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    NoEncryption,
-    PrivateFormat,
-    PublicFormat,
-)
 
 _ed25519_key = Ed25519PrivateKey.generate()
 SIGNING_KEY = _ed25519_key.private_bytes(
@@ -657,10 +664,6 @@ class TestEdgeCases:
 # ===================================================================
 # 7. Reasoning trace confidentiality filtering
 # ===================================================================
-
-from kailash.trust.chain import ActionResult, AuditAnchor
-from kailash.trust.signing.crypto import hash_reasoning_trace
-from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 
 
 def _make_reasoning_trace(

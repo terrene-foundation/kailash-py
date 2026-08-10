@@ -3,7 +3,6 @@
 """Tests for AgentGuardrailMixin."""
 from __future__ import annotations
 
-import math
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -17,7 +16,6 @@ from kailash_ml.engines._guardrails import (
     GuardrailBudgetExceededError,
     GuardrailConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # GuardrailConfig

@@ -15,7 +15,6 @@ from nexus.transports.base import Transport
 from nexus.transports.http import HTTPTransport
 from nexus.transports.mcp import MCPTransport
 
-
 # ---------------------------------------------------------------------------
 # Transport ABC tests
 # ---------------------------------------------------------------------------

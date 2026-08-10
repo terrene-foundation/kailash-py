@@ -43,9 +43,7 @@ from kaizen_agents.delegate.adapters.ollama_adapter import (
     OllamaStreamAdapter,
 )
 from kaizen_agents.delegate.adapters.openai_adapter import OpenAIStreamAdapter
-from kaizen_agents.delegate.adapters.registry import (
-    get_adapter_for_model,
-)
+from kaizen_agents.delegate.adapters.registry import get_adapter_for_model
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 from kaizen_agents.orchestration.adapters import (

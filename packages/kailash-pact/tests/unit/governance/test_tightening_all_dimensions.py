@@ -20,11 +20,7 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TemporalConstraintConfig,
 )
-from kailash.trust.pact.envelopes import (
-    MonotonicTighteningError,
-    RoleEnvelope,
-)
-
+from kailash.trust.pact.envelopes import MonotonicTighteningError, RoleEnvelope
 
 # ---------------------------------------------------------------------------
 # Helpers -- build constraint configs for tests

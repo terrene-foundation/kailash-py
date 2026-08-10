@@ -33,7 +33,6 @@ from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pact.knowledge import KnowledgeItem
 
-
 # ---------------------------------------------------------------------------
 # Helpers -- minimal org for testing
 # ---------------------------------------------------------------------------
@@ -333,7 +332,7 @@ class TestDelegationRecordEmission:
         engine, addrs = _make_org_and_engine(eatp_emitter=emitter)
 
         # Set parent role envelope first
-        role_env = _set_envelope_for_role(
+        _set_envelope_for_role(
             engine, addrs["dean-eng"], addrs["team-lead"], envelope_id="env-tl"
         )
 
@@ -442,7 +441,6 @@ class TestAuditEnrichment:
 
     def test_barrier_enforced_on_denial(self) -> None:
         """check_access denial audit includes barrier_enforced=True."""
-        from kailash.trust.pact.audit import AuditChain
 
         emitter = InMemoryPactEmitter()
         engine, addrs = _make_org_and_engine(eatp_emitter=emitter)

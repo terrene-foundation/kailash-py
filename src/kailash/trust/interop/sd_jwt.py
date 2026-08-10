@@ -48,9 +48,7 @@ from typing import Any, Dict, List, Optional
 from kailash.trust.chain import CapabilityAttestation, TrustLineageChain
 from kailash.trust.exceptions import InvalidSignatureError
 from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
-from kailash.trust.signing.capability_fold_serde import (
-    serialize_capability_fold_fields,
-)
+from kailash.trust.signing.capability_fold_serde import serialize_capability_fold_fields
 from kailash.trust.signing.crypto import hash_reasoning_trace
 
 logger = logging.getLogger(__name__)

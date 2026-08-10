@@ -87,7 +87,7 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
                     async with session.get(f"http://localhost:{port}/health") as resp:
                         if resp.status == 200:
                             break
-                except:
+                except aiohttp.ClientError:
                     await asyncio.sleep(0.1)
 
         # Return both health status and port for tests to use

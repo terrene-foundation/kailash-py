@@ -32,8 +32,8 @@ import time
 from pathlib import Path
 
 import pytest
-from dataflow import DataFlow
 
+from dataflow import DataFlow
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

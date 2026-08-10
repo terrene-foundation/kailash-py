@@ -5,15 +5,14 @@ from __future__ import annotations
 
 import warnings
 
-import numpy as np
 import polars as pl
 import pytest
-from kailash_ml._decorators import ExperimentalWarning, _warned_classes
-from kailash_ml.engines.model_visualizer import ModelVisualizer
 from sklearn.datasets import make_classification, make_regression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
+from kailash_ml._decorators import ExperimentalWarning, _warned_classes
+from kailash_ml.engines.model_visualizer import ModelVisualizer
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -243,9 +242,8 @@ class TestFeatureImportance:
     def test_permutation_fallback(self, binary_data) -> None:
         """Test fallback to permutation importance for models without
         feature_importances_ or coef_."""
-        from sklearn.neighbors import KNeighborsClassifier
-
         import plotly.graph_objects as go
+        from sklearn.neighbors import KNeighborsClassifier
 
         X, y, _ = binary_data
         knn = KNeighborsClassifier(n_neighbors=3)

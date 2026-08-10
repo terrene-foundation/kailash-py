@@ -63,8 +63,8 @@ from typing import Any, Optional
 
 from kailash.db.dialect import (
     DatabaseType,
-    PostgresDialect,
     MySQLDialect,
+    PostgresDialect,
     QueryDialect,
     SQLiteDialect,
 )

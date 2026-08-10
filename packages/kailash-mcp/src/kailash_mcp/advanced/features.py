@@ -79,6 +79,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optiona
 from urllib.parse import urlparse
 
 import jsonschema
+
 from kailash_mcp.errors import MCPError, MCPErrorCode, ValidationError
 from kailash_mcp.protocol.protocol import ProgressToken, get_protocol_manager
 
@@ -1320,8 +1321,8 @@ class ElicitationSystem:
         try:
             # Dispatch the elicitation/create request through the bound
             # transport, TARGETING ``client_id`` (FINDING 3). Wrap the send so a
-            # transport failure (the client vanished mid-dispatch) surfaces as a
-            # typed MCPError and the ``finally`` below cleans the pending Future /
+            # transport failure (the client vanished mid-dispatch) surfaces as a typed
+            # MCPError and the ``finally`` below cleans the pending Future /
             # callbacks — the awaiter is never left hanging until timeout.
             try:
                 await self._send_elicitation_request(

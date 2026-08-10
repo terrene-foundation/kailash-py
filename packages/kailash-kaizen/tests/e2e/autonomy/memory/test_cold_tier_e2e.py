@@ -37,7 +37,6 @@ except ImportError:
 
 from kaizen.memory import PersistentBufferMemory
 from kaizen.memory.backends import DataFlowBackend
-
 from tests.utils.cost_tracking import get_global_tracker
 
 # Mark all tests as E2E and async

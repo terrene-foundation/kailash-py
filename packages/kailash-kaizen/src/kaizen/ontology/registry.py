@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
 from kaizen.ontology.types import (
     Concept,
     ConceptMatch,

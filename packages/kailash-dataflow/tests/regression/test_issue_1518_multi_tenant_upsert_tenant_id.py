@@ -31,11 +31,11 @@ import tempfile
 import time
 
 import pytest
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 from dataflow.tenancy.interceptor import QueryInterceptor
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def _uid(prefix: str = "doc") -> str:

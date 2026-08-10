@@ -18,18 +18,16 @@ import concurrent.futures
 import threading
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.addressing import NodeType
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
 )
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.addressing import NodeType
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 from kailash.trust.pact.store import (
     MAX_STORE_SIZE,
@@ -275,7 +273,7 @@ class TestMemoryEnvelopeStoreThreadSafety:
 
         assert errors == [], f"Concurrent task writes raised exceptions: {errors}"
         for i in range(NUM_THREADS):
-            loaded = store.get_active_task_envelope(f"D1-R1", f"task-{i}")
+            loaded = store.get_active_task_envelope("D1-R1", f"task-{i}")
             assert loaded is not None, f"Task envelope task-{i} missing"
 
     def test_concurrent_ancestor_lookups_during_writes(self) -> None:

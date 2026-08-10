@@ -738,9 +738,7 @@ class WorkflowOrchestrator:
                 # not accumulate across hops -- `result` is rebuilt from
                 # `wf_results` each iteration, so the key is re-derived, never
                 # nested.
-                from kailash.workflow.input_envelope import (
-                    bind_parameter_envelope,
-                )
+                from kailash.workflow.input_envelope import bind_parameter_envelope
 
                 wf_results, _run_id = runtime.execute(
                     reg.workflow, parameters=bind_parameter_envelope(result)

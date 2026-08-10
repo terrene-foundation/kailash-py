@@ -192,7 +192,7 @@ tests/benchmarks/
 
 ### 1. Run Benchmarks
 ```bash
-cd 
+cd
 pytest tests/benchmarks/trust/benchmark_trust_operations.py -v --benchmark-only
 ```
 

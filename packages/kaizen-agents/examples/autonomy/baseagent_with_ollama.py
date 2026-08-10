@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import anyio
+
 from kaizen.core.autonomy.control.protocol import ControlProtocol
 from kaizen.core.autonomy.control.transports import CLITransport
 from kaizen.core.base_agent import BaseAgent

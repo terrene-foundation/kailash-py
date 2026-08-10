@@ -10,13 +10,13 @@ This module provides production-ready utilities for MCP servers including:
 
 from .cache import CacheManager, LRUCache, cached_query
 from .config import ConfigManager
-from .input_schema import build_input_schema, json_type_for
 from .formatters import (
     format_response,
     json_formatter,
     markdown_formatter,
     search_formatter,
 )
+from .input_schema import build_input_schema, json_type_for
 from .metrics import MetricsCollector
 
 __all__ = [

@@ -37,11 +37,7 @@ from kaizen.llm.presets import (
     vertex_claude_preset,
     vertex_gemini_preset,
 )
-from kaizen.llm.wire_protocols import (
-    anthropic_messages,
-    bedrock_invoke,
-    openai_chat,
-)
+from kaizen.llm.wire_protocols import anthropic_messages, bedrock_invoke, openai_chat
 
 
 def _sa() -> dict:

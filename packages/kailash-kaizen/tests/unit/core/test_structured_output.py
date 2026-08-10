@@ -6,6 +6,7 @@ OpenAI's structured output format.
 """
 
 import pytest
+
 from kaizen.core.structured_output import (
     StructuredOutputGenerator,
     create_structured_output_config,

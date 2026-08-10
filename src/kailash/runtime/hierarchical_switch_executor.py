@@ -10,8 +10,8 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
-from kailash.workflow.dag import WorkflowDAG
 from kailash.tracking import TaskManager
+from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)

@@ -26,10 +26,7 @@ import uuid
 import pytest
 
 from dataflow import DataFlow
-from dataflow.features.transactions import (
-    SyncTransactionManager,
-    SyncTransactionScope,
-)
+from dataflow.features.transactions import SyncTransactionManager, SyncTransactionScope
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 pytestmark = [pytest.mark.regression, pytest.mark.integration]

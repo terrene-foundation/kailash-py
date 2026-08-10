@@ -8,7 +8,6 @@ Reuses SaaS Starter's verify_token function.
 from typing import Any, Callable, Dict
 
 from fastapi import HTTPException, Request
-
 from templates.saas_starter.auth import jwt_auth
 
 # Import verify_token for test mocking

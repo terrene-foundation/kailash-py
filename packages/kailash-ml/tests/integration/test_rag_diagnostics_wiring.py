@@ -17,8 +17,6 @@ consumers rely on.
 """
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from kailash.diagnostics.protocols import (  # noqa: E402
@@ -32,7 +30,6 @@ from kailash.diagnostics.protocols import (  # noqa: E402
 # per rules/orphan-detection.md §1 (downstream consumers see the public
 # attribute, so the wiring test MUST exercise the same surface).
 from kailash_ml.diagnostics import RAGDiagnostics  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures — in-process JudgeCallable implementations

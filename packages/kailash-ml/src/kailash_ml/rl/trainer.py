@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any
 
 from kailash_ml._device_report import DeviceReport
-from kailash_ml._result import TrainingResult
 from kailash_ml.errors import RLError
 from kailash_ml.rl._lineage import RLLineage
 from kailash_ml.rl._records import EpisodeRecord, EvalRecord

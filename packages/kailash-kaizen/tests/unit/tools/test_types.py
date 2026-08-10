@@ -13,6 +13,7 @@ Coverage:
 """
 
 import pytest
+
 from kaizen.tools.types import (
     DangerLevel,
     ToolCategory,

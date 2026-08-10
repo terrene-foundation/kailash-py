@@ -136,7 +136,10 @@ def generate_audit_report(
     lines.append("## Competency Map")
     lines.append("")
     try:
-        from kailash.trust.plane.mirror import build_competency_map, format_competency_map
+        from kailash.trust.plane.mirror import (
+            build_competency_map,
+            format_competency_map,
+        )
 
         records = project.get_mirror_records()
         total = sum(len(v) for v in records.values())

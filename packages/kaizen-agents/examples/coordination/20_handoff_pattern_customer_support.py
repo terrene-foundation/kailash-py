@@ -19,7 +19,7 @@ Estimated time: 15 minutes
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from kaizen_agents.patterns.patterns import create_handoff_pattern
 
@@ -64,8 +64,8 @@ SUPPORT_TICKETS = [
 
 
 def format_support_report(
-    ticket: Dict[str, Any], result: Dict[str, Any], history: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+    ticket: dict[str, Any], result: dict[str, Any], history: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Format support ticket resolution report."""
     return {
         "timestamp": datetime.now().isoformat(),

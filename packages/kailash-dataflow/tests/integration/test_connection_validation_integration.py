@@ -17,6 +17,7 @@ Test Coverage:
 """
 
 import pytest
+
 from dataflow.validation.connection_validator import (
     detect_circular_dependency,
     get_connection_summary,
@@ -26,7 +27,6 @@ from dataflow.validation.connection_validator import (
     validate_no_self_connection,
     validate_node_existence,
 )
-
 from kailash.workflow.builder import WorkflowBuilder
 
 

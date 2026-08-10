@@ -20,6 +20,10 @@ from __future__ import annotations
 
 import logging
 
+from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
+from kailash.trust.plane.key_managers.azure_keyvault import AzureKeyVaultKeyManager
+from kailash.trust.plane.key_managers.vault import VaultKeyManager
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -27,7 +31,3 @@ __all__ = [
     "AzureKeyVaultKeyManager",
     "VaultKeyManager",
 ]
-
-from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
-from kailash.trust.plane.key_managers.azure_keyvault import AzureKeyVaultKeyManager
-from kailash.trust.plane.key_managers.vault import VaultKeyManager

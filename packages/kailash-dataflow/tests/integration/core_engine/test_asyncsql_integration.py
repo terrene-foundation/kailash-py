@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../src"))
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
 
 @pytest.fixture
 async def test_suite():
@@ -30,6 +30,7 @@ async def test_suite():
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
+
 
 class TestAsyncSQLIntegration:
     """Test AsyncSQL node integration with DataFlow."""

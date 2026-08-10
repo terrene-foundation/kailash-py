@@ -20,11 +20,7 @@ import socket
 
 import pytest
 
-from kaizen.llm.http_client import (
-    _SafeHttpTransport,
-    LlmHttpClient,
-    SafeDnsResolver,
-)
+from kaizen.llm.http_client import LlmHttpClient, SafeDnsResolver, _SafeHttpTransport
 
 
 @pytest.mark.integration

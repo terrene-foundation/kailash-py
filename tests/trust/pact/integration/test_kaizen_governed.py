@@ -18,10 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from kailash.trust.pact.agent import (
-    GovernanceBlockedError,
-    PactGovernedAgent,
-)
+from kailash.trust.pact.agent import GovernanceBlockedError, PactGovernedAgent
 from kailash.trust.pact.audit import AuditChain
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,

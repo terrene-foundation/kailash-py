@@ -6,7 +6,7 @@ specialists and handling the booking selection process.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 
 class DoctorDatabase(Protocol):
@@ -19,10 +19,10 @@ class DoctorDatabase(Protocol):
 
     async def find_specialists(
         self,
-        symptoms: List[str],
-        preferences: Dict[str, Any],
-        exclude_ids: List[str],
-    ) -> List[Dict[str, Any]]:
+        symptoms: list[str],
+        preferences: dict[str, Any],
+        exclude_ids: list[str],
+    ) -> list[dict[str, Any]]:
         """
         Find specialists matching patient criteria.
 
@@ -135,10 +135,10 @@ class MockDoctorDatabase:
 
     async def find_specialists(
         self,
-        symptoms: List[str],
-        preferences: Dict[str, Any],
-        exclude_ids: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        symptoms: list[str],
+        preferences: dict[str, Any],
+        exclude_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Find matching specialists based on symptoms and preferences.
 
@@ -280,8 +280,8 @@ class BookingAgent:
 
     def __init__(
         self,
-        config: Optional[BookingAgentConfig] = None,
-        doctor_database: Optional[DoctorDatabase] = None,
+        config: BookingAgentConfig | None = None,
+        doctor_database: DoctorDatabase | None = None,
     ):
         """
         Initialize BookingAgent.
@@ -307,10 +307,10 @@ class BookingAgent:
     async def find_doctors(
         self,
         patient_message: str,
-        symptoms: List[str],
-        preferences: Dict[str, Any],
-        rejected_doctors: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        symptoms: list[str],
+        preferences: dict[str, Any],
+        rejected_doctors: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Find matching doctors and present options.
 
@@ -357,10 +357,10 @@ class BookingAgent:
     def find_doctors_sync(
         self,
         patient_message: str,
-        symptoms: List[str],
-        preferences: Dict[str, Any],
-        rejected_doctors: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        symptoms: list[str],
+        preferences: dict[str, Any],
+        rejected_doctors: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         Synchronous version of find_doctors.
 
@@ -378,7 +378,7 @@ class BookingAgent:
         )
 
     # BaseAgent interface methods for Journey compatibility
-    async def run_async(self, **kwargs) -> Dict[str, Any]:
+    async def run_async(self, **kwargs) -> dict[str, Any]:
         """Run agent asynchronously (Journey interface)."""
         return await self.find_doctors(
             patient_message=kwargs.get("message", kwargs.get("patient_message", "")),
@@ -387,7 +387,7 @@ class BookingAgent:
             rejected_doctors=kwargs.get("rejected_doctors", []),
         )
 
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def run(self, **kwargs) -> dict[str, Any]:
         """Run agent synchronously (Journey interface)."""
         return self.find_doctors_sync(
             patient_message=kwargs.get("message", kwargs.get("patient_message", "")),

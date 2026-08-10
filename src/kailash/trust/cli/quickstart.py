@@ -28,15 +28,11 @@ import logging
 from datetime import datetime, timezone
 
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
-from kailash.trust.chain import (
-    ActionResult,
-    AuthorityType,
-    CapabilityType,
-)
-from kailash.trust.signing.crypto import generate_keypair
+from kailash.trust.chain import ActionResult, AuthorityType, CapabilityType
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.scoring import compute_trust_score
-from kailash.trust.chain_store.memory import InMemoryTrustStore
+from kailash.trust.signing.crypto import generate_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +252,7 @@ async def run_quickstart(verbose: bool = False) -> None:
 
     if result.valid:
         print(_ok(f"VERIFIED / APPROVED: {agent1_id}"))
-        print(_detail(f"Action: analyze_data"))
+        print(_detail("Action: analyze_data"))
         if result.capability_used:
             print(_detail(f"Capability: {result.capability_used}"))
         if result.effective_constraints:
@@ -349,8 +345,8 @@ async def run_quickstart(verbose: bool = False) -> None:
     )
 
     print(_ok(f"Audit anchor recorded for {agent1_id}"))
-    print(_detail(f"Action:   analyze_data"))
-    print(_detail(f"Resource: finance_db.quarterly_results"))
+    print(_detail("Action:   analyze_data"))
+    print(_detail("Resource: finance_db.quarterly_results"))
     print(_detail(f"Result:   {anchor.result.value}"))
     if verbose:
         print(_detail(f"Anchor ID:  {anchor.id}"))

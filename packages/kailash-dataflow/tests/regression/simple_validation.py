@@ -127,7 +127,6 @@ def test_generated_nodes():
     """Test if DataFlow generates nodes correctly"""
     try:
         from dataflow import DataFlow
-
         from kailash.workflow.builder import WorkflowBuilder
 
         db = DataFlow()

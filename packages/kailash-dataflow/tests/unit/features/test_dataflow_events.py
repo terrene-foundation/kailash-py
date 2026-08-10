@@ -19,7 +19,6 @@ import pytest
 
 from dataflow.core.events import WRITE_OPERATIONS, DataFlowEventMixin
 
-
 # ---------------------------------------------------------------------------
 # WRITE_OPERATIONS constant
 # ---------------------------------------------------------------------------

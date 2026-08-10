@@ -21,12 +21,11 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust._locking import atomic_write, safe_read_json, validate_id
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import AuthorityType, CapabilityType
 from kailash.trust.chain_store.filesystem import FilesystemStore
-
-from kailash.trust._locking import atomic_write, safe_read_json, validate_id
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.plane.project import _AuthorityRegistry, _load_keys
 
 logger = logging.getLogger(__name__)

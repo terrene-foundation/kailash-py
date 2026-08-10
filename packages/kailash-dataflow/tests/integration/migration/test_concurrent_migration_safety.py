@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 
 import pytest
+
 from dataflow.migrations.concurrent_access_manager import (
     AtomicMigrationExecutor,
     ConcurrentMigrationQueue,
@@ -44,7 +45,7 @@ class TestConcurrentMigrationSafety:
             await postgres_connection.execute(
                 f"DELETE FROM dataflow_migration_locks WHERE schema_name = '{self._schema_name}'"
             )
-        except:
+        except Exception:
             pass  # Ignore cleanup errors
 
     @pytest.mark.asyncio
@@ -152,18 +153,18 @@ class TestConcurrentMigrationSafety:
         print(f"Migration completed by: {migration_completed_by}")
 
         # Only one instance should have acquired the lock and completed migration
-        assert len(lock_acquired_by) == 1, (
-            f"Expected 1 lock acquisition, got {len(lock_acquired_by)}"
-        )
-        assert len(migration_completed_by) == 1, (
-            f"Expected 1 migration completion, got {len(migration_completed_by)}"
-        )
-        assert len(successful_instances) == 1, (
-            f"Expected 1 successful instance, got {len(successful_instances)}"
-        )
-        assert len(failed_instances) == 2, (
-            f"Expected 2 failed instances, got {len(failed_instances)}"
-        )
+        assert (
+            len(lock_acquired_by) == 1
+        ), f"Expected 1 lock acquisition, got {len(lock_acquired_by)}"
+        assert (
+            len(migration_completed_by) == 1
+        ), f"Expected 1 migration completion, got {len(migration_completed_by)}"
+        assert (
+            len(successful_instances) == 1
+        ), f"Expected 1 successful instance, got {len(successful_instances)}"
+        assert (
+            len(failed_instances) == 2
+        ), f"Expected 2 failed instances, got {len(failed_instances)}"
 
     @pytest.mark.asyncio
     async def test_advisory_lock_cleanup_on_error(self, postgres_connection):
@@ -262,7 +263,7 @@ class TestConcurrentMigrationSafety:
             # Cleanup
             try:
                 await postgres_connection.execute(f"DROP TABLE IF EXISTS {table_name}")
-            except:
+            except Exception:
                 pass
 
 

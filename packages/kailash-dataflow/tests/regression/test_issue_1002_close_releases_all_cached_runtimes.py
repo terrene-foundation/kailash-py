@@ -26,10 +26,10 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
-from kailash.runtime.async_local import AsyncLocalRuntime
-from kailash.runtime.local import LocalRuntime
 
 from dataflow import DataFlow
+from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.runtime.local import LocalRuntime
 
 pytestmark = [pytest.mark.regression]
 

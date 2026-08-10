@@ -35,7 +35,6 @@ from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
 # attribute, so the wiring test MUST exercise the same surface).
 from kaizen.interpretability import InterpretabilityDiagnostics  # noqa: E402
 
-
 TINY_MODEL = "sshleifer/tiny-gpt2"
 
 
@@ -199,9 +198,7 @@ def test_api_only_mode_via_facade_no_model_load() -> None:
     DataFrame) without requiring the HF cache, so it runs on every
     CI runner regardless of model availability.
     """
-    from kaizen.interpretability import (
-        InterpretabilityDiagnostics as FacadeImport,
-    )
+    from kaizen.interpretability import InterpretabilityDiagnostics as FacadeImport
 
     diag = FacadeImport(model_name="gpt-4-turbo")
     assert isinstance(diag, Diagnostic)

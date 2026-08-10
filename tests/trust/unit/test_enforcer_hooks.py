@@ -42,7 +42,6 @@ from kailash.trust.hooks import (
     HookType,
 )
 
-
 # ---------------------------------------------------------------------------
 # Concrete test hook implementations (no mocking)
 # ---------------------------------------------------------------------------
@@ -250,7 +249,10 @@ def _make_flagged_result() -> VerificationResult:
 
 def _make_held_result(violation_count: int = 2) -> VerificationResult:
     """Create a valid result with enough violations to trigger HELD (flag_threshold=1)."""
-    violations = [{"dimension": f"dim_{i}", "reason": f"violation {i}"} for i in range(violation_count)]
+    violations = [
+        {"dimension": f"dim_{i}", "reason": f"violation {i}"}
+        for i in range(violation_count)
+    ]
     return VerificationResult(
         valid=True,
         violations=violations,
@@ -286,7 +288,9 @@ class TestPreVerificationHookFires:
 
     def test_pre_hook_receives_correct_agent_id(self, registry: HookRegistry):
         """PRE_VERIFICATION context must contain the agent_id passed to enforce()."""
-        hook = AllowHook(name="pre_agent_check", event_types=[HookType.PRE_VERIFICATION])
+        hook = AllowHook(
+            name="pre_agent_check", event_types=[HookType.PRE_VERIFICATION]
+        )
         registry.register(hook)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -298,7 +302,9 @@ class TestPreVerificationHookFires:
 
     def test_pre_hook_receives_correct_action(self, registry: HookRegistry):
         """PRE_VERIFICATION context must contain the action passed to enforce()."""
-        hook = AllowHook(name="pre_action_check", event_types=[HookType.PRE_VERIFICATION])
+        hook = AllowHook(
+            name="pre_action_check", event_types=[HookType.PRE_VERIFICATION]
+        )
         registry.register(hook)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -374,7 +380,9 @@ class TestPostVerificationHookFires:
 
     def test_post_hook_receives_correct_hook_type(self, registry: HookRegistry):
         """POST_VERIFICATION context must have hook_type=POST_VERIFICATION."""
-        hook = AllowHook(name="post_type_check", event_types=[HookType.POST_VERIFICATION])
+        hook = AllowHook(
+            name="post_type_check", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(hook)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -579,9 +587,15 @@ class TestHookPriorityOrder:
     def test_pre_hooks_fire_in_priority_order(self, registry: HookRegistry):
         """PRE_VERIFICATION hooks must execute lowest-priority-number first."""
         order_log: List[str] = []
-        hook_c = OrderTrackingHook("hook_c", order_log, event_types=[HookType.PRE_VERIFICATION], priority=300)
-        hook_a = OrderTrackingHook("hook_a", order_log, event_types=[HookType.PRE_VERIFICATION], priority=10)
-        hook_b = OrderTrackingHook("hook_b", order_log, event_types=[HookType.PRE_VERIFICATION], priority=100)
+        hook_c = OrderTrackingHook(
+            "hook_c", order_log, event_types=[HookType.PRE_VERIFICATION], priority=300
+        )
+        hook_a = OrderTrackingHook(
+            "hook_a", order_log, event_types=[HookType.PRE_VERIFICATION], priority=10
+        )
+        hook_b = OrderTrackingHook(
+            "hook_b", order_log, event_types=[HookType.PRE_VERIFICATION], priority=100
+        )
         registry.register(hook_c)
         registry.register(hook_a)
         registry.register(hook_b)
@@ -595,9 +609,15 @@ class TestHookPriorityOrder:
     def test_post_hooks_fire_in_priority_order(self, registry: HookRegistry):
         """POST_VERIFICATION hooks must execute lowest-priority-number first."""
         order_log: List[str] = []
-        hook_z = OrderTrackingHook("hook_z", order_log, event_types=[HookType.POST_VERIFICATION], priority=500)
-        hook_x = OrderTrackingHook("hook_x", order_log, event_types=[HookType.POST_VERIFICATION], priority=5)
-        hook_y = OrderTrackingHook("hook_y", order_log, event_types=[HookType.POST_VERIFICATION], priority=50)
+        hook_z = OrderTrackingHook(
+            "hook_z", order_log, event_types=[HookType.POST_VERIFICATION], priority=500
+        )
+        hook_x = OrderTrackingHook(
+            "hook_x", order_log, event_types=[HookType.POST_VERIFICATION], priority=5
+        )
+        hook_y = OrderTrackingHook(
+            "hook_y", order_log, event_types=[HookType.POST_VERIFICATION], priority=50
+        )
         registry.register(hook_z)
         registry.register(hook_x)
         registry.register(hook_y)
@@ -611,7 +631,9 @@ class TestHookPriorityOrder:
     def test_pre_and_post_hooks_fire_in_correct_phases(self, registry: HookRegistry):
         """PRE hooks fire before POST hooks, each in their own priority order."""
         order_log: List[str] = []
-        pre_hook = OrderTrackingHook("pre_hook", order_log, event_types=[HookType.PRE_VERIFICATION], priority=50)
+        pre_hook = OrderTrackingHook(
+            "pre_hook", order_log, event_types=[HookType.PRE_VERIFICATION], priority=50
+        )
         post_hook = OrderTrackingHook(
             "post_hook",
             order_log,
@@ -638,7 +660,9 @@ class TestPostVerificationMetadata:
 
     def test_metadata_contains_verdict_auto_approved(self, registry: HookRegistry):
         """POST_VERIFICATION metadata must include verdict='auto_approved' for valid."""
-        recorder = MetadataRecordingHook(name="post_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="post_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -651,7 +675,9 @@ class TestPostVerificationMetadata:
 
     def test_metadata_contains_verdict_flagged(self, registry: HookRegistry):
         """POST_VERIFICATION metadata must include verdict='flagged' for flagged results."""
-        recorder = MetadataRecordingHook(name="post_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="post_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(flag_threshold=5, hook_registry=registry)
         result = _make_flagged_result()
@@ -664,7 +690,9 @@ class TestPostVerificationMetadata:
 
     def test_metadata_contains_valid_field(self, registry: HookRegistry):
         """POST_VERIFICATION metadata must include 'valid' from the VerificationResult."""
-        recorder = MetadataRecordingHook(name="valid_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="valid_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -676,7 +704,9 @@ class TestPostVerificationMetadata:
 
     def test_metadata_contains_violation_count(self, registry: HookRegistry):
         """POST_VERIFICATION metadata must include violation count."""
-        recorder = MetadataRecordingHook(name="violation_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="violation_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(flag_threshold=5, hook_registry=registry)
         result = _make_flagged_result()  # has 1 violation
@@ -688,7 +718,9 @@ class TestPostVerificationMetadata:
 
     def test_metadata_includes_user_metadata(self, registry: HookRegistry):
         """POST_VERIFICATION metadata must include user-provided metadata merged in."""
-        recorder = MetadataRecordingHook(name="user_meta_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="user_meta_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -713,7 +745,9 @@ class TestPostVerificationMetadata:
         However, looking at the implementation, BLOCKED verdicts raise after
         POST hooks. The POST hook sees the verdict and can decide to allow or deny.
         """
-        recorder = MetadataRecordingHook(name="blocked_recorder", event_types=[HookType.POST_VERIFICATION])
+        recorder = MetadataRecordingHook(
+            name="blocked_recorder", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(recorder)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_invalid_result()
@@ -753,7 +787,9 @@ class TestMultipleHookInteractions:
     def test_pre_deny_prevents_post_hook_from_firing(self, registry: HookRegistry):
         """PRE_VERIFICATION deny must prevent POST_VERIFICATION hooks from running."""
         pre_hook = DenyHook(name="pre_blocker", event_types=[HookType.PRE_VERIFICATION])
-        post_hook = AllowHook(name="post_allow", event_types=[HookType.POST_VERIFICATION])
+        post_hook = AllowHook(
+            name="post_allow", event_types=[HookType.POST_VERIFICATION]
+        )
         registry.register(pre_hook)
         registry.register(post_hook)
         enforcer = StrictEnforcer(hook_registry=registry)
@@ -780,7 +816,9 @@ class TestMultipleHookInteractions:
 
     def test_unrelated_hook_types_do_not_fire(self, registry: HookRegistry):
         """Hooks for PRE_DELEGATION must NOT fire during enforce()."""
-        delegation_hook = AllowHook(name="delegation_hook", event_types=[HookType.PRE_DELEGATION])
+        delegation_hook = AllowHook(
+            name="delegation_hook", event_types=[HookType.PRE_DELEGATION]
+        )
         registry.register(delegation_hook)
         enforcer = StrictEnforcer(hook_registry=registry)
         result = _make_valid_result()
@@ -863,7 +901,9 @@ class TestHookIntegrationWithVerdicts:
         # POST hook still fires for BLOCKED results (it sees the verdict)
         assert post_hook.call_count == 1
 
-    def test_post_deny_on_blocked_result_still_raises_blocked(self, registry: HookRegistry):
+    def test_post_deny_on_blocked_result_still_raises_blocked(
+        self, registry: HookRegistry
+    ):
         """POST deny on an already-blocked result must raise EATPBlockedError.
 
         The post hook deny raises its own EATPBlockedError before the enforcer

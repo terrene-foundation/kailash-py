@@ -13,14 +13,14 @@ This is the complete multi-modal workflow for Phase 4.
 from dataclasses import dataclass
 from pathlib import Path
 
-from kaizen_agents.agents.multi_modal.multi_modal_agent import (
-    MultiModalAgent,
-    MultiModalConfig,
-)
 from kaizen.cost.tracker import CostTracker
 from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField
 from kaizen.signatures.multi_modal import ImageField, MultiModalSignature
+from kaizen_agents.agents.multi_modal.multi_modal_agent import (
+    MultiModalAgent,
+    MultiModalConfig,
+)
 
 
 # Step 1: OCR Signature

@@ -20,11 +20,11 @@ Estimated time: 15 minutes
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
+from kaizen.core.base_agent import BaseAgentConfig
 from kaizen_agents.patterns.patterns import create_sequential_pipeline
 from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
-from kaizen.core.base_agent import BaseAgentConfig
 
 # Sample customer transaction data
 CUSTOMER_TRANSACTIONS = [
@@ -52,10 +52,10 @@ CUSTOMER_TRANSACTIONS = [
 
 
 def format_etl_report(
-    transaction: Dict[str, Any],
-    result: Dict[str, Any],
-    stage_results: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    transaction: dict[str, Any],
+    result: dict[str, Any],
+    stage_results: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Format ETL pipeline report."""
 
     return {

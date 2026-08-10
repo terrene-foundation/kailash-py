@@ -2517,9 +2517,8 @@ class MLEngine:
         """
         if self._registry is not None:
             return self._registry
-        from kailash_ml.engines.model_registry import ModelRegistry
-
         from kailash.db.connection import ConnectionManager
+        from kailash_ml.engines.model_registry import ModelRegistry
 
         if self._connection_manager is None:
             conn = ConnectionManager(self.store_url)
@@ -2902,9 +2901,8 @@ class MLEngine:
         # setup()/register() path will do, letting finalize() and
         # evaluate() work against a pre-populated registry without
         # waiting on Shard A.
-        from kailash_ml.engines.model_registry import ModelRegistry
-
         from kailash.db.connection import ConnectionManager
+        from kailash_ml.engines.model_registry import ModelRegistry
 
         if self._connection_manager is None:
             self._connection_manager = ConnectionManager(self.store_url)

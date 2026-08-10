@@ -14,7 +14,6 @@ import pytest
 
 from dataflow.core.nodes import _coerce_record_id, _normalize_id_type
 
-
 # --- _normalize_id_type unit tests ---
 
 
@@ -112,10 +111,9 @@ class TestCoerceRecordId:
 @pytest.mark.regression
 def test_issue_439_read_with_string_id_for_int_pk(tmp_path):
     """Read with string ID for int PK model — was broken on PostgreSQL."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_439_read.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)
@@ -159,10 +157,9 @@ def test_issue_439_read_with_string_id_for_int_pk(tmp_path):
 @pytest.mark.regression
 def test_issue_439_update_with_string_id_for_int_pk(tmp_path):
     """Update with string ID for int PK model — was broken on PostgreSQL."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_439_update.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)
@@ -204,10 +201,9 @@ def test_issue_439_update_with_string_id_for_int_pk(tmp_path):
 @pytest.mark.regression
 def test_issue_439_delete_with_string_id_for_int_pk(tmp_path):
     """Delete with string ID for int PK model — was broken on PostgreSQL."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_439_delete.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)
@@ -249,10 +245,9 @@ def test_issue_439_delete_with_string_id_for_int_pk(tmp_path):
 @pytest.mark.regression
 def test_issue_439_int_id_still_works(tmp_path):
     """Int IDs still work after the fix (no regression on the working path)."""
+    from dataflow import DataFlow
     from kailash.runtime import LocalRuntime
     from kailash.workflow.builder import WorkflowBuilder
-
-    from dataflow import DataFlow
 
     db_file = str(tmp_path / "test_439_int.db")
     db = DataFlow(f"sqlite:///{db_file}", auto_migrate=False, cache_enabled=False)

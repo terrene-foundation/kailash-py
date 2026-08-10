@@ -25,7 +25,6 @@ from dataflow.features.transactions import (
     TransactionManager,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test doubles — Protocol-Satisfying Deterministic Adapter per
 # rules/testing.md § "Protocol Adapters". These are NOT mocks: they are

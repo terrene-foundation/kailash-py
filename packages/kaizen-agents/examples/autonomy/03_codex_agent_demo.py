@@ -27,8 +27,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from kaizen_agents.agents.autonomous import CodexAgent, CodexConfig
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.agents.autonomous import CodexAgent, CodexConfig
 
 
 class PRSignature(Signature):

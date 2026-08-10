@@ -72,11 +72,13 @@ except ImportError as exc:  # pragma: no cover — optional-extra guard
 
 # Eager re-exports so `from kailash_align.rl_bridge import DPOAdapter`
 # resolves at module-scope (orphan-detection.md §6 — every public symbol in
-# `__all__` MUST be module-scope importable).
-from kailash_align.rl_bridge._dpo import DPOAdapter
-from kailash_align.rl_bridge._online_dpo import OnlineDPOAdapter
-from kailash_align.rl_bridge._ppo_rlhf import PPORLHFAdapter
-from kailash_align.rl_bridge._rloo import RLOOAdapter
+# `__all__` MUST be module-scope importable). Deliberately placed after the
+# [rl-bridge] extra loud-fail guard above — noqa: E402 is the guard, not an
+# oversight.
+from kailash_align.rl_bridge._dpo import DPOAdapter  # noqa: E402
+from kailash_align.rl_bridge._online_dpo import OnlineDPOAdapter  # noqa: E402
+from kailash_align.rl_bridge._ppo_rlhf import PPORLHFAdapter  # noqa: E402
+from kailash_align.rl_bridge._rloo import RLOOAdapter  # noqa: E402
 
 
 def register_bridge_adapters() -> None:

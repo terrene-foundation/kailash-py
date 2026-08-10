@@ -32,10 +32,10 @@ pytest.importorskip(
     "install via kailash[db-sqlite] extra",
 )
 
-from kailash.core.pool.sqlite_pool import (
+from kailash.core.pool.sqlite_pool import (  # noqa: E402
     AsyncSQLitePool,
     SQLitePoolConfig,
-)  # noqa: E402
+)
 from kailash.trust.audit_store import (  # noqa: E402
     _GENESIS_HASH,
     AuditEvent,

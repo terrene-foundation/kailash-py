@@ -25,13 +25,6 @@ from threading import Thread
 
 import pytest
 import requests
-from kaizen.core.autonomy.hooks import HookContext, HookEvent
-
-# Kaizen imports
-from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
-from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (
-    PerformanceProfilerHook,
-)
 
 # Prometheus imports
 from prometheus_client import (
@@ -40,6 +33,14 @@ from prometheus_client import (
     Gauge,
     Histogram,
     start_http_server,
+)
+
+from kaizen.core.autonomy.hooks import HookContext, HookEvent
+
+# Kaizen imports
+from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
+from kaizen.core.autonomy.hooks.builtin.performance_profiler_hook import (
+    PerformanceProfilerHook,
 )
 
 # ============================================================================

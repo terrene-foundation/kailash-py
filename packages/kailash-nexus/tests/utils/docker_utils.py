@@ -61,7 +61,7 @@ except ImportError:
         try:
             result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
             return result.returncode == 0
-        except:
+        except (OSError, subprocess.TimeoutExpired):
             return False
 
     def is_postgres_available():
@@ -78,7 +78,7 @@ except ImportError:
             )
             conn.close()
             return True
-        except:
+        except Exception:
             return False
 
     def is_redis_available():
@@ -88,7 +88,7 @@ except ImportError:
             r = redis.Redis(host="localhost", port=6380, socket_connect_timeout=3)
             r.ping()
             return True
-        except:
+        except Exception:
             return False
 
     def is_ollama_available():
@@ -97,7 +97,7 @@ except ImportError:
 
             response = requests.get("http://localhost:11435/api/tags", timeout=3)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
     async def ensure_docker_services():

@@ -10,9 +10,8 @@ from typing import Callable, Optional
 
 from fastapi import HTTPException, Request
 
-from nexus.extractors.proxy import client_key_for_request
-
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
+from nexus.extractors.proxy import client_key_for_request
 
 
 def rate_limit(

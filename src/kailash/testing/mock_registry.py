@@ -77,7 +77,9 @@ class MockResourceRegistry:
         if not isinstance(mock, (Mock, AsyncMock)):
             self._wrap_mock_methods(name, mock)
 
-    async def create_mock(self, name: str, factory: Any, spec: Optional[Any] = None) -> Any:
+    async def create_mock(
+        self, name: str, factory: Any, spec: Optional[Any] = None
+    ) -> Any:
         """Create a mock resource from factory."""
         # Determine what to mock
         if spec is None and hasattr(factory, "create"):

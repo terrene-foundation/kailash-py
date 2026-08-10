@@ -27,7 +27,9 @@ class SigningError(MessagingError):
         reason: str,
         cause: Optional[Exception] = None,
     ):
-        super().__init__(f"Failed to sign message for agent {agent_id}: {reason}", cause)
+        super().__init__(
+            f"Failed to sign message for agent {agent_id}: {reason}", cause
+        )
         self.agent_id = agent_id
         self.reason = reason
 
@@ -41,7 +43,9 @@ class VerificationError(MessagingError):
         reason: str,
         cause: Optional[Exception] = None,
     ):
-        super().__init__(f"Message verification failed for {message_id}: {reason}", cause)
+        super().__init__(
+            f"Message verification failed for {message_id}: {reason}", cause
+        )
         self.message_id = message_id
         self.reason = reason
 
@@ -54,7 +58,9 @@ class ReplayDetectedError(MessagingError):
         message_id: str,
         nonce: str,
     ):
-        super().__init__(f"Replay attack detected: message {message_id} with nonce {nonce[:16]}...")
+        super().__init__(
+            f"Replay attack detected: message {message_id} with nonce {nonce[:16]}..."
+        )
         self.message_id = message_id
         self.nonce = nonce
 

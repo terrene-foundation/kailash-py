@@ -18,15 +18,8 @@ from sklearn.ensemble import RandomForestClassifier
 
 from kailash.db.connection import ConnectionManager
 from kailash_ml import MLEngine, PredictionResult
-from kailash_ml.engines.model_registry import (
-    LocalFileArtifactStore,
-    ModelRegistry,
-)
-from kailash_ml.types import (
-    FeatureField,
-    FeatureSchema,
-    ModelSignature,
-)
+from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
+from kailash_ml.types import FeatureField, FeatureSchema, ModelSignature
 
 
 @pytest.fixture

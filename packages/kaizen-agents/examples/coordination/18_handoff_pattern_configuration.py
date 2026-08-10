@@ -15,9 +15,9 @@ Estimated time: 5 minutes
 
 import os
 
+from kaizen.core.base_agent import BaseAgentConfig
 from kaizen_agents.patterns.patterns import create_handoff_pattern
 from kaizen_agents.patterns.patterns.handoff import HandoffAgent
-from kaizen.core.base_agent import BaseAgentConfig
 
 
 def example_1_custom_tier_count():
@@ -41,7 +41,7 @@ def example_2_tier_specific_models():
     # Tier 1: Fast model for simple tasks
     # Tier 2: Balanced model
     # Tier 3: Powerful model for complex tasks
-    handoff = create_handoff_pattern(
+    _handoff = create_handoff_pattern(
         tier_configs={
             1: {"model": "gpt-4o-mini", "temperature": 0.3},  # Fast, deterministic
             2: {"model": "gpt-4o-mini", "temperature": 0.5},  # Balanced
@@ -112,7 +112,7 @@ def example_4_pre_built_tiers():
     )
 
     # Create pattern with pre-built tiers
-    handoff = create_handoff_pattern(tiers={1: tier1, 2: tier2, 3: tier3})
+    _handoff = create_handoff_pattern(tiers={1: tier1, 2: tier2, 3: tier3})
 
     print("✓ Pattern created with pre-built tiers")
     print(f"  Tier 1: {tier1.agent_id}")

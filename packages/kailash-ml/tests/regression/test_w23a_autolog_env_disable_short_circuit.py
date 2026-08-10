@@ -17,7 +17,6 @@ import pytest
 from kailash.ml.errors import AutologNoAmbientRunError
 from kailash_ml.autolog import autolog, registered_integration_names
 
-
 # Module-scope lock per `rules/testing.md § Env-Var Test Isolation` —
 # every test that mutates KAILASH_ML_AUTOLOG_DISABLED serializes so
 # parallel xdist workers don't race on the env var.

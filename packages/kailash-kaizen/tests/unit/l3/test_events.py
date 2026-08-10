@@ -21,9 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kaizen.l3.events import L3Event, L3EventType, _sanitize_details
 from kaizen.l3.event_hooks import L3EventBus
-
+from kaizen.l3.events import L3Event, L3EventType, _sanitize_details
 
 # ---------------------------------------------------------------------------
 # L3EventType tests

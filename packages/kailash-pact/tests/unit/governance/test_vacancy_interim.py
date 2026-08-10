@@ -12,10 +12,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from kailash.trust.pact.compilation import RoleDefinition
-from kailash.trust.pact.config import (
-    DepartmentConfig,
-    OrgDefinition,
-)
+from kailash.trust.pact.config import DepartmentConfig, OrgDefinition
 from kailash.trust.pact.engine import GovernanceEngine
 
 

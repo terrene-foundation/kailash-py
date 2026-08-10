@@ -16,6 +16,7 @@ Fix:
 """
 
 import pytest
+
 from kaizen.signatures import InputField, OutputField, Signature
 
 

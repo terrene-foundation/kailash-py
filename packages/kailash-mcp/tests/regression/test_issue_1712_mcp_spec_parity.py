@@ -17,9 +17,12 @@ per ``rules/testing.md``) for the three in-shard fixes:
    (never a hardcoded fixed string).
 """
 
+import asyncio
+
 import pytest
 
 from kailash_mcp.client import MCPClient
+from kailash_mcp.discovery.discovery import HealthChecker, ServerInfo
 from kailash_mcp.errors import MCPErrorCode
 from kailash_mcp.protocol.messages import JsonRpcRequest, JsonRpcValidationError
 from kailash_mcp.security import (
@@ -32,7 +35,7 @@ from kailash_mcp.server import (
     SUPPORTED_PROTOCOL_VERSIONS,
     negotiate_protocol_version,
 )
-
+from kailash_mcp.transports.transports import EnhancedStdioTransport
 
 # ---------------------------------------------------------------------------
 # 1. Local-server spawn safety - fail closed by default
@@ -196,10 +199,6 @@ def test_latest_is_newest_of_supported_set():
 #    adversarial security review of the first shard (enforcement-surface
 #    parity, ``rules/security.md`` § Multi-Site Kwarg Plumbing).
 # ---------------------------------------------------------------------------
-import asyncio
-
-from kailash_mcp.discovery.discovery import HealthChecker, ServerInfo
-from kailash_mcp.transports.transports import EnhancedStdioTransport
 
 
 @pytest.mark.asyncio

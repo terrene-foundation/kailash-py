@@ -24,6 +24,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+
 from kailash.trust.chain import ConstraintType
 from kailash.trust.posture.postures import TrustPosture
 from kailash.trust.vocabulary import (

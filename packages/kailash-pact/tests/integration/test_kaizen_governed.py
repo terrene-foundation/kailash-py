@@ -16,30 +16,23 @@ Covers:
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
-from kailash.trust.pact.agent import (
-    GovernanceBlockedError,
-    PactGovernedAgent,
-)
+from kailash.trust.pact.agent import GovernanceBlockedError, PactGovernedAgent
 from kailash.trust.pact.audit import AuditChain
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
-    VerificationLevel,
 )
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import RoleEnvelope
 from pact.examples.university.org import create_university_org
 
-try:
-    from kaizen import CoreAgent
-
-    _HAS_KAIZEN = True
-except ImportError:
-    _HAS_KAIZEN = False
+_HAS_KAIZEN = importlib.util.find_spec("kaizen") is not None
 
 
 # ---------------------------------------------------------------------------

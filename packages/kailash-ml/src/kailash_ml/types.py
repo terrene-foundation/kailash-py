@@ -14,7 +14,6 @@ import math
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-
 # ---------------------------------------------------------------------------
 # Protocols
 # ---------------------------------------------------------------------------

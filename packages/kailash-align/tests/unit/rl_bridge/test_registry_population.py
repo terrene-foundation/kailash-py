@@ -18,7 +18,6 @@ def test_import_registers_all_four_adapters():
     """Importing the bridge populates BRIDGE_ADAPTERS with the v1 names."""
     # Fresh import of the bridge package — side effect registers adapters.
     import kailash_align.rl_bridge  # noqa: F401 — imported for side effect
-
     from kailash_ml.rl.align_adapter import BRIDGE_ADAPTERS
 
     expected = {"dpo", "ppo-rlhf", "rloo", "online-dpo"}
@@ -35,7 +34,6 @@ def test_import_registers_all_four_adapters():
 def test_registered_classes_match_adapter_types():
     """Each registered entry is the expected adapter class."""
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_align.rl_bridge._dpo import DPOAdapter
     from kailash_align.rl_bridge._online_dpo import OnlineDPOAdapter
     from kailash_align.rl_bridge._ppo_rlhf import PPORLHFAdapter
@@ -51,7 +49,6 @@ def test_registered_classes_match_adapter_types():
 def test_resolve_bridge_adapter_returns_class():
     """km.rl_train's resolver finds every registered adapter by name."""
     import kailash_align.rl_bridge  # noqa: F401
-
     from kailash_ml.rl.align_adapter import resolve_bridge_adapter
 
     for name in ("dpo", "ppo-rlhf", "rloo", "online-dpo"):

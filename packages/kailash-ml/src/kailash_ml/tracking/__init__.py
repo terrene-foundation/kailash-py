@@ -37,7 +37,9 @@ from kailash_ml.tracking.registry import (
     ClearAliasResult,
     CrossTenantLineageError,
     DemoteResult,
-    FilterParseError as RegistryFilterParseError,
+)
+from kailash_ml.tracking.registry import FilterParseError as RegistryFilterParseError
+from kailash_ml.tracking.registry import (
     InvalidAliasError,
     InvalidModelNameError,
     Lineage,

@@ -11,6 +11,7 @@ This test suite ensures the system is hardened against security threats.
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from dataflow.migrations.default_strategies import (
     ConditionalDefaultStrategy,
     DefaultValueStrategyManager,
@@ -71,7 +72,7 @@ class TestSQLInjectionPrevention:
             assert (
                 "DROP TABLE" not in strategy.sql_expression.upper()
                 or strategy.sql_expression.startswith("'")
-            ), f"Malicious value not properly escaped: {malicious_value}"
+            ), (f"Malicious value not properly escaped: {malicious_value}")
 
             # Should be wrapped in quotes with escaping
             assert strategy.sql_expression.startswith("'")

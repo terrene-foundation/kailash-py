@@ -41,12 +41,12 @@ if "kaizen" not in sys.modules:
 
 from kaizen.manifest.agent import AgentManifest  # noqa: E402
 from kaizen.manifest.app import AppManifest  # noqa: E402
-from kaizen.manifest.governance import GovernanceManifest  # noqa: E402
 from kaizen.manifest.errors import (  # noqa: E402
     ManifestError,
     ManifestParseError,
     ManifestValidationError,
 )
+from kaizen.manifest.governance import GovernanceManifest  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Any
 
 from kailash.nodes.base import NodeParameter, register_node
-
 from kaizen.config.providers import ConfigurationError
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode
@@ -307,8 +306,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
         # fall back to a hand-built synthesis template — silently returning
         # fabricated content as a real answer with success=True. Guarding here,
         # before any phase runs, re-closes the silent-mock class for the subclass
-        # exactly as the base node closes it (a forgotten provider is a LOUD,
-        # typed error, not a template answer). provider="mock" explicit is honored.
+        # exactly as the base node closes it (a forgotten provider is a LOUD, typed
+        # error, not a template answer). provider="mock" explicit is honored.
         if kwargs.get("provider") is None:
             raise ConfigurationError(
                 "IterativeLLMAgentNode: 'provider' is unresolved (None). A missing "

@@ -298,4 +298,3 @@ Exposed via `PactEngine.governance` property. Blocks: `set_role_envelope`, `set_
 - vacancy_deadline_hours <= 0 -> ValueError
 
 ---
-

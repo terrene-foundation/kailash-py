@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import (
     ActionResult,

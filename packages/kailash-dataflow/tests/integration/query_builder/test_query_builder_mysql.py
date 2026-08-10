@@ -14,9 +14,8 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
-from kailash.runtime.local import LocalRuntime
-
 from dataflow.database.query_builder import DatabaseType, QueryBuilder
+from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 

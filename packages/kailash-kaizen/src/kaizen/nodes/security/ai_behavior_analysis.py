@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node
 from kailash.nodes.security.behavior_analysis import BehaviorAnalysisNode
-
 from kaizen.nodes._env_model import detect_provider, resolve_default_model
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 from kaizen.nodes.ai.llm_agent import LLMAgentNode

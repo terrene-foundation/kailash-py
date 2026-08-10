@@ -57,19 +57,19 @@ class TestTracingLevel:
         assert TracingLevel.FULL.value == "full"
 
     def test_resolve_from_env_basic(self) -> None:
-        from kailash.runtime.tracing import _resolve_tracing_level, TracingLevel
+        from kailash.runtime.tracing import TracingLevel, _resolve_tracing_level
 
         with patch.dict(os.environ, {"KAILASH_TRACING_LEVEL": "basic"}):
             assert _resolve_tracing_level() is TracingLevel.BASIC
 
     def test_resolve_from_env_full(self) -> None:
-        from kailash.runtime.tracing import _resolve_tracing_level, TracingLevel
+        from kailash.runtime.tracing import TracingLevel, _resolve_tracing_level
 
         with patch.dict(os.environ, {"KAILASH_TRACING_LEVEL": "full"}):
             assert _resolve_tracing_level() is TracingLevel.FULL
 
     def test_resolve_from_env_unknown_defaults_to_none(self) -> None:
-        from kailash.runtime.tracing import _resolve_tracing_level, TracingLevel
+        from kailash.runtime.tracing import TracingLevel, _resolve_tracing_level
 
         with patch.dict(os.environ, {"KAILASH_TRACING_LEVEL": "turbo"}):
             assert _resolve_tracing_level() is TracingLevel.NONE
@@ -77,8 +77,8 @@ class TestTracingLevel:
     def test_resolve_unset_defaults_based_on_otel(self) -> None:
         from kailash.runtime.tracing import (
             _OTEL_AVAILABLE,
-            _resolve_tracing_level,
             TracingLevel,
+            _resolve_tracing_level,
         )
 
         env = os.environ.copy()

@@ -11,7 +11,6 @@ import uuid
 from typing import Any, Dict, Optional
 
 from kailash.nodes.base import NodeParameter, register_node
-
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 from ..signatures import Signature

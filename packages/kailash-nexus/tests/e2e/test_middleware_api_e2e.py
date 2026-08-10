@@ -9,12 +9,12 @@ import os
 
 import pytest
 from fastapi import APIRouter
-from nexus import Nexus
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.testclient import TestClient
 
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 # =============================================================================
 # Fixtures

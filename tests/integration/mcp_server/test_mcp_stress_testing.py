@@ -328,7 +328,7 @@ class TestMCPStressTesting:
             # In real test, would stop Redis container
             # For now, just close connection to simulate network issue
             await r.aclose()
-        except:
+        except redis.RedisError:
             pass
 
         # Make another call - should still work (fallback to memory cache)

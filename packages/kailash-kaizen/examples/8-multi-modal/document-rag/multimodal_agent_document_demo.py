@@ -15,12 +15,12 @@ import os
 import tempfile
 from pathlib import Path
 
+from kaizen.signatures import InputField, OutputField, Signature
+from kaizen.signatures.multi_modal import MultiModalSignature
 from kaizen_agents.agents.multi_modal.multi_modal_agent import (
     MultiModalAgent,
     MultiModalConfig,
 )
-from kaizen.signatures import InputField, OutputField, Signature
-from kaizen.signatures.multi_modal import MultiModalSignature
 
 
 class UnifiedAnalysisSignature(MultiModalSignature, Signature):

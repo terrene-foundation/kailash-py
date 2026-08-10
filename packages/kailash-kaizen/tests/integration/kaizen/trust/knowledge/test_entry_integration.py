@@ -12,6 +12,7 @@ for Tier 2 integration testing of knowledge entries with trust chains.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,

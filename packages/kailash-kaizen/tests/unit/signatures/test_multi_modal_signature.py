@@ -6,8 +6,9 @@ Tests mixed text/image/audio fields and formatting for Ollama API.
 
 import base64
 
-from kaizen.signatures.multi_modal import AudioField, ImageField, MultiModalSignature
 from PIL import Image
+
+from kaizen.signatures.multi_modal import AudioField, ImageField, MultiModalSignature
 
 
 class TestMultiModalSignatureCreation:

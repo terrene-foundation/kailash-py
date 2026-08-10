@@ -26,7 +26,6 @@ from kailash.nodes.transaction.participant_transport import (
 )
 from kailash.nodes.transaction.two_phase_commit import TwoPhaseCommitParticipant
 
-
 # ---------------------------------------------------------------------------
 # TransportResult tests
 # ---------------------------------------------------------------------------

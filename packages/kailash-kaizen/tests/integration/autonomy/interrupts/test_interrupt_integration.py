@@ -11,6 +11,7 @@ import signal
 import time
 
 import pytest
+
 from kaizen.core.autonomy.interrupts.handlers import (
     BudgetInterruptHandler,
     ControlProtocolInterruptHandler,

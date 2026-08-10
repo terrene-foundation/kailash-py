@@ -8,10 +8,15 @@ This module contains the foundational classes and interfaces for the Kaizen fram
 - Token counting utilities
 """
 
+# Signature primitives — re-exported here so the canonical Quick Start
+# (`from kaizen.core import BaseAgent, Signature, InputField, OutputField`)
+# documented in specs/kaizen-core.md §3 and rules/patterns.md § Kaizen
+# resolves on a fresh install.
+from kaizen.signatures import InputField, OutputField, Signature
+
 from .agents import Agent, AgentManager
 from .base_agent import BaseAgent
 from .config import KaizenConfig, MemoryProvider, OptimizationEngine
-from .structured_output import StructuredOutput
 
 # PERFORMANCE OPTIMIZED: Use lightweight imports for <100ms startup
 from .framework import Kaizen
@@ -24,6 +29,7 @@ from .specialist_types import (
     SkillDefinition,
     SpecialistDefinition,
 )
+from .structured_output import StructuredOutput
 
 # Token counting utilities
 from .token_counter import (
@@ -32,12 +38,6 @@ from .token_counter import (
     count_tokens,
     get_token_counter,
 )
-
-# Signature primitives — re-exported here so the canonical Quick Start
-# (`from kaizen.core import BaseAgent, Signature, InputField, OutputField`)
-# documented in specs/kaizen-core.md §3 and rules/patterns.md § Kaizen
-# resolves on a fresh install.
-from kaizen.signatures import InputField, OutputField, Signature
 
 __all__ = [
     "Kaizen",

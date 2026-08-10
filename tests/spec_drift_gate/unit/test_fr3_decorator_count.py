@@ -12,11 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from spec_drift_gate import (
-    Finding,
-    SymbolIndex,
-    _sweep_fr3_decorator_count,
-)
+from spec_drift_gate import Finding, SymbolIndex, _sweep_fr3_decorator_count
 
 
 def _idx(decorator_counts: dict[str, int]) -> SymbolIndex:

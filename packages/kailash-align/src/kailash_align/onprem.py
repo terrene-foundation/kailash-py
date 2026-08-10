@@ -273,9 +273,9 @@ class SetupChecklist:
             )
             lines.append(f"- [ ] **Step {item.step}**: {item.description}{size_note}")
             if item.command:
-                lines.append(f"  ```bash")
+                lines.append("  ```bash")
                 lines.append(f"  {item.command}")
-                lines.append(f"  ```")
+                lines.append("  ```")
             lines.append("")
         return "\n".join(lines)
 

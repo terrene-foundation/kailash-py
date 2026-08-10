@@ -17,7 +17,7 @@ Or with SQLite for local testing:
 import asyncio
 import os
 
-from kailash import WorkflowBuilder, LocalRuntime
+from kailash import LocalRuntime, WorkflowBuilder
 from kailash.infrastructure import StoreFactory
 
 

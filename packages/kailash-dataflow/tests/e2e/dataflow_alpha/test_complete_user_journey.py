@@ -207,11 +207,10 @@ class TestCompleteUserJourney:
 
     def test_step5_workflow_integration(self, clean_environment, database_url):
         """Step 5: Test integration with Kailash workflows."""
+        from dataflow import DataFlow
         from kailash.runtime.local import LocalRuntime
         from kailash.sdk_exceptions import WorkflowValidationError
         from kailash.workflow.builder import WorkflowBuilder
-
-        from dataflow import DataFlow
 
         # Set up DataFlow
         db = DataFlow(database_url=database_url)
@@ -482,11 +481,10 @@ class TestCompleteUserJourney:
 
     def test_alpha_release_readiness_checklist(self, clean_environment, database_url):
         """Final checklist: All alpha release requirements met."""
+        from dataflow import DataFlow
         from kailash.runtime.local import LocalRuntime
         from kailash.sdk_exceptions import WorkflowValidationError
         from kailash.workflow.builder import WorkflowBuilder
-
-        from dataflow import DataFlow
 
         # Alpha readiness checklist
         checklist = {

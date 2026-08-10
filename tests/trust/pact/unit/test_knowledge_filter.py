@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from kailash.trust.pact.access import AccessDecision
 from kailash.trust.pact.audit import AuditChain
 from kailash.trust.pact.clearance import RoleClearance

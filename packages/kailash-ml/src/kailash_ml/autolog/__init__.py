@@ -29,15 +29,6 @@ wave plan at
 """
 from __future__ import annotations
 
-from kailash_ml.autolog._context import autolog, autolog_fn
-from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
-    register_integration,
-    registered_integration_names,
-    unregister_integration,
-)
-from kailash_ml.autolog.config import AutologConfig, AutologHandle
-
 # Framework integrations — W23.b onwards. Each module registers its
 # concrete integration class via @register_integration at module
 # scope (orphan-detection.md §1 — production call site is the CM's
@@ -51,7 +42,14 @@ from kailash_ml.autolog import _sklearn  # noqa: F401 — registration side-effe
 from kailash_ml.autolog import _statsmodels  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _transformers  # noqa: F401 — registration side-effect
 from kailash_ml.autolog import _xgboost  # noqa: F401 — registration side-effect
-
+from kailash_ml.autolog._context import autolog, autolog_fn
+from kailash_ml.autolog._registry import (
+    FrameworkIntegration,
+    register_integration,
+    registered_integration_names,
+    unregister_integration,
+)
+from kailash_ml.autolog.config import AutologConfig, AutologHandle
 
 __all__ = [
     "AutologConfig",

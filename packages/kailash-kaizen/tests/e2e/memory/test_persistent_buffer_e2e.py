@@ -289,9 +289,9 @@ def test_multi_session_isolation(dataflow_db):
     assert len(context_b) == 1, "Session B should have 1 turn"
 
     # Verify different content
-    assert context_a[0]["user"] != context_b[0]["user"], (
-        "Sessions should have different questions"
-    )
+    assert (
+        context_a[0]["user"] != context_b[0]["user"]
+    ), "Sessions should have different questions"
 
     # Cleanup
     memory_a.clear()
@@ -446,9 +446,9 @@ def test_concurrent_sessions(dataflow_db):
 
     # Verify all sessions completed
     assert len(results) == 3, "All sessions should complete"
-    assert all(count == 1 for count in results.values()), (
-        "Each session should have 1 turn"
-    )
+    assert all(
+        count == 1 for count in results.values()
+    ), "Each session should have 1 turn"
 
 
 def test_error_recovery(persistent_memory):

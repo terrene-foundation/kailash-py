@@ -43,10 +43,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
-from kailash_ml.autolog._registry import (
-    FrameworkIntegration,
-    register_integration,
-)
+from kailash_ml.autolog._registry import FrameworkIntegration, register_integration
 
 if TYPE_CHECKING:
     from kailash_ml.autolog.config import AutologConfig
