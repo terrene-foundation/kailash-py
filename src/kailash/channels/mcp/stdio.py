@@ -38,9 +38,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import shlex
 from asyncio.subprocess import Process
 from typing import Optional, Sequence
+
+from kailash.utils.command_safety import safe_command_ref
 
 from .base import ProtocolError, Transport, TransportError
 
@@ -156,7 +157,9 @@ class StdioTransport(Transport):
                 cwd=cwd,
             )
         except (OSError, FileNotFoundError) as exc:
-            raise TransportError(f"failed to spawn {command!r}: {exc}") from exc
+            raise TransportError(
+                f"failed to spawn {safe_command_ref(command)}: {exc}"
+            ) from exc
         return cls(process)
 
     @classmethod
@@ -175,10 +178,17 @@ class StdioTransport(Transport):
         allowed: Optional[Sequence[str]],
         allow_arbitrary: bool = False,
     ) -> None:
+        # ``command`` is untrusted (agent output, registry entry, discovery
+        # response) and routinely carries a credential as a CLI flag, so no
+        # rejection path may echo it. ``safe_command_ref`` yields a
+        # ``basename#fingerprint`` reference that stays correlatable across
+        # log lines without disclosing the arguments. See issue #2004.
         if not isinstance(command, str) or not command:
             raise TransportError("command must be a non-empty string")
         if ".." in command.replace("\\", "/").split("/"):
-            raise TransportError(f"command rejected (path traversal): {command!r}")
+            raise TransportError(
+                f"command rejected (path traversal): {safe_command_ref(command)}"
+            )
         if allow_arbitrary:
             return
         # Fail closed: absent an explicit allowlist, enforce the curated
@@ -188,7 +198,8 @@ class StdioTransport(Transport):
         if basename not in effective and command not in effective:
             allowed_str = ", ".join(repr(c) for c in sorted(effective))
             raise TransportError(
-                f"command {command!r} not in the allowlist [{allowed_str}]; "
+                f"command {safe_command_ref(command)} not in the allowlist "
+                f"[{allowed_str}]; "
                 f"pass allowed_commands=[...] or allow_arbitrary_commands=True"
             )
 
@@ -348,11 +359,6 @@ async def read_framed_message(reader: asyncio.StreamReader) -> str:
         return body.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ProtocolError(f"message body is not valid UTF-8: {exc}") from exc
-
-
-def _quote_for_log(command: str, args: Sequence[str]) -> str:
-    """Render a spawn command + args for log output (debug only)."""
-    return shlex.join([command, *args])
 
 
 def validate_spawn_command(
