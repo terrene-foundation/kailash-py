@@ -78,16 +78,27 @@ async def test_sanitizer_warning_does_not_log_the_raw_value(memory_dataflow, cap
 
     node = db.express._create_node("Credential", "Create")
 
-    with caplog.at_level(logging.DEBUG):
-        node.validate_inputs(id="c-1", password=INJECTION_SECRET)
+    # The level MUST be set on ``dataflow.core.nodes`` itself. DataFlow
+    # configures that logger's own level, so ``caplog.at_level(DEBUG)`` (which
+    # raises the root logger) leaves the DEBUG line that carried the raw value
+    # unemitted — and the assertion below would then pass against the unfixed
+    # code, reporting on a line that never ran.
+    caplog.set_level(logging.DEBUG, logger="dataflow.core.nodes")
+    node.validate_inputs(id="c-1", password=INJECTION_SECRET)
 
-    assert caplog.text, "no log output captured; the test would be vacuous"
-    assert (
-        INJECTION_SECRET not in caplog.text
-    ), "raw pre-sanitization value reached the log"
-    # The detection signal itself must survive — redaction that silences the
-    # warning entirely would trade one defect for another.
-    assert "injection" in caplog.text.lower()
+    sanitizer_lines = [
+        r
+        for r in caplog.records
+        if "injection" in r.getMessage().lower() and r.name == "dataflow.core.nodes"
+    ]
+    assert sanitizer_lines, "the sanitizer never logged; the test would be vacuous"
+    assert any(
+        "Sanitized" in r.getMessage() for r in sanitizer_lines
+    ), "the DEBUG sanitization line never fired; the raw-value assertion is vacuous"
+    for record in sanitizer_lines:
+        assert (
+            INJECTION_SECRET not in record.getMessage()
+        ), "raw pre-sanitization value reached the log"
 
 
 @pytest.mark.unit
