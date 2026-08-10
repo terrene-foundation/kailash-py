@@ -110,9 +110,9 @@ class TestResourceResolverKeysDoNotExposeSecrets:
         config = {"host": "db.internal", "database": "app"}
         creds = {"user": "svc", "password": PASSWORD}
         merged = {**config, **creds}
-        legacy = hashlib.md5(
-            json.dumps(merged, sort_keys=True).encode()
-        ).hexdigest()[:8]
+        legacy = hashlib.md5(json.dumps(merged, sort_keys=True).encode()).hexdigest()[
+            :8
+        ]
         key = _key_for(lambda r: r._resolve_database(dict(config), dict(creds)))
         assert legacy not in key
 
@@ -182,9 +182,10 @@ class TestProcessLocalConfigKey:
         """Keyed, so knowing the whole config does not let an attacker who saw
         the key confirm a guessed password."""
         payload = json.dumps({"password": PASSWORD}, sort_keys=True)
-        assert process_local_config_key(payload) != hashlib.blake2b(
-            payload.encode(), digest_size=8
-        ).hexdigest()
+        assert (
+            process_local_config_key(payload)
+            != hashlib.blake2b(payload.encode(), digest_size=8).hexdigest()
+        )
 
     def test_defaults_to_64_bits(self) -> None:
         """8 hex chars collide at ~2**16 configs; a collision hands over
@@ -267,7 +268,9 @@ class TestTrustAuditLogPermissions:
     def test_the_verdict_is_still_recorded(self, tmp_path) -> None:
         """Tightening the mode must not silently break the audit trail."""
         log_path = tmp_path / "audit.jsonl"
-        _log_verdict(log_path, "Write", "/srv/x", "BLOCKED", "strict", {"why": "policy"})
+        _log_verdict(
+            log_path, "Write", "/srv/x", "BLOCKED", "strict", {"why": "policy"}
+        )
         entry = json.loads(log_path.read_text().strip())
         assert entry["verdict"] == "BLOCKED"
         assert entry["details"] == {"why": "policy"}
@@ -301,9 +304,9 @@ class TestFileSecretBackendPermissions:
         asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
 
         assert observed, "the write path never ran; test would be vacuous"
-        assert observed[0] == 0o600, (
-            f"secret was world-readable during the write (mode {observed[0]:o})"
-        )
+        assert (
+            observed[0] == 0o600
+        ), f"secret was world-readable during the write (mode {observed[0]:o})"
 
     def test_final_mode_and_content_are_preserved(self, tmp_path) -> None:
         manager = FileSecretBackend(str(tmp_path))

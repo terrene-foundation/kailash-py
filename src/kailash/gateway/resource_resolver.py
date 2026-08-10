@@ -9,8 +9,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
-from ..utils.url_credentials import process_local_config_key
-
 from ..resources.factory import (
     CacheFactory,
     DatabasePoolFactory,
@@ -19,6 +17,7 @@ from ..resources.factory import (
     S3ClientFactory,
 )
 from ..resources.registry import ResourceFactory, ResourceRegistry
+from ..utils.url_credentials import process_local_config_key
 from .security import SecretManager
 
 logger = logging.getLogger(__name__)

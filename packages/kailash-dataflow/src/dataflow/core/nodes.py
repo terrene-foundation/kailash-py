@@ -48,6 +48,10 @@ try:
 except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
+from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
+    fingerprint_secret,
+)
+
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
 from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VALUES
 from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
@@ -55,10 +59,6 @@ from .exceptions import (  # Issue #1519/#1520: typed conflict-target error prop
     UpsertConflictTargetError,
 )
 from .exceptions import is_conflict_target_error as _is_conflict_target_error
-from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
-    fingerprint_secret,
-)
-
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -1918,17 +1918,24 @@ class NodeGenerator:
                             f"CREATE {self.model_name}: field_names={field_names}, "
                             f"values count={len(values)}, SQL placeholders expected={len(field_names)}"
                         )
-                        # Enhanced debug logging to show value types
+                        # Enhanced debug logging to show value types.
+                        # Issue #2027: the value itself is NEVER emitted. These are
+                        # arbitrary user records, so `values` may hold a password,
+                        # token, or PII column; repr()ing it put plaintext
+                        # credentials in DEBUG. Position, field name, type, and
+                        # size carry the parameter-ordering diagnostic this line
+                        # exists for without the payload.
                         value_debug = []
                         for i, (field, value) in enumerate(zip(field_names, values)):
                             value_type = type(value).__name__
-                            value_repr = (
-                                repr(value)[:50] + "..."
-                                if len(repr(value)) > 50
-                                else repr(value)
+                            # Scalars have no length; only sized values get one.
+                            size = (
+                                f", len={len(value)}"
+                                if hasattr(value, "__len__")
+                                else ""
                             )
                             value_debug.append(
-                                f"${i + 1} {field}={value_repr} (type={value_type})"
+                                f"${i + 1} {field}=<redacted> (type={value_type}{size})"
                             )
 
                         # ADR-002: Changed from WARNING to DEBUG - parameter tracing
