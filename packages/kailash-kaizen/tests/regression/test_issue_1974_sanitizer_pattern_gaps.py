@@ -221,8 +221,27 @@ def test_jwt_pattern_does_not_redact_arbitrary_base64_json() -> None:
 
     The three-segment (`header.payload.signature`) structure is what makes the
     pattern discriminating; without it we must not redact.
+
+    THE PAYLOAD SHRANK IN #1997, AND THE SURVIVAL WINDOW WITH IT. This assertion
+    reads module OUTPUT, so it is satisfiable only by a blob no OTHER rule
+    claims either — the same qualification the sibling test below already
+    records for the 40-char contiguous-run rule ("that is the module's
+    documented false-positive posture, not a JWT over-match"). #1997 added
+    `_MIXED_ALPHABET_OPAQUE_KEY`, which claims a 32+ char run mixing case and
+    digits, so the window in which a base64-JSON blob survives narrowed from
+    <40 to <32 for mixed-alphabet blobs. That narrowing is a DELIBERATE
+    over-redaction widening — it is what closes prefix-less Mistral/Cohere keys
+    on the conservative preset — and it is pinned explicitly in
+    `test_issue_1997_preset_vendor_coverage.py`, not hidden here.
+
+    The blob was therefore shortened to stay inside the new window. The test's
+    SUBJECT is unchanged, and the assertion that actually isolates the JWT rule
+    (`test_jwt_pattern_itself_never_matches_base64_json_of_any_length`) still
+    probes the compiled pattern directly at lengths on BOTH sides of every
+    threshold, so JWT-rule breadth remains pinned independently of any of this.
     """
-    blob = base64.b64encode(b'{"ok":true,"role":"viewer"}').decode().rstrip("=")
+    blob = base64.b64encode(b'{"ok":true}').decode().rstrip("=")
+    assert len(blob) < 32, f"blob re-entered the mixed-alphabet window: {blob!r}"
     assert blob.startswith("eyJ"), blob
     out = sanitize_provider_error(RuntimeError(f"decoded payload {blob}"), "test")
     assert "[REDACTED]" not in out, f"over-redacted non-JWT base64: {out!r}"

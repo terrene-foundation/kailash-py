@@ -63,18 +63,25 @@ def test_mistral_hex_shape_is_scrubbed_incidentally():
 
 
 @pytest.mark.regression
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "#1997 — Mistral has no vendor prefix and its 32-char mixed-alphanumeric "
-        "body is under the 40-char contiguous-run threshold, so no rule claims it. "
-        "Fixing it means either lowering that threshold (worsens over-redaction "
-        "on compact-JSON bodies) or a context-anchored rule (misses bare secrets). "
-        "Design decision, surfaced not self-decided. Remove this marker with the fix."
-    ),
-)
 def test_mistral_alnum_shape_is_scrubbed():
-    """KNOWN GAP (#1997): a mixed-alphanumeric Mistral key is not claimed."""
+    """CLOSED BY #1997: a mixed-alphanumeric Mistral key IS now claimed.
+
+    The ``xfail(strict=True)`` marker that stood here is REMOVED rather than
+    flipped to a comment, which is the whole point of using strict-xfail for a
+    deferred conformance vector: it XPASSed the moment the gap closed and forced
+    its own removal in the same change (``rules/testing.md`` § "Deferred-
+    Implementation Conformance Vectors Use xfail-Strict, Not Skip").
+
+    Neither branch the marker named was taken. The 40-char contiguous-run
+    threshold is UNCHANGED, and the fix is not context-anchored either — it is
+    a THIRD option the marker did not consider: a prefix-less rule discriminated
+    on ALPHABET rather than on length or on nearby keywords
+    (``_MIXED_ALPHABET_OPAQUE_KEY``), which claims a mixed-case-plus-digit run
+    while leaving single-case digests and digit-free identifiers alone. The
+    preset-dependence that made this worse than the issue's framing, and the two
+    documented residuals, are pinned in
+    ``test_issue_1997_preset_vendor_coverage.py``.
+    """
     out = scrub_credentials(f"401 unauthorized: invalid api key {_MISTRAL_KEY}")
     assert _MISTRAL_KEY not in out
 

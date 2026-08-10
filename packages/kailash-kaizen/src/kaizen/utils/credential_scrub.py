@@ -149,6 +149,87 @@ _AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
     r"[A-Za-z0-9/+]{40,}", re.ASCII
 )
 
+# ---------------------------------------------------------------------------
+# PREFIX-LESS PROVIDER KEYS (#1997) — shape-discriminated, but NOT shape-ONLY,
+# so NOT gated by ``redact_opaque_tokens``.
+# ---------------------------------------------------------------------------
+# Mistral issues a 32-character alphanumeric key and Cohere a 40-character one,
+# with NO vendor prefix. Before this rule, NOTHING claimed either on the
+# CONSERVATIVE preset, and the remote preset claimed Cohere only INCIDENTALLY
+# (via the 40-char run rule above, which is gated OFF conservatively). Measured
+# before the fix, embedding each key in an error string:
+#
+#     vendor      len  conservative  remote
+#     groq        56   LEAKS         REDACTED   (incidental, 40-char run)
+#     mistral     32   LEAKS         LEAKS
+#     cohere      40   LEAKS         REDACTED   (incidental, 40-char run)
+#     together    64   LEAKS         REDACTED   (incidental, hex rule)
+#
+# ``scrub_local_error`` IS the conservative preset and carries ~180 call sites,
+# so the leak lived on the surface with the most consumers.
+#
+# WHY THE MIXED-ALPHABET REQUIREMENT IS THE WHOLE RULE. A bare ``{32,}``
+# alphanumeric run is untenable and was rejected on MEASUREMENT, not taste:
+# 2360 unique 32+ alphanumeric runs exist in this repo's own text, and the
+# conservative preset's contract explicitly names git SHAs, MD5/SHA digests,
+# hyphen-free UUIDs and long CamelCase identifiers as the DIAGNOSTIC PAYLOAD it
+# exists to preserve. Requiring all THREE character classes — at least one
+# lowercase, one uppercase and one digit — excludes every one of those families
+# structurally rather than by luck:
+#
+#   * a git SHA / MD5 / SHA-256 digest / hyphen-free UUID is single-case hex, so
+#     it fails the case requirement (in EITHER direction: an uppercase-hex
+#     rendering fails the lowercase lookahead);
+#   * a ULID is uppercase + digits with no lowercase;
+#   * a CamelCase identifier (``AbstractSingletonProxyFactoryBeanBuilderImpl``)
+#     carries no digit.
+#
+# The residual false-positive class is therefore a 32+ character identifier
+# that mixes case AND embeds a digit — measured at 333 unique in the whole repo,
+# of which the subset that could plausibly appear in LOCAL error prose is ~20
+# long test-class names (``TestP0C001CachedTopoSortInLocalRuntime``). Blanking
+# one of those costs a class name in a message; the leak it closes is a live
+# provider credential at ~180 sinks. That is the same false-positive-vs-
+# sensitivity trade ``_AWS_SECRET_CONTIGUOUS_RUN`` takes above, in the same
+# direction, and it is taken deliberately here too.
+#
+# DOCUMENTED RESIDUAL — THE DIGIT-FREE DRAW. A uniformly random 32-character
+# alphanumeric key omits digits entirely with probability (52/62)^32 ~ 0.36%
+# (a 40-char one, ~0.09%), and such a key is byte-indistinguishable from the
+# CamelCase identifier the negative corpus requires to survive. The residual is
+# a property of the DRAW, not of the vendor, and it is pinned xfail-strict in
+# ``test_issue_1997_preset_vendor_coverage.py`` so it self-clears on XPASS.
+# Closing it means separating random letters from dictionary words, which no
+# regex can do; a URL/entropy parse is the only sound route, exactly as for the
+# URL rules' residuals below.
+#
+# TOGETHER AI IS NOT CLAIMED BY THIS RULE AND CANNOT BE. Its published key is
+# 64 HEX characters — byte-for-byte a SHA-256 digest — so any rule claiming it
+# on the conservative preset blanks every digest in every local error. Covered
+# when ANNOUNCED (``TOGETHER_API_KEY=``, via the key-name rules); the bare form
+# is a documented residual, also pinned xfail-strict.
+#
+# THIS RULE IS DELIBERATELY ABSENT FROM ``_OPAQUE_SHAPE_PATTERNS``. Membership
+# there is what switches a rule off conservatively, which is the entire defect
+# this rule closes. See the amended contract at that constant.
+#
+# REGEX SAFETY. The three class assertions are BOUNDED lookaheads ({0,256}),
+# per the module docstring's contract, so each costs constant work. They fire
+# only where ``\b`` fires — i.e. once per token, never once per character —
+# because a word boundary cannot occur inside an alphanumeric run. The 256 bound
+# is a DoS bound, not a coverage one: a key whose only lowercase character sits
+# past offset 256 is not a shape any provider issues. ``\b`` on both ends
+# follows ``_GENERIC_HEX_TOKEN``'s convention and keeps underscore-adjacent
+# identifiers (``_SOME_CONSTANT_ABC123``) out of the match, since ``\b`` cannot
+# fire between ``_`` and an alphanumeric.
+_MIXED_ALPHABET_OPAQUE_KEY: Final[re.Pattern] = re.compile(
+    r"\b(?=[A-Za-z0-9]{0,256}[a-z])"
+    r"(?=[A-Za-z0-9]{0,256}[A-Z])"
+    r"(?=[A-Za-z0-9]{0,256}[0-9])"
+    r"[A-Za-z0-9]{32,}\b",
+    re.ASCII,
+)
+
 #: Key names that ANNOUNCE their value as a secret. Shared by the two
 #: ``key=value`` rules below so the vocabulary cannot drift between them.
 #:
@@ -191,8 +272,55 @@ _AWS_SECRET_CONTIGUOUS_RUN: Final[re.Pattern] = re.compile(
 #: form — e.g. ``secret[\w-]*`` — is exactly the widened class that argument
 #: rejects: it makes the key/separator boundary float and it would newly claim
 #: unrelated prose such as ``secret_scanning_enabled: false``.
+#: The provider names this SDK actually supports, as one regex alternation.
+#:
+#: SOURCED FROM ``llm/presets.py::_FROM_ENV_PROVIDERS`` and pinned against it by
+#: ``test_issue_1997_preset_vendor_coverage.py::
+#: test_vendor_vocabulary_tracks_the_provider_registry`` — a provider added to
+#: that registry REDS this repo's suite until it is added here too. Duplicated
+#: as a literal rather than imported because a regex needs one, and because
+#: importing ``llm.presets`` from a leaf utility module would invert the
+#: dependency direction; the test is what stops the two copies drifting.
+#:
+#: ``xai`` / ``grok`` are DELIBERATELY ABSENT. Neither is a provider in this
+#: codebase — no ``_FROM_ENV_PROVIDERS`` entry, no mention anywhere in the
+#: kaizen source — so a rule naming them would be dead code protecting no
+#: surface. The tripwire above will demand them the day that changes.
+_PROVIDER_NAME_ALTERNATION: Final[str] = (
+    r"openai|anthropic|google|gemini|azure|bedrock|cohere|mistral|perplexity|"
+    r"huggingface|groq|together|fireworks|openrouter|deepseek|ollama"
+)
+
+#: Key names that ANNOUNCE their value as a secret (continued).
+#:
+#: THE VENDOR-QUALIFIED ALTERNATIVE IS ENUMERATED, NOT A STEM, and that shape is
+#: forced rather than chosen. ``api[-_]?key`` already claims ``MISTRAL_API_KEY``
+#: (the alternation is unanchored, so it matches from the ``API_KEY`` offset),
+#: but NOTHING claimed the equally ordinary ``MISTRAL_KEY=`` / ``GROQ_TOKEN=``
+#: spellings, because no alternative matches a bare ``key`` or ``token`` stem.
+#:
+#: Adding one is the obvious fix and is WRONG in both directions:
+#:
+#:   * a bare ``key`` stem claims ``cache_key=``, ``primary_key=`` and
+#:     ``sort_key=`` — legitimate parameter traces whose loss is exactly the
+#:     diagnosability cost ``redact_opaque_tokens=False`` exists to avoid at
+#:     ~180 conservative-preset sinks;
+#:   * a bare ``token`` stem is fenced from ``tokenizer`` only by the mandatory
+#:     separator, and an unanchored compound (``[\w-]*key``) would additionally
+#:     claim ``monkey=``.
+#:
+#: Enumerating the vendors instead costs O(1) per start offset (literals plus
+#: two BOUNDED ``[-_]?``), introduces no quantifier that can interact with the
+#: value part's runs, and cannot widen: ``cache``/``primary``/``sort`` are not
+#: provider names. Both polarities are pinned in
+#: ``test_issue_1997_preset_vendor_coverage.py``.
+_VENDOR_QUALIFIED_KEY: Final[str] = (
+    r"(?:" + _PROVIDER_NAME_ALTERNATION + r")[-_]?(?:api[-_]?)?(?:key|token)"
+)
+
 _CREDENTIAL_KEY_NAMES: Final[str] = (
-    r"[\"']?(?i:passwd|password|passphrase|pwd|secret[-_]?key|secret|"
+    r"[\"']?(?i:" + _VENDOR_QUALIFIED_KEY + r"|"
+    r"passwd|password|passphrase|pwd|secret[-_]?key|secret|"
     r"api[-_]?key|apikey|"
     r"access[-_]?token|refresh[-_]?token|id[-_]?token|"
     r"client[-_]?secret|auth[-_]?token|private[-_]?key|"
@@ -416,6 +544,23 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # scrub_credentials() unredacted.
     re.compile(r"\bhf_[A-Za-z0-9]{30,}", re.ASCII),
     re.compile(r"\bfw_[A-Za-z0-9]{20,}", re.ASCII),
+    # Groq API keys. ``groq`` is a first-class provider in
+    # ``llm/presets.py::_FROM_ENV_PROVIDERS`` (GROQ_API_KEY) and its key leaked
+    # on the CONSERVATIVE preset in full: the ``_`` is a word character so
+    # ``\b`` cannot fire before the body (defeating the generic-hex rule by the
+    # same mechanism the ``ghp_`` comment above describes), and the 40-char
+    # contiguous-run rule that claimed it on the remote preset is gated OFF
+    # conservatively. Same structure as ``hf_`` / ``fw_``, so it sits OUTSIDE
+    # ``_OPAQUE_SHAPE_PATTERNS`` and fires on BOTH presets at zero
+    # false-positive cost.
+    #
+    # THE PREFIX IS CITED, NOT INFERRED. ``gsk_`` has ZERO literals anywhere in
+    # this repo (verified by grep before landing), so there was nothing here to
+    # infer it from; it is pinned on Groq's PUBLISHED key format — ``gsk_``
+    # followed by 52 alphanumerics. The ``{20,}`` floor is the same tolerance
+    # the ``fw_`` rule takes, so a future length change at the vendor does not
+    # silently open the leak again.
+    re.compile(r"\bgsk_[A-Za-z0-9]{20,}", re.ASCII),
     # Azure storage SAS token (the ``sig=`` query parameter). A SAS token IS a
     # bearer credential for the blob it signs. Previously present ONLY in
     # kaizen/llm/errors.py; landed here so the sanitize_provider_error surface
@@ -443,6 +588,13 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
     # SHAPE-ONLY — defined above, gated by ``redact_opaque_tokens``. Position
     # in this list is unchanged; only the definition moved.
     _AWS_SECRET_CONTIGUOUS_RUN,
+    # PREFIX-LESS provider keys (#1997) — NOT gated. Placed IMMEDIATELY AFTER
+    # the 40-char run rule so the aggressive preset's verdict on any 40+ run is
+    # byte-for-byte what it was: that rule claims the span first and this one
+    # then sees a placeholder, whose brackets break the alphanumeric run. What
+    # this rule ADDS is therefore exactly two things — the 32..39 window on the
+    # aggressive preset, and prefix-less coverage on the conservative one.
+    _MIXED_ALPHABET_OPAQUE_KEY,
     # Bearer tokens in error messages.
     #
     # "=" is in the class because base64 bearer tokens carry "=" padding; the
@@ -531,6 +683,31 @@ _CREDENTIAL_PATTERNS: List[re.Pattern] = [
 #: real credential". The bipolar corpus in
 #: ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``
 #: is the tripwire: a shape-only rule left unclassified reds it.
+#:
+#: ONE NAMED EXCEPTION, AND IT IS AN EXCEPTION RATHER THAN A REINTERPRETATION
+#: (#1997). ``_MIXED_ALPHABET_OPAQUE_KEY`` is anchored on no prefix and no
+#: keyword, so the sentence above would place it here — and placing it here
+#: would restore the exact defect it closes, since prefix-less Mistral and
+#: Cohere keys leaked on the CONSERVATIVE preset and nowhere else. It is kept
+#: out on a MEASURED argument rather than a redefinition of "shape-only":
+#:
+#:   * the conservative preset's contract names WHICH credential-free families
+#:     it protects — git SHAs, MD5/SHA digests, hyphen-free UUIDs, trace ids and
+#:     long CamelCase identifiers — and the three-class requirement excludes
+#:     EVERY one of them structurally (each is single-case, or digit-free);
+#:   * the whole 26-vector credential-free corpus in the file named above is
+#:     still rewritten ZERO times by the conservative preset with this rule on,
+#:     which is the same tripwire, still armed, still reporting the same verdict.
+#:
+#: So the invariant the contract exists to protect — "conservative mode does not
+#: touch the diagnostic payload" — HOLDS; what fails is the syntactic proxy the
+#: contract used for it. The residual false-positive class (a 32+ char
+#: mixed-case identifier embedding a digit) is enumerated and quantified at the
+#: rule itself. A future rule may take this exception ONLY by making the same
+#: measurement and pinning it; "it feels precise enough" is not the argument.
+#: ``test_issue_1997_preset_vendor_coverage.py::
+#: test_mixed_alphabet_rule_is_not_shape_only_gated`` pins the classification so
+#: a later "tidy-up" into this set reds rather than silently re-opening #1997.
 _OPAQUE_SHAPE_PATTERNS: Final[frozenset] = frozenset(
     {_GENERIC_HEX_TOKEN, _AWS_SECRET_CONTIGUOUS_RUN, _CREDENTIAL_KEYVALUE_PROSE}
 )
@@ -962,8 +1139,12 @@ def scrub_credentials(
     Turning BOTH off leaves the rules that can match nothing but a real
     credential: vendor-prefixed tokens (``sk-``, ``sk-ant-``, ``AIza``,
     ``pplx-``, ``AKIA``, ``ASIA``, ``xox?-``, bare JWTs, ``gh?_``,
-    ``github_pat_``, ``[sr]k_live_``/``_test_``, ``hf_``, ``fw_``, ``sig=``,
-    ``Bearer <tok>``) and URL-userinfo / DSN credentials. That combination is a
+    ``github_pat_``, ``[sr]k_live_``/``_test_``, ``hf_``, ``fw_``, ``gsk_``,
+    ``sig=``, ``Bearer <tok>``), the credential-announcing ``key=value`` rules,
+    the prefix-less mixed-alphabet provider-key rule (#1997 —
+    ``_MIXED_ALPHABET_OPAQUE_KEY``, which is shape-DISCRIMINATED but not
+    shape-ONLY; see its own block for the measured argument), and
+    URL-userinfo / DSN credentials. That combination is a
     verified no-op across the credential-free corpus in
     ``tests/regression/test_scrub_credentials_ordinary_text_is_not_noop.py``,
     which is what makes it safe on surfaces where the redacted bytes would
@@ -1158,14 +1339,27 @@ def scrub_local_error(value: object, *, placeholder: str = DEFAULT_PLACEHOLDER) 
     was the disclosure defect:
 
     * **A bare AWS secret access key** (``wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY``)
-      — no vendor prefix; claimed ONLY by ``_AWS_SECRET_CONTIGUOUS_RUN``.
+      — no vendor prefix; the ``/`` breaks the alphanumeric run, so it is
+      claimed ONLY by ``_AWS_SECRET_CONTIGUOUS_RUN``.
     * **A bare 32+ character hex secret** — **Azure OpenAI ``api-key`` values
-      are exactly this shape** (see ``_GENERIC_HEX_TOKEN``); claimed ONLY by
-      that rule.
+      are exactly this shape** (see ``_GENERIC_HEX_TOKEN``); single-case hex,
+      so it is claimed ONLY by that rule. A bare **Together AI** key (64 hex)
+      is the same class.
+    * **A prefix-less key drawn with no digit** — indistinguishable from a long
+      CamelCase identifier. Aperture measured at ~0.36% of random 32-char keys;
+      pinned xfail-strict in ``test_issue_1997_preset_vendor_coverage.py``.
     * Filesystem paths, Azure resource hostnames, git SHAs, MD5/SHA digests,
       unhyphenated UUIDs and trace ids — these ARE benign, and they are the
       diagnostic payload of a local error: an ``OSError`` message IS a path
       plus a reason, and an agent handed ``[PATH]/...`` cannot retry.
+
+    WHAT IT *DOES* REDACT THAT IT DID NOT BEFORE (#1997). Prefix-less provider
+    keys that mix case AND carry a digit — the Mistral (32 alphanumeric) and
+    Cohere (40 alphanumeric) shapes — are now claimed on THIS preset too, by
+    ``_MIXED_ALPHABET_OPAQUE_KEY``, which is deliberately NOT gated by
+    ``redact_opaque_tokens``. So is a Groq ``gsk_`` key. Before that, coverage
+    was PRESET-dependent: groq, cohere and together were redacted only by the
+    shape-only rules this preset switches off, and mistral leaked on both.
 
     USE :func:`scrub_remote_error` INSTEAD whenever the exception being
     rendered can originate at an HTTP / SDK / subprocess / provider boundary.
