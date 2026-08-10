@@ -27,8 +27,9 @@ from __future__ import annotations
 import os
 from typing import Optional, Sequence
 
-from kailash.utils.command_safety import safe_command_ref
 from kailash_mcp.errors import MCPError, MCPErrorCode
+
+from kailash.utils.command_safety import safe_command_ref
 
 # Standard MCP launcher executables considered safe to spawn without an
 # explicit per-caller allowlist. Deliberately EXCLUDES shells (``sh``,
