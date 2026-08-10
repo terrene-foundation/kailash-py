@@ -15,9 +15,35 @@ consequences, plus siblings of the same shape found by sweeping
 * ``mfa.py`` swallowed provider send failures, so callers were told
   ``verification_sent: True`` for codes that were never delivered.
 
+Five adversarial review rounds then found more of the same shape, and the file
+grew to cover them:
+
+* ``sso.py::run`` dispatched to a "simplified synchronous implementation"
+  whenever an event loop was already running — every FastAPI/Nexus caller —
+  which returned ``authenticated: True`` for **any** non-empty token.
+* ``enterprise_auth_provider.py`` decoded JWT payloads with the signature
+  deliberately unverified, accepted API keys on format alone, and granted
+  ``admin`` to any ``user_id`` merely *containing* the substring.
+* ``_authenticate`` bound the session to the caller-supplied ``user_id``
+  rather than the principal the credential asserted.
+* ``directory_integration.py`` shipped a credential table whose lookup
+  defaulted to ``"password123"``, so any username authenticated with it.
+* Administrative MFA actions (``revoke``/``disable``/``reset``/recovery) and
+  re-enrolment over a verified factor were ungated.
+
 Every test here calls the function under test and asserts on its behaviour.
 Source-grep assertions are deliberately avoided — they pass against code that
-still contains the defect behind a different spelling.
+still contains the defect behind a different spelling. Positive controls are
+included throughout so a fix cannot pass by refusing everything.
+
+Note on the sync-bridge tests: that branch is reachable ONLY from inside a
+running event loop, so a test that calls ``run()`` normally never executes it —
+which is why the defect survived a green suite for so long. Those tests drive
+a live loop explicitly.
+
+The one structural gap this file does NOT cover is the absence of any caller
+identity on ``MultiFactorAuthNode`` (``user_id`` is the subject, never the
+actor). That is tracked in #2047.
 """
 
 import asyncio
