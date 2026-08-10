@@ -34,6 +34,7 @@ inherits the parent's memory, and the fork/spawn discrimination test below would
 pass for the wrong reason if the pin were ever dropped.
 """
 
+import json
 import multiprocessing
 import os
 import pickle
@@ -375,10 +376,15 @@ class TestResourceLimitReporting:
         expected in the returned list there. The assertion is written against
         the CONTRACT (a list naming real limit fields) so it holds on Linux,
         where the list is empty.
+
+        Run in a subprocess. ``apply()`` lowers the HARD limit as well as the
+        soft one, which is irreversible for the process that does it -- calling
+        it inline would cap the pytest process and break every later test that
+        needs a higher limit.
         """
-        unenforced = ResourceLimits(
-            max_memory_mb=4096, max_cpu_seconds=60, max_file_size_mb=64
-        ).apply()
+        unenforced = _apply_in_subprocess(
+            max_memory_mb=4096, max_cpu_seconds=3600, max_file_size_mb=64
+        )
 
         assert isinstance(unenforced, list)
         assert set(unenforced) <= {
@@ -395,6 +401,32 @@ class TestResourceLimitReporting:
                 "a refusal of one limit must not discard the limits this "
                 "platform does enforce"
             )
+
+    def test_apply_does_not_leak_limits_into_the_calling_process(self):
+        """Guards the guard: the subprocess indirection above must stay necessary.
+
+        If ``apply()`` ever stops lowering the hard limit, the isolation
+        sandbox becomes escapable -- hook code could raise its own soft limit
+        back up. This asserts the hard limit really is lowered, in a throwaway
+        process.
+        """
+        script = (
+            "import resource, sys;"
+            "sys.path.insert(0, %r);"
+            "from kaizen.core.autonomy.hooks.security.isolation import ResourceLimits;"
+            "ResourceLimits(max_memory_mb=4096, max_cpu_seconds=1234,"
+            " max_file_size_mb=64).apply();"
+            "print(resource.getrlimit(resource.RLIMIT_CPU)[1])" % (_SRC_ROOT,)
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+        )
+
+        assert completed.returncode == 0, completed.stderr[-2000:]
+        assert completed.stdout.strip().splitlines()[-1] == "1234", (
+            "the HARD limit was not lowered, so hook code could raise its own "
+            f"soft limit back up. stdout={completed.stdout!r}"
+        )
 
     @pytest.mark.asyncio
     async def test_unenforced_limits_reach_the_parent_log(self, caplog):
@@ -419,28 +451,33 @@ class TestResourceLimitReporting:
         assert "NOT enforced on this platform" in caplog.text
         assert "max_memory_mb" in caplog.text
 
-    def test_a_limit_above_the_hard_ceiling_still_raises(self):
-        """A capability gap is tolerated; a real misconfiguration is not.
+    def test_a_stricter_environment_clamps_rather_than_breaking_isolation(self):
+        """An environment already tighter than the request is not an error.
+
+        A container may impose a hard limit below what the caller asked for.
+        That environment is STRICTER than requested, so it satisfies the intent
+        of the cap. Raising there would break isolation inside exactly the
+        hardened deployments that most need it, and the workaround an operator
+        would reach for is turning isolation off.
+
+        Falsifying result: a non-zero exit, i.e. ``apply()`` raised instead of
+        clamping. Asserted alongside the resulting limit, so the test cannot
+        pass merely because nothing blew up.
 
         Run in a subprocess because lowering a hard limit is irreversible for
         the process that does it, and would poison the rest of the session.
         """
-        script = """
-import resource, sys
-sys.path.insert(0, %r)
-from kaizen.core.autonomy.hooks.security.isolation import ResourceLimits
-
-# Lower the HARD ceiling, then ask for more than it allows.
-resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
-try:
-    ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60,
-                   max_file_size_mb=64).apply()
-except (OSError, ValueError):
-    print("RAISED")
-else:
-    print("SWALLOWED")
-""" % (
-            os.path.join(os.path.dirname(__file__), "..", "..", "src"),
+        one_mb = 1024 * 1024
+        script = (
+            "import resource, sys;"
+            "sys.path.insert(0, %r);"
+            "resource.setrlimit(resource.RLIMIT_FSIZE, (%d, %d));"
+            "from kaizen.core.autonomy.hooks.security.isolation import ResourceLimits;"
+            "unenforced = ResourceLimits(max_memory_mb=4096, max_cpu_seconds=3600,"
+            " max_file_size_mb=64).apply();"
+            "print('FSIZE=%%s' %% (resource.getrlimit(resource.RLIMIT_FSIZE)[0],));"
+            "print('UNENFORCED=%%s' %% (','.join(unenforced),))"
+            % (_SRC_ROOT, one_mb, one_mb)
         )
 
         completed = subprocess.run(
@@ -450,15 +487,44 @@ else:
             timeout=120,
         )
 
-        assert "RAISED" in completed.stdout, (
-            f"a value above the hard limit must re-raise, not be reported as a "
-            f"platform gap. stdout={completed.stdout!r} stderr={completed.stderr[-2000:]!r}"
+        assert completed.returncode == 0, (
+            f"apply() raised instead of clamping to the stricter environment "
+            f"limit. stderr={completed.stderr[-2000:]!r}"
+        )
+        assert f"FSIZE={one_mb}" in completed.stdout, (
+            f"the requested 64MB cap should have been clamped down to the "
+            f"environment's 1MB ceiling. stdout={completed.stdout!r}"
+        )
+        assert "max_file_size_mb" not in completed.stdout.split("UNENFORCED=")[-1], (
+            "a clamped limit IS enforced, and must not be reported as " "unenforceable"
         )
 
 
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
+
+#: Import root for the subprocess probes below.
+_SRC_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+
+
+def _apply_in_subprocess(
+    *, max_memory_mb: int, max_cpu_seconds: int, max_file_size_mb: int
+) -> list[str]:
+    """Run ``ResourceLimits.apply()`` somewhere disposable and return its result."""
+    script = (
+        "import json, sys;"
+        "sys.path.insert(0, %r);"
+        "from kaizen.core.autonomy.hooks.security.isolation import ResourceLimits;"
+        "print(json.dumps(ResourceLimits(max_memory_mb=%d, max_cpu_seconds=%d,"
+        " max_file_size_mb=%d).apply()))"
+        % (_SRC_ROOT, max_memory_mb, max_cpu_seconds, max_file_size_mb)
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    return json.loads(completed.stdout.strip().splitlines()[-1])
 
 
 class _LocalAdapter:

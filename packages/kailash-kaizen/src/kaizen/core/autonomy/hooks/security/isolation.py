@@ -145,23 +145,30 @@ class ResourceLimits:
         them as one block would discard the two limits the platform does
         enforce along with the one it does not.
 
-        A refusal is only tolerated when it is a PLATFORM CAPABILITY GAP -- the
-        kernel rejecting a value that is within the current hard limit, which is
-        the signature of a resource it does not implement. A refusal of a value
-        that genuinely exceeds the hard limit is a real misconfiguration and is
-        re-raised.
+        A requested cap that exceeds the environment's existing HARD limit is
+        clamped down to that hard limit rather than treated as an error. The
+        environment is already stricter than what was asked for, which satisfies
+        the intent of the cap; refusing to run would break isolation inside
+        exactly the hardened containers that most need it, and the workaround an
+        operator would reach for is turning isolation off entirely.
+
+        After that clamp every value is within the hard limit, so a refusal from
+        the kernel means it does not implement the resource at all (macOS and
+        ``RLIMIT_AS``). That is REPORTED rather than raised: the limits the
+        platform does support still apply, and process isolation itself -- the
+        primary control -- is unaffected by a missing cap.
+
+        Both the soft and the hard limit are set. Lowering the hard limit is
+        what prevents the hook's own code from raising its soft limit back up,
+        and it is irreversible for the process that does it -- which is correct
+        here, because the process that does it is a disposable child. Callers
+        MUST NOT invoke this on a process they intend to keep using.
 
         Returns:
             Names of the limits that could NOT be enforced (empty list when all
             applied). The caller is expected to surface these: an unenforced
             limit is a security control that is OFF, and the child's own log
             records do not reach the parent's handlers under ``spawn``.
-
-        Raises:
-            OSError: If setrlimit fails for a value exceeding the hard limit
-                (a real misconfiguration, not a platform capability gap)
-            ValueError: Likewise, for the ValueError variant CPython raises for
-                the same condition
 
         Example:
             >>> limits = ResourceLimits(max_memory_mb=100)
@@ -203,7 +210,26 @@ class ResourceLimits:
 
             _soft, hard = resource.getrlimit(rlimit)
 
+            # An environment that is ALREADY stricter than the requested cap
+            # satisfies the intent of the cap, so clamp to it rather than
+            # failing. Refusing to run here would mean isolation breaks inside
+            # exactly the hardened containers that need it most, and the
+            # workaround an operator would reach for is enable_isolation=False.
+            requested = value
+            if hard != resource.RLIM_INFINITY and value > hard:
+                value = hard
+                logger.info(
+                    "Resource limit %s requested %s but the environment caps it "
+                    "at %s; using the stricter environment value",
+                    label,
+                    requested,
+                    hard,
+                )
+
             try:
+                # Both soft and hard are set: lowering the HARD limit is what
+                # stops the hook's own code from raising its soft limit back up.
+                # The child is disposable, so the irreversibility is intended.
                 resource.setrlimit(rlimit, (value, value))
             except (OSError, ValueError) as e:
                 # ``scrub_local_error``, not ``scrub_remote_error``: this comes
@@ -217,17 +243,12 @@ class ResourceLimits:
                 # a leak: the moment this block covers a limit derived from a
                 # caller-supplied value, the sink is already wrong and nothing
                 # would flag it.
-                within_hard = hard == resource.RLIM_INFINITY or value <= hard
-                if not within_hard:
-                    logger.error(
-                        "SECURITY: Failed to apply resource limit %s: %s",
-                        label,
-                        scrub_local_error(e),
-                    )
-                    raise
-
-                # Refused despite being within the hard limit: this kernel does
-                # not implement the resource (macOS and RLIMIT_AS).
+                #
+                # The clamp above guarantees the value is within the hard limit,
+                # so a refusal here means the kernel does not implement this
+                # resource at all (macOS and RLIMIT_AS). That is reported, not
+                # raised: the remaining limits still apply, and process
+                # isolation itself -- the primary control -- is unaffected.
                 unenforced.append(label)
                 logger.warning(
                     "SECURITY: %s (%s) is not enforceable on this platform: %s",
