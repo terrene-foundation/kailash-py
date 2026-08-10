@@ -14,7 +14,12 @@ from .authorization import (
     HookPrincipal,
     HookRole,
 )
-from .isolation import IsolatedHookExecutor, IsolatedHookManager, ResourceLimits
+from .isolation import (
+    HookIsolationError,
+    IsolatedHookExecutor,
+    IsolatedHookManager,
+    ResourceLimits,
+)
 from .metrics_auth import MetricsAuthConfig, MetricsEndpoint, SecureMetricsEndpoint
 from .rate_limiting import RateLimitedHookManager, RateLimiter, RateLimitError
 from .redaction import (
@@ -61,4 +66,5 @@ __all__ = [
     "ResourceLimits",
     "IsolatedHookExecutor",
     "IsolatedHookManager",
+    "HookIsolationError",
 ]

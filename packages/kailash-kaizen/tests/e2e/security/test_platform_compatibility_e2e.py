@@ -11,6 +11,7 @@ Test Tier: 3 (E2E with real infrastructure, NO MOCKING)
 
 import asyncio
 import logging
+import os
 import platform
 import sys
 from datetime import datetime
@@ -21,9 +22,17 @@ from kaizen.core.autonomy.hooks import HookEvent, HookPriority
 from kaizen.core.autonomy.hooks.security import IsolatedHookManager, ResourceLimits
 from kaizen.core.autonomy.hooks.types import HookContext, HookResult
 
+from . import _isolation_hooks as hooks
+
 logger = logging.getLogger(__name__)
 
 CURRENT_PLATFORM = platform.system()  # Linux, Darwin (macOS), Windows
+
+#: Startup budget for a spawned child. Under ``spawn`` the child pays a full
+#: interpreter start plus the import of the handler's module, which is far more
+#: than the sub-second budgets these tests used while isolation was silently not
+#: happening (issue #2014).
+ISOLATION_TIMEOUT = 30.0
 
 
 # ============================================================================
@@ -76,39 +85,51 @@ async def test_unix_memory_limit():
     """
     Test memory limit enforcement on Unix/Linux/macOS.
 
-    Validates:
-    - Memory limits applied successfully
-    - Memory exhaustion prevented
-    - Graceful failure on memory exceeded
+    Asserts the OUTCOME rather than merely that a hook ran. The previous version
+    asserted ``len(results) == 1``, which is true whether the cap was applied,
+    ignored, or never reachable at all -- and it was in fact never reachable,
+    because isolation was silently failing (issue #2014).
+
+    The expectation is platform-split because the capability genuinely is:
+    Linux enforces ``RLIMIT_AS``, macOS refuses to set it at all. Both branches
+    are asserted, so neither can pass by accident on the other's platform.
     """
-    # Create manager with strict memory limit
-    limits = ResourceLimits(max_memory_mb=50, max_cpu_seconds=5, max_file_size_mb=10)
+    limits = ResourceLimits(max_memory_mb=50, max_cpu_seconds=60, max_file_size_mb=10)
+    unenforced = hooks.unenforceable_limits()
 
     manager = IsolatedHookManager(limits=limits, enable_isolation=True)
+    manager.register(
+        HookEvent.PRE_AGENT_LOOP,
+        hooks.MemoryHogHook(allocate_mb=512),
+        HookPriority.NORMAL,
+    )
 
-    # Create memory-intensive hook
-    async def memory_hog_hook(context: HookContext) -> HookResult:
-        # Try to allocate 100MB (exceeds 50MB limit)
-        try:
-            data = [0] * (100 * 1024 * 1024 // 8)  # 100MB of integers
-            return HookResult(success=True)
-        except MemoryError:
-            return HookResult(success=False, error="Memory limit exceeded")
-
-    manager.register(HookEvent.PRE_AGENT_LOOP, memory_hog_hook, HookPriority.NORMAL)
-
-    # Trigger hook (should fail due to memory limit)
     results = await manager.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=5.0,
+        timeout=ISOLATION_TIMEOUT,
     )
 
-    # Validate graceful failure
     assert len(results) == 1, "Hook should execute once"
-    # Note: Hook may fail or succeed depending on OS enforcement timing
-    logger.info("✅ Unix/Linux/macOS: Memory limit test completed")
+
+    if "max_memory_mb" in unenforced:
+        # macOS: the cap is not enforceable, and the code says so out loud.
+        assert results[0].success is True, (
+            "the allocation should succeed where the platform cannot cap it; "
+            f"got {results[0].error!r}"
+        )
+    else:
+        # Linux: a 512MB allocation under a 50MB cap must be refused.
+        assert results[0].success is False, (
+            "a 512MB allocation succeeded under a 50MB RLIMIT_AS cap: the "
+            "memory limit was not applied in the isolated process"
+        )
+    logger.info(
+        "✅ %s: memory limit outcome asserted (unenforced=%s)",
+        CURRENT_PLATFORM,
+        unenforced,
+    )
 
 
 @pytest.mark.skipif(
@@ -124,34 +145,32 @@ async def test_unix_cpu_limit():
     - Infinite loops prevented
     - Graceful failure on CPU exceeded
     """
-    # Create manager with strict CPU limit
-    limits = ResourceLimits(max_memory_mb=100, max_cpu_seconds=2, max_file_size_mb=10)
+    limits = ResourceLimits(max_memory_mb=4096, max_cpu_seconds=2, max_file_size_mb=10)
+    assert "max_cpu_seconds" not in hooks.unenforceable_limits(), (
+        "RLIMIT_CPU is expected to be enforceable on every non-Windows platform "
+        "this test runs on"
+    )
 
     manager = IsolatedHookManager(limits=limits, enable_isolation=True)
+    manager.register(HookEvent.PRE_AGENT_LOOP, hooks.CpuHogHook(), HookPriority.NORMAL)
 
-    # Create CPU-intensive hook
-    async def cpu_hog_hook(context: HookContext) -> HookResult:
-        # Infinite loop (should be killed by CPU limit)
-        count = 0
-        while True:
-            count += 1
-            if count > 1000000:
-                break
-        return HookResult(success=True)
-
-    manager.register(HookEvent.PRE_AGENT_LOOP, cpu_hog_hook, HookPriority.NORMAL)
-
-    # Trigger hook (should timeout or be killed by CPU limit)
     results = await manager.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=5.0,
+        timeout=ISOLATION_TIMEOUT,
     )
 
-    # Validate graceful failure
+    # The child burns a billion additions against a 2-second CPU cap. It is
+    # killed by SIGXCPU long before finishing, so the ONLY way this reports
+    # success is if the cap was never applied -- which is what a silently
+    # non-isolated execution looks like.
     assert len(results) == 1, "Hook should execute once"
-    logger.info("✅ Unix/Linux/macOS: CPU limit test completed")
+    assert results[0].success is False, (
+        "an unbounded CPU loop completed under a 2-second RLIMIT_CPU cap: the "
+        "CPU limit was not applied in the isolated process"
+    )
+    logger.info("✅ %s: CPU limit enforced (hook killed)", CURRENT_PLATFORM)
 
 
 @pytest.mark.skipif(
@@ -167,36 +186,32 @@ async def test_unix_file_size_limit():
     - Large file writes prevented
     - Graceful failure on file size exceeded
     """
-    import tempfile
-
-    # Create manager with strict file size limit
-    limits = ResourceLimits(max_memory_mb=100, max_cpu_seconds=5, max_file_size_mb=1)
+    limits = ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60, max_file_size_mb=1)
+    assert "max_file_size_mb" not in hooks.unenforceable_limits(), (
+        "RLIMIT_FSIZE is expected to be enforceable on every non-Windows "
+        "platform this test runs on"
+    )
 
     manager = IsolatedHookManager(limits=limits, enable_isolation=True)
+    manager.register(
+        HookEvent.PRE_AGENT_LOOP, hooks.FileWriterHook(write_mb=10), HookPriority.NORMAL
+    )
 
-    # Create file-writing hook
-    async def file_writer_hook(context: HookContext) -> HookResult:
-        # Try to write 10MB file (exceeds 1MB limit)
-        try:
-            with tempfile.NamedTemporaryFile(mode="wb", delete=True) as f:
-                f.write(b"0" * (10 * 1024 * 1024))  # 10MB
-            return HookResult(success=True)
-        except OSError as e:
-            return HookResult(success=False, error=f"File size limit: {e}")
-
-    manager.register(HookEvent.PRE_AGENT_LOOP, file_writer_hook, HookPriority.NORMAL)
-
-    # Trigger hook (should fail due to file size limit)
     results = await manager.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=5.0,
+        timeout=ISOLATION_TIMEOUT,
     )
 
-    # Validate graceful failure
+    # A 10MB write under a 1MB RLIMIT_FSIZE cap cannot complete. Success here
+    # would mean the cap was never applied.
     assert len(results) == 1, "Hook should execute once"
-    logger.info("✅ Unix/Linux/macOS: File size limit test completed")
+    assert results[0].success is False, (
+        "a 10MB write completed under a 1MB RLIMIT_FSIZE cap: the file size "
+        "limit was not applied in the isolated process"
+    )
+    logger.info("✅ %s: file size limit enforced", CURRENT_PLATFORM)
 
 
 # ============================================================================
@@ -209,38 +224,37 @@ async def test_process_isolation():
     """
     Test process isolation on all platforms.
 
-    Validates:
-    - Hooks run in separate processes
-    - Hook crashes don't affect main process
-    - Main process remains stable
+    Asserts that the hook ran SOMEWHERE ELSE, and that a mutation it made could
+    not reach this process. The previous version asserted
+    ``isinstance(results, list)``, which is true of every possible outcome --
+    including the in-process execution issue #2014 was silently doing.
     """
     manager = IsolatedHookManager(
-        limits=ResourceLimits(),  # Default limits
+        limits=ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60),
         enable_isolation=True,
     )
+    manager.register(
+        HookEvent.PRE_AGENT_LOOP, hooks.MutatingHook(), HookPriority.NORMAL
+    )
 
-    # Create crashing hook
-    async def crash_hook(context: HookContext) -> HookResult:
-        raise Exception("Simulated crash")
+    assert hooks.LEAKED_STATE == "clean"
 
-    manager.register(HookEvent.PRE_AGENT_LOOP, crash_hook, HookPriority.NORMAL)
+    results = await manager.trigger(
+        HookEvent.PRE_AGENT_LOOP,
+        agent_id="agent-001",
+        data={},
+        timeout=ISOLATION_TIMEOUT,
+    )
 
-    # Trigger hook (should crash in isolated process)
-    try:
-        results = await manager.trigger(
-            HookEvent.PRE_AGENT_LOOP,
-            agent_id="agent-001",
-            data={},
-            timeout=2.0,
-        )
-
-        # Main process should survive
-        assert isinstance(results, list), "Main process should remain stable"
-        logger.info(
-            f"✅ {CURRENT_PLATFORM}: Process isolation prevents main process crash"
-        )
-    except Exception as e:
-        pytest.fail(f"Main process crashed (isolation failed): {e}")
+    assert len(results) == 1 and results[0].success is True, results[0].error
+    assert (
+        results[0].data["pid"] != os.getpid()
+    ), "the hook ran in this process: isolation did not engage"
+    assert hooks.LEAKED_STATE == "clean", (
+        "the hook's mutation reached the parent's address space, so the hook "
+        "was not isolated and could corrupt agent state"
+    )
+    logger.info("✅ %s: hook confined to its own process", CURRENT_PLATFORM)
 
 
 @pytest.mark.asyncio
@@ -253,29 +267,31 @@ async def test_cross_hook_isolation():
     - Separate memory spaces
     - Independent execution
     """
-    manager = IsolatedHookManager(limits=ResourceLimits(), enable_isolation=True)
+    manager = IsolatedHookManager(
+        limits=ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60),
+        enable_isolation=True,
+    )
 
-    # Create two hooks: one crashes, one succeeds
-    async def crash_hook(context: HookContext) -> HookResult:
-        raise Exception("Hook A crash")
+    manager.register(HookEvent.PRE_AGENT_LOOP, hooks.CrashingHook(), HookPriority.HIGH)
+    manager.register(HookEvent.PRE_AGENT_LOOP, hooks.SuccessHook(), HookPriority.NORMAL)
 
-    async def success_hook(context: HookContext) -> HookResult:
-        return HookResult(success=True, metadata={"hook": "B"})
-
-    manager.register(HookEvent.PRE_AGENT_LOOP, crash_hook, HookPriority.HIGH)
-    manager.register(HookEvent.PRE_AGENT_LOOP, success_hook, HookPriority.NORMAL)
-
-    # Trigger both hooks
     results = await manager.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=2.0,
+        timeout=ISOLATION_TIMEOUT,
     )
 
-    # Hook B should succeed despite Hook A crash
+    # Asserts the OUTCOMES, not just the count: A must have failed, B must have
+    # succeeded despite it, and the two must have run in DIFFERENT processes
+    # from each other and from this one.
     assert len(results) == 2, "Both hooks should execute"
-    logger.info(f"✅ {CURRENT_PLATFORM}: Hooks isolated from each other")
+    assert results[0].success is False, "the crashing hook should report failure"
+    assert results[1].success is True, results[1].error
+    assert (
+        results[1].data["pid"] != os.getpid()
+    ), "the surviving hook ran in this process: isolation did not engage"
+    logger.info("✅ %s: hook crash did not affect the sibling hook", CURRENT_PLATFORM)
 
 
 # ============================================================================
@@ -350,49 +366,56 @@ async def test_performance_with_isolation():
     manager_no_isolation = IsolatedHookManager(
         limits=ResourceLimits(), enable_isolation=False
     )
-
-    async def fast_hook(context: HookContext) -> HookResult:
-        return HookResult(success=True)
-
     manager_no_isolation.register(
-        HookEvent.PRE_AGENT_LOOP, fast_hook, HookPriority.NORMAL
+        HookEvent.PRE_AGENT_LOOP, hooks.SuccessHook(), HookPriority.NORMAL
     )
 
     start = time.perf_counter()
-    results_no_isolation = await manager_no_isolation.trigger(
+    await manager_no_isolation.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=2.0,
+        timeout=ISOLATION_TIMEOUT,
     )
     duration_no_isolation = (time.perf_counter() - start) * 1000  # ms
 
     # Measure with isolation
     manager_with_isolation = IsolatedHookManager(
-        limits=ResourceLimits(), enable_isolation=True
+        limits=ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60),
+        enable_isolation=True,
     )
-
     manager_with_isolation.register(
-        HookEvent.PRE_AGENT_LOOP, fast_hook, HookPriority.NORMAL
+        HookEvent.PRE_AGENT_LOOP, hooks.SuccessHook(), HookPriority.NORMAL
     )
 
     start = time.perf_counter()
-    results_with_isolation = await manager_with_isolation.trigger(
+    await manager_with_isolation.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=2.0,
+        timeout=ISOLATION_TIMEOUT,
     )
     duration_with_isolation = (time.perf_counter() - start) * 1000  # ms
 
-    # Calculate overhead
     overhead_ms = duration_with_isolation - duration_no_isolation
     logger.info(f"Performance overhead: {overhead_ms:.2f}ms")
     logger.info(f"  Without isolation: {duration_no_isolation:.2f}ms")
     logger.info(f"  With isolation: {duration_with_isolation:.2f}ms")
 
-    # Validate acceptable overhead (< 200ms for process creation)
-    assert overhead_ms < 500, f"Isolation overhead too high: {overhead_ms:.2f}ms"
+    # LOWER bound first, and it is the load-bearing one. Isolation means a real
+    # interpreter is started, which cannot be free. The old assertion was an
+    # upper bound of 500ms, which passed comfortably for the wrong reason: no
+    # process was being created at all (issue #2014). A near-zero overhead is
+    # now a FAILURE signal rather than a good result.
+    assert overhead_ms > 50, (
+        f"isolation added only {overhead_ms:.2f}ms, which is too cheap to have "
+        f"started an interpreter -- isolation is probably not engaging"
+    )
+
+    # Upper bound calibrated against real spawn cost: a fresh interpreter plus
+    # the import of the handler's module, which is seconds rather than the
+    # sub-500ms a no-op fallback used to measure.
+    assert overhead_ms < 20000, f"Isolation overhead too high: {overhead_ms:.2f}ms"
     logger.info(f"✅ {CURRENT_PLATFORM}: Performance overhead acceptable")
 
 

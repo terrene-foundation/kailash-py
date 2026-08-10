@@ -47,6 +47,8 @@ from kaizen.core.autonomy.hooks.security.validation import (
 )
 from kaizen.core.autonomy.hooks.types import HookContext, HookResult
 
+from . import _isolation_hooks as isolation_hooks
+
 logger = logging.getLogger(__name__)
 
 
@@ -478,35 +480,35 @@ async def test_soc2_availability():
     - Capacity management
     - Incident response
     """
-    # SOC2 Availability: System availability via isolation
+    # SOC2 Availability: System availability via isolation.
+    #
+    # The hook is defined at MODULE scope (see _isolation_hooks) because an
+    # isolating manager transfers it to a fresh interpreter by pickle. Defined
+    # inside this test body it could not be transferred, and before #2014 that
+    # silently meant the hook ran in the agent's own process -- so this test
+    # asserted availability of a control that was not engaged.
     manager = IsolatedHookManager(
-        limits=ResourceLimits(max_memory_mb=100, max_cpu_seconds=5),
+        limits=ResourceLimits(max_memory_mb=4096, max_cpu_seconds=60),
         enable_isolation=True,
     )
 
-    async def failing_hook(context: HookContext) -> HookResult:
-        raise Exception("Simulated failure")
-
-    # Register failing hook
-    manager.register(HookEvent.PRE_AGENT_LOOP, failing_hook, HookPriority.NORMAL)
-
-    # Test system remains available despite hook failure
-    context = HookContext(
-        event_type=HookEvent.PRE_AGENT_LOOP,
-        agent_id="agent-001",
-        data={},
-        timestamp=datetime.now(),
+    manager.register(
+        HookEvent.PRE_AGENT_LOOP, isolation_hooks.CrashingHook(), HookPriority.NORMAL
     )
 
     results = await manager.trigger(
         HookEvent.PRE_AGENT_LOOP,
         agent_id="agent-001",
         data={},
-        timeout=1.0,
+        timeout=30.0,
     )
 
-    # System should remain available (graceful degradation)
-    assert isinstance(results, list), "SOC2: System should remain available"
+    # Availability means the crash was CONTAINED and reported, not that a list
+    # came back. The previous assertion (isinstance(results, list)) held for
+    # every possible outcome, including the hook taking down agent state.
+    assert len(results) == 1, "SOC2: the hook should have been executed once"
+    assert results[0].success is False, "SOC2: the failing hook should report failure"
+    assert "crash" in (results[0].error or "").lower(), results[0].error
 
     logger.info("✅ SOC2 Trust Principle (Availability): PASSED")
 
