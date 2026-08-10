@@ -14,7 +14,6 @@ import pytest_asyncio
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-
 from kailash_mcp.discovery.discovery import (
     FileBasedDiscovery,
     HealthChecker,
@@ -26,6 +25,7 @@ from kailash_mcp.discovery.discovery import (
     create_default_registry,
     discover_mcp_servers,
 )
+
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 

@@ -71,7 +71,6 @@ class TestIntegrationTestCollection:
         # Test that required modules can be imported
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
-
         from kaizen import Kaizen
 
         # Test that we can create instances without errors

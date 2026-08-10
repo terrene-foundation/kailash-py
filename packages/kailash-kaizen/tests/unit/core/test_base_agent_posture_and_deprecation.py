@@ -15,8 +15,8 @@ import dataclasses
 import warnings
 
 import pytest
-from kailash.trust.envelope import AgentPosture
 
+from kailash.trust.envelope import AgentPosture
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 
 _EXTENSION_POINTS = (

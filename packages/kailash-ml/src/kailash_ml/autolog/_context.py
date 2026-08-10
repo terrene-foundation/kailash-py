@@ -198,12 +198,13 @@ async def autolog(
     :raises AutologAttachError: a framework integration's ``attach``
         call raised; wraps the inner exception as ``__cause__``.
     """
+    from kailash_ml.tracking import get_current_run
+
     from kailash.ml.errors import (
         AutologAttachError,
         AutologDetachError,
         AutologNoAmbientRunError,
     )
-    from kailash_ml.tracking import get_current_run
 
     # Ambient-run gate per §6.1 — evaluated BEFORE the env-disable
     # short-circuit so the disabled-autolog path still surfaces the

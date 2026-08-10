@@ -25,9 +25,6 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-from scipy.stats import ks_2samp
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.drift._types import DriftReport, FeatureDriftResult
 from kailash_ml.drift.alerts import AlertConfig, DriftAlertDispatcher
 from kailash_ml.drift.policy import DriftMonitorReferencePolicy
@@ -48,6 +45,9 @@ from kailash_ml.errors import (
     ZeroVarianceReferenceError,
 )
 from kailash_ml.types import AgentInfusionProtocol
+from scipy.stats import ks_2samp
+
+from kailash.db.connection import ConnectionManager
 
 logger = logging.getLogger(__name__)
 

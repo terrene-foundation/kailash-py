@@ -122,13 +122,14 @@ except ImportError as exc:
         allow_module_level=True,
     )
 
-from dataflow import DataFlow  # noqa: E402
 from kailash_ml.features import (  # noqa: E402
     CANONICAL_SINGLE_TENANT_SENTINEL,
     FeatureField,
     FeatureSchema,
     FeatureStore,
 )
+
+from dataflow import DataFlow  # noqa: E402
 
 _T1 = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
 _T2 = datetime(2026, 5, 8, 12, 0, tzinfo=timezone.utc)  # one week later

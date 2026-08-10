@@ -15,7 +15,6 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-
 from spec_drift_gate import (
     DEFAULT_AGEOUT_DAYS,
     BaselineEntry,

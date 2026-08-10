@@ -39,11 +39,11 @@ from typing import Any, Dict
 import polars as pl
 import pytest
 import yaml
-
-from kailash._from_brief import BriefInterpretationError
 from kailash_ml import from_brief
 from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec
 from kailash_ml.features.schema import FeatureSchema
+
+from kailash._from_brief import BriefInterpretationError
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _FIXTURE_DIR = _REPO_ROOT / "tests" / "regression" / "from_brief" / "fixtures"

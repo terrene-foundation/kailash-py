@@ -230,7 +230,6 @@ class TestGraphRAGNodeIntegration:
         from kailash.nodes.code.python import PythonCodeNode as _PCN
         from kailash.runtime.local import LocalRuntime as _RT
         from kailash.workflow.builder import WorkflowBuilder as _WB
-
         from kaizen.nodes.rag.graph import build_knowledge_graph
 
         b = _WB()
@@ -364,7 +363,6 @@ from typing import Any  # noqa: E402
 from kailash.nodes.code.python import PythonCodeNode  # noqa: E402
 from kailash.runtime.local import LocalRuntime  # noqa: E402
 from kailash.workflow.builder import WorkflowBuilder  # noqa: E402
-
 from kaizen.nodes.rag.graph import (  # noqa: E402
     compose_entity_extraction_messages,
     compose_query_analysis_messages,

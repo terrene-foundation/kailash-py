@@ -7,9 +7,9 @@ Validates the stub fixes in resources.py.
 import json
 
 import pytest
+from kailash_mcp import MCPServer
 
 from kailash.workflow.builder import WorkflowBuilder
-from kailash_mcp import MCPServer
 from nexus import Nexus
 from nexus.resources import NexusResourceManager
 

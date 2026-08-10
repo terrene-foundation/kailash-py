@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-
 from kailash_ml.engines.data_explorer import (
     AlertConfig,
     ColumnProfile,

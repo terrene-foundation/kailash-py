@@ -13,10 +13,10 @@ immediately.
 """
 from __future__ import annotations
 
+import kailash_ml.errors as ml_errors
 import pytest
 
 import kailash.ml.errors as core_errors
-import kailash_ml.errors as ml_errors
 
 CORE_NAMES = sorted(core_errors.__all__)
 

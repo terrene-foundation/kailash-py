@@ -31,8 +31,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # avoid eager DataFlow / FeatureSchema import on type-only paths
-    from dataflow.core.engine import DataFlow
     from kailash_ml.features.schema import FeatureSchema
+
+    from dataflow.core.engine import DataFlow
 
 __all__ = ["DTYPE_TO_PYTYPE", "ensure_feature_model_registered"]
 

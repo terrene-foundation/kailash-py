@@ -23,9 +23,9 @@ import time
 from typing import Any, Dict, List
 
 import pytest
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.nodes.rag.realtime import IncrementalIndexNode, RealtimeStreamingRAGNode
 
 pytestmark = pytest.mark.integration

@@ -13,6 +13,7 @@ import hashlib
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.chain import ActionResult, AuditAnchor
 from kailash.trust.signing.merkle import (
     MerkleNode,
@@ -22,7 +23,6 @@ from kailash.trust.signing.merkle import (
     get_proof_length,
     verify_merkle_proof,
 )
-
 from kaizen.trust.audit_store import AuditRecord
 
 # =============================================================================

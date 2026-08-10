@@ -61,7 +61,6 @@ class TestMlflowFormatWriter:
 
     def test_write_mlmodel_yaml(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatWriter
 
         writer = MlflowFormatWriter()
@@ -97,7 +96,6 @@ class TestMlflowFormatWriter:
 
     def test_write_with_signature(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatWriter
 
         schema = _FakeFeatureSchema(
@@ -155,7 +153,6 @@ class TestMlflowFormatReader:
 
     def test_read_basic(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatReader
 
         model_dir = tmp_path / "model"
@@ -186,7 +183,6 @@ class TestMlflowFormatReader:
 
     def test_read_with_signature(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatReader
 
         model_dir = tmp_path / "model"
@@ -213,7 +209,6 @@ class TestMlflowFormatReader:
 
     def test_read_with_metrics(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatReader
 
         model_dir = tmp_path / "model"
@@ -236,7 +231,6 @@ class TestMlflowFormatReader:
 
     def test_detect_lightgbm_framework(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatReader
 
         model_dir = tmp_path / "model"
@@ -254,7 +248,6 @@ class TestMlflowFormatReader:
 
     def test_malformed_signature_handled(self, tmp_path):
         import yaml
-
         from kailash_ml.compat.mlflow_format import MlflowFormatReader
 
         model_dir = tmp_path / "model"

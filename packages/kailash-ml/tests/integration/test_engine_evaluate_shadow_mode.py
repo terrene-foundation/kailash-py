@@ -14,12 +14,12 @@ from types import SimpleNamespace
 
 import polars as pl
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml import MLEngine
 from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from sklearn.ensemble import RandomForestClassifier
+
+from kailash.db.connection import ConnectionManager
 
 
 @pytest.fixture

@@ -5,6 +5,7 @@ Tests context switching, registration, validation, and helpers.
 """
 
 import pytest
+
 from nexus.auth.tenant.context import (
     TenantContext,
     TenantInfo,

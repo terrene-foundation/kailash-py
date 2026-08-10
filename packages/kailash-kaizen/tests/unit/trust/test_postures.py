@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import MagicMock
 
 import pytest
+
 from kailash.trust.posture.postures import (
     PostureConstraints,
     PostureResult,

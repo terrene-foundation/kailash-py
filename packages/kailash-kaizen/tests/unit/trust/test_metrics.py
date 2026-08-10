@@ -19,6 +19,7 @@ Coverage:
 """
 
 import pytest
+
 from kailash.trust.metrics import (
     POSTURE_LEVEL_MAP,
     ConstraintMetrics,

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
 from nexus.auth.tenant.config import TenantConfig
 from nexus.auth.tenant.context import get_current_tenant, get_current_tenant_id
 from nexus.auth.tenant.middleware import TenantMiddleware

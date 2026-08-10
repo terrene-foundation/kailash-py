@@ -27,7 +27,6 @@ from typing import Any
 
 import polars as pl
 import pytest
-
 from kailash_ml import MLEngine
 from kailash_ml.engine import (
     ConflictingArgumentsError,

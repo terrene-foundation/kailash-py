@@ -9,6 +9,7 @@ import base64
 import secrets
 
 import pytest
+
 from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     SALT_LENGTH,

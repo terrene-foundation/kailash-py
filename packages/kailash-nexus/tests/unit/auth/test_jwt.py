@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 import jwt as pyjwt
 import pytest
+
 from nexus.auth.exceptions import ExpiredTokenError, InvalidTokenError
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
 from nexus.auth.models import AuthenticatedUser

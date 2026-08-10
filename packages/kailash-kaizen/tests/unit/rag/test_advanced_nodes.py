@@ -44,8 +44,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kailash.nodes.logic.workflow import WorkflowNode
 
+from kailash.nodes.logic.workflow import WorkflowNode
 from kaizen.nodes.rag.advanced import (
     HyDENode,
     RAGConfig,

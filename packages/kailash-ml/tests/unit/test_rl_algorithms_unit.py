@@ -8,7 +8,6 @@ unknown -> RLError not RuntimeError/ValueError).
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.errors import FeatureNotYetSupportedError, RLError
 from kailash_ml.rl.algorithms import (
     A2CAdapter,

@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -28,7 +29,6 @@ from kailash.trust.key_manager import InMemoryKeyManager
 from kailash.trust.operations import TrustKeyManager
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 from kailash.trust.signing.rotation import CredentialRotationManager, RotationError
-
 from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kaizen.trust.store import InMemoryTrustStore, TransactionContext
 

@@ -7,7 +7,6 @@ import pickle
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash_ml.engines.model_registry import (
     ALL_STAGES,
     VALID_TRANSITIONS,

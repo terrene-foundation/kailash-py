@@ -25,9 +25,6 @@ import pickle
 
 import numpy as np
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.errors import (
     InferenceServerError,
@@ -36,6 +33,9 @@ from kailash_ml.errors import (
 )
 from kailash_ml.serving import InferenceServer, ServeHandle
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from sklearn.ensemble import RandomForestClassifier
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Real infrastructure fixtures

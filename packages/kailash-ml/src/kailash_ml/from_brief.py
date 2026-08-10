@@ -93,6 +93,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, cast
 
 import polars as pl
+from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec
+from kailash_ml.features.schema import FeatureField, FeatureSchema
 
 from kailash._from_brief import (
     BriefInterpretationError,
@@ -102,8 +104,6 @@ from kailash._from_brief import (
 )
 from kailash._from_brief.confidence import DEFAULT_CONFIDENCE_THRESHOLD
 from kailash._from_brief.validator import BriefPlan as _BasePlan
-from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec
-from kailash_ml.features.schema import FeatureField, FeatureSchema
 
 # kaizen-dependent imports (`BriefPlanSignature` / `get_default_llm_model` from
 # kailash._from_brief, `OutputField` / `BaseAgent` from kaizen) are LAZY —

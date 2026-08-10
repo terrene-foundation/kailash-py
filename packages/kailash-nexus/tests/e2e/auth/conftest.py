@@ -13,6 +13,7 @@ import pytest
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
+
 from nexus.auth.audit.config import AuditConfig
 from nexus.auth.dependencies import require_permission, require_role
 from nexus.auth.jwt import JWTConfig

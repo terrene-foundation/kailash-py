@@ -32,11 +32,11 @@ input to the first node, and several nodes (``VectorDatabaseNode``,
 from __future__ import annotations
 
 import pytest
+
 from kailash.nodes.base import Node
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
-
 from kaizen.nodes.rag.strategies import (
     HierarchicalRAGNode,
     HybridRAGNode,
@@ -278,7 +278,6 @@ class TestWorkflowCodegenRealExecution:
         """
         from kailash.nodes.code.python import PythonCodeNode
         from kailash.workflow.builder import WorkflowBuilder
-
         from kaizen.nodes.rag.workflows import _analyze_documents
 
         # The migrated node no longer carries a `code` string to re-exec.
@@ -674,9 +673,8 @@ def capturing_llm(monkeypatch: pytest.MonkeyPatch):
     """Substitute ``LLMAgentNode`` (both the module symbol and the NodeRegistry
     string key the inner workflow resolves through) with the message-capturing
     Protocol-Satisfying Deterministic Adapter, and clear the capture sink."""
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag.workflows as wf_mod
+    from kailash.nodes.base import NodeRegistry
 
     _WF_CAPTURED_MESSAGES.clear()
 
@@ -941,7 +939,6 @@ class TestWorkflowsDecisionDrivesExecutor:
         decision-flow edges under real LocalRuntime."""
         from kailash.nodes.code.python import PythonCodeNode
         from kailash.workflow.builder import WorkflowBuilder
-
         from kaizen.nodes.rag.workflows import parse_strategy_decision
 
         builder = WorkflowBuilder()

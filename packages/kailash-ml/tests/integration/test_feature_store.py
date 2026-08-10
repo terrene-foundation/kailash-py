@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 
 import polars as pl
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.feature_store import FeatureStore
 from kailash_ml.types import FeatureField, FeatureSchema
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

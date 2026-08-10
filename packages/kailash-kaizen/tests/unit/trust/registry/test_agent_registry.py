@@ -16,6 +16,7 @@ from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.trust.registry.agent_registry import AgentRegistry, DiscoveryQuery
 from kailash.trust.registry.exceptions import (
     AgentNotFoundError,

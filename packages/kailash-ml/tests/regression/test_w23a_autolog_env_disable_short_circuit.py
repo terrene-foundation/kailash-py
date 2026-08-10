@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from kailash_ml.autolog import autolog, registered_integration_names
 
 from kailash.ml.errors import AutologNoAmbientRunError
-from kailash_ml.autolog import autolog, registered_integration_names
 
 # Module-scope lock per `rules/testing.md § Env-Var Test Isolation` —
 # every test that mutates KAILASH_ML_AUTOLOG_DISABLED serializes so

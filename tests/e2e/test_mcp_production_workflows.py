@@ -12,7 +12,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from kailash_mcp import (
     MCPClient,
     MCPServer,
@@ -22,6 +21,7 @@ from kailash_mcp import (
 )
 from kailash_mcp.auth.providers import APIKeyAuth
 from kailash_mcp.discovery.discovery import ServerInfo
+
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 

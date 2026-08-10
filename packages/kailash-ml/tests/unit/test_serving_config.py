@@ -16,7 +16,6 @@ W25 invariants covered:
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.serving import (
     ALLOWED_CHANNELS,
     ALLOWED_RUNTIMES,

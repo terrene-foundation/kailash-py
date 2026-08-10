@@ -27,7 +27,6 @@ import math
 
 import polars as pl
 import pytest
-
 from kailash_ml._device import (
     KNOWN_BACKENDS,
     BackendInfo,

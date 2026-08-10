@@ -53,7 +53,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-
 from kailash_ml.errors import fingerprint_classified_value
 from kailash_ml.features._error_context import describe_exception_origin
 from kailash_ml.features._model_registration import DTYPE_TO_PYTYPE as _DTYPE_TO_PYTYPE
@@ -64,8 +63,9 @@ from kailash_ml.features.cache_keys import (
 )
 
 if TYPE_CHECKING:  # avoid eager DataFlow import on type-only paths
-    from dataflow.core.engine import DataFlow
     from kailash_ml.features.feature_group import FeatureGroup
+
+    from dataflow.core.engine import DataFlow
 
 __all__ = ["FeatureMaterialiser", "MaterializeResult"]
 

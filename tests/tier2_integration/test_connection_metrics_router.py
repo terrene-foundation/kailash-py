@@ -7,7 +7,6 @@ Validates the /connections/metrics, /connections/pools, and
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from src.kailash.servers.connection_metrics_router import (
     ConnectionMetricsProvider,
     create_connection_metrics_router,

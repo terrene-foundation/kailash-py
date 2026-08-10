@@ -4,6 +4,7 @@ Tier 1 tests - mocking allowed.
 """
 
 import pytest
+
 from nexus.auth.audit.backends.custom import CustomBackend
 from nexus.auth.audit.record import AuditRecord
 

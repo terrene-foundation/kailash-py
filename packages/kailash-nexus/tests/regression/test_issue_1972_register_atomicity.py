@@ -25,6 +25,7 @@ previous entry instead of clobbering a working workflow.
 """
 
 import pytest
+
 from kailash.workflow.builder import WorkflowBuilder
 
 pytestmark = pytest.mark.regression

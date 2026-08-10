@@ -12,7 +12,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from src.kailash.runtime.distributed import (
     _HEARTBEAT_PREFIX,
     _PROCESSING_KEY,

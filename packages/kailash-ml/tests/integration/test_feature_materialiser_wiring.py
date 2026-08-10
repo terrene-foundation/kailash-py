@@ -36,8 +36,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from dataflow import DataFlow
 from kailash_ml.errors import (
     CrossTenantReadError,
     FeatureStoreError,
@@ -51,6 +49,8 @@ from kailash_ml.features import (
     FeatureStore,
     feature,
 )
+
+from dataflow import DataFlow
 
 pytestmark = pytest.mark.integration
 

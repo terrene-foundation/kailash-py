@@ -29,8 +29,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
-from nexus import JSONResponse, Nexus, Request, Response
-
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
 from kailash.trust.a2a.exceptions import (
@@ -41,6 +39,7 @@ from kailash.trust.a2a.exceptions import (
 from kailash.trust.a2a.jsonrpc import A2AMethodHandlers, JsonRpcHandler
 from kailash.trust.a2a.models import AgentCard, JsonRpcRequest, JsonRpcResponse
 from kailash.trust.operations import TrustOperations
+from nexus import JSONResponse, Nexus, Request, Response
 
 logger = logging.getLogger(__name__)
 

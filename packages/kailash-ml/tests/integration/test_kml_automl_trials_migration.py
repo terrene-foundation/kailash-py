@@ -21,8 +21,6 @@ import importlib
 from pathlib import Path
 
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 from kailash_ml.errors import MigrationRequiredError
 
@@ -31,6 +29,8 @@ from kailash_ml.errors import MigrationRequiredError
 # same private adapter ExperimentTracker.create() uses (mirrors W10
 # tracker bootstrap).
 from kailash_ml.tracking.tracker import _MigrationConnAdapter
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Migration module — imported via importlib because the filename starts

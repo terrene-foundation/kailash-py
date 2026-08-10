@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import pytest_asyncio
-
 from kailash_mcp.advanced.subscriptions import (
     CursorManager,
     ResourceMonitor,

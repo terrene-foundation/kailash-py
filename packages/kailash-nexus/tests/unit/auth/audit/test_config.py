@@ -4,6 +4,7 @@ Tier 1 tests - mocking allowed.
 """
 
 import pytest
+
 from nexus.auth.audit.config import AuditConfig
 
 # =============================================================================

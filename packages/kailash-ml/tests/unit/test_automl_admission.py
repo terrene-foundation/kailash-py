@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pytest
-
 from kailash_ml.automl.admission import (
     AdmissionDecision,
     PromotionRequiresApprovalError,

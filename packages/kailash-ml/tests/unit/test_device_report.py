@@ -21,9 +21,8 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 import kailash_ml as km
+import pytest
 from kailash_ml import (
     BackendInfo,
     DeviceReport,

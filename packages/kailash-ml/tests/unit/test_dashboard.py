@@ -11,12 +11,12 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from starlette.testclient import TestClient
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.dashboard.server import create_app
 from kailash_ml.engines.experiment_tracker import ExperimentTracker
 from kailash_ml.engines.model_registry import ModelRegistry
+from starlette.testclient import TestClient
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

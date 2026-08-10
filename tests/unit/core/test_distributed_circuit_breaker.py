@@ -12,7 +12,6 @@ import time
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from src.kailash.core.resilience.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerError,

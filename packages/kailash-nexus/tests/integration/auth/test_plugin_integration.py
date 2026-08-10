@@ -10,6 +10,7 @@ import logging
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from nexus.auth.audit.config import AuditConfig
 from nexus.auth.jwt import JWTConfig
 from nexus.auth.plugin import NexusAuthPlugin

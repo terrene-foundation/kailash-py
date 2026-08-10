@@ -26,12 +26,12 @@ import pickle
 
 import numpy as np
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.serving.multi_model_adapter import MultiModelAdapter
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from sklearn.ensemble import RandomForestClassifier
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Real infrastructure fixtures

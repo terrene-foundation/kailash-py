@@ -9,15 +9,15 @@ from __future__ import annotations
 import pickle
 
 import pytest
-from sklearn.ensemble import RandomForestClassifier
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.model_registry import (
     LocalFileArtifactStore,
     ModelNotFoundError,
     ModelRegistry,
 )
 from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from sklearn.ensemble import RandomForestClassifier
+
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import (
     ActionResult,
     AuthorityType,
@@ -45,7 +46,6 @@ from kailash.trust.exceptions import (
     TrustChainNotFoundError,
     TrustError,
 )
-
 from kaizen.trust.store import InMemoryTrustStore
 
 # =============================================================================

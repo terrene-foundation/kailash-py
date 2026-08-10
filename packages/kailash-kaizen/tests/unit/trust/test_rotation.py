@@ -7,8 +7,9 @@ Tests the CredentialRotationManager in isolation using mocked dependencies.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import kailash.trust.signing.rotation as rotation_module
 import pytest
+
+import kailash.trust.signing.rotation as rotation_module
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -27,7 +28,6 @@ from kailash.trust.signing.rotation import (
     RotationStatusInfo,
     ScheduledRotation,
 )
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     OrganizationalAuthority,

@@ -14,9 +14,8 @@ from __future__ import annotations
 
 from typing import Any, List, Tuple
 
-from sklearn.pipeline import Pipeline as _SKPipeline
-
 from kailash_ml.estimators._protocol import check_estimator_step, check_transformer_step
+from sklearn.pipeline import Pipeline as _SKPipeline
 
 __all__ = ["Pipeline"]
 

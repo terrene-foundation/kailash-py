@@ -24,7 +24,6 @@ from __future__ import annotations
 import importlib.util
 
 import pytest
-
 from kailash_ml.automl.strategies import (
     BayesianSearchStrategy,
     GridSearchStrategy,

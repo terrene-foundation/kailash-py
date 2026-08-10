@@ -24,12 +24,12 @@ import pytest
 sb3 = pytest.importorskip("stable_baselines3", reason="requires kailash-ml[rl]")
 gym = pytest.importorskip("gymnasium", reason="requires kailash-ml[rl]")
 
-from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
-
 # Import through the facade — NOT ``from kailash_ml.diagnostics.rl import ...``
 # per orphan-detection §1 (downstream consumers see the public attribute,
 # so the wiring test MUST exercise the same surface).
 from kailash_ml.diagnostics import RLDiagnostics  # noqa: E402
+
+from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
 
 
 class _RecordingTracker:

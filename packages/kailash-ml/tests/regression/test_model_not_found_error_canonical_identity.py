@@ -26,9 +26,10 @@ import pytest
 @pytest.mark.regression
 def test_model_registry_module_re_exports_canonical():
     """``engines.model_registry.ModelNotFoundError`` IS canonical."""
-    import kailash.ml.errors as canonical_errors
     import kailash_ml.engines.model_registry as registry_module
     import kailash_ml.errors as kml_errors
+
+    import kailash.ml.errors as canonical_errors
 
     assert registry_module.ModelNotFoundError is canonical_errors.ModelNotFoundError, (
         "engines.model_registry.ModelNotFoundError diverged from canonical "

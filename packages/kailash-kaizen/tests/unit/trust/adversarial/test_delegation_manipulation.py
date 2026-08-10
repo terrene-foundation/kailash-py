@@ -32,6 +32,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import (
     CapabilityAttestation,
     CapabilityType,
@@ -63,7 +64,6 @@ from kailash.trust.signing.crypto import (
     sign,
     verify_signature,
 )
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     AuthorityType,

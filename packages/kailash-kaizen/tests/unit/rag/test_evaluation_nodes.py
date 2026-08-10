@@ -26,8 +26,8 @@ storage-read-back half via real aiosqlite.
 from __future__ import annotations
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.evaluation import (
     RAGBenchmarkNode,
     RAGEvaluationNode,

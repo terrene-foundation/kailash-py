@@ -9,7 +9,6 @@ value-object behaviour.
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.features import FeatureField, FeatureSchema
 
 # ---------------------------------------------------------------------------

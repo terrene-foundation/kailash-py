@@ -65,10 +65,6 @@ except ImportError as exc:  # pragma: no cover
         allow_module_level=True,
     )
 
-# Deliberately after the lightgbm/numpy availability guards above (module-
-# level pytest.skip on ImportError) — noqa: E402 is the guard, not an
-# oversight.
-from kailash.db.connection import ConnectionManager  # noqa: E402
 from kailash_ml.automl import (  # noqa: E402
     AutoMLConfig,
     AutoMLEngine,
@@ -76,6 +72,11 @@ from kailash_ml.automl import (  # noqa: E402
     Trial,
     TrialOutcome,
 )
+
+# Deliberately after the lightgbm/numpy availability guards above (module-
+# level pytest.skip on ImportError) — noqa: E402 is the guard, not an
+# oversight.
+from kailash.db.connection import ConnectionManager  # noqa: E402
 
 _POSTGRES_URL = os.environ.get("POSTGRES_TEST_URL")
 _BACKEND_LABEL = "postgres" if _POSTGRES_URL else "sqlite"

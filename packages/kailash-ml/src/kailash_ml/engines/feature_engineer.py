@@ -13,7 +13,6 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-
 from kailash_ml._decorators import experimental
 from kailash_ml.engines._shared import NUMERIC_DTYPES as _NUMERIC_DTYPES
 from kailash_ml.types import FeatureSchema
@@ -323,9 +322,8 @@ class FeatureEngineer:
         generated_names: set[str],
     ) -> list[FeatureRank]:
         """Rank features by tree-based importance (sklearn RandomForest)."""
-        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-
         from kailash_ml.interop import to_sklearn_input
+        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
         # Filter to numeric columns only for sklearn
         numeric_feature_cols = [
@@ -414,12 +412,11 @@ class FeatureEngineer:
         generated_names: set[str],
     ) -> list[FeatureRank]:
         """Rank features by mutual information with target."""
+        from kailash_ml.interop import to_sklearn_input
         from sklearn.feature_selection import (
             mutual_info_classif,
             mutual_info_regression,
         )
-
-        from kailash_ml.interop import to_sklearn_input
 
         numeric_cols = [c for c in feature_cols if data[c].dtype in _NUMERIC_DTYPES]
         if not numeric_cols:

@@ -6,14 +6,13 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-from sklearn.datasets import make_classification, make_regression
-
 from kailash_ml.engines.preprocessing import (
     PreprocessingPipeline,
     SetupResult,
     _detect_task_type,
     _identify_column_types,
 )
+from sklearn.datasets import make_classification, make_regression
 
 # ---------------------------------------------------------------------------
 # Fixtures

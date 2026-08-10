@@ -22,6 +22,7 @@ from typing import List
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import ActionResult, AuditAnchor
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 from kailash.trust.signing.merkle import (
@@ -30,7 +31,6 @@ from kailash.trust.signing.merkle import (
     compute_merkle_root,
     verify_merkle_proof,
 )
-
 from kaizen.trust.audit_store import AppendOnlyAuditStore, AuditRecord
 
 

@@ -20,7 +20,6 @@ the original vacuous test asserted nothing at all.
 import logging
 
 import pytest
-
 from kailash_mcp.server import MCPServer
 from kailash_mcp.utils.cache import UnifiedCache
 

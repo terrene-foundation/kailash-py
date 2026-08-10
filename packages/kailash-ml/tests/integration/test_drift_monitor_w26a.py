@@ -24,10 +24,10 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.drift import DriftThresholds
 from kailash_ml.engines.drift_monitor import DriftMonitor, FeatureDriftResult
+
+from kailash.db.connection import ConnectionManager
 
 
 class _RecordingTracker:

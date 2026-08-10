@@ -24,7 +24,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
 from kailash_ml.errors import RunNotFoundError
 from kailash_ml.tracking import ExperimentTracker
 from kailash_ml.tracking.query import (

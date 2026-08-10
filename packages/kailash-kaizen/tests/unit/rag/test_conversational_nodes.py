@@ -26,8 +26,8 @@ from __future__ import annotations
 from collections import deque
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.conversational import (
     ConversationalRAGNode,
     ConversationMemoryNode,

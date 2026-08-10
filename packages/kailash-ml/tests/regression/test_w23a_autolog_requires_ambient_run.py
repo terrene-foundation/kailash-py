@@ -11,9 +11,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from kailash_ml.autolog import autolog
 
 from kailash.ml.errors import AutologNoAmbientRunError
-from kailash_ml.autolog import autolog
 
 
 @pytest.mark.regression

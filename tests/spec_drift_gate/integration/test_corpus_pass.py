@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from spec_drift_gate import (
     ErrorsModule,
     Manifest,

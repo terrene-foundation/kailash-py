@@ -27,6 +27,7 @@ Test categories:
 from typing import Any, Dict
 
 import pytest
+
 from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,

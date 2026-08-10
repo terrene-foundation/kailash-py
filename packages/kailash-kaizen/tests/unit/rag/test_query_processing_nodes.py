@@ -20,8 +20,8 @@ graph carries — NOT on raw LLM-call output content.
 from __future__ import annotations
 
 import pytest
-from kailash.workflow.graph import Workflow
 
+from kailash.workflow.graph import Workflow
 from kaizen.nodes.rag.query_processing import (
     AdaptiveQueryProcessorNode,
     MultiHopQueryPlannerNode,

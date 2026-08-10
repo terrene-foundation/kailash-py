@@ -7,6 +7,7 @@ InMemoryBackend for middleware integration testing.
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
 from nexus.auth.rate_limit.config import RateLimitConfig
 from nexus.auth.rate_limit.middleware import RateLimitMiddleware
 

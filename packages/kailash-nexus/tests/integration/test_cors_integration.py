@@ -7,8 +7,9 @@ Tier 2 tests - NO MOCKING. Uses real gateway and middleware stack.
 import os
 
 import pytest
-from nexus import Nexus
 from starlette.testclient import TestClient
+
+from nexus import Nexus
 
 # =============================================================================
 # Fixtures

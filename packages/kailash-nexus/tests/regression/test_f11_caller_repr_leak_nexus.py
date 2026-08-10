@@ -42,6 +42,7 @@ from dataclasses import dataclass
 
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus import Nexus
 from nexus.extractors import DependencyOverrideRuntimeMutationError, Depends
 

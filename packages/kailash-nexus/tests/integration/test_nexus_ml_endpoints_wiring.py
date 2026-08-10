@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 import jwt as pyjwt
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus import Nexus
 from nexus.auth.jwt import JWTConfig, JWTMiddleware
 from nexus.ml import mount_ml_endpoints

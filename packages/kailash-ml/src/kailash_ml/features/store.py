@@ -49,7 +49,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-
 from kailash_ml.errors import FeatureStoreError, TenantRequiredError
 from kailash_ml.features._error_context import describe_exception_origin
 from kailash_ml.features._schema_feature_group import SchemaFeatureGroup
@@ -64,9 +63,10 @@ if TYPE_CHECKING:
     # Avoid importing DataFlow eagerly — kailash-ml depends on kailash-dataflow
     # as a wave peer but downstream callers may import FeatureStore on paths
     # that never touch DataFlow (e.g. type-only utility imports).
-    from dataflow.core.engine import DataFlow
     from kailash_ml.features.feature_group import FeatureGroup
     from kailash_ml.features.online_store import OnlineFeatureStore
+
+    from dataflow.core.engine import DataFlow
 
 __all__ = ["FeatureStore"]
 

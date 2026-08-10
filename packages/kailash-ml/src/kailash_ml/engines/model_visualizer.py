@@ -16,7 +16,6 @@ from typing import Any
 
 import numpy as np
 import plotly.express as px
-
 from kailash_ml._decorators import experimental
 
 logger = logging.getLogger(__name__)

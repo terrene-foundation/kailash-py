@@ -8,6 +8,7 @@ Verifies INTENT: Policy conditions and conflict resolution work correctly.
 from datetime import datetime, timezone
 
 import pytest
+
 from kailash.trust.governance import (
     ConflictResolutionStrategy,
     EnvironmentCondition,

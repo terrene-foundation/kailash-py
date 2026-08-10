@@ -4,6 +4,7 @@ Tier 1 tests - mocking allowed.
 """
 
 import pytest
+
 from nexus.auth.tenant.config import TenantConfig
 
 # =============================================================================

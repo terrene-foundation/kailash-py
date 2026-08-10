@@ -6,7 +6,6 @@ WorkflowBuilder.
 """
 
 import pytest
-
 from src.kailash.middleware.gateway.durable_request import (
     DurableRequest,
     RequestMetadata,

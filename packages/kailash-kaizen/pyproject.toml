@@ -243,6 +243,12 @@ target-version = ['py311']
 [tool.isort]
 profile = "black"
 line_length = 88
+# MUST match the root pyproject.toml list exactly. isort resolves config from the
+# nearest file, so a per-package block that omits `known_first_party` silently
+# reclassifies `kailash` as THIRD-party for every file under this package — which
+# is the blank-line-between-import-blocks that flip-flopped on every run and left
+# ~2,000 files permanently modified (#1995).
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
 
 [tool.ruff]
 line-length = 88

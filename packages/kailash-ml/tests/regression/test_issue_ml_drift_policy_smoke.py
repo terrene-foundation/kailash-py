@@ -14,10 +14,10 @@ from datetime import datetime, timedelta, timezone
 
 import polars as pl
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.drift.policy import DriftMonitorReferencePolicy
 from kailash_ml.engines.drift_monitor import DriftMonitor
+
+from kailash.db.connection import ConnectionManager
 
 
 @pytest.mark.regression

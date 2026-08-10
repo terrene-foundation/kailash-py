@@ -4,6 +4,7 @@ Validates that @db.model decorator generates correct nodes.
 """
 
 import pytest
+
 from dataflow import DataFlow
 
 

@@ -16,8 +16,8 @@ References:
 from typing import Any, Dict
 
 import pytest
-from kailash.workflow.builder import WorkflowBuilder
 
+from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature

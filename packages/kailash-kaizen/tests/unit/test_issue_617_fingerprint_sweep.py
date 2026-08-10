@@ -12,8 +12,9 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from kailash.utils.url_credentials import fingerprint_secret
 from pydantic import SecretStr
+
+from kailash.utils.url_credentials import fingerprint_secret
 
 
 class TestNoSha256InKaizenLlm:

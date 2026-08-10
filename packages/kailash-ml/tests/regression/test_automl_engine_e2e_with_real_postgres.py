@@ -51,7 +51,6 @@ if _POSTGRES_URL is None:
         allow_module_level=True,
     )
 
-from kailash.db.connection import ConnectionManager  # noqa: E402
 from kailash_ml.automl import (  # noqa: E402
     AutoMLConfig,
     AutoMLEngine,
@@ -59,6 +58,8 @@ from kailash_ml.automl import (  # noqa: E402
     Trial,
     TrialOutcome,
 )
+
+from kailash.db.connection import ConnectionManager  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Deterministic synthetic trial — Postgres lane stresses persistence,

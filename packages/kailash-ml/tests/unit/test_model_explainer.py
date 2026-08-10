@@ -262,7 +262,6 @@ class TestToPlotly:
 
     def test_summary_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -273,7 +272,6 @@ class TestToPlotly:
 
     def test_beeswarm_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -284,7 +282,6 @@ class TestToPlotly:
 
     def test_dependence_returns_figure(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data
@@ -320,7 +317,6 @@ class TestToPlotly:
 
     def test_dependence_with_interaction(self, clf_data) -> None:
         import plotly.graph_objects as go
-
         from kailash_ml.engines.model_explainer import ModelExplainer
 
         df, model, names = clf_data

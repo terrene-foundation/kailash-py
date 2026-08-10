@@ -18,7 +18,6 @@ import sys
 from typing import Any, Mapping
 
 import pytest
-
 from kailash_ml.serving.channels import ChannelBinding
 from kailash_ml.serving.channels.mcp import bind_mcp
 from kailash_ml.serving.channels.rest import bind_rest, health_response

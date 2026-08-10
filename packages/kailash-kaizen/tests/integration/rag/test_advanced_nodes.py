@@ -22,8 +22,8 @@ end-to-end result keys/values, score ordering.
 from __future__ import annotations
 
 import pytest
-from kailash.nodes.logic.workflow import WorkflowNode
 
+from kailash.nodes.logic.workflow import WorkflowNode
 from kaizen.nodes.rag.advanced import (
     HyDENode,
     RAGConfig,

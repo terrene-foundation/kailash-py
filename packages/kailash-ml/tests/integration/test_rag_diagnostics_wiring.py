@@ -19,17 +19,17 @@ from __future__ import annotations
 
 import pytest
 
+# Import through the facade — NOT `from kailash_ml.diagnostics.rag import ...`
+# per rules/orphan-detection.md §1 (downstream consumers see the public
+# attribute, so the wiring test MUST exercise the same surface).
+from kailash_ml.diagnostics import RAGDiagnostics  # noqa: E402
+
 from kailash.diagnostics.protocols import (  # noqa: E402
     Diagnostic,
     JudgeCallable,
     JudgeInput,
     JudgeResult,
 )
-
-# Import through the facade — NOT `from kailash_ml.diagnostics.rag import ...`
-# per rules/orphan-detection.md §1 (downstream consumers see the public
-# attribute, so the wiring test MUST exercise the same surface).
-from kailash_ml.diagnostics import RAGDiagnostics  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Test fixtures — in-process JudgeCallable implementations

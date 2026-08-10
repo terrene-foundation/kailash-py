@@ -26,9 +26,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 
 from kailash.db.connection import ConnectionManager
-from kailash_ml.automl import AutoMLConfig, AutoMLEngine, ParamSpec, Trial, TrialOutcome
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -6,6 +6,7 @@ Tier 1 - mocking allowed but minimal.
 """
 
 import pytest
+
 from nexus.auth.exceptions import InsufficientPermissionError, InsufficientRoleError
 from nexus.auth.models import AuthenticatedUser
 from nexus.auth.rbac import (

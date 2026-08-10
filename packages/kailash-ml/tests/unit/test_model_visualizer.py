@@ -7,12 +7,11 @@ import warnings
 
 import polars as pl
 import pytest
+from kailash_ml._decorators import ExperimentalWarning, _warned_classes
+from kailash_ml.engines.model_visualizer import ModelVisualizer
 from sklearn.datasets import make_classification, make_regression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
-
-from kailash_ml._decorators import ExperimentalWarning, _warned_classes
-from kailash_ml.engines.model_visualizer import ModelVisualizer
 
 # ---------------------------------------------------------------------------
 # Fixtures

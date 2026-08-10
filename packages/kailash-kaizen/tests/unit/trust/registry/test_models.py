@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
+
 from kailash.trust.registry.models import (
     AgentMetadata,
     AgentStatus,

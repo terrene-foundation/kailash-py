@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -38,7 +39,6 @@ from kailash.trust.exceptions import (
 )
 from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
-
 from kaizen.trust.authority import (
     AuthorityPermission,
     OrganizationalAuthority,

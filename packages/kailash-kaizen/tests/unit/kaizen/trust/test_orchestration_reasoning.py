@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.trust.orchestration.execution_context import TrustExecutionContext
 from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
@@ -214,7 +215,6 @@ class TestKaizenShimReExports:
     def test_policy_enforce_constraint_with_reasoning_required(self):
         """Policies should support REASONING_REQUIRED constraint type."""
         from kailash.trust.orchestration import TrustPolicy
-
         from kaizen.trust import ConstraintType
 
         policy = TrustPolicy.enforce_constraint(

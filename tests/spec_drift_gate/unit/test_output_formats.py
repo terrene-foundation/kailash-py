@@ -18,7 +18,6 @@ import re
 from datetime import date
 
 import pytest
-
 from spec_drift_gate import (
     FIX_HINT_CATALOG,
     BaselineEntry,

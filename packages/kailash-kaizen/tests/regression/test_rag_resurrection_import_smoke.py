@@ -64,10 +64,9 @@ def test_streamingrag_collision_resolved():
     Both register distinctly; the bare-name collision that the kailash 2.23.0
     guard would raise on is gone.
     """
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag.optimized  # noqa: F401
     import kaizen.nodes.rag.realtime  # noqa: F401
+    from kailash.nodes.base import NodeRegistry
 
     reg = NodeRegistry._nodes
     assert "RealtimeStreamingRAGNode" in reg, "realtime rename did not register"
@@ -83,9 +82,8 @@ def test_streamingrag_collision_resolved():
 @pytest.mark.regression
 def test_representative_rag_nodes_register():
     """A spread of the ~53 RAG node classes are reachable in the registry."""
-    from kailash.nodes.base import NodeRegistry
-
     import kaizen.nodes.rag  # noqa: F401
+    from kailash.nodes.base import NodeRegistry
 
     reg = NodeRegistry._nodes
     for name in (

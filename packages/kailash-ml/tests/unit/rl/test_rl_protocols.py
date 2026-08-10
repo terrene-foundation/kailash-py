@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pytest
-
 from kailash_ml.rl.protocols import PolicyArtifactRef, RLLifecycleProtocol
 
 

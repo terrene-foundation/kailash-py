@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from nexus.discovery import WorkflowDiscovery, discover_workflows
 
 

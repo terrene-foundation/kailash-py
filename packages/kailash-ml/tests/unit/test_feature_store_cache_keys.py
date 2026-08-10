@@ -9,7 +9,6 @@ stability per rules/tenant-isolation.md.
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.errors import TenantRequiredError
 from kailash_ml.features import (
     CANONICAL_SINGLE_TENANT_SENTINEL,

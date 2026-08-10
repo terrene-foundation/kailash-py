@@ -74,14 +74,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
-# Credential scrubber for SERVER-SIDE diagnostics. kailash-mcp already depends
-# on it (``transports.py`` uses the same helper), so no new dependency: a driver
-# or client library routinely quotes the connection string it failed on, and the
-# raw text reaches a log file that is far more widely readable than the
-# database it names (observability.md § "No secrets in logs"). It is NOT the
-# caller-facing defence — nothing derived from an exception is returned to an
-# unauthenticated caller; see ``MCPServer._internal_error_envelope``.
-from kailash.utils.url_credentials import mask_error_text
 from kailash_mcp.advanced.features import (
     ElicitationSystem,
     StructuredTool,
@@ -123,6 +115,15 @@ from kailash_mcp.utils import (
     build_input_schema,
     format_response,
 )
+
+# Credential scrubber for SERVER-SIDE diagnostics. kailash-mcp already depends
+# on it (``transports.py`` uses the same helper), so no new dependency: a driver
+# or client library routinely quotes the connection string it failed on, and the
+# raw text reaches a log file that is far more widely readable than the
+# database it names (observability.md § "No secrets in logs"). It is NOT the
+# caller-facing defence — nothing derived from an exception is returned to an
+# unauthenticated caller; see ``MCPServer._internal_error_envelope``.
+from kailash.utils.url_credentials import mask_error_text
 
 logger = logging.getLogger(__name__)
 

@@ -11,6 +11,7 @@ Tests cover:
 from typing import Any, Dict, List
 
 import pytest
+
 from kailash.trust.constraints.dimension import (
     ConstraintCheckResult,
     ConstraintDimension,

@@ -602,10 +602,11 @@ async def lineage(
     # Mirrors the ExperimentTracker.create() factory pattern but does
     # not need the tracker's full machinery — we only need the
     # ConnectionManager-backed registry surface.
-    from kailash.db.connection import ConnectionManager
     from kailash_ml._env import resolve_store_url
     from kailash_ml.engines.model_registry import ModelRegistry
     from kailash_ml.tracking import get_current_tenant_id
+
+    from kailash.db.connection import ConnectionManager
 
     resolved_tenant = tenant_id or get_current_tenant_id() or "_single"
     store_url = resolve_store_url()

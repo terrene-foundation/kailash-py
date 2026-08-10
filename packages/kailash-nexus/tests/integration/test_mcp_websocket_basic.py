@@ -10,6 +10,7 @@ from contextlib import closing
 
 import pytest
 import websockets
+
 from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 

@@ -8,11 +8,10 @@ Ports the 6 regression tests from kailash-rs
 """
 from __future__ import annotations
 
+import kailash_ml as kml
 import numpy as np
 import pytest
 from sklearn.base import BaseEstimator, TransformerMixin
-
-import kailash_ml as kml
 
 
 class _BocpdStub(BaseEstimator):

@@ -11,7 +11,6 @@ field (str, repr, args).
 from __future__ import annotations
 
 from kailash.utils.url_credentials import fingerprint_secret
-
 from kaizen.llm.errors import Invalid, InvalidEndpoint, MissingCredential, ProviderError
 
 

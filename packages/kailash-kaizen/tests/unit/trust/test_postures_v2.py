@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import pytest
+
 from kailash.trust.posture.postures import (
     PostureConstraints,
     PostureResult,

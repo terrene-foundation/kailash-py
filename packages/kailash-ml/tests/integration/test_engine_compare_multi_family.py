@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-
 from kailash_ml import ComparisonResult, MLEngine, TrainingResult
 
 

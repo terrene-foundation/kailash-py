@@ -52,10 +52,8 @@ import inspect
 import logging
 from pathlib import Path
 
-import pytest
-
 import kailash_ml.features as features_pkg
-from dataflow import DataFlow
+import pytest
 from kailash_ml.errors import FeatureStoreError, TenantRequiredError
 from kailash_ml.features import (
     CANONICAL_SINGLE_TENANT_SENTINEL,
@@ -71,6 +69,8 @@ from kailash_ml.features.cache_keys import (
     validate_tenant_id,
 )
 from kailash_ml.features.store import _import_ml_feature_source
+
+from dataflow import DataFlow
 
 pytestmark = [pytest.mark.integration]
 

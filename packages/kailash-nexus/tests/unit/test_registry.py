@@ -7,6 +7,7 @@ extracted from core.py into nexus/registry.py.
 """
 
 import pytest
+
 from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
 
 # ---------------------------------------------------------------------------

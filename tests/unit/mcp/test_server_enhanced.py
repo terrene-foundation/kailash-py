@@ -7,7 +7,6 @@ import builtins
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash_mcp.server import MCPServer
 
 

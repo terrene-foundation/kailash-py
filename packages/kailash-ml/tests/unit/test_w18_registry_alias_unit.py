@@ -10,7 +10,6 @@ integration tests (``test_w18_registry_alias_wiring.py``).
 from __future__ import annotations
 
 import pytest
-
 from kailash_ml.tracking.registry import (
     ALIAS_REGEX,
     RESERVED_ALIASES,

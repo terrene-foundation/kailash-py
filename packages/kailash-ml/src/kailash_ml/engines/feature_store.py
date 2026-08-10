@@ -14,11 +14,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 import polars as pl
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines import _feature_sql as sql
 from kailash_ml.interop import polars_to_dict_records
 from kailash_ml.types import FeatureSchema
+
+from kailash.db.connection import ConnectionManager
 
 logger = logging.getLogger(__name__)
 

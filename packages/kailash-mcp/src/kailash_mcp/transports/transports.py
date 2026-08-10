@@ -73,12 +73,12 @@ from urllib.parse import urljoin, urlparse
 
 import aiohttp
 import websockets
-
-from kailash.utils.url_credentials import mask_error_text, mask_url
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, TransportError
 from kailash_mcp.protocol.protocol import MetaData, ProtocolManager
 from kailash_mcp.security import validate_spawn_command
+
+from kailash.utils.url_credentials import mask_error_text, mask_url
 
 logger = logging.getLogger(__name__)
 
