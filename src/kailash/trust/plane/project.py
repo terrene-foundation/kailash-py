@@ -80,6 +80,7 @@ from kailash.trust.posture.postures import (
 )
 from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 from kailash.trust.signing.crypto import generate_keypair
+from kailash.utils.file_permissions import restrict_to_owner
 
 logger = logging.getLogger(__name__)
 
@@ -116,41 +117,17 @@ def set_private_file_permissions(path: Path) -> None:
     """Restrict file access to the owning user only.
 
     On POSIX: chmod 0o600 (owner read/write only).
-    On Windows: attempts to set a DACL via pywin32 restricting access
-    to the current user's SID. Falls back to a warning if pywin32
-    is not installed.
+    On Windows: sets a DACL via pywin32 restricting access to the current
+    user's SID, warning once if pywin32 is not installed.
+
+    Thin wrapper kept for its existing callers. The implementation lives in
+    :func:`kailash.utils.file_permissions.restrict_to_owner` so that this and
+    the gateway/audit-log write sites cannot drift apart -- the duplicate copy
+    of the DACL logic that used to live here was exactly that risk
+    (``rules/security.md`` § Credential Decode Helpers: one shared helper,
+    never a per-call-site reimplementation).
     """
-    import sys as _sys
-
-    if _sys.platform == "win32":
-        try:
-            import ntsecuritycon as con  # type: ignore[import-untyped]
-            import win32api  # type: ignore[import-untyped]
-            import win32security  # type: ignore[import-untyped]
-
-            username = win32api.GetUserName()
-            user_sid = win32security.LookupAccountName(None, username)[0]
-            dacl = win32security.ACL()
-            dacl.AddAccessAllowedAce(
-                win32security.ACL_REVISION,
-                con.FILE_GENERIC_READ | con.FILE_GENERIC_WRITE,
-                user_sid,
-            )
-            sd = win32security.GetFileSecurity(
-                str(path), win32security.DACL_SECURITY_INFORMATION
-            )
-            sd.SetSecurityDescriptorDacl(True, dacl, False)
-            win32security.SetFileSecurity(
-                str(path), win32security.DACL_SECURITY_INFORMATION, sd
-            )
-        except ImportError:
-            logger.warning(
-                "Private file %s is not access-controlled on this platform. "
-                "Install pywin32 for key protection: pip install kailash",
-                path,
-            )
-    else:
-        os.chmod(path, 0o600)
+    restrict_to_owner(path)
 
 
 def _save_keys(keys_dir: Path, private_key: str, public_key: str) -> None:

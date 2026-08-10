@@ -8,6 +8,54 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 5 (burn-down, latest): main is `0f323546f`. TWO lane fixes landed — #2034 (#2015) and
+#2037 (#2014).** #2037's F1 RCE is **FIXED AND RE-VERIFIED BY EXECUTION**: the boundary moved from
+pickle to JSON bytes, the exploit now yields `MARKER: ABSENT` (was `MARKER == PARENT PID`) and a
+loud typed refusal — `hook result may only contain JSON primitives, got <class 'Evil'>` — while a
+benign hook still runs isolated (`PARENT 12592 | HOOK RAN IN 12663`), so the fix did not buy safety
+by breaking everything. lane-2b and lane-2d worktrees retired.
+
+**UPDATE 4: PR #2034 merged, #2015 CLOSED.** Its three security blockers were CONFIRMED BY EXECUTION, fixed, then independently
+re-verified (no call site passes an allowlist; the template execute-blocks no longer catch
+`ValueError`; the helper is now total). lane-2b worktree retired.
+
+**Three lane PRs still open, each with a confirmed blocker:**
+
+- **#2035 (#2026)** — the reviewer's BLOCK was **REFUTED BY EXECUTION** (the claimed cross-user MFA
+  bypass is closed at head; it read a stale revision). Real remaining: JWT `sub` fallback,
+  `if session_id:` skip, truthy-string flag gates, untested sso sync-bridge.
+- **#2036 (#2027)** — Windows `os.fchmod` AttributeError (POSIX-only), `_resolve_cache` keyed on
+  host+port only, unvalidated `reference` → path traversal.
+- **#2037 (#2014)** — **F1 CONFIRMED BY EXECUTION: RCE in the PARENT process.** A hook returning an
+  object with a malicious `__reduce__` passes the child's `pickle.dumps` guard (`__reduce__` only
+  BUILDS the instruction) and executes at unpickle time in the agent — `MARKER == PARENT PID` —
+  with the call reporting `success: True`. Isolation itself is PROVEN REAL
+  (`PARENT 60454 | HOOK RAN IN 60612`); F2 (exception shadowing) is fixed.
+
+**Reviewer caveat that generalises:** three of four security reviewers had NO shell, so every
+headline finding was inference. Running their probes flipped outcomes in BOTH directions — one
+CRITICAL refuted, three findings plus an RCE confirmed. Reviewers reading code find candidates;
+only execution separates real from plausible.
+
+**UPDATE 3 (burn-down, latest): main is `5af514919`.** Merged: #2028, #2032, #2033, #2042.
+**FOUR lane PRs open — #2034 (#2015), #2035 (#2026), #2036 (#2027), #2037 (#2014)** — every one
+measured MORE defects than its issue claimed (#2035 found **17 auth defects vs 2**). Filed from
+lane findings: **#2038** (CI Tier-2 `continue-on-error` — a green `gh pr checks` is NOT evidence),
+**#2039** (dataflow isort `src_paths`), **#2040** (log injection), **#2041** (`SecretManager`
+ephemeral key on the shipped default path — higher impact than #2024).
+**#2036 is BLOCKED on a Windows failure**: `os.fchmod` does not exist there.
+**#2025 remains UNINVESTIGATED** — two investigators died mid-report ("Response stalled
+mid-stream"); relaunched with a compact-output mandate. Do not inherit any #2025 finding.
+**Read `02-plans/launch-ledger.md` for the full state and the six confirmed traps** — two of the
+orchestrator's own verification runs were INERT because `pytest.ini`'s `pythonpath = src`
+overrides `PYTHONPATH`, so worktree tests silently ran against the main checkout.
+
+**UPDATE 2 (burn-down session, post-quota-reset): main is `80b465e89`.** PR #2028 AND PR
+#2032 are both merged. #1995 closed. Four implementation lanes and two CRITICAL investigations
+are IN FLIGHT — **read `02-plans/launch-ledger.md` FIRST**; it is the authoritative,
+compaction-surviving record of which lanes are running, on which branches, and which preserved
+WIP commits they resume from. Do not spawn anything before reading it.
+
 **UPDATE (burn-down session): PR #2028 MERGED as `a101c81f9` — Gate 0 is CLEARED.** #1995 closed
 with the SHA. 1,819 files changed. Parallel burn-down waves are now running; see
 `02-plans/launch-ledger.md` for the durable agent-launch table (which lanes are in flight, on

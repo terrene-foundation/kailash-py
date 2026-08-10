@@ -281,7 +281,12 @@ class TestAPIChannel:
             response = await api_channel.handle_request(request)
 
         assert response.success is False
-        assert "Execution failed" in response.error
+        # The raw exception text must NOT reach the caller (#2015): this
+        # assertion previously required the opposite, which is what made the
+        # leak look like intended behaviour. The caller gets a generic
+        # message plus a reference id correlating to the server-side log.
+        assert "Execution failed" not in response.error
+        assert response.error.startswith("Internal server error (reference: ")
 
         # Verify error event was emitted
         mock_emit.assert_called()
@@ -445,4 +450,8 @@ class TestAPIChannelEndpoints:
             response = client.post("/channel/events", json={"invalid": "data"})
 
             assert response.status_code == 400
-            assert "Event error" in response.json()["detail"]
+            # Same inversion as test_handle_request_with_exception (#2015):
+            # the endpoint must not echo the exception into the 400 body.
+            detail = response.json()["detail"]
+            assert "Event error" not in detail
+            assert detail.startswith("Invalid request (reference: ")

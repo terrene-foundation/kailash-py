@@ -81,6 +81,73 @@ from typing import Dict, List, Optional, Pattern, Union
 # (mongodb, mongodb+srv) drivers — every URL family the
 # DataFlow / kailash codebase passes through f-string log
 # interpolation.
+# Credential words, matched as a COMPLETE underscore/hyphen-delimited segment
+# of the key (see _SECRET_KEY below). Bare ``key`` is deliberately absent: it
+# would mask ``cache_key``, ``primary_key`` and ``sort_key``, destroying the
+# diagnostics these traces exist for. The key-bearing compounds are listed
+# explicitly instead.
+_SECRET_STEM = (
+    r"password|passwd|pwd|secret|token|credentials?|authorization|auth|"
+    + r"apikey|api[_-]?key|secret[_-]?key|private[_-]?key|access[_-]?key|"
+    + r"encryption[_-]?key|signing[_-]?key"
+)
+
+# A key that CONTAINS a credential word as a whole segment, not only one that
+# IS a credential word. The earlier form anchored the alternation directly
+# between the quotes, so ``api_token``, ``x-api-key`` and ``client_secret`` --
+# all standard credential names -- went unmasked.
+#
+# Affixes must be separated by ``_`` or ``-``, which is what keeps ``token``
+# from matching ``tokenizer`` and ``key`` compounds from matching ``monkey``.
+_SECRET_KEY = r"(?:[A-Za-z0-9]+[_-])*(?:" + _SECRET_STEM + r")(?:[_-][A-Za-z0-9]+)*"
+
+# Value classes are per-quote-style rather than a single ``[^'\"]*``.
+#
+# The combined class stopped at the FIRST quote of either kind, so a value
+# holding the other kind -- ``{'password': "it's<secret>"}``, exactly what
+# Python repr produces when the value contains an apostrophe -- was truncated
+# at the apostrophe and the remainder emitted verbatim. That is worse than no
+# masking: the output carries ***MASKED*** and the secret. Splitting by quote
+# style lets a single-quoted value hold double quotes and vice versa, and the
+# ``\\.`` alternative consumes backslash escapes so an escaped same-quote does
+# not terminate the value either.
+_SQ_VALUE = r"'((?:\\.|[^'\\])*)'"
+_DQ_VALUE = r'"((?:\\.|[^"\\])*)"'
+
+# Quoted-key mapping form: Python dict repr and JSON.
+#
+# Issue #2027: every key=value pattern in DEFAULT_SENSITIVE_PATTERNS requires
+# the key to be followed immediately by ``=``, ``:`` or whitespace, so none of
+# them match ``{'token': 'sk-live-...'}`` -- the key's own closing quote sits
+# between the name and the separator. That made
+# ``mask_sensitive_values(str(kwargs))`` a no-op on exactly the input it is
+# most often handed (a node's kwargs), so credentials passed as ordinary model
+# fields reached DEBUG logs verbatim.
+#
+# Built with explicit ``+`` and kept OUT of the list literal on purpose: inside
+# a list, implicit adjacent-string concatenation is indistinguishable from a
+# missing comma, both to a reader and to CodeQL.
+_QUOTED_KEY = r"['\"]" + _SECRET_KEY + r"['\"]\s*:\s*"
+QUOTED_KEY_MAPPING_PATTERNS: List[str] = [
+    _QUOTED_KEY + _SQ_VALUE,
+    _QUOTED_KEY + _DQ_VALUE,
+]
+
+# Unquoted-key form: object reprs and keyword arguments, e.g.
+# ``Node(token='sk-live-...')``. This shape has no quotes around the key at
+# all, so the mapping patterns above miss it -- and an object repr is a shape
+# ``mask_sensitive_values(str(kwargs))`` genuinely meets, which is the call the
+# node traces rely on.
+#
+# The bare-value class excludes the bracket characters so a repr's closing
+# ``)``/``]``/``}`` is not swallowed into the secret.
+_UNQUOTED_KEY = r"\b" + _SECRET_KEY + r"\s*=\s*"
+UNQUOTED_KEY_PATTERNS: List[str] = [
+    _UNQUOTED_KEY + _SQ_VALUE,
+    _UNQUOTED_KEY + _DQ_VALUE,
+    _UNQUOTED_KEY + r"([^\s,;'\"()\[\]{}]+)",
+]
+
 DEFAULT_SENSITIVE_PATTERNS: List[str] = [
     # Database / cache / document URLs with credentials.
     # Captures ``user:password`` as group 1 — the replace_match
@@ -90,26 +157,30 @@ DEFAULT_SENSITIVE_PATTERNS: List[str] = [
     # Generic database URL password parameter
     r"password=([^\s&;]+)",
     # API keys (common formats)
-    r"api[_-]?key[=:\s]+([^\s,;\"']+)",
-    r"apikey[=:\s]+([^\s,;\"']+)",
+    r"api[_-]?key[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"apikey[=:\s]+([^\s,;\"'()\[\]{}]+)",
     # Bearer tokens
-    r"bearer\s+([^\s,;\"']+)",
-    r"authorization[=:\s]+bearer\s+([^\s,;\"']+)",
+    r"bearer\s+([^\s,;\"'()\[\]{}]+)",
+    r"authorization[=:\s]+bearer\s+([^\s,;\"'()\[\]{}]+)",
     # AWS credentials
-    r"aws[_-]?access[_-]?key[_-]?id[=:\s]+([^\s,;\"']+)",
-    r"aws[_-]?secret[_-]?access[_-]?key[=:\s]+([^\s,;\"']+)",
+    r"aws[_-]?access[_-]?key[_-]?id[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"aws[_-]?secret[_-]?access[_-]?key[=:\s]+([^\s,;\"'()\[\]{}]+)",
     r"AKIA[A-Z0-9]{16}",  # AWS Access Key ID format
     # Generic secret patterns
-    r"secret[_-]?key[=:\s]+([^\s,;\"']+)",
-    r"private[_-]?key[=:\s]+([^\s,;\"']+)",
-    r"token[=:\s]+([^\s,;\"']+)",
-    r"credential[s]?[=:\s]+([^\s,;\"']+)",
+    r"secret[_-]?key[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"private[_-]?key[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"token[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"credential[s]?[=:\s]+([^\s,;\"'()\[\]{}]+)",
     # Common authentication patterns
-    r"auth[_-]?token[=:\s]+([^\s,;\"']+)",
-    r"access[_-]?token[=:\s]+([^\s,;\"']+)",
-    r"refresh[_-]?token[=:\s]+([^\s,;\"']+)",
+    r"auth[_-]?token[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"access[_-]?token[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    r"refresh[_-]?token[=:\s]+([^\s,;\"'()\[\]{}]+)",
     # Connection strings
-    r"(password|pwd|passwd)[=:\s]+([^\s,;\"']+)",
+    r"(password|pwd|passwd)[=:\s]+([^\s,;\"'()\[\]{}]+)",
+    # Quoted-key mapping (dict repr / JSON) and unquoted-key (object repr /
+    # kwargs) forms -- see the pattern builders above.
+    *QUOTED_KEY_MAPPING_PATTERNS,
+    *UNQUOTED_KEY_PATTERNS,
 ]
 
 # Default mask replacement string

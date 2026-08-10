@@ -80,6 +80,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from pydantic import BaseModel, Field
 
 from ..runtime.local import LocalRuntime
+from ..utils.http_errors import safe_http_detail
 from ..utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
@@ -408,7 +409,17 @@ class WorkflowAPIGateway:
                             tools = await tools
                         all_tools[name] = tools
                     except Exception as exc:
-                        all_tools[name] = {"error": str(exc)}
+                        # This dict IS the response body -- it is returned
+                        # directly below. An MCP server's connection failure
+                        # routinely names its transport endpoint or auth
+                        # header, so the raw text cannot go to the caller.
+                        all_tools[name] = {
+                            "error": safe_http_detail(
+                                exc,
+                                logger=logger,
+                                context=f"list tools for MCP server {name!r}",
+                            )
+                        }
                 else:
                     all_tools[name] = {"error": "Server does not support list_tools"}
             return all_tools
