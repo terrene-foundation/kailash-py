@@ -36,6 +36,10 @@ class TestMultiFactorAuthNode:
     def test_backup_codes_format(self):
         """Test backup codes are generated in correct format."""
         node = MultiFactorAuthNode(name="test_mfa")
+        # Backup codes supplement an existing factor; issuing them to an
+        # unenrolled user is enrolment by another name and is now refused
+        # (issue #2026), so enrol first.
+        node.execute(action="setup", user_id="test_user", method="totp")
         result = node.execute(action="generate_backup_codes", user_id="test_user")
 
         assert result["success"] is True

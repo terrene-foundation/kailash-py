@@ -54,6 +54,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         mfa_config: Dict[str, Any] | None = None,
         directory_config: Dict[str, Any] | None = None,
         session_config: Dict[str, Any] | None = None,
+        jwt_config: Dict[str, Any] | None = None,
+        api_key_store: Dict[str, Dict[str, Any]] | None = None,
+        api_key_pepper: str | None = None,
+        api_key_kdf_iterations: int = 10_000,
+        user_permissions: Dict[str, List[str]] | None = None,
+        default_permissions: List[str] | None = None,
         risk_assessment_enabled: bool = True,
         adaptive_auth_enabled: bool = True,
         fraud_detection_enabled: bool = True,
@@ -79,6 +85,24 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         self.mfa_config = mfa_config or {}
         self.directory_config = directory_config or {}
         self.session_config = session_config or {}
+        # JWT verification material. Without a key, 'jwt' authentication fails
+        # closed rather than trusting an unverified payload (issue #2026).
+        self.jwt_config = jwt_config or {}
+        # Issued API keys, keyed by _api_key_digest(key) -> {"user_id": ...,
+        # optional "expires_at" (epoch seconds) and "revoked" (bool)}. Empty
+        # means 'api_key' authentication fails closed.
+        self.api_key_store = api_key_store or {}
+        # Server-side secret mixed into the API-key lookup digest so a stolen
+        # api_key_store cannot be attacked by precomputation.
+        self.api_key_pepper = api_key_pepper or ""
+        self.api_key_kdf_iterations = max(1, int(api_key_kdf_iterations))
+        # Explicit user -> permissions mapping. Permissions are never inferred
+        # from the text of a user_id (issue #2026); unlisted users get
+        # default_permissions only.
+        self.user_permissions = user_permissions or {}
+        self.default_permissions = (
+            ["read"] if default_permissions is None else list(default_permissions)
+        )
         self.risk_assessment_enabled = risk_assessment_enabled
         self.adaptive_auth_enabled = adaptive_auth_enabled
         self.fraud_detection_enabled = fraud_detection_enabled
@@ -260,9 +284,22 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             result["auth_id"] = auth_id
             result["timestamp"] = datetime.now(UTC).isoformat()
 
-            # Set success status if not explicitly set
+            # Derive success from the operation's own verdict before applying
+            # any default. Defaulting to True stamped every authorization
+            # DENIAL as success=True and audited it as "auth_success", so a
+            # caller gating on the SDK's conventional success field granted
+            # access on a denial (issue #2026).
             if "success" not in result:
-                result["success"] = True
+                if "authorized" in result:
+                    result["success"] = bool(result["authorized"])
+                elif "authenticated" in result:
+                    result["success"] = bool(result["authenticated"])
+                elif "valid" in result:
+                    result["success"] = bool(result["valid"])
+                elif "error" in result:
+                    result["success"] = False
+                else:
+                    result["success"] = True
 
             # Log successful operation
             if result.get("success", True):
@@ -360,6 +397,37 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "auth_method": auth_method,
                 "risk_score": risk_score,
             }
+
+        # The session belongs to the principal the CREDENTIAL asserts, not to
+        # the user_id the caller typed. Verifying a JWT/API key and then minting
+        # a session for a caller-chosen name let anyone holding any valid
+        # credential authenticate as anyone else (issue #2026).
+        #
+        # The assertion is MANDATORY, not opportunistic: an opportunistic
+        # override silently fell back to the caller's user_id for any method
+        # that authenticates without naming a principal (the directory methods
+        # return "username", and social can return user_id=None).
+        asserted_user_id = primary_auth_result.get(
+            "user_id"
+        ) or primary_auth_result.get("username")
+        if not isinstance(asserted_user_id, str) or not asserted_user_id:
+            self.log_info(
+                f"Authentication method {auth_method} asserted no principal; "
+                "refusing rather than trusting the requested user_id."
+            )
+            return {
+                "success": False,
+                "authenticated": False,
+                "error": "Authentication method asserted no principal",
+                "auth_method": auth_method,
+                "risk_score": risk_score,
+            }
+        if user_id and asserted_user_id != user_id:
+            self.log_info(
+                "Requested user_id does not match the authenticated "
+                "principal; using the authenticated principal."
+            )
+        user_id = asserted_user_id
 
         # Adaptive authentication - determine if additional factors needed
         additional_factors_required = []
@@ -484,15 +552,54 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         validation_result = await self._validate_social_token(provider, access_token)
 
         if validation_result.get("valid"):
+            # The provider must name the principal. The key is always present
+            # here but may be None (a provider returning neither email nor
+            # login), so a `.get(key, default)` fallback never fired and the
+            # caller-supplied user_id was used instead (issue #2026).
+            social_user_id = validation_result.get("user_id")
+            if not isinstance(social_user_id, str) or not social_user_id:
+                return {
+                    "authenticated": False,
+                    "error": "Social provider returned no user identity",
+                }
             return {
                 "authenticated": True,
-                "user_id": validation_result.get("user_id", user_id),
+                "user_id": social_user_id,
                 "auth_method": "social",
                 "social_provider": provider,
                 "user_info": validation_result.get("user_info"),
             }
         else:
             return {"authenticated": False, "error": "Invalid social token"}
+
+    def _api_key_digest(self, api_key: str) -> str:
+        """Derive the lookup digest for an issued API key.
+
+        PBKDF2-HMAC-SHA256, salted with ``api_key_pepper``. The derivation runs
+        ONCE per authentication -- the result is a lookup key, not a value
+        compared against every stored entry -- so an iteration count is
+        affordable here in a way it would not be for a scan.
+
+        The iteration count (``api_key_kdf_iterations``, default 10_000) is
+        modest by password-hashing standards, deliberately: API keys are
+        high-entropy values this system generates, so the offline-guessing
+        attack that motivates a 100k+ count does not apply. It buys
+        defence-in-depth against a leaked ``api_key_store`` without putting a
+        password-grade derivation on every API request.
+
+        Args:
+            api_key: The presented key.
+
+        Returns:
+            Hex digest used as the ``api_key_store`` lookup key.
+        """
+        salt = str(self.api_key_pepper or "kailash-api-key").encode("utf-8")
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            api_key.encode("utf-8"),
+            salt,
+            self.api_key_kdf_iterations,
+        ).hex()
 
     async def _authenticate_api_key(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
@@ -502,39 +609,70 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if not api_key:
             return {"authenticated": False, "error": "API key required"}
 
-        # DEBUG: Log API key details
+        if not isinstance(api_key, str):
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        # Log a DIGEST prefix, never key material: api_key[:6] on an "ak_"-
+        # prefixed key exposed 3 real secret characters on every attempt.
+        key_digest = self._api_key_digest(api_key)
         self.log_info(
-            f"DEBUG: _authenticate_api_key - api_key={api_key}, length={len(api_key)}, starts_with_ak={api_key.startswith('ak_')}"
+            f"_authenticate_api_key - digest_prefix={key_digest[:8]}, "
+            f"length={len(api_key)}"
         )
 
-        # Validate API key (simulation)
-        if len(api_key) >= 32 and api_key.startswith("ak_"):
-            # Extract user ID from API key (in production, lookup from database)
-            # For test API keys like "ak_1234567890abcdef_test_service", preserve the test indicator
-            if "test" in api_key:
-                # Extract the test-related part for test environment detection
-                parts = api_key.split("_")
-                test_parts = [part for part in parts if "test" in part]
-                extracted_user_id = (
-                    test_parts[0] if test_parts else api_key.split("_")[-1]
-                )
-            else:
-                extracted_user_id = (
-                    api_key.split("_")[-1] if "_" in api_key else user_id
-                )
-
+        # An API key is a bearer credential and MUST be checked against issued
+        # key material. This previously accepted ANY string >= 32 chars starting
+        # with "ak_" and derived the user_id from the key's own text, so an
+        # attacker minted "ak_" + 29 chars + "_admin" and was authenticated as
+        # admin without any key ever having been issued (issue #2026).
+        if not self.api_key_store:
             self.log_info(
-                f"DEBUG: API key validated - extracted_user_id={extracted_user_id}"
+                "API key authentication attempted but no api_key_store is "
+                "configured; refusing."
             )
             return {
-                "authenticated": True,
-                "user_id": extracted_user_id,
-                "auth_method": "api_key",
-                "api_key_id": api_key[:10] + "...",
+                "authenticated": False,
+                "error": (
+                    "API key authentication is not configured. Provide "
+                    "api_key_store={<digest(key)>: {'user_id': ...}} or remove "
+                    "'api_key' from enabled_methods."
+                ),
             }
-        else:
-            self.log_info("DEBUG: API key validation failed - invalid format")
+
+        record = None
+        for candidate_digest, candidate_record in self.api_key_store.items():
+            # Constant-time compare so a timing signal cannot reveal which
+            # issued key a guess is converging on.
+            if secrets.compare_digest(key_digest, candidate_digest):
+                record = candidate_record
+                break
+
+        if record is None:
+            self.log_info("API key validation failed - key not recognised")
             return {"authenticated": False, "error": "Invalid API key"}
+
+        if record.get("revoked"):
+            self.log_info("API key validation failed - key revoked")
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        expires_at = record.get("expires_at")
+        if expires_at is not None and float(expires_at) <= time.time():
+            self.log_info("API key validation failed - key expired")
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        # A record without a user_id used to fall back to the CALLER-supplied
+        # user_id, turning an operator typo into an impersonation primitive.
+        principal = record.get("user_id")
+        if not isinstance(principal, str) or not principal:
+            self.log_info("API key validation failed - store record has no user_id")
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        return {
+            "authenticated": True,
+            "user_id": principal,
+            "auth_method": "api_key",
+            "api_key_id": key_digest[:10] + "...",
+        }
 
     async def _authenticate_jwt(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
@@ -544,32 +682,137 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if not jwt_token:
             return {"authenticated": False, "error": "JWT token required"}
 
-        # Validate JWT (simulation - in production use proper JWT library)
-        try:
-            # Simple validation - check if it has 3 parts separated by dots
-            parts = jwt_token.split(".")
-            if len(parts) == 3:
-                # Decode payload (without signature verification for simulation)
-                payload_b64 = parts[1]
-                # Add padding if needed
-                payload_b64 += "=" * (4 - len(payload_b64) % 4)
-                payload = json.loads(base64.b64decode(payload_b64))
+        # The signature is the ONLY thing that makes a JWT a credential. This
+        # previously base64-decoded the payload with NO signature verification
+        # and returned authenticated=True with user_id taken from the token's
+        # own "sub" claim, so anyone could mint {"sub": "admin", "exp": <future>}
+        # and be authenticated as admin (issue #2026).
+        verification_key = self.jwt_config.get("secret") or self.jwt_config.get(
+            "public_key"
+        )
+        if not verification_key:
+            self.log_info(
+                "JWT authentication attempted but no jwt_config verification "
+                "key is configured; refusing."
+            )
+            return {
+                "authenticated": False,
+                "error": (
+                    "JWT authentication is not configured. Provide "
+                    "jwt_config={'secret': ...} or {'public_key': ...}, or "
+                    "remove 'jwt' from enabled_methods."
+                ),
+            }
 
-                # Check expiration
-                exp = payload.get("exp")
-                if exp and exp > time.time():
-                    return {
-                        "authenticated": True,
-                        "user_id": payload.get("sub", user_id),
-                        "auth_method": "jwt",
-                        "jwt_claims": payload,
-                    }
-                else:
-                    return {"authenticated": False, "error": "JWT token expired"}
-            else:
-                return {"authenticated": False, "error": "Invalid JWT format"}
+        try:
+            import jwt as pyjwt
+        except ImportError:
+            return {
+                "authenticated": False,
+                "error": ("JWT authentication requires PyJWT. Install kailash[auth]."),
+            }
+
+        # Refuse a key/algorithm family mismatch rather than letting an
+        # asymmetric public key be used as an HMAC secret: with a non-PEM
+        # public key and HS256 in the list, anyone holding the PUBLIC key can
+        # mint tokens.
+        configured_algorithms = self.jwt_config.get("algorithms", ["HS256"])
+        if isinstance(configured_algorithms, str):
+            configured_algorithms = [configured_algorithms]
+        algorithms = [str(a) for a in configured_algorithms]
+
+        # Explicit allowlist. A denylist bucketed "none" as asymmetric and left
+        # the whole defence resting on PyJWT's key-presence rule.
+        allowed = {
+            "HS256",
+            "HS384",
+            "HS512",
+            "RS256",
+            "RS384",
+            "RS512",
+            "ES256",
+            "ES384",
+            "ES512",
+            "PS256",
+            "PS384",
+            "PS512",
+            "EDDSA",
+        }
+        unknown = [a for a in algorithms if a.upper() not in allowed]
+        if not algorithms or unknown:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['algorithms'] must be a non-empty list of "
+                    f"supported signing algorithms; rejected: {unknown or algorithms}"
+                ),
+            }
+
+        if self.jwt_config.get("secret") and self.jwt_config.get("public_key"):
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config sets both 'secret' and 'public_key'; configure "
+                    "exactly one."
+                ),
+            }
+
+        symmetric = {a for a in algorithms if a.upper().startswith("HS")}
+        asymmetric = {a for a in algorithms if not a.upper().startswith("HS")}
+        if symmetric and asymmetric:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['algorithms'] mixes symmetric and asymmetric "
+                    "families; configure exactly one family."
+                ),
+            }
+        if self.jwt_config.get("public_key") and symmetric:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['public_key'] cannot be used with an HMAC "
+                    "algorithm; set an asymmetric algorithm (e.g. RS256)."
+                ),
+            }
+
+        try:
+            payload = pyjwt.decode(
+                jwt_token,
+                verification_key,
+                algorithms=algorithms,
+                audience=self.jwt_config.get("audience"),
+                issuer=self.jwt_config.get("issuer"),
+                # "sub" is required: without it the identity silently fell back
+                # to the CALLER-supplied user_id, so any token signed with this
+                # key that carries no subject (a reset token, a service token)
+                # became an impersonation primitive.
+                options={"require": ["exp", "sub"]},
+            )
         except Exception as e:
-            return {"authenticated": False, "error": f"JWT validation failed: {e}"}
+            # Do not echo the library's message back to the caller: it
+            # distinguishes "bad signature" from "expired" from "wrong
+            # audience", which is an oracle for forging attempts.
+            self.log_info(f"JWT validation failed: {type(e).__name__}")
+            return {"authenticated": False, "error": "Invalid JWT token"}
+
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject:
+            self.log_info("JWT validation failed: missing or non-string sub")
+            return {"authenticated": False, "error": "Invalid JWT token"}
+
+        if not self.jwt_config.get("issuer"):
+            self.log_info(
+                "JWT accepted without an issuer check: jwt_config['issuer'] is "
+                "unset, so any token signed with this key is accepted."
+            )
+
+        return {
+            "authenticated": True,
+            "user_id": subject,
+            "auth_method": "jwt",
+            "jwt_claims": payload,
+        }
 
     async def _validate_social_token(
         self, provider: str, access_token: str
@@ -652,29 +895,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         primary_method: str,
         primary_auth_result: Dict[str, Any],
     ) -> List[str]:
-        """Determine if additional authentication factors are required."""
+        """Determine if additional authentication factors are required.
+
+        Step-up requirements are derived from risk and method only. They are
+        NEVER relaxed based on the *content* of an identifier: a principal who
+        chooses their own user_id or API key would otherwise pick one
+        containing "test." and opt themselves out of MFA.
+        """
         additional_factors = []
 
-        # Check if we're in test environment (test users, company.com domain, or test credentials)
-        # For API keys, check if extracted user_id from primary_auth_result contains "test"
-        api_user_id = (
-            primary_auth_result.get("user_id") if primary_method == "api_key" else None
-        )
-
-        is_test_env = (
-            user_id
-            and ("test." in user_id or "@company.com" in user_id or "test_" in user_id)
-        ) or (api_user_id and "test" in api_user_id)
-
-        # DEBUG: Log test environment detection
         self.log_info(
-            f"DEBUG: _determine_additional_factors - user_id={user_id}, api_user_id={api_user_id}, primary_method={primary_method}, is_test_env={is_test_env}, risk_score={risk_score}"
+            f"_determine_additional_factors - primary_method={primary_method}, "
+            f"risk_score={risk_score}"
         )
-
-        # Skip additional factors for test environment unless explicitly high risk
-        if is_test_env and risk_score < 0.9:
-            self.log_info("DEBUG: Skipping additional factors for test environment")
-            return additional_factors
 
         # Risk-based additional factors
         if risk_score > 0.7:  # High risk
@@ -685,14 +918,14 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             if "passwordless" in self.enabled_methods:
                 additional_factors.append("passwordless")
 
-        # Method-specific requirements (relaxed for test environment)
-        if primary_method == "api_key" and not is_test_env:
-            # API keys might require MFA for sensitive operations in production
-            if "mfa" in self.enabled_methods:
+        # Method-specific requirements
+        if primary_method == "api_key":
+            # API keys are bearer credentials: require a second factor.
+            if "mfa" in self.enabled_methods and "mfa" not in additional_factors:
                 additional_factors.append("mfa")
 
-        # User-specific requirements (disabled for test environment)
-        if not is_test_env and user_id and hash(user_id) % 3 == 0:  # Every 3rd user
+        # User-specific requirements (pre-existing sampling rule, retained)
+        if user_id and hash(user_id) % 3 == 0:  # Every 3rd user
             if "mfa" in self.enabled_methods and "mfa" not in additional_factors:
                 additional_factors.append("mfa")
 
@@ -1102,20 +1335,51 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         **kwargs,
     ) -> Dict[str, Any]:
         """Authorize user access to resource."""
-        # Validate session
-        if session_id:
-            session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
-                action="validate", session_id=session_id
-            )
+        # A session is proof of authentication. Without one, user_id is just a
+        # string the caller typed, so authorization cannot proceed: this
+        # previously skipped validation entirely and authorized the caller's
+        # claimed identity (issue #2026).
+        if not session_id:
+            return {
+                "authorized": False,
+                "error": "Session required for authorization",
+                "reason": "session_required",
+            }
 
-            if not session_validation.get("valid"):
-                return {
-                    "authorized": False,
-                    "error": "Invalid session",
-                    "reason": "session_invalid",
-                }
+        session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            action="validate", session_id=session_id
+        )
 
-            user_id = session_validation.get("user_id", user_id)
+        if not session_validation.get("valid"):
+            return {
+                "authorized": False,
+                "error": "Invalid session",
+                "reason": "session_invalid",
+            }
+
+        # The session's subject wins over any caller-supplied user_id. The
+        # subject is NESTED under "session_data" (see SessionManagementNode's
+        # validate result); reading a top-level "user_id" always missed and
+        # silently fell back to the caller's claim.
+        session_data = session_validation.get("session_data") or {}
+        session_user_id = session_data.get("user_id") or session_validation.get(
+            "user_id"
+        )
+        if not session_user_id:
+            return {
+                "authorized": False,
+                "error": "Session has no subject",
+                "reason": "session_subject_missing",
+            }
+        user_id = session_user_id
+
+        # An empty permission request is not a free pass.
+        if not permissions:
+            return {
+                "authorized": False,
+                "error": "No permissions requested",
+                "reason": "no_permissions_requested",
+            }
 
         # Check permissions (simulation)
         # In production, integrate with RBAC/ABAC system
@@ -1142,16 +1406,21 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         }
 
     async def _get_user_permissions(self, user_id: str) -> List[str]:
-        """Get user permissions (simulation)."""
-        # In production, retrieve from user management system
-        base_permissions = ["read"]
+        """Get the permissions granted to a user.
 
-        if "admin" in user_id.lower():
-            return ["read", "write", "delete", "admin"]
-        elif "manager" in user_id.lower():
-            return ["read", "write"]
-        else:
-            return base_permissions
+        Resolved from the configured ``user_permissions`` mapping. Users with no
+        entry receive the least-privilege default only.
+
+        This previously derived permissions from the TEXT of the user_id --
+        anything containing "admin" was granted ["read", "write", "delete",
+        "admin"], and anything containing "manager" got write. Any directory or
+        IdP that lets a principal influence their own username (``admin.intern``,
+        ``sysadmin-contractor``) was therefore a privilege escalation
+        (issue #2026).
+
+        For real role/policy evaluation, use PACT rather than this mapping.
+        """
+        return list(self.user_permissions.get(user_id, self.default_permissions))
 
     async def _logout(self, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
         """Handle user logout."""

@@ -17,6 +17,7 @@ import base64
 import hashlib
 import json
 import re
+import secrets
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,24 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+
+
+def _is_enabled(value: Any) -> bool:
+    """Strictly interpret an insecure-mode opt-in flag.
+
+    Bare truthiness is wrong for these gates: config files and environment
+    variables deliver strings, and ``"false"``/``"0"``/``"no"`` are all truthy
+    in Python, so an operator explicitly DISABLING an insecure fallback would
+    have enabled it (issue #2026). Only a real ``True``, or a string that
+    spells one, counts; anything unrecognised is treated as OFF.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    return False
 
 
 @register_node()
@@ -167,6 +186,39 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             ),
         }
 
+    def _build_tls_config(self, server_url: str):
+        """Build the LDAPS TLS policy shared by every connection site.
+
+        One policy for all sites: the three connection points previously
+        disagreed (one CERT_REQUIRED, one CERT_OPTIONAL, one with no TLS at
+        all), which is the multi-site parity failure `rules/security.md`
+        forbids. These channels carry bind passwords and the group data that
+        drives admin-role assignment, so certificates are validated by default;
+        ``tls_validate_optional`` is the explicit opt-out for a private CA or
+        lab directory.
+
+        Returns:
+            An ``ldap3.Tls`` for LDAPS connections, else None.
+        """
+        import ssl
+
+        from ldap3 import Tls
+
+        if not (
+            self.connection_config.get("use_ssl", False)
+            or str(server_url).startswith("ldaps://")
+        ):
+            return None
+
+        return Tls(
+            validate=(
+                ssl.CERT_OPTIONAL
+                if _is_enabled(self.connection_config.get("tls_validate_optional"))
+                else ssl.CERT_REQUIRED
+            ),
+            version=ssl.PROTOCOL_TLSv1_2,
+        )
+
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
@@ -260,7 +312,15 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             # Add processing metrics
             processing_time = (time.time() - start_time) * 1000
             result["processing_time_ms"] = processing_time
-            result["success"] = True
+            # Derive from the operation's verdict: unconditionally stamping
+            # success=True turned an {"authenticated": False} result into a
+            # success for any caller gating on that field (issue #2026).
+            if "authenticated" in result:
+                result["success"] = bool(result["authenticated"])
+            elif "error" in result:
+                result["success"] = False
+            else:
+                result["success"] = True
             result["directory_type"] = self.directory_type
 
             # Log successful operation
@@ -551,37 +611,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if not username or not password:
             raise ValueError("Username and password required for authentication")
 
-        # Try real LDAP authentication first (for tests), fall back to simulation
+        # Bind through the configurable implementation. This path used to build
+        # its own connection with the bind DN hardcoded to
+        # "CN={username},OU=Users,DC=test,DC=com", ignoring base_dn /
+        # user_dn_template, and dropped the use_ssl/TLS handling -- so against a
+        # real directory the bind always failed into simulation, and an operator
+        # who set use_ssl sent the user's password in cleartext (issue #2026).
         try:
-            from ldap3 import Connection, Server
-
-            # Get connection config
-            server_url = self.connection_config.get("server", "ldap://localhost:389")
-            bind_dn = self.connection_config.get("bind_dn", "")
-            bind_password = self.connection_config.get("bind_password", "")
-
-            # Create server and connection for user authentication
-            server = Server(server_url)
-            user_dn = f"CN={username},OU=Users,DC=test,DC=com"
-            connection = Connection(server, user=user_dn, password=password)
-
-            # Attempt to bind as the user
-            bind_result = connection.bind()
-            connection.unbind()
-
-            if bind_result:
-                auth_result = {
-                    "authenticated": True,
-                    "username": username,
-                    "directory_type": self.directory_type,
-                }
-            else:
-                auth_result = {
-                    "authenticated": False,
-                    "username": username,
-                    "reason": "invalid_credentials",
-                    "message": "Invalid credentials",
-                }
+            auth_result = await self._ldap_directory_auth(username, password)
 
         except ImportError:
             # Fall back to simulation if ldap3 not available
@@ -594,8 +631,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             # Get user details
             user_details = await self._get_user(username)
             auth_result["user"] = user_details.get("user")
-            # Add user DN for test compatibility
-            auth_result["user_dn"] = f"CN={username},OU=Users,DC=test,DC=com"
+            # Report the DN actually used for the bind, from configuration --
+            # this was hardcoded to a DC=test,DC=com value "for test
+            # compatibility" and echoed to the caller (issue #2026).
+            base_dn = self.connection_config.get("base_dn", "dc=example,dc=com")
+            user_dn_template = self.connection_config.get(
+                "user_dn_template", "CN={username},OU=Users," + base_dn
+            )
+            auth_result["user_dn"] = user_dn_template.format(username=username)
 
             # Log successful authentication
             await self.audit_logger.execute_async(  # type: ignore[attr-defined]
@@ -845,23 +888,32 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 Connection, "return_value"
             )
 
-            # For non-mocked environments, skip real LDAP connections to test servers
-            server_url = self.connection_config.get("server", "")
-            is_test_server = "test." in server_url or server_url.startswith(
-                "ldap://test"
-            )
-
-            if is_test_server and not is_mocked:
-                # Simulate connection for test servers when not mocked
-                raise ImportError("Using test simulation")
+            # Simulation is opted into explicitly, never inferred from the
+            # server's NAME. This previously routed any directory whose URL
+            # contained "test." or began with "ldap://test" into the simulated
+            # backend, so a real production directory named e.g.
+            # ldap://test.corp.example.com was never actually contacted
+            # (issue #2026).
+            if (
+                _is_enabled(self.connection_config.get("simulate_directory"))
+                and not is_mocked
+            ):
+                raise ImportError("Using directory simulation (opted in)")
 
             # Get connection config
             server_url = self.connection_config.get("server", "ldap://localhost:389")
             bind_dn = self.connection_config.get("bind_dn", "")
             bind_password = self.connection_config.get("bind_password", "")
 
-            # Create server and connection
-            server = Server(server_url)
+            # Honour use_ssl / TLS here too: this bind carries the service
+            # account password, and building a bare Server() sent it in
+            # cleartext whenever the operator had configured use_ssl
+            # (issue #2026 -- the sibling of the _authenticate_user fix).
+            server = Server(
+                server_url,
+                use_ssl=self.connection_config.get("use_ssl", False),
+                tls=self._build_tls_config(server_url),
+            )
             connection = Connection(server, user=bind_dn, password=bind_password)
 
             # Attempt to bind (this is what the test expects to be called)
@@ -891,7 +943,19 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             connection.unbind()
 
         except ImportError:
-            # Fallback to simulation if ldap3 not available
+            if not _is_enabled(self.connection_config.get("simulate_directory")):
+                # A health check must not report a connection it never made.
+                # This previously said "connected" with a full feature list
+                # whenever ldap3 was simply not installed (issue #2026).
+                test_result["connection_status"] = "unavailable"
+                test_result["error"] = (
+                    "ldap3 is not installed; the directory was not contacted. "
+                    "Install kailash[ldap] or set simulate_directory=True."
+                )
+                test_result["response_time_ms"] = (time.time() - start_time) * 1000
+                return test_result
+
+            # Explicit simulation opt-in.
             await asyncio.sleep(0.1)  # Simulate network delay
             test_result["connection_status"] = "connected"
             test_result["features_supported"] = [
@@ -952,17 +1016,38 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         filters: Dict[str, Any],
         attributes: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
-        """Search the directory using real LDAP when available, with fallback.
+        """Search the directory using real LDAP, with an opt-in sample fallback.
 
-        Attempts a real ldap3 search against the configured server. If ldap3
-        is not installed or the connection fails, falls back to the built-in
-        sample dataset for backward compatibility.
+        Attempts a real ldap3 search against the configured server. The built-in
+        sample dataset is used ONLY when explicitly opted into, because its
+        fabricated users and ``memberOf`` groups flow into
+        :meth:`_assign_roles_from_directory` and
+        :meth:`_map_groups_to_permissions`, both of which grant the ``admin``
+        role for any group name containing "admin". Ungated, an attacker who
+        could make the directory unreachable was provisioned as an admin
+        (issue #2026 -- the sibling surface of ``_fallback_directory_auth``).
         """
         try:
             return await self._ldap_directory_search(object_type, filters, attributes)
         except ImportError:
-            pass
+            if not _is_enabled(
+                self.connection_config.get("allow_insecure_credential_fallback")
+            ):
+                self.log_error(
+                    "Directory search requires ldap3, which is not installed, "
+                    "and the built-in sample dataset is disabled; returning no "
+                    "results."
+                )
+                return []
         except Exception as e:
+            if not _is_enabled(
+                self.connection_config.get("allow_insecure_credential_fallback")
+            ):
+                self.log_error(
+                    f"Directory search failed ({e}) and the built-in sample "
+                    "dataset is disabled; returning no results."
+                )
+                return []
             self.log_error(f"LDAP search failed, using fallback: {e}")
 
         return self._fallback_directory_search(object_type, filters, attributes)
@@ -987,13 +1072,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         use_ssl = self.connection_config.get("use_ssl", False)
         base_dn = self.connection_config.get("base_dn", "dc=example,dc=com")
 
-        # Build TLS context for LDAPS
-        tls_config = None
-        if use_ssl or server_url.startswith("ldaps://"):
-            tls_config = Tls(
-                validate=ssl.CERT_OPTIONAL,
-                version=ssl.PROTOCOL_TLSv1_2,
-            )
+        # Build TLS context for LDAPS -- one shared policy across every site,
+        # so a single opt-out flag governs all of them (issue #2026).
+        tls_config = self._build_tls_config(server_url)
 
         # Support server pool for connection pooling
         servers_list = self.connection_config.get("servers", [server_url])
@@ -1219,9 +1300,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             "user_dn_template", "CN={username},OU=Users," + base_dn
         )
 
-        tls_config = None
-        if use_ssl or server_url.startswith("ldaps://"):
-            tls_config = Tls(validate=ssl.CERT_OPTIONAL, version=ssl.PROTOCOL_TLSv1_2)
+        tls_config = self._build_tls_config(server_url)
 
         server = Server(server_url, use_ssl=use_ssl, tls=tls_config)
         user_dn = user_dn_template.format(username=username)
@@ -1233,6 +1312,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if bind_result:
             return {
                 "authenticated": True,
+                # Name the principal explicitly: a caller that only sees
+                # "username" fell back to its own requested user_id (#2026).
+                "user_id": username,
                 "username": username,
                 "directory_type": self.directory_type,
             }
@@ -1244,20 +1326,53 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
     def _fallback_directory_auth(self, username: str, password: str) -> Dict[str, Any]:
-        """Built-in credential table fallback for testing."""
-        valid_passwords = {
-            "test.user": "password123",
-            "normal.user": "password123",
-            "admin.user": "password123",
-            "session.user": "password123",
-            "auth.user": "password123",
-            "jdoe": "user_password",
-            "jsmith": "user_password",
-        }
+        """Local-development credential check, for tests and dev ONLY.
 
-        if password == valid_passwords.get(username, "password123"):
+        Fails closed unless explicitly opted into via
+        ``connection_config={"allow_insecure_credential_fallback": True}``, AND
+        credentials are supplied by the operator via
+        ``connection_config["dev_credentials"] = {username: password}``.
+
+        The hardcoded table this replaced is GONE (issue #2026). It shipped
+        seven built-in accounts and, worse, defaulted the lookup to
+        ``"password123"``, so ANY username at all authenticated with that
+        password. It was reachable in production whenever the real LDAP bind
+        raised, which made an attacker who could take the directory offline able
+        to log in as anyone. There is now no built-in account and no default
+        password: an empty ``dev_credentials`` authenticates nobody.
+        """
+        if not _is_enabled(
+            self.connection_config.get("allow_insecure_credential_fallback")
+        ):
+            self.log_error(
+                "Directory authentication is unavailable and the built-in "
+                "credential fallback is disabled; refusing to authenticate "
+                f"{username}."
+            )
+            return {
+                "authenticated": False,
+                "username": username,
+                "reason": "directory_unavailable",
+                "message": (
+                    "Directory service unavailable and insecure credential "
+                    "fallback is disabled."
+                ),
+            }
+
+        # Operator-supplied only. No built-in accounts, and no default: an
+        # unknown username has no entry, so `expected` is None and the
+        # comparison below cannot succeed.
+        dev_credentials = self.connection_config.get("dev_credentials") or {}
+        expected = dev_credentials.get(username)
+
+        if expected is not None and secrets.compare_digest(
+            str(expected).encode("utf-8"), str(password).encode("utf-8")
+        ):
             return {
                 "authenticated": True,
+                # Name the principal explicitly: a caller that only sees
+                # "username" fell back to its own requested user_id (#2026).
+                "user_id": username,
                 "username": username,
                 "directory_type": self.directory_type,
             }

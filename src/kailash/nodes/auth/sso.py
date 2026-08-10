@@ -17,9 +17,12 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -29,6 +32,30 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+
+
+# Shared, BOUNDED executor for the sync->async bridge in ``run()``. A per-call
+# ThreadPoolExecutor would spawn one OS thread plus one event loop per request,
+# which a burst of unauthenticated SSO callbacks could turn into resource
+# exhaustion.
+def _sync_bridge_workers() -> int:
+    """Worker count for the sync bridge, validated so a typo cannot brick import."""
+    raw = os.environ.get("KAILASH_SSO_SYNC_BRIDGE_WORKERS", "8")
+    try:
+        workers = int(raw)
+    except (TypeError, ValueError):
+        return 8
+    return workers if workers >= 1 else 8
+
+
+_SYNC_BRIDGE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_sync_bridge_workers(),
+    thread_name_prefix="kailash-sso-sync-bridge",
+)
+
+# Default ceiling on a single bridged operation, so a hung IdP cannot pin the
+# caller's event loop indefinitely.
+_SYNC_BRIDGE_TIMEOUT_SECONDS = 30.0
 
 
 @register_node()
@@ -52,6 +79,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         encryption_enabled: bool = True,
         session_timeout: timedelta = timedelta(hours=8),
         max_concurrent_sessions: int = 5,
+        sync_bridge_timeout: float = _SYNC_BRIDGE_TIMEOUT_SECONDS,
     ):
         # Set attributes before calling super().__init__()
         self.name = name
@@ -71,6 +99,8 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         self.encryption_enabled = encryption_enabled
         self.session_timeout = session_timeout
         self.max_concurrent_sessions = max_concurrent_sessions
+        # Ceiling on a bridged sync call (see _run_async_in_worker_thread).
+        self.sync_bridge_timeout = sync_bridge_timeout
 
         # Internal state
         self.active_sessions = {}
@@ -168,9 +198,13 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # If we're in an async context, we need to handle this differently
-                # For now, provide a simplified synchronous implementation
-                return self._run_sync_fallback(
+                # Already inside a running loop (FastAPI/Nexus calling the sync
+                # surface). Run the REAL async implementation on a private loop
+                # in a worker thread. This previously dispatched to a
+                # "simplified synchronous implementation" that returned
+                # authenticated=True for any non-empty token -- a full SSO
+                # bypass for every async caller (issue #2026).
+                return self._run_async_in_worker_thread(
                     action=action,
                     provider=provider,
                     request_data=request_data,
@@ -208,7 +242,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 )
             )
 
-    def _run_sync_fallback(
+    def _run_async_in_worker_thread(
         self,
         action: str,
         provider: str | None = None,
@@ -219,64 +253,56 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         callback_data: Dict[str, Any] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Synchronous fallback implementation for SSO operations."""
+        """Run the real :meth:`async_run` on a private loop in a worker thread.
+
+        ``run()`` is a synchronous surface, but the implementation is async. When
+        the caller is already inside a running event loop we cannot block it, so
+        the coroutine is executed on its own loop in a worker thread and the
+        genuine result is returned.
+
+        This replaces a "simplified synchronous implementation" that fabricated
+        results: ``action="validate"`` returned ``authenticated: True`` with a
+        caller-supplied ``user_id`` for ANY non-empty token, ``status`` always
+        reported ``active: True``, and ``initiate`` returned a hardcoded
+        Microsoft URL with ``client_id=test``. See issue #2026.
+
+        Note that ``future.result()`` blocks the calling thread, which IS the
+        event-loop thread. A shared bounded executor and a hard timeout keep a
+        slow or hung IdP from pinning the loop indefinitely or spawning an
+        unbounded number of threads. Async callers should await
+        :meth:`async_run` directly and avoid this path entirely.
+        """
         start_time = time.time()
 
+        # The coroutine is built INSIDE the worker: constructing it here and
+        # handing it to a saturated pool leaves an un-awaited coroutine if the
+        # job is later cancelled.
+        def _invoke() -> Dict[str, Any]:
+            return asyncio.run(
+                self.async_run(
+                    action=action,
+                    provider=provider,
+                    request_data=request_data,
+                    user_id=user_id,
+                    redirect_uri=redirect_uri,
+                    attributes=attributes,
+                    callback_data=callback_data,
+                    **kwargs,
+                )
+            )
+
+        future = _SYNC_BRIDGE_EXECUTOR.submit(_invoke)
         try:
-            # Handle callback_data parameter alias
-            if callback_data and not request_data:
-                request_data = callback_data
-
-            # Simplified sync implementation for testing
-            if action == "validate":
-                # Mock validation
-                if request_data and request_data.get("token"):
-                    return {
-                        "authenticated": True,
-                        "user_id": request_data.get("username", "test.user"),
-                        "provider": provider or "azure_ad",
-                        "attributes": {
-                            "email": request_data.get(
-                                "username", "test.user@example.com"
-                            ),
-                            "name": "Test User",
-                        },
-                        "session_id": f"sso_session_{int(time.time())}",
-                        "expires_at": (
-                            datetime.now(UTC) + self.session_timeout
-                        ).isoformat(),
-                    }
-                else:
-                    return {
-                        "authenticated": False,
-                        "error": "No valid token provided",
-                    }
-            elif action == "initiate":
-                return {
-                    "redirect_url": f"https://login.microsoftonline.com/oauth2/v2.0/authorize?client_id=test&redirect_uri={redirect_uri}",
-                    "state": f"state_{int(time.time())}",
-                }
-            elif action == "logout":
-                return {
-                    "logged_out": True,
-                    "user_id": user_id,
-                }
-            elif action == "status":
-                return {
-                    "active": True,
-                    "user_id": user_id,
-                    "provider": provider,
-                }
-            else:
-                return {
-                    "error": f"Unknown action: {action}",
-                }
-
-        except Exception as e:
-            return {
-                "authenticated": False,
-                "error": str(e),
-            }
+            return future.result(timeout=self.sync_bridge_timeout)
+        except FuturesTimeoutError as e:
+            # Drop it from the queue if it has not started. An already-running
+            # job cannot be cancelled and is abandoned, which is why the
+            # provider-side call needs its own timeout too.
+            future.cancel()
+            raise TimeoutError(
+                f"SSO operation {action!r} exceeded "
+                f"{self.sync_bridge_timeout}s on the synchronous bridge"
+            ) from e
         finally:
             duration = time.time() - start_time
             self.log_info(f"SSO operation {action} completed in {duration:.3f}s")
@@ -334,7 +360,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             # Log successful operation
             processing_time = (time.time() - start_time) * 1000
             result["processing_time_ms"] = processing_time
-            result["success"] = True
+            # Derive from the operation's verdict: unconditionally stamping
+            # success=True turned an {"authenticated": False} / {"valid": False}
+            # result into a success for any caller gating on that field
+            # (issue #2026).
+            if "authenticated" in result:
+                result["success"] = bool(result["authenticated"])
+            elif "valid" in result:
+                result["success"] = bool(result["valid"])
+            elif "error" in result:
+                result["success"] = False
+            else:
+                result["success"] = True
 
             # Log security event
             await self._log_security_event(
@@ -902,9 +939,17 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             okta_domain = cached_data["okta_domain"]
             token_url = f"https://{okta_domain}/oauth2/default/v1/token"
         else:
-            token_url = self.oauth_settings.get(
-                "token_endpoint", "https://oauth.example.com/token"
-            )
+            # No silent default. The previous fallback posted the authorization
+            # code AND client_secret to https://oauth.example.com/token -- a
+            # host the operator does not control -- whenever token_endpoint was
+            # left unset (issue #2026).
+            token_url = self.oauth_settings.get("token_endpoint")
+            if not token_url:
+                raise ValueError(
+                    f"No token_endpoint configured for provider {provider!r}. "
+                    "Set oauth_settings['token_endpoint']; refusing to send the "
+                    "authorization code and client_secret to a default host."
+                )
 
         # Make token request using HTTPRequestNode
         try:
@@ -922,16 +967,11 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
             return token_response["response"]
         except Exception as e:
-            # For test compatibility, simulate successful token exchange if using example URL
-            if "oauth.example.com" in token_url:
-                return {
-                    "access_token": "test_access_token",
-                    "token_type": "Bearer",
-                    "expires_in": 3600,
-                    "refresh_token": "test_refresh_token",
-                }
-            else:
-                raise ValueError(f"Token exchange failed: {str(e)}")
+            # Fail closed for every endpoint. A failed token exchange NEVER
+            # yields a token: there is no URL, host, or substring for which a
+            # synthetic "success" is correct. Tests that need a token supply an
+            # explicit http_client double.
+            raise ValueError(f"Token exchange failed: {e}") from e
 
     async def _get_oauth_user_info(
         self, provider: str, access_token: str
@@ -962,17 +1002,10 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
             return userinfo_response["response"]
         except Exception as e:
-            # For test compatibility, simulate user info response for test tokens
-            if access_token == "test_access_token":
-                return {
-                    "sub": "test_user_id",
-                    "email": "test.user@example.com",
-                    "given_name": "Test",
-                    "family_name": "User",
-                    "name": "Test User",
-                }
-            else:
-                raise ValueError(f"User info request failed: {str(e)}")
+            # Fail closed. Deriving an identity from the *value* of a bearer
+            # token let anyone presenting "test_access_token" be provisioned as
+            # test.user@example.com once the userinfo call failed.
+            raise ValueError(f"User info request failed: {e}") from e
 
     def _map_attributes(
         self, raw_attributes: Dict[str, Any], provider: str
@@ -1135,9 +1168,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             # Update last activity
             session_data["last_activity"] = datetime.now(UTC).isoformat()
 
+            # Never hand the upstream IdP tokens back to a session holder.
+            # Returning session_data verbatim upgraded an app-scoped, revocable
+            # session id into the IdP's access_token AND refresh_token, which
+            # this app cannot revoke and which work directly against the
+            # provider's APIs (issue #2026). They stay in the internal store.
+            public_session_data = {
+                k: v for k, v in session_data.items() if k != "tokens"
+            }
+
             return {
                 "valid": True,
-                "session_data": session_data,
+                "session_data": public_session_data,
                 "user_id": session_data["user_id"],
                 "provider": session_data["provider"],
             }
@@ -1213,13 +1255,39 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         }
 
     async def _log_security_event(self, **event_data):
-        """Log security events using SecurityEventNode."""
-        await self.security_logger.async_run(  # type: ignore[reportAttributeAccessIssue]
-            event_type=event_data.get("event_type", "sso_event"),
-            source="sso_authentication_node",
-            timestamp=datetime.now(UTC).isoformat(),
-            details=event_data,
-        )
+        """Log security events using SecurityEventNode.
+
+        This called ``security_logger.async_run``, which ``SecurityEventNode``
+        does not define -- it exposes ``execute``. Every successful
+        :meth:`async_run` therefore raised ``AttributeError`` after doing its
+        work, so the whole async SSO surface was unusable and NO security event
+        was ever recorded. Invisible to the suite because nothing drove
+        ``async_run`` end to end; surfaced by the sync-bridge tests added for
+        issue #2026.
+
+        Dispatches to whichever surface the logger actually provides, and never
+        lets a logging failure abort the authentication that already succeeded
+        -- while still reporting that the event went unrecorded.
+        """
+        payload = {
+            "event_type": event_data.get("event_type", "sso_event"),
+            "source": "sso_authentication_node",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "details": event_data,
+        }
+
+        try:
+            for surface in ("async_run", "execute_async"):
+                fn = getattr(self.security_logger, surface, None)
+                if fn is not None:
+                    await fn(**payload)
+                    return
+            self.security_logger.execute(**payload)
+        except Exception as e:  # noqa: BLE001 - logging must not break auth
+            self.log_info(
+                f"Security event was NOT recorded ({type(e).__name__}); "
+                "the operation itself is unaffected."
+            )
 
     def get_sso_statistics(self) -> Dict[str, Any]:
         """Get SSO usage statistics."""

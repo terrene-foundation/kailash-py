@@ -140,6 +140,11 @@ class TestIssue803MFAResponseContracts:
             user_id="user-803",
             method="totp",
             user_email="u@example.com",
+            # reset destroys the existing factor and mints a new one, so it is
+            # an administrative action (issue #2026). The #803 contract below —
+            # that it clears state and returns a fresh setup payload — is
+            # unchanged.
+            admin_override=True,
         )
         assert result["success"] is True
         assert result["user_id"] == "user-803"
