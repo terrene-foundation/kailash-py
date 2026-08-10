@@ -42,13 +42,42 @@ Collision check run before launch: #2015's `detail=str(e)` sites resolve to exac
 `visualization/api.py`) with ZERO overlap against lanes 1C or 1E. 2A's nexus `core.py`/`plugins.py`
 is disjoint from 1E's nexus `auth/rate_limit/middleware.py`.
 
-| track | agent        | issue(s) | branch                         | worktree  | status    |
-| ----- | ------------ | -------- | ------------------------------ | --------- | --------- |
-| 2A    | LANE-2A-2013 | #2013    | `fix/2013-inert-auth-control`  | `lane-2a` | in-flight |
-| 2B    | LANE-2B-2015 | #2015    | `fix/2015-exception-leak-http` | `lane-2b` | in-flight |
-| 2C    | —            | #1997    | —                              | —         | queued    |
-| 2D    | —            | #2014    | —                              | —         | queued    |
-| 2E    | —            | #2004    | —                              | —         | queued    |
+| track | agent        | issue(s) | branch                              | worktree  | status    |
+| ----- | ------------ | -------- | ----------------------------------- | --------- | --------- |
+| 2A    | LANE-2A-2013 | #2013    | `fix/2013-inert-auth-control`       | `lane-2a` | in-flight |
+| 2B    | LANE-2B-2015 | #2015    | `fix/2015-exception-leak-http`      | `lane-2b` | in-flight |
+| 2C    | LANE-2C-1997 | #1997    | `fix/1997-credential-scrub-presets` | `lane-2c` | in-flight |
+| 2D    | LANE-2D-2014 | #2014    | `fix/2014-spawn-isolation`          | `lane-2d` | in-flight |
+| 2E    | LANE-2E-2004 | #2004    | `fix/2004-spawn-command-leak`       | `lane-2e` | in-flight |
+
+**10 agents concurrent at peak.** Cold-start guidance is ~3
+(`worktree-isolation.md` Rule 4); we sit above it deliberately, because the
+falsifiable back-off signal has NOT fired. That signal is specific: ≥2 agents in
+one wave dying inside a ~30–48s synchronized window carrying
+`Server is temporarily limiting requests` / `(not your usage limit)`. A single
+agent dying, a timeout, or an OOM is NOT that signal and must not trigger
+back-off. If it DOES fire: drop to waves of 3 and re-run the throttled lanes —
+worktrees persist, so a throttled lane resumes rather than restarts.
+
+## Verified-disjoint file map (why 10 lanes do not serialize)
+
+Measured from live worktree `git status`, not assumed:
+
+- **1C** `nodes/auth/{sso,mfa,enterprise_auth_provider}.py`
+- **1E** `gateway/resource_resolver.py`, `runtime/{parameter_injector,resource_manager}.py`,
+  `utils/url_credentials.py`, `dataflow/core/nodes.py`
+- **2A** `nexus/{core,plugins}.py`
+- **2B** `channels/api_channel.py`, `gateway/api.py`,
+  `middleware/communication/api_gateway.py`, `visualization/api.py`
+- **2C** `kaizen/utils/credential_scrub.py`
+- **2D** `kaizen/core/autonomy/hooks/security/isolation.py`
+- **2E** `kailash_mcp/{security,discovery}.py`
+
+`enterprise_auth_provider.py` surfaced in TWO lanes' editor DIAGNOSTICS but only
+ONE lane's diff (1C). Diagnostics are not a collision signal — the worktree diff
+is. Every Wave-2 lane also carries an explicit do-not-touch list naming the files
+its siblings hold, so a lane finding an in-scope defect in a held file reports it
+for a follow-up rather than colliding.
 
 Lanes 2B/2A carry an explicit DO-NOT-TOUCH file list naming the other lanes' files, so a lane
 that discovers an in-scope defect in a held file reports it instead of colliding.
