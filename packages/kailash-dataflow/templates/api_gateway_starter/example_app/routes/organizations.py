@@ -4,9 +4,17 @@ Organization CRUD routes with authentication.
 All endpoints require JWT authentication.
 """
 
+import logging
+
 from fastapi import APIRouter, Request
+
+from dataflow import DataFlow
+from kailash.runtime import LocalRuntime
+from kailash.utils.http_errors import safe_http_detail
+from kailash.workflow.builder import WorkflowBuilder
 from templates.api_gateway_starter.middleware.rbac import require_role
 from templates.api_gateway_starter.utils.errors import (
+    INTERNAL_ERROR,
     NOT_FOUND_ERROR,
     VALIDATION_ERROR,
     ProblemDetail,
@@ -21,9 +29,7 @@ from templates.api_gateway_starter.utils.validation import (
     validate_pagination_params,
 )
 
-from dataflow import DataFlow
-from kailash.runtime import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+logger = logging.getLogger(__name__)
 
 
 def create_organization_router(db: DataFlow) -> APIRouter:
@@ -55,10 +61,21 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             401: Authentication error
             403: Authorization error
         """
+        # Validation is its own block. A ValueError raised HERE is the
+        # validator's own message, written for the caller, so it is returned
+        # verbatim -- that is the whole point of a 400.
         try:
-            # Validate request
             validated = validate_create_request("Organization", org_data)
+        except ValueError as e:
+            problem = ProblemDetail(
+                type=VALIDATION_ERROR,
+                title="Validation Error",
+                status=400,
+                detail=str(e),
+            )
+            return problem.to_response()
 
+        try:
             # Execute DataFlow workflow. Context-managed runtime per
             # round-5 redteam F1 sibling sweep.
             workflow = WorkflowBuilder()
@@ -79,12 +96,17 @@ def create_organization_router(db: DataFlow) -> APIRouter:
 
             return created_response(org, resource_id=org["id"])
 
-        except ValueError as e:
+        except Exception as e:
+            # Past validation, anything raised came from the database layer,
+            # and a driver's connect error quotes the DSN -- password and
+            # all. It is also not a 400: the caller's request was fine.
             problem = ProblemDetail(
-                type=VALIDATION_ERROR,
-                title="Validation Error",
-                status=400,
-                detail=str(e),
+                type=INTERNAL_ERROR,
+                title="Internal Error",
+                status=500,
+                detail=safe_http_detail(
+                    e, logger=logger, context="create organization"
+                ),
             )
             return problem.to_response()
 
@@ -125,11 +147,26 @@ def create_organization_router(db: DataFlow) -> APIRouter:
             return paginated_response(organizations, total, page, limit)
 
         except ValueError as e:
+            # validate_pagination_params raises ValueError with a message
+            # written for the caller; kept verbatim as a genuine 400.
             problem = ProblemDetail(
                 type=VALIDATION_ERROR,
                 title="Validation Error",
                 status=400,
                 detail=str(e),
+            )
+            return problem.to_response()
+
+        except Exception as e:
+            # Everything else on this path is the database layer failing.
+            # Without this arm it either escaped as an unhandled 500 or, if
+            # the driver raised a ValueError subclass, was rendered into the
+            # 400 body above with its DSN intact.
+            problem = ProblemDetail(
+                type=INTERNAL_ERROR,
+                title="Internal Error",
+                status=500,
+                detail=safe_http_detail(e, logger=logger, context="list organizations"),
             )
             return problem.to_response()
 

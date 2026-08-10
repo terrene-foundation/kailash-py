@@ -16,6 +16,8 @@ client body must not swallow the error), and that the reference id appearing
 in the client body is the one in the log, so an operator can correlate them.
 """
 
+import asyncio
+import json
 import logging
 
 import pytest
@@ -195,3 +197,60 @@ def test_references_are_unique_per_call():
     a = safe_http_detail(exc, logger=logger, context="c")
     b = safe_http_detail(exc, logger=logger, context="c")
     assert a != b, "reference ids collided; correlation would be ambiguous"
+
+
+# ---------------------------------------------------------------------------
+# Sites the issue's `detail=str(e)` grep cannot see
+#
+# Each of these renders an exception into a response body without ever
+# spelling `detail=`. They are the reason the fix is not a find-and-replace.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_pool_metrics_do_not_leak_the_dsn_to_the_metrics_endpoint():
+    """GET /metrics and /pools return collect()'s dict verbatim.
+
+    This is the likeliest site in the codebase to carry a real credential:
+    the exception comes from a database driver, and driver connect failures
+    quote the connection string.
+    """
+    from kailash.servers.connection_metrics_router import ConnectionMetricsProvider
+
+    class _ExplodingPool:
+        async def get_pool_statistics(self):
+            raise ConnectionError(f"could not connect to {DSN}")
+
+    provider = ConnectionMetricsProvider()
+    provider.register_source("primary", _ExplodingPool())
+
+    results = asyncio.run(provider.collect())
+
+    rendered = json.dumps(results)
+    assert SECRET not in rendered, f"pool metrics leaked the credential: {rendered}"
+    assert DSN not in rendered, f"pool metrics leaked the DSN: {rendered}"
+    # Still reported as unhealthy with a correlation id, not silently dropped.
+    assert results["primary"]["health_score"] == 0
+    assert "reference:" in results["primary"]["error"]
+
+
+@pytest.mark.regression
+def test_mcp_tools_listing_does_not_leak_server_exceptions():
+    """GET /mcp/tools returns its per-server dict as the body."""
+    from kailash.api.gateway import WorkflowAPIGateway
+
+    class _ExplodingMCPServer:
+        def list_tools(self):
+            raise ConnectionError(f"MCP transport failed for {DSN}")
+
+    gateway = WorkflowAPIGateway()
+    gateway.mcp_servers["broken"] = _ExplodingMCPServer()
+
+    response = TestClient(gateway.app, raise_server_exceptions=False).get("/mcp/tools")
+
+    assert response.status_code == 200
+    assert (
+        SECRET not in response.text
+    ), f"/mcp/tools leaked the credential: {response.text}"
+    assert DSN not in response.text, f"/mcp/tools leaked the DSN: {response.text}"
+    assert "reference:" in response.json()["broken"]["error"]
