@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 from urllib.parse import urlparse
 
+from kailash.utils.url_credentials import mask_error_text
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, ServiceDiscoveryError
 from kailash_mcp.security import SpawnSecurityError, validate_spawn_command
@@ -1129,8 +1130,21 @@ class HealthChecker:
                                     "status": "healthy",
                                     "response_time": response_time,
                                 }
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        # Acts: falls through to the main-endpoint probe
+                        # below. Logged rather than swallowed silently so a
+                        # persistently-failing health endpoint is diagnosable
+                        # (zero-tolerance Rule 3).
+                        logger.debug(
+                            "health_check.health_endpoint_failed",
+                            extra={
+                                "server": server.name,
+                                # The probe URL is echoed by most client
+                                # errors and may carry userinfo / credential
+                                # query parameters.
+                                "error": mask_error_text(str(exc)),
+                            },
+                        )
 
                     # Fallback to main endpoint
                     try:
@@ -1156,6 +1170,12 @@ class HealthChecker:
                     # spawn safety): a health probe MUST NOT spawn an unlisted
                     # command. server.command is untrusted (registry / discovery
                     # response). Reject before spawn; report blocked, don't run.
+                    #
+                    # The rejection text is safe to log and to return: since
+                    # #2004 SpawnSecurityError renders a
+                    # ``basename#fingerprint`` reference rather than the raw
+                    # command, which routinely carries a credential as a CLI
+                    # flag (``npx ... --token=<secret>``).
                     try:
                         validate_spawn_command(server.command)
                     except SpawnSecurityError as e:
