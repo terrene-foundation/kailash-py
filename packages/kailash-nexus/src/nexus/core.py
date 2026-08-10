@@ -30,6 +30,11 @@ from kailash.servers.gateway import create_gateway
 from kailash.utils.secure_logging import safe_callable_name
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
+from nexus.auth_bootstrap import (
+    AuthNotConfiguredError,
+    InvalidAuthSecretError,
+    install_auth_middleware,
+)
 from nexus.background import BackgroundService
 from nexus.events import EventBus, NexusEvent, NexusEventType
 from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
@@ -1266,6 +1271,24 @@ class Nexus:
             self._http_transport._install_exception_handlers()
             logger.info("Enterprise gateway initialized successfully")
 
+            # Install authentication BEFORE CORS (#2013).
+            #
+            # Starlette's add_middleware() prepends, so the LAST layer added is
+            # the OUTERMOST one. CORS must stay outermost or a cross-origin
+            # preflight OPTIONS would be 401'd by auth before CORS could answer
+            # it. Installing auth here — ahead of the CORS block below — keeps
+            # that ordering.
+            #
+            # This is the ONLY place auth is installed. `enable_auth=True`
+            # previously set three booleans and probed the gateway with
+            # `hasattr(gw, "enable_auth")` / `hasattr(gateway,
+            # "set_auth_manager")`; neither name is defined anywhere in this
+            # repo or its dependencies, so both guards were permanently False
+            # and every route stayed open while the platform reported auth as
+            # enabled. See nexus/auth_bootstrap.py for the full analysis.
+            if self._enable_auth:
+                install_auth_middleware(self)
+
             # Apply full CORS middleware with all options
             if cors_config["allow_origins"]:
                 from starlette.middleware.cors import CORSMiddleware
@@ -1304,9 +1327,16 @@ class Nexus:
                     logger.info(f"Applied queued mount: {mount_path}")
                 self._mount_queue.clear()
 
+        except (AuthNotConfiguredError, InvalidAuthSecretError):
+            # Propagate UNWRAPPED. These are not gateway failures -- they are
+            # the fail-loud arm of enable_auth (#2013), and their messages
+            # carry the exact environment variables the operator must set.
+            # Re-wrapping as "Nexus requires enterprise gateway" would bury
+            # that wiring behind a misleading cause.
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize enterprise gateway: {e}")
-            raise RuntimeError(f"Nexus requires enterprise gateway: {e}")
+            raise RuntimeError(f"Nexus requires enterprise gateway: {e}") from e
 
     def _initialize_revolutionary_capabilities(self):
         """Initialize revolutionary capabilities that differentiate Nexus from traditional frameworks."""
@@ -4812,26 +4842,43 @@ Check the documentation or explore available resources.
     # Progressive enhancement methods
 
     def enable_auth(self):
-        """Enable authentication using SDK's enterprise auth capabilities."""
-        gw = self._http_transport.gateway
-        if gw and hasattr(gw, "enable_auth"):
-            try:
-                gw.enable_auth()
-                logger.info("Authentication enabled via enterprise gateway")
-            except Exception as e:
-                logger.error(f"Failed to enable authentication: {e}")
-        return self.use_plugin("auth")  # Fallback to plugin
+        """Install HTTP authentication on this Nexus instance.
+
+        Idempotent -- calling it when ``Nexus(enable_auth=True)`` already
+        installed the middleware is a no-op.
+
+        Previously this probed ``hasattr(gw, "enable_auth")`` and fell through
+        to a plugin that itself installed nothing, so the method returned
+        successfully having enabled nothing (#2013). The gateway
+        (``EnterpriseWorkflowServer``) has no authentication surface at all, so
+        that probe could never succeed; the middleware install below is the
+        real control.
+
+        Returns:
+            self, for chaining.
+
+        Raises:
+            AuthNotConfiguredError: No credential source configured. See
+                :mod:`nexus.auth_bootstrap` for the accepted variables.
+            RuntimeError: The server is already running -- Starlette freezes
+                its middleware stack at startup.
+        """
+        install_auth_middleware(self)
+        self._enable_auth = True
+        return self
 
     def enable_monitoring(self):
-        """Enable monitoring using SDK's enterprise monitoring capabilities."""
-        gw = self._http_transport.gateway
-        if gw and hasattr(gw, "enable_monitoring"):
-            try:
-                gw.enable_monitoring()
-                logger.info("Monitoring enabled via enterprise gateway")
-            except Exception as e:
-                logger.error(f"Failed to enable monitoring: {e}")
+        """Enable monitoring using SDK's enterprise monitoring capabilities.
 
+        The gateway probe that used to open this method --
+        ``if gw and hasattr(gw, "enable_monitoring")`` -- was the same dead
+        guard as the auth one (#2013): ``EnterpriseWorkflowServer`` defines no
+        ``enable_monitoring``, so the branch never ran and its
+        catch-and-log-only body could never fire. It is removed rather than
+        reimplemented, because the real monitoring install is
+        ``register_metrics_endpoint`` below; keeping an inert probe alongside a
+        working install only makes the working one look conditional.
+        """
         # Expose the nexus_* Prometheus series. The enterprise gateway's own
         # /metrics route renders only the Core SDK's kailash_* collectors, so
         # without this call the nexus.metrics collectors are never initialised
