@@ -19,6 +19,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
     ) from exc
 
 from ..servers import EnterpriseWorkflowServer
+from ..utils.http_errors import safe_http_detail
 from ..workflow import Workflow
 from .base import (
     Channel,
@@ -140,8 +141,15 @@ class APIChannel(Channel):
                 return {"status": "success", "event_id": event.event_id}
 
             except Exception as e:
-                logger.error(f"Error emitting channel event: {e}")
-                raise HTTPException(status_code=400, detail=str(e))
+                raise HTTPException(
+                    status_code=400,
+                    detail=safe_http_detail(
+                        e,
+                        logger=logger,
+                        context="emit channel event",
+                        status_code=400,
+                    ),
+                ) from e
 
         @self.app.get("/channel/status")
         async def get_channel_status():
@@ -437,7 +445,7 @@ class APIChannel(Channel):
             )
 
         except Exception as e:
-            logger.error(f"Error handling API request: {e}")
+            detail = safe_http_detail(e, logger=logger, context="handle API request")
 
             # Emit error event
             await self.emit_event(
@@ -446,14 +454,14 @@ class APIChannel(Channel):
                     channel_name=self.name,
                     channel_type=self.channel_type,
                     event_type="workflow_error",
-                    payload={"error": str(e), "request": request},
+                    payload={"error": detail, "request": request},
                     session_id=request.get("session_id"),
                 )
             )
 
             return ChannelResponse(
                 success=False,
-                error=str(e),
+                error=detail,
                 metadata={"channel": self.name, "type": "api"},
             )
 

@@ -18,6 +18,7 @@ from ..gateway.resource_resolver import ResourceReference, ResourceResolver
 from ..gateway.security import SecretManager
 from ..resources.registry import ResourceRegistry
 from ..runtime.async_local import AsyncLocalRuntime, ExecutionContext
+from ..utils.http_errors import safe_http_detail
 from ..workflow import Workflow
 from .durable_workflow_server import DurableWorkflowServer
 
@@ -387,13 +388,15 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                 return response.to_dict()
 
             except Exception as e:
-                logger.error(f"Async workflow execution failed: {e}")
-
                 error_response = WorkflowResponse(
                     request_id=workflow_request.request_id,
                     workflow_id=workflow_id,
                     status="failed",
-                    error=str(e),
+                    # `.to_dict()` on this object is the response body, so
+                    # `error` is client-facing despite not being a `detail=`.
+                    error=safe_http_detail(
+                        e, logger=logger, context="execute workflow"
+                    ),
                     started_at=workflow_request.timestamp,
                     completed_at=datetime.now(UTC),
                 )
@@ -421,15 +424,29 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                     health = await self.resource_registry._is_healthy(resource_name)
                     resource_health["resources"][resource_name] = health
                 except Exception as e:
+                    # Every dict built here is serialized into the
+                    # GET /enterprise/health body. Registered resources are
+                    # databases and caches, so an unhealthy one fails with a
+                    # driver error naming its DSN.
                     resource_health["resources"][resource_name] = {
                         "status": "unhealthy",
-                        "error": str(e),
+                        "error": safe_http_detail(
+                            e,
+                            logger=logger,
+                            context=f"probe health of resource {resource_name!r}",
+                            status_code=503,
+                        ),
                     }
                     resource_health["status"] = "degraded"
 
         except Exception as e:
             resource_health["status"] = "unhealthy"
-            resource_health["error"] = str(e)
+            resource_health["error"] = safe_http_detail(
+                e,
+                logger=logger,
+                context="enumerate registered resources",
+                status_code=503,
+            )
 
         return resource_health
 
@@ -450,7 +467,12 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         except Exception as e:
             return {
                 "status": "unhealthy",
-                "error": str(e),
+                "error": safe_http_detail(
+                    e,
+                    logger=logger,
+                    context="probe async runtime health",
+                    status_code=503,
+                ),
             }
 
     async def _check_secret_manager_health(self) -> Dict[str, Any]:
@@ -462,9 +484,16 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                 "type": type(self.secret_manager).__name__,
             }
         except Exception as e:
+            # Of all the health probes this is the one whose exception text
+            # is likeliest to quote a secret backend's address or token.
             return {
                 "status": "unhealthy",
-                "error": str(e),
+                "error": safe_http_detail(
+                    e,
+                    logger=logger,
+                    context="probe secret manager health",
+                    status_code=503,
+                ),
             }
 
     def register_resource(self, name: str, resource: Any):
