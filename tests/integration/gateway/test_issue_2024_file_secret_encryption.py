@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import shutil
 import stat
@@ -418,6 +419,83 @@ class TestTheDocumentedLimitsOfRollbackDetection:
 
         asyncio.run(backend.store_secret("cred", "v3"))
         assert backend._read_version_marks()["cred"] == 3
+
+
+class TestTheWeakerDefaultAnnouncesItself:
+    """`security.md` § Secure-Default: a control whose default provides the
+    weaker guarantee must say so loudly, not leave the docstring to imply the
+    stronger one.
+
+    Falsifying result: the backend is constructed in the degraded
+    configuration and nothing above DEBUG is emitted, so an operator who never
+    reads the docstring believes rollback is covered outright.
+    """
+
+    def test_the_default_warns_that_a_directory_restore_is_undetected(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        monkeypatch.delenv("KAILASH_SECRETS_STATE_DIR", raising=False)
+        security_module._warn_manifest_inside_store.cache_clear()
+
+        with caplog.at_level(logging.WARNING):
+            FileSecretBackend(str(tmp_path / "secrets"))
+
+        assert caplog.records, "constructing the degraded default said nothing"
+        assert all(r.levelno >= logging.WARNING for r in caplog.records)
+        text = caplog.text
+        # The operator must learn WHAT is unprotected...
+        assert "WHOLE directory" in text
+        assert "NOT be detected" in text
+        # ...that the other case still is, so the warning is not read as
+        # "rollback detection does not work"...
+        assert "Single-file restores ARE detected" in text
+        # ...and exactly how to close it.
+        assert "KAILASH_SECRETS_STATE_DIR" in text
+        assert "state_dir=" in text
+
+    def test_an_external_state_dir_does_not_warn(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        security_module._warn_manifest_inside_store.cache_clear()
+
+        with caplog.at_level(logging.WARNING):
+            FileSecretBackend(
+                str(tmp_path / "secrets"), state_dir=str(tmp_path / "state")
+            )
+
+        assert not caplog.records, f"warned about a closed case: {caplog.text}"
+
+    def test_it_warns_once_per_directory_not_once_per_construction(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        """A service building a backend per request would otherwise flood the
+        log with a message about a static configuration fact."""
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        monkeypatch.delenv("KAILASH_SECRETS_STATE_DIR", raising=False)
+        security_module._warn_manifest_inside_store.cache_clear()
+
+        with caplog.at_level(logging.WARNING):
+            for _ in range(3):
+                FileSecretBackend(str(tmp_path / "secrets"))
+
+        assert len(caplog.records) == 1, f"warned {len(caplog.records)} times"
+
+    def test_a_second_store_in_the_degraded_default_warns_too(
+        self, tmp_path, monkeypatch, caplog
+    ) -> None:
+        """Once per DIRECTORY, so a second misconfigured store is not silenced
+        by the first one's warning."""
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
+        monkeypatch.delenv("KAILASH_SECRETS_STATE_DIR", raising=False)
+        security_module._warn_manifest_inside_store.cache_clear()
+
+        with caplog.at_level(logging.WARNING):
+            FileSecretBackend(str(tmp_path / "one"))
+            FileSecretBackend(str(tmp_path / "two"))
+
+        assert len(caplog.records) == 2
 
 
 class TestMaxAgeStalenessCheck:

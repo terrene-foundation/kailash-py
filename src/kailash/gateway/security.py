@@ -17,6 +17,7 @@ import tempfile
 import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -272,6 +273,40 @@ _VERSION_MANIFEST_NAME = ".secret-versions.json"
 _VERSION_MANIFEST_REF = ".secret-versions"
 
 
+@lru_cache(maxsize=64)
+def _warn_manifest_inside_store(secrets_dir: str) -> None:
+    """Warn that rollback detection is running in its weaker form.
+
+    Once per directory rather than once per read: this fires from the
+    constructor, and a service that builds a backend per request would
+    otherwise flood the operator's log with a message about a static
+    configuration fact. Tests reset it with ``cache_clear()``.
+
+    Loud rather than silent because the default provides the WEAKER of two
+    guarantees the docstring describes, and an operator who never reads the
+    docstring would otherwise believe rollback is covered outright
+    (``rules/security.md`` § Secure-Default For A New Security Feature).
+
+    Not defaulted to some directory outside the store instead: no location
+    this class could pick is KNOWN to sit outside the operator's backup
+    boundary. A sibling directory looks separate but is captured by any backup
+    taken one level up, so an automatic default would trade a loud, accurate
+    warning for a silent and possibly false claim of protection. Only the
+    operator knows where their backup boundary runs.
+    """
+    logger.warning(
+        "Rollback detection is degraded: the secret version manifest lives "
+        "inside %s, so it is part of the same backup set as the secrets. A "
+        "restore of the WHOLE directory will revert the version marks along "
+        "with the secrets and will NOT be detected as a rollback -- a rotated "
+        "credential can be silently reverted to its pre-rotation value. "
+        "Single-file restores ARE detected. To close the whole-directory "
+        "case, set KAILASH_SECRETS_STATE_DIR (or pass state_dir=) to a "
+        "directory with an independent backup lifecycle.",
+        secrets_dir,
+    )
+
+
 class FileSecretBackend(SecretBackend):
     """Secret backend that encrypts each secret at rest in its own file.
 
@@ -300,6 +335,14 @@ class FileSecretBackend(SecretBackend):
     high-water mark is kept in a separate authenticated manifest
     (``.secret-versions.json``); a read whose envelope version is BELOW the
     mark raises :class:`SecretRollbackError`.
+
+    **Read this before relying on rollback detection.** With the DEFAULT
+    configuration the manifest lives inside ``secrets_dir``, so restoring the
+    whole directory reverts the marks along with the secrets and the rollback
+    is NOT detected. The default therefore protects against restoring
+    individual secret FILES, not against restoring the STORE. Constructing the
+    backend in that configuration logs a warning saying so. Set ``state_dir``
+    to close it.
 
     What that guarantee is, precisely
     ---------------------------------
@@ -428,18 +471,11 @@ class FileSecretBackend(SecretBackend):
             os.makedirs(self.state_dir, mode=0o700, exist_ok=True)
             restrict_dir_to_owner(self.state_dir)
         else:
-            # Stated rather than silent: with the manifest inside the store, a
-            # whole-directory restore reverts the high-water marks along with
-            # the secrets, and the rollback it would otherwise catch becomes
-            # invisible. Anyone who accepts that should do so knowingly.
-            logger.info(
-                "Secret version manifest lives inside %s. A restore of the "
-                "whole directory will revert it with the secrets, so a "
-                "rolled-back secret would not be detected. Set "
-                "KAILASH_SECRETS_STATE_DIR (or pass state_dir=) to a location "
-                "with an independent backup lifecycle to close that case.",
-                secrets_dir,
-            )
+            # LOUD, not informational: the default runs the weaker of the two
+            # guarantees the docstring describes, and an operator who never
+            # reads the docstring would otherwise believe rollback is covered
+            # outright.
+            _warn_manifest_inside_store(secrets_dir)
         self._manifest_path = os.path.join(self.state_dir, _VERSION_MANIFEST_NAME)
 
     def _path_for(self, reference: str) -> str:
