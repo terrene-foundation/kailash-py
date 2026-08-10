@@ -18,6 +18,7 @@ from kailash.trust.rate_limit.backends.base import RateLimitBackend
 from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 from kailash.trust.rate_limit.config import RateLimitConfig
 from kailash.trust.rate_limit.result import RateLimitResult
+from kailash.utils.url_credentials import fingerprint_secret
 from nexus.extractors.proxy import client_key_for_request
 
 logger = logging.getLogger(__name__)
@@ -178,9 +179,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 identifier=identifier,
             )
 
+            # identifier is whatever _identifier_extractor returns -- an IP or
+            # user id (PII), and by convention sometimes an API key. Log a
+            # fingerprint so operators can still correlate repeat offenders;
+            # the raw value stays confined to the rate-limit backend key.
             logger.warning(
-                "Rate limit exceeded: identifier=%s, path=%s, retry_after=%ds",
-                identifier,
+                "Rate limit exceeded: identifier_fp=%s, path=%s, retry_after=%ds",
+                fingerprint_secret(str(identifier)),
                 path,
                 retry_after,
             )

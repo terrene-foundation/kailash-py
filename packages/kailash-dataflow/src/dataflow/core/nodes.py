@@ -48,6 +48,10 @@ try:
 except ImportError:
     AsyncNode = Node  # type: ignore[assignment,misc]
 
+from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
+    fingerprint_secret,
+)
+
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
 from .exceptions import sanitize_db_error  # Issue #1552: redact driver-error VALUES
 from .exceptions import (  # Issue #1519/#1520: typed conflict-target error propagation
@@ -1024,14 +1028,21 @@ class NodeGenerator:
 
                     # 5. Check if any patterns were found and log
                     if value != original_value:
+                        # Never emit field_name or the raw pre-sanitization
+                        # value: the field may be `password`/`token` and the
+                        # value is attacker- or user-supplied plaintext. The
+                        # fingerprint still correlates repeat hits on one field.
+                        field_fp = fingerprint_secret(str(field_name))
                         for pattern in sql_injection_patterns:
                             if re.search(pattern, original_value):
                                 logger.warning(
-                                    f"Potential SQL injection detected in field '{field_name}': {pattern}"
+                                    f"Potential SQL injection detected in field "
+                                    f"fp={field_fp}: {pattern}"
                                 )
                                 break
                         logger.debug(
-                            f"Sanitized SQL injection in field '{field_name}': {original_value} -> {value}"
+                            f"Sanitized SQL injection in field fp={field_fp} "
+                            f"(value redacted)"
                         )
 
                     return value
@@ -1647,7 +1658,8 @@ class NodeGenerator:
                 logger = logging.getLogger(__name__)
                 # ADR-002: Changed from WARNING to DEBUG - this is diagnostic tracing, not a problem
                 logger.debug(
-                    f"DataFlow Node {self.model_name}{self.operation.title()}Node - received kwargs: {kwargs}"
+                    f"DataFlow Node {self.model_name}{self.operation.title()}Node"
+                    f" - received kwargs: {mask_sensitive_values(str(kwargs))}"
                 )
 
                 # Ensure table exists before any database operations (lazy table creation)
@@ -1907,17 +1919,24 @@ class NodeGenerator:
                             f"CREATE {self.model_name}: field_names={field_names}, "
                             f"values count={len(values)}, SQL placeholders expected={len(field_names)}"
                         )
-                        # Enhanced debug logging to show value types
+                        # Enhanced debug logging to show value types.
+                        # Issue #2027: the value itself is NEVER emitted. These are
+                        # arbitrary user records, so `values` may hold a password,
+                        # token, or PII column; repr()ing it put plaintext
+                        # credentials in DEBUG. Position, field name, type, and
+                        # size carry the parameter-ordering diagnostic this line
+                        # exists for without the payload.
                         value_debug = []
                         for i, (field, value) in enumerate(zip(field_names, values)):
                             value_type = type(value).__name__
-                            value_repr = (
-                                repr(value)[:50] + "..."
-                                if len(repr(value)) > 50
-                                else repr(value)
+                            # Scalars have no length; only sized values get one.
+                            size = (
+                                f", len={len(value)}"
+                                if hasattr(value, "__len__")
+                                else ""
                             )
                             value_debug.append(
-                                f"${i + 1} {field}={value_repr} (type={value_type})"
+                                f"${i + 1} {field}=<redacted> (type={value_type}{size})"
                             )
 
                         # ADR-002: Changed from WARNING to DEBUG - parameter tracing

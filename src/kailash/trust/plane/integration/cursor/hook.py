@@ -35,6 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from kailash.utils.file_permissions import OWNER_ONLY_MODE, restrict_to_owner
+
 logger = logging.getLogger(__name__)
 
 # Tool names that are gated (require trust_check before execution)
@@ -136,8 +138,22 @@ def _log_verdict(
         flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        fd = os.open(str(log_path), flags, 0o644)
+        # Owner-only: this is the trust audit log (tool names, resources,
+        # verdicts, and raw verdict `details`), not a published artifact. The
+        # 0o644 writes elsewhere in the trust plane are public KEYS, which are
+        # meant to be world-readable; this is not.
+        fd = os.open(str(log_path), flags, OWNER_ONLY_MODE)
         try:
+            # A log created by an earlier version persists at its original
+            # mode, since the mode argument applies only on creation, so
+            # re-apply. The descriptor-based form cannot be redirected by a
+            # symlink swapped in after the open, as a second path lookup could.
+            #
+            # POSIX only. On Windows this is a DACL change when pywin32 is
+            # present and a no-op (with a one-time WARN) when it is not, so the
+            # audit log is NOT confidential there -- see
+            # kailash.utils.file_permissions.
+            restrict_to_owner(log_path, fd=fd)
             f = os.fdopen(fd, "a", encoding="utf-8")
         except Exception:
             os.close(fd)
