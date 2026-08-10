@@ -1,10 +1,32 @@
 """
 Hook execution isolation (SECURITY FIX #5).
 
-Provides resource limits and process isolation for hook execution to prevent:
-- Resource exhaustion (memory, CPU)
-- Agent crashes from malicious hooks
-- Cross-hook interference
+WHAT THIS DELIVERS
+------------------
+- Crash containment: a hook that segfaults, aborts, or exits takes down only
+  its own process, never the agent.
+- Cross-hook independence: hooks cannot corrupt each other's or the agent's
+  in-process state, because they do not share an address space.
+- CPU and file-size caps (``RLIMIT_CPU`` / ``RLIMIT_FSIZE``) on Unix.
+- A loud, typed failure when any of the above cannot be established.
+
+WHAT THIS DOES **NOT** DELIVER
+------------------------------
+This is process SEPARATION, not a sandbox. It is not a containment boundary
+against hostile hook code, and MUST NOT be relied on as one:
+
+- The child inherits the parent's ENVIRONMENT, including every API key and
+  secret in it, plus its cwd, uid, filesystem access and network access.
+- The memory cap is unavailable on macOS, which refuses ``setrlimit`` for
+  ``RLIMIT_AS`` outright (reported at runtime by ``ResourceLimits.apply``).
+  On Windows no resource limits apply at all.
+- The hook's return value is unpickled IN THE PARENT, so a hook returning an
+  object with a hostile ``__reduce__`` executes code in the parent process.
+  A hook is TRUSTED CODE running with the agent's privileges; run only hooks
+  you would run in-process.
+
+Treat this as protection against buggy and crashing hooks, not against
+malicious ones.
 
 SECURITY: CWE-265 (Privilege Issues)
 """
@@ -35,6 +57,13 @@ logger = logging.getLogger(__name__)
 #: means the picklability requirement below is uniform instead of
 #: platform-dependent -- a hook that isolates on the developer's Linux box now
 #: isolates identically on the operator's macOS box, or fails loudly on both.
+#:
+#: OPERATOR NOTE: this changes behaviour on Linux, where ``fork`` was the
+#: default. ``spawn`` re-imports the entry-point module in every child, so an
+#: application started from a script whose top level has side effects (and no
+#: ``if __name__ == "__main__":`` guard) will re-run those side effects once per
+#: isolated hook invocation. Guard your entry point -- which ``multiprocessing``
+#: already requires of any spawn-using program.
 _ISOLATION_START_METHOD = "spawn"
 
 #: Wall-clock budget for the child interpreter to boot, import the handler's
@@ -54,9 +83,18 @@ _DRAIN_TIMEOUT = 0.5
 _REAP_TIMEOUT = 1.0
 
 
-class HookIsolationError(RuntimeError):
+class HookIsolationError(Exception):
     """
     Raised when hook process isolation cannot be established (issue #2014).
+
+    Bases ``Exception``, NOT ``RuntimeError``, deliberately. ``asyncio`` raises
+    ``RuntimeError`` for "no running event loop", and callers probe for that
+    with ``except RuntimeError`` as ordinary control flow -- ``multi_cycle.py``
+    does exactly this at six sites, with the hook trigger inside the ``try``.
+    Subclassing ``RuntimeError`` would let a fail-closed security signal be
+    swallowed by a branch whose comment reads "No running loop" and retried down
+    a path the operator never chose, destroying the loud failure this class
+    exists to produce.
 
     This error means the SECURITY CONTROL is unavailable -- not that the hook
     failed. It is raised INSTEAD of running the hook, never alongside it: a
@@ -391,7 +429,7 @@ class IsolatedHookExecutor:
         >>>     print(f"Hook failed: {result.error}")
 
     SECURITY FIX #5:
-    - Prevents malicious hooks from crashing agent
+    - Prevents a crashing hook from taking down the agent
     - Prevents resource exhaustion attacks
     - Isolates hook execution from main process
     """
@@ -679,7 +717,8 @@ class IsolatedHookManager(HookManager):
     HookManager with process isolation and resource limits (SECURITY FIX #5).
 
     Extends HookManager to execute hooks in isolated processes with resource
-    limits. This prevents malicious or buggy hooks from:
+    limits. This prevents BUGGY hooks (not hostile ones -- see the module
+    docstring) from:
     - Crashing the agent
     - Exhausting system resources
     - Interfering with other hooks
@@ -715,7 +754,7 @@ class IsolatedHookManager(HookManager):
         >>> results = await manager.trigger(HookEvent.POST_AGENT_LOOP, context)
 
     SECURITY FIX #5:
-    - Prevents malicious hooks from compromising agent
+    - Prevents a buggy hook from compromising agent state
     - Isolates hook execution in separate processes
     - Applies resource limits to prevent exhaustion attacks
     - Never downgrades itself to non-isolated execution (issue #2014)

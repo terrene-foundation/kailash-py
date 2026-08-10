@@ -111,6 +111,30 @@ class TestWorkerIsTransferable:
         with pytest.raises((AttributeError, pickle.PicklingError)):
             pickle.dumps(_local_worker)
 
+    def test_isolation_error_is_not_caught_by_an_asyncio_loop_probe(self):
+        """The fail-closed signal must not be swallowed by unrelated control flow.
+
+        ``multi_cycle.py`` wraps hook triggers in ``except RuntimeError`` at six
+        sites to probe for "no running event loop". If HookIsolationError
+        subclassed RuntimeError, an isolation failure would be caught by a
+        branch whose comment reads "No running loop" and retried down a path the
+        operator never chose -- losing the diagnostic entirely.
+
+        Falsifying result: ``issubclass(HookIsolationError, RuntimeError)``.
+        """
+        assert not issubclass(HookIsolationError, RuntimeError), (
+            "HookIsolationError subclasses RuntimeError, so asyncio loop probes "
+            "(except RuntimeError) will swallow the fail-closed security signal"
+        )
+        assert issubclass(HookIsolationError, Exception)
+
+        # The concrete shadowing scenario, not just the class relationship.
+        with pytest.raises(HookIsolationError):
+            try:
+                raise HookIsolationError("h", "isolation unavailable")
+            except RuntimeError:  # pragma: no cover - must not catch
+                pytest.fail("an asyncio loop probe swallowed the isolation error")
+
     def test_start_method_is_pinned_not_inherited(self):
         """A platform-dependent start method is the condition that hid the bug."""
         assert _ISOLATION_START_METHOD == "spawn"
