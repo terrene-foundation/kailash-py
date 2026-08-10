@@ -711,6 +711,78 @@ def test_api_key_honours_revocation_and_expiry():
 
 
 # ---------------------------------------------------------------------------
+# 6d. Sibling: permissions must not be inferred from the user_id's text
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "user_id",
+    ["admin", "admin.intern", "sysadmin-contractor", "ADMIN", "not-an-admin"],
+)
+def test_permissions_are_not_granted_by_a_username_containing_admin(user_id):
+    """Any user_id containing 'admin' used to receive delete+admin."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+
+    perms = asyncio.run(node._get_user_permissions(user_id))
+
+    assert (
+        "admin" not in perms
+    ), f"user_id={user_id!r} was granted admin from its own text: {perms}"
+    assert "delete" not in perms
+
+
+@pytest.mark.parametrize("user_id", ["manager", "product.manager", "middle-manager"])
+def test_permissions_are_not_granted_by_a_username_containing_manager(user_id):
+    """Same escalation, one rung lower."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+
+    perms = asyncio.run(node._get_user_permissions(user_id))
+
+    assert "write" not in perms, f"user_id={user_id!r} was granted write: {perms}"
+
+
+def test_permissions_come_from_the_configured_mapping():
+    """Positive control: an explicitly granted user still gets their rights."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        user_permissions={"alice": ["read", "write", "delete", "admin"]},
+    )
+
+    assert asyncio.run(node._get_user_permissions("alice")) == [
+        "read",
+        "write",
+        "delete",
+        "admin",
+    ]
+    assert asyncio.run(node._get_user_permissions("admin.intern")) == ["read"]
+
+
+def test_authorize_refuses_admin_action_for_a_username_containing_admin():
+    """The escalation observed through the authorization surface."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+
+    result = asyncio.run(
+        node._authorize(
+            user_id="admin.intern",
+            session_id=None,
+            resource="billing",
+            permissions=["admin"],
+            risk_context={},
+        )
+    )
+
+    assert result["authorized"] is False
+
+
+# ---------------------------------------------------------------------------
 # 7. Sibling: MFA step-up must not be waived by identifier content
 # ---------------------------------------------------------------------------
 

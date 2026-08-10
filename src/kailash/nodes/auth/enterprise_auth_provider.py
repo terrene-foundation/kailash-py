@@ -56,6 +56,8 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         session_config: Dict[str, Any] | None = None,
         jwt_config: Dict[str, Any] | None = None,
         api_key_store: Dict[str, Dict[str, Any]] | None = None,
+        user_permissions: Dict[str, List[str]] | None = None,
+        default_permissions: List[str] | None = None,
         risk_assessment_enabled: bool = True,
         adaptive_auth_enabled: bool = True,
         fraud_detection_enabled: bool = True,
@@ -88,6 +90,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # "expires_at" (epoch seconds) and "revoked" (bool)}. Empty means
         # 'api_key' authentication fails closed.
         self.api_key_store = api_key_store or {}
+        # Explicit user -> permissions mapping. Permissions are never inferred
+        # from the text of a user_id (issue #2026); unlisted users get
+        # default_permissions only.
+        self.user_permissions = user_permissions or {}
+        self.default_permissions = (
+            ["read"] if default_permissions is None else list(default_permissions)
+        )
         self.risk_assessment_enabled = risk_assessment_enabled
         self.adaptive_auth_enabled = adaptive_auth_enabled
         self.fraud_detection_enabled = fraud_detection_enabled
@@ -1188,16 +1197,21 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         }
 
     async def _get_user_permissions(self, user_id: str) -> List[str]:
-        """Get user permissions (simulation)."""
-        # In production, retrieve from user management system
-        base_permissions = ["read"]
+        """Get the permissions granted to a user.
 
-        if "admin" in user_id.lower():
-            return ["read", "write", "delete", "admin"]
-        elif "manager" in user_id.lower():
-            return ["read", "write"]
-        else:
-            return base_permissions
+        Resolved from the configured ``user_permissions`` mapping. Users with no
+        entry receive the least-privilege default only.
+
+        This previously derived permissions from the TEXT of the user_id --
+        anything containing "admin" was granted ["read", "write", "delete",
+        "admin"], and anything containing "manager" got write. Any directory or
+        IdP that lets a principal influence their own username (``admin.intern``,
+        ``sysadmin-contractor``) was therefore a privilege escalation
+        (issue #2026).
+
+        For real role/policy evaluation, use PACT rather than this mapping.
+        """
+        return list(self.user_permissions.get(user_id, self.default_permissions))
 
     async def _logout(self, user_id: str, session_id: str, **kwargs) -> Dict[str, Any]:
         """Handle user logout."""
