@@ -1,192 +1,126 @@
-# Session Notes — 2026-07-25 (session B: hook-registration class + forest drain)
+# Session Notes — 2026-08-10 (session N: forest merged, security triage, #1995 closed out)
 
 ## Where we are
 
-Two PRs merged to main this session. The COC hook layer went from "3 visible errors" to
-"registration class closed": `validate-emit --check settings-hook-registration` **18 blocking → 0**,
-`/sync` unblocked. `session-start.js` startup banner repaired (it was mostly emitting false
-positives). #1973 (a2a) is IN FLIGHT in the working tree — NOT committed, NOT landed.
+**PR #2016 merged** (admin, 341 commits) → main is `25973edb5`. That auto-closed
+#1970/#1971/#1972/#1974/#1981, and #2005/#2008/#2007 were already closed or closed here.
+**9 of the original 22 outstanding issues are now closed.**
+
+Four NEW security issues were filed that **outrank everything on the original list**, plus
+**PR #2028** (open) closing out #1995.
 
 Workspace issue-1720-llm-consolidation, phase 05-codify.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/04-validate/launch-ledger.md` — AUTHORITATIVE
-   orchestration record. Session-B sections at the END carry the full Wave 1–4 findings.
-2. This file's **In-flight state** + **Traps** below before touching anything.
-3. Follow-ups #1970–#1974 — but READ the reconciliation in the ledger first: it changed what
-   THREE of the five items ARE. Do not implement from the issue text alone.
+1. **The four new security issues — #2024, #2025, #2026, #2027.** Two are CRITICAL. All were
+   verified against source by the orchestrator, not taken from a subagent report.
+2. **PR #2028** — #1995 fix. Green and idempotent; needs merge.
+3. The **"specs were wrong" section** below. This is the load-bearing finding of the session.
 
 ## In-flight state
 
-**NONE.** PRs #1978 / #1979 / #1980 / #1982 / #1983 all merged. Open-PR board clean.
-Only untracked leftovers are the PRIOR session's `04-validate/*.diff` + `mock-guard-*` artifacts.
+**PR #2028 (open, chore/1995-isort-normalization)** — 2 commits, `c29a1fbce` + `c40a09a87`.
+Acceptance criterion VERIFIED: clean tree → `pre-commit run --all-files` exit 0 → 0 files
+modified. Not yet merged; CI not yet checked. Working tree clean, branch pushed.
 
-**#1973 is documented as well as fixed:** PR #1983 added a kaizen `[Unreleased]` CHANGELOG entry.
-The async→sync flip IS a breaking API change — verified against the released tag, not reconstructed:
-`git show kaizen-v2.45.0:...a2a.py` → `async def matches_requirement` (:95); main → `def` (:98).
-`/release` owns the version bump and folds `[Unreleased]` in.
+**Nothing else in flight.** No uncommitted work.
 
-**FLAGGED, deliberately not touched — `packages/kailash-kaizen/CHANGELOG.md` is structurally odd:**
-it carries a SECOND Keep-a-Changelog preamble and a stranded, EMPTY `## [Unreleased]` heading at
-~line 1550, mid-history above the 2.20.0 entry. Two changelogs were almost certainly concatenated.
-A reader scanning for unreleased work can land on the empty one instead of the real entry at the
-top. Restructuring a 1550-line changelog needs a deliberate pass — do NOT fold it into an unrelated PR.
+## The four new security issues (higher priority than the original 22)
 
-## Executed this session
+- **#2024 CRITICAL** — `FileSecretBackend` (`src/kailash/gateway/security.py:189`) documents
+  "encrypted file storage" and writes plaintext (`f.write(secret)` at :205). The module imports
+  and uses Fernet — in a *different* class. Fake-encryption stub, `zero-tolerance.md` Rule 2.
+- **#2025 CRITICAL** — `workflow_server.py:761-770` registers an UNAUTHENTICATED `{path:path}`
+  catch-all for GET/POST/PUT/DELETE/PATCH that forwards to the proxied backend and returns the
+  body. Only middleware in the file is CORS (:326); no `Depends` anywhere. `Authorization` is
+  stripped on forward (:779) so the backend can't re-authorize either.
+  **CodeQL framed this as SSRF — that framing is wrong.** Host is not attacker-controlled; no
+  authority pivot is constructible. Fixing "SSRF" closes nothing. The defect is the missing auth gate.
+- **#2026 HIGH** — `sso.py:924` returns a FORGED successful token response when
+  `"oauth.example.com" in token_url` (substring, on the *exception* path, so an attacker wants
+  it to fail). `mfa.py:31` logs the OTP body at INFO and returns True having sent nothing.
+- **#2027 HIGH/MED** — 5 sites: MD5 over AWS secret material as a cache key
+  (`resource_resolver.py:295`), workflow parameter VALUES logged
+  (`parameter_injector.py:411`), raw pre-sanitization value (`dataflow/core/nodes.py:1034`),
+  rate-limit identifier at WARN (`nexus rate_limit/middleware.py:184`), and a **world-readable
+  trust audit log** (`trust/plane/integration/cursor/hook.py:139`, `0o644`).
 
-- **PR #1978 merged** (5e1ae832f) — the 3 reported errors. `settings.json` registered
-  `.claude/hooks/coc-drift-warn.js`, deleted by loom sync 717c0f6e3 (SUBSUMED into
-  `multi-operator-sessionstart.js`, F13 closure). Reported issues 1 + 3 were ONE defect
-  (`cjs/loader:1478` is the top frame of that MODULE_NOT_FOUND stack). Also removed 7
-  `Write(...)` deny entries — CC ≥2.1.210 matches file-perm rules on `Edit()`/`Read()` ONLY,
-  so they were already inert; `Edit()` covers all file-editing tools. No enforcement lost.
-- **PR #1979 merged** (3 commits) — closed the CLASS. 4 hooks REGISTERED
-  (`analyze-completeness-guard` at PreToolUse(Skill) — block-severity, 9/9 fixtures, had NEVER
-  fired; `cross-ecosystem-disclosure-guard`; `wrapup-after-landing`;
-  `session-notes-incorporation-guard`), 14 MARKED `@settings-registration:`, `NotebookEdit` added
-  to every edit matcher (was missing everywhere → 7-8 registered hooks never fired on notebook
-  edits). `session-start.js`: 4 defects fixed + 2 self-found. Security review MERGE-WITH-FIXES
-  (no CRIT/HIGH); its 3 in-branch items fixed in-branch.
+**CodeQL backlog: 2,353 open alerts — 1 critical, 35 high, 57 medium.** Of the 36 high/critical,
+**11 are real, 25 are false positives.** The 25 are NOT yet dismissed — deliberately. Dismissing a
+security alert on an un-reverified analysis is the failure this session spent its effort avoiding.
+Spot-verify the two generic logging sinks (#11249, #11244) first; being wrong there hides a real leak.
 
-## validate-emit's 6 failures — TRIAGED (user-approved). 1 was real and LIVE.
+## THE finding: five issues had wrong SPECIFICATIONS, not wrong code
 
-`validate-emit.mjs` (full run) went **401 pass / 6 fail → 402 pass / 5 fail**.
+A diligent session implements each faithfully and closes it wrongly. Verify before implementing.
 
-**NOT A DISCLOSURE LEAK — do not re-escalate `gitignore-learning-parity`.** Verified twice
-(orchestrator + agent, independently): `git ls-files .claude/learning/` is EMPTY, `.gitignore:121/:123`
-ignore the whole dir, and the only tracked identity-shaped file `.claude/operators.roster.json` is
-all-PLACEHOLDER (`PLACEHOLDER-owner`, root_commit `0000000`, fingerprint `DEADBEEF…`). The check is a
-PRODUCER-side fence on what loom DISTRIBUTES (`sync-manifest.yaml::gitignore_additions` ⊇ loom's own
-`.gitignore`), asserting nothing about this repo's exposure. Its red is fail-closed-on-missing-input.
+- **#2004** — its own prescribed fix (route through `mask_error_text`) **provably does not redact**.
+  That helper handles URL userinfo and query params; the threat is a CLI flag `--token=`. No
+  scrubber in the monorepo covers CLI-flag credentials. Also a third leak surface the issue misses:
+  `SpawnSecurityError` puts the raw command in `.data`, which `to_dict()` sends over the wire.
+  **Correct fix is at the raise site** (`security.py:60-65`), storing a basename+hash, not at the
+  three call sites.
+- **#2006** — blames the `else` branch; a `ts: datetime = None` model (its own repro) takes the
+  `elif "default" in field_info` branch. Patching only `else` does not fix the reported case.
+  Real sites: `nodes.py:1780-1788` + `1845-1869`, not the stale numbers in the issue.
+- **#2015** — "auth path worst" is FALSE. 1 auth site vs **10 in `visualization/api.py` on
+  unauthenticated routes leaking DSNs**. Plus a 26th site the issue's grep cannot find
+  (`durable_workflow_server.py:480` uses an f-string spelling).
+- **#1997** — the binary is wrong. Coverage is **preset**-dependent: apparent groq/cohere coverage
+  is incidental (an AWS 40+ rule in `_OPAQUE_SHAPE_PATTERNS`, OFF on the conservative preset).
+  **All four vendors leak unconditionally on the conservative preset**, where nothing tests.
+- **#2022** — names the missing kwarg; the real defect is the **swallow** at `base_agent.py:743`
+  turning a `ConfigurationError` into "the LLM emitted a malformed plan".
 
-**THE REAL ONE — `codex-policies-fresh`, and it was LIVE (FIXED).** The un-enrolled posture that
-`settings.json` carefully preserves was being BYPASSED for Codex sessions. Committed
-`.codex-mcp-guard/policies.json` was a loom-shaped SUPERSET declaring 3 gates the live extraction
-does not: `genesis-anchor-guard.js`, `signing-mutation-guard.js`, `operator-gate.js` — all three
-present on disk but deliberately UNREGISTERED in `settings.json` (grep count 0). And it was wired:
-`.codex/config.toml` runs `.codex-mcp-guard/server.js`, whose contract is `exit 0 ⇒ allow; exit 2 ⇒
-deny`, while `genesis-anchor-guard.js:14` "hard-`block`s (exit 2) every `git commit` / `git push`"
-absent an enrollment marker. **So a forker running Codex here could be hard-blocked from committing
-— the exact fork-bricking mode the un-enrolled posture exists to prevent, leaked in via a SYNCED
-file while settings.json was correctly preserved.** Same class as the `coc-drift-warn` defect that
-opened this session, but with teeth. Regenerated → diff is REMOVALS ONLY (loosens Codex to match CC,
-cannot tighten) → `[ok] codex-policies-fresh`.
+## Decisions A–D — status
 
-**TRAP — the validator's own printed remediation command DOES NOT WORK.** It prints
-`node .claude/codex-mcp-guard/extract-policies.mjs …`, but `.claude/codex-mcp-guard` is a SYMLINK to
-`../.codex-mcp-guard`, and the script's run-as-main guard at `extract-policies.mjs:640`
-(`import.meta.url === \`file://${process.argv[1]}\``) compares a realpath against the symlink path →
-mismatch → **silent no-op at exit 0, nothing written**. Use the REAL path:
-`node .codex-mcp-guard/extract-policies.mjs .claude/hooks --write-policies .codex-mcp-guard/policies.json --settings .claude/settings.json`
-
-**Incidental real drift (FIXED):** `.claude/agents/frameworks/infrastructure-specialist.md` was the
-only 1 of 32 agents missing the `provenance-capture-tool.js` PreToolUse frontmatter hook — it was
-carve-out-`PRESERVED` (see `.claude/VERSION` changelog 1.0.2) across the sync that added it to the
-other 31. Now 32/32.
-
-**The remaining 5 are MIS-SCOPED, not defects here — do NOT `--allow=` them.** `provenance-parity`,
-`provenance-subagent-hooks`, `hook-delivery`, `coc-artifact-ids`, `gitignore-learning-parity` all
-assert contracts over `.claude/sync-manifest.yaml`, which has NEVER existed here and is not tracked
-or ignored — it is loom's DISTRIBUTION manifest. `validate-emit.mjs` references it at ~40 sites and
-**never reads `.claude/VERSION`**, so it has no repo-type awareness. Root cause of 5 of 6.
-- `coc-artifact-ids` additionally has a STRUCTURALLY DEFECTIVE skip predicate: `:3196` guards on
-  `resolve(root) !== EMIT_REPO` intending "am I loom?", but `EMIT_REPO` is
-  `path.resolve(__dirname,"..","..","..")` = *the repo containing the script*, so it is ALWAYS false
-  and the "loom checkout only" SKIP **can never fire in any repo loom syncs to**. A class defect.
-- Residual, stated not inferred: because that emit cannot run, the id-grammar/collision invariant
-  over this repo's 197 tracked `.coc/` files is **UNVERIFIED** — SKIP would be honest, not green.
-
-**ROUTING DECISION (orchestrator call, answers the agent's open question): the `validate-emit.mjs`
-predicate fix routes UPSTREAM via `/codify` Step 7a — do NOT patch it locally.** Three reasons:
-(1) `issue-triage-routing.md` binds it — this repo is `.claude/VERSION::type = coc-build`, so a
-COC-tooling fix goes cross-SDK-first → `/codify` proposal, never a local edit; (2) the `EMIT_REPO`
-bug is loom's and mis-fires in EVERY repo loom syncs this validator to — a local patch fixes 1 of N;
-(3) `validate-emit.mjs` matches the `self-referential-codify.md` Bin allowlist glob
-(`.claude/bin/{validate-*}.mjs`), so a local patch would need the Tier-1 full multi-agent redteam AND
-be Class-A non-durable — rebuilt away by the next `/sync-to-build`.
-**Corollary: do NOT widen `coc-hook-registration.yml` past `--check settings-hook-registration`
-until the upstream re-scoping lands.**
-
-## Wave tracker
-
-None in flight. All 7 agents reported and are done: `w2-loom-sync`, `w2-backlog-reconcile`,
-`w2-freshness`, `w3-markers`, `w3-sessionstart-fix`, `w3-secreview`, `w4-a2a-1973`.
-
-**PR #1980 merged** — #1973 a2a fixed. `matches_requirement` was `async def` with ZERO `await`
-tokens (regression traced to `24dcc4bb5`); made sync, not propagated async (the awaited callee
-`llm_capability_match` is itself sync). Bridges now forward `config=`/`correlation_id=` on the
-sync branch — without that the fix would have silently dropped judge config to `.env` defaults.
-3 extra silent-swallow siblings fixed. A review-found `UnboundLocalError` in the new WARN handler
-(provider/model bound inside the same try) fixed + 2 regression tests. 22 new Tier-1 tests
-(fail-first verified), 903 kaizen regression, 17/17 CI green. pyright independently confirms:
-a2a.py 11 errors → 8, the 3 lost being exactly the `coroutine * float` sites.
-
-## Outstanding ledger (forest) — RECONCILED, ranking inverted
-
-| ID | Item | Reconciliation verdict | Status |
-| -- | ---- | ---------------------- | ------ |
-| F-1973 | a2a unawaited coroutine | RANK 1 — was the only provably-100%-broken shipped feature | **DONE — PR #1980 merged** |
-| F1 | #1970 kaizen sanitize sweep | STILL-REAL. Issue's file path AND class name BOTH WRONG (`MultiProviderNode` exists nowhere; real owner `KaizenAIModelNode` at `ai_nodes.py:1498`, path has no `/ai/`). **DECOMPOSE** — 55 load-bearing sites | queued |
-| F2 | #1971 DataFlow 63-char id | STILL-REAL but 3 corrections: **kaizen** file not dataflow; **SQLite** path raising the **Postgres** limit (SQLite's is 128); wrong-DIALECT-selection, not over-long-id | queued |
-| F5 | #1974 sanitizer patterns | STILL-REAL (gaps 1-2). AC-3 premise CONTRADICTED — over-redaction already intentional+documented (`error_sanitizer.py:42-54`); a test written to AC-3 as worded FAILS on landing | queued |
-| F3 | #1972 nexus 3 failures | PARTIALLY SUPERSEDED — 2 of 3 are STALE TESTS asserting behavior production DELIBERATELY BLOCKS (`nexus/core.py:1512-1515`). **Fixing the product to green them RE-INTRODUCES the defect.** Port the tests | queued |
-| F6 | #1981 structured-output root cause | Found by walking a LIVE provider: `CapabilityMatchAgent`/`TextSimilarityAgent` do not enforce structured output → on a non-structured-output provider EVERY real score is 0.0 and A2A ranking is arbitrary. #1980 made it LOUD (`.degraded` WARN, uncached) but did NOT fix it. HIGH, own shard | **FILED #1981**, queued |
-
-## Decisions — ALL THREE RESOLVED (user "approved", 2026-07-25)
-
-- **(a) DONE** — `.github/workflows/coc-hook-registration.yml` gates
-  `validate-emit --check settings-hook-registration` on every PR touching `.claude/hooks/**`,
-  `.claude/settings.json`, or the validator. Proven to bite: an unregistered/unmarked hook →
-  exit 1 naming it; clean tree → exit 0. ~0.1s, no `npm install` (node: builtins only).
-  **Deliberately scoped to ONE check.** A full `validate-emit` run has 6 OTHER blocking failures
-  (provenance-parity, provenance-subagent-hooks, hook-delivery, coc-artifact-ids,
-  codex-policies-fresh, gitignore-learning-parity) — all loom/multi-CLI-emission concerns, not
-  hook-registration. Gating on the full run would red every PR day one, and the predictable
-  response is a blanket `--allow=` that restores the exact silence the gate removes.
-  **Those 6 are open for triage on their own terms — do NOT widen the gate by suppressing them.**
-- **(b) DONE** — venv rebuilt; see Traps for the outcome AND the correct recipe.
-- **(c) RESOLVED — no kailash-ml release owed.** The `CHANGELOG.md` touch that made
-  `build-repo-release-discipline.md` Rule 1a read "release required" was a 1-line scrub of a
-  HISTORICAL entry; it changes no wheel byte, and CHANGELOG.md is not in the wheel
-  (`[tool.hatch.build.targets.wheel] packages = ["src/kailash_ml"]`). Release-drift counts for
-  kailash / kailash-align / kailash-ml are accurate but all chore/test-only.
+- **A (#1997 fix shape) — the recommended option-3 was REFUTED.** xAI is **not a provider in this
+  codebase at all** (0 mentions in kaizen src, no `_FROM_ENV_PROVIDERS` entry), so half of it was
+  unactionable. `gsk_` has **0 in-repo literals** — cite Groq's published docs or don't pin it.
+  Cohere is NOT an easier class than mistral. See the #1997 comment for the corrected shape.
+- **B (#2022 boundary) — needs re-deciding.** There are **THREE** provider resolvers, not one:
+  `_provider_env.detect_provider_from_env` (env-keyed, what #1952 hardened),
+  `_env_model.detect_provider` (model-keyed, what the fix needs), `providers.auto_detect_provider`.
+  Publishing one of three without declaring which is canonical recreates the drift #1952 ended.
+- **C (#2023 per-step)** — untouched. Note the issue says 5 steps; **there are 8**. Fix the title.
+- **D (CodeQL #11400) — DONE.** Dismissed as false positive with evidence.
 
 ## Traps
 
-- **RESOLVED 2026-07-25 — venv rebuilt (user-approved).** `kailash-ml` / `kailash-align` no longer
-  import-fail; `.venv/bin/pre-commit` works natively again; 0 stale shebangs (was 119); 0 dangling
-  editable pointers (was 2). All 9 packages import at current versions. **`packages/kailash-ml/tests`
-  now collects 2594 tests (was 99 + 180 ERRORS); kailash-align collects 485.** ~3079 tests were
-  previously unrunnable.
-  - **REBUILD RECIPE — get this right or you will make it worse.** `uv venv --clear` alone picks the
-    NEWEST python (3.14.3) and `uv sync` alone installs only the 13-package SLIM CORE, dropping every
-    sub-package and all dev tooling. The correct invocation is:
-    `uv venv --python 3.13 --clear && uv sync --all-extras --dev`
-    (`--all-extras` is what pulls the 8 editable sub-packages via the `all` extra; there is NO
-    `.python-version` pin and `requires-python = ">=3.11"`, so the 3.13 pin must be explicit.)
-- Tests: ALWAYS `.venv/bin/python -m pytest`. Bare python/pyenv dies at conftest with
-  `ImportError: Node`. **An errored run is zero evidence, not a failure.**
-- **RESOLVED 2026-07-25 — 8 stale inter-package pins bumped (PR #1986, user-approved).** Root
-  `pyproject.toml` floors were last touched 2026-05-08 (`ea8d956e3`). Hook now reports 0 stale pins.
-  - **BEFORE BUMPING A PIN, READ THE COMMENT ABOVE THEM:** "bumping to unreleased versions breaks
-    release CI which installs from PyPI before the new release publishes." Local
-    `packages/*/pyproject.toml` versions are NOT automatically on PyPI — verify each against
-    `pypi.org/pypi/<pkg>/json` first. All 8 were published (local == PyPI) this time.
-  - `kailash-ml` crossed a MAJOR floor (1.x → 2.x): `kailash[ml]`/`kailash[all]` now fail to resolve
-    for anyone holding kailash-ml 1.x. Intended (lockstep monorepo) but a real tightening.
-  - `uv lock` also picked up 3 STALE RECORDED versions (kailash 2.61.0→2.62.0, kaizen
-    2.40.0→2.45.0, nexus 2.14.0→2.15.0) — the lock had drifted from the packages.
-  - Line 305's `kailash-dataflow>=2.0.3` is PROSE in a comment, not a live constraint. Leave it.
-- Clear `__pycache__` before running kaizen tests — stale bytecode renders tracebacks against the
-  non-existent pre-move path and you will read `???` for source.
-- Duplicate/cancelled CI runs read as red: a `conclusion: cancelled` job with all substantive
-  steps green is NOT a failure. Re-run it; pin the head SHA; check-then-merge as SEPARATE steps.
+- **A green subagent report is not a green run.** L8 reported "all 21 hooks Passed"; the verifying
+  run exited 1 on two hooks. Always re-run the gate yourself.
+- **`pre-commit run --all-files` and the commit-time hook can disagree.** Root cause was five
+  competing isort configs (fixed in #2028). If it recurs, compare `known_first_party` across
+  root + the three per-package `[tool.isort]` blocks.
+- **`git status --porcelain` counts staged AND unstaged** — `'^ M\|^.M'` matches both; it will
+  mislead you about what a hook just modified.
+- **Bash working directory PERSISTS between calls.** A stray `cd packages/...` silently made an
+  `isort --show-config` reading come from the wrong package; it produced a confident wrong
+  conclusion that had to be retracted. Re-anchor with an absolute `cd` when measuring config.
+- **`#2011` fires during pre-commit itself** — the Tier-1 hook reports "files were modified"
+  because `packages/kailash-kaizen/scripts/test_examples_implementation.py` writes
+  `kaizen_implementation_test.log` into the repo root at import. L6 identified the fix: RENAME the
+  file (the `test_` prefix IS the bug — it collects zero tests) + move `logging.basicConfig` into
+  `__main__`. Sibling `comprehensive_implementation_tester.py` has the same latent shape.
+- **#2029** — `test_concurrent_execution_performance` is a load-sensitive flake in the Tier-1
+  pre-commit hook (asserts 3x on a ~30ms workload). It will block commits on a busy machine.
+  Do NOT widen the threshold.
 - `.env` `OPENAI_API_KEY` is INVALID (live 401). Anthropic works.
-- `framework-first` hook false-positives "raw SQL string detected" on `session-start.js` (a Node
-  file, no SQL, no DB). Advisory only — but a detector that cries wolf trains operators to ignore it.
+- Tests: ALWAYS `.venv/bin/python -m pytest`. An errored run is zero evidence, not a failure.
 
-## Unreleased packages
+## Next session
 
-None new. Release-drift counts are accurate but NONE are release-worthy (chore/test-only; nothing
-in any wheel) — see (c) above.
+1. **Merge PR #2028** (check CI first, pinned to head SHA).
+2. **#2025 and #2024** — the two criticals, ahead of the remaining correctness bugs. #2025 needs
+   BOTH a correctness reviewer AND an adversarial security-reviewer (`agents.md`).
+3. **#2013** — verified inert (`set_auth_manager` has ZERO definitions repo-wide). Treat as
+   security-adjacent, not a correctness bug: `enable_auth=True` users believe they're authenticated.
+   `enable_monitoring` at `core.py:4826` has the IDENTICAL dead-`hasattr` shape — fix both.
+4. Then #2014 (reproduced; isolation dead on macOS/Windows under `spawn`), #2006, #2004, #2011,
+   #2010 (a 3-line deletion), #2002, #2023.
+
+## Outstanding ledger — remaining open from the original 22
+
+#1995 (PR open) · #1997 · #2000 · #2002 · #2004 · #2006 · #2010 · #2011 · #2012 · #2013 · #2014 ·
+#2015 · #2017–#2021 · #2022 · #2023 — plus new: #2024 #2025 #2026 #2027 #2029.
