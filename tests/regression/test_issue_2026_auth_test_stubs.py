@@ -297,10 +297,140 @@ def test_setup_sms_does_not_claim_verification_sent_when_nothing_was_sent():
     )
 
     assert result.get("verification_sent") is not True, (
-        "setup reported an SMS as sent although no transport delivered it: "
-        f"{result}"
+        "setup reported an SMS as sent although no transport delivered it: " f"{result}"
     )
     assert result.get("success") is False
+
+
+# ---------------------------------------------------------------------------
+# 5b. MFA verify must never be a path to enrolment
+# ---------------------------------------------------------------------------
+
+
+def test_verify_does_not_auto_enrol_an_unconfigured_user_with_123456():
+    """`verify` with '123456' auto-enrolled ANY user and minted a session."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="verify", user_id="attacker", code="123456", method="totp"
+    )
+
+    assert (
+        result.get("verified") is not True
+    ), f"verify auto-enrolled an unconfigured user and verified them: {result}"
+    assert result.get("session_id") is None
+    assert (
+        "attacker" not in node.user_mfa_data
+    ), "verify enrolled a user who was never set up"
+
+
+def test_verify_async_does_not_auto_enrol_an_unconfigured_user_with_123456():
+    """Same bypass existed on the async verify path."""
+    node = _mfa_node()
+
+    result = asyncio.run(node._verify_mfa_async("attacker", "123456", "totp"))
+
+    assert (
+        result.get("verified") is not True
+    ), f"async verify auto-enrolled an unconfigured user: {result}"
+    assert result.get("session_id") is None
+    assert "attacker" not in node.user_mfa_data
+
+
+def test_no_hardcoded_shared_totp_secret_is_ever_installed():
+    """The auto-enrolment used one shared secret for every 'test' user."""
+    node = _mfa_node()
+
+    for code in ("123456", "000000", "111111"):
+        node.execute(action="verify", user_id=f"u-{code}", code=code, method="totp")
+
+    installed = [
+        m.get("totp", {}).get("secret")
+        for m in (d.get("methods", {}) for d in node.user_mfa_data.values())
+    ]
+    assert "JBSWY3DPEHPK3PXP" not in installed
+
+
+# ---------------------------------------------------------------------------
+# 5c. MFA push challenges must not be reported as sent when undelivered
+# ---------------------------------------------------------------------------
+
+
+def test_push_challenge_raises_when_no_push_transport_configured():
+    """It returned success:True after ignoring the FCM response entirely."""
+    from kailash.nodes.auth import mfa
+
+    node = _mfa_node()
+    node.user_devices["user-1"] = [{"device_id": "d1", "push_token": "tok"}]
+
+    with pytest.raises(mfa.MFADeliveryError):
+        node._send_push_challenge("user-1", {"ip_address": "203.0.113.5"})
+
+    assert (
+        node.push_challenges == {}
+    ), "an undelivered challenge was left pending and could be verified"
+
+
+def test_push_challenge_does_not_contact_a_hardcoded_endpoint_with_a_fake_key():
+    """No transport configured => no outbound request at all."""
+    from kailash.nodes.auth import mfa
+
+    node = _mfa_node()
+    node.user_devices["user-1"] = [{"device_id": "d1", "push_token": "tok"}]
+
+    with patch("requests.post") as post:
+        with pytest.raises(mfa.MFADeliveryError):
+            node._send_push_challenge("user-1", {})
+
+    post.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 5d. MFA recovery must deliver the token, not hand it to the caller
+# ---------------------------------------------------------------------------
+
+
+def test_initiate_recovery_does_not_return_the_recovery_token():
+    """The token clears the second factor; returning it defeats recovery."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="initiate_recovery",
+        user_id="victim",
+        recovery_method="email",
+        recovery_destination="victim@example.net",
+    )
+
+    assert (
+        "recovery_token" not in result
+    ), f"recovery token was handed straight back to the caller: {result}"
+
+
+def test_initiate_recovery_requires_a_destination():
+    """Without a destination there is nowhere to deliver; refuse."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="initiate_recovery", user_id="victim", recovery_method="email"
+    )
+
+    assert result["success"] is False
+    assert "recovery_token" not in result
+
+
+def test_initiate_recovery_token_is_not_leaked_in_any_response_value():
+    """Belt-and-braces: the stored token must not appear anywhere in output."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="initiate_recovery",
+        user_id="victim",
+        recovery_method="email",
+        recovery_destination="victim@example.net",
+    )
+
+    stored = node.recovery_requests["victim"]["recovery_token"]
+    assert stored not in str(result)
 
 
 # ---------------------------------------------------------------------------
@@ -438,3 +568,68 @@ def test_unreachable_directory_does_not_authenticate():
         result = asyncio.run(node._simulate_directory_auth("anyone", "password123"))
 
     assert result["authenticated"] is False
+
+
+# ---------------------------------------------------------------------------
+# 9. Sibling: verification must never be a path to enrolment
+# ---------------------------------------------------------------------------
+
+
+def test_verify_does_not_auto_enrol_an_unknown_user():
+    """'123456' used to auto-enrol ANY user against a hardcoded secret.
+
+    ``_verify_mfa`` for a user with no MFA data returned a fully verified
+    session (``auto_setup: True``) whenever the code was ``123456``.
+    """
+    node = _mfa_node()
+    result = node._verify_mfa("never-enrolled", "123456", "totp")
+
+    assert result["verified"] is False
+    assert result["success"] is False
+    assert "session_id" not in result
+    assert "never-enrolled" not in node.user_mfa_data
+
+
+def test_verify_async_does_not_auto_enrol_an_unknown_user():
+    """Same defect existed on the async verification path."""
+    node = _mfa_node()
+    result = asyncio.run(node._verify_mfa_async("never-enrolled", "123456", "totp"))
+
+    assert result["verified"] is False
+    assert result["success"] is False
+    assert "session_id" not in result
+    assert "never-enrolled" not in node.user_mfa_data
+
+
+# ---------------------------------------------------------------------------
+# 10. Sibling: push challenges must not be reported as sent when unconfigured
+# ---------------------------------------------------------------------------
+
+
+def test_push_challenge_fails_closed_without_a_provider():
+    """It used to POST to live FCM with 'key=test_server_key', ignore the
+    outcome, and report the challenge as delivered."""
+    from kailash.nodes.auth import mfa
+
+    node = _mfa_node()
+    node.user_devices = {
+        "user-1": [{"device_id": "d1", "push_token": "tok", "platform": "ios"}]
+    }
+
+    with pytest.raises(mfa.MFADeliveryError):
+        node._send_push_challenge("user-1", {"ip_address": "203.0.113.9"})
+
+
+def test_push_challenge_does_not_retain_an_undelivered_challenge():
+    """A challenge that was never delivered must not stay verifiable."""
+    from kailash.nodes.auth import mfa
+
+    node = _mfa_node()
+    node.user_devices = {
+        "user-1": [{"device_id": "d1", "push_token": "tok", "platform": "ios"}]
+    }
+
+    with pytest.raises(mfa.MFADeliveryError):
+        node._send_push_challenge("user-1", {})
+
+    assert node.push_challenges == {}
