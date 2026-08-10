@@ -206,14 +206,26 @@ class FileSecretBackend(SecretBackend):
         """Store secret in file."""
         file_path = os.path.join(self.secrets_dir, f"{reference}.json")
 
-        with open(file_path, "w") as f:
+        # Create with 0o600 up front rather than writing then chmod'ing: the
+        # latter leaves the secret world-readable for the whole write window.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(file_path, flags, 0o600)
+        try:
+            # An existing file keeps its original mode, since the mode argument
+            # applies only on creation. fchmod acts on the open descriptor.
+            os.fchmod(fd, 0o600)
+            f = os.fdopen(fd, "w")
+        except Exception:
+            os.close(fd)
+            raise
+
+        with f:
             if isinstance(secret, str):
                 f.write(secret)
             else:
                 json.dump(secret, f)
-
-        # Set restrictive permissions
-        os.chmod(file_path, 0o600)
 
     async def delete_secret(self, reference: str) -> None:
         """Delete secret file."""

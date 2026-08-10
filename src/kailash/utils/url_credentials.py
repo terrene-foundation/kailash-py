@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import secrets as _secrets
 from typing import Optional, Tuple
 from urllib.parse import (
     ParseResult,
@@ -59,6 +60,7 @@ __all__ = [
     "mask_error_text",
     "mask_secret",
     "fingerprint_secret",
+    "process_local_config_key",
     "is_sensitive_query_key",
     "UNPARSEABLE_URL_SENTINEL",
 ]
@@ -729,6 +731,62 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
     return hashlib.blake2b(value.encode("utf-8"), digest_size=digest_bytes).hexdigest()[
         :length
     ]
+
+
+# Per-process keying material for ``process_local_config_key``. Regenerated on
+# every interpreter start, never persisted, never logged. Because the key is
+# secret and random, the derived cache key is not a brute-forceable oracle for
+# the credentials in its pre-image, which a bare digest would be.
+_PROCESS_KEY_MATERIAL = _secrets.token_bytes(32)
+
+
+def process_local_config_key(payload: str, *, length: int = 16) -> str:
+    """Derive an in-process cache/registry key from config that may hold secrets.
+
+    Use this for keys identifying a pooled resource (DB pool, HTTP session,
+    S3 client, message-queue connection) whose configuration includes
+    credentials. It replaces the ``hashlib.md5(config_str)[:8]`` idiom, which
+    is unsafe in two independent ways:
+
+    1. **Weak digest over secret material.** MD5 is broken and unkeyed, so the
+       key is a stable offline oracle: an attacker who sees it in a log and
+       knows the non-secret half of the config can brute-force the password.
+       CodeQL flags this as ``py/weak-sensitive-data-hashing``.
+    2. **32-bit truncation.** Eight hex characters collide at roughly 2**16
+       distinct configs (birthday bound). A collision does not merely miss the
+       cache — it returns *another tenant's* live pooled connection, already
+       authenticated with their credentials.
+
+    This helper keys BLAKE2b with per-process random material, so the output
+    cannot be reversed or brute-forced even by someone who knows the whole
+    plaintext config, and widens the default to 16 hex characters (64 bits).
+
+    The credentials deliberately REMAIN in the pre-image. Dropping them (keying
+    on host/user/region alone) would make a rotated password collide with the
+    key of the pool built from the *old* password, silently handing callers a
+    stale connection that authenticates with a revoked credential. Distinct
+    credentials must yield distinct keys; that is a correctness requirement,
+    not just a security one.
+
+    Because the keying material is per-process, the returned key is stable only
+    within one interpreter. It is suited to in-memory registries such as
+    ``kailash.resources.registry.ResourceRegistry``. It MUST NOT be persisted,
+    shared between processes, or used as a cross-node correlation id — use
+    :func:`fingerprint_secret` for that.
+
+    Args:
+        payload: Serialized configuration (e.g. ``json.dumps(cfg, sort_keys=True)``).
+        length: Hex-character length of the returned key (default 16 = 64 bits).
+
+    Returns:
+        The first ``length`` hex characters of keyed BLAKE2b over ``payload``.
+    """
+    digest_bytes = max(1, (length + 1) // 2)
+    return hashlib.blake2b(
+        payload.encode("utf-8"),
+        key=_PROCESS_KEY_MATERIAL,
+        digest_size=digest_bytes,
+    ).hexdigest()[:length]
 
 
 def mask_secret(value: Optional[str], *, keep_tail: int = 4) -> str:

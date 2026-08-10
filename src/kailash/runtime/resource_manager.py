@@ -12,7 +12,6 @@ Components:
 
 import asyncio
 import gc
-import hashlib
 import logging
 import random
 import re
@@ -32,7 +31,7 @@ except ImportError:
     psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
-from kailash.utils.url_credentials import mask_url
+from kailash.utils.url_credentials import mask_url, process_local_config_key
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +93,10 @@ class ResourceCoordinator:
         """
         with self._coordination_lock:
             # Generate resource ID based on type and config
+            # resource_config is caller-supplied and for connection pools carries
+            # a DSN/password, so the id must not be a reversible digest of it.
             config_str = str(sorted(resource_config.items()))
-            resource_id = (
-                f"{resource_type}_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
-            )
+            resource_id = f"{resource_type}_{process_local_config_key(config_str)}"
 
             if resource_id not in self._shared_resources:
                 # Create new resource

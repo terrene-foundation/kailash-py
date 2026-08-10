@@ -55,6 +55,10 @@ from .exceptions import (  # Issue #1519/#1520: typed conflict-target error prop
     UpsertConflictTargetError,
 )
 from .exceptions import is_conflict_target_error as _is_conflict_target_error
+from kailash.utils.url_credentials import (  # Issue #2027: field-name fingerprints
+    fingerprint_secret,
+)
+
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 
 
@@ -1024,14 +1028,21 @@ class NodeGenerator:
 
                     # 5. Check if any patterns were found and log
                     if value != original_value:
+                        # Never emit field_name or the raw pre-sanitization
+                        # value: the field may be `password`/`token` and the
+                        # value is attacker- or user-supplied plaintext. The
+                        # fingerprint still correlates repeat hits on one field.
+                        field_fp = fingerprint_secret(str(field_name))
                         for pattern in sql_injection_patterns:
                             if re.search(pattern, original_value):
                                 logger.warning(
-                                    f"Potential SQL injection detected in field '{field_name}': {pattern}"
+                                    f"Potential SQL injection detected in field "
+                                    f"fp={field_fp}: {pattern}"
                                 )
                                 break
                         logger.debug(
-                            f"Sanitized SQL injection in field '{field_name}': {original_value} -> {value}"
+                            f"Sanitized SQL injection in field fp={field_fp} "
+                            f"(value redacted)"
                         )
 
                     return value

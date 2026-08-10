@@ -407,8 +407,13 @@ class WorkflowParameterInjector:
                     if value is not None:
                         node_params[node_param] = value
                         if self.debug:
+                            # Log the value's TYPE only. A workflow parameter
+                            # named api_key/password/token would otherwise be
+                            # emitted verbatim, which is what every sibling
+                            # debug line in this method already avoids.
                             self.logger.debug(
-                                f"Mapping workflow input {workflow_param} -> {node_param} for node {node_id} (value: {value})"
+                                f"Mapping workflow input {workflow_param} -> {node_param} "
+                                f"for node {node_id} (type: {type(value).__name__})"
                             )
 
                 if node_params:

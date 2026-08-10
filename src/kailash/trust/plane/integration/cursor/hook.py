@@ -136,8 +136,17 @@ def _log_verdict(
         flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        fd = os.open(str(log_path), flags, 0o644)
+        # 0o600: this is the trust audit log (tool names, resources, verdicts,
+        # and raw verdict `details`), not a published artifact. The 0o644 writes
+        # elsewhere in the trust plane are public KEYS, which are meant to be
+        # world-readable; this is not.
+        fd = os.open(str(log_path), flags, 0o600)
         try:
+            # A log created by an earlier version persists at its original
+            # mode, since the mode argument applies only on creation. fchmod
+            # acts on the open descriptor, so it cannot be raced by a symlink
+            # swap the way a path-based chmod could.
+            os.fchmod(fd, 0o600)
             f = os.fdopen(fd, "a", encoding="utf-8")
         except Exception:
             os.close(fd)

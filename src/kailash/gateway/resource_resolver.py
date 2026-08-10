@@ -4,11 +4,12 @@ This module provides resource reference resolution to handle non-serializable
 objects like database connections, HTTP clients, and caches through the API.
 """
 
-import hashlib
 import json
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
+
+from ..utils.url_credentials import process_local_config_key
 
 from ..resources.factory import (
     CacheFactory,
@@ -97,7 +98,9 @@ class ResourceResolver:
 
         # Create unique key for this configuration
         config_str = json.dumps(connection_config, sort_keys=True)
-        pool_key = f"db_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
+        # connection_config carries the DB password; key it so the digest is
+        # neither a brute-forceable oracle nor collision-prone (see helper).
+        pool_key = f"db_{process_local_config_key(config_str)}"
 
         try:
             # Try to get existing pool
@@ -142,7 +145,8 @@ class ResourceResolver:
 
         # Create unique key
         config_str = json.dumps(config, sort_keys=True)
-        client_key = f"http_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
+        # config embeds the "Authorization: Bearer <token>" header.
+        client_key = f"http_{process_local_config_key(config_str)}"
 
         try:
             return await self.resource_registry.get_resource(client_key)
@@ -208,7 +212,8 @@ class ResourceResolver:
         config_str = json.dumps(
             {**connection_config, "type": queue_type}, sort_keys=True
         )
-        mq_key = f"mq_{queue_type}_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
+        # connection_config carries the broker password.
+        mq_key = f"mq_{queue_type}_{process_local_config_key(config_str)}"
 
         try:
             return await self.resource_registry.get_resource(mq_key)
@@ -292,7 +297,8 @@ class ResourceResolver:
         # Create unique key for this configuration
         region = connection_config.get("region", "us-east-1")
         config_str = json.dumps(connection_config, sort_keys=True)
-        s3_key = f"s3_{region}_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
+        # connection_config carries aws_secret_access_key.
+        s3_key = f"s3_{region}_{process_local_config_key(config_str)}"
 
         try:
             return await self.resource_registry.get_resource(s3_key)
