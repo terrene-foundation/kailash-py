@@ -908,11 +908,15 @@ def test_disable_with_admin_override_still_works():
 
 
 def test_malformed_setup_leaves_no_half_enrolment():
-    """The broad exception handler bypassed the rollback paths.
+    """Invariant guard, NOT a fail-first regression test.
 
-    A non-string phone reached the enrolment writer, which stored the method
-    before failing deeper in, so `methods` stayed non-empty and satisfied the
-    generate_backup_codes gate.
+    A review round reported that a non-string phone reached the enrolment
+    writer and left a half-written record behind, satisfying the
+    generate_backup_codes gate. That does not reproduce: NodeParameter(type=str)
+    coerces the value before ``run()`` is entered, so the delivery-failure
+    rollback already clears the record — this test passes against the code from
+    before the type-check was added. It is kept to pin the invariant, and is
+    labelled so no one mistakes it for evidence of a closed hole.
     """
     node = _mfa_node()
 
