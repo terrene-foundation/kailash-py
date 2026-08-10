@@ -821,13 +821,21 @@ class IsolatedHookManager(HookManager):
             logger.debug(f"Executing hook in isolated process: {handler_name}")
             result = await self.executor.execute_isolated(handler, context, timeout)
         except HookIsolationError as e:
-            # Already typed and already scrubbed at construction; re-logged so
-            # the operator sees WHICH control failed, then propagated.
+            # Re-logged so the operator sees WHICH control failed, then
+            # propagated unchanged.
+            #
+            # Scrubbed again here even though every construction site already
+            # scrubs what it puts in ``reason``. Logging ``e.reason`` directly
+            # would make this sink's safety depend on a property of some OTHER
+            # function -- and on every future one that raises this error. The
+            # F11 sink scanner rejects exception-attribute interpolation for
+            # exactly that reason, and it is right to: scrubbing is idempotent,
+            # so re-scrubbing costs nothing and keeps the guarantee local.
             logger.error(
                 "SECURITY: Hook isolation could not be established for %s; "
                 "the hook was NOT executed: %s",
                 handler_name,
-                e.reason,
+                scrub_remote_error(e),
             )
             self._update_stats(handler_name, 0, success=False)
             raise
