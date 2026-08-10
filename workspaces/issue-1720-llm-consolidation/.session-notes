@@ -8,6 +8,12 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 2 (burn-down session, post-quota-reset): main is `80b465e89`.** PR #2028 AND PR
+#2032 are both merged. #1995 closed. Four implementation lanes and two CRITICAL investigations
+are IN FLIGHT — **read `02-plans/launch-ledger.md` FIRST**; it is the authoritative,
+compaction-surviving record of which lanes are running, on which branches, and which preserved
+WIP commits they resume from. Do not spawn anything before reading it.
+
 **UPDATE (burn-down session): PR #2028 MERGED as `a101c81f9` — Gate 0 is CLEARED.** #1995 closed
 with the SHA. 1,819 files changed. Parallel burn-down waves are now running; see
 `02-plans/launch-ledger.md` for the durable agent-launch table (which lanes are in flight, on
