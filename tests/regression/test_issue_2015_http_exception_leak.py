@@ -19,6 +19,8 @@ in the client body is the one in the log, so an operator can correlate them.
 import asyncio
 import json
 import logging
+import pathlib
+import types
 
 import pytest
 
@@ -254,3 +256,120 @@ def test_mcp_tools_listing_does_not_leak_server_exceptions():
     ), f"/mcp/tools leaked the credential: {response.text}"
     assert DSN not in response.text, f"/mcp/tools leaked the DSN: {response.text}"
     assert "reference:" in response.json()["broken"]["error"]
+
+
+# ---------------------------------------------------------------------------
+# Error paths must be EXECUTED, not just reasoned about
+#
+# `safe_http_detail` is called from inside `except` branches. A module that
+# calls it without importing it raises NameError at request time -- while
+# handling another exception -- and no test that fails to enter the branch
+# can see that. So each converted branch below is actually driven.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+def test_enterprise_health_probes_drive_their_except_branches():
+    """All four /enterprise/health probes, each through its failure path.
+
+    Called unbound against a stub `self`: that executes the real method
+    bodies -- including the global lookup of `safe_http_detail` -- without
+    standing up an entire enterprise server.
+    """
+    from kailash.servers.enterprise_workflow_server import EnterpriseWorkflowServer
+
+    exc = ConnectionError(f"could not connect to {DSN}")
+
+    class _ExplodingRegistry:
+        def list_resources(self):
+            return ["primary_db"]
+
+        async def _is_healthy(self, name):
+            raise exc
+
+    # Per-resource failure -> degraded, with the driver error contained.
+    resource_health = asyncio.run(
+        EnterpriseWorkflowServer._check_resource_health(
+            types.SimpleNamespace(resource_registry=_ExplodingRegistry())
+        )
+    )
+    rendered = json.dumps(resource_health)
+    assert SECRET not in rendered, f"resource health leaked the credential: {rendered}"
+    assert resource_health["status"] == "degraded"
+    assert "reference:" in resource_health["resources"]["primary_db"]["error"]
+
+    # Enumeration itself failing -> the outer except branch.
+    class _ExplodingEnumeration:
+        def list_resources(self):
+            raise exc
+
+    outer = asyncio.run(
+        EnterpriseWorkflowServer._check_resource_health(
+            types.SimpleNamespace(resource_registry=_ExplodingEnumeration())
+        )
+    )
+    assert SECRET not in json.dumps(outer)
+    assert outer["status"] == "unhealthy"
+    assert "reference:" in outer["error"]
+
+    # Runtime + secret-manager probes: a raising attribute enters each except.
+    class _RaisesOnAccess:
+        def __getattr__(self, name):
+            raise exc
+
+    runtime_health = asyncio.run(
+        EnterpriseWorkflowServer._check_runtime_health(_RaisesOnAccess())
+    )
+    assert SECRET not in json.dumps(runtime_health)
+    assert "reference:" in runtime_health["error"]
+
+    secret_health = asyncio.run(
+        EnterpriseWorkflowServer._check_secret_manager_health(_RaisesOnAccess())
+    )
+    assert SECRET not in json.dumps(secret_health)
+    assert "reference:" in secret_health["error"]
+
+
+@pytest.mark.regression
+def test_every_module_calling_the_helper_also_imports_it():
+    """The import-omission class, swept structurally across all call sites.
+
+    Driving every converted branch behaviourally is the ideal, but some sit
+    behind servers that are expensive to stand up. This closes the same gap
+    for ALL of them at once, and keeps closing it for sites added later:
+    a module that calls `safe_http_detail` without importing it fails here
+    even if no test ever reaches its except branch.
+    """
+    import ast
+
+    repo_root = pathlib.Path(__file__).resolve().parents[2]
+
+    offenders = []
+    for path in list((repo_root / "src").rglob("*.py")) + list(
+        (repo_root / "packages").rglob("*.py")
+    ):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue  # scaffold templates carry substitution tokens
+        calls = any(
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "safe_http_detail"
+            for n in ast.walk(tree)
+        )
+        if not calls:
+            continue
+        bound = {
+            alias.asname or alias.name
+            for n in ast.walk(tree)
+            if isinstance(n, (ast.Import, ast.ImportFrom))
+            for alias in n.names
+        } | {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+        if "safe_http_detail" not in bound:
+            offenders.append(str(path.relative_to(repo_root)))
+
+    assert not offenders, (
+        "these modules call safe_http_detail without importing it; each is a "
+        f"NameError raised while handling another exception: {offenders}"
+    )
