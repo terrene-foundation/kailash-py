@@ -866,6 +866,92 @@ def test_revoke_then_setup_cannot_take_over_an_enrolled_account():
     )
 
 
+def test_disable_requires_admin_override_on_the_sync_surface():
+    """The round-4 gate landed on async only; sync stayed open.
+
+    `method` defaults to "totp", so the ungated `elif method:` branch was
+    always taken and `disable` remained a full reset-equivalent.
+    """
+    node = _enrolled_totp_node()
+
+    result = node.execute(action="disable", user_id="victim", method="totp")
+
+    assert result["success"] is False
+    assert (
+        "totp" in node.user_mfa_data["victim"]["methods"]
+    ), f"disable destroyed the factor with no override: {result}"
+
+
+def test_disable_then_setup_cannot_take_over_an_enrolled_account():
+    """The takeover chain with `revoke` swapped for `disable`."""
+    node = _enrolled_totp_node()
+
+    node.execute(action="disable", user_id="victim", method="totp")
+    setup = node.execute(action="setup", user_id="victim", method="totp")
+
+    assert setup["success"] is False
+    assert (
+        node.user_mfa_data["victim"]["methods"]["totp"]["secret"] == "JBSWY3DPEHPK3PXP"
+    )
+
+
+def test_disable_with_admin_override_still_works():
+    """Positive control: the administrative path is intact."""
+    node = _enrolled_totp_node()
+
+    result = node.execute(
+        action="disable", user_id="victim", method="totp", admin_override=True
+    )
+
+    assert result["success"] is True
+    assert "totp" not in node.user_mfa_data["victim"]["methods"]
+
+
+def test_malformed_setup_leaves_no_half_enrolment():
+    """The broad exception handler bypassed the rollback paths.
+
+    A non-string phone reached the enrolment writer, which stored the method
+    before failing deeper in, so `methods` stayed non-empty and satisfied the
+    generate_backup_codes gate.
+    """
+    node = _mfa_node()
+
+    node.execute(action="setup", user_id="user-1", method="sms", user_phone=12345)
+
+    assert not node.user_mfa_data.get("user-1", {}).get(
+        "methods"
+    ), "a malformed setup left a half-written method record behind"
+
+    codes = node.execute(action="generate_backup_codes", user_id="user-1")
+    assert codes["success"] is False
+
+
+def test_session_validation_does_not_return_idp_tokens():
+    """A session id must not be upgradable to the IdP's refresh token."""
+    node = _sso_node()
+    node.active_sessions["sess-1"] = {
+        "user_id": "alice",
+        "provider": "oauth2",
+        "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        "tokens": {
+            "access_token": "IDP-ACCESS-TOKEN",
+            "refresh_token": "IDP-REFRESH-TOKEN",
+        },
+    }
+
+    result = asyncio.run(node._validate_token("oauth2", {"token": "sess-1"}))
+
+    assert result["valid"] is True
+    assert "IDP-REFRESH-TOKEN" not in str(
+        result
+    ), f"the IdP refresh token was returned to a session holder: {result}"
+    assert "IDP-ACCESS-TOKEN" not in str(result)
+    # ...and the node still holds them internally.
+    assert node.active_sessions["sess-1"]["tokens"]["refresh_token"] == (
+        "IDP-REFRESH-TOKEN"
+    )
+
+
 def test_disable_requires_admin_override_on_the_async_surface():
     """A gate in one dispatcher and absent in the other is not a gate."""
     node = _enrolled_totp_node()

@@ -1168,9 +1168,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             # Update last activity
             session_data["last_activity"] = datetime.now(UTC).isoformat()
 
+            # Never hand the upstream IdP tokens back to a session holder.
+            # Returning session_data verbatim upgraded an app-scoped, revocable
+            # session id into the IdP's access_token AND refresh_token, which
+            # this app cannot revoke and which work directly against the
+            # provider's APIs (issue #2026). They stay in the internal store.
+            public_session_data = {
+                k: v for k, v in session_data.items() if k != "tokens"
+            }
+
             return {
                 "valid": True,
-                "session_data": session_data,
+                "session_data": public_session_data,
                 "user_id": session_data["user_id"],
                 "provider": session_data["provider"],
             }

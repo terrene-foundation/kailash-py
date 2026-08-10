@@ -515,6 +515,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_email = user_email or ""
             user_phone = final_user_phone
 
+            # Reject malformed identifiers BEFORE any state is written. These
+            # used to reach the enrolment writers and only fail deeper in
+            # (len() / "in" on an int), leaving a half-written method record
+            # behind even though the call reported failure (issue #2026).
+            for _label, _value in (
+                ("user_email", user_email),
+                ("user_phone", user_phone),
+                ("code", code),
+                ("method", method),
+            ):
+                if _value is not None and not isinstance(_value, str):
+                    return {
+                        "success": False,
+                        "error": f"{_label} must be a string",
+                        "action": action,
+                    }
+
             # self.log_node_execution("mfa_operation_start", action=action, method=method)
 
             # Check rate limits for verification operations (issue #803).
@@ -606,17 +623,28 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "get_methods":
                 result = self._get_user_methods(user_id)
             elif action == "disable":
-                if admin_override:
-                    # Disable all MFA for user (admin override)
-                    result = self._disable_all_mfa(user_id)
-                elif method:
-                    # Disable specific method
-                    result = self._disable_method(user_id, method)
-                else:
+                # `disable` deletes a factor, which is what `revoke` does and
+                # what `reset` does: it clears the way for a fresh `setup`, so
+                # it carries the same requirement. The `elif method:` branch
+                # that used to run ungated was ALWAYS taken -- `method` is
+                # defaulted to "totp" above, so the "method required" branch
+                # below it was unreachable -- which left the whole
+                # setup/revoke/reset guard reachable-around on this dispatcher
+                # while the async one was gated (issue #2026).
+                if not admin_override:
                     result = {
                         "success": False,
-                        "error": "Method required to disable, or use admin_override=True to disable all MFA",
+                        "error": (
+                            "Disabling a user's MFA destroys an enrolled "
+                            "factor; it requires admin_override=True."
+                        ),
                     }
+                elif method:
+                    # Disable a specific method.
+                    result = self._disable_method(user_id, method)
+                else:
+                    # Disable all MFA for user.
+                    result = self._disable_all_mfa(user_id)
             elif action == "initiate_recovery":
                 result = self._initiate_recovery(
                     user_id,
