@@ -13,6 +13,15 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — `FileSecretBackend` now actually encrypts (#2024)
+
+- **`kailash.gateway.security.FileSecretBackend` documented "encrypted file storage" and wrote cleartext (CRITICAL).** `store_secret` wrote the secret verbatim (`f.write(secret)` for strings, `json.dump` for everything else) and `get_secret` was the symmetric plain `json.load` — no decrypt step existed anywhere in the class, so the encryption claim was never true on the direct-instantiation path. Anyone who read the docstring and put the store on a shared, backed-up, or container-mounted volume was told their credentials were protected at rest when they were not. Secrets are now stored as a versioned envelope (`{"v":1,"kdf":"pbkdf2-sha256","iterations":100000,"salt":…,"ciphertext":…}`) holding a Fernet token keyed by PBKDF2-HMAC-SHA256 over a master key, with a fresh salt per secret persisted alongside the ciphertext.
+- **Migration — this is a break, not a deprecation.** (1) `FileSecretBackend(...)` now **raises `SecretEncryptionError` at construction** unless `KAILASH_SECRETS_MASTER_KEY` is set (or `master_key=` is passed). It deliberately does not invent a key: a backend that generates its own writes either an unrecoverable store or an unprotected one. (2) **Existing plaintext files are not readable** — `get_secret` raises `LegacyPlaintextSecretError`. There is no plaintext fallback by design; a fallback would let anyone able to write into the secrets directory swap an envelope for a file of their choosing and have it honoured. Treat every secret in an existing store as disclosed: rotate it, then store it again through the new backend.
+- **Path traversal on read, write, and delete.** The caller-supplied `reference` reached `os.path.join` unvalidated, so `"../../etc/kailash/authorized_keys"` escaped the store — including on `delete_secret`. All three methods now validate through `kailash.trust._locking.validate_id`; references are limited to `[A-Za-z0-9_-]+`.
+- **Read-side symlink follow / TOCTOU.** `get_secret` used `os.path.exists()` then `open()`; the path could be replaced by a symlink in between. It now uses a single `O_NOFOLLOW` open and refuses symlinks outright. (kailash 2.63.0 hardened only the write path.)
+- **World-listable secrets directory.** The store was created under the process umask (typically `0o755`), so the reference names alone disclosed which credentials existed. It is now `0o700`, applied through the new `kailash.utils.file_permissions.restrict_dir_to_owner` (which, like `restrict_to_owner`, returns `False` on Windows without `pywin32` rather than silently claiming protection it did not apply).
+- **Unrelated to `SecretManager`'s own Fernet layer**, whose key handling has its own defect tracked separately (#2041) — this fix deliberately does not route through it.
+
 ## [2.63.0] — 2026-08-05 — Dialect identifier budgets are fail-closed; bare install no longer breaks on the trust-plane MCP import; workflow `parameters` envelope binding restored on HTTP/CLI (#1971, #1996)
 
 ### Fixed

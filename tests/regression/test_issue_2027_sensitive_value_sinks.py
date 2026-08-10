@@ -39,6 +39,9 @@ PASSWORD = "sup3r-s3cret-p4ssw0rd"
 OTHER_PASSWORD = "a-completely-different-p4ssw0rd"
 BEARER = "sk-live-0123456789abcdefghij"
 AWS_SECRET = "wJalrXUtnFEMI-K7MDENG-bPxRfiCYEXAMPLEKEY"
+# FileSecretBackend fails closed without a master key since #2024; these tests
+# are about file permissions, so they supply one and move on.
+MASTER_KEY = "test-master-key-for-permission-tests"
 
 
 class _RecordingRegistry:
@@ -317,6 +320,7 @@ class TestFileSecretBackendPermissions:
             return real_dump(obj, fp, *args, **kwargs)
 
         monkeypatch.setattr(security_module.json, "dump", spying_dump)
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
 
         manager = FileSecretBackend(str(tmp_path))
         asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
@@ -327,13 +331,18 @@ class TestFileSecretBackendPermissions:
         ), f"secret was world-readable during the write (mode {observed[0]:o})"
 
     @posix_only
-    def test_final_mode_and_content_are_preserved(self, tmp_path) -> None:
+    def test_final_mode_and_content_are_preserved(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
         manager = FileSecretBackend(str(tmp_path))
         asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
 
         secret_file = tmp_path / "db-creds.json"
         assert _mode(secret_file) == 0o600
-        assert json.loads(secret_file.read_text())["password"] == PASSWORD
+        # Content is checked through the class, not by reading the file: since
+        # #2024 the file holds a ciphertext envelope, and asserting the
+        # password is readable from disk would now be asserting the bug.
+        assert asyncio.run(manager.get_secret("db-creds")) == {"password": PASSWORD}
+        assert PASSWORD not in secret_file.read_text()
 
 
 # ---------------------------------------------------------------------------
@@ -351,11 +360,13 @@ class TestRestrictToOwnerIsCrossPlatform:
     best-effort. These tests run on every platform.
     """
 
-    def test_writing_a_secret_does_not_raise_on_any_platform(self, tmp_path) -> None:
+    def test_writing_a_secret_does_not_raise_on_any_platform(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
         manager = FileSecretBackend(str(tmp_path))
         asyncio.run(manager.store_secret("db-creds", {"password": PASSWORD}))
-        secret_file = tmp_path / "db-creds.json"
-        assert json.loads(secret_file.read_text())["password"] == PASSWORD
+        assert asyncio.run(manager.get_secret("db-creds")) == {"password": PASSWORD}
 
     def test_writing_an_audit_log_does_not_raise_on_any_platform(
         self, tmp_path
@@ -425,7 +436,9 @@ class TestRestrictToOwnerIsCrossPlatform:
 
         assert caplog.text.count("NOT access-controlled") == 1
 
-    def test_both_write_paths_survive_an_os_without_fchmod(self, tmp_path) -> None:
+    def test_both_write_paths_survive_an_os_without_fchmod(
+        self, tmp_path, monkeypatch
+    ) -> None:
         """Reproduces the CI failure directly: Windows' ``os`` module simply
         has no ``fchmod`` attribute, so removing it here is the same condition
         rather than an approximation of it. Against the unguarded version this
@@ -440,8 +453,7 @@ class TestRestrictToOwnerIsCrossPlatform:
             _log_verdict(log_path, "Write", "/srv/x", "BLOCKED", "strict", {"w": "p"})
             assert json.loads(log_path.read_text().strip())["verdict"] == "BLOCKED"
 
+            monkeypatch.setenv("KAILASH_SECRETS_MASTER_KEY", MASTER_KEY)
             manager = FileSecretBackend(str(tmp_path))
             asyncio.run(manager.store_secret("creds", {"password": PASSWORD}))
-            assert json.loads((tmp_path / "creds.json").read_text())["password"] == (
-                PASSWORD
-            )
+            assert asyncio.run(manager.get_secret("creds")) == {"password": PASSWORD}
