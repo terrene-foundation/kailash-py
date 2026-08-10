@@ -1255,13 +1255,39 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         }
 
     async def _log_security_event(self, **event_data):
-        """Log security events using SecurityEventNode."""
-        await self.security_logger.async_run(  # type: ignore[reportAttributeAccessIssue]
-            event_type=event_data.get("event_type", "sso_event"),
-            source="sso_authentication_node",
-            timestamp=datetime.now(UTC).isoformat(),
-            details=event_data,
-        )
+        """Log security events using SecurityEventNode.
+
+        This called ``security_logger.async_run``, which ``SecurityEventNode``
+        does not define -- it exposes ``execute``. Every successful
+        :meth:`async_run` therefore raised ``AttributeError`` after doing its
+        work, so the whole async SSO surface was unusable and NO security event
+        was ever recorded. Invisible to the suite because nothing drove
+        ``async_run`` end to end; surfaced by the sync-bridge tests added for
+        issue #2026.
+
+        Dispatches to whichever surface the logger actually provides, and never
+        lets a logging failure abort the authentication that already succeeded
+        -- while still reporting that the event went unrecorded.
+        """
+        payload = {
+            "event_type": event_data.get("event_type", "sso_event"),
+            "source": "sso_authentication_node",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "details": event_data,
+        }
+
+        try:
+            for surface in ("async_run", "execute_async"):
+                fn = getattr(self.security_logger, surface, None)
+                if fn is not None:
+                    await fn(**payload)
+                    return
+            self.security_logger.execute(**payload)
+        except Exception as e:  # noqa: BLE001 - logging must not break auth
+            self.log_info(
+                f"Security event was NOT recorded ({type(e).__name__}); "
+                "the operation itself is unaffected."
+            )
 
     def get_sso_statistics(self) -> Dict[str, Any]:
         """Get SSO usage statistics."""

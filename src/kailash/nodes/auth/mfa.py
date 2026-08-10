@@ -35,19 +35,6 @@ class MFADeliveryError(NodeExecutionError):
     """
 
 
-def _phone_ref(phone: Optional[str]) -> str:
-    """Return a non-reversible reference to a phone number, for logs.
-
-    A phone number is subscriber PII. Logging even its last 4 digits puts part
-    of it in cleartext in every aggregator that ingests these logs, so a short
-    digest is used instead: it correlates log lines for the same destination
-    without disclosing any digit of it.
-    """
-    if not phone:
-        return "unknown"
-    return "sms:" + hashlib.sha256(str(phone).encode("utf-8")).hexdigest()[:10]
-
-
 def _send_sms(phone: str, message: str) -> bool:
     """Deliver an SMS through the module-level transport.
 
@@ -73,9 +60,8 @@ def _send_sms(phone: str, message: str) -> bool:
     # its last 4 digits: a digest still correlates entries for support without
     # putting any part of the subscriber number in cleartext.
     logger.warning(
-        "SMS delivery requested for %s (%d-char body) but no SMS transport is "
+        "SMS delivery requested (%d-char body) but no SMS transport is "
         "configured; nothing was sent.",
-        _phone_ref(phone),
         len(message),
     )
     raise MFADeliveryError(
@@ -241,6 +227,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         >>> print(f"Verified: {verify_result['verified']}")
     """
 
+    # Set once per process by __init__ so the "no audit sink" warning is stated
+    # loudly one time, rather than per operation where it reads as transient.
+    _audit_gap_warned: bool = False
+
     def __init__(
         self,
         name: str = "multi_factor_auth",
@@ -299,11 +289,22 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
 
-        # Initialize audit logging (disabled for debugging deadlock)
-        # self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
-        # self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
+        # Audit logging is NOT wired. This is a real gap, not a configuration
+        # choice, and it is stated loudly here rather than surfacing as a
+        # per-operation "Failed to audit" warning that reads like a transient
+        # error (issue #2026). The nodes were disabled while debugging a
+        # deadlock and never restored; re-wiring them needs that deadlock
+        # re-investigated, which is out of scope for the #2026 stub removal.
         self.audit_log_node = None
         self.security_event_node = None
+        if not MultiFactorAuthNode._audit_gap_warned:
+            MultiFactorAuthNode._audit_gap_warned = True
+            logger.warning(
+                "MultiFactorAuthNode has NO audit sink: setup, verify, revoke, "
+                "disable, reset and recovery -- including the admin-gated "
+                "destructive actions -- complete with no audit record. Deploy "
+                "behind a layer that records these operations."
+            )
 
         # User MFA data storage (in production, this would be a database)
         self.user_mfa_data: Dict[str, Dict[str, Any]] = {}
@@ -2331,7 +2332,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self.log_with_context(
                 "WARNING",
                 f"No SMS provider configured; no code was delivered to "
-                f"{_phone_ref(phone)} for user {user_id}",
+                f"the enrolled destination for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -2411,7 +2412,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 from_=self.sms_provider.get("from_number"),
                 to=phone,
             )
-            masked = _phone_ref(phone)
+            masked = "the enrolled destination"
             self.log_with_context(
                 "INFO", f"SMS sent via Twilio to {masked} (SID: {message.sid})"
             )
@@ -2524,9 +2525,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "ip_address": "unknown",  # In real implementation, get from request
         }
 
+        if self.audit_log_node is None:
+            # No sink is wired at all -- already reported once at init. Do not
+            # emit a per-operation "Failed to audit", which reads like a
+            # transient fault rather than a standing gap (issue #2026).
+            return
+
         try:
             await self.audit_log_node.async_run(**audit_entry)  # type: ignore[reportAttributeAccessIssue]
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
+            # Narrow: a broad `except Exception` here hid the fact that the
+            # sink was None behind a warning that looked transient.
             self.log_with_context("WARNING", f"Failed to audit MFA operation: {e}")
 
     def validate_session(self, session_id: str) -> Dict[str, Any]:

@@ -17,6 +17,7 @@ import base64
 import hashlib
 import json
 import re
+import secrets
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,24 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+
+
+def _is_enabled(value: Any) -> bool:
+    """Strictly interpret an insecure-mode opt-in flag.
+
+    Bare truthiness is wrong for these gates: config files and environment
+    variables deliver strings, and ``"false"``/``"0"``/``"no"`` are all truthy
+    in Python, so an operator explicitly DISABLING an insecure fallback would
+    have enabled it (issue #2026). Only a real ``True``, or a string that
+    spells one, counts; anything unrecognised is treated as OFF.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    return False
 
 
 @register_node()
@@ -194,7 +213,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         return Tls(
             validate=(
                 ssl.CERT_OPTIONAL
-                if self.connection_config.get("tls_validate_optional")
+                if _is_enabled(self.connection_config.get("tls_validate_optional"))
                 else ssl.CERT_REQUIRED
             ),
             version=ssl.PROTOCOL_TLSv1_2,
@@ -875,7 +894,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             # backend, so a real production directory named e.g.
             # ldap://test.corp.example.com was never actually contacted
             # (issue #2026).
-            if self.connection_config.get("simulate_directory") and not is_mocked:
+            if (
+                _is_enabled(self.connection_config.get("simulate_directory"))
+                and not is_mocked
+            ):
                 raise ImportError("Using directory simulation (opted in)")
 
             # Get connection config
@@ -921,7 +943,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             connection.unbind()
 
         except ImportError:
-            if not self.connection_config.get("simulate_directory"):
+            if not _is_enabled(self.connection_config.get("simulate_directory")):
                 # A health check must not report a connection it never made.
                 # This previously said "connected" with a full feature list
                 # whenever ldap3 was simply not installed (issue #2026).
@@ -1008,7 +1030,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         try:
             return await self._ldap_directory_search(object_type, filters, attributes)
         except ImportError:
-            if not self.connection_config.get("allow_insecure_credential_fallback"):
+            if not _is_enabled(
+                self.connection_config.get("allow_insecure_credential_fallback")
+            ):
                 self.log_error(
                     "Directory search requires ldap3, which is not installed, "
                     "and the built-in sample dataset is disabled; returning no "
@@ -1016,7 +1040,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 )
                 return []
         except Exception as e:
-            if not self.connection_config.get("allow_insecure_credential_fallback"):
+            if not _is_enabled(
+                self.connection_config.get("allow_insecure_credential_fallback")
+            ):
                 self.log_error(
                     f"Directory search failed ({e}) and the built-in sample "
                     "dataset is disabled; returning no results."
@@ -1300,18 +1326,24 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
     def _fallback_directory_auth(self, username: str, password: str) -> Dict[str, Any]:
-        """Built-in credential table, for tests and local development ONLY.
+        """Local-development credential check, for tests and dev ONLY.
 
         Fails closed unless explicitly opted into via
-        ``connection_config={"allow_insecure_credential_fallback": True}``.
+        ``connection_config={"allow_insecure_credential_fallback": True}``, AND
+        credentials are supplied by the operator via
+        ``connection_config["dev_credentials"] = {username: password}``.
 
-        Without that gate this table authenticated ANY username presenting the
-        default password (``valid_passwords.get(username, "password123")``
-        returns the default for unknown users), and it was reachable in
-        production whenever the real LDAP bind raised — an attacker who could
-        make the directory unreachable could log in as anyone.
+        The hardcoded table this replaced is GONE (issue #2026). It shipped
+        seven built-in accounts and, worse, defaulted the lookup to
+        ``"password123"``, so ANY username at all authenticated with that
+        password. It was reachable in production whenever the real LDAP bind
+        raised, which made an attacker who could take the directory offline able
+        to log in as anyone. There is now no built-in account and no default
+        password: an empty ``dev_credentials`` authenticates nobody.
         """
-        if not self.connection_config.get("allow_insecure_credential_fallback"):
+        if not _is_enabled(
+            self.connection_config.get("allow_insecure_credential_fallback")
+        ):
             self.log_error(
                 "Directory authentication is unavailable and the built-in "
                 "credential fallback is disabled; refusing to authenticate "
@@ -1327,17 +1359,15 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 ),
             }
 
-        valid_passwords = {
-            "test.user": "password123",
-            "normal.user": "password123",
-            "admin.user": "password123",
-            "session.user": "password123",
-            "auth.user": "password123",
-            "jdoe": "user_password",
-            "jsmith": "user_password",
-        }
+        # Operator-supplied only. No built-in accounts, and no default: an
+        # unknown username has no entry, so `expected` is None and the
+        # comparison below cannot succeed.
+        dev_credentials = self.connection_config.get("dev_credentials") or {}
+        expected = dev_credentials.get(username)
 
-        if password == valid_passwords.get(username, "password123"):
+        if expected is not None and secrets.compare_digest(
+            str(expected).encode("utf-8"), str(password).encode("utf-8")
+        ):
             return {
                 "authenticated": True,
                 # Name the principal explicitly: a caller that only sees

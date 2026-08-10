@@ -43,6 +43,10 @@ def ldap_node():
             # opted into (issue #2026). These tests exercise that table, so
             # they opt in; production deployments must not.
             "allow_insecure_credential_fallback": True,
+            # The hardcoded credential table was deleted (issue #2026): there
+            # are no built-in accounts and no default password, so a dev/test
+            # run must supply its own credentials explicitly.
+            "dev_credentials": {"jdoe": "user_password", "jsmith": "user_password"},
         },
     )
 
@@ -119,9 +123,14 @@ class TestFallbackDirectoryAuth:
         assert result["authenticated"] is False
         assert result["reason"] == "invalid_credentials"
 
-    def test_default_password(self, ldap_node):
+    def test_unknown_user_is_refused(self, ldap_node):
+        """No default password: an unlisted username authenticates with nothing.
+
+        This asserted the opposite until issue #2026 — the lookup defaulted to
+        "password123", so ANY username at all authenticated with it.
+        """
         result = ldap_node._fallback_directory_auth("unknown_user", "password123")
-        assert result["authenticated"] is True
+        assert result["authenticated"] is False
 
 
 class TestRealLDAPSearch:

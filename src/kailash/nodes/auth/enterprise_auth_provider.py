@@ -16,7 +16,6 @@ Unified authentication provider that orchestrates multiple authentication method
 import asyncio
 import base64
 import hashlib
-import hmac
 import json
 import secrets
 import time
@@ -58,6 +57,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         jwt_config: Dict[str, Any] | None = None,
         api_key_store: Dict[str, Dict[str, Any]] | None = None,
         api_key_pepper: str | None = None,
+        api_key_kdf_iterations: int = 10_000,
         user_permissions: Dict[str, List[str]] | None = None,
         default_permissions: List[str] | None = None,
         risk_assessment_enabled: bool = True,
@@ -95,6 +95,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # Server-side secret mixed into the API-key lookup digest so a stolen
         # api_key_store cannot be attacked by precomputation.
         self.api_key_pepper = api_key_pepper or ""
+        self.api_key_kdf_iterations = max(1, int(api_key_kdf_iterations))
         # Explicit user -> permissions mapping. Permissions are never inferred
         # from the text of a user_id (issue #2026); unlisted users get
         # default_permissions only.
@@ -574,15 +575,17 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     def _api_key_digest(self, api_key: str) -> str:
         """Derive the lookup digest for an issued API key.
 
-        Keyed HMAC-SHA256 rather than a bare digest: an attacker who obtains
-        ``api_key_store`` cannot precompute candidate digests without also
-        obtaining ``api_key_pepper``. A deliberately slow KDF (bcrypt/scrypt/
-        argon2) is NOT used here and is not appropriate: lookup compares the
-        presented key against every issued entry, so a slow hash would cost one
-        slow derivation per stored key per authentication. That trade is sound
-        because API keys are high-entropy values THIS SYSTEM generates, not
-        user-chosen passwords -- the offline-guessing attack a KDF defends
-        against does not apply.
+        PBKDF2-HMAC-SHA256, salted with ``api_key_pepper``. The derivation runs
+        ONCE per authentication -- the result is a lookup key, not a value
+        compared against every stored entry -- so an iteration count is
+        affordable here in a way it would not be for a scan.
+
+        The iteration count (``api_key_kdf_iterations``, default 10_000) is
+        modest by password-hashing standards, deliberately: API keys are
+        high-entropy values this system generates, so the offline-guessing
+        attack that motivates a 100k+ count does not apply. It buys
+        defence-in-depth against a leaked ``api_key_store`` without putting a
+        password-grade derivation on every API request.
 
         Args:
             api_key: The presented key.
@@ -590,8 +593,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         Returns:
             Hex digest used as the ``api_key_store`` lookup key.
         """
-        pepper = str(self.api_key_pepper or "").encode("utf-8")
-        return hmac.new(pepper, api_key.encode("utf-8"), hashlib.sha256).hexdigest()
+        salt = str(self.api_key_pepper or "kailash-api-key").encode("utf-8")
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            api_key.encode("utf-8"),
+            salt,
+            self.api_key_kdf_iterations,
+        ).hex()
 
     async def _authenticate_api_key(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]

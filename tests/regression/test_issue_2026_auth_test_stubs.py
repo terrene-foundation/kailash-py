@@ -34,10 +34,8 @@ pytestmark = pytest.mark.regression
 
 
 def _digest(raw: bytes) -> str:
-    """Mirror EnterpriseAuthProviderNode._api_key_digest with the default pepper."""
-    import hmac as _hmac
-
-    return _hmac.new(b"", raw, hashlib.sha256).hexdigest()
+    """Mirror EnterpriseAuthProviderNode._api_key_digest at its defaults."""
+    return hashlib.pbkdf2_hmac("sha256", raw, b"kailash-api-key", 10_000).hex()
 
 
 class _FailingHTTPClient:
@@ -120,6 +118,128 @@ def test_token_exchange_does_not_return_forged_token_fields():
 
 
 # ---------------------------------------------------------------------------
+# 1b. The sync surface must run the REAL implementation under a running loop
+# ---------------------------------------------------------------------------
+#
+# This is the highest-severity original defect: run() dispatched to a
+# "simplified synchronous implementation" whenever an event loop was already
+# running -- i.e. every FastAPI/Nexus caller -- and that implementation returned
+# authenticated=True with a caller-supplied user_id for ANY non-empty token.
+#
+# The branch is only reachable FROM INSIDE a running loop, so a test that calls
+# run() normally never executes it. These drive it explicitly.
+
+
+def _run_inside_running_loop(fn):
+    """Call `fn()` from a thread while an event loop runs in THIS thread.
+
+    `run()` checks `loop.is_running()` on the current thread's loop, so the
+    bridge branch is only taken when a loop is live here.
+    """
+    import concurrent.futures
+
+    async def _driver():
+        loop = asyncio.get_running_loop()
+        assert loop.is_running()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            # Run fn on a thread that ALSO sees a running loop by setting one.
+            return await loop.run_in_executor(None, fn)
+
+    return asyncio.run(_driver())
+
+
+def test_sync_bridge_runs_the_real_implementation_under_a_running_loop():
+    """`validate` with an arbitrary token must NOT authenticate.
+
+    The deleted fallback returned authenticated=True for any non-empty token.
+    """
+    node = _sso_node()
+
+    async def _drive():
+        assert asyncio.get_running_loop().is_running()
+        # Exercise the bridge exactly as run() would reach it.
+        return node._run_async_in_worker_thread(
+            action="validate",
+            provider="oauth2",
+            request_data={"token": "any-old-string", "username": "admin"},
+        )
+
+    result = asyncio.run(_drive())
+
+    assert (
+        result.get("authenticated") is not True
+    ), f"the sync bridge authenticated an arbitrary token: {result}"
+    assert result.get("user_id") != "admin"
+
+
+def test_sync_bridge_returns_the_real_result_for_a_valid_session():
+    """Positive control: a genuine session still validates through the bridge.
+
+    Without this, a bridge that simply refused everything would pass the
+    negative test above.
+    """
+    node = _sso_node()
+    node.active_sessions["sess-live"] = {
+        "user_id": "alice",
+        "provider": "oauth2",
+        "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        "tokens": {"access_token": "AT", "refresh_token": "RT"},
+    }
+
+    async def _drive():
+        return node._run_async_in_worker_thread(
+            action="validate",
+            provider="oauth2",
+            request_data={"token": "sess-live"},
+        )
+
+    result = asyncio.run(_drive())
+
+    assert result.get("valid") is True, f"a genuine session failed: {result}"
+    assert result["user_id"] == "alice"
+    assert "RT" not in str(result), "IdP tokens leaked through the bridge"
+
+
+def test_sync_bridge_propagates_a_failure_rather_than_faking_success():
+    """A failing exchange must surface as a failure, not a synthetic token."""
+    node = _sso_node(token_endpoint="https://idp.invalid/token")
+
+    async def _drive():
+        return node._run_async_in_worker_thread(
+            action="callback",
+            provider="oauth2",
+            request_data={"code": "abc", "state": "nope"},
+        )
+
+    result = asyncio.run(_drive())
+
+    assert result.get("authenticated") is not True
+    assert result.get("success") is not True
+
+
+def test_sync_bridge_has_a_bounded_timeout():
+    """A hung IdP must not block the caller's loop forever."""
+    from kailash.nodes.auth.sso import SSOAuthenticationNode
+
+    node = SSOAuthenticationNode(name="sso_slow", providers=["oauth2"])
+
+    assert node.sync_bridge_timeout is not None
+    assert node.sync_bridge_timeout > 0
+
+    async def _never(*args, **kwargs):
+        await asyncio.sleep(30)
+
+    node.async_run = _never
+    node.sync_bridge_timeout = 0.25
+
+    async def _drive():
+        return node._run_async_in_worker_thread(action="status", provider="oauth2")
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(_drive())
+
+
+# ---------------------------------------------------------------------------
 # 2. SSO userinfo must not derive an identity from the token's value
 # ---------------------------------------------------------------------------
 
@@ -179,7 +299,8 @@ def test_send_sms_does_not_log_full_phone_number(caplog):
             mfa._send_sms("+15555550123", "body")
 
     assert "+15555550123" not in caplog.text
-    assert "0123" not in caplog.text, "the last 4 digits still reached the log"
+    assert "0123" not in caplog.text, "part of the number still reached the log"
+    assert "5555550123" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -1871,11 +1992,52 @@ def test_directory_credential_fallback_fails_closed_by_default(username, passwor
 
 
 def test_directory_fallback_still_works_when_explicitly_enabled():
-    """Positive control: the opt-in path is unchanged for dev/test use."""
-    node = _directory_node(allow_insecure_credential_fallback=True)
+    """Positive control: the opt-in dev path still authenticates.
+
+    Credentials must now be supplied by the operator — the built-in table was
+    deleted (issue #2026), so there is no account to fall back on.
+    """
+    node = _directory_node(
+        allow_insecure_credential_fallback=True,
+        dev_credentials={"jdoe": "user_password"},
+    )
     result = node._fallback_directory_auth("jdoe", "user_password")
 
     assert result["authenticated"] is True
+
+
+def test_directory_fallback_refuses_an_unlisted_user_even_when_enabled():
+    """No default password: the opt-in path is not a blanket bypass.
+
+    The deleted table defaulted the lookup to "password123", so ANY username
+    authenticated with it once the flag was on.
+    """
+    node = _directory_node(
+        allow_insecure_credential_fallback=True,
+        dev_credentials={"jdoe": "user_password"},
+    )
+
+    assert (
+        node._fallback_directory_auth("unlisted", "password123")["authenticated"]
+        is False
+    )
+    assert node._fallback_directory_auth("jdoe", "wrong")["authenticated"] is False
+
+
+@pytest.mark.parametrize("flag", ["false", "0", "no", "off", "", "False"])
+def test_insecure_flags_are_not_enabled_by_a_truthy_string(flag):
+    """A config/env string like "false" is truthy and used to ENABLE the gate."""
+    node = _directory_node(
+        allow_insecure_credential_fallback=flag,
+        dev_credentials={"jdoe": "user_password"},
+    )
+
+    result = node._fallback_directory_auth("jdoe", "user_password")
+
+    assert (
+        result["authenticated"] is False
+    ), f"allow_insecure_credential_fallback={flag!r} enabled the insecure path"
+    assert result["reason"] == "directory_unavailable"
 
 
 def test_simulation_is_not_selected_by_the_server_hostname():
