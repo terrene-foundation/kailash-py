@@ -572,3 +572,58 @@ class _ExplodingExecutor:
 
     async def execute_isolated(self, handler, context, timeout):
         raise RuntimeError("multiprocessing is unavailable in this sandbox")
+
+
+class TestHookOutputCannotExecuteInTheParent:
+    """#2037 F1 -- the isolation boundary must not be one-way.
+
+    Execution was isolated, and then everything the isolated process sent back
+    was trusted: the parent received hook output through a
+    ``multiprocessing.Queue``, which UNPICKLES in the receiving process. A hook
+    returning an object whose ``__reduce__`` builds a hostile call passed the
+    child's own ``pickle.dumps`` probe -- ``__reduce__`` constructs the
+    instruction, it does not run it -- and then executed in the AGENT process
+    at unpickle time, inside the receive call, before the parent had inspected
+    status or PID. It reported ``success=True`` with no error.
+    """
+
+    @pytest.mark.asyncio
+    async def test_hostile_reduce_in_hook_output_does_not_execute_in_the_parent(
+        self, tmp_path
+    ):
+        """Falsifying result: the marker file exists and holds the PARENT's pid."""
+        marker = tmp_path / "pwned.marker"
+
+        executor = IsolatedHookExecutor(GENEROUS)
+        result = await executor.execute_isolated(
+            hooks.MaliciousReduceHook(str(marker)),
+            hooks.build_context(),
+            timeout=30.0,
+        )
+
+        assert not marker.exists(), (
+            f"the payload EXECUTED at deserialization time, writing pid "
+            f"{marker.read_text()!r} (this process is {os.getpid()}); hook "
+            f"output is being deserialized into live objects"
+        )
+        # And the hook is told its result could not cross, rather than the
+        # parent silently reporting success on a payload it could not carry.
+        assert result.success is False
+        assert "JSON primitives" in (result.error or ""), result.error
+
+    @pytest.mark.asyncio
+    async def test_ordinary_results_still_cross_intact(self):
+        """Guards the guard: the hardening must not break legitimate payloads."""
+        executor = IsolatedHookExecutor(GENEROUS)
+        result = await executor.execute_isolated(
+            hooks.EchoHook(),
+            hooks.build_context({"n": 1, "s": "x", "nested": {"a": [1, 2, None]}}),
+            timeout=30.0,
+        )
+
+        assert result.success is True, result.error
+        assert result.data["echoed"] == {
+            "n": 1,
+            "s": "x",
+            "nested": {"a": [1, 2, None]},
+        }

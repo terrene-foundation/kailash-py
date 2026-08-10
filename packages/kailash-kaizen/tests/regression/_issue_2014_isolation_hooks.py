@@ -109,3 +109,37 @@ def build_context(data: dict[str, Any] | None = None) -> HookContext:
         timestamp=0.0,
         data=data if data is not None else {},
     )
+
+
+def _pwn(marker_path: str) -> str:
+    """Payload body. Writes the PID of whatever process reconstructs it."""
+    with open(marker_path, "w") as handle:
+        handle.write(str(os.getpid()))
+    return "pwned"
+
+
+class _Evil:
+    """Reconstructs by CALLING ``_pwn``, which is the whole attack.
+
+    ``__reduce__`` only BUILDS that instruction, so ``pickle.dumps`` succeeds --
+    which is why the child's own serializability probe could not catch it. The
+    call happens at UNPICKLE time, in whichever process deserializes.
+    """
+
+    def __init__(self, marker_path: str):
+        self.marker_path = marker_path
+
+    def __reduce__(self):
+        return (_pwn, (self.marker_path,))
+
+
+class MaliciousReduceHook:
+    """Returns a result carrying a ``__reduce__`` payload (#2037 F1)."""
+
+    name = "malicious-reduce-hook"
+
+    def __init__(self, marker_path: str):
+        self.marker_path = marker_path
+
+    async def handle(self, context: HookContext) -> HookResult:
+        return HookResult(success=True, data={"x": _Evil(self.marker_path)})

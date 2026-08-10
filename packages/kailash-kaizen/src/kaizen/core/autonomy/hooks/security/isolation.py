@@ -20,10 +20,11 @@ against hostile hook code, and MUST NOT be relied on as one:
 - The memory cap is unavailable on macOS, which refuses ``setrlimit`` for
   ``RLIMIT_AS`` outright (reported at runtime by ``ResourceLimits.apply``).
   On Windows no resource limits apply at all.
-- The hook's return value is unpickled IN THE PARENT, so a hook returning an
-  object with a hostile ``__reduce__`` executes code in the parent process.
-  A hook is TRUSTED CODE running with the agent's privileges; run only hooks
-  you would run in-process.
+- A hook can read and exfiltrate anything the agent can.
+
+The child->parent channel is NOT a weak point: results cross as JSON
+primitives over ``send_bytes``/``recv_bytes``, so hook output is never
+unpickled in the agent process and cannot execute code there.
 
 Treat this as protection against buggy and crashing hooks, not against
 malicious ones.
@@ -32,13 +33,12 @@ SECURITY: CWE-265 (Privilege Issues)
 """
 
 import asyncio
+import json
 import logging
 import multiprocessing
 import os
-import pickle
 import sys
 import time
-from queue import Empty as QueueEmpty
 from typing import Any
 
 from kaizen.utils.credential_scrub import scrub_local_error, scrub_remote_error
@@ -73,7 +73,7 @@ _ISOLATION_START_METHOD = "spawn"
 #: timeouts ``HookManager.trigger`` defaults to.
 DEFAULT_STARTUP_TIMEOUT = 30.0
 
-#: Queue poll granularity while waiting for a child message.
+#: Pipe poll granularity while waiting for a child message.
 _POLL_INTERVAL = 0.02
 
 #: Grace period to drain a message the child wrote immediately before exiting.
@@ -309,6 +309,99 @@ class ResourceLimits:
         return unenforced
 
 
+#: Ceiling on a single child->parent message, before it is decoded.
+_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
+
+
+def _json_safe(value: Any, _depth: int = 0) -> Any:
+    """Reduce ``value`` to JSON primitives, or raise.
+
+    Rejects rather than coerces: a type that is not already a primitive is an
+    error the hook author must fix, not something to paper over with ``str()``.
+    """
+    if _depth > 32:
+        raise ValueError("hook result nests too deeply to cross the boundary")
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        out = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"hook result dict keys must be str, got {type(key)!r}")
+            out[key] = _json_safe(item, _depth + 1)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item, _depth + 1) for item in value]
+    raise TypeError(
+        f"hook result may only contain JSON primitives, got {type(value)!r}"
+    )
+
+
+def _decode(raw: bytes) -> tuple[tuple[str, Any, int] | None, str]:
+    """Decode one child message, validating its SHAPE before anyone unpacks it.
+
+    A malformed message is reported as ``malformed`` rather than allowed to
+    raise out of the supervision thread as an unpacking ``ValueError``.
+    """
+    try:
+        message = json.loads(raw.decode())
+    except Exception as e:
+        logger.error(
+            "SECURITY: isolated hook sent an undecodable message (%s bytes): %s",
+            len(raw),
+            scrub_local_error(e),
+        )
+        return None, "malformed"
+
+    if not isinstance(message, dict):
+        logger.error(
+            "SECURITY: isolated hook sent a non-object message of type %s",
+            type(message).__name__,
+        )
+        return None, "malformed"
+
+    status = message.get("status")
+    worker_pid = message.get("pid")
+    if status not in ("ready", "success", "error"):
+        logger.error(
+            "SECURITY: isolated hook sent an unrecognised status (type %s)",
+            type(status).__name__,
+        )
+        return None, "malformed"
+    if not isinstance(worker_pid, int) or isinstance(worker_pid, bool):
+        logger.error(
+            "SECURITY: isolated hook sent a non-integer pid of type %s",
+            type(worker_pid).__name__,
+        )
+        return None, "malformed"
+
+    return (status, message.get("payload"), worker_pid), "message"
+
+
+def _send(conn: Any, status: str, payload: Any, worker_pid: int) -> None:
+    """Send one message to the parent as JSON BYTES, never as a pickled object.
+
+    This is the fix for the parent-side deserialization hole (#2037 F1). The
+    worker used to ``put`` the ``HookResult`` on a ``multiprocessing.Queue``,
+    which pickles on the way in and UNPICKLES IN THE PARENT. A hook returning an
+    object whose ``__reduce__`` builds a hostile call passed the child's own
+    ``pickle.dumps`` probe -- ``__reduce__`` only constructs the instruction, it
+    does not run it -- and then executed in the AGENT process at unpickle time,
+    inside the receive call, before the parent had inspected the status or the
+    PID. The isolation boundary was one-way: execution was isolated, and then
+    everything the isolated process sent back was trusted.
+
+    Sending ``json.dumps(...).encode()`` over ``send_bytes`` closes it. The
+    parent's ``recv_bytes`` performs no object reconstruction at all, so there
+    is no ``__reduce__``, no ``find_class``, and no code path from hook output
+    to parent execution -- rather than an allowlist that must stay correct as
+    types are added.
+    """
+    conn.send_bytes(
+        json.dumps({"status": status, "payload": payload, "pid": worker_pid}).encode()
+    )
+
+
 def _isolated_hook_worker(
     limits: ResourceLimits,
     handler: HookHandler,
@@ -326,7 +419,7 @@ def _isolated_hook_worker(
     ``Can't get local object 'IsolatedHookExecutor.execute_isolated.<locals>._run_hook'``
     and the caller swallowed it and ran the hook in-process instead.
 
-    The worker speaks a 3-tuple protocol on ``result_queue``:
+    The worker speaks a 3-field JSON protocol on ``result_queue`` (a Pipe end):
     ``(status, payload, worker_pid)`` where status is one of
     ``ready`` / ``success`` / ``error``. ``ready`` is sent once the sandbox is
     fully in place and BEFORE any caller-supplied code runs, so the parent can
@@ -344,7 +437,7 @@ def _isolated_hook_worker(
         limits: Resource limits to apply before running any hook code
         handler: Hook handler to execute
         context: Hook context to pass to the handler
-        result_queue: Queue back to the parent process
+        result_queue: Write end of the pipe back to the parent process
     """
     worker_pid = os.getpid()
 
@@ -355,49 +448,50 @@ def _isolated_hook_worker(
         # parent must treat this as an isolation failure and never run the hook.
         # ``scrub_local_error`` matches ``ResourceLimits.apply``: this is an
         # in-process OS call whose errno text IS the diagnostic.
-        result_queue.put(
-            (
-                "error",
-                f"Resource limits could not be applied: {scrub_local_error(e)}",
-                worker_pid,
-            )
+        _send(
+            result_queue,
+            "error",
+            f"Resource limits could not be applied: {scrub_local_error(e)}",
+            worker_pid,
         )
         return
 
     # Sent before any caller-supplied code runs: it is the parent's proof that a
     # distinct process exists and that the sandbox is established.
-    result_queue.put(("ready", unenforced, worker_pid))
+    _send(result_queue, "ready", unenforced, worker_pid)
 
     try:
         start_time = time.perf_counter()
         result = asyncio.run(handler.handle(context))
-        result.duration_ms = (time.perf_counter() - start_time) * 1000
+        duration_ms = (time.perf_counter() - start_time) * 1000
     except Exception as e:
         # ``handler.handle`` is CALLER-SUPPLIED code, so ``e`` is whatever it
         # raised -- an HTTP client, a DB driver, an SDK -- and this string
         # crosses the process boundary into BOTH a parent log line and the
         # returned ``HookResult.error``. Scrubbed here, at the point it is
         # built, so neither consumer can re-leak it.
-        result_queue.put(("error", f"Hook error: {scrub_remote_error(e)}", worker_pid))
+        _send(result_queue, "error", f"Hook error: {scrub_remote_error(e)}", worker_pid)
         return
 
     try:
-        # Pickled explicitly rather than left to the queue's feeder thread: a
-        # feeder-thread pickling failure surfaces as a traceback on the child's
-        # stderr and a SILENTLY dropped item, which the parent would then
-        # report as the unrelated "did not return a result".
-        pickle.dumps(result)
+        # Reduced to JSON-safe PRIMITIVES here, in the child, rather than sent
+        # as an object. See ``_send``: the parent never unpickles hook output.
+        payload = {
+            "success": bool(result.success),
+            "data": _json_safe(result.data),
+            "error": None if result.error is None else str(result.error),
+            "duration_ms": float(duration_ms),
+        }
     except Exception as e:
-        result_queue.put(
-            (
-                "error",
-                f"Hook result cannot cross the process boundary: {scrub_remote_error(e)}",
-                worker_pid,
-            )
+        _send(
+            result_queue,
+            "error",
+            f"Hook result cannot cross the process boundary: {scrub_remote_error(e)}",
+            worker_pid,
         )
         return
 
-    result_queue.put(("success", result, worker_pid))
+    _send(result_queue, "success", payload, worker_pid)
 
 
 class IsolatedHookExecutor:
@@ -506,14 +600,18 @@ class IsolatedHookExecutor:
         parent_pid = os.getpid()
 
         # Explicit context, never the platform default: see
-        # ``_ISOLATION_START_METHOD``. The queue must come from the SAME context
+        # ``_ISOLATION_START_METHOD``. The pipe must come from the SAME context
         # as the process that receives it.
+        #
+        # A one-way ``Pipe``, not a ``Queue``: the parent reads with
+        # ``recv_bytes`` and decodes JSON, so hook output is never unpickled in
+        # the agent process. See ``_send`` (#2037 F1).
         mp_context = multiprocessing.get_context(_ISOLATION_START_METHOD)
-        result_queue = mp_context.Queue()
+        receiver, sender = mp_context.Pipe(duplex=False)
 
         process = mp_context.Process(
             target=_isolated_hook_worker,
-            args=(self.limits, handler, context, result_queue),
+            args=(self.limits, handler, context, sender),
             name=f"kaizen-isolated-hook-{handler_name}",
         )
 
@@ -523,7 +621,8 @@ class IsolatedHookExecutor:
             # synchronously and leaves no orphan process behind.
             process.start()
         except Exception as e:
-            result_queue.close()
+            receiver.close()
+            sender.close()
             raise HookIsolationError(
                 handler_name,
                 f"the isolated process could not be started under the "
@@ -536,22 +635,26 @@ class IsolatedHookExecutor:
         try:
             # The supervision loop blocks on a queue and on process reaping;
             # running it in a worker thread keeps the caller's event loop free.
+            # The child's end is closed in the PARENT immediately after start, so
+            # ``recv_bytes`` raises EOFError the moment the last writer (the
+            # child) goes away, instead of blocking for the full budget.
+            sender.close()
             return await asyncio.to_thread(
                 self._supervise,
                 process,
-                result_queue,
+                receiver,
                 handler_name,
                 timeout,
                 parent_pid,
             )
         finally:
             self._reap(process)
-            result_queue.close()
+            receiver.close()
 
     def _supervise(
         self,
         process: Any,
-        result_queue: Any,
+        receiver: Any,
         handler_name: str,
         timeout: float,
         parent_pid: int,
@@ -569,7 +672,7 @@ class IsolatedHookExecutor:
         # PHASE 1: readiness. Absence here means no isolated process is running
         # our worker, so there is nothing to fall back to except the very
         # in-process execution this control exists to prevent.
-        message, reason = self._receive(process, result_queue, self.startup_timeout)
+        message, reason = self._receive(process, receiver, self.startup_timeout)
         if message is None:
             raise HookIsolationError(
                 handler_name,
@@ -621,7 +724,7 @@ class IsolatedHookExecutor:
             )
 
         # PHASE 2: the hook's own result.
-        message, reason = self._receive(process, result_queue, timeout)
+        message, reason = self._receive(process, receiver, timeout)
 
         if message is None and reason == "timeout":
             logger.warning(
@@ -653,44 +756,80 @@ class IsolatedHookExecutor:
         status, payload, _worker_pid = message
 
         if status == "success":
+            if not isinstance(payload, dict):
+                logger.error(
+                    "SECURITY: isolated hook %s sent a success payload of type "
+                    "%s; expected an object",
+                    handler_name,
+                    type(payload).__name__,
+                )
+                return HookResult(
+                    success=False,
+                    error="Hook returned a malformed result",
+                    duration_ms=0.0,
+                )
+
             logger.debug(
                 "Hook executed successfully in isolated process: %s", handler_name
             )
-            return payload
+            # Reconstructed from PRIMITIVES here, in the parent. The child sent
+            # JSON, not an object graph, so nothing the hook returned can be
+            # instantiated in this process (#2037 F1).
+            return HookResult(
+                success=bool(payload.get("success")),
+                data=payload.get("data"),
+                error=payload.get("error"),
+                duration_ms=float(payload.get("duration_ms") or 0.0),
+            )
 
         logger.error("Hook failed in isolated process: %s", payload)
-        return HookResult(success=False, error=payload, duration_ms=0.0)
+        return HookResult(success=False, error=str(payload), duration_ms=0.0)
 
     @staticmethod
     def _receive(
-        process: Any, result_queue: Any, budget: float
+        process: Any, receiver: Any, budget: float
     ) -> tuple[tuple[str, Any, int] | None, str]:
         """
         Wait up to ``budget`` seconds for one message from the child.
 
-        Polls rather than blocking on ``Queue.get(timeout=budget)`` so that a
-        child which dies without writing is noticed immediately instead of
-        after the full budget. Reads BEFORE joining, so a result larger than the
-        pipe buffer cannot deadlock the child inside its own flush.
+        Polls rather than blocking for the whole budget so that a child which
+        dies without writing is noticed immediately. Reads BEFORE joining, so a
+        message larger than the pipe buffer cannot deadlock the child inside its
+        own flush.
+
+        Decodes with ``recv_bytes`` + ``json.loads``, NEVER ``recv()``: the
+        latter unpickles, which would execute a hostile ``__reduce__`` from hook
+        output inside the agent process (#2037 F1). The message shape is
+        validated here, before ``_supervise`` unpacks it.
 
         Returns:
-            ``(message, "message")`` on success, or ``(None, "timeout")`` /
-            ``(None, "exited")`` when no message arrived.
+            ``(message, "message")`` on success, or ``(None, reason)`` where
+            reason is ``timeout``, ``exited``, or ``malformed``.
         """
         deadline = time.monotonic() + budget
 
         while True:
             try:
-                return result_queue.get(timeout=_POLL_INTERVAL), "message"
-            except QueueEmpty:
-                pass
+                if receiver.poll(_POLL_INTERVAL):
+                    return _decode(receiver.recv_bytes(_MAX_MESSAGE_BYTES))
+            except (EOFError, OSError):
+                # Every writer is gone: the child died without completing a
+                # message. Not an "empty queue" -- a closed pipe.
+                return None, "exited"
 
             if not process.is_alive():
                 # Last chance: the child may have written just before exiting.
                 try:
-                    return result_queue.get(timeout=_DRAIN_TIMEOUT), "message"
-                except QueueEmpty:
-                    return None, "exited"
+                    if receiver.poll(_DRAIN_TIMEOUT):
+                        return _decode(receiver.recv_bytes(_MAX_MESSAGE_BYTES))
+                except (EOFError, OSError) as e:
+                    # Expected when the child died mid-write; recorded rather
+                    # than swallowed so the cause is not invisible.
+                    logger.debug(
+                        "Isolated hook pipe closed during final drain: %s",
+                        scrub_local_error(e),
+                    )
+                return None, "exited"
 
             if time.monotonic() >= deadline:
                 return None, "timeout"
