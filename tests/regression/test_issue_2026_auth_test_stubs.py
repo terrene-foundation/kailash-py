@@ -423,17 +423,144 @@ def test_initiate_recovery_requires_a_destination():
 
 def test_initiate_recovery_token_is_not_leaked_in_any_response_value():
     """Belt-and-braces: the stored token must not appear anywhere in output."""
-    node = _mfa_node()
+    node = _enrolled_email_node()
 
-    result = node.execute(
-        action="initiate_recovery",
-        user_id="victim",
-        recovery_method="email",
-        recovery_destination="victim@example.net",
-    )
+    with patch.object(node, "_smtp_send", return_value=None):
+        result = node.execute(
+            action="initiate_recovery", user_id="victim", recovery_method="email"
+        )
 
     stored = node.recovery_requests["victim"]["recovery_token"]
     assert stored not in str(result)
+
+
+# ---------------------------------------------------------------------------
+# 5e. Findings from the adversarial review of the fix itself
+# ---------------------------------------------------------------------------
+
+
+def _enrolled_email_node():
+    """A node with a real SMTP provider and an enrolled email factor."""
+    node = _mfa_node(
+        email_provider={
+            "smtp_host": "smtp.invalid",
+            "smtp_port": 587,
+            "username": "u",
+            "password": "p",
+        }
+    )
+    node.user_mfa_data["victim"] = {
+        "methods": {"email": {"email": "victim@example.net", "verified": True}},
+        "backup_codes": [],
+    }
+    return node
+
+
+def test_recovery_token_is_not_redeemable_as_an_mfa_code():
+    """Routing recovery through _send_email_code made the token a live factor.
+
+    The recovery token is a 24-hour credential; storing it as temp_email_code
+    would let it clear the second factor via action="verify".
+    """
+    node = _enrolled_email_node()
+
+    with patch.object(node, "_smtp_send", return_value=None):
+        node.execute(
+            action="initiate_recovery", user_id="victim", recovery_method="email"
+        )
+
+    token = node.recovery_requests["victim"]["recovery_token"]
+
+    assert (
+        node._verify_email_code("victim", token) is False
+    ), "the recovery token was accepted as a routine MFA second factor"
+    assert (
+        "temp_email_code" not in node.user_mfa_data["victim"]
+    ), "recovery delivery registered the token as a live MFA challenge"
+
+
+def test_recovery_is_delivered_to_the_enrolled_address_not_a_supplied_one():
+    """A caller-chosen destination would mail the victim's token to them."""
+    node = _enrolled_email_node()
+
+    with patch.object(node, "_smtp_send", return_value=None) as smtp:
+        result = node.execute(
+            action="initiate_recovery",
+            user_id="victim",
+            recovery_method="email",
+            recovery_destination="attacker@evil.tld",
+        )
+
+    assert (
+        result["success"] is False
+    ), f"recovery honoured an attacker-supplied destination: {result}"
+    smtp.assert_not_called()
+
+
+def test_recovery_uses_the_enrolled_address_when_none_is_supplied():
+    """Positive control: delivery goes to the enrolled address."""
+    node = _enrolled_email_node()
+
+    with patch.object(node, "_smtp_send", return_value=None) as smtp:
+        result = node.execute(
+            action="initiate_recovery", user_id="victim", recovery_method="email"
+        )
+
+    assert result["success"] is True
+    assert smtp.call_args[0][0] == "victim@example.net"
+
+
+def test_recovery_reports_failure_when_no_transport_is_configured():
+    """It must not claim 'Recovery token sent' having sent nothing."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"email": {"email": "victim@example.net"}},
+        "backup_codes": [],
+    }
+
+    result = node.execute(
+        action="initiate_recovery", user_id="victim", recovery_method="email"
+    )
+
+    assert result["success"] is False
+    assert "victim" not in getattr(node, "recovery_requests", {})
+
+
+def test_recovery_refuses_when_the_user_has_no_enrolled_destination():
+    """No enrolled address => nowhere safe to deliver."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="initiate_recovery", user_id="stranger", recovery_method="email"
+    )
+
+    assert result["success"] is False
+
+
+def test_generate_backup_codes_does_not_enrol_an_unenrolled_user():
+    """Issuing backup codes was enrolment by another name.
+
+    The returned codes are accepted directly by verify, so this reached the
+    same outcome as the removed "123456" auto-enrolment.
+    """
+    node = _mfa_node()
+
+    result = node.execute(action="generate_backup_codes", user_id="attacker")
+
+    assert result["success"] is False
+    assert "backup_codes" not in result
+    assert "attacker" not in node.user_mfa_data
+
+
+def test_send_push_failure_returns_a_result_dict_not_an_exception():
+    """Every other MFA failure returns a dict; push must not abort a workflow."""
+    node = _mfa_node()
+    node.user_devices["user-1"] = [{"device_id": "d1", "push_token": "tok"}]
+
+    result = node.execute(action="send_push", user_id="user-1", auth_context={})
+
+    assert result["success"] is False
+    assert result.get("challenge_sent") is False
 
 
 # ---------------------------------------------------------------------------
@@ -710,6 +837,91 @@ def test_api_key_honours_revocation_and_expiry():
         assert result["authenticated"] is False
 
 
+def test_jwt_without_a_sub_claim_does_not_authenticate_as_the_caller():
+    """A signed token with no subject fell back to the caller's user_id.
+
+    Any other token signed with the same key (a reset token, a service token)
+    became an impersonation primitive.
+    """
+    pyjwt = pytest.importorskip("jwt")
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    secret = "shared-signing-secret"
+    node = EnterpriseAuthProviderNode(name="eap_test", jwt_config={"secret": secret})
+    subjectless = pyjwt.encode(
+        {"exp": int(time.time()) + 3600, "purpose": "password-reset"},
+        secret,
+        algorithm="HS256",
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": subjectless},
+            user_id="admin",
+            risk_context={},
+        )
+    )
+
+    assert (
+        result["authenticated"] is False
+    ), f"a subject-less token authenticated as the caller's user_id: {result}"
+
+
+def test_jwt_public_key_cannot_be_used_with_an_hmac_algorithm():
+    """Otherwise anyone holding the PUBLIC key can mint HS256 tokens."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        jwt_config={"public_key": "not-a-pem-blob", "algorithms": ["HS256"]},
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": "a.b.c"}, user_id="n", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+
+
+def test_api_key_record_without_a_user_id_does_not_authenticate():
+    """An operator typo must not become an impersonation primitive."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    issued = "ak_" + "material-with-no-user-id-01234567"
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        api_key_store={hashlib.sha256(issued.encode()).hexdigest(): {"note": "oops"}},
+    )
+
+    result = asyncio.run(
+        node._authenticate_api_key(
+            credentials={"api_key": issued}, user_id="admin", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+
+
+def test_api_key_prefix_is_not_logged(caplog):
+    """api_key[:6] exposed 3 characters of real secret on every attempt."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+    api_key = "ak_SECRETMATERIAL0123456789abcdef"
+
+    with caplog.at_level(logging.DEBUG):
+        asyncio.run(
+            node._authenticate_api_key(
+                credentials={"api_key": api_key}, user_id="n", risk_context={}
+            )
+        )
+
+    assert api_key[:6] not in caplog.text
+    assert "SECRET" not in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # 6d. Sibling: permissions must not be inferred from the user_id's text
 # ---------------------------------------------------------------------------
@@ -780,6 +992,132 @@ def test_authorize_refuses_admin_action_for_a_username_containing_admin():
     )
 
     assert result["authorized"] is False
+
+
+def test_authorize_requires_a_session():
+    """Without a session, user_id is just a string the caller typed."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test", user_permissions={"alice": ["read", "write"]}
+    )
+
+    result = asyncio.run(
+        node._authorize(
+            user_id="alice",
+            session_id=None,
+            resource="billing",
+            permissions=["read"],
+            risk_context={},
+        )
+    )
+
+    assert result["authorized"] is False
+    assert result["reason"] == "session_required"
+
+
+def test_authorize_does_not_treat_an_empty_permission_request_as_a_pass():
+    """`permissions=[]` produced no missing permissions => authorized=True."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(name="eap_test")
+
+    result = asyncio.run(
+        node._authorize(
+            user_id="anyone",
+            session_id=None,
+            resource="billing",
+            permissions=[],
+            risk_context={},
+        )
+    )
+
+    assert result["authorized"] is False
+
+
+# ---------------------------------------------------------------------------
+# 6e. The session must belong to the principal the CREDENTIAL asserts
+# ---------------------------------------------------------------------------
+
+
+def test_authenticate_does_not_mint_a_session_for_a_caller_chosen_user_id():
+    """Verifying a credential then honouring a different requested identity.
+
+    An attacker holding any valid credential for 'alice' could request
+    user_id='admin' and receive an admin session.
+    """
+    pyjwt = pytest.importorskip("jwt")
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    secret = "signing-secret"
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        enabled_methods=["jwt"],
+        adaptive_auth_enabled=False,
+        risk_assessment_enabled=False,
+        jwt_config={"secret": secret},
+    )
+    alice_token = pyjwt.encode(
+        {"sub": "alice", "exp": int(time.time()) + 3600}, secret, algorithm="HS256"
+    )
+
+    # SessionManagementNode has no execute_async (a separate, pre-existing
+    # defect), so the session call is stubbed to record who the session is for.
+    created_for = {}
+
+    async def _fake_create(**kwargs):
+        created_for.update(kwargs)
+        return {"session_id": "sess-1"}
+
+    node.session_node.execute_async = _fake_create
+
+    result = asyncio.run(
+        node._authenticate(
+            auth_method="jwt",
+            credentials={"jwt_token": alice_token},
+            user_id="admin",
+            risk_context={},
+            auth_id="auth-1",
+        )
+    )
+
+    assert (
+        result["user_id"] == "alice"
+    ), f"session minted for the caller-supplied identity, not the credential's: {result}"
+    assert (
+        created_for["user_id"] == "alice"
+    ), f"the session itself was created for the wrong principal: {created_for}"
+
+
+# ---------------------------------------------------------------------------
+# 6f. Directory search fallback must be gated like the credential table
+# ---------------------------------------------------------------------------
+
+
+def test_directory_search_does_not_fabricate_users_when_ldap_fails():
+    """The sample roster feeds role/permission mapping that grants admin."""
+    node = _directory_node()
+
+    with patch.object(
+        node, "_ldap_directory_search", side_effect=ConnectionError("unreachable")
+    ):
+        results = asyncio.run(node._simulate_directory_search("users", {}))
+
+    assert (
+        results == []
+    ), f"fabricated directory users were returned on LDAP failure: {results}"
+
+
+def test_directory_search_fallback_still_available_when_opted_in():
+    """Positive control: dev/test use survives the gate."""
+    node = _directory_node(allow_insecure_credential_fallback=True)
+
+    with patch.object(
+        node, "_ldap_directory_search", side_effect=ConnectionError("unreachable")
+    ):
+        results = asyncio.run(node._simulate_directory_search("users", {}))
+
+    assert len(results) > 0
 
 
 # ---------------------------------------------------------------------------

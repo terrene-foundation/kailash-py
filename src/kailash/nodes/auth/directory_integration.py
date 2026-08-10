@@ -951,17 +951,34 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         filters: Dict[str, Any],
         attributes: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
-        """Search the directory using real LDAP when available, with fallback.
+        """Search the directory using real LDAP, with an opt-in sample fallback.
 
-        Attempts a real ldap3 search against the configured server. If ldap3
-        is not installed or the connection fails, falls back to the built-in
-        sample dataset for backward compatibility.
+        Attempts a real ldap3 search against the configured server. The built-in
+        sample dataset is used ONLY when explicitly opted into, because its
+        fabricated users and ``memberOf`` groups flow into
+        :meth:`_assign_roles_from_directory` and
+        :meth:`_map_groups_to_permissions`, both of which grant the ``admin``
+        role for any group name containing "admin". Ungated, an attacker who
+        could make the directory unreachable was provisioned as an admin
+        (issue #2026 -- the sibling surface of ``_fallback_directory_auth``).
         """
         try:
             return await self._ldap_directory_search(object_type, filters, attributes)
         except ImportError:
-            pass
+            if not self.connection_config.get("allow_insecure_credential_fallback"):
+                self.log_error(
+                    "Directory search requires ldap3, which is not installed, "
+                    "and the built-in sample dataset is disabled; returning no "
+                    "results."
+                )
+                return []
         except Exception as e:
+            if not self.connection_config.get("allow_insecure_credential_fallback"):
+                self.log_error(
+                    f"Directory search failed ({e}) and the built-in sample "
+                    "dataset is disabled; returning no results."
+                )
+                return []
             self.log_error(f"LDAP search failed, using fallback: {e}")
 
         return self._fallback_directory_search(object_type, filters, attributes)

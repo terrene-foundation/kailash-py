@@ -518,7 +518,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif action == "status":
                 result = self._get_mfa_status(user_id)
             elif action == "send_push":
-                result = self._send_push_challenge(user_id, auth_context or {})
+                # Keep the node's result-dict contract: every other MFA failure
+                # returns {"success": False, ...} rather than raising out of
+                # execute(), so an undelivered push must not abort the workflow.
+                try:
+                    result = self._send_push_challenge(user_id, auth_context or {})
+                except MFADeliveryError as e:
+                    result = {
+                        "success": False,
+                        "method": "push",
+                        "error": f"Push delivery failed: {e}",
+                        "challenge_sent": False,
+                    }
             elif action == "verify_push":
                 result = self._verify_push_challenge(user_id, challenge_id)
             elif action == "trust_device":
@@ -1682,11 +1693,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         with self._data_lock:
             if user_id not in self.user_mfa_data:
-                # Initialize user data if not exists
-                self.user_mfa_data[user_id] = {
-                    "methods": {},
-                    "backup_codes": [],
-                    "created_at": datetime.now(UTC).isoformat(),
+                # Issuing backup codes for an unenrolled user WAS enrolment by
+                # another name: the codes returned here are accepted directly by
+                # _verify_mfa, so this reached the same outcome as the removed
+                # "123456" auto-enrolment stub (issue #2026). Backup codes
+                # supplement an existing factor; they never establish one.
+                return {
+                    "success": False,
+                    "user_id": user_id,
+                    "error": "MFA not setup for user",
                 }
 
             # Generate backup codes
@@ -1954,30 +1969,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         # Use Twilio if configured
         if self.sms_provider and self.sms_provider.get("service") == "twilio":
-            try:
-                from twilio.rest import Client
-
-                client = Client(
-                    self.sms_provider.get("account_sid"),
-                    self.sms_provider.get("auth_token"),
-                )
-
-                message = client.messages.create(
-                    body=f"Your verification code: {code}",
-                    from_=self.sms_provider.get("from_number"),
-                    to=phone,
-                )
-
-                self.log_with_context(
-                    "INFO", f"SMS sent via Twilio to {phone[-4:]} (SID: {message.sid})"
-                )
-                delivered = True
-
-            except Exception as e:
-                # Fail closed. Swallowing this made the caller report
-                # "verification_sent": True for a code the user never got.
-                self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
-                raise MFADeliveryError(f"Failed to send SMS via Twilio: {e}") from e
+            self._twilio_send(phone, f"Your verification code: {code}")
+            delivered = True
         else:
             # No provider bound: say so at WARNING. This previously logged
             # "SMS code sent", which was false.
@@ -2018,48 +2011,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         # Use SMTP if configured
         if self.email_provider and self.email_provider.get("smtp_host"):
-            try:
-                import smtplib
-                from email.mime.multipart import MIMEMultipart
-                from email.mime.text import MIMEText
-
-                # Create message
-                msg = MIMEMultipart()
-                msg["From"] = self.email_provider.get("username")  # type: ignore[reportArgumentType]
-                msg["To"] = email
-                msg["Subject"] = "MFA Verification Code"
-
-                body = f"Your verification code: {code}"
-                msg.attach(MIMEText(body, "plain"))
-
-                # Send email
-                server = smtplib.SMTP(
-                    self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
-                    self.email_provider.get("smtp_port", 587),
-                )
-                server.starttls()
-                server.login(
-                    self.email_provider.get("username"),  # type: ignore[reportArgumentType]
-                    self.email_provider.get("password"),  # type: ignore[reportArgumentType]
-                )
-                server.send_message(msg)
-                server.quit()
-
-                self.log_with_context("INFO", f"Email sent via SMTP to {email}")
-                delivered = True
-
-            except Exception as e:
-                # Fail closed. Swallowing this made the caller report
-                # "verification_sent": True for a code the user never got.
-                self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
-                raise MFADeliveryError(f"Failed to send email via SMTP: {e}") from e
+            self._smtp_send(
+                email, "MFA Verification Code", f"Your verification code: {code}"
+            )
+            delivered = True
         else:
             # No provider bound: say so at WARNING. This previously logged
             # "Email code sent", which was false.
             self.log_with_context(
                 "WARNING",
                 f"No email provider configured; no code was delivered to "
-                f"{email} for user {user_id}",
+                f"{self._mask_email(email)} for user {user_id}",
             )
 
         # Store code for verification (in production, use secure storage)
@@ -2073,6 +2035,88 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         }
 
         return delivered
+
+    def _twilio_send(self, phone: Optional[str], body: str) -> None:
+        """Send one SMS via the configured Twilio provider.
+
+        The single Twilio transport, shared by code delivery and recovery-token
+        delivery. ``body`` is a credential-bearing message and is never logged.
+
+        Raises:
+            MFADeliveryError: Delivery failed.
+        """
+        try:
+            from twilio.rest import Client
+
+            client = Client(
+                self.sms_provider.get("account_sid"),
+                self.sms_provider.get("auth_token"),
+            )
+            message = client.messages.create(
+                body=body,
+                from_=self.sms_provider.get("from_number"),
+                to=phone,
+            )
+            masked = phone[-4:] if phone and len(phone) > 4 else "****"
+            self.log_with_context(
+                "INFO", f"SMS sent via Twilio to {masked} (SID: {message.sid})"
+            )
+        except Exception as e:
+            # Fail closed. Swallowing this made the caller report
+            # "verification_sent": True for a code the user never got.
+            self.log_with_context("ERROR", f"Failed to send SMS via Twilio: {e}")
+            raise MFADeliveryError(f"Failed to send SMS via Twilio: {e}") from e
+
+    def _smtp_send(self, email: Optional[str], subject: str, body: str) -> None:
+        """Send one email via the configured SMTP provider.
+
+        The single SMTP transport, shared by code delivery and recovery-token
+        delivery. ``body`` is credential-bearing and is never logged; the
+        recipient is logged masked.
+
+        Raises:
+            MFADeliveryError: Delivery failed.
+        """
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            msg = MIMEMultipart()
+            msg["From"] = self.email_provider.get("username")  # type: ignore[reportArgumentType]
+            msg["To"] = email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "plain"))
+
+            server = smtplib.SMTP(
+                self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
+                self.email_provider.get("smtp_port", 587),
+            )
+            server.starttls()
+            server.login(
+                self.email_provider.get("username"),  # type: ignore[reportArgumentType]
+                self.email_provider.get("password"),  # type: ignore[reportArgumentType]
+            )
+            server.send_message(msg)
+            server.quit()
+
+            self.log_with_context(
+                "INFO", f"Email sent via SMTP to {self._mask_email(email)}"
+            )
+        except Exception as e:
+            # Fail closed. Swallowing this made the caller report
+            # "verification_sent": True for a code the user never got.
+            self.log_with_context("ERROR", f"Failed to send email via SMTP: {e}")
+            raise MFADeliveryError(f"Failed to send email via SMTP: {e}") from e
+
+    @staticmethod
+    def _mask_email(email: Optional[str]) -> str:
+        """Mask an address for logging, mirroring the SMS last-4 treatment."""
+        if not email or "@" not in email:
+            return "****"
+        local, _, domain = email.partition("@")
+        head = local[:2] if len(local) > 2 else local[:1]
+        return f"{head}***@{domain}"
 
     async def _log_security_event(
         self, user_id: str, event_type: str, severity: str
@@ -2462,18 +2506,25 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         for a victim's user_id received their recovery credential directly
         (issue #2026).
 
+        The destination is resolved from the user's ENROLLED method record, not
+        from anything the caller supplies: recovery is by definition reachable by
+        an un-MFA'd principal, so a caller-chosen address would simply mail the
+        victim's recovery credential to the attacker.
+
+        The token is also delivered through a dedicated transport rather than
+        :meth:`_send_email_code` / :meth:`_send_sms_code`, because those store
+        what they send as ``temp_email_code`` / ``temp_sms_code`` -- which would
+        make the 24-hour recovery token redeemable as a routine second factor.
+
         Args:
             user_id: User initiating recovery.
             recovery_method: ``email``, ``sms``, or ``admin``.
-            recovery_destination: Enrolled address/number to deliver to. Required
-                for ``email`` and ``sms``.
+            recovery_destination: Ignored for delivery. When supplied it must
+                match the enrolled destination, and is rejected otherwise.
 
         Returns:
             Result describing that a token was issued and delivered. The token
             itself is not included.
-
-        Raises:
-            MFADeliveryError: The token could not be delivered.
         """
         if recovery_method not in ["email", "sms", "admin"]:
             return {
@@ -2481,49 +2532,80 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "error": f"Unsupported recovery method: {recovery_method}",
             }
 
-        if recovery_method in ("email", "sms") and not recovery_destination:
-            return {
-                "success": False,
-                "error": (
-                    f"recovery_destination is required for {recovery_method} "
-                    "recovery"
-                ),
+        with self._data_lock:
+            enrolled = (
+                self.user_mfa_data.get(user_id, {})
+                .get("methods", {})
+                .get(recovery_method, {})
+                if recovery_method in ("email", "sms")
+                else {}
+            )
+
+            destination = None
+            if recovery_method == "email":
+                destination = enrolled.get("email")
+            elif recovery_method == "sms":
+                destination = enrolled.get("phone")
+
+            if recovery_method in ("email", "sms") and not destination:
+                return {
+                    "success": False,
+                    "error": (
+                        f"No enrolled {recovery_method} destination for this "
+                        "user; recovery cannot be delivered."
+                    ),
+                }
+
+            # A supplied destination is a confirmation value, never a routing
+            # instruction. Mismatch is refused rather than honoured.
+            if recovery_destination and not secrets.compare_digest(
+                str(recovery_destination), str(destination or "")
+            ):
+                return {
+                    "success": False,
+                    "error": "recovery_destination does not match the enrolled destination",
+                }
+
+            recovery_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now(UTC) + timedelta(hours=24)  # 24 hour expiry
+
+            # Deliver BEFORE recording the request, so a request is never left
+            # pending against a token the user cannot have received.
+            try:
+                delivered = self._deliver_recovery_token(
+                    recovery_method, destination, recovery_token, user_id
+                )
+            except MFADeliveryError as e:
+                self.log_with_context(
+                    "ERROR", f"Recovery delivery failed for user {user_id}: {e}"
+                )
+                return {
+                    "success": False,
+                    "recovery_method": recovery_method,
+                    "error": f"Recovery token delivery failed: {e}",
+                }
+
+            if not delivered:
+                return {
+                    "success": False,
+                    "recovery_method": recovery_method,
+                    "error": (
+                        f"No {recovery_method} transport is configured; the "
+                        "recovery token was not delivered."
+                    ),
+                }
+
+            # Store recovery request
+            if not hasattr(self, "recovery_requests"):
+                self.recovery_requests = {}
+
+            self.recovery_requests[user_id] = {
+                "recovery_token": recovery_token,
+                "recovery_method": recovery_method,
+                "created_at": datetime.now(UTC).isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "used": False,
             }
-
-        # Generate recovery token
-        recovery_token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(UTC) + timedelta(hours=24)  # 24 hour expiry
-
-        # Deliver BEFORE recording the request, so a request is never left
-        # pending against a token the user cannot have received.
-        if recovery_method == "email":
-            self._send_email_code(
-                recovery_destination, recovery_token, user_id  # type: ignore[arg-type]
-            )
-        elif recovery_method == "sms":
-            self._send_sms_code(
-                recovery_destination, recovery_token, user_id  # type: ignore[arg-type]
-            )
-        else:
-            # "admin" recovery is an out-of-band operator process; the token is
-            # handed over through that channel, never through this response.
-            self.log_with_context(
-                "WARNING",
-                f"Admin MFA recovery issued for user {user_id}; the token must "
-                "be retrieved from recovery_requests by an authorised operator.",
-            )
-
-        # Store recovery request
-        if not hasattr(self, "recovery_requests"):
-            self.recovery_requests = {}
-
-        self.recovery_requests[user_id] = {
-            "recovery_token": recovery_token,
-            "recovery_method": recovery_method,
-            "created_at": datetime.now(UTC).isoformat(),
-            "expires_at": expires_at.isoformat(),
-            "used": False,
-        }
 
         return {
             "success": True,
@@ -2531,6 +2613,58 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "expires_in": 24 * 60 * 60,  # 24 hours in seconds
             "message": f"Recovery token sent via {recovery_method}",
         }
+
+    def _deliver_recovery_token(
+        self,
+        recovery_method: str,
+        destination: Optional[str],
+        recovery_token: str,
+        user_id: str,
+    ) -> bool:
+        """Deliver a recovery token WITHOUT registering it as an MFA code.
+
+        Deliberately does not reuse :meth:`_send_email_code` /
+        :meth:`_send_sms_code`: those persist the delivered value as a live
+        second-factor challenge, which would let the recovery token be replayed
+        against ``action="verify"``.
+
+        Returns:
+            True if a transport delivered the token, False if none is configured.
+
+        Raises:
+            MFADeliveryError: A transport IS configured but delivery failed.
+        """
+        body = (
+            "Your account recovery token (valid 24 hours): "
+            f"{recovery_token}\nIf you did not request this, ignore this message."
+        )
+
+        if recovery_method == "admin":
+            # Operator-mediated channel; the token is retrieved from
+            # recovery_requests by an authorised operator, never echoed here.
+            self.log_with_context(
+                "WARNING",
+                f"Admin MFA recovery issued for user {user_id}; the token must "
+                "be retrieved by an authorised operator.",
+            )
+            return True
+
+        if recovery_method == "email":
+            if not (self.email_provider and self.email_provider.get("smtp_host")):
+                return False
+            self._smtp_send(destination, "Account recovery", body)
+            self.log_with_context(
+                "INFO", f"Recovery token delivered by email for user {user_id}"
+            )
+            return True
+
+        if not (self.sms_provider and self.sms_provider.get("service") == "twilio"):
+            return False
+        self._twilio_send(destination, body)
+        self.log_with_context(
+            "INFO", f"Recovery token delivered by SMS for user {user_id}"
+        )
+        return True
 
     def _disable_all_mfa(self, user_id: str) -> Dict[str, Any]:
         """Disable all MFA for user (admin override)."""

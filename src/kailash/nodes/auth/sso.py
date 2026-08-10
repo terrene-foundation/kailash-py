@@ -17,10 +17,12 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -30,6 +32,19 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+
+# Shared, BOUNDED executor for the sync->async bridge in ``run()``. A per-call
+# ThreadPoolExecutor would spawn one OS thread plus one event loop per request,
+# which a burst of unauthenticated SSO callbacks could turn into resource
+# exhaustion.
+_SYNC_BRIDGE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=int(os.environ.get("KAILASH_SSO_SYNC_BRIDGE_WORKERS", "8")),
+    thread_name_prefix="kailash-sso-sync-bridge",
+)
+
+# Default ceiling on a single bridged operation, so a hung IdP cannot pin the
+# caller's event loop indefinitely.
+_SYNC_BRIDGE_TIMEOUT_SECONDS = 30.0
 
 
 @register_node()
@@ -53,6 +68,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         encryption_enabled: bool = True,
         session_timeout: timedelta = timedelta(hours=8),
         max_concurrent_sessions: int = 5,
+        sync_bridge_timeout: float = _SYNC_BRIDGE_TIMEOUT_SECONDS,
     ):
         # Set attributes before calling super().__init__()
         self.name = name
@@ -72,6 +88,8 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         self.encryption_enabled = encryption_enabled
         self.session_timeout = session_timeout
         self.max_concurrent_sessions = max_concurrent_sessions
+        # Ceiling on a bridged sync call (see _run_async_in_worker_thread).
+        self.sync_bridge_timeout = sync_bridge_timeout
 
         # Internal state
         self.active_sessions = {}
@@ -236,24 +254,34 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         caller-supplied ``user_id`` for ANY non-empty token, ``status`` always
         reported ``active: True``, and ``initiate`` returned a hardcoded
         Microsoft URL with ``client_id=test``. See issue #2026.
+
+        Note that ``future.result()`` blocks the calling thread, which IS the
+        event-loop thread. A shared bounded executor and a hard timeout keep a
+        slow or hung IdP from pinning the loop indefinitely or spawning an
+        unbounded number of threads. Async callers should await
+        :meth:`async_run` directly and avoid this path entirely.
         """
         start_time = time.time()
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    asyncio.run,
-                    self.async_run(
-                        action=action,
-                        provider=provider,
-                        request_data=request_data,
-                        user_id=user_id,
-                        redirect_uri=redirect_uri,
-                        attributes=attributes,
-                        callback_data=callback_data,
-                        **kwargs,
-                    ),
-                )
-                return future.result()
+            future = _SYNC_BRIDGE_EXECUTOR.submit(
+                asyncio.run,
+                self.async_run(
+                    action=action,
+                    provider=provider,
+                    request_data=request_data,
+                    user_id=user_id,
+                    redirect_uri=redirect_uri,
+                    attributes=attributes,
+                    callback_data=callback_data,
+                    **kwargs,
+                ),
+            )
+            return future.result(timeout=self.sync_bridge_timeout)
+        except FuturesTimeoutError as e:
+            raise TimeoutError(
+                f"SSO operation {action!r} exceeded "
+                f"{self.sync_bridge_timeout}s on the synchronous bridge"
+            ) from e
         finally:
             duration = time.time() - start_time
             self.log_info(f"SSO operation {action} completed in {duration:.3f}s")

@@ -379,6 +379,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "risk_score": risk_score,
             }
 
+        # The session belongs to the principal the CREDENTIAL asserts, not to
+        # the user_id the caller typed. Verifying a JWT/API key and then minting
+        # a session for a caller-chosen name let anyone holding any valid
+        # credential authenticate as anyone else (issue #2026).
+        asserted_user_id = primary_auth_result.get("user_id")
+        if isinstance(asserted_user_id, str) and asserted_user_id:
+            if user_id and asserted_user_id != user_id:
+                self.log_info(
+                    "Requested user_id does not match the authenticated "
+                    "principal; using the authenticated principal."
+                )
+            user_id = asserted_user_id
+
         # Adaptive authentication - determine if additional factors needed
         additional_factors_required = []
         if self.adaptive_auth_enabled:
@@ -520,11 +533,15 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if not api_key:
             return {"authenticated": False, "error": "API key required"}
 
-        # Log key metadata only -- an API key is a credential and must never be
-        # written to logs (rules/security.md "No secrets in logs").
+        if not isinstance(api_key, str):
+            return {"authenticated": False, "error": "Invalid API key"}
+
+        # Log a DIGEST prefix, never key material: api_key[:6] on an "ak_"-
+        # prefixed key exposed 3 real secret characters on every attempt.
+        key_digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
         self.log_info(
-            f"_authenticate_api_key - key_prefix={api_key[:6]}..., "
-            f"length={len(api_key)}, well_formed={api_key.startswith('ak_')}"
+            f"_authenticate_api_key - digest_prefix={key_digest[:8]}, "
+            f"length={len(api_key)}"
         )
 
         # An API key is a bearer credential and MUST be checked against issued
@@ -546,7 +563,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 ),
             }
 
-        key_digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
         record = None
         for candidate_digest, candidate_record in self.api_key_store.items():
             # Constant-time compare so a timing signal cannot reveal which
@@ -568,9 +584,16 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             self.log_info("API key validation failed - key expired")
             return {"authenticated": False, "error": "Invalid API key"}
 
+        # A record without a user_id used to fall back to the CALLER-supplied
+        # user_id, turning an operator typo into an impersonation primitive.
+        principal = record.get("user_id")
+        if not isinstance(principal, str) or not principal:
+            self.log_info("API key validation failed - store record has no user_id")
+            return {"authenticated": False, "error": "Invalid API key"}
+
         return {
             "authenticated": True,
-            "user_id": record.get("user_id", user_id),
+            "user_id": principal,
             "auth_method": "api_key",
             "api_key_id": key_digest[:10] + "...",
         }
@@ -613,14 +636,42 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "error": ("JWT authentication requires PyJWT. Install kailash[auth]."),
             }
 
+        # Refuse a key/algorithm family mismatch rather than letting an
+        # asymmetric public key be used as an HMAC secret: with a non-PEM
+        # public key and HS256 in the list, anyone holding the PUBLIC key can
+        # mint tokens.
+        algorithms = list(self.jwt_config.get("algorithms", ["HS256"]))
+        symmetric = {a for a in algorithms if a.upper().startswith("HS")}
+        asymmetric = {a for a in algorithms if not a.upper().startswith("HS")}
+        if symmetric and asymmetric:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['algorithms'] mixes symmetric and asymmetric "
+                    "families; configure exactly one family."
+                ),
+            }
+        if self.jwt_config.get("public_key") and symmetric:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['public_key'] cannot be used with an HMAC "
+                    "algorithm; set an asymmetric algorithm (e.g. RS256)."
+                ),
+            }
+
         try:
             payload = pyjwt.decode(
                 jwt_token,
                 verification_key,
-                algorithms=self.jwt_config.get("algorithms", ["HS256"]),
+                algorithms=algorithms,
                 audience=self.jwt_config.get("audience"),
                 issuer=self.jwt_config.get("issuer"),
-                options={"require": ["exp"]},
+                # "sub" is required: without it the identity silently fell back
+                # to the CALLER-supplied user_id, so any token signed with this
+                # key that carries no subject (a reset token, a service token)
+                # became an impersonation primitive.
+                options={"require": ["exp", "sub"]},
             )
         except Exception as e:
             # Do not echo the library's message back to the caller: it
@@ -629,9 +680,20 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             self.log_info(f"JWT validation failed: {type(e).__name__}")
             return {"authenticated": False, "error": "Invalid JWT token"}
 
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject:
+            self.log_info("JWT validation failed: missing or non-string sub")
+            return {"authenticated": False, "error": "Invalid JWT token"}
+
+        if not self.jwt_config.get("issuer"):
+            self.log_info(
+                "JWT accepted without an issuer check: jwt_config['issuer'] is "
+                "unset, so any token signed with this key is accepted."
+            )
+
         return {
             "authenticated": True,
-            "user_id": payload.get("sub", user_id),
+            "user_id": subject,
             "auth_method": "jwt",
             "jwt_claims": payload,
         }
@@ -1157,20 +1219,38 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         **kwargs,
     ) -> Dict[str, Any]:
         """Authorize user access to resource."""
-        # Validate session
-        if session_id:
-            session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
-                action="validate", session_id=session_id
-            )
+        # A session is proof of authentication. Without one, user_id is just a
+        # string the caller typed, so authorization cannot proceed: this
+        # previously skipped validation entirely and authorized the caller's
+        # claimed identity (issue #2026).
+        if not session_id:
+            return {
+                "authorized": False,
+                "error": "Session required for authorization",
+                "reason": "session_required",
+            }
 
-            if not session_validation.get("valid"):
-                return {
-                    "authorized": False,
-                    "error": "Invalid session",
-                    "reason": "session_invalid",
-                }
+        session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            action="validate", session_id=session_id
+        )
 
-            user_id = session_validation.get("user_id", user_id)
+        if not session_validation.get("valid"):
+            return {
+                "authorized": False,
+                "error": "Invalid session",
+                "reason": "session_invalid",
+            }
+
+        # The session's subject wins over any caller-supplied user_id.
+        user_id = session_validation.get("user_id", user_id)
+
+        # An empty permission request is not a free pass.
+        if not permissions:
+            return {
+                "authorized": False,
+                "error": "No permissions requested",
+                "reason": "no_permissions_requested",
+            }
 
         # Check permissions (simulation)
         # In production, integrate with RBAC/ABAC system
