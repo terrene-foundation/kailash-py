@@ -8,6 +8,50 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 12 (FINAL): main `aba8a0878`. ELEVEN issues closed, 20 PRs merged.**
+Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, #2026, + masker follow-up.
+**Both CRITICALs down.** All lane PRs merged; all worktrees retired except `lane-1c` (below).
+
+## TRAP 9 — SKIPPED IS NOT PASSED (a check surface reporting green for work never run)
+
+A **CONFLICTING** PR cannot have its merge ref built, so GitHub reports the ENTIRE matrix as
+`skipped`. Any summary counting "not failing" as green reads that as a pass. Lane 1C caught itself
+about to report CI green off those skips. On #2035's head the skipped rows included
+`Test (Python ${{ matrix.python-version }})` — an UNEXPANDED matrix template, i.e. the duplicate
+run's placeholder.
+
+**Always separate success from skipped:**
+`gh api .../commits/<sha>/check-runs --jq '[.check_runs[]]|group_by(.conclusion)|map("\(.[0].conclusion): \(length)")'`
+
+Same class as **#2038** (Tier-2 `continue-on-error`). Also: an empty retrigger commit matching none
+of `unified-ci.yml`'s `paths:` filters fires NOTHING.
+
+## Bonus finding — a branch no test had ever executed
+
+`_log_security_event` called `security_logger.async_run`, which `SecurityEventNode` does not
+define. **Every successful async SSO operation raised `AttributeError` AFTER doing its work** — the
+async surface was unusable and no SSO security event was ever recorded. Found only because the
+sync-bridge tests drove that path. Fixed in #2035.
+
+## Residue for the next session
+
+- **`lane-1c` worktree left INTACT** on `tmp/reword` with stale `UU` index entries from an abandoned
+  reword. **Everything in it is MERGED** (`580777bea` contained in `origin/main`; fix verified on
+  main). No rebase in progress. Safe to remove — left for the owner rather than force-removed.
+- **A predecessor WIP commit still documents its own `--no-verify`.** That commit is the
+  ORCHESTRATOR's, made to preserve work when a quota limit killed the original lane. Rewording needs
+  an interactive rebase across 15 commits; flagged rather than risked.
+- **#2025 is the last big item and is UNSTARTED**, pending a fail-closed vs opt-in decision. Scope
+  is now clean — Nexus auth landed in #2054, so #2025 is purely the `src/kailash/servers/` gate.
+  Zero auth primitives across all five server modules today.
+
+## Issues filed this session
+
+#2038 · #2039 (**cause UNKNOWN, three excluded**) · #2040 · #2041 · #2044 · #2047 (MFA node has no
+ACTOR concept — the root behind 5 rounds of patching) · #2052 · #2056 · #2057 (5-of-6 guards
+dispose safely, one outlier)
+
+
 **UPDATE 11 (latest): main `caa892aeb`. TEN issues closed, 19 PRs merged.**
 Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, + masker follow-up.
 **BOTH CRITICALs down** (#2024, and #2025 remains the open one).
