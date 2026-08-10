@@ -217,3 +217,60 @@ beats re-spreading across ten. Relaunch these as the current six complete.
 Every resumed lane carries the shared-stash prohibition and a mandate to re-run
 the FULL pre-commit gate and re-commit properly, because the WIP commits bypassed
 it. No WIP branch leaves local until that gate passes.
+
+## STATE — post-quota-reset wave (2026-08-10, later)
+
+Merged: **#2028**, **#2032**, **#2033**. main = `5d752e64c`.
+
+### Four lane PRs open, each found MORE than its issue named
+
+| PR | Issue | Branch | Measured vs claimed |
+| --- | --- | --- | --- |
+| #2034 | #2015 | `fix/2015-exception-leak-http` | 23 real leaks (issue: "24 sites"); "auth worst" REFUTED — 1 auth site vs 10 on unauthenticated routes |
+| #2035 | #2026 | `fix/2026-auth-test-stubs` | **17 auth defects vs 2**; 67 behavioural tests, 64 RED at base |
+| #2036 | #2027 | `fix/2027-sensitive-value-sinks` | **12 sites vs 5**; masker was a no-op on dict shape |
+| #2037 | #2014 | `fix/2014-spawn-isolation` | fail-closed spawn isolation |
+
+### Issues filed from lane findings
+
+- **#2038** — CI Tier-2 step is `continue-on-error: true`, so a green `gh pr checks` is NOT evidence about integration tests. Verified in `unified-ci.yml`. Affects every PR.
+- **#2039** — `packages/kailash-dataflow/pyproject.toml` `[tool.isort]` lacks `src_paths`; isort resolves nearest-first, so the #1995 root-cause fix never reached that package. Explains commits there not sticking.
+- **#2040** — log injection: caller-controlled `user_id` interpolated into a log line; no PUBLIC value-sanitizer exported (only private `_safe_identifier`) → needs an API decision.
+- **#2041** — **`SecretManager` generates an EPHEMERAL key and continues at WARNING** when `KAILASH_ENCRYPTION_KEY` is unset. On the shipped default path in 2 servers. Higher impact than #2024 (which has ZERO call sites). Fixing #2024 via `SecretManager` would inherit this.
+
+### Masker probe — orchestrator-run for the read-only reviewer (#2036)
+
+Pre-fix **17 leaks / 21**; post-fix **8 / 21**. Resolution verified in-run (printed `__file__`).
+Strict improvement, **no regression** — every survivor was already leaking. Residual gaps:
+`api_token`, `x-api-key`, `client_secret` keys; `Node(token='...')` repr form (the PR's OWN
+stated call shape); bytes values; and a value containing a quote terminates the mask early,
+emitting `***MASKED***'ss` followed by the intact secret. Disposition = follow-up, not blocker,
+unless the PR overclaims completeness.
+
+## ⚠ TRAPS CONFIRMED THIS SESSION — read before trusting any check
+
+1. **`pytest.ini` sets `pythonpath = src`, which OVERRIDES `PYTHONPATH`.** A worktree test run
+   silently resolves the package from the MAIN checkout and passes against unconverted code.
+   Two of my three verification attempts were INERT because of this. Force with
+   `pytest -o pythonpath="$PWD/src"` AND print the resolved `__file__`. Three agents hit this.
+2. **Editor/Pyright diagnostics resolve against MAIN, not the worktree.** They report stale
+   state for lane code. I relayed two as defects; one (`safe_http_detail`) was a stale pre-import
+   snapshot the lane correctly refuted with a negative control. VERIFY before relaying.
+3. **The worktrees have no `.venv`** — use the main checkout's interpreter explicitly.
+4. **A quota-killed agent is NOT dead.** It resurrects when quota resets. Recording lanes as
+   "terminated" and relaunching into their worktrees produced TWO agents on one branch
+   (duplicated work, a commit consuming another's staged changes, a port-8888 test collision).
+   Originals were stood down. **"failed on quota" ≠ "dead".**
+5. **`git stash` is SHARED across worktrees** (common `.git`). Cost one lane its source edits.
+6. **Agents die mid-report** ("Response stalled mid-stream") on long replies, losing everything.
+   Mandate short reports: verdict first, under ~500 words, follow-ups as separate messages.
+
+## Investigation status
+
+- **#2024 — COMPLETE.** Confirmed + 3 adjacent defects (path traversal via unvalidated
+  `reference`; read-side symlink/TOCTOU untouched by #2036; world-traversable secrets dir).
+  Zero call sites repo-wide. Recommendation: implement real encryption reusing
+  `trust/security.py::SecureKeyStorage`'s KDF pattern — NOT `SecretManager`'s. Rebase on #2036.
+  Posted to the issue.
+- **#2025 — NOT DONE.** Two investigators died mid-report. Relaunched (`INV-2025-R3`) with a
+  compact-output mandate. **Do not treat any #2025 claim as investigated.**
