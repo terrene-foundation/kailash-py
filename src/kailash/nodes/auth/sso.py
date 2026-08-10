@@ -20,6 +20,7 @@ import json
 import secrets
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -168,9 +169,13 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # If we're in an async context, we need to handle this differently
-                # For now, provide a simplified synchronous implementation
-                return self._run_sync_fallback(
+                # Already inside a running loop (FastAPI/Nexus calling the sync
+                # surface). Run the REAL async implementation on a private loop
+                # in a worker thread. This previously dispatched to a
+                # "simplified synchronous implementation" that returned
+                # authenticated=True for any non-empty token -- a full SSO
+                # bypass for every async caller (issue #2026).
+                return self._run_async_in_worker_thread(
                     action=action,
                     provider=provider,
                     request_data=request_data,
@@ -208,7 +213,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 )
             )
 
-    def _run_sync_fallback(
+    def _run_async_in_worker_thread(
         self,
         action: str,
         provider: str | None = None,
@@ -219,64 +224,36 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         callback_data: Dict[str, Any] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Synchronous fallback implementation for SSO operations."""
+        """Run the real :meth:`async_run` on a private loop in a worker thread.
+
+        ``run()`` is a synchronous surface, but the implementation is async. When
+        the caller is already inside a running event loop we cannot block it, so
+        the coroutine is executed on its own loop in a worker thread and the
+        genuine result is returned.
+
+        This replaces a "simplified synchronous implementation" that fabricated
+        results: ``action="validate"`` returned ``authenticated: True`` with a
+        caller-supplied ``user_id`` for ANY non-empty token, ``status`` always
+        reported ``active: True``, and ``initiate`` returned a hardcoded
+        Microsoft URL with ``client_id=test``. See issue #2026.
+        """
         start_time = time.time()
-
         try:
-            # Handle callback_data parameter alias
-            if callback_data and not request_data:
-                request_data = callback_data
-
-            # Simplified sync implementation for testing
-            if action == "validate":
-                # Mock validation
-                if request_data and request_data.get("token"):
-                    return {
-                        "authenticated": True,
-                        "user_id": request_data.get("username", "test.user"),
-                        "provider": provider or "azure_ad",
-                        "attributes": {
-                            "email": request_data.get(
-                                "username", "test.user@example.com"
-                            ),
-                            "name": "Test User",
-                        },
-                        "session_id": f"sso_session_{int(time.time())}",
-                        "expires_at": (
-                            datetime.now(UTC) + self.session_timeout
-                        ).isoformat(),
-                    }
-                else:
-                    return {
-                        "authenticated": False,
-                        "error": "No valid token provided",
-                    }
-            elif action == "initiate":
-                return {
-                    "redirect_url": f"https://login.microsoftonline.com/oauth2/v2.0/authorize?client_id=test&redirect_uri={redirect_uri}",
-                    "state": f"state_{int(time.time())}",
-                }
-            elif action == "logout":
-                return {
-                    "logged_out": True,
-                    "user_id": user_id,
-                }
-            elif action == "status":
-                return {
-                    "active": True,
-                    "user_id": user_id,
-                    "provider": provider,
-                }
-            else:
-                return {
-                    "error": f"Unknown action: {action}",
-                }
-
-        except Exception as e:
-            return {
-                "authenticated": False,
-                "error": str(e),
-            }
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    self.async_run(
+                        action=action,
+                        provider=provider,
+                        request_data=request_data,
+                        user_id=user_id,
+                        redirect_uri=redirect_uri,
+                        attributes=attributes,
+                        callback_data=callback_data,
+                        **kwargs,
+                    ),
+                )
+                return future.result()
         finally:
             duration = time.time() - start_time
             self.log_info(f"SSO operation {action} completed in {duration:.3f}s")
@@ -902,9 +879,17 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             okta_domain = cached_data["okta_domain"]
             token_url = f"https://{okta_domain}/oauth2/default/v1/token"
         else:
-            token_url = self.oauth_settings.get(
-                "token_endpoint", "https://oauth.example.com/token"
-            )
+            # No silent default. The previous fallback posted the authorization
+            # code AND client_secret to https://oauth.example.com/token -- a
+            # host the operator does not control -- whenever token_endpoint was
+            # left unset (issue #2026).
+            token_url = self.oauth_settings.get("token_endpoint")
+            if not token_url:
+                raise ValueError(
+                    f"No token_endpoint configured for provider {provider!r}. "
+                    "Set oauth_settings['token_endpoint']; refusing to send the "
+                    "authorization code and client_secret to a default host."
+                )
 
         # Make token request using HTTPRequestNode
         try:
