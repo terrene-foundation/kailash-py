@@ -8,6 +8,38 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 11 (latest): main `caa892aeb`. TEN issues closed, 19 PRs merged.**
+Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, #2024, #2013, + masker follow-up.
+**BOTH CRITICALs down** (#2024, and #2025 remains the open one).
+
+**#2054 (#2013)** — the gateway exposed no auth API, so "implement `set_auth_manager`" was
+impossible; the lane installed Nexus's real Starlette `JWTMiddleware` ahead of CORS (Starlette
+prepends, so CORS must stay outermost or preflight 401s). Fail-closed: no credential source →
+`AuthNotConfiguredError` at construction. **BREAKING** — `enable_auth=True` / `NEXUS_ENV=prod` now
+require a credential; CHANGELOG entry landed under a NEW `[Unreleased]` in
+`packages/kailash-nexus/CHANGELOG.md` (NOT folded into shipped 2.16.0 — that would misreport when
+the break takes effect).
+
+**Why the dead guard shipped:** three unit tests drove `Mock()` objects, and a Mock satisfies every
+`hasattr`, so the test passed identically whether auth was installed or not. Same
+non-discriminating-instrument class as the rest of this session.
+
+**#2057's real finding (re-verified across all six sites): 5-of-6 dispose safely, ONE outlier.**
+`add_permission_rule` is the only guard whose callee has zero definitions, and its
+`return {"success": True, "rule_id": hash(...)}` sits OUTSIDE the `if add_rule_fn:` block — so the
+caller gets a success AND an id referring to nothing, plus a `permission_rule_created` audit event
+for a rule never registered. The correct behaviour is already in the file, five times over.
+
+**Worktrees retired:** lane-2b, 2d, 1e, 3a, 2c, 2a, 1b. **Live:** lane-1c only.
+
+## ⚠ OUTSTANDING — #2035 commit messages claim bypasses that may not have happened
+
+The rebase removed `955fbafc9` / `2e734a053`, but the bodies carried through and still read
+"Committed with --no-verify". **One of those messages is the orchestrator's** (the WIP-preservation
+commit made when quota killed the original lane). Lane 1C asked to reword or squash and to state
+plainly whether the re-created commits went through the hooks. History must match reality.
+
+
 **UPDATE 10 (latest): main `727bc8d19`. EIGHT issues closed, 16 PRs merged.**
 Closed: #1995, #2015, #2014, #2027, #2004, #2006, #1997, + masker follow-up.
 
