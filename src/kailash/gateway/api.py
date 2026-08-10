@@ -24,6 +24,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..resources.registry import ResourceRegistry
+from ..utils.http_errors import safe_http_detail
 from .enhanced_gateway import (
     EnhancedDurableAPIGateway,
     ResourceReference,
@@ -159,8 +160,10 @@ async def execute_workflow(
         response = await gateway.execute_workflow(workflow_id, workflow_request)
         return WorkflowResponseModel(**response.to_dict())
     except Exception as e:
-        logger.error(f"Workflow execution failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=safe_http_detail(e, logger=logger, context="execute workflow"),
+        ) from e
 
 
 @router.get(
@@ -181,7 +184,19 @@ async def get_workflow_status(
             )
         return WorkflowResponseModel(**response.to_dict())
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        # The gateway raises ValueError as its own not-found signal here, so
+        # the message is written for the caller and is allowlisted -- still
+        # masked, in case a backend error arrives wearing the same type.
+        raise HTTPException(
+            status_code=404,
+            detail=safe_http_detail(
+                e,
+                logger=logger,
+                context="get workflow status",
+                status_code=404,
+                safe_types=(ValueError,),
+            ),
+        ) from e
 
 
 @router.get("/workflows")
@@ -243,8 +258,12 @@ async def register_workflow(
             "message": f"Workflow {workflow_id} registered successfully",
         }
     except Exception as e:
-        logger.error(f"Workflow registration failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400,
+            detail=safe_http_detail(
+                e, logger=logger, context="register workflow", status_code=400
+            ),
+        ) from e
 
 
 @router.get("/health")

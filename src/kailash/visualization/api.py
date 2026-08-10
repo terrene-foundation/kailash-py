@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
+from kailash.utils.http_errors import safe_http_detail
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
@@ -227,8 +228,12 @@ class DashboardAPIServer:
 
                 return run_responses
             except Exception as e:
-                self.logger.error(f"Failed to list runs: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='list runs'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/runs/{run_id}", response_model=RunResponse)
         async def get_run(run_id: str):
@@ -257,8 +262,12 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to get run {run_id}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='get run'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/runs/{run_id}/tasks", response_model=list[TaskResponse])
         async def get_run_tasks(run_id: str):
@@ -292,8 +301,12 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to get tasks for run {run_id}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='get run tasks'
+                    ),
+                ) from e
 
         @self.app.post("/api/v1/monitoring/start")
         async def start_monitoring(request: RunRequest):
@@ -405,8 +418,12 @@ class DashboardAPIServer:
                 # replace it with str(exc) and downgrade a 409 to a 500.
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to start monitoring: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='start monitoring'
+                    ),
+                ) from e
 
         @self.app.post("/api/v1/monitoring/stop")
         async def stop_monitoring():
@@ -467,8 +484,12 @@ class DashboardAPIServer:
                 # replace it with str(exc) and lose the detail.
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to stop monitoring: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='stop monitoring'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/monitoring/status")
         async def get_monitoring_status():
@@ -501,8 +522,12 @@ class DashboardAPIServer:
                     avg_task_duration=metrics.avg_task_duration,
                 )
             except Exception as e:
-                self.logger.error(f"Failed to get current metrics: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='get current metrics'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/metrics/history", response_model=list[MetricsResponse])
         async def get_metrics_history(minutes: int = 30):
@@ -524,8 +549,12 @@ class DashboardAPIServer:
                     for m in history
                 ]
             except Exception as e:
-                self.logger.error(f"Failed to get metrics history: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='get metrics history'
+                    ),
+                ) from e
 
         @self.app.post("/api/v1/reports/generate")
         async def generate_report(request: ReportRequest, background_tasks: Any):
@@ -563,8 +592,12 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to generate report: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='generate report'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/reports/download/{filename}")
         async def download_report(filename: str):
@@ -582,8 +615,12 @@ class DashboardAPIServer:
             except HTTPException:
                 raise
             except Exception as e:
-                self.logger.error(f"Failed to download report {filename}: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='download report'
+                    ),
+                ) from e
 
         @self.app.get("/api/v1/dashboard/live")
         async def get_live_dashboard():
@@ -599,8 +636,12 @@ class DashboardAPIServer:
                     path=output_path, filename=filename, media_type="text/html"
                 )
             except Exception as e:
-                self.logger.error(f"Failed to generate live dashboard: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(
+                        e, logger=self.logger, context='generate live dashboard'
+                    ),
+                ) from e
 
         @self.app.websocket("/api/v1/metrics/stream")
         async def websocket_metrics_stream(websocket: Any):

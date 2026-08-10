@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from ...nodes.base import NodeRegistry
 from ...nodes.security import CredentialManagerNode
 from ...nodes.transform import DataTransformer
+from ...utils.http_errors import new_error_reference, safe_http_detail
 from ...utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
@@ -346,9 +347,14 @@ class APIGateway:
                     },
                 }
             except Exception as e:
-                logger.error(f"Health check failed: {e}")
                 return JSONResponse(
-                    status_code=503, content={"status": "unhealthy", "error": str(e)}
+                    status_code=503,
+                    content={
+                        "status": "unhealthy",
+                        "error": safe_http_detail(
+                            e, logger=logger, context="health check", status_code=503
+                        ),
+                    },
                 )
 
     def _setup_session_routes(self):
@@ -404,14 +410,24 @@ class APIGateway:
 
                 return SessionResponse(**transformed["result"])
             except Exception as e:
-                logger.error(f"Error creating session: {e}")
+                # The security event and the client response share one
+                # reference id, so the failed-session record can be tied to
+                # the caller report without the exception text -- which on
+                # this path reaches a session/credential backend -- landing
+                # in either sink raw.
+                reference = new_error_reference()
+                detail = safe_http_detail(
+                    e, logger=logger, context="create session", reference=reference
+                )
 
                 # Log security event for failed session creation
                 logger.warning(
-                    f"Session creation failed for user {request.user_id}: {str(e)}"
+                    "Session creation failed for user %s [reference=%s]",
+                    request.user_id,
+                    reference,
                 )
 
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail=detail) from e
 
         @self.app.get("/api/sessions/{session_id}")
         async def get_session(session_id: str):
@@ -484,8 +500,10 @@ class APIGateway:
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
             except Exception as e:
-                logger.error(f"Error creating workflow: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(e, logger=logger, context="create workflow"),
+                ) from e
 
         @self.app.get("/api/workflows/{workflow_id}")
         async def get_workflow(workflow_id: str, session_id: str):
@@ -566,8 +584,10 @@ class APIGateway:
                     created_at=datetime.now(timezone.utc),
                 )
             except Exception as e:
-                logger.error(f"Error executing workflow: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(e, logger=logger, context="execute workflow"),
+                ) from e
 
         @self.app.get("/api/executions/{execution_id}")
         async def get_execution_status(execution_id: str, session_id: str):
@@ -648,8 +668,10 @@ class APIGateway:
                     "categories": self._get_node_categories(schemas),
                 }
             except Exception as e:
-                logger.error(f"Error getting node schemas: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(e, logger=logger, context="get node schemas"),
+                ) from e
 
         @self.app.get("/api/schemas/nodes/{node_type}")
         async def get_node_schema(node_type: str):
@@ -765,8 +787,10 @@ class APIGateway:
                     "schema_registry": self.schema_registry.get_stats(),
                 }
             except Exception as e:
-                logger.error(f"Error getting stats: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(e, logger=logger, context="get stats"),
+                ) from e
 
         @self.app.get("/api/events/recent")
         async def get_recent_events(
@@ -803,8 +827,10 @@ class APIGateway:
                     },
                 }
             except Exception as e:
-                logger.error(f"Error getting recent events: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(
+                    status_code=500,
+                    detail=safe_http_detail(e, logger=logger, context="get recent events"),
+                ) from e
 
     # Public API methods
     def run(

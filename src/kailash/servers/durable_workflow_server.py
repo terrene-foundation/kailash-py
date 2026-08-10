@@ -39,6 +39,7 @@ from ..middleware.gateway.event_store import (
     request_state_projection,
 )
 from .workflow_server import WorkflowServer
+from ..utils.http_errors import safe_http_detail
 
 logger = logging.getLogger(__name__)
 
@@ -474,11 +475,12 @@ class DurableWorkflowServer(WorkflowServer):
                     "result": result,
                 }
             except Exception as e:
-                logger.error("Recovery failed for request %s: %s", request_id, e)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Recovery failed: {e}",
-                )
+                    detail=safe_http_detail(
+                        e, logger=logger, context="recover request"
+                    ),
+                ) from e
             finally:
                 self.active_requests.pop(request_id, None)
 
