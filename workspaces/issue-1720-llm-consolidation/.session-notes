@@ -21,9 +21,13 @@ Workspace issue-1720-llm-consolidation, phase 05-codify.
 3. **PR #2028** — #1995 fix. **Do NOT merge on the earlier "green" report**: `Test DataFlow Infra
    Regression (Postgres/Redis)` fails on it and passed on #2016. Same selection passes locally
    (23 passed, real PG+Redis); collection clean. UNRESOLVED pending the CI log.
-4. **`rules/specification-verification.md`** (NEW, uncommitted) — the codified defense for the
-   wrong-specifications class. Its Tier-1 self-referential redteam was dispatched but its findings
-   had NOT landed when this note was written; treat the rule as PROPOSED, not ratified.
+4. **PR #2031 (DRAFT)** — `rules/specification-verification.md`, the codified defense for the
+   wrong-specifications class, on branch `docs/codify-specification-verification` off main.
+   Its Tier-1 self-referential redteam (reviewer + cc-architect + analyst) was DISPATCHED but its
+   findings had NOT landed when this note was written. **Treat the rule as PROPOSED, not ratified;
+   do not merge #2031 until the redteam findings are incorporated.** The three agents were asked to
+   attack the scope decision, verify every evidentiary claim in the rule against source, and make
+   the strongest case that the rule should not exist — re-dispatch them if their reports are lost.
 5. The **"specs were wrong" section** below. This is the load-bearing finding of the session.
 
 ## In-flight state
