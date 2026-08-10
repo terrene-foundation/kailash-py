@@ -135,69 +135,119 @@ class ResourceLimits:
         self.max_cpu_seconds = max_cpu_seconds
         self.max_file_size_mb = max_file_size_mb
 
-    def apply(self) -> None:
+    def apply(self) -> list[str]:
         """
         Apply resource limits to current process.
 
-        Uses resource.setrlimit() on Unix systems. On Windows, logs a warning
-        as resource limits are not supported.
+        Each limit is applied INDEPENDENTLY, because platform support is
+        per-resource rather than all-or-nothing: macOS accepts ``RLIMIT_CPU``
+        and ``RLIMIT_FSIZE`` but refuses ``RLIMIT_AS`` outright, so applying
+        them as one block would discard the two limits the platform does
+        enforce along with the one it does not.
+
+        A refusal is only tolerated when it is a PLATFORM CAPABILITY GAP -- the
+        kernel rejecting a value that is within the current hard limit, which is
+        the signature of a resource it does not implement. A refusal of a value
+        that genuinely exceeds the hard limit is a real misconfiguration and is
+        re-raised.
+
+        Returns:
+            Names of the limits that could NOT be enforced (empty list when all
+            applied). The caller is expected to surface these: an unenforced
+            limit is a security control that is OFF, and the child's own log
+            records do not reach the parent's handlers under ``spawn``.
 
         Raises:
-            ImportError: If resource module is not available (Windows)
-            OSError: If setrlimit fails (insufficient privileges)
+            OSError: If setrlimit fails for a value exceeding the hard limit
+                (a real misconfiguration, not a platform capability gap)
+            ValueError: Likewise, for the ValueError variant CPython raises for
+                the same condition
 
         Example:
             >>> limits = ResourceLimits(max_memory_mb=100)
-            >>> limits.apply()  # Applies limits on Unix, warns on Windows
+            >>> unenforced = limits.apply()
+            >>> if unenforced:
+            >>>     print(f"NOT enforced on this platform: {unenforced}")
         """
+        all_limits = ["max_memory_mb", "max_cpu_seconds", "max_file_size_mb"]
+
         # Check platform support
         if sys.platform == "win32":
             logger.warning(
                 "SECURITY: Resource limits not supported on Windows. "
                 "Process isolation will be used without resource limits."
             )
-            return
+            return all_limits
 
         try:
             import resource
-
-            # Memory limit (virtual address space)
-            max_memory_bytes = self.max_memory_mb * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))
-            logger.debug(f"Applied memory limit: {self.max_memory_mb}MB")
-
-            # CPU time limit
-            resource.setrlimit(
-                resource.RLIMIT_CPU, (self.max_cpu_seconds, self.max_cpu_seconds)
-            )
-            logger.debug(f"Applied CPU limit: {self.max_cpu_seconds} seconds")
-
-            # File size limit
-            max_file_bytes = self.max_file_size_mb * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_FSIZE, (max_file_bytes, max_file_bytes))
-            logger.debug(f"Applied file size limit: {self.max_file_size_mb}MB")
-
         except ImportError:
             logger.warning(
                 "SECURITY: resource module not available. "
                 "Resource limits cannot be applied."
             )
-        except OSError as e:
-            # ``scrub_local_error``, not ``scrub_remote_error``: this OSError
-            # comes from ``resource.setrlimit``, an in-process OS call, so the
-            # conservative preset is right -- it keeps the shape-only rules OFF
-            # and preserves the errno text and any path, which ARE the
-            # diagnostic here.
-            #
-            # The credential risk today is nil (setrlimit takes ints, not
-            # caller strings). It is scrubbed anyway because the raw-exception-
-            # in-an-f-string SHAPE is one edit away from being a leak: the
-            # moment this block covers a limit derived from a caller-supplied
-            # value, the sink is already wrong and nothing would flag it.
-            logger.error(
-                "SECURITY: Failed to apply resource limits: %s", scrub_local_error(e)
+            return all_limits
+
+        unenforced: list[str] = []
+
+        for label, rlimit_name, value in (
+            ("max_memory_mb", "RLIMIT_AS", self.max_memory_mb * 1024 * 1024),
+            ("max_cpu_seconds", "RLIMIT_CPU", self.max_cpu_seconds),
+            ("max_file_size_mb", "RLIMIT_FSIZE", self.max_file_size_mb * 1024 * 1024),
+        ):
+            rlimit = getattr(resource, rlimit_name, None)
+            if rlimit is None:
+                # The platform's resource module does not define this resource.
+                unenforced.append(label)
+                continue
+
+            _soft, hard = resource.getrlimit(rlimit)
+
+            try:
+                resource.setrlimit(rlimit, (value, value))
+            except (OSError, ValueError) as e:
+                # ``scrub_local_error``, not ``scrub_remote_error``: this comes
+                # from ``resource.setrlimit``, an in-process OS call, so the
+                # conservative preset is right -- it keeps the shape-only rules
+                # OFF and preserves the errno text, which IS the diagnostic.
+                #
+                # The credential risk today is nil (setrlimit takes ints, not
+                # caller strings). It is scrubbed anyway because the raw-
+                # exception-in-a-log-argument SHAPE is one edit away from being
+                # a leak: the moment this block covers a limit derived from a
+                # caller-supplied value, the sink is already wrong and nothing
+                # would flag it.
+                within_hard = hard == resource.RLIM_INFINITY or value <= hard
+                if not within_hard:
+                    logger.error(
+                        "SECURITY: Failed to apply resource limit %s: %s",
+                        label,
+                        scrub_local_error(e),
+                    )
+                    raise
+
+                # Refused despite being within the hard limit: this kernel does
+                # not implement the resource (macOS and RLIMIT_AS).
+                unenforced.append(label)
+                logger.warning(
+                    "SECURITY: %s (%s) is not enforceable on this platform: %s",
+                    label,
+                    rlimit_name,
+                    scrub_local_error(e),
+                )
+            else:
+                logger.debug("Applied resource limit %s: %s", label, value)
+
+        if unenforced:
+            logger.warning(
+                "SECURITY: Hook process isolation is ACTIVE, but these resource "
+                "limits are NOT enforced on this platform: %s. The hook is "
+                "confined to its own process but is not capped on those "
+                "resources.",
+                ", ".join(unenforced),
             )
-            raise
+
+        return unenforced
 
 
 def _isolated_hook_worker(
@@ -219,10 +269,17 @@ def _isolated_hook_worker(
 
     The worker speaks a 3-tuple protocol on ``result_queue``:
     ``(status, payload, worker_pid)`` where status is one of
-    ``ready`` / ``success`` / ``error``. ``ready`` is sent FIRST, before any
-    caller-supplied code runs, so the parent can (a) confirm a real child is
-    alive and (b) charge interpreter startup to a separate budget instead of
-    the hook's timeout.
+    ``ready`` / ``success`` / ``error``. ``ready`` is sent once the sandbox is
+    fully in place and BEFORE any caller-supplied code runs, so the parent can
+    (a) confirm a real child is alive, (b) charge interpreter startup to a
+    separate budget instead of the hook's timeout, and (c) learn which resource
+    limits this platform refused to enforce.
+
+    The ``ready`` payload carries that unenforced-limit list because the child's
+    own ``logger`` records do NOT reach the parent's handlers: under ``spawn``
+    the child is a fresh interpreter with a default, unconfigured logging setup,
+    so a warning emitted here would be written to nothing. The parent re-logs
+    it against its own handlers instead.
 
     Args:
         limits: Resource limits to apply before running any hook code
@@ -232,13 +289,11 @@ def _isolated_hook_worker(
     """
     worker_pid = os.getpid()
 
-    # Sent BEFORE limits are applied and before any caller-supplied code runs:
-    # it is the parent's proof that a distinct process exists.
-    result_queue.put(("ready", None, worker_pid))
-
     try:
-        limits.apply()
+        unenforced = limits.apply()
     except Exception as e:
+        # Reported INSTEAD of ``ready``: the sandbox was not established, so the
+        # parent must treat this as an isolation failure and never run the hook.
         # ``scrub_local_error`` matches ``ResourceLimits.apply``: this is an
         # in-process OS call whose errno text IS the diagnostic.
         result_queue.put(
@@ -249,6 +304,10 @@ def _isolated_hook_worker(
             )
         )
         return
+
+    # Sent before any caller-supplied code runs: it is the parent's proof that a
+    # distinct process exists and that the sandbox is established.
+    result_queue.put(("ready", unenforced, worker_pid))
 
     try:
         start_time = time.perf_counter()
@@ -419,7 +478,12 @@ class IsolatedHookExecutor:
             # The supervision loop blocks on a queue and on process reaping;
             # running it in a worker thread keeps the caller's event loop free.
             return await asyncio.to_thread(
-                self._supervise, process, result_queue, handler_name, timeout, parent_pid
+                self._supervise,
+                process,
+                result_queue,
+                handler_name,
+                timeout,
+                parent_pid,
             )
         finally:
             self._reap(process)
@@ -455,7 +519,15 @@ class IsolatedHookExecutor:
                 f"exit code: {process.exitcode})",
             )
 
-        status, _payload, worker_pid = message
+        status, payload, worker_pid = message
+        if status == "error":
+            # The child reached its entry point but could not establish the
+            # sandbox (resource limits refused). The control is not in place, so
+            # the hook must not run.
+            raise HookIsolationError(
+                handler_name,
+                f"the isolated process could not establish its sandbox: {payload}",
+            )
         if status != "ready":
             raise HookIsolationError(
                 handler_name,
@@ -477,6 +549,17 @@ class IsolatedHookExecutor:
             worker_pid,
             parent_pid,
         )
+
+        if payload:
+            # Re-logged HERE rather than left to the child: under ``spawn`` the
+            # child's logging is unconfigured, so its own warning went nowhere.
+            logger.warning(
+                "SECURITY: Hook %s is isolated in process %s, but these resource "
+                "limits are NOT enforced on this platform: %s",
+                handler_name,
+                worker_pid,
+                ", ".join(payload),
+            )
 
         # PHASE 2: the hook's own result.
         message, reason = self._receive(process, result_queue, timeout)
@@ -581,11 +664,13 @@ class IsolatedHookManager(HookManager):
     - Interfering with other hooks
 
     Features:
-    - Process isolation via multiprocessing
-    - Configurable resource limits (memory, CPU, file size)
-    - Optional isolation (can be disabled for backward compatibility)
-    - Graceful degradation on Windows (no resource limits)
-    - Comprehensive error handling
+    - Process isolation via multiprocessing, under an explicitly-pinned
+      ``spawn`` start method on every platform
+    - Configurable resource limits (memory, CPU, file size), each applied
+      independently and each reported when the platform refuses to enforce it
+    - Optional isolation, disabled only by explicit ``enable_isolation=False``
+    - Fails CLOSED: if isolation cannot be established the hook is not run and
+      ``HookIsolationError`` is raised (issue #2014)
 
     Example:
         >>> from kaizen.core.autonomy.hooks.security import IsolatedHookManager, ResourceLimits
@@ -612,7 +697,15 @@ class IsolatedHookManager(HookManager):
     - Prevents malicious hooks from compromising agent
     - Isolates hook execution in separate processes
     - Applies resource limits to prevent exhaustion attacks
-    - Maintains backward compatibility with non-isolated mode
+    - Never downgrades itself to non-isolated execution (issue #2014)
+
+    Note:
+        Handlers registered on an isolating manager MUST be picklable, because
+        ``spawn`` transfers them to a fresh interpreter by pickle. In practice
+        that means the handler is a class or function defined at MODULE scope.
+        A lambda, a closure, or a function defined inside a test body cannot be
+        isolated and will raise ``HookIsolationError`` rather than silently
+        running unisolated.
     """
 
     def __init__(
@@ -673,10 +766,14 @@ class IsolatedHookManager(HookManager):
         Returns:
             HookResult with success/failure status
 
+        Raises:
+            HookIsolationError: If isolation was requested but could not be
+                established. The hook is NOT executed in that case.
+
         SECURITY FIX #5:
         - Executes hook in isolated process if enable_isolation=True
-        - Falls back to normal execution if isolation fails
-        - Maintains backward compatibility with non-isolated mode
+        - Fails CLOSED if isolation cannot be established (issue #2014)
+        - Non-isolated execution remains available, but only by explicit opt-out
         """
         handler_name = getattr(handler, "name", safe_handler_name(handler))
 
@@ -685,35 +782,63 @@ class IsolatedHookManager(HookManager):
             # Use parent implementation (no isolation)
             return await super()._execute_hook(handler, context, timeout)
 
-        # Execute in isolated process
+        # Execute in isolated process.
+        #
+        # There is deliberately NO fallback to ``super()._execute_hook`` here
+        # (issue #2014). Running the hook in-process when isolation fails is not
+        # a degraded mode of this control -- it is the control switched OFF,
+        # applied to the exact code the control exists to contain, while the
+        # caller is handed a successful-looking HookResult. The failure it hid
+        # was total: under the ``spawn`` start method the old closure-based
+        # worker could never be pickled, so isolation failed on EVERY call on
+        # macOS and Windows and every hook ran with full agent privileges.
+        #
+        # A caller that genuinely wants non-isolated execution asks for it by
+        # constructing the manager with ``enable_isolation=False``, which is
+        # visible at the call site and logged as a warning at construction.
         try:
             logger.debug(f"Executing hook in isolated process: {handler_name}")
             result = await self.executor.execute_isolated(handler, context, timeout)
-
-            # Update stats
-            self._update_stats(handler_name, result.duration_ms, success=result.success)
-
-            return result
-
-        except Exception as e:
-            # Isolation failed - log error and fall back to normal execution.
-            # ``e`` comes from ``execute_isolated``, which runs CALLER-SUPPLIED
-            # hook code, so it is the same credential surface as the handler
-            # repr on this line. This module imported no scrubber at all before
-            # the F11 sweep, leaving it un-swept for the exception half.
+        except HookIsolationError as e:
+            # Already typed and already scrubbed at construction; re-logged so
+            # the operator sees WHICH control failed, then propagated.
             logger.error(
-                "SECURITY: Hook isolation failed for %s, "
-                "falling back to normal execution: %s",
+                "SECURITY: Hook isolation could not be established for %s; "
+                "the hook was NOT executed: %s",
+                handler_name,
+                e.reason,
+            )
+            self._update_stats(handler_name, 0, success=False)
+            raise
+        except Exception as e:
+            # Anything else from ``execute_isolated`` is an isolation-machinery
+            # failure rather than a hook failure (hook exceptions come back as
+            # an unsuccessful HookResult, not as a raise). It is converted to
+            # the typed error so callers have ONE exception type to handle, and
+            # scrubbed because ``execute_isolated`` drives CALLER-SUPPLIED hook
+            # code and this text reaches both a log line and the raised message.
+            logger.error(
+                "SECURITY: Hook isolation failed for %s; the hook was NOT "
+                "executed: %s",
                 handler_name,
                 scrub_remote_error(e),
             )
+            self._update_stats(handler_name, 0, success=False)
+            raise HookIsolationError(
+                handler_name,
+                f"the isolation machinery failed: {scrub_remote_error(e)}",
+            ) from e
 
-            # Fall back to parent implementation
-            return await super()._execute_hook(handler, context, timeout)
+        # Update stats
+        self._update_stats(handler_name, result.duration_ms, success=result.success)
+
+        return result
 
 
 # Export public API
 __all__ = [
+    "DEFAULT_STARTUP_TIMEOUT",
+    "HookIsolationError",
     "ResourceLimits",
     "IsolatedHookExecutor",
     "IsolatedHookManager",
