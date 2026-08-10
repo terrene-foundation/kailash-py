@@ -527,7 +527,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     result = {
                         "success": False,
                         "method": "push",
-                        "error": f"Push delivery failed: {e}",
+                        "error": "Push delivery failed",
                         "challenge_sent": False,
                     }
             elif action == "verify_push":
@@ -558,24 +558,42 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     }
             elif action == "initiate_recovery":
                 result = self._initiate_recovery(
-                    user_id, recovery_method or "email", recovery_destination
+                    user_id,
+                    recovery_method or "email",
+                    recovery_destination,
+                    admin_override=bool(admin_override),
                 )
             elif action == "reset":
                 # Reset: clear existing MFA state, then re-run setup. Returns
                 # the new setup payload (fresh secret + backup codes) so the
                 # caller can re-enroll the user (issue #803).
-                with self._data_lock:
-                    self.user_mfa_data.pop(user_id, None)
-                    self.pending_verifications.pop(user_id, None)
-                    self.trusted_devices.pop(user_id, None)
-                result = self._setup_mfa(
-                    user_id,
-                    method,
-                    user_email,
-                    user_phone,
-                    user_data or {},
-                    device_info or {},
-                )
+                #
+                # Destroying a user's second factor and minting a new one is an
+                # administrative action: ungated it was the strongest form of
+                # the setup-overwrite takeover (issue #2026). It now matches
+                # the admin_override requirement `disable` already carries.
+                if not admin_override:
+                    result = {
+                        "success": False,
+                        "error": (
+                            "Resetting MFA destroys the existing factor and "
+                            "issues a new one; it requires admin_override=True."
+                        ),
+                    }
+                else:
+                    with self._data_lock:
+                        self.user_mfa_data.pop(user_id, None)
+                        self.pending_verifications.pop(user_id, None)
+                        self.trusted_devices.pop(user_id, None)
+                    result = self._setup_mfa(
+                        user_id,
+                        method,
+                        user_email,
+                        user_phone,
+                        user_data or {},
+                        device_info or {},
+                        admin_override=True,
+                    )
                 if result.get("success"):
                     result["reset"] = True
                     result["user_id"] = user_id
@@ -615,6 +633,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_phone: str,
         user_data: Optional[Dict[str, Any]] = None,
         device_info: Optional[Dict[str, Any]] = None,
+        admin_override: bool = False,
     ) -> Dict[str, Any]:
         """Setup MFA for user.
 
@@ -634,6 +653,24 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             }
 
         with self._data_lock:
+            # Re-enrolling an already-VERIFIED factor is a step-up operation.
+            # Without this, setup silently replaced a victim's authenticator
+            # secret, phone, or address and handed the caller fresh backup
+            # codes -- a complete MFA takeover in one call, and the upstream
+            # route that defeated every downstream enrolment guard
+            # (issue #2026).
+            existing = self.user_mfa_data.get(user_id, {}).get("methods", {})
+            if any(m.get("verified") for m in existing.values()) and not admin_override:
+                return {
+                    "success": False,
+                    "method": method,
+                    "error": (
+                        "MFA is already set up and verified for this user. "
+                        "Re-enrolment requires admin_override=True or a "
+                        "completed recovery."
+                    ),
+                }
+
             if user_id not in self.user_mfa_data:
                 self.user_mfa_data[user_id] = {
                     "methods": {},
@@ -767,11 +804,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # transport seam, which fails closed when nothing is bound.
                 _send_sms(user_phone, f"Your verification code: {verification_code}")
         except MFADeliveryError as e:
+            # Log the detail; do NOT return it. Provider exceptions routinely
+            # carry the recipient address/number, which would disclose the
+            # enrolled destination to the caller (issue #2026).
             self.log_with_context("ERROR", f"SMS setup failed for user {user_id}: {e}")
+            # Roll back the half-enrolment, as the email path does: leaving it
+            # in place let a failed setup permanently replace a victim's
+            # verified destination with an attacker-chosen number.
+            self.user_mfa_data[user_id]["methods"].pop("sms", None)
             return {
                 "success": False,
                 "method": "sms",
-                "error": f"SMS delivery failed: {e}",
+                "error": "SMS delivery failed",
                 "verification_sent": False,
             }
 
@@ -829,7 +873,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {
                 "success": False,
                 "method": "email",
-                "error": f"Email delivery failed: {e}",
+                "error": "Email delivery failed",
                 "verification_sent": False,
             }
 
@@ -893,7 +937,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "push_token": device_info.get("push_token"),
             "platform": device_info.get("platform", "unknown"),
             "setup_at": datetime.now(UTC).isoformat(),
-            "verified": True,  # Push enrollment is considered verified upon setup
+            # NOT verified at setup: nothing has been delivered to, or
+            # acknowledged by, the device. Marking it verified here asserted a
+            # proof that never happened and satisfied every downstream
+            # "is a factor verified" gate (issue #2026). A push challenge must
+            # be sent and approved first.
+            "verified": False,
         }
 
         # Initialize user's device list if needed
@@ -1213,6 +1262,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "device_id": fingerprint,
                     "trust_token": device_data.get("trust_token"),
                     "expires_at": device_data.get("expires_at"),
+                    # Tag the origin so expiry cleanup deletes from the store
+                    # the entry actually came from: removing a synthesised dict
+                    # from the OTHER store raised KeyError/ValueError out of
+                    # execute() (issue #2026).
+                    "_store": "user_mfa_data",
+                    "_fingerprint": fingerprint,
                 }
                 devices_to_check.append(device_obj)
 
@@ -1235,11 +1290,24 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             )
 
             if device_matches and token_matches:
-                # Check if trust has expired
-                expires_at = datetime.fromisoformat(device.get("expires_at", ""))
+                # A missing/malformed expiry is treated as expired rather than
+                # raising out of execute().
+                try:
+                    expires_at = datetime.fromisoformat(device.get("expires_at") or "")
+                except (TypeError, ValueError):
+                    expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
                 if expires_at <= datetime.now(UTC):
-                    # Remove expired trust
-                    self.trusted_devices[user_id].remove(device)
+                    # Remove expired trust from the store it came from.
+                    if device.get("_store") == "user_mfa_data":
+                        self.user_mfa_data.get(user_id, {}).get(
+                            "trusted_devices", {}
+                        ).pop(device.get("_fingerprint"), None)
+                    elif user_id in self.trusted_devices:
+                        try:
+                            self.trusted_devices[user_id].remove(device)
+                        except ValueError:
+                            pass
                     return {
                         "success": True,
                         "trusted": False,
@@ -1341,7 +1409,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             # Check if it's a backup code first
-            if self.backup_codes and code in user_data.get("backup_codes", []):
+            # A backup code only substitutes for a factor that EXISTS and has
+            # been verified. Codes are minted at setup time, so accepting them
+            # against an unverified enrolment made `setup -> verify` a
+            # complete second factor with nothing proven (issue #2026).
+            if (
+                self.backup_codes
+                and any(
+                    m.get("verified") for m in user_data.get("methods", {}).values()
+                )
+                and code in user_data.get("backup_codes", [])
+            ):
                 # Remove used backup code
                 user_data["backup_codes"].remove(code)
                 self.mfa_stats["backup_codes_used"] += 1
@@ -1364,7 +1442,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # Handle backup_code method specially
             if method == "backup_code":
-                if self.backup_codes and code in user_data.get("backup_codes", []):
+                # A backup code only substitutes for a factor that EXISTS and
+                # has been verified (issue #2026).
+                if (
+                    self.backup_codes
+                    and any(
+                        m.get("verified") for m in user_data.get("methods", {}).values()
+                    )
+                    and code in user_data.get("backup_codes", [])
+                ):
                     # Remove used backup code
                     user_data["backup_codes"].remove(code)
                     self.mfa_stats["backup_codes_used"] += 1
@@ -1484,7 +1570,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             # Check if it's a backup code first
-            if self.backup_codes and code in user_data.get("backup_codes", []):
+            # A backup code only substitutes for a factor that EXISTS and has
+            # been verified. Codes are minted at setup time, so accepting them
+            # against an unverified enrolment made `setup -> verify` a
+            # complete second factor with nothing proven (issue #2026).
+            if (
+                self.backup_codes
+                and any(
+                    m.get("verified") for m in user_data.get("methods", {}).values()
+                )
+                and code in user_data.get("backup_codes", [])
+            ):
                 # Remove used backup code
                 user_data["backup_codes"].remove(code)
                 self.mfa_stats["backup_codes_used"] += 1
@@ -1507,7 +1603,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # Handle backup_code method specially
             if method == "backup_code":
-                if self.backup_codes and code in user_data.get("backup_codes", []):
+                # A backup code only substitutes for a factor that EXISTS and
+                # has been verified (issue #2026).
+                if (
+                    self.backup_codes
+                    and any(
+                        m.get("verified") for m in user_data.get("methods", {}).values()
+                    )
+                    and code in user_data.get("backup_codes", [])
+                ):
                     # Remove used backup code
                     user_data["backup_codes"].remove(code)
                     self.mfa_stats["backup_codes_used"] += 1
@@ -1781,10 +1885,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_data = self.user_mfa_data[user_id]
 
             if method == "all":
-                # Revoke all methods
+                # Capture the method list BEFORE clearing it: reading it after
+                # the reset always reported an empty revoked_methods.
+                revoked_methods = list(user_data.get("methods", {}).keys())
                 user_data["methods"] = {}
                 user_data["backup_codes"] = []
-                revoked_methods = list(user_data.get("methods", {}).keys())
             else:
                 if method not in user_data["methods"]:
                     return {
@@ -1796,8 +1901,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 del user_data["methods"][method]
                 revoked_methods = [method]
 
-            # Invalidate all sessions
-            self._invalidate_user_sessions(user_id)
+            # Invalidate all sessions. The lock-free variant: _data_lock is
+            # already held here and is not reentrant.
+            self._invalidate_user_sessions_internal(user_id)
 
             # Log security event
             # self._log_security_event(user_id, "mfa_revoked", "high")
@@ -1903,13 +2009,27 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             user_id: User ID
         """
         with self._data_lock:
-            sessions_to_remove = []
-            for session_id, session_data in self.user_sessions.items():
-                if session_data["user_id"] == user_id:
-                    sessions_to_remove.append(session_id)
+            self._invalidate_user_sessions_internal(user_id)
 
-            for session_id in sessions_to_remove:
-                del self.user_sessions[session_id]
+    def _invalidate_user_sessions_internal(self, user_id: str) -> None:
+        """Invalidate all sessions for user. Caller MUST hold ``_data_lock``.
+
+        ``_data_lock`` is a non-reentrant ``threading.Lock``, so the locking
+        wrapper above cannot be called from a context that already holds it --
+        ``_revoke_mfa`` did exactly that and self-deadlocked while holding the
+        lock, wedging every MFA operation in the process (issue #2026). Mirrors
+        the ``_create_mfa_session_internal`` split.
+
+        Args:
+            user_id: User ID
+        """
+        sessions_to_remove = [
+            session_id
+            for session_id, session_data in self.user_sessions.items()
+            if session_data["user_id"] == user_id
+        ]
+        for session_id in sessions_to_remove:
+            del self.user_sessions[session_id]
 
     def _check_rate_limit(self, user_id: str) -> bool:
         """Check rate limit for user.
@@ -2530,6 +2650,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_id: str,
         recovery_method: str,
         recovery_destination: Optional[str] = None,
+        admin_override: bool = False,
     ) -> Dict[str, Any]:
         """Initiate MFA recovery for user.
 
@@ -2564,6 +2685,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {
                 "success": False,
                 "error": f"Unsupported recovery method: {recovery_method}",
+            }
+
+        # "admin" bypasses the enrolled-destination checks entirely and always
+        # reports delivered, so ungated it minted a recovery_requests entry for
+        # any caller-chosen user_id (issue #2026).
+        if recovery_method == "admin" and not admin_override:
+            return {
+                "success": False,
+                "error": "Admin recovery requires admin_override=True.",
             }
 
         # Resolve the destination under the lock, then RELEASE it before the
@@ -2633,7 +2763,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {
                 "success": False,
                 "recovery_method": recovery_method,
-                "error": f"Recovery token delivery failed: {e}",
+                "error": "Recovery token delivery failed",
             }
 
         if not delivered:

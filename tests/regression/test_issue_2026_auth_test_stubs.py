@@ -672,6 +672,163 @@ def test_recovery_destination_with_non_ascii_does_not_crash():
     assert isinstance(result, dict)
 
 
+def test_setup_then_verify_with_issued_backup_codes_does_not_yield_a_session():
+    """The upstream route that defeated every downstream enrolment gate.
+
+    setup mints a factor AND returns backup codes for an arbitrary user_id, and
+    _verify_mfa accepted a backup code with nothing verified.
+    """
+    node = _mfa_node()
+
+    setup = node.execute(action="setup", user_id="victim", method="totp")
+    codes = setup.get("backup_codes") or setup.get("recovery_codes") or []
+
+    if codes:
+        verified = node.execute(action="verify", user_id="victim", code=codes[0])
+        assert (
+            verified.get("verified") is not True
+        ), f"backup codes issued at setup verified with nothing proven: {verified}"
+        assert verified.get("session_id") is None
+
+
+def test_setup_does_not_overwrite_a_verified_enrolment():
+    """setup silently replaced a victim's authenticator and issued new codes."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"totp": {"secret": "ORIGINALSECRET", "verified": True}},
+        "backup_codes": ["ORIGINAL"],
+    }
+
+    result = node.execute(action="setup", user_id="victim", method="totp")
+
+    assert (
+        result["success"] is False
+    ), f"setup overwrote a verified enrolment without a step-up: {result}"
+    assert node.user_mfa_data["victim"]["methods"]["totp"]["secret"] == "ORIGINALSECRET"
+    assert node.user_mfa_data["victim"]["backup_codes"] == ["ORIGINAL"]
+
+
+def test_setup_push_does_not_mark_itself_verified():
+    """Nothing was delivered to or acknowledged by the device."""
+    node = _mfa_node()
+
+    node.execute(
+        action="setup",
+        user_id="user-1",
+        method="push",
+        device_info={"device_id": "d1", "push_token": "t"},
+    )
+
+    push = node.user_mfa_data["user-1"]["methods"]["push"]
+    assert (
+        push["verified"] is False
+    ), "push enrolment asserted a verification that never happened"
+
+
+def test_reset_requires_admin_override():
+    """reset destroys the existing factor and mints a new one."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"totp": {"secret": "ORIGINALSECRET", "verified": True}},
+        "backup_codes": ["ORIGINAL"],
+    }
+
+    result = node.execute(action="reset", user_id="victim", method="totp")
+
+    assert result["success"] is False
+    assert node.user_mfa_data["victim"]["methods"]["totp"]["secret"] == (
+        "ORIGINALSECRET"
+    )
+
+
+def test_revoke_all_does_not_deadlock_and_reports_revoked_methods():
+    """_revoke_mfa took a non-reentrant lock, then re-took it via a helper.
+
+    That wedged every MFA operation in the process permanently.
+    """
+    import threading
+
+    node = _mfa_node()
+    node.user_mfa_data["user-1"] = {
+        "methods": {"totp": {"secret": "S", "verified": True}},
+        "backup_codes": [],
+    }
+
+    done = {}
+
+    def _revoke():
+        done["result"] = node.execute(
+            action="revoke", user_id="user-1", method="all", admin_override=True
+        )
+
+    t = threading.Thread(target=_revoke, daemon=True)
+    t.start()
+    t.join(timeout=10)
+
+    assert not t.is_alive(), "revoke deadlocked on the non-reentrant _data_lock"
+    assert done["result"]["revoked_methods"] == ["totp"]
+
+    # The lock must still be usable afterwards.
+    assert node.execute(action="get_methods", user_id="user-1")["success"] is True
+
+
+def test_admin_recovery_requires_admin_override():
+    """The admin branch skipped every destination check and always succeeded."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="initiate_recovery", user_id="anyone-at-all", recovery_method="admin"
+    )
+
+    assert result["success"] is False
+    assert "anyone-at-all" not in getattr(node, "recovery_requests", {})
+
+
+def test_sms_setup_failure_rolls_back_the_enrolled_destination():
+    """A failed setup must not leave an attacker-chosen number enrolled."""
+    node = _mfa_node(
+        sms_provider={
+            "service": "twilio",
+            "account_sid": "AC",
+            "auth_token": "t",
+            "from_number": "+1555",
+        }
+    )
+
+    result = node.execute(
+        action="setup", user_id="victim", method="sms", user_phone="+15555550199"
+    )
+
+    assert result["success"] is False
+    assert "sms" not in node.user_mfa_data.get("victim", {}).get("methods", {})
+
+
+def test_delivery_errors_do_not_disclose_the_destination():
+    """Provider exceptions carry the recipient address/number."""
+    node = _mfa_node(
+        email_provider={
+            "smtp_host": "smtp.invalid",
+            "smtp_port": 587,
+            "username": "u",
+            "password": "p",
+        }
+    )
+
+    with patch(
+        "smtplib.SMTP", side_effect=OSError("refused for victim@secret.example")
+    ):
+        result = node.execute(
+            action="setup",
+            user_id="user-1",
+            method="email",
+            user_email="victim@secret.example",
+        )
+
+    assert "secret.example" not in str(
+        result
+    ), f"the enrolled destination leaked through the error text: {result}"
+
+
 def test_send_push_failure_returns_a_result_dict_not_an_exception():
     """Every other MFA failure returns a dict; push must not abort a workflow."""
     node = _mfa_node()

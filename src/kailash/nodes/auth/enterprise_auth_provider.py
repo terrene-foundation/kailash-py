@@ -278,9 +278,22 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             result["auth_id"] = auth_id
             result["timestamp"] = datetime.now(UTC).isoformat()
 
-            # Set success status if not explicitly set
+            # Derive success from the operation's own verdict before applying
+            # any default. Defaulting to True stamped every authorization
+            # DENIAL as success=True and audited it as "auth_success", so a
+            # caller gating on the SDK's conventional success field granted
+            # access on a denial (issue #2026).
             if "success" not in result:
-                result["success"] = True
+                if "authorized" in result:
+                    result["success"] = bool(result["authorized"])
+                elif "authenticated" in result:
+                    result["success"] = bool(result["authenticated"])
+                elif "valid" in result:
+                    result["success"] = bool(result["valid"])
+                elif "error" in result:
+                    result["success"] = False
+                else:
+                    result["success"] = True
 
             # Log successful operation
             if result.get("success", True):

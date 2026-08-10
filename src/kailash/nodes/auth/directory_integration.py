@@ -167,6 +167,39 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             ),
         }
 
+    def _build_tls_config(self, server_url: str):
+        """Build the LDAPS TLS policy shared by every connection site.
+
+        One policy for all sites: the three connection points previously
+        disagreed (one CERT_REQUIRED, one CERT_OPTIONAL, one with no TLS at
+        all), which is the multi-site parity failure `rules/security.md`
+        forbids. These channels carry bind passwords and the group data that
+        drives admin-role assignment, so certificates are validated by default;
+        ``tls_validate_optional`` is the explicit opt-out for a private CA or
+        lab directory.
+
+        Returns:
+            An ``ldap3.Tls`` for LDAPS connections, else None.
+        """
+        import ssl
+
+        from ldap3 import Tls
+
+        if not (
+            self.connection_config.get("use_ssl", False)
+            or str(server_url).startswith("ldaps://")
+        ):
+            return None
+
+        return Tls(
+            validate=(
+                ssl.CERT_OPTIONAL
+                if self.connection_config.get("tls_validate_optional")
+                else ssl.CERT_REQUIRED
+            ),
+            version=ssl.PROTOCOL_TLSv1_2,
+        )
+
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
@@ -260,7 +293,15 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             # Add processing metrics
             processing_time = (time.time() - start_time) * 1000
             result["processing_time_ms"] = processing_time
-            result["success"] = True
+            # Derive from the operation's verdict: unconditionally stamping
+            # success=True turned an {"authenticated": False} result into a
+            # success for any caller gating on that field (issue #2026).
+            if "authenticated" in result:
+                result["success"] = bool(result["authenticated"])
+            elif "error" in result:
+                result["success"] = False
+            else:
+                result["success"] = True
             result["directory_type"] = self.directory_type
 
             # Log successful operation
@@ -842,8 +883,15 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             bind_dn = self.connection_config.get("bind_dn", "")
             bind_password = self.connection_config.get("bind_password", "")
 
-            # Create server and connection
-            server = Server(server_url)
+            # Honour use_ssl / TLS here too: this bind carries the service
+            # account password, and building a bare Server() sent it in
+            # cleartext whenever the operator had configured use_ssl
+            # (issue #2026 -- the sibling of the _authenticate_user fix).
+            server = Server(
+                server_url,
+                use_ssl=self.connection_config.get("use_ssl", False),
+                tls=self._build_tls_config(server_url),
+            )
             connection = Connection(server, user=bind_dn, password=bind_password)
 
             # Attempt to bind (this is what the test expects to be called)
@@ -873,7 +921,19 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             connection.unbind()
 
         except ImportError:
-            # Fallback to simulation if ldap3 not available
+            if not self.connection_config.get("simulate_directory"):
+                # A health check must not report a connection it never made.
+                # This previously said "connected" with a full feature list
+                # whenever ldap3 was simply not installed (issue #2026).
+                test_result["connection_status"] = "unavailable"
+                test_result["error"] = (
+                    "ldap3 is not installed; the directory was not contacted. "
+                    "Install kailash[ldap] or set simulate_directory=True."
+                )
+                test_result["response_time_ms"] = (time.time() - start_time) * 1000
+                return test_result
+
+            # Explicit simulation opt-in.
             await asyncio.sleep(0.1)  # Simulate network delay
             test_result["connection_status"] = "connected"
             test_result["features_supported"] = [
@@ -986,13 +1046,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         use_ssl = self.connection_config.get("use_ssl", False)
         base_dn = self.connection_config.get("base_dn", "dc=example,dc=com")
 
-        # Build TLS context for LDAPS
-        tls_config = None
-        if use_ssl or server_url.startswith("ldaps://"):
-            tls_config = Tls(
-                validate=ssl.CERT_OPTIONAL,
-                version=ssl.PROTOCOL_TLSv1_2,
-            )
+        # Build TLS context for LDAPS -- one shared policy across every site,
+        # so a single opt-out flag governs all of them (issue #2026).
+        tls_config = self._build_tls_config(server_url)
 
         # Support server pool for connection pooling
         servers_list = self.connection_config.get("servers", [server_url])
@@ -1218,19 +1274,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             "user_dn_template", "CN={username},OU=Users," + base_dn
         )
 
-        tls_config = None
-        if use_ssl or server_url.startswith("ldaps://"):
-            # CERT_REQUIRED by default: this channel carries the user's
-            # password, so an unvalidated certificate makes the bind
-            # MITM-able. Opt out explicitly for a private CA / lab directory.
-            tls_config = Tls(
-                validate=(
-                    ssl.CERT_OPTIONAL
-                    if self.connection_config.get("tls_validate_optional")
-                    else ssl.CERT_REQUIRED
-                ),
-                version=ssl.PROTOCOL_TLSv1_2,
-            )
+        tls_config = self._build_tls_config(server_url)
 
         server = Server(server_url, use_ssl=use_ssl, tls=tls_config)
         user_dn = user_dn_template.format(username=username)

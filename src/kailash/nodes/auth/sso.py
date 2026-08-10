@@ -360,7 +360,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             # Log successful operation
             processing_time = (time.time() - start_time) * 1000
             result["processing_time_ms"] = processing_time
-            result["success"] = True
+            # Derive from the operation's verdict: unconditionally stamping
+            # success=True turned an {"authenticated": False} / {"valid": False}
+            # result into a success for any caller gating on that field
+            # (issue #2026).
+            if "authenticated" in result:
+                result["success"] = bool(result["authenticated"])
+            elif "valid" in result:
+                result["success"] = bool(result["valid"])
+            elif "error" in result:
+                result["success"] = False
+            else:
+                result["success"] = True
 
             # Log security event
             await self._log_security_event(
