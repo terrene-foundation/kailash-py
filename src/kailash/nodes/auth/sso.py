@@ -33,12 +33,23 @@ from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
 
+
 # Shared, BOUNDED executor for the sync->async bridge in ``run()``. A per-call
 # ThreadPoolExecutor would spawn one OS thread plus one event loop per request,
 # which a burst of unauthenticated SSO callbacks could turn into resource
 # exhaustion.
+def _sync_bridge_workers() -> int:
+    """Worker count for the sync bridge, validated so a typo cannot brick import."""
+    raw = os.environ.get("KAILASH_SSO_SYNC_BRIDGE_WORKERS", "8")
+    try:
+        workers = int(raw)
+    except (TypeError, ValueError):
+        return 8
+    return workers if workers >= 1 else 8
+
+
 _SYNC_BRIDGE_EXECUTOR = ThreadPoolExecutor(
-    max_workers=int(os.environ.get("KAILASH_SSO_SYNC_BRIDGE_WORKERS", "8")),
+    max_workers=_sync_bridge_workers(),
     thread_name_prefix="kailash-sso-sync-bridge",
 )
 
@@ -262,9 +273,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         :meth:`async_run` directly and avoid this path entirely.
         """
         start_time = time.time()
-        try:
-            future = _SYNC_BRIDGE_EXECUTOR.submit(
-                asyncio.run,
+
+        # The coroutine is built INSIDE the worker: constructing it here and
+        # handing it to a saturated pool leaves an un-awaited coroutine if the
+        # job is later cancelled.
+        def _invoke() -> Dict[str, Any]:
+            return asyncio.run(
                 self.async_run(
                     action=action,
                     provider=provider,
@@ -274,10 +288,17 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                     attributes=attributes,
                     callback_data=callback_data,
                     **kwargs,
-                ),
+                )
             )
+
+        future = _SYNC_BRIDGE_EXECUTOR.submit(_invoke)
+        try:
             return future.result(timeout=self.sync_bridge_timeout)
         except FuturesTimeoutError as e:
+            # Drop it from the queue if it has not started. An already-running
+            # job cannot be cancelled and is abandoned, which is why the
+            # provider-side call needs its own timeout too.
+            future.cancel()
             raise TimeoutError(
                 f"SSO operation {action!r} exceeded "
                 f"{self.sync_bridge_timeout}s on the synchronous bridge"

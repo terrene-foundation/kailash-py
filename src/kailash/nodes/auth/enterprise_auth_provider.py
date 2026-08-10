@@ -383,14 +383,32 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # the user_id the caller typed. Verifying a JWT/API key and then minting
         # a session for a caller-chosen name let anyone holding any valid
         # credential authenticate as anyone else (issue #2026).
-        asserted_user_id = primary_auth_result.get("user_id")
-        if isinstance(asserted_user_id, str) and asserted_user_id:
-            if user_id and asserted_user_id != user_id:
-                self.log_info(
-                    "Requested user_id does not match the authenticated "
-                    "principal; using the authenticated principal."
-                )
-            user_id = asserted_user_id
+        #
+        # The assertion is MANDATORY, not opportunistic: an opportunistic
+        # override silently fell back to the caller's user_id for any method
+        # that authenticates without naming a principal (the directory methods
+        # return "username", and social can return user_id=None).
+        asserted_user_id = primary_auth_result.get(
+            "user_id"
+        ) or primary_auth_result.get("username")
+        if not isinstance(asserted_user_id, str) or not asserted_user_id:
+            self.log_info(
+                f"Authentication method {auth_method} asserted no principal; "
+                "refusing rather than trusting the requested user_id."
+            )
+            return {
+                "success": False,
+                "authenticated": False,
+                "error": "Authentication method asserted no principal",
+                "auth_method": auth_method,
+                "risk_score": risk_score,
+            }
+        if user_id and asserted_user_id != user_id:
+            self.log_info(
+                "Requested user_id does not match the authenticated "
+                "principal; using the authenticated principal."
+            )
+        user_id = asserted_user_id
 
         # Adaptive authentication - determine if additional factors needed
         additional_factors_required = []
@@ -515,9 +533,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         validation_result = await self._validate_social_token(provider, access_token)
 
         if validation_result.get("valid"):
+            # The provider must name the principal. The key is always present
+            # here but may be None (a provider returning neither email nor
+            # login), so a `.get(key, default)` fallback never fired and the
+            # caller-supplied user_id was used instead (issue #2026).
+            social_user_id = validation_result.get("user_id")
+            if not isinstance(social_user_id, str) or not social_user_id:
+                return {
+                    "authenticated": False,
+                    "error": "Social provider returned no user identity",
+                }
             return {
                 "authenticated": True,
-                "user_id": validation_result.get("user_id", user_id),
+                "user_id": social_user_id,
                 "auth_method": "social",
                 "social_provider": provider,
                 "user_info": validation_result.get("user_info"),
@@ -640,7 +668,47 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # asymmetric public key be used as an HMAC secret: with a non-PEM
         # public key and HS256 in the list, anyone holding the PUBLIC key can
         # mint tokens.
-        algorithms = list(self.jwt_config.get("algorithms", ["HS256"]))
+        configured_algorithms = self.jwt_config.get("algorithms", ["HS256"])
+        if isinstance(configured_algorithms, str):
+            configured_algorithms = [configured_algorithms]
+        algorithms = [str(a) for a in configured_algorithms]
+
+        # Explicit allowlist. A denylist bucketed "none" as asymmetric and left
+        # the whole defence resting on PyJWT's key-presence rule.
+        allowed = {
+            "HS256",
+            "HS384",
+            "HS512",
+            "RS256",
+            "RS384",
+            "RS512",
+            "ES256",
+            "ES384",
+            "ES512",
+            "PS256",
+            "PS384",
+            "PS512",
+            "EDDSA",
+        }
+        unknown = [a for a in algorithms if a.upper() not in allowed]
+        if not algorithms or unknown:
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config['algorithms'] must be a non-empty list of "
+                    f"supported signing algorithms; rejected: {unknown or algorithms}"
+                ),
+            }
+
+        if self.jwt_config.get("secret") and self.jwt_config.get("public_key"):
+            return {
+                "authenticated": False,
+                "error": (
+                    "jwt_config sets both 'secret' and 'public_key'; configure "
+                    "exactly one."
+                ),
+            }
+
         symmetric = {a for a in algorithms if a.upper().startswith("HS")}
         asymmetric = {a for a in algorithms if not a.upper().startswith("HS")}
         if symmetric and asymmetric:
@@ -1241,8 +1309,21 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "reason": "session_invalid",
             }
 
-        # The session's subject wins over any caller-supplied user_id.
-        user_id = session_validation.get("user_id", user_id)
+        # The session's subject wins over any caller-supplied user_id. The
+        # subject is NESTED under "session_data" (see SessionManagementNode's
+        # validate result); reading a top-level "user_id" always missed and
+        # silently fell back to the caller's claim.
+        session_data = session_validation.get("session_data") or {}
+        session_user_id = session_data.get("user_id") or session_validation.get(
+            "user_id"
+        )
+        if not session_user_id:
+            return {
+                "authorized": False,
+                "error": "Session has no subject",
+                "reason": "session_subject_missing",
+            }
+        user_id = session_user_id
 
         # An empty permission request is not a free pass.
         if not permissions:

@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -550,6 +551,125 @@ def test_generate_backup_codes_does_not_enrol_an_unenrolled_user():
     assert result["success"] is False
     assert "backup_codes" not in result
     assert "attacker" not in node.user_mfa_data
+
+
+def test_set_preference_then_backup_codes_does_not_yield_a_verified_session():
+    """The round-1 guard checked key presence, which two actions create.
+
+    set_preference creates an empty user_mfa_data entry, after which
+    generate_backup_codes passed a `user_id in user_mfa_data` check and
+    returned codes that _verify_mfa accepts directly.
+    """
+    node = _mfa_node()
+
+    node.execute(action="set_preference", user_id="victim", preferred_method="totp")
+    codes = node.execute(action="generate_backup_codes", user_id="victim")
+
+    assert (
+        codes["success"] is False
+    ), f"backup codes were issued to an unenrolled user: {codes}"
+
+    verified = node.execute(
+        action="verify", user_id="victim", code="AAAAAAAA", method="totp"
+    )
+    assert verified.get("verified") is not True
+    assert verified.get("session_id") is None
+
+
+def test_recovery_refuses_an_unverified_enrolled_destination():
+    """`setup` can write a destination without verification.
+
+    If recovery trusted it, an attacker could point a victim's recovery at
+    their own address and then trigger recovery.
+    """
+    node = _mfa_node(
+        email_provider={
+            "smtp_host": "smtp.invalid",
+            "smtp_port": 587,
+            "username": "u",
+            "password": "p",
+        }
+    )
+    node.user_mfa_data["victim"] = {
+        "methods": {"email": {"email": "attacker@evil.tld", "verified": False}},
+        "backup_codes": [],
+    }
+
+    with patch.object(node, "_smtp_send", return_value=None) as smtp:
+        result = node.execute(
+            action="initiate_recovery", user_id="victim", recovery_method="email"
+        )
+
+    assert result["success"] is False
+    smtp.assert_not_called()
+
+
+def test_device_trust_requires_a_trust_token():
+    """A device_id is an identifier, not a secret; omitting the token gave skip_mfa."""
+    node = _mfa_node()
+    node.trusted_devices["user-1"] = [
+        {
+            "device_id": "known-device",
+            "trust_token": "the-real-token",
+            "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+        }
+    ]
+
+    result = node._check_device_trust("user-1", "known-device", None)
+
+    assert (
+        result.get("skip_mfa") is not True
+    ), f"MFA was waived without presenting the trust token: {result}"
+    assert result.get("trusted") is False
+
+
+def test_device_trust_accepts_the_real_token():
+    """Positive control: the enrolled token still works."""
+    node = _mfa_node()
+    node.trusted_devices["user-1"] = [
+        {
+            "device_id": "known-device",
+            "trust_token": "the-real-token",
+            "expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
+        }
+    ]
+
+    result = node._check_device_trust("user-1", "known-device", "the-real-token")
+
+    assert result["trusted"] is True
+
+
+def test_setup_email_does_not_claim_sent_without_a_transport():
+    """The SMS path failed closed here; its email twin did not."""
+    node = _mfa_node()
+
+    result = node.execute(
+        action="setup", user_id="user-1", method="email", user_email="u@example.net"
+    )
+
+    assert (
+        result.get("verification_sent") is not True
+    ), f"email setup reported a code as sent with no transport: {result}"
+    assert result.get("success") is False
+    assert "email" not in node.user_mfa_data.get("user-1", {}).get("methods", {})
+
+
+def test_recovery_destination_with_non_ascii_does_not_crash():
+    """compare_digest raises TypeError on non-ASCII str."""
+    node = _mfa_node()
+    node.user_mfa_data["victim"] = {
+        "methods": {"email": {"email": "üser@example.de", "verified": True}},
+        "backup_codes": [],
+    }
+
+    result = node.execute(
+        action="initiate_recovery",
+        user_id="victim",
+        recovery_method="email",
+        recovery_destination="üser@example.de",
+    )
+
+    assert isinstance(result, dict)
 
 
 def test_send_push_failure_returns_a_result_dict_not_an_exception():
@@ -1087,6 +1207,118 @@ def test_authenticate_does_not_mint_a_session_for_a_caller_chosen_user_id():
     assert (
         created_for["user_id"] == "alice"
     ), f"the session itself was created for the wrong principal: {created_for}"
+
+
+def test_authenticate_refuses_a_method_that_asserts_no_principal():
+    """An opportunistic override fell back to the caller's user_id.
+
+    The directory methods return "username" rather than "user_id", and social
+    can return user_id=None, so an attacker authenticating as themselves could
+    request user_id="admin".
+    """
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        enabled_methods=["directory"],
+        adaptive_auth_enabled=False,
+        risk_assessment_enabled=False,
+    )
+
+    async def _anon_auth(*args, **kwargs):
+        # authenticated, but naming no principal at all
+        return {"authenticated": True, "directory_type": "ldap"}
+
+    node._perform_authentication = _anon_auth
+
+    result = asyncio.run(
+        node._authenticate(
+            auth_method="directory",
+            credentials={"username": "lowpriv", "password": "p"},
+            user_id="admin",
+            risk_context={},
+            auth_id="auth-1",
+        )
+    )
+
+    assert (
+        result["authenticated"] is False
+    ), f"a principal-less authentication minted a session for 'admin': {result}"
+
+
+def test_authorize_reads_the_session_subject_from_session_data():
+    """The subject is nested under session_data; a top-level read always missed."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test", user_permissions={"admin": ["admin"], "attacker": ["read"]}
+    )
+
+    async def _validate(**kwargs):
+        # The real SessionManagementNode shape: subject nested, not top-level.
+        return {"success": True, "valid": True, "session_data": {"user_id": "attacker"}}
+
+    node.session_node.execute_async = _validate
+
+    result = asyncio.run(
+        node._authorize(
+            user_id="admin",  # caller's claim, must be ignored
+            session_id="sess-1",
+            resource="billing",
+            permissions=["admin"],
+            risk_context={},
+        )
+    )
+
+    assert (
+        result["authorized"] is False
+    ), f"the caller's claimed user_id was used instead of the session subject: {result}"
+
+
+@pytest.mark.parametrize("algorithms", [["none"], ["none", "RS256"], [], "HS256junk"])
+def test_jwt_rejects_unsupported_algorithm_configuration(algorithms):
+    """A denylist bucketed 'none' as asymmetric and let it through the check.
+
+    Asserts the CONFIGURATION is rejected, not merely that a malformed token
+    fails: the old code reached pyjwt with alg='none' configured and refused
+    only because the token did not parse, which is a different guarantee.
+    """
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        jwt_config={"public_key": "not-a-pem-blob", "algorithms": algorithms},
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": "a.b.c"}, user_id="n", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+    assert (
+        "algorithms" in result["error"]
+    ), f"the algorithm configuration was not itself rejected: {result}"
+
+
+def test_jwt_refuses_when_both_secret_and_public_key_are_set():
+    """Ambiguous key material must not silently pick one."""
+    from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
+
+    node = EnterpriseAuthProviderNode(
+        name="eap_test",
+        jwt_config={"secret": "s", "public_key": "p", "algorithms": ["HS256"]},
+    )
+
+    result = asyncio.run(
+        node._authenticate_jwt(
+            credentials={"jwt_token": "a.b.c"}, user_id="n", risk_context={}
+        )
+    )
+
+    assert result["authenticated"] is False
+    assert "public_key" in result["error"]
 
 
 # ---------------------------------------------------------------------------

@@ -551,37 +551,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if not username or not password:
             raise ValueError("Username and password required for authentication")
 
-        # Try real LDAP authentication first (for tests), fall back to simulation
+        # Bind through the configurable implementation. This path used to build
+        # its own connection with the bind DN hardcoded to
+        # "CN={username},OU=Users,DC=test,DC=com", ignoring base_dn /
+        # user_dn_template, and dropped the use_ssl/TLS handling -- so against a
+        # real directory the bind always failed into simulation, and an operator
+        # who set use_ssl sent the user's password in cleartext (issue #2026).
         try:
-            from ldap3 import Connection, Server
-
-            # Get connection config
-            server_url = self.connection_config.get("server", "ldap://localhost:389")
-            bind_dn = self.connection_config.get("bind_dn", "")
-            bind_password = self.connection_config.get("bind_password", "")
-
-            # Create server and connection for user authentication
-            server = Server(server_url)
-            user_dn = f"CN={username},OU=Users,DC=test,DC=com"
-            connection = Connection(server, user=user_dn, password=password)
-
-            # Attempt to bind as the user
-            bind_result = connection.bind()
-            connection.unbind()
-
-            if bind_result:
-                auth_result = {
-                    "authenticated": True,
-                    "username": username,
-                    "directory_type": self.directory_type,
-                }
-            else:
-                auth_result = {
-                    "authenticated": False,
-                    "username": username,
-                    "reason": "invalid_credentials",
-                    "message": "Invalid credentials",
-                }
+            auth_result = await self._ldap_directory_auth(username, password)
 
         except ImportError:
             # Fall back to simulation if ldap3 not available
@@ -594,8 +571,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             # Get user details
             user_details = await self._get_user(username)
             auth_result["user"] = user_details.get("user")
-            # Add user DN for test compatibility
-            auth_result["user_dn"] = f"CN={username},OU=Users,DC=test,DC=com"
+            # Report the DN actually used for the bind, from configuration --
+            # this was hardcoded to a DC=test,DC=com value "for test
+            # compatibility" and echoed to the caller (issue #2026).
+            base_dn = self.connection_config.get("base_dn", "dc=example,dc=com")
+            user_dn_template = self.connection_config.get(
+                "user_dn_template", "CN={username},OU=Users," + base_dn
+            )
+            auth_result["user_dn"] = user_dn_template.format(username=username)
 
             # Log successful authentication
             await self.audit_logger.execute_async(  # type: ignore[attr-defined]
@@ -1237,7 +1220,17 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         tls_config = None
         if use_ssl or server_url.startswith("ldaps://"):
-            tls_config = Tls(validate=ssl.CERT_OPTIONAL, version=ssl.PROTOCOL_TLSv1_2)
+            # CERT_REQUIRED by default: this channel carries the user's
+            # password, so an unvalidated certificate makes the bind
+            # MITM-able. Opt out explicitly for a private CA / lab directory.
+            tls_config = Tls(
+                validate=(
+                    ssl.CERT_OPTIONAL
+                    if self.connection_config.get("tls_validate_optional")
+                    else ssl.CERT_REQUIRED
+                ),
+                version=ssl.PROTOCOL_TLSv1_2,
+            )
 
         server = Server(server_url, use_ssl=use_ssl, tls=tls_config)
         user_dn = user_dn_template.format(username=username)
@@ -1249,6 +1242,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if bind_result:
             return {
                 "authenticated": True,
+                # Name the principal explicitly: a caller that only sees
+                # "username" fell back to its own requested user_id (#2026).
+                "user_id": username,
                 "username": username,
                 "directory_type": self.directory_type,
             }
@@ -1300,6 +1296,9 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if password == valid_passwords.get(username, "password123"):
             return {
                 "authenticated": True,
+                # Name the principal explicitly: a caller that only sees
+                # "username" fell back to its own requested user_id (#2026).
+                "user_id": username,
                 "username": username,
                 "directory_type": self.directory_type,
             }

@@ -820,15 +820,30 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # raises; the caller is never told a code was sent when it was not.
         verification_code = self._generate_verification_code()
         try:
-            self._send_email_code(user_email, verification_code, user_id)
+            delivered = self._send_email_code(user_email, verification_code, user_id)
         except MFADeliveryError as e:
             self.log_with_context(
                 "ERROR", f"Email setup failed for user {user_id}: {e}"
             )
+            self.user_mfa_data[user_id]["methods"].pop("email", None)
             return {
                 "success": False,
                 "method": "email",
                 "error": f"Email delivery failed: {e}",
+                "verification_sent": False,
+            }
+
+        if not delivered:
+            # Mirror the SMS path: no transport means no code reached the user,
+            # so do not leave them enrolled against a code nobody received.
+            self.user_mfa_data[user_id]["methods"].pop("email", None)
+            return {
+                "success": False,
+                "method": "email",
+                "error": (
+                    "No email transport is configured. Set email_provider="
+                    "{'smtp_host': ...} on MultiFactorAuthNode."
+                ),
                 "verification_sent": False,
             }
 
@@ -1201,9 +1216,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 }
                 devices_to_check.append(device_obj)
 
+        # A device_id is an identifier, not a secret -- it is echoed back by
+        # setup_push and trust_device. Without a token requirement, anyone
+        # naming a device_id got skip_mfa=True (issue #2026).
+        if not trust_token:
+            return {
+                "success": True,
+                "trusted": False,
+                "skip_mfa": False,
+                "reason": "trust_token required",
+            }
+
         for device in devices_to_check:
             device_matches = device.get("device_id") == device_id
-            token_matches = not trust_token or device.get("trust_token") == trust_token
+            stored_token = device.get("trust_token") or ""
+            token_matches = secrets.compare_digest(
+                str(stored_token).encode("utf-8"), str(trust_token).encode("utf-8")
+            )
 
             if device_matches and token_matches:
                 # Check if trust has expired
@@ -1692,12 +1721,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {"success": False, "error": "Backup codes not enabled"}
 
         with self._data_lock:
-            if user_id not in self.user_mfa_data:
-                # Issuing backup codes for an unenrolled user WAS enrolment by
-                # another name: the codes returned here are accepted directly by
-                # _verify_mfa, so this reached the same outcome as the removed
-                # "123456" auto-enrolment stub (issue #2026). Backup codes
-                # supplement an existing factor; they never establish one.
+            # Gate on an ENROLLED FACTOR, not on the presence of a record:
+            # set_preference and trust_device both create an empty
+            # user_mfa_data entry, so a key-presence check was bypassable in
+            # two calls. The codes returned here are accepted directly by
+            # _verify_mfa, so issuing them to an unenrolled user reached the
+            # same outcome as the removed "123456" auto-enrolment stub
+            # (issue #2026). Backup codes supplement a factor; never establish one.
+            if not self.user_mfa_data.get(user_id, {}).get("methods"):
                 return {
                     "success": False,
                     "user_id": user_id,
@@ -2088,9 +2119,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain"))
 
+            # An explicit timeout: smtplib defaults to the global socket
+            # timeout (None), so a blackholing host blocked forever.
             server = smtplib.SMTP(
                 self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
                 self.email_provider.get("smtp_port", 587),
+                timeout=self.email_provider.get("timeout", 15),
             )
             server.starttls()
             server.login(
@@ -2532,6 +2566,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "error": f"Unsupported recovery method: {recovery_method}",
             }
 
+        # Resolve the destination under the lock, then RELEASE it before the
+        # network call: delivery previously ran inside _data_lock, so one hung
+        # SMTP host wedged every MFA operation in the process.
         with self._data_lock:
             enrolled = (
                 self.user_mfa_data.get(user_id, {})
@@ -2547,55 +2584,69 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             elif recovery_method == "sms":
                 destination = enrolled.get("phone")
 
-            if recovery_method in ("email", "sms") and not destination:
-                return {
-                    "success": False,
-                    "error": (
-                        f"No enrolled {recovery_method} destination for this "
-                        "user; recovery cannot be delivered."
-                    ),
-                }
+            if recovery_method in ("email", "sms"):
+                if not destination:
+                    return {
+                        "success": False,
+                        "error": (
+                            f"No enrolled {recovery_method} destination for this "
+                            "user; recovery cannot be delivered."
+                        ),
+                    }
+                # An UNVERIFIED destination is one an unauthenticated `setup`
+                # call could have just written, which would redirect the
+                # victim's recovery token to an attacker's address.
+                if not enrolled.get("verified"):
+                    return {
+                        "success": False,
+                        "error": (
+                            f"The enrolled {recovery_method} destination is not "
+                            "verified; recovery cannot be delivered to it."
+                        ),
+                    }
 
             # A supplied destination is a confirmation value, never a routing
-            # instruction. Mismatch is refused rather than honoured.
+            # instruction. Mismatch is refused rather than honoured. Compared as
+            # UTF-8 bytes because compare_digest rejects non-ASCII str.
             if recovery_destination and not secrets.compare_digest(
-                str(recovery_destination), str(destination or "")
+                str(recovery_destination).encode("utf-8"),
+                str(destination or "").encode("utf-8"),
             ):
                 return {
                     "success": False,
                     "error": "recovery_destination does not match the enrolled destination",
                 }
 
-            recovery_token = secrets.token_urlsafe(32)
-            expires_at = datetime.now(UTC) + timedelta(hours=24)  # 24 hour expiry
+        recovery_token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(UTC) + timedelta(hours=24)  # 24 hour expiry
 
-            # Deliver BEFORE recording the request, so a request is never left
-            # pending against a token the user cannot have received.
-            try:
-                delivered = self._deliver_recovery_token(
-                    recovery_method, destination, recovery_token, user_id
-                )
-            except MFADeliveryError as e:
-                self.log_with_context(
-                    "ERROR", f"Recovery delivery failed for user {user_id}: {e}"
-                )
-                return {
-                    "success": False,
-                    "recovery_method": recovery_method,
-                    "error": f"Recovery token delivery failed: {e}",
-                }
+        # Deliver BEFORE recording the request, so a request is never left
+        # pending against a token the user cannot have received.
+        try:
+            delivered = self._deliver_recovery_token(
+                recovery_method, destination, recovery_token, user_id
+            )
+        except MFADeliveryError as e:
+            self.log_with_context(
+                "ERROR", f"Recovery delivery failed for user {user_id}: {e}"
+            )
+            return {
+                "success": False,
+                "recovery_method": recovery_method,
+                "error": f"Recovery token delivery failed: {e}",
+            }
 
-            if not delivered:
-                return {
-                    "success": False,
-                    "recovery_method": recovery_method,
-                    "error": (
-                        f"No {recovery_method} transport is configured; the "
-                        "recovery token was not delivered."
-                    ),
-                }
+        if not delivered:
+            return {
+                "success": False,
+                "recovery_method": recovery_method,
+                "error": (
+                    f"No {recovery_method} transport is configured; the "
+                    "recovery token was not delivered."
+                ),
+            }
 
-            # Store recovery request
+        with self._data_lock:
             if not hasattr(self, "recovery_requests"):
                 self.recovery_requests = {}
 
