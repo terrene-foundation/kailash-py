@@ -8,6 +8,29 @@
 
 Four NEW security issues were filed that **outrank everything on the original list**.
 
+**UPDATE 4 (burn-down, latest): main is `04bf57ff3`. FIRST LANE FIX LANDED — PR #2034 merged,
+#2015 CLOSED.** Its three security blockers were CONFIRMED BY EXECUTION, fixed, then independently
+re-verified (no call site passes an allowlist; the template execute-blocks no longer catch
+`ValueError`; the helper is now total). lane-2b worktree retired.
+
+**Three lane PRs still open, each with a confirmed blocker:**
+
+- **#2035 (#2026)** — the reviewer's BLOCK was **REFUTED BY EXECUTION** (the claimed cross-user MFA
+  bypass is closed at head; it read a stale revision). Real remaining: JWT `sub` fallback,
+  `if session_id:` skip, truthy-string flag gates, untested sso sync-bridge.
+- **#2036 (#2027)** — Windows `os.fchmod` AttributeError (POSIX-only), `_resolve_cache` keyed on
+  host+port only, unvalidated `reference` → path traversal.
+- **#2037 (#2014)** — **F1 CONFIRMED BY EXECUTION: RCE in the PARENT process.** A hook returning an
+  object with a malicious `__reduce__` passes the child's `pickle.dumps` guard (`__reduce__` only
+  BUILDS the instruction) and executes at unpickle time in the agent — `MARKER == PARENT PID` —
+  with the call reporting `success: True`. Isolation itself is PROVEN REAL
+  (`PARENT 60454 | HOOK RAN IN 60612`); F2 (exception shadowing) is fixed.
+
+**Reviewer caveat that generalises:** three of four security reviewers had NO shell, so every
+headline finding was inference. Running their probes flipped outcomes in BOTH directions — one
+CRITICAL refuted, three findings plus an RCE confirmed. Reviewers reading code find candidates;
+only execution separates real from plausible.
+
 **UPDATE 3 (burn-down, latest): main is `5af514919`.** Merged: #2028, #2032, #2033, #2042.
 **FOUR lane PRs open — #2034 (#2015), #2035 (#2026), #2036 (#2027), #2037 (#2014)** — every one
 measured MORE defects than its issue claimed (#2035 found **17 auth defects vs 2**). Filed from
