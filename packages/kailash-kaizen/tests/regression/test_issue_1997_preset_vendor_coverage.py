@@ -130,7 +130,9 @@ _TOGETHER_KEY: Final[str] = _HEX64
 
 def _probe(preset_name: str, key: str) -> str:
     """Embed ``key`` in a realistic error string and return the scrubbed text."""
-    return PRESETS[preset_name](RuntimeError(f"401 unauthorized: invalid api key {key}"))
+    return PRESETS[preset_name](
+        RuntimeError(f"401 unauthorized: invalid api key {key}")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +217,13 @@ BENIGN_BOTH_PRESETS: Final[List] = [
 #: so they are the sharpest available probe that the new rule did not smuggle
 #: shape-only breadth onto the surface with ~180 sinks.
 BENIGN_CONSERVATIVE_ONLY: Final[List] = [
-    pytest.param("checkpoint at f0e1d2c3b4a5968778695a4b3c2d1e0f0a1b2c3d", id="git-sha"),
+    pytest.param(
+        "checkpoint at f0e1d2c3b4a5968778695a4b3c2d1e0f0a1b2c3d", id="git-sha"
+    ),
     pytest.param("checksum mismatch: 9e107d9d372bb6826bd81d3542a419d6", id="md5"),
-    pytest.param("trace 6f1c2a3b4d5e6f708192a3b4c5d6e7f8 not found", id="uuid-nohyphen"),
+    pytest.param(
+        "trace 6f1c2a3b4d5e6f708192a3b4c5d6e7f8 not found", id="uuid-nohyphen"
+    ),
     pytest.param(
         "unknown node type: AbstractSingletonProxyFactoryBeanBuilderImpl",
         id="camelcase-identifier",
