@@ -230,9 +230,7 @@ class DashboardAPIServer:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(
-                        e, logger=self.logger, context='list runs'
-                    ),
+                    detail=safe_http_detail(e, logger=self.logger, context="list runs"),
                 ) from e
 
         @self.app.get("/api/v1/runs/{run_id}", response_model=RunResponse)
@@ -264,9 +262,7 @@ class DashboardAPIServer:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(
-                        e, logger=self.logger, context='get run'
-                    ),
+                    detail=safe_http_detail(e, logger=self.logger, context="get run"),
                 ) from e
 
         @self.app.get("/api/v1/runs/{run_id}/tasks", response_model=list[TaskResponse])
@@ -304,7 +300,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='get run tasks'
+                        e, logger=self.logger, context="get run tasks"
                     ),
                 ) from e
 
@@ -421,7 +417,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='start monitoring'
+                        e, logger=self.logger, context="start monitoring"
                     ),
                 ) from e
 
@@ -487,7 +483,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='stop monitoring'
+                        e, logger=self.logger, context="stop monitoring"
                     ),
                 ) from e
 
@@ -525,7 +521,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='get current metrics'
+                        e, logger=self.logger, context="get current metrics"
                     ),
                 ) from e
 
@@ -552,7 +548,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='get metrics history'
+                        e, logger=self.logger, context="get metrics history"
                     ),
                 ) from e
 
@@ -595,7 +591,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='generate report'
+                        e, logger=self.logger, context="generate report"
                     ),
                 ) from e
 
@@ -618,7 +614,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='download report'
+                        e, logger=self.logger, context="download report"
                     ),
                 ) from e
 
@@ -639,7 +635,7 @@ class DashboardAPIServer:
                 raise HTTPException(
                     status_code=500,
                     detail=safe_http_detail(
-                        e, logger=self.logger, context='generate live dashboard'
+                        e, logger=self.logger, context="generate live dashboard"
                     ),
                 ) from e
 

@@ -20,7 +20,9 @@ import logging
 
 import pytest
 
-fastapi = pytest.importorskip("fastapi", reason="visualization API needs the fastapi extra")
+fastapi = pytest.importorskip(
+    "fastapi", reason="visualization API needs the fastapi extra"
+)
 from fastapi.testclient import TestClient  # noqa: E402
 
 from kailash.utils.http_errors import safe_http_detail  # noqa: E402
@@ -72,7 +74,9 @@ def test_dsn_does_not_reach_an_unauthenticated_client(caplog):
     # The client must not receive the credential, the DSN, or the raw message.
     assert SECRET not in body, f"password reached the client: {body!r}"
     assert DSN not in body, f"DSN reached the client: {body!r}"
-    assert "could not connect" not in body, f"raw exception text reached client: {body!r}"
+    assert (
+        "could not connect" not in body
+    ), f"raw exception text reached client: {body!r}"
 
     # ...but the failure is still reported, not swallowed.
     assert "reference:" in body, f"no correlation reference for the operator: {body!r}"
@@ -172,16 +176,16 @@ def test_helper_status_code_selects_the_generic_message():
     logger = logging.getLogger("test.http_errors.status")
     exc = RuntimeError("internal")
 
-    assert safe_http_detail(exc, logger=logger, context="c", status_code=404).startswith(
-        "Resource not found"
-    )
-    assert safe_http_detail(exc, logger=logger, context="c", status_code=403).startswith(
-        "Access denied"
-    )
+    assert safe_http_detail(
+        exc, logger=logger, context="c", status_code=404
+    ).startswith("Resource not found")
+    assert safe_http_detail(
+        exc, logger=logger, context="c", status_code=403
+    ).startswith("Access denied")
     # An unmapped status still fails closed rather than echoing the exception.
-    assert safe_http_detail(exc, logger=logger, context="c", status_code=418).startswith(
-        "Internal server error"
-    )
+    assert safe_http_detail(
+        exc, logger=logger, context="c", status_code=418
+    ).startswith("Internal server error")
 
 
 @pytest.mark.regression

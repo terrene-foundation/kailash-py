@@ -502,7 +502,9 @@ class APIGateway:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(e, logger=logger, context="create workflow"),
+                    detail=safe_http_detail(
+                        e, logger=logger, context="create workflow"
+                    ),
                 ) from e
 
         @self.app.get("/api/workflows/{workflow_id}")
@@ -586,7 +588,9 @@ class APIGateway:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(e, logger=logger, context="execute workflow"),
+                    detail=safe_http_detail(
+                        e, logger=logger, context="execute workflow"
+                    ),
                 ) from e
 
         @self.app.get("/api/executions/{execution_id}")
@@ -670,7 +674,9 @@ class APIGateway:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(e, logger=logger, context="get node schemas"),
+                    detail=safe_http_detail(
+                        e, logger=logger, context="get node schemas"
+                    ),
                 ) from e
 
         @self.app.get("/api/schemas/nodes/{node_type}")
@@ -829,7 +835,9 @@ class APIGateway:
             except Exception as e:
                 raise HTTPException(
                     status_code=500,
-                    detail=safe_http_detail(e, logger=logger, context="get recent events"),
+                    detail=safe_http_detail(
+                        e, logger=logger, context="get recent events"
+                    ),
                 ) from e
 
     # Public API methods

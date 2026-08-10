@@ -38,8 +38,8 @@ from ..middleware.gateway.event_store import (
     performance_metrics_projection,
     request_state_projection,
 )
-from .workflow_server import WorkflowServer
 from ..utils.http_errors import safe_http_detail
+from .workflow_server import WorkflowServer
 
 logger = logging.getLogger(__name__)
 

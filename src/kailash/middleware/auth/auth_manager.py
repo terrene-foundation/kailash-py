@@ -41,8 +41,8 @@ from ...nodes.security import (
     SecurityEventNode,
 )
 from ...nodes.transform import DataTransformer
-from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 from ...utils.http_errors import safe_http_detail
+from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 
 logger = logging.getLogger(__name__)
 

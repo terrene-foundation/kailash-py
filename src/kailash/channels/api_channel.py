@@ -19,8 +19,8 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
     ) from exc
 
 from ..servers import EnterpriseWorkflowServer
-from ..workflow import Workflow
 from ..utils.http_errors import safe_http_detail
+from ..workflow import Workflow
 from .base import (
     Channel,
     ChannelConfig,
