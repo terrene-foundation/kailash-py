@@ -387,7 +387,7 @@ changes:
 
       REDTEAM: reviewer + security-reviewer + cc-architect (parallel) → MERGE-WITH-FIXES;
 
-      all fixes applied (README scrub + removed a leaked private seed-org token `rrps-mtu`
+      all fixes applied (README scrub + removed a leaked private seed-org token
 
       from the clause''s own detection grep). NOT a self-referential-codify Rule-1 round —
 
