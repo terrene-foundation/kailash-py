@@ -710,21 +710,25 @@ class WorkflowAPIGateway:
             methods=methods,
             **route_kwargs,
         )
-        async def _proxy_handler(
-            path: str,
-            request: Request,
-            _name=name,
-            _backends=backends,
-            _allowlist=path_allowlist,
-        ):
-            """Forward request to backend using round-robin."""
+        async def _proxy_handler(path: str, request: Request):
+            """Forward request to backend using round-robin.
+
+            `name`, `backends` and `path_allowlist` are captured from the
+            enclosing scope, NOT passed as default arguments. FastAPI treats a
+            non-path parameter carrying a plain default as a QUERY parameter,
+            so the previous `backends=backends` idiom let a caller redirect
+            the forward with `?backends=http://attacker/` -- SSRF. Each
+            `proxy_workflow` call has its own scope, so direct capture is
+            correct and the late-binding hazard the idiom guards against does
+            not apply.
+            """
             # Refuse traversal before the target URL is built (issue #2025),
             # rather than relying on the HTTP client's URL normalization.
             unsafe_reason = reject_unsafe_proxy_path(path)
             if unsafe_reason is not None:
                 logger.warning(
                     "gateway.proxy.path_rejected",
-                    extra={"workflow": _name, "reason": unsafe_reason},
+                    extra={"workflow": name, "reason": unsafe_reason},
                 )
                 return Response(
                     content=json.dumps(
@@ -734,9 +738,9 @@ class WorkflowAPIGateway:
                     media_type="application/json",
                 )
 
-            if not path_matches_allowlist(path, _allowlist):
+            if not path_matches_allowlist(path, path_allowlist):
                 logger.warning(
-                    "gateway.proxy.path_not_allowed", extra={"workflow": _name}
+                    "gateway.proxy.path_not_allowed", extra={"workflow": name}
                 )
                 return Response(
                     content=json.dumps({"error": "Not found"}),
@@ -751,7 +755,7 @@ class WorkflowAPIGateway:
             safe_path_match = SAFE_FORWARD_PATH_RE.fullmatch(path)
             if safe_path_match is None:
                 logger.warning(
-                    "gateway.proxy.path_charset_rejected", extra={"workflow": _name}
+                    "gateway.proxy.path_charset_rejected", extra={"workflow": name}
                 )
                 return Response(
                     content=json.dumps(
@@ -765,9 +769,9 @@ class WorkflowAPIGateway:
                 )
             safe_path = safe_path_match.group(0)
 
-            idx = self._proxy_round_robin.get(_name, 0)
-            backend = _backends[idx % len(_backends)]
-            self._proxy_round_robin[_name] = idx + 1
+            idx = self._proxy_round_robin.get(name, 0)
+            backend = backends[idx % len(backends)]
+            self._proxy_round_robin[name] = idx + 1
 
             target_url = f"{backend.rstrip('/')}/{safe_path}"
 

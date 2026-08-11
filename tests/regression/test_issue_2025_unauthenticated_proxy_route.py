@@ -82,6 +82,21 @@ class _EchoHandler(BaseHTTPRequestHandler):
         return
 
 
+class _AttackerHandler(BaseHTTPRequestHandler):
+    """Stands in for a host the caller would like the proxy redirected to."""
+
+    def do_GET(self):
+        payload = json.dumps({"who": "ATTACKER-CONTROLLED-HOST"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
 @pytest.fixture
 def backend():
     """A real HTTP server on a real socket -- no mocking (rules/testing.md)."""
@@ -560,3 +575,100 @@ def test_normalize_allowed_methods():
         normalize_allowed_methods(
             ["HEAD"], name="x", supported=("GET", "POST", "PUT", "DELETE", "PATCH")
         )
+
+
+# ---------------------------------------------------------------------------
+# Query-parameter override of the handler's closure captures -- FULL SSRF
+# ---------------------------------------------------------------------------
+
+
+def test_destination_cannot_be_overridden_by_query_parameter(
+    server, backend, auth_manager
+):
+    """`?_url=http://attacker/` MUST NOT redirect the proxy. This was live.
+
+    FastAPI inspects the handler signature and treats any non-path parameter
+    carrying a plain default as a QUERY parameter. The handler captured its
+    destination as `_url=proxy_url`, so the destination was caller-writable:
+    an authenticated caller could point the proxy at any host they liked.
+
+    Measured on the pre-fix source, with a second HTTP server standing in for
+    the attacker's host:
+
+        NORMAL   -> {"who": "legitimate-backend"}
+        ?_url=   -> {"who": "ATTACKER-CONTROLLED-HOST"}
+
+    This is FULL SSRF -- not the "partial" the CodeQL alert was rated, and
+    not the "no authority pivot is constructible" the issue analysis asserted.
+    """
+    attacker = ThreadingHTTPServer(("127.0.0.1", 0), _AttackerHandler)
+    thread = threading.Thread(target=attacker.serve_forever, daemon=True)
+    thread.start()
+    attacker_url = f"http://127.0.0.1:{attacker.server_address[1]}"
+    try:
+        server.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
+        client = TestClient(server.app)
+        headers = {"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"}
+
+        # Control: the normal request reaches the registered backend.
+        normal = client.get("/workflows/internal/data", headers=headers)
+        assert normal.status_code == 200, normal.text
+        assert "ATTACKER" not in normal.text
+
+        # The attack: the destination must stay the registered backend.
+        attack = client.get(
+            f"/workflows/internal/data?_url={attacker_url}", headers=headers
+        )
+        assert attack.status_code == 200, attack.text
+        assert (
+            "ATTACKER-CONTROLLED-HOST" not in attack.text
+        ), "SSRF: the caller redirected the proxy to an arbitrary host"
+    finally:
+        attacker.shutdown()
+        attacker.server_close()
+        thread.join(timeout=5)
+
+
+def test_allowlist_cannot_be_overridden_by_query_parameter(
+    server, backend, auth_manager
+):
+    """The path allowlist was captured the same way and was equally writable."""
+    server.proxy_workflow(
+        name="internal", proxy_url=backend, allowed_paths=["reports/*"]
+    )
+    client = TestClient(server.app)
+    headers = {"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"}
+
+    blocked = client.get("/workflows/internal/admin/users", headers=headers)
+    assert blocked.status_code == 404, blocked.text
+
+    # Attempting to widen the allowlist from the query string must not work.
+    still_blocked = client.get(
+        "/workflows/internal/admin/users?_allowlist=*", headers=headers
+    )
+    assert still_blocked.status_code == 404, still_blocked.text
+
+
+def test_proxy_handler_exposes_no_query_parameters(server, backend):
+    """Structural guard: the handler must declare only `request` and `path`.
+
+    A future edit that reintroduces `_x=captured` closure capture would make
+    that value caller-writable again. Asserting the signature catches it at
+    the source rather than relying on someone writing the matching attack.
+    """
+    import inspect
+
+    server.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
+    route = next(
+        r
+        for r in server.app.router.routes
+        if getattr(r, "path", "") == "/workflows/internal/{path:path}"
+    )
+    params = inspect.signature(route.endpoint).parameters
+    assert set(params) == {"request", "path"}, (
+        f"handler exposes unexpected parameters {set(params)}; any parameter "
+        f"with a plain default becomes a caller-writable query parameter"
+    )
+    assert all(
+        p.default is inspect.Parameter.empty for p in params.values()
+    ), "a defaulted handler parameter is a caller-writable query parameter"

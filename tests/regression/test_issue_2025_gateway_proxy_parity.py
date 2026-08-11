@@ -329,3 +329,55 @@ def test_gateway_repeated_query_keys_are_preserved(gateway, backend):
     assert response.status_code == 200, response.text
     path = response.json()["path"]
     assert "tag=a" in path and "tag=b" in path, path
+
+
+# ---------------------------------------------------------------------------
+# Query-parameter override of the handler's closure captures
+# ---------------------------------------------------------------------------
+
+
+def test_gateway_backends_cannot_be_overridden_by_query_parameter(gateway, backend):
+    """`?_backends=...` MUST NOT redirect the forward.
+
+    Same root cause as the server surface: FastAPI treats a handler parameter
+    carrying a plain default as a QUERY parameter, so `_backends=backends`
+    made the destination caller-writable.
+    """
+    gateway.proxy_workflow(
+        name="internal",
+        proxy_url=backend,
+        allowed_paths=["*"],
+        auth_dependency=_allow,
+    )
+    client = TestClient(gateway.app)
+    h = _auth_headers()
+
+    normal = client.get("/internal/data", headers=h)
+    assert normal.status_code == 200, normal.text
+
+    attack = client.get("/internal/data?_backends=http://127.0.0.1:9", headers=h)
+    assert attack.status_code == 200, attack.text
+    assert attack.json()["method"] == "GET"
+
+
+def test_gateway_proxy_handler_exposes_no_query_parameters(gateway, backend):
+    """Structural guard against reintroducing closure capture via defaults."""
+    import inspect
+
+    gateway.proxy_workflow(
+        name="internal",
+        proxy_url=backend,
+        allowed_paths=["*"],
+        auth_dependency=_allow,
+    )
+    route = next(
+        r
+        for r in gateway.app.router.routes
+        if getattr(r, "path", "") == "/internal/{path:path}"
+    )
+    params = inspect.signature(route.endpoint).parameters
+    assert set(params) == {"request", "path"}, (
+        f"handler exposes unexpected parameters {set(params)}; any parameter "
+        f"with a plain default becomes a caller-writable query parameter"
+    )
+    assert all(p.default is inspect.Parameter.empty for p in params.values())

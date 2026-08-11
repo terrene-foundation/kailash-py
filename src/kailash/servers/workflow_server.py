@@ -925,13 +925,19 @@ class WorkflowServer:
             methods=methods,
             **route_kwargs,
         )
-        async def proxy_handler(
-            request: Request,
-            path: str,
-            _url=proxy_url,
-            _allowlist=path_allowlist,
-        ):
-            """Forward requests to proxied workflow server."""
+        async def proxy_handler(request: Request, path: str):
+            """Forward requests to proxied workflow server.
+
+            `proxy_url` and `path_allowlist` are captured from the enclosing
+            scope, NOT passed as default arguments. FastAPI inspects the
+            handler signature and treats any non-path parameter carrying a
+            plain default as a QUERY parameter, so the previous
+            `_url=proxy_url` idiom let a caller override the destination with
+            `?_url=http://attacker/` -- full SSRF. Each `proxy_workflow` call
+            has its own scope, so direct capture is correct here and the
+            late-binding hazard the default-argument idiom guards against
+            does not apply.
+            """
             import aiohttp
             from starlette.responses import JSONResponse
 
@@ -948,7 +954,7 @@ class WorkflowServer:
                     content={"error": f"Invalid proxy path: {unsafe_reason}"},
                 )
 
-            if not path_matches_allowlist(path, _allowlist):
+            if not path_matches_allowlist(path, path_allowlist):
                 logger.warning(
                     "workflow_server.proxy.path_not_allowed",
                     extra={"workflow": name},
@@ -979,7 +985,7 @@ class WorkflowServer:
                 )
             safe_path = safe_path_match.group(0)
 
-            target_url = f"{_url.rstrip('/')}/{safe_path}"
+            target_url = f"{proxy_url.rstrip('/')}/{safe_path}"
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
