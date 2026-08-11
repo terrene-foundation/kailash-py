@@ -114,26 +114,37 @@ class AgentConfig:
     # LAYER 2: Observability Configuration
     # =========================================================================
 
-    enable_tracing: bool = True
-    """Enable distributed tracing (Jaeger)"""
+    # TRI-STATE, not bool (#2084). None of these four subsystems is
+    # implemented, so an explicit `True` must fail loudly — but `True` was
+    # ALSO the default, and raising on the default would break every agent
+    # construction including callers who never mentioned observability. A
+    # dataclass cannot tell "explicitly passed True" from "defaulted True",
+    # so the sentinel is required:
+    #   None  -> nobody asked; warn, behave as before
+    #   True  -> explicit request; raise ObservabilityNotImplemented
+    #   False -> explicit opt-out; silent
+    # Same mechanism as `LoggingHook.redact_sensitive` (#2070).
+
+    enable_tracing: Optional[bool] = None
+    """Enable distributed tracing (Jaeger). NOT IMPLEMENTED — see #2084."""
 
     tracing_endpoint: str = "http://localhost:16686"
     """Jaeger tracing endpoint"""
 
-    enable_metrics: bool = True
-    """Enable Prometheus metrics collection"""
+    enable_metrics: Optional[bool] = None
+    """Enable Prometheus metrics collection. NOT IMPLEMENTED — see #2084."""
 
     metrics_port: int = 9090
     """Prometheus metrics port"""
 
-    enable_logging: bool = True
-    """Enable structured JSON logging"""
+    enable_logging: Optional[bool] = None
+    """Enable structured JSON logging. NOT IMPLEMENTED — see #2084."""
 
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
 
-    enable_audit: bool = True
-    """Enable compliance audit trails"""
+    enable_audit: Optional[bool] = None
+    """Enable compliance audit trails. NOT IMPLEMENTED — see #2084."""
 
     audit_log_path: str = ".kaizen/audit.jsonl"
     """Audit log file path"""
@@ -365,12 +376,28 @@ class AgentConfig:
         )
 
     def is_observability_enabled(self) -> bool:
-        """Check if observability is enabled (either default or custom)."""
-        return self.has_custom_observability() or (
-            self.enable_tracing
-            or self.enable_metrics
-            or self.enable_logging
-            or self.enable_audit
+        """Check if observability is enabled (either default or custom).
+
+        CORRECTED in #2084. This previously returned True by default — while
+        `create_observability` registered ZERO hooks, because none of the four
+        subsystems exists. It reported observability the framework did not
+        have, so a caller branching on it ran its observability-dependent path
+        against an empty manager.
+
+        Now only an EXPLICIT `True` counts. `None` (the default, nobody asked)
+        and `False` (opt-out) both mean not-enabled, so the answer matches what
+        is actually registered.
+        """
+        if self.has_custom_observability():
+            return True
+        return any(
+            flag is True
+            for flag in (
+                self.enable_tracing,
+                self.enable_metrics,
+                self.enable_logging,
+                self.enable_audit,
+            )
         )
 
     def is_checkpointing_enabled(self) -> bool:
