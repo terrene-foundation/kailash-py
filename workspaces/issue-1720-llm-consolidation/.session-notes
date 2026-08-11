@@ -7,7 +7,15 @@ fired** and now does. Largest user-facing breakage found: `sso.py` awaited `asyn
 sync `HTTPRequestNode` at both OAuth token exchange and userinfo, so **every OAuth login
 failed**, misreported as a token-exchange failure.
 
-## ⚠ ORCHESTRATOR ERROR #3 — I specified a repro that could not fire
+## ⚠ TRAP — A RUNTIME BEHAVIOUR ASSERTED FROM A SIGNATURE IS A GUESS
+
+Not a review-discipline lesson; **Python falsiness**, and it will catch someone again.
+`if not risk_context:` READS as "when the caller omits it" and MEANS "when it is empty OR
+absent" — and those two differ *precisely where the defect lives*. Any guard of the form
+`if not <container>:` has this gap: `{}`, `[]`, `""` and `0` take the same branch as `None`.
+Drive it; do not read it.
+
+### How it bit here (orchestrator error #3)
 
 Security review found M5: `authenticate` returned `success/authenticated: True` with
 `session_id: None` and emitted an `auth_success` audit record. Real. **But I told the lane to
