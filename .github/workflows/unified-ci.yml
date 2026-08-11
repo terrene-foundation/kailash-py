@@ -158,6 +158,19 @@ jobs:
             -m 'not (slow or performance or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
             --maxfail=10 -q -p no:xdist --timeout=30
 
+      # The #2023 sibling-install lint lives in tests/regression/, which the
+      # (unshipped, see #2081) test-root-regression job would have run. Named
+      # explicitly here so AC#3 of #2023 is actually enforced on every PR rather
+      # than nominally enforced by a job that does not exist. It is a pure
+      # filesystem scan over .github/workflows/*.yml — no runtime, no hang risk,
+      # under 2 seconds. Fold it back into the regression job when #2081 lands.
+      - name: Test (regression lint — workflow sibling declarations, #2023)
+        timeout-minutes: 5
+        run: |
+          .venv/bin/python -m pytest \
+            tests/regression/test_issue_2023_sibling_install_declarations.py \
+            -q -p no:xdist --timeout=60
+
       - name: Test (Tier 2 — integration runtime tests)
         id: tier2
         # Raised from 10 minutes. On PRE-CHANGE code this step TIMED OUT at 10
@@ -247,169 +260,30 @@ jobs:
             echo "**A green PR check does NOT mean Tier 2 passed.** Open the step log."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Issue #2002: root `tests/regression/` had no blanket CI coverage. Before this
-  # job, exactly TWO of its ~156 files were named by any workflow
-  # (trust-tests.yml runs test_issue_1332_rfc3161_*.py, and only on PRs whose
-  # diff matches that workflow's trust/** paths filter). The Tier-1 step in the
-  # `test` job above runs tests/unit/, tests/trust/plane/unit/ and tests/security/
-  # — not tests/regression/. The regression step in `test-dataflow` below covers
-  # the DataFlow PACKAGE's regression dir, a different directory.
+  # ISSUE #2002 — the `test-root-regression` job lived HERE and is NOT SHIPPED,
+  # pending #2081. Root tests/regression/ cannot run to completion on this
+  # repo's ubuntu-latest runner: three CI runs, each with a sharper instrument,
+  # ended in a timeout or a truncated `--maxfail`. The last one
+  # (--timeout-method=signal, --timeout=60, --maxfail=30) enumerated 30 hangs
+  # across 8 files having executed 757 of 1916 tests in 23m40s — so 30 is a
+  # floor, not a count. The identical selection is 1916 passed / 0 failed in
+  # 217s on macOS.
   #
-  # Regression tests are the never-delete tier: each one pins a bug that already
-  # shipped once. A regression test that never executes records the intent to
-  # prevent a recurrence while providing none of the prevention.
+  # A 40-minute job that cannot complete is pure cost on every PR, and making
+  # it non-blocking would only make that cost silent. So it is removed rather
+  # than shipped degraded, and #2002 stays open with #2081 as its blocker.
   #
-  # Why this is a SEPARATE job rather than a step in the `test` matrix:
-  # root tests/regression/ imports three sibling packages at MODULE level
-  # (unguarded), which the `test` job does not install:
-  #   dataflow       — 17 files (e.g. test_dataflow_pool_bridge.py, test_issue_184.py)
-  #   nexus          —  7 files (e.g. test_issue_500_router_on_startup.py: `from nexus import Nexus`)
-  #   kaizen         —  4 files (e.g. test_provider_registry_backcompat.py:
-  #                              `from kaizen.providers.registry import ...`)
-  #   kailash_mcp    —  3 files (already installed by the `test` job)
-  #   kaizen_agents  —  1 file  (test_issue_443_kaizen_mcp_dependency.py)
-  # Adding five editable sibling installs to a 4-version matrix would pay that
-  # cost 4×; this job pays it once on a single interpreter.
+  # The complete job — the extras set (note `shamir`, without which five EATP
+  # vault tests fail), the five editable sibling installs the suite needs to
+  # COLLECT at all, and the marker filter mirroring the DataFlow regression
+  # step — is preserved in PR #2077's history and referenced from #2081.
+  # Restore it from there once the hangs are fixed; do not re-derive it.
   #
-  # Per issue #2023 § sibling-install discipline — siblings exercised by this
-  # step and how each resolves: kailash (editable, this tree), kailash-dataflow
-  # (editable), kailash-kaizen (editable), kailash-nexus (editable),
-  # kailash-mcp (editable), kaizen-agents (editable). NONE resolve from PyPI.
-  test-root-regression:
-    name: Test Root Regression Suite (Python 3.12)
-    needs: check-duplicate
-    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
-    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
-    runs-on: ubuntu-latest
-    # Must exceed the 40-minute test step plus install time.
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Restore uv cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-py3.12-rootregr-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-py3.12-rootregr-
-
-      - name: Install dependencies
-        # Extras are the `test` job's set PLUS `shamir`. The shamir extra is
-        # REQUIRED, not optional garnish: without shamir-mnemonic, five tests
-        # (test_eatp12_vault_3way_discrimination.py ×3,
-        # test_eatp12_vault_quickstart.py ×2) fail with
-        # `RuntimeError: SLIP-0039 Shamir secret-sharing requires the 'shamir'
-        # optional extra` raised from src/kailash/trust/vault/shamir.py. Those
-        # are real assertions on a real code path, not env noise — the fix is to
-        # provision the dependency, not to skip the tests.
-        #
-        # Root kailash editable BEFORE the sub-packages, per
-        # rules/deployment.md § "Sibling-Package CI Installs Root SDK Editable".
-        #
-        # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-        # Selection: tests/regression/ minus the infra markers (1916 collected).
-        # Determined by grepping module-level sibling imports across the
-        # directory, then confirmed by building this exact venv from scratch and
-        # running the suite in it:
-        #   dataflow      -> EXERCISED (17 files) -> editable below
-        #   nexus         -> EXERCISED  (7 files) -> editable below
-        #   kaizen        -> EXERCISED  (4 files) -> editable below
-        #   kailash_mcp   -> EXERCISED  (3 files) -> editable below
-        #   kaizen_agents -> EXERCISED  (1 file)  -> editable below
-        #   kailash_ml / kailash_align / kailash_pact -> 0 files, NOT installed
-        # Several of these imports are UNGUARDED at module scope
-        # (`from nexus import Nexus`, `from kaizen.providers.registry import ...`),
-        # so a missing sibling is a COLLECTION error, not a skip.
-        run: |
-          uv venv .venv
-          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data,shamir]" --python .venv/bin/python
-          uv pip install -e packages/kailash-mcp --python .venv/bin/python
-          uv pip install -e packages/kailash-dataflow --python .venv/bin/python
-          uv pip install -e packages/kailash-kaizen --python .venv/bin/python
-          uv pip install -e packages/kailash-nexus --python .venv/bin/python
-          # test_issue_443_kaizen_mcp_dependency.py does `from kaizen_agents
-          # import Delegate` — without this the test fails ModuleNotFoundError.
-          uv pip install -e packages/kaizen-agents --python .venv/bin/python
-
-      - name: Test root regression suite (infra-free)
-        # 15 -> 40. The first CI run of this step TIMED OUT at 15 minutes while
-        # the identical selection completes in 210s locally. `-q` printed no
-        # per-test progress, so the log could not distinguish "hung on one test"
-        # from "uniformly ~4x slower on a 2-core runner" — 210s x 4 is already
-        # 14 minutes, i.e. the old budget was marginal on arithmetic alone.
-        # Raised well clear, and `-v --durations=25` added below so the next
-        # run answers the question instead of leaving it open.
-        #
-        # It answered it: the suite HANGS on this runner. Two observed points
-        # are test_channel_parameters_envelope_behaviour.py::
-        # test_nexus_websocket_transport_invoke_handler_binds_envelope and
-        # test_create_index_identifier_safety.py, at ~8% of the run.
-        #
-        # `--timeout-method=signal` is the load-bearing change, not the larger
-        # budget. The root pytest.ini sets `timeout_method = thread`, and a
-        # thread-method timeout CANNOT kill a test blocked in a C call: pytest
-        # -timeout printed its banner repeatedly and the process carried on
-        # regardless, so the step consumed its whole budget having run 8% of the
-        # suite. That is a timeout that cannot enforce a timeout. SIGALRM can
-        # (Linux/macOS only, which is what this job runs), so a hung test now
-        # FAILS at 120s and names itself instead of taking the job down with it.
-        # If tests still hang after this, the log will list them individually
-        # and they can be quarantined; the previous instrument could not even
-        # produce that list.
-        #
-        # It did: the first SIGALRM run named 5 hangs in
-        # test_channel_parameters_envelope_behaviour.py and 5 in
-        # test_create_index_identifier_safety.py, then stopped at
-        # `--maxfail=10`. maxfail raised to 30 and the per-test timeout dropped
-        # 120s -> 60s to enumerate the rest within the step budget: 60s is still
-        # 3x the slowest healthy test in this suite (19.94s,
-        # test_issue_2015_http_exception_leak.py), so it cannot false-positive
-        # on a merely-slow test, and it halves the cost of each genuine hang.
-        timeout-minutes: 40
-        # tests/regression/ is a MIXED dir — the same shape as the DataFlow
-        # regression dir handled below. The explicit `-m` filter mirrors that
-        # step's, and is REQUIRED for the same reason: the root pytest.ini
-        # `addopts` carries NO marker filter at all (only --strict-markers and
-        # --tb=short), so nothing else deselects the infra-requiring tests.
-        #
-        # The filter deselects 22 tests across 7 files, all Postgres/DB-pool
-        # bound (test_issue_697_pool_leak.py, test_dataflow_pool_bridge.py,
-        # test_issue_953_async_sql_pool_tracking.py, test_issue_713_*.py ×2,
-        # test_issue_1248_localruntime_cross_loop_pool_disposal.py,
-        # test_w3_security_fixes.py). Those run in `test-dataflow-infra` below,
-        # which already provides Postgres + Redis service containers.
-        #
-        # Overlap with trust-tests.yml: that workflow names
-        # test_issue_1332_rfc3161_verify_fail_closed.py and
-        # test_issue_1332_rfc3161_live_binding.py explicitly (13 tests, ~0.3s
-        # collected). The overlap is deliberate and costs a fraction of a
-        # second: trust-tests.yml is path-filtered to trust/** and does NOT run
-        # on most PRs, and it emits a separate JUnit artifact for the trust
-        # surface. Deduplicating would reintroduce the gap on every non-trust PR.
-        # test_issue_1332_rfc3161_live_binding.py self-skips here (`rfc3161`
-        # extra deliberately NOT installed — the live-binding path is
-        # trust-tests.yml's to provision).
-        #
-        # Verified green before landing: 1913 passed, 3 skipped, 22 deselected,
-        # 0 failed in 207s, in a from-scratch uv venv built with exactly the
-        # install block above (Python 3.12). The same selection run in a
-        # fully-loaded dev venv reported 1917 passed / 2 skipped — which is why
-        # the clean-venv run is the one quoted: it is the only one that can
-        # surface a missing-extra failure.
-        run: |
-          .venv/bin/python -m pytest tests/regression/ \
-            -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
-            --maxfail=30 -v -p no:xdist --durations=25 \
-            --timeout=60 --timeout-method=signal
+  # One finding from that work is worth acting on independently of #2002: the
+  # root pytest.ini sets `timeout_method = thread`, and a thread-method timeout
+  # CANNOT kill a test blocked in a C call. Two of the three runs above were
+  # unreadable for exactly that reason — pytest-timeout printed its banner and
+  # the process carried on. `signal` is the enforceable method on Linux/macOS.
 
   test-pact:
     name: Test PACT (Python 3.11)

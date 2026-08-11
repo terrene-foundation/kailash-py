@@ -78,13 +78,26 @@ means a failure turns the check red.
 | ------------------------------------------------------------ | -------------------------- | ---------------------------------- |
 | Tier 1 — `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` | every PR, Python 3.11–3.14 | **Yes**                            |
 | Tier 2 — `tests/tier2_integration/`                          | every PR, Python 3.11–3.14 | **Not yet** — non-blocking, but a failure now posts a loud annotation + job summary. Blocked on #2078; see below. |
-| Root regression — `tests/regression/`, infra-free            | every PR, Python 3.12      | **Yes** (since #2002)              |
-| Root regression — infra-marked                               | every PR (Postgres+Redis)  | **Yes** (since #2002)              |
+| Root regression — `tests/regression/`                        | **not run** — see #2081    | No                                 |
+| Regression lint (`test_issue_2023_*`)                        | every PR, Python 3.11–3.14 | **Yes**                            |
 | DataFlow unit + regression                                   | every PR                   | **Yes**                            |
 | PACT                                                         | every PR                   | **Yes**                            |
 | Type check (pyright)                                         | every PR                   | No — `continue-on-error`, see #73  |
 | CUDA jobs (`test-kailash-ml.yml`)                            | manual dispatch only       | No — `continue-on-error` until the GPU runner is live |
 | kailash-ml / kailash-align / trust / CodeQL                  | only when their paths change | Yes, when they run              |
+
+#### Root `tests/regression/` is still not run
+
+#2002 asked for it and it is still open. The gate was built and could not be
+shipped: root `tests/regression/` **hangs on the ubuntu CI runner**. Three runs
+with progressively sharper instruments ended in a timeout or a truncated
+`--maxfail`; the last enumerated 30 hung tests across 8 files having executed
+757 of 1916. The same suite is `1916 passed / 0 failed in 217s` locally. Blocker
+is #2081; the complete, working job is preserved in PR #2077's history and
+should be restored from there rather than rebuilt.
+
+Practically: **run `pytest tests/regression/` locally before you push.** Nothing
+in CI does it for you.
 
 Two consequences worth internalising:
 
