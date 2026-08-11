@@ -89,7 +89,8 @@ jobs:
     # exercised this matrix. Saves ~45 min × matrix-size per release cycle.
     if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 25 -> 40: the Tier-2 step's own budget rose to 25 minutes (see there).
+    timeout-minutes: 40
     continue-on-error: false
     strategy:
       fail-fast: false
@@ -158,7 +159,14 @@ jobs:
             --maxfail=10 -q -p no:xdist --timeout=30
 
       - name: Test (Tier 2 — integration runtime tests)
-        timeout-minutes: 10
+        # Raised from 10 minutes. On PRE-CHANGE code this step TIMED OUT at 10
+        # minutes on Python 3.11 and 3.12 in every run inspected (e.g. runs
+        # 31480330313, 31478307416, 31476919718) — and every one of those jobs
+        # still reported SUCCESS, because `continue-on-error: true` swallowed
+        # the timeout as well as the failures. The Tier-2 suite has therefore
+        # never been observed to COMPLETE on this repo's CI on two of the four
+        # interpreters, which means nobody knows its true failure count there.
+        timeout-minutes: 25
         # Issue #2038: `continue-on-error: true` REMOVED. Tier 2 now gates the
         # merge exactly as Tier 1 does, and `gh pr checks` is once again a
         # discriminating instrument for integration behaviour.
@@ -193,7 +201,7 @@ jobs:
           .venv/bin/python -m pytest \
             tests/tier2_integration/ \
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
-            --maxfail=20 -q -p no:xdist --timeout=60
+            --maxfail=400 -q -p no:xdist --timeout=60 -rf
 
   # Issue #2002: root `tests/regression/` had no blanket CI coverage. Before this
   # job, exactly TWO of its ~156 files were named by any workflow
@@ -517,10 +525,30 @@ jobs:
         # dataflow [postgres-sync] extra provides psycopg2-binary, REQUIRED by the
         # auto_migrate synchronous DDL path the tenant-isolation tests exercise
         # (DataFlow is async-first but creates tables via the sync DDL executor).
+        #
+        # The extras list is WIDER than this job's DataFlow step needs, because
+        # the root-regression infra step added below shares this venv and root
+        # `tests/regression/` is collected as a whole directory — pytest imports
+        # every module in it before `-m` selects anything. On the first CI run
+        # of that step, the narrow ".[db-postgres,redis]" install produced eight
+        # COLLECTION errors, none of which was a test defect:
+        #   PyNaCl    -> test_issue_1316_*.py (trust extra)
+        #   pact      -> test_issue_1510_bh5_circuit_breaker.py
+        #   qrcode    -> test_issue_1815_oidc_nonce_pkce.py, test_issue_1835_*.py (auth extra)
+        #   filelock  -> test_issue_1912_*.py, test_issue_2027_*.py
+        # Widening costs this job some install time and removes nothing.
         run: |
           uv venv .venv
-          uv pip install -e ".[db-postgres,redis]" --python .venv/bin/python
+          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data,shamir]" --python .venv/bin/python
           uv pip install -e "packages/kailash-dataflow[dev,postgres-sync]" --python .venv/bin/python
+          # Same sibling set as `test-root-regression` — root tests/regression/
+          # imports these at module level and unguarded, so a missing one is a
+          # collection error rather than a skip.
+          uv pip install -e packages/kailash-mcp --python .venv/bin/python
+          uv pip install -e packages/kailash-kaizen --python .venv/bin/python
+          uv pip install -e packages/kailash-nexus --python .venv/bin/python
+          uv pip install -e packages/kailash-pact --python .venv/bin/python
+          uv pip install -e packages/kaizen-agents --python .venv/bin/python
 
       - name: Run Postgres/Redis-marked regression tests
         timeout-minutes: 10
