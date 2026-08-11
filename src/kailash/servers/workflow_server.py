@@ -40,6 +40,7 @@ from .connection_metrics_router import (
     create_connection_metrics_router,
 )
 from .proxy_guard import (
+    SAFE_FORWARD_PATH_RE,
     PathPattern,
     compile_path_allowlist,
     normalize_allowed_methods,
@@ -947,7 +948,28 @@ class WorkflowServer:
                     content={"error": "Not found"},
                 )
 
-            target_url = f"{_url.rstrip('/')}/{path}"
+            # Positive charset barrier. The target URL is built from the
+            # MATCHED GROUP, never from the raw path parameter, so no byte
+            # outside the allowlist can reach the wire whatever the HTTP
+            # client does with re-encoding. This is what closes the
+            # request-line-injection question #2025 recorded as UNVERIFIED,
+            # and it is the sanitizer CodeQL's py/partial-ssrf query asks for.
+            safe_path_match = SAFE_FORWARD_PATH_RE.fullmatch(path)
+            if safe_path_match is None:
+                logger.warning(
+                    "workflow_server.proxy.path_charset_rejected",
+                    extra={"workflow": name},
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Invalid proxy path: contains a character that "
+                        "may not be forwarded"
+                    },
+                )
+            safe_path = safe_path_match.group(0)
+
+            target_url = f"{_url.rstrip('/')}/{safe_path}"
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:

@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "DEFAULT_ALLOWED_METHODS",
     "PROXY_SUPPORTED_METHODS",
+    "SAFE_FORWARD_PATH_RE",
     "PathPattern",
     "ProxyAuthNotConfiguredError",
     "compile_path_allowlist",
@@ -65,6 +66,23 @@ __all__ = [
     "reject_unsafe_proxy_path",
     "resolve_proxy_auth_dependency",
 ]
+
+#: Characters a forwarded path may contain, as a positive allowlist.
+#:
+#: RFC 3986 ``pchar`` (unreserved + sub-delims + ``:`` ``@`` ``%``) plus ``/``,
+#: plus every non-ASCII codepoint so internationalized paths still forward.
+#: Everything else is refused -- notably SPACE, CR, LF, TAB, every other C0/C1
+#: control, and ``? # \ < > " { } | ^ ` ``.
+#:
+#: This is a **barrier**, not decoration. The captured group -- never the raw
+#: parameter -- is what the target URL is built from, so no un-validated byte
+#: can reach the wire. It settles a concern the #2025 analysis recorded as
+#: UNVERIFIED: whether a decoded CR/LF in the path could reach the wire as
+#: request-line injection. With this allowlist it cannot, regardless of how
+#: the HTTP client happens to re-encode.
+SAFE_FORWARD_PATH_RE: re.Pattern = re.compile(
+    r"[/A-Za-z0-9._~!$&'()*+,;=:@%\u0080-\U0010FFFF-]*"
+)
 
 #: Every HTTP method a proxy registration may forward.
 PROXY_SUPPORTED_METHODS: tuple[str, ...] = (

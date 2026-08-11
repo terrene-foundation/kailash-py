@@ -46,6 +46,7 @@ from kailash.servers import (
     WorkflowServer,
 )
 from kailash.servers.proxy_guard import (
+    SAFE_FORWARD_PATH_RE,
     compile_path_allowlist,
     normalize_allowed_methods,
     path_matches_allowlist,
@@ -435,6 +436,83 @@ def test_repeated_query_keys_are_preserved(server, backend, auth_manager):
 )
 def test_reject_unsafe_proxy_path(path, expected):
     assert reject_unsafe_proxy_path(path) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "a b",  # SPACE
+        "a\rb",  # CR  -- request-line injection vector
+        "a\nb",  # LF  -- request-line injection vector
+        "a\tb",
+        "a\x00b",
+        "a\x7fb",
+        "a\\b",
+        "a<b",
+        "a>b",
+        "a?b",
+        "a#b",
+        "a{b",
+        "a|b",
+        "a^b",
+        "a`b",
+        'a"b',
+    ],
+)
+def test_safe_forward_path_charset_rejects(value):
+    """The positive charset barrier refuses everything outside RFC 3986 pchar.
+
+    Asserted against the COMPILED module constant, never a retyped copy of the
+    pattern: a retyped pattern is a different string and would not report on
+    what the module actually does.
+    """
+    assert SAFE_FORWARD_PATH_RE.fullmatch(value) is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "a/b",
+        "",
+        ".well-known/acme-challenge/token",
+        "a%2eb",
+        "a!$&'()*+,;=:@b",
+        "a-b",
+        "a~b",
+        "café/x",  # internationalized paths still forward
+        "文件/x",
+    ],
+)
+def test_safe_forward_path_charset_accepts(value):
+    assert SAFE_FORWARD_PATH_RE.fullmatch(value) is not None
+
+
+def test_charset_rejection_over_http(server, backend, auth_manager):
+    """The charset barrier refuses end-to-end, before any forward.
+
+    A SPACE is used rather than a CR because it isolates THIS barrier:
+    ``reject_unsafe_proxy_path`` runs first and already refuses control
+    characters, so a CR would not tell us which layer fired. A space passes
+    every earlier check and is stopped only by the charset allowlist.
+    """
+    server.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
+    client = TestClient(server.app)
+    headers = {"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"}
+
+    # %20 decodes to SPACE at the handler.
+    response = client.get("/workflows/internal/a%20b", headers=headers)
+    assert response.status_code == 400, response.text
+    assert "may not be forwarded" in response.text
+
+    # Control: the same path without the space forwards normally, so the 400
+    # above is the charset barrier and not a broken route.
+    ok = client.get("/workflows/internal/ab", headers=headers)
+    assert ok.status_code == 200, ok.text
+
+    # A CR is refused too; the earlier control-character check owns that one.
+    cr = client.get("/workflows/internal/a%0db", headers=headers)
+    assert cr.status_code == 400, cr.text
+    assert "control character" in cr.text
 
 
 def test_path_allowlist_matching_semantics():
