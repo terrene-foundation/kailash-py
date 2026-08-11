@@ -493,17 +493,29 @@ class TestCircularImportPrevention:
             "kailash.runtime.local",
         ]
 
-        # Clear modules from cache
-        for module_name in core_modules:
-            if module_name in sys.modules:
-                del sys.modules[module_name]
+        # Snapshot the ORIGINAL module objects — see the identical guard in
+        # tests/tier2_integration/middleware/test_circular_imports.py. Without
+        # restoring them, the re-import creates a SECOND `Node` class and every
+        # later test that does isinstance(node, Node) against the first one
+        # fails with "Invalid node type".
+        original_modules = {
+            name: sys.modules[name] for name in core_modules if name in sys.modules
+        }
 
-        # Import each module independently
-        for module_name in core_modules:
-            try:
-                importlib.import_module(module_name)
-            except ImportError as e:
-                pytest.fail(f"Circular import detected in {module_name}: {e}")
+        try:
+            # Clear modules from cache
+            for module_name in core_modules:
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+
+            # Import each module independently
+            for module_name in core_modules:
+                try:
+                    importlib.import_module(module_name)
+                except ImportError as e:
+                    pytest.fail(f"Circular import detected in {module_name}: {e}")
+        finally:
+            sys.modules.update(original_modules)
 
     def test_node_registry_lazy_loading(self):
         """NodeRegistry should use lazy loading to avoid circular imports."""

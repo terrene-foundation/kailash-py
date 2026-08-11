@@ -77,6 +77,10 @@ class MockMalformedNode(Node):
 
         return {"mode": NodeParameter(name="mode", type=str, default="missing_success")}
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, mode: str = "missing_success", **kwargs) -> Dict[str, Any]:
         if mode == "missing_success":
             return {"error": "no success field"}

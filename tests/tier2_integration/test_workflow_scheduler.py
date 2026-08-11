@@ -111,10 +111,20 @@ class TestWorkflowSchedulerInit:
             mock_jobstore = MagicMock()
             mock_scheduler_instance = MagicMock()
 
+            # NOTE: the parent package `apscheduler` is deliberately NOT stubbed
+            # here. Replacing sys.modules["apscheduler"] with a MagicMock makes
+            # it a non-package, so `from apscheduler.events import ...` — which
+            # WorkflowScheduler.__init__ does for the issue #914 fire-time
+            # listeners — fails with
+            #   ModuleNotFoundError: No module named 'apscheduler.events';
+            #   'apscheduler' is not a package
+            # Leaving the real package in place lets that import resolve while
+            # the two specific submodules below stay stubbed, which is all these
+            # tests ever needed. (apscheduler is a real dependency of the
+            # `scheduler` extra and is installed in CI.)
             with patch.dict(
                 "sys.modules",
                 {
-                    "apscheduler": MagicMock(),
                     "apscheduler.schedulers.asyncio": MagicMock(
                         AsyncIOScheduler=MagicMock(return_value=mock_scheduler_instance)
                     ),
@@ -132,10 +142,11 @@ class TestWorkflowSchedulerInit:
         """WorkflowScheduler should work with in-memory storage."""
         mock_scheduler_instance = MagicMock()
 
+        # Parent `apscheduler` intentionally left unstubbed — see the note in
+        # test_init_with_defaults above.
         with patch.dict(
             "sys.modules",
             {
-                "apscheduler": MagicMock(),
                 "apscheduler.schedulers.asyncio": MagicMock(
                     AsyncIOScheduler=MagicMock(return_value=mock_scheduler_instance)
                 ),
@@ -159,10 +170,11 @@ class TestWorkflowSchedulerOperations:
         mock_scheduler.running = False
 
         with patch("kailash.runtime.scheduler._check_apscheduler", return_value=True):
+            # Parent `apscheduler` intentionally left unstubbed — see the note
+            # in test_init_with_defaults above.
             with patch.dict(
                 "sys.modules",
                 {
-                    "apscheduler": MagicMock(),
                     "apscheduler.schedulers.asyncio": MagicMock(
                         AsyncIOScheduler=MagicMock(return_value=mock_scheduler)
                     ),

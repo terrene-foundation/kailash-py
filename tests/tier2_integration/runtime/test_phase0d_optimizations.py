@@ -568,6 +568,31 @@ class TestP0DIntegration:
             for i in range(5):
                 assert f"node_{i}" in results
 
+    @pytest.mark.skip(
+        reason=(
+            "QUARANTINED (#2038): load-sensitive absolute wall-clock threshold. "
+            "Observed failing 1 of 3 consecutive local runs on a loaded machine "
+            "while the other 45 Tier-2 failures were consistent 3/3 — this is "
+            "the ONLY genuine runner-flake in the tier. The assertion "
+            "`avg_ms < 50` is an absolute wall-clock bound, which "
+            "`.claude/rules/testing.md` § 'Complexity Bounds Use Self-Normalizing "
+            "Ratios, Not Absolute Wall-Clock Thresholds' prohibits: under "
+            "competing load 10 trivial nodes exceed 50ms for reasons that have "
+            "nothing to do with P0D caching, and the failure message then "
+            "asserts a diagnosis ('P0D optimizations') it cannot distinguish "
+            "from 'the machine was busy'. "
+            "skip rather than xfail(strict=True) BECAUSE the test PASSES most "
+            "runs — a strict xfail would XPASS and turn this into a different "
+            "red. That is the narrow case AC#2 of #2038 allows a documented "
+            "skip. Same class as #2029. Un-skip once the assertion is "
+            "restated structurally (e.g. warm-vs-cold ratio, or a cache-hit "
+            "counter) rather than as a wall-clock bound. Do NOT simply widen "
+            "the 50ms threshold — that ratchet is how a real serialization "
+            "regression later hides. NOTE: line ~157 of this file carries a "
+            "sibling absolute bound (`per_call_us < 50`) which was NOT observed "
+            "failing in those 3 runs and is therefore left running."
+        )
+    )
     def test_repeated_execution_performance(self):
         """Repeated executions should benefit from all P0D caching."""
         builder = WorkflowBuilder()
