@@ -1781,7 +1781,7 @@ def test_authenticate_does_not_mint_a_session_for_a_caller_chosen_user_id():
             auth_method="jwt",
             credentials={"jwt_token": alice_token},
             user_id="admin",
-            risk_context={"ip_address": "203.0.113.7"},
+            risk_context={},
             auth_id="auth-1",
         )
     )

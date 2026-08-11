@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import qrcode
 
-from kailash.nodes.auth._log_hygiene import log_safe
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -2598,7 +2598,15 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         safe["omitted_keys"] = sorted(
             k for k in result if k not in cls._AUDITABLE_RESULT_KEYS
         )
-        return safe
+        # The allowlist is FLAT -- it admits a key, not the shape underneath
+        # it. "methods" is safe only because its producer happens to be a
+        # curated projection; a future change returning user_mfa_data["methods"]
+        # directly would hand this the TOTP seed and push_token nested one level
+        # down, and the allowlist would copy them straight through. Composing
+        # the same redactor used at every SSO and directory sink closes that,
+        # and puts the strongest filter where the credential material actually
+        # lives rather than only where it does not.
+        return redact_mapping(safe)
 
     def _audit_mfa_operation_sync(
         self, user_id: str, action: str, method: str, result: Dict[str, Any]
@@ -2619,8 +2627,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         """
         audit_entry = {
             "event_type": f"mfa_{action}",
-            "message": f"MFA {action} ({method}) for user {user_id}",
-            "user_id": user_id,
+            "message": f"MFA {action} ({method}) for user {log_safe(user_id, 64)}",
+            "user_id": log_safe(user_id),
             "event_data": {
                 "action": action,
                 "method": method,

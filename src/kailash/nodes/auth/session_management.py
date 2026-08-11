@@ -1131,7 +1131,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         # (issue #2060). The keys below are the ones the node reads.
         audit_entry = {
             "event_type": f"session_{operation}",
-            "message": f"Session {operation} for user {session_data.user_id}",
+            "message": f"Session {operation} for user {log_safe(session_data.user_id, 64)}",
             "user_id": log_safe(session_data.user_id),
             "event_data": {
                 "operation": operation,
@@ -1170,7 +1170,11 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         #      dropped, while message= was never supplied.
         security_event = {
             "event_type": event_type,
-            "severity": severity.upper(),
+            # str(... or "INFO") rather than severity.upper(): this dict is
+            # built BEFORE the try below, so a None severity would raise an
+            # AttributeError that escapes the logging call entirely and
+            # aborts session creation.
+            "severity": str(severity or "INFO").upper(),
             "message": f"Session management: {event_type}",
             "user_id": log_safe(user_id),
             "metadata": {

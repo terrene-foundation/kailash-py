@@ -502,6 +502,31 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             ip_address=risk_context.get("ip_address"),
             device_info=risk_context.get("device_info"),
         )
+        # A credential that verifies but yields no session is NOT an
+        # authentication. This returned success=True / authenticated=True with
+        # session_id=None whenever the session step refused, took the caller's
+        # success branch, incremented successful_auths, and emitted an
+        # auth_success record for a login that minted nothing (issue #2060).
+        #
+        # Reachable today: SessionManagementNode refuses "create" without an
+        # ip_address, and _extract_risk_context only supplies a default when
+        # risk_context is FALSY. A caller passing a non-empty risk_context that
+        # omits ip_address -- device_info or user_agent only, the ordinary
+        # shape -- skips that fallback and lands here. Same class as the
+        # success-derivation fix in async_run: the verdict comes from the
+        # operation, never from a default.
+        if not session_result.get("success") or not session_result.get("session_id"):
+            return {
+                "success": False,
+                "authenticated": False,
+                "error": "session_creation_failed",
+                "reason": "session_creation_failed",
+                "user_id": user_id,
+                "auth_method": auth_method,
+                "risk_score": risk_score,
+                "session_details": session_result,
+            }
+
         self.log_info(f"Session created: {session_result.get('session_id')}")
 
         # Clear failed attempts on successful auth
@@ -1493,8 +1518,8 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         await asyncio.to_thread(
             self.audit_logger.execute,
             event_type="user_logout",
-            message=f"User {user_id} logged out",
-            user_id=user_id,
+            message=f"User {log_safe(user_id, 64)} logged out",
+            user_id=log_safe(user_id),
             event_data={"session_id": session_id, "logout_results": logout_results},
         )
 

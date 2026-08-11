@@ -637,11 +637,31 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         try:
             auth_result = await self._ldap_directory_auth(username, password)
 
+        # ANY exception from the bind -- including a connection an attacker can
+        # induce by taking the directory offline -- routes here. That is only
+        # acceptable because the fallback terminates FAIL-CLOSED, and it MUST
+        # stay that way:
+        #   * _fallback_directory_auth refuses outright with
+        #     reason="directory_unavailable" unless the operator explicitly set
+        #     connection_config["allow_insecure_credential_fallback"], read
+        #     through _is_enabled() so the string "false" does not enable it;
+        #   * even opted in, there is NO built-in account and NO default
+        #     password -- an empty dev_credentials authenticates nobody, and the
+        #     comparison is secrets.compare_digest against operator-supplied
+        #     values. The hardcoded table that defaulted every lookup to
+        #     "password123" is gone (issue #2026).
+        # Giving this path a permissive default would hand an attacker who can
+        # DoS the directory a login as anyone, which is exactly what #2026 fixed.
+        #
+        # This became REACHABLE in issue #2060: the audit call after the
+        # decision awaited a method the sink does not define, so the whole
+        # function previously raised AttributeError before returning. The
+        # fail-closed property was load-bearing but unexercised until then.
         except ImportError:
-            # Fall back to simulation if ldap3 not available
+            # ldap3 not installed
             auth_result = await self._simulate_directory_auth(username, password)
         except Exception:
-            # If connection fails, use simulation
+            # Bind or connection failure
             auth_result = await self._simulate_directory_auth(username, password)
 
         if auth_result["authenticated"]:

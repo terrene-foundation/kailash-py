@@ -1089,7 +1089,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         await asyncio.to_thread(
             self.audit_logger.execute,
             event_type="user_provisioned",
-            message=f"Provisioned SSO user {email} from {provider}",
+            message=f"Provisioned SSO user {log_safe(email, 64)} from {log_safe(provider, 32)}",
             user_id=log_safe(email),
             event_data=redact_mapping(
                 {
@@ -1247,7 +1247,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         await asyncio.to_thread(
             self.audit_logger.execute,
             event_type="sso_logout",
-            message=f"SSO logout for user {user_id}",
+            message=f"SSO logout for user {log_safe(user_id, 64)}",
             user_id=log_safe(user_id),
             event_data={"provider": provider, "sessions_removed": sessions_removed},
         )

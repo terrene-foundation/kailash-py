@@ -993,3 +993,162 @@ def test_active_session_counter_cannot_go_negative():
     node._bump_stat("active_sessions", -1, floor=0)
     node._bump_stat("active_sessions", -1, floor=0)
     assert node.session_stats["active_sessions"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Third review round: a verified credential that mints no session is not a login
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "risk_context",
+    [
+        {"user_agent": "curl/8.4"},
+        {"device_info": {"device_type": "mobile"}},
+        {"location": "SG"},
+    ],
+)
+def test_authenticate_refuses_when_the_session_step_mints_nothing(risk_context):
+    """A credential that verifies but produces no session is NOT authenticated.
+
+    ``_authenticate`` returned ``success=True, authenticated=True`` with
+    ``session_id=None`` whenever the session step refused, took the caller's
+    success branch, incremented ``successful_auths`` and emitted an
+    ``auth_success`` record for a login that minted nothing.
+
+    The trigger is specific and worth stating, because the obvious one is
+    wrong: ``risk_context={}`` does NOT reach it. An empty dict is falsy, so
+    ``async_run`` replaces it via ``_extract_risk_context``, which supplies a
+    default ``ip_address`` of 127.0.0.1 and the session succeeds. It is a
+    NON-EMPTY risk_context that omits ``ip_address`` -- device info or a user
+    agent and nothing else, the ordinary caller shape -- that skips the
+    fallback and leaves ``SessionManagementNode`` refusing "create".
+    """
+    node = _provider(name="eap_nosession")
+    result = asyncio.run(
+        node.async_run(
+            action="authenticate",
+            auth_method="jwt",
+            credentials={"jwt_token": _token()},
+            user_id="alice",
+            risk_context=risk_context,
+        )
+    )
+
+    assert result["success"] is False, (
+        "a credential that minted no session was reported as a successful "
+        f"authentication: {result}"
+    )
+    assert result["authenticated"] is False, result
+    assert result.get("reason") == "session_creation_failed", result
+    assert node.auth_statistics["successful_auths"] == 0, (
+        "the successful-auth counter was incremented for a login that "
+        "produced no session"
+    )
+
+
+def test_no_auth_success_record_when_no_session_was_minted(caplog):
+    """The audit half of the above: the trail must not assert a successful
+    authentication that produced nothing."""
+    node = _provider(name="eap_nosession_log")
+    with caplog.at_level("INFO", logger="security.eap_nosession_log_security"):
+        asyncio.run(
+            node.async_run(
+                action="authenticate",
+                auth_method="jwt",
+                credentials={"jwt_token": _token()},
+                user_id="alice",
+                risk_context={"user_agent": "curl/8.4"},
+            )
+        )
+
+    messages = [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "security.eap_nosession_log_security"
+    ]
+    assert not any("auth_success" in m for m in messages), (
+        f"an auth_success record was written for a login that minted no "
+        f"session: {messages}"
+    )
+
+
+def test_empty_risk_context_still_authenticates():
+    """The complement, so the test above cannot pass by refusing everything.
+
+    An empty risk_context is falsy and picks up _extract_risk_context's
+    defaults, so it must still authenticate end to end.
+    """
+    node = _provider(name="eap_emptyrc")
+    result = asyncio.run(
+        node.async_run(
+            action="authenticate",
+            auth_method="jwt",
+            credentials={"jwt_token": _token()},
+            user_id="alice",
+            risk_context={},
+        )
+    )
+    assert result["success"] is True, result
+    assert result["session_id"], "empty risk_context should still mint a session"
+
+
+def test_mfa_audit_redaction_reaches_nested_values():
+    """_audit_safe_result's allowlist is flat -- it admits a KEY, not the shape
+    under it. If a producer ever returns a nested credential under an
+    allowlisted key, the allowlist alone would copy it straight to the sink."""
+    node = MultiFactorAuthNode(name="mfa_nested")
+    projected = node._audit_safe_result(
+        {
+            "success": True,
+            "methods": {"totp": {"secret": "SEEDVALUE123", "verified": True}},
+        }
+    )
+    rendered = json.dumps(projected)
+    assert (
+        "SEEDVALUE123" not in rendered
+    ), f"a nested secret under an allowlisted key reached the record: {rendered}"
+    assert "verified" in rendered, "redaction flattened the whole structure away"
+
+
+def test_audit_sink_messages_are_single_line_too():
+    """The security sinks were sanitized but the AUDIT sinks interpolate the
+    same caller-supplied value into their ``message=``.
+
+    Latent rather than live: AuditLogNode defaults to output_format="json" and
+    json.dumps escapes newlines. It goes live the moment a deployment
+    constructs the node with any other format, where execute() renders
+    f"[{event_type}] {message} - User: {user_id} ...". Pinned so the two sink
+    families do not drift apart.
+    """
+    payload = _injection_payload()
+    offenders = []
+
+    sso = SSOAuthenticationNode(name="sso_audit_line")
+    sso_seen = []
+    sso.audit_logger.execute = lambda **kw: sso_seen.append(kw) or {"logged": True}
+    asyncio.run(sso._handle_logout(payload, "oauth2"))
+
+    mfa = MultiFactorAuthNode(name="mfa_audit_line")
+    mfa_seen = []
+    mfa.audit_log_node.execute = lambda **kw: mfa_seen.append(kw) or {"logged": True}
+    mfa.run(action="status", user_id=payload)
+
+    sess = SessionManagementNode(name="sess_audit_line")
+    sess_seen = []
+    sess.audit_log_node.execute = lambda **kw: sess_seen.append(kw) or {"logged": True}
+    sess.execute(action="create", user_id=payload, ip_address="203.0.113.7")
+
+    for label, seen in (("sso", sso_seen), ("mfa", mfa_seen), ("session", sess_seen)):
+        assert seen, f"{label} wrote no audit record; the sweep proved nothing"
+        for event in seen:
+            for field in ("message", "user_id"):
+                value = event.get(field)
+                if isinstance(value, str) and "\n" in value:
+                    offenders.append(f"{label}.{field}")
+
+    assert (
+        not offenders
+    ), "audit records carried a caller-supplied newline: " + ", ".join(
+        sorted(set(offenders))
+    )
