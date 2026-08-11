@@ -822,7 +822,18 @@ class WorkflowAPIGateway:
                     media_type=resp.headers.get("content-type"),
                 )
             except httpx.RequestError as exc:
-                logger.error(f"Proxy request to {target_url} failed: {exc}")
+                # Log the workflow and the registered backend -- both fixed at
+                # registration -- not `target_url`, which embeds the caller's
+                # path. Interpolating that put caller-controlled text into the
+                # log stream (py/log-injection); a forged newline there can
+                # fabricate whole log entries for anything reading the file.
+                logger.error(
+                    "Proxy request for workflow %s to backend %s failed: %s: %s",
+                    name,
+                    backend,
+                    type(exc).__name__,
+                    exc,
+                )
                 return Response(
                     content='{"error": "Backend unreachable"}',
                     status_code=502,
