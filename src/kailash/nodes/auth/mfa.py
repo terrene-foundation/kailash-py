@@ -5,6 +5,7 @@ This module provides comprehensive MFA capabilities including TOTP, SMS, email
 verification, backup codes, and integration with popular authenticator apps.
 """
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -227,10 +228,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         >>> print(f"Verified: {verify_result['verified']}")
     """
 
-    # Set once per process by __init__ so the "no audit sink" warning is stated
-    # loudly one time, rather than per operation where it reads as transient.
-    _audit_gap_warned: bool = False
-
     def __init__(
         self,
         name: str = "multi_factor_auth",
@@ -289,22 +286,28 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
 
-        # Audit logging is NOT wired. This is a real gap, not a configuration
-        # choice, and it is stated loudly here rather than surfacing as a
-        # per-operation "Failed to audit" warning that reads like a transient
-        # error (issue #2026). The nodes were disabled while debugging a
-        # deadlock and never restored; re-wiring them needs that deadlock
-        # re-investigated, which is out of scope for the #2026 stub removal.
-        self.audit_log_node = None
-        self.security_event_node = None
-        if not MultiFactorAuthNode._audit_gap_warned:
-            MultiFactorAuthNode._audit_gap_warned = True
-            logger.warning(
-                "MultiFactorAuthNode has NO audit sink: setup, verify, revoke, "
-                "disable, reset and recovery -- including the admin-gated "
-                "destructive actions -- complete with no audit record. Deploy "
-                "behind a layer that records these operations."
-            )
+        # Audit logging IS wired (issue #2060).
+        #
+        # These two sinks stood at None from this file's first commit
+        # (7dc4e6773, 2025-06-16) behind the comment "disabled for now to fix
+        # deadlock". The deadlock was re-investigated before re-wiring and
+        # there is no evidence for it:
+        #   * `git log -S "AuditLogNode(" -- src/kailash/nodes/auth/mfa.py`
+        #     returns the birth commit and nothing earlier -- the wiring was
+        #     ALREADY commented out when the file first landed, so no commit
+        #     ever wired it and no commit ever disabled it in response to a
+        #     hang. There is no repro anywhere in history.
+        #   * AuditLogNode.execute and SecurityEventNode.execute take no lock,
+        #     open no socket, and enter no event loop; each is dict
+        #     construction plus one `logger` call.
+        #   * SessionManagementNode constructs and calls these exact two nodes
+        #     today, synchronously, from inside a held non-reentrant
+        #     threading.Lock, and ships.
+        # The real MFA deadlock -- `_revoke_mfa` re-acquiring the non-reentrant
+        # `_data_lock` -- was a different defect, fixed under #2026, and had no
+        # audit-node involvement.
+        self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
+        self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
 
         # User MFA data storage (in production, this would be a database)
         self.user_mfa_data: Dict[str, Dict[str, Any]] = {}
@@ -710,15 +713,23 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             result["processing_time_ms"] = processing_time
             result["timestamp"] = start_time.isoformat()
 
-            # Audit log the operation (disabled for now to fix deadlock)
-            # self._audit_mfa_operation(user_id, action, method, result)
+            # Audit the operation. This stood commented out from this file's
+            # first commit behind "disabled for now to fix deadlock", which
+            # meant every admin-gated destructive action (revoke, disable,
+            # reset) taken through the SYNC surface completed with no record.
+            # The deadlock claim was re-investigated and has no supporting
+            # evidence -- see the sink construction in __init__ (issue #2060).
+            # This is deliberately OUTSIDE any `_data_lock` held above: the
+            # action handlers acquire and release it themselves, so the sink
+            # never runs under the lock.
+            self._audit_mfa_operation_sync(user_id, action, method, result)
 
-            # self.log_node_execution(
-            #     "mfa_operation_complete",
-            #     action=action,
-            #     success=result.get("success", False),
-            #     processing_time_ms=processing_time
-            # )
+            self.log_node_execution(
+                "mfa_operation_complete",
+                action=action,
+                success=result.get("success", False),
+                processing_time_ms=processing_time,
+            )
 
             return result
 
@@ -2486,17 +2497,26 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             event_type: Type of security event
             severity: Event severity
         """
+        # SecurityEventNode is a sync-only Node: it defines neither async_run
+        # nor execute_async, so this await raised AttributeError (issue #2060).
+        # Its parameters are event_type/severity/message/user_id/metadata --
+        # description= and source_ip= were dropped and message= never supplied.
+        # severity is upper-cased because SeverityLevel() rejects lowercase.
         security_event = {
             "event_type": event_type,
-            "severity": severity,
-            "description": f"MFA {event_type} for user {user_id}",
-            "metadata": {"mfa_operation": True},
+            "severity": severity.upper(),
+            "message": f"MFA {event_type} for user {user_id}",
             "user_id": user_id,
-            "source_ip": "unknown",  # In real implementation, get from request
+            "metadata": {
+                "mfa_operation": True,
+                # No request context reaches this node -- it has no caller,
+                # session, or principal parameter. See #2047.
+                "source_ip": "unknown",
+            },
         }
 
         try:
-            await self.security_event_node.async_run(**security_event)  # type: ignore[reportAttributeAccessIssue]
+            await asyncio.to_thread(self.security_event_node.execute, **security_event)
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log security event: {e}")
 
@@ -2511,28 +2531,49 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             method: MFA method
             result: Operation result
         """
+        await asyncio.to_thread(self._audit_mfa_operation_sync, user_id, action, method, result)
+
+    def _audit_mfa_operation_sync(
+        self, user_id: str, action: str, method: str, result: Dict[str, Any]
+    ) -> None:
+        """Audit an MFA operation from a synchronous caller.
+
+        Both dispatchers audit through this: ``run()`` calls it directly and
+        ``async_run()`` offloads it to a worker thread. Previously only the
+        async dispatcher audited at all, and the sync one carried a commented
+        out call, so ``revoke`` / ``disable`` / ``reset`` through the sync
+        surface completed with no record whatsoever (issue #2060).
+
+        AuditLogNode is a sync-only Node -- see ``_log_security_event``. Its
+        parameters are event_type/message/user_id/event_data; the previous
+        action=/resource_type=/resource_id=/metadata=/ip_address= were all
+        dropped by execute(), so even a resolved call would have written
+        {"event_type": "info", "message": "", "data": {}}.
+        """
         audit_entry = {
-            "action": f"mfa_{action}",
+            "event_type": f"mfa_{action}",
+            "message": f"MFA {action} ({method}) for user {user_id}",
             "user_id": user_id,
-            "resource_type": "mfa",
-            "resource_id": f"{user_id}:{method}",
-            "metadata": {
+            "event_data": {
                 "action": action,
                 "method": method,
+                "resource_type": "mfa",
+                "resource_id": f"{user_id}:{method}",
                 "success": result.get("success", False),
                 "result": result,
+                # user_id above is the SUBJECT of the operation, never the
+                # actor: this node has no caller identity to record, and
+                # admin_override is a caller-supplied boolean rather than an
+                # authenticated principal. An auditor reading these records
+                # can see WHAT happened and TO WHOM, but not BY WHOM. That
+                # gap is #2047 and is not closed here.
+                "actor": None,
+                "ip_address": "unknown",
             },
-            "ip_address": "unknown",  # In real implementation, get from request
         }
 
-        if self.audit_log_node is None:
-            # No sink is wired at all -- already reported once at init. Do not
-            # emit a per-operation "Failed to audit", which reads like a
-            # transient fault rather than a standing gap (issue #2026).
-            return
-
         try:
-            await self.audit_log_node.async_run(**audit_entry)  # type: ignore[reportAttributeAccessIssue]
+            self.audit_log_node.execute(**audit_entry)
         except (AttributeError, TypeError, ValueError) as e:
             # Narrow: a broad `except Exception` here hid the fact that the
             # sink was None behind a warning that looked transient.
@@ -2906,17 +2947,21 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         }
         self.audit_events.append(event)
 
-        # Also use the audit log node if available
-        if hasattr(self, "audit_log_node") and self.audit_log_node:
-            try:
-                self.audit_log_node.execute(
-                    action=event_type,
-                    user_id=metadata.get("user_id"),
-                    metadata=metadata,
-                )
-            except Exception as e:
-                # Don't fail the main operation if audit logging fails
-                logger.warning(f"Audit logging failed: {e}")
+        # Also write to the audit sink. The `hasattr(...) and self.audit_log_node`
+        # guard that used to stand here is gone: __init__ always constructs the
+        # sink now, so the absent-branch was unreachable and would have silently
+        # returned success while recording nothing (issue #2060). Parameters are
+        # the ones AuditLogNode reads -- action=/metadata= were dropped.
+        try:
+            self.audit_log_node.execute(
+                event_type=event_type,
+                message=f"MFA event {event_type}",
+                user_id=metadata.get("user_id"),
+                event_data=metadata,
+            )
+        except Exception as e:
+            # Don't fail the main operation if audit logging fails
+            logger.warning(f"Audit logging failed: {e}")
 
     def _initiate_recovery(
         self,

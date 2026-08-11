@@ -1757,22 +1757,31 @@ def test_authenticate_does_not_mint_a_session_for_a_caller_chosen_user_id():
         {"sub": "alice", "exp": int(time.time()) + 3600}, secret, algorithm="HS256"
     )
 
-    # SessionManagementNode has no execute_async (a separate, pre-existing
-    # defect), so the session call is stubbed to record who the session is for.
+    # The REAL SessionManagementNode, not a stub.
+    #
+    # This test used to replace node.session_node.execute_async with a fake.
+    # SessionManagementNode never defined execute_async, so the assignment
+    # created the attribute and the fake answered a call that, in production,
+    # raised AttributeError before any session was minted. The test therefore
+    # passed for the entire lifetime of issue #2060 while the path it claims to
+    # cover could not execute at all. Driving the real collaborator is the
+    # point: the identity binding must hold through the surface that actually
+    # runs.
     created_for = {}
+    real_create = node.session_node.async_run
 
-    async def _fake_create(**kwargs):
+    async def _recording_create(**kwargs):
         created_for.update(kwargs)
-        return {"session_id": "sess-1"}
+        return await real_create(**kwargs)
 
-    node.session_node.execute_async = _fake_create
+    node.session_node.async_run = _recording_create
 
     result = asyncio.run(
         node._authenticate(
             auth_method="jwt",
             credentials={"jwt_token": alice_token},
             user_id="admin",
-            risk_context={},
+            risk_context={"ip_address": "203.0.113.7"},
             auth_id="auth-1",
         )
     )

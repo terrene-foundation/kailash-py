@@ -27,7 +27,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.api import AsyncHTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -114,7 +114,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
     def _setup_supporting_nodes(self):
         """Initialize supporting Kailash nodes."""
-        self.http_client = HTTPRequestNode(name=f"{self.name}_http")
+        # AsyncHTTPRequestNode, not HTTPRequestNode: every call site here is
+        # on an async path and awaits the client. The sync HTTPRequestNode
+        # defines neither async_run nor execute_async, so those awaits
+        # raised AttributeError (issue #2060). Both return
+        # {"success": ..., "response": ...}.
+        self.http_client = AsyncHTTPRequestNode(name=f"{self.name}_http")
 
         self.json_reader = JSONReaderNode(name=f"{self.name}_json")
 
@@ -953,7 +958,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # Make token request using HTTPRequestNode
         try:
-            token_response = await self.http_client.async_run(  # type: ignore[reportAttributeAccessIssue]
+            token_response = await self.http_client.async_run(
                 method="POST",
                 url=token_url,
                 data=token_data,
@@ -989,7 +994,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # Make user info request
         try:
-            userinfo_response = await self.http_client.async_run(  # type: ignore[reportAttributeAccessIssue]
+            userinfo_response = await self.http_client.async_run(
                 method="GET",
                 url=userinfo_url,
                 headers={"Authorization": f"Bearer {access_token}"},
@@ -1064,11 +1069,19 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "roles": self._assign_roles_from_attributes(attributes, provider),
         }
 
-        # Log user provisioning
-        await self.audit_logger.async_run(  # type: ignore[reportAttributeAccessIssue]
-            action="user_provisioned",
+        # Log user provisioning. AuditLogNode is sync-only -- it defines
+        # neither async_run nor execute_async, so awaiting async_run raised
+        # AttributeError after the provisioning had already happened, and no
+        # provisioning was ever recorded (issue #2060). It is offloaded to a
+        # worker thread, and given the parameters it actually reads
+        # (event_type/message/user_id/event_data) rather than action=/details=,
+        # which it drops.
+        await asyncio.to_thread(
+            self.audit_logger.execute,
+            event_type="user_provisioned",
+            message=f"Provisioned SSO user {email} from {provider}",
             user_id=email,
-            details={
+            event_data={
                 "provider": provider,
                 "attributes": attributes,
                 "profile": user_profile,
@@ -1217,11 +1230,14 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             del self.active_sessions[session_id]
             sessions_removed += 1
 
-        # Log logout
-        await self.audit_logger.async_run(  # type: ignore[reportAttributeAccessIssue]
-            action="sso_logout",
+        # Log logout. Sync-only sink -- see _provision_user for why this is a
+        # thread offload with event_type/message/event_data (issue #2060).
+        await asyncio.to_thread(
+            self.audit_logger.execute,
+            event_type="sso_logout",
+            message=f"SSO logout for user {user_id}",
             user_id=user_id,
-            details={"provider": provider, "sessions_removed": sessions_removed},
+            event_data={"provider": provider, "sessions_removed": sessions_removed},
         )
 
         return {

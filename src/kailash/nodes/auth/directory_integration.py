@@ -23,7 +23,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.api import AsyncHTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -108,7 +108,12 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
     def _setup_supporting_nodes(self):
         """Initialize supporting Kailash nodes."""
-        self.http_client = HTTPRequestNode(name=f"{self.name}_http")
+        # AsyncHTTPRequestNode, not HTTPRequestNode: every call site here is
+        # on an async path and awaits the client. The sync HTTPRequestNode
+        # defines neither async_run nor execute_async, so those awaits
+        # raised AttributeError (issue #2060). Both return
+        # {"success": ..., "response": ...}.
+        self.http_client = AsyncHTTPRequestNode(name=f"{self.name}_http")
 
         self.json_reader = JSONReaderNode(name=f"{self.name}_json")
 
@@ -403,8 +408,19 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             self.sync_status[self.directory_type] = sync_stats
 
             # Log sync completion
-            await self.audit_logger.execute_async(  # type: ignore[attr-defined]
-                action="directory_sync_completed", details=sync_stats
+            # AuditLogNode / SecurityEventNode are sync-only: neither defines
+            # execute_async nor async_run, so every await in this module raised
+            # AttributeError and no directory audit or security event was ever
+            # recorded (issue #2060). They are offloaded to a worker thread and
+            # given the parameters they actually read -- event_type/message/
+            # user_id/event_data for audit, event_type/severity/message/user_id/
+            # metadata for security. The action=/details=/source=/timestamp=
+            # previously passed were silently dropped by execute().
+            await asyncio.to_thread(
+                self.audit_logger.execute,
+                event_type="directory_sync_completed",
+                message=f"Directory sync completed for {self.directory_type}",
+                event_data=sync_stats,
             )
 
             return sync_stats
@@ -641,18 +657,23 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             auth_result["user_dn"] = user_dn_template.format(username=username)
 
             # Log successful authentication
-            await self.audit_logger.execute_async(  # type: ignore[attr-defined]
-                action="directory_authentication_success",
+            await asyncio.to_thread(
+                self.audit_logger.execute,
+                event_type="directory_authentication_success",
+                message=f"Directory authentication succeeded for {username}",
                 user_id=username,
-                details={"directory_type": self.directory_type},
+                event_data={"directory_type": self.directory_type},
             )
         else:
             # Log failed authentication
-            await self.security_logger.execute_async(  # type: ignore[attr-defined]
+            await asyncio.to_thread(
+                self.security_logger.execute,
                 event_type="authentication_failure",
                 severity="HIGH",
-                source="directory_integration",
-                details={
+                message=f"Directory authentication failed for {username}",
+                user_id=username,
+                metadata={
+                    "source": "directory_integration",
                     "username": username,
                     "directory_type": self.directory_type,
                     "reason": auth_result.get("reason", "invalid_credentials"),
@@ -820,10 +841,12 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
         # Log user provisioning
-        await self.audit_logger.execute_async(  # type: ignore[attr-defined]
-            action="user_provisioned_from_directory",
+        await asyncio.to_thread(
+            self.audit_logger.execute,
+            event_type="user_provisioned_from_directory",
+            message=f"Provisioned user {user_id} from {self.directory_type}",
             user_id=user_id,
-            details={
+            event_data={
                 "directory_type": self.directory_type,
                 "directory_data": user_data,
                 "provisioning_data": provisioning_data,
@@ -1518,12 +1541,15 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         else:
             severity = "MEDIUM"
 
-        await self.security_logger.execute_async(  # type: ignore[attr-defined]
+        # The node stamps its own timestamp; source= and details= are not
+        # parameters of SecurityEventNode and were dropped (issue #2060).
+        await asyncio.to_thread(
+            self.security_logger.execute,
             event_type=event_type,
             severity=severity,
-            source="directory_integration_node",
-            timestamp=datetime.now(UTC).isoformat(),
-            details=event_data,
+            message=f"{event_type} via directory_integration_node",
+            user_id=event_data.get("user_id"),
+            metadata={"source": "directory_integration_node", **event_data},
         )
 
     def get_directory_statistics(self) -> Dict[str, Any]:

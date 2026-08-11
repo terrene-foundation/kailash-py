@@ -6,6 +6,7 @@ concurrent session limits, device tracking, anomaly detection, and automatic
 session cleanup with security event integration.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -227,6 +228,37 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 required=False,
                 default={},
             ),
+            # Declared because EnterpriseAuthProviderNode already passes them on
+            # create. Undeclared parameters are dropped by validate_inputs(), so
+            # the session recorded login_method="password" no matter how the
+            # principal actually authenticated -- an SSO or JWT session audited
+            # as a password login (issue #2060).
+            "auth_method": NodeParameter(
+                name="auth_method",
+                type=str,
+                description=(
+                    "Authentication method that established this session "
+                    "(password, mfa, sso, jwt, directory, ...). Recorded as the "
+                    "session's login_method."
+                ),
+                required=False,
+            ),
+            "additional_factors": NodeParameter(
+                name="additional_factors",
+                type=list,
+                description="Additional authentication factors satisfied at login",
+                required=False,
+            ),
+            "risk_score": NodeParameter(
+                name="risk_score",
+                type=float,
+                description=(
+                    "Authentication-time risk score from the caller. Recorded in "
+                    "session metadata as auth_risk_score; it does NOT override "
+                    "the session risk score this node computes itself."
+                ),
+                required=False,
+            ),
         }
 
     def run(  # type: ignore[reportIncompatibleMethodOverride]
@@ -236,6 +268,9 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         user_id: Optional[str] = None,
         ip_address: Optional[str] = None,
         device_info: Optional[Dict[str, Any]] = None,
+        auth_method: Optional[str] = None,
+        additional_factors: Optional[List[str]] = None,
+        risk_score: Optional[float] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Run session management operation.
@@ -246,6 +281,9 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             user_id: User ID for session operations
             ip_address: Client IP address
             device_info: Device information
+            auth_method: Authentication method that established the session
+            additional_factors: Additional factors satisfied at login
+            risk_score: Authentication-time risk score from the caller
             **kwargs: Additional parameters
 
         Returns:
@@ -284,7 +322,14 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                         "success": False,
                         "error": "user_id and ip_address required for create",
                     }
-                result = self._create_session(user_id, ip_address, device_info)  # type: ignore[reportArgumentType]
+                result = self._create_session(  # type: ignore[reportArgumentType]
+                    user_id,
+                    ip_address,
+                    device_info,
+                    auth_method=auth_method,
+                    additional_factors=additional_factors,
+                    auth_risk_score=risk_score,
+                )
                 self.session_stats["total_sessions_created"] += 1
 
             elif action == "validate":
@@ -348,7 +393,13 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             raise
 
     def _create_session(
-        self, user_id: str, ip_address: str, device_info: Dict[str, Any]
+        self,
+        user_id: str,
+        ip_address: str,
+        device_info: Dict[str, Any],
+        auth_method: Optional[str] = None,
+        additional_factors: Optional[List[str]] = None,
+        auth_risk_score: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Create new user session.
 
@@ -356,6 +407,11 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             user_id: User ID
             ip_address: Client IP address
             device_info: Device information
+            auth_method: Method that authenticated the principal; recorded as
+                the session's login_method
+            additional_factors: Additional factors satisfied at login
+            auth_risk_score: Caller's authentication-time risk score, recorded
+                in metadata only
 
         Returns:
             Session creation result
@@ -399,13 +455,21 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 ip_address=ip_address,
                 device_info=device,
                 status=SessionStatus.ACTIVE,
-                login_method="password",  # Default, should be set by caller
+                # The caller's auth_method, not a hardcoded "password". The
+                # caller-supplied auth_risk_score is recorded as metadata and
+                # deliberately does NOT override risk_score above: that one is
+                # computed here from IP/device/history, and letting a caller
+                # supply it would let the caller declare its own session safe.
+                login_method=auth_method or "password",
                 risk_score=risk_score,
                 anomaly_flags=[],
                 page_views=0,
                 actions_performed=0,
                 data_accessed_mb=0.0,
-                metadata={},
+                metadata={
+                    "additional_factors": list(additional_factors or []),
+                    "auth_risk_score": auth_risk_score,
+                },
             )
 
             # Add geo-location if enabled
@@ -1035,19 +1099,25 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             session_data: Session data
             metadata: Additional metadata
         """
+        # AuditLogNode.execute reads event_type/message/user_id/event_data and
+        # nothing else. This previously passed action/resource_type/resource_id/
+        # metadata/ip_address -- every one of which it drops -- so the record it
+        # actually wrote was {"event_type": "info", "message": "", "data": {}}:
+        # an audit entry that names neither the operation nor the session
+        # (issue #2060). The keys below are the ones the node reads.
         audit_entry = {
-            "action": f"session_{operation}",
+            "event_type": f"session_{operation}",
+            "message": f"Session {operation} for user {session_data.user_id}",
             "user_id": session_data.user_id,
-            "resource_type": "session",
-            "resource_id": session_data.session_id,
-            "metadata": {
+            "event_data": {
                 "operation": operation,
+                "resource_type": "session",
+                "resource_id": session_data.session_id,
                 "ip_address": session_data.ip_address,
                 "device_type": session_data.device_info.device_type,
                 "risk_score": session_data.risk_score,
                 **(metadata or {}),
             },
-            "ip_address": session_data.ip_address,
         }
 
         try:
@@ -1066,13 +1136,24 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             severity: Event severity
             metadata: Event metadata
         """
+        # SecurityEventNode.execute reads event_type/severity/message/user_id/
+        # metadata. Two defects lived here (issue #2060):
+        #   1. severity was forwarded verbatim, and every caller in this module
+        #      passes it lowercase ("medium"/"high"). SeverityLevel("medium")
+        #      raises ValueError, so the except below swallowed it and NO
+        #      session security event was ever recorded -- not one, ever.
+        #   2. description=/source_ip= are not parameters of the node and were
+        #      dropped, while message= was never supplied.
         security_event = {
             "event_type": event_type,
-            "severity": severity,
-            "description": f"Session management: {event_type}",
-            "metadata": {"session_management": True, **metadata},
+            "severity": severity.upper(),
+            "message": f"Session management: {event_type}",
             "user_id": user_id,
-            "source_ip": metadata.get("ip_address", "unknown"),
+            "metadata": {
+                "session_management": True,
+                "source_ip": metadata.get("ip_address", "unknown"),
+                **metadata,
+            },
         }
 
         try:
@@ -1089,5 +1170,14 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         return self._get_session_statistics()["statistics"]
 
     async def async_run(self, **kwargs) -> Dict[str, Any]:
-        """Async execution method for enterprise integration."""
-        return self.execute(**kwargs)
+        """Async entry point for this node.
+
+        The body is genuinely synchronous -- this node performs zero awaits;
+        it manipulates in-memory session state under ``_sessions_lock`` and
+        writes an audit record through a sync ``AuditLogNode``. It is offloaded
+        to a worker thread rather than run inline so that an async caller's
+        event loop is not blocked by whatever logging handler the operator has
+        attached to the audit logger. The node is already thread-safe by
+        construction (``threading.Lock``), which is what makes the offload safe.
+        """
+        return await asyncio.to_thread(self.execute, **kwargs)
