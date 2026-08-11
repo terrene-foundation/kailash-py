@@ -1,3 +1,84 @@
+# ═══ UPDATE 15 (LATEST) — main `114d3c06e`: #2066 MERGED, OAuth login was DEAD ═══
+
+**#2060 closed.** `authenticate`/`authorize`/`logout`/`validate` complete end-to-end and
+**#2035's identity binding is LIVE for the first time**. 19 broken collaborator calls -> 0.
+`mfa_revoked` (the HIGH-severity event fired when a second factor is destroyed) had **never
+fired** and now does. Largest user-facing breakage found: `sso.py` awaited `async_run` on a
+sync `HTTPRequestNode` at both OAuth token exchange and userinfo, so **every OAuth login
+failed**, misreported as a token-exchange failure.
+
+## ⚠ TRAP — A RUNTIME BEHAVIOUR ASSERTED FROM A SIGNATURE IS A GUESS
+
+Not a review-discipline lesson; **Python falsiness**, and it will catch someone again.
+`if not risk_context:` READS as "when the caller omits it" and MEANS "when it is empty OR
+absent" — and those two differ *precisely where the defect lives*. Any guard of the form
+`if not <container>:` has this gap: `{}`, `[]`, `""` and `0` take the same branch as `None`.
+Drive it; do not read it.
+
+### How it bit here (orchestrator error #3)
+
+Security review found M5: `authenticate` returned `success/authenticated: True` with
+`session_id: None` and emitted an `auth_success` audit record. Real. **But I told the lane to
+pin it with `risk_context={}` — which is the ONE input that does NOT trigger it.** An empty
+dict is falsy, so `async_run` takes `if not risk_context: risk_context =
+self._extract_risk_context(kwargs)` and a default `127.0.0.1` fills in. Measured by the lane:
+
+    {}                            -> success=True  session_id='Njy7...'  (fallback fills IP)
+    {'user_agent': 'curl'}        -> success=True  session_id=None       <-- DEFECT
+    {'device_info': {...}}        -> success=True  session_id=None       <-- DEFECT
+    {'ip_address': '203.0.113.7'} -> success=True  session_id='YkXF...'
+
+Following my instruction would have shipped a pin that passes on broken code — while I was, in
+the same message, flagging exactly that failure mode. I asserted a runtime behaviour from
+reading a signature instead of driving it. **Third premise error handed to a lane this
+session** (the others: observability flags "default False" when all four are `True`; briefing a
+`security-reviewer` to run `gh` when it has no Bash).
+
+**The generalisation: a delegation brief is a durable artifact.** It directs a whole run and is
+acted on before anyone reads it critically. Verify its code-claims like a CHANGELOG entry.
+
+## An ENUMERATION missed what a SWEEP caught — three times on one branch
+
+M6's sweep test found **two raw `user_id` sites the author's manual pass had missed** (MFA audit
+entry, provider logout) — drift inside a single branch, under active review, by the person who
+had just written the helper. That is the argument for the sink-level fix, now **#2088**.
+
+## Filed this round
+
+**#2088** (log-injection sanitizing belongs in `SecurityEventNode.execute` /
+`AuditLogNode.execute`, not N call sites — with the drift evidence) · **#2089** (`jwt_config`
+issuer unset logs "any token signed with this key is accepted" at **INFO**, below every alert
+threshold; pre-existing from #2035).
+
+# ═══ UPDATE 14 (LATEST) — main `fae6d1c28`: THE LIVE SSRF IS CLOSED ═══
+
+**PR #2064 MERGED.** The full SSRF described in UPDATE 13 is no longer live on main.
+
+Two independent adversarial security reviewers + a release specialist each re-derived the
+analysis rather than accepting a summary. Both reviewers independently found a SECOND SSRF the
+first fix did not close: `aiohttp` defaults `allow_redirects=True`, so the four registration-time
+controls bounded **hop 1 only**. Reproduced live before fixing — a backend open-redirect returned
+`{"AccessKeyId": "ASIA-PIVOTED-CREDENTIAL"}` to the caller with the `location` header hidden from
+the response allowlist. Now `allow_redirects=False` (server) + explicit `follow_redirects=False`
+(gateway, stated rather than inherited because the two clients' defaults disagree).
+
+Measured, `aiohttp 3.13.3`: across a redirect **`Authorization` is STRIPPED but `Cookie` is
+FORWARDED** — so the exfil half was a session cookie, not a bearer token. (Caveat: both endpoints
+were 127.0.0.1 on different PORTS, i.e. cross-ORIGIN not cross-hostname.)
+
+**CodeQL #11497 dismissed** as a bounded reverse-proxy residual, with the full proof posted as a
+PR #2064 comment because the Security-tab comment caps at **280 characters**. Dismissal was
+gated on the redirect fix landing: both reviewers said the residual was NOT dispositionable while
+the bound was stated over a flow that continued past where the controls stopped.
+
+**Alert-state instrument note:** `gh api .../code-scanning/alerts/<n>` returns `state: null` for a
+PR-ref alert. The discriminating read is the LISTING endpoint **with an explicit `ref=`** — PR
+alerts index under `refs/pull/<n>/merge`, not the branch. That read also showed main carried its
+own open critical `#11252` at the PRE-FIX line, independently confirming the class was live.
+
+Still open: **#2072** (anonymous `POST /workflows/{name}/execute` on a default `create_gateway()`)
+— user-approved fail-closed `require_auth=True` server-wide is **task #27, now UNBLOCKED**.
+
 # SWEEP + WRAPUP — 2026-08-11 (READ THIS FIRST)
 
 main `cc44f5471`. **21 PRs merged, 11 issues closed** (#1995 #2015 #2014 #2027 #2004 #2006 #1997
@@ -55,6 +136,204 @@ auth changes already merged (#2035, #2054). **#2060 belongs in the same decision
 #2035's identity-binding work is live at all.
 
 # Session Notes — 2026-08-10 (session N: forest merged, security triage, #1995 closed out)
+
+# ══════════ UPDATE 13 (LATEST, 2026-08-11) — main `8507ec525` ══════════
+
+**Read `workspaces/issue-1720-llm-consolidation/launch-ledger-cont16.md` FIRST.** It is the
+live lane/PR table and the compaction-surviving launch record.
+
+## ⚠ THE FINDING: a LIVE FULL SSRF on main, nearly dismissed as a false positive
+
+Both proxy handlers captured closure state as DEFAULT ARGUMENTS:
+
+    async def proxy_handler(request: Request, path: str, _url=proxy_url, _allowlist=path_allowlist):
+
+**FastAPI treats any non-path handler parameter carrying a plain default as a QUERY
+parameter.** So `_url`, `_allowlist`, `_name`, `_backends` were all caller-writable.
+Measured against a second HTTP server standing in for the attacker:
+
+    NORMAL -> 200 {"who": "legitimate-backend"}
+    ?_url= -> 200 {"who": "ATTACKER-CONTROLLED-HOST"}
+    VERDICT: FULL SSRF — caller redirected the request to an arbitrary host
+
+The path allowlist was writable the same way, so the registration-time restriction could be
+widened from the query string. **Fixed in `4a243fb17` (PR #2064), still UNMERGED — the defect
+is live on main until it lands.**
+
+**How it was nearly missed, twice, the same way:** #2025's inherited analysis said "no
+authority pivot is constructible", reasoning about the string concatenation; the lane then
+repeated the error in a written Rule 1b deferral proof (#2065). Both probed the URL
+*string-building* and read a clean result as clearing the whole flow. The taint entered
+through the handler's PARAMETERS — the thing neither instrument looked at. **CodeQL was
+right and `py/partial-ssrf` under-rated it.** The deferral is WITHDRAWN, #2065 closed as
+invalid with the refutation written into it. Nothing was ever dismissed in the Security tab.
+
+**What forced the catch:** Rule 1b's fourth artifact (release-specialist signoff, which the
+lane could not self-grant). Requiring an independent signer is what produced the re-look.
+Independently, the release-specialist read alert #11497 and found its two source lines were
+`path` AND `_url` — NOT path+query as the proof claimed. Two routes to the same defect.
+
+**The thread:** a `py/log-injection` alert on `extra={"workflow": _name}`. A registration-time
+constant should not be tainted; chasing *why* exposed the SSRF. **The finding that looked
+cosmetic was the thread to the critical one.**
+
+## The bug CLASS, swept repo-wide (orchestrator)
+
+AST sweep over decorated route handlers, excluding vendored trees and legitimate FastAPI
+markers (`Depends`/`Query`/`Path`/`Body`/`Header`/`Cookie`/`Form`/`File`/`Security`):
+**27 handlers carry default args; nearly all are INTENDED query params** (`limit`, `page`,
+`session_id`). **Exactly two** were closure-captures — both the proxy handlers above.
+Blind-spot checked: `add_api_route`/`add_websocket_route` appear nowhere as real
+registrations, so the decorator-scoped sweep missed no registration form.
+
+**A third instance lives in a DIFFERENT framework** — `MCPMixin` bound tool methods with
+`async def tool_wrapper(_bound_method=method, **kwargs)`. MCP derives each tool's published
+schema from the signature, so `_bound_method` was advertised to every client
+(`ADVERTISED PARAMETERS: ['_bound_method', 'kwargs']`) and, being NAMED, binds by name and
+displaces the bound method. Not RCE (JSON values aren't callable → TypeError). **PR #2080.**
+
+Generalised lesson: **internal closure state placed in a signature that a framework reads as
+a public contract.** Any framework that introspects signatures (FastAPI, MCP, Click, Pydantic)
+has this shape available.
+
+## ⚠ CI CANNOT RUN THESE SUITES — #2002/#2038 premise refuted on the runner
+
+I measured root regression LOCALLY at **1,928 passed / 0 failed / 3m15s** and relayed
+"~3-4 min per PR" to the user, who approved gating on that basis. **That number does not
+survive the runner** and I corrected it with them:
+
+| suite                        | local (macOS)          | GitHub runner                          |
+| ---------------------------- | ---------------------- | -------------------------------------- |
+| root regression, infra-free  | 1916 pass / 0 fail /210s | **HANGS** — killed at 40-min cap, ~8% run |
+| root regression, infra-marked| 11 pass / 11 skip      | **HANGS** — killed at 30-min cap, 3 of 22 |
+| Tier 2                       | 2604 pass / 0 fail     | **174 failed + 58 errors**             |
+
+Tier-2's 232 failures are ~one cause: **130 `RuntimeError: can't start new thread` + 90
+`sqlite3.OperationalError: disk I/O error`** — thread/fd exhaustion, **reproduced identically
+against UNMODIFIED code** (run 31478307416). Neither suite has ever been observed to complete
+on CI, which is very likely *why* neither was wired in.
+
+**USER DECISION: land the verified value; gate AFTER the leak is fixed.** #2002 lands
+**DIAGNOSED, NOT FIXED** — do NOT close it. Issues: **#2075** (DataFlow pool leak), **#2076**
+(5 CI selectors matching zero tests), **#2078** (Tier-2 resource exhaustion), **#2079/#2081**
+(regression hangs).
+
+### Two instrument findings that explain the whole blind spot
+
+1. **On Python 3.11/3.12 the Tier-2 step TIMED OUT at 10 minutes on every inspected run — and
+   every one reported SUCCESS.** `continue-on-error` swallowed the *timeouts* as well as the
+   failures. The check could not fail even by running out of time.
+2. **`pytest.ini` sets `timeout_method = thread`, which CANNOT kill a test blocked in a C
+   call.** pytest-timeout printed its 300s banner repeatedly while the process ran on to the
+   job cap. A timeout that cannot enforce a timeout.
+3. `--maxfail=20` made every run a truncated WINDOW, not a failure set — so **no "N failures"
+   figure ever produced by this repo was a complete count.**
+
+## ⚠ ANOTHER 855 tests that never run (#2074)
+
+`packages/kailash-kaizen/tests/regression/` — **107 files / 855 test functions — is in NO
+pytest invocation** in `test-kailash-kaizen.yml`. Found by a lane whose own new regression
+tests were sitting there and would have merged **green-by-absence, never collected**. Needs a
+real baseline run before gating; some will be red.
+
+## ⚠ #2083 — CRITICAL sibling of #2041, found because #2041's sweep was STRING-scoped
+
+`JWTAuthManager` (`middleware/auth/jwt_auth.py:152-156`, reachable because
+`middleware/auth/models.py:33` sets `auto_generate_keys: bool = True`) **generates a fresh
+HS256 SIGNING SECRET on the default path** and announces it at `logger.info`. Measured, two
+managers in one process:
+
+    secret A = ZyRhYSy-RRz3pGOm6sQQKz065wVzJePgrTMaIfjqXtU
+    secret B = LTAC16KF2syqezQJShvl1mq-lYezBPb3TVmkvtaNL5A
+    SAME? False
+
+Worse than #2041: it is a JWT signing secret, so every token dies at restart, and in a
+multi-replica deployment replica A's tokens are rejected by replica B — an intermittent,
+load-balancer-dependent auth failure that looks like a client bug. Its signal is `info`,
+QUIETER than the `warning` #2063 removes.
+
+**Why #2041's own sweep missed it: the sweep was scoped to the literal string
+`Fernet.generate_key`.** This site uses a different generator. **Sweep by SHAPE
+(generate-and-continue on a default path), never by generator name** — enumerate
+`Fernet.generate_key`, `AESGCM.generate_key`, `secrets.token_*`, `os.urandom`.
+
+## Traps confirmed THIS session (brief every new lane)
+
+1. **`pytest.ini`'s `pythonpath = src` is inserted AHEAD of `PYTHONPATH`.** Comparing against
+   another checkout via `PYTHONPATH` silently tests YOUR OWN tree. One lane got a false
+   **20/20 pass**; the real result was 19-of-20 FAIL. Assert the resolved module `__file__`
+   in-process — never trust the flag. (To genuinely block a module, use a `meta_path` blocker
+   AND assert the blocker itself worked.)
+2. **Wiring a dormant audit sink is a DISCLOSURE change.** Wiring the MFA sink nearly shipped
+   the **TOTP seed, `otpauth://` URI, and backup codes to the log in plaintext** — strictly
+   worse than leaving it unwired. Caught by an adversarial reviewer.
+3. **`gh` alert/issue queries truncate silently.** `per_page=100` without `--paginate` returned
+   exactly 100 rows; grepping that for `partial-ssrf` found nothing — *indistinguishable from a
+   real absence*. Main actually has **2310** open alerts. Watch for the exact-100 tell.
+4. **A `(rule, severity, path)` key collapses multiple instances in one file** — it reported
+   "no new alerts" while `py/log-injection` went 3 → 4. Compare COUNTS too.
+5. **`gh issue list --search` / `gh issue view` do NOT see comment threads.** Two lanes
+   mis-scoped work because the governing analysis lived in a COMMENT. Use `--comments`.
+6. **A timeout is not an assertion failure.** I read a FAILED summary line as a live regression
+   and began hunting a polluting test; the traceback said `Failed: Timeout (>120.0s)` from a
+   flag *I* passed. I had truncated with `tail -35`, dropping the traceback. **Read the
+   FAILURES block, not the summary, before naming a cause.**
+7. **Tests can be non-discriminating in BOTH directions.** One lane found 3 of its own tests
+   passed against the broken tree. Passing pre-fix is a defect in the TEST.
+8. **A source grep cannot tell code from prose about code.** My own structural test grepped for
+   the old idiom and matched the fix's explanatory comment. Parse the AST.
+9. **A DELEGATION BRIEF is a durable artifact — verify its code-claims before sending.**
+   ORCHESTRATOR ERROR, twice. (i) I briefed a lane that four observability flags "default to
+   unset/False"; they are all `= True` (`agent_config.py:117,123,129,135`) and
+   `create_observability` runs on EVERY agent construction — so the fix I specified would have
+   made **every agent construction raise**. (ii) I briefed a `security-reviewer` to run
+   `gh pr diff`; that agent type has **no Bash**, so it sat blocked. Both were unverified
+   assertions in a brief that directs a whole lane's run and gets acted on before anyone reads
+   it critically. **Two greps would have prevented (i).**
+   Corollary that saved it: a lane that STOPS on a false premise rather than implementing it
+   is worth more than one that complies. This happened twice with the same lane.
+
+## ⚠ #2084 — four advertised observability subsystems install NOTHING
+
+`enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit` — **all default `True`**,
+all silently dead. `observability/tracing.py` does not exist; the other three modules define
+zero `*Hook` classes; the handler methods (`start_trace`, `end_trace`, `record_start`,
+`record_end`, `log_start`, `log_end`) have **zero definitions anywhere in `src/`**, so a
+corrected import path would fail at the next line — a STUB, not a typo. `create_observability`
+always returns an empty `HookManager`; even its closing `logger.info("Enabled observability:…")`
+never fires. Runtime trace on the default path: `flags = True True True True`,
+`is_observability_enabled() = True`, **`hooks actually registered = 0`**.
+
+`is_observability_enabled()` ORs the four flags, so it returns `True` by default while nothing
+is registered — **it lies today**. "Enable compliance audit trails" recording nothing is the
+compliance-shaped failure and the strongest implement-rather-than-remove candidate.
+
+**DISPOSITION (b′), tri-state `Optional[bool] = None`:** `None` (default) → loud one-time WARN,
+behaviour byte-identical; `True` (explicit opt-in) → typed raise; `False` → silent. Literal
+fail-loud-on-True was REJECTED because default-`True` means it breaks every agent construction,
+not the opt-in population — which also kills the "callers who break are already broken"
+argument that justified fail-closed on #2025. Same tri-state mechanism as #2070's
+`redact_sensitive`. The assertion whose absence let this ship: **`len(hook_manager._hooks) > 0`**.
+
+## PR queue at handoff
+
+| PR    | closes            | state                                                  |
+| ----- | ----------------- | ------------------------------------------------------ |
+| #2071 | (#2015 sweep)     | **MERGED** — sweep 78,152→first-party files, 379s→8.3s |
+| #2064 | Refs #2025, #2072 | **HIGHEST PRIORITY** — contains the live SSRF fix       |
+| #2063 | #2041             | green, in review                                        |
+| #2066 | #2060             | green, in review — makes #2035's identity binding live  |
+| #2068 | #2030 #2022       | green, in review                                        |
+| #2073 | #2070             | green                                                   |
+| #2080 | (MCP wrapper)     | green-pending, in review                                |
+| #2077 | #2023 only        | **MERGED** — #2002/#2038 in `Refs`, both left OPEN      |
+| #2031 | —                 | DRAFT, 2 open gating questions — do NOT sweep-merge     |
+
+**#2025 stays OPEN** (`Refs`, not `Fixes`): `POST /workflows/{name}/execute` is still anonymous
+arbitrary workflow execution on a default `create_gateway()` — **#2072**, proven under uvicorn
+on a real socket (`the workflow actually ran`). `Depends` does not reach a mounted sub-app;
+middleware does. **USER APPROVED fail-closed `require_auth=True` server-wide, as a SEPARATE
+shard off #2064's merged state** (task #27, BLOCKED until #2064 lands).
 
 ## Where we are
 
