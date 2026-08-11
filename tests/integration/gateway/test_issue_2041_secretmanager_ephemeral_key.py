@@ -29,6 +29,7 @@ import asyncio
 import base64
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, Union
 
@@ -40,6 +41,7 @@ from kailash.gateway.security import (
     SecretBackend,
     SecretEncryptionError,
     SecretManager,
+    SecretRollbackError,
 )
 
 #: Master key for the on-disk backend. Distinct from the manager's own key so a
@@ -461,6 +463,257 @@ def test_no_error_message_echoes_key_material_or_the_secret() -> None:
     message = str(excinfo.value)
     assert OPERATOR_PASSPHRASE not in message
     assert SENTINEL not in message
+
+
+# ---------------------------------------------------------------------------
+# Adversarial review findings on PR #2063 (M1-M4, L2, L3)
+# ---------------------------------------------------------------------------
+
+
+def test_the_iteration_ceiling_is_a_small_multiple_of_the_write_value() -> None:
+    """M1. An attacker-chosen iteration count is a CPU amplifier.
+
+    PBKDF2 must run to completion before Fernet can authenticate anything, so
+    the cost of a planted envelope is paid BEFORE any integrity check rejects
+    it. The ceiling bounds that amplification.
+
+    Falsifying result: the ceiling is a large multiple of the write value --
+    at the original 10,000,000 against a 100,000 write value, one planted
+    envelope bought 100x the intended work on every read.
+    """
+    from kailash.gateway import security as m
+
+    assert m._MAX_KDF_ITERATIONS <= 10 * m.SECRET_KDF_ITERATIONS
+
+
+def test_an_envelope_above_the_ceiling_is_refused_before_deriving(tmp_path) -> None:
+    """M1. The ceiling must be enforced, not merely declared.
+
+    Falsifying result: the read spends the attacker's iteration count and
+    THEN complains -- which is the cost this bound exists to avoid.
+    """
+    from kailash.gateway import security as m
+
+    backend = DictSecretBackend()
+    manager = SecretManager(backend=backend, encryption_key=OPERATOR_PASSPHRASE)
+    asyncio.run(manager.store_secret("db", {"password": SENTINEL}))
+
+    prefix, packed = backend.store["db"].split(":", 1)
+    envelope = json.loads(base64.urlsafe_b64decode(packed))
+    envelope["iterations"] = m._MAX_KDF_ITERATIONS + 1
+    backend.store["db"] = (
+        f"{prefix}:" + base64.urlsafe_b64encode(json.dumps(envelope).encode()).decode()
+    )
+
+    started = time.monotonic()
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        asyncio.run(manager.get_secret("db"))
+    elapsed = time.monotonic() - started
+
+    assert "iteration count" in str(excinfo.value)
+    # Rejected structurally, not by running the KDF: the inflated count would
+    # take seconds, so a fast refusal is the evidence the check ran first.
+    assert elapsed < 1.0, f"refusal took {elapsed:.2f}s -- the KDF likely ran"
+
+
+def test_crypto_does_not_block_the_event_loop(tmp_path) -> None:
+    """M1. 100k PBKDF2 rounds inline would stall every other coroutine.
+
+    A heartbeat coroutine ticks every 5ms while a store and a read run. If the
+    derivation holds the loop, the heartbeat cannot tick.
+
+    Falsifying result: the heartbeat records (near-)zero ticks, which is what
+    a synchronous ``_derive_fernet`` call on the loop produces.
+    """
+
+    async def scenario() -> int:
+        ticks = 0
+        stop = asyncio.Event()
+
+        async def heartbeat() -> None:
+            nonlocal ticks
+            while not stop.is_set():
+                await asyncio.sleep(0.005)
+                ticks += 1
+
+        beat = asyncio.create_task(heartbeat())
+        manager = SecretManager(
+            backend=_disk_backend(tmp_path), encryption_key=OPERATOR_PASSPHRASE
+        )
+        await manager.store_secret("db", {"password": SENTINEL})
+        await manager.clear_cache()
+        assert await manager.get_secret("db") == {"password": SENTINEL}
+        stop.set()
+        await beat
+        return ticks
+
+    assert asyncio.run(scenario()) > 0
+
+
+def test_strict_mode_refuses_an_unsealed_value() -> None:
+    """M2. The prefix dispatch is a downgrade oracle above the envelope checks.
+
+    Whoever can write the backing store swaps a sealed value for plain text;
+    no marker is seen, so every envelope check is SKIPPED rather than failed
+    and the plaintext is returned unauthenticated.
+
+    Falsifying result: strict mode returns the substituted plaintext.
+    """
+    backend = DictSecretBackend()
+    manager = SecretManager(
+        backend=backend, encryption_key=OPERATOR_PASSPHRASE, require_encryption=True
+    )
+    asyncio.run(manager.store_secret("db", {"password": SENTINEL}))
+
+    backend.store["db"] = {"value": "attacker-supplied-plaintext"}
+    asyncio.run(manager.clear_cache())
+
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        asyncio.run(manager.get_secret("db"))
+    assert "not sealed" in str(excinfo.value)
+
+
+def test_non_strict_mode_still_returns_unsealed_values() -> None:
+    """M2 control. The permissive path is the documented default; it must stay.
+
+    Falsifying result: closing the strict hole also broke every backend that
+    legitimately holds unsealed values -- the default
+    ``EnvironmentSecretBackend`` among them.
+    """
+    backend = DictSecretBackend()
+    backend.store["db"] = {"value": "plain"}
+    manager = SecretManager(backend=backend, encryption_key=OPERATOR_PASSPHRASE)
+
+    assert asyncio.run(manager.get_secret("db")) == {"value": "plain"}
+
+
+def test_strict_mode_refuses_the_unbound_legacy_format() -> None:
+    """M3. The pre-2.64 format has no ``ref``, so nothing binds it to a name.
+
+    An operator on the supported raw-Fernet compatibility path, plus a party
+    with backend write access, can copy a legacy envelope from staging over
+    production and have it honoured. Strict mode declines the unbound path.
+
+    Falsifying result: strict mode reads the legacy value anyway.
+    """
+    key = Fernet.generate_key().decode()
+    backend = DictSecretBackend()
+    backend.store["db"] = (
+        "encrypted:"
+        + Fernet(key.encode())
+        .encrypt(json.dumps({"password": SENTINEL}).encode())
+        .decode()
+    )
+
+    permissive = SecretManager(backend=backend, encryption_key=key)
+    assert asyncio.run(permissive.get_secret("db")) == {"password": SENTINEL}
+
+    strict = SecretManager(backend=backend, encryption_key=key, require_encryption=True)
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        asyncio.run(strict.get_secret("db"))
+    assert "reference binding" in str(excinfo.value)
+
+
+def test_max_age_rejects_a_replayed_old_envelope() -> None:
+    """M4. A superseded envelope is cryptographically perfect.
+
+    It carries the CORRECT reference and a valid signature, so the binding
+    check passes; after a rotation, whoever kept the old ciphertext can write
+    it back and be handed the revoked credential. ``max_age`` catches it once
+    the envelope has aged out.
+
+    Falsifying result: the stale envelope is returned as current.
+    """
+    backend = DictSecretBackend()
+    writer = SecretManager(backend=backend, encryption_key=OPERATOR_PASSPHRASE)
+    asyncio.run(writer.store_secret("db", {"password": "old-rotated-out"}))
+    superseded = backend.store["db"]
+
+    asyncio.run(writer.store_secret("db", {"password": SENTINEL}))
+    backend.store["db"] = superseded  # the replay
+
+    reader = SecretManager(
+        backend=backend, encryption_key=OPERATOR_PASSPHRASE, max_age=0.0
+    )
+    with pytest.raises(SecretRollbackError):
+        asyncio.run(reader.get_secret("db"))
+
+
+def test_max_age_unset_claims_nothing_and_checks_nothing() -> None:
+    """M4 control. The bound is opt-in; without it no staleness claim is made.
+
+    Falsifying result: a fresh secret raises because a default max_age was
+    quietly applied.
+    """
+    backend = DictSecretBackend()
+    manager = SecretManager(backend=backend, encryption_key=OPERATOR_PASSPHRASE)
+    asyncio.run(manager.store_secret("db", {"password": SENTINEL}))
+    asyncio.run(manager.clear_cache())
+
+    assert asyncio.run(manager.get_secret("db")) == {"password": SENTINEL}
+
+
+def test_a_whitespace_only_key_is_refused() -> None:
+    """L2. 32 spaces clears a naive length check and carries no entropy.
+
+    Falsifying result: ``" " * 32`` is accepted as a 32-character key.
+    """
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        SecretManager(backend=DictSecretBackend(), encryption_key=" " * 32)
+
+    assert "non-whitespace" in str(excinfo.value)
+
+
+def test_a_padded_key_is_measured_on_its_real_content() -> None:
+    """L2. Padding must not buy length.
+
+    Falsifying result: a short passphrase padded to the floor with spaces is
+    accepted.
+    """
+    with pytest.raises(SecretEncryptionError):
+        SecretManager(backend=DictSecretBackend(), encryption_key="short" + " " * 40)
+
+
+def test_a_reference_with_newlines_cannot_forge_log_lines() -> None:
+    """L3. References are caller-controlled and land in exception text.
+
+    ``SecretManager`` deliberately does NOT run them through ``validate_id``
+    (unlike ``FileSecretBackend``, where they become filenames), so a
+    reference carrying a newline would otherwise inject a second apparent log
+    line into whatever records the exception.
+
+    Falsifying result: a raw newline survives into the message.
+    """
+    hostile = "db\nERROR malicious-injected-line"
+    backend = DictSecretBackend()
+    # Unsealed, and read in strict mode, so the reference we control is the
+    # one the message interpolates.
+    backend.store[hostile] = {"value": "plain"}
+    manager = SecretManager(
+        backend=backend, encryption_key=OPERATOR_PASSPHRASE, require_encryption=True
+    )
+
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        asyncio.run(manager.get_secret(hostile))
+
+    message = str(excinfo.value)
+    assert "malicious-injected-line" in message, "the reference must still be named"
+    assert "\n" not in message, "a raw newline would forge a second log line"
+    assert "\\n" in message, "it must appear escaped, not stripped"
+
+
+def test_an_overlong_reference_is_truncated_in_messages() -> None:
+    """L3. A multi-megabyte reference must not be copied into a log per read."""
+    backend = DictSecretBackend()
+    backend.store["x" * 5000] = {"value": "plain"}
+    manager = SecretManager(
+        backend=backend, encryption_key=OPERATOR_PASSPHRASE, require_encryption=True
+    )
+
+    with pytest.raises(SecretEncryptionError) as excinfo:
+        asyncio.run(manager.get_secret("x" * 5000))
+
+    assert len(str(excinfo.value)) < 1000
 
 
 # ---------------------------------------------------------------------------
