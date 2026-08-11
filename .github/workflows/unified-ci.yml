@@ -121,9 +121,22 @@ jobs:
           # OLD: cli/database/postgres/mysql/files/distributed/http/mfa/otel
           # NEW: db-postgres/db-mysql/db-sqlite/http-client/auth-azure/telemetry/redis/trust
           # `cli` and `files` were folded into core/server respectively.
-          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data]" --python .venv/bin/python
+          # Issue #2038: `vault` (hvac) and `aws-secrets` (boto3) added, plus
+          # matplotlib + scikit-learn below. These are NOT decoration — with the
+          # Tier-2 step no longer swallowing failures, 8 Tier-2 tests that used
+          # to die on ModuleNotFoundError now RUN and pass:
+          #   hvac         -> test_todo027_credential_manager.py TestVaultBackend (3)
+          #   boto3        -> test_todo027_credential_manager.py TestAWSSecretsBackend (2)
+          #   matplotlib   -> visualization/test_visualization_consolidated.py (2)
+          #   scikit-learn -> test_behavior_analysis_comprehensive.py::test_isolation_forest_model (1)
+          # Provisioning the dependency is the right fix here; skipping or
+          # quarantining these would have recorded a dependency gap as a test
+          # defect.
+          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data,vault,aws-secrets]" --python .venv/bin/python
           uv pip install -e packages/kailash-mcp --python .venv/bin/python
-          uv pip install numpy --python .venv/bin/python
+          # matplotlib / scikit-learn have no declared extra — they are test-only
+          # dependencies of the two Tier-2 files named above.
+          uv pip install numpy matplotlib scikit-learn --python .venv/bin/python
 
       - name: Lint (ruff)
         run: .venv/bin/ruff check src/ tests/ --select=E9,F63,F7,F82
@@ -146,12 +159,170 @@ jobs:
 
       - name: Test (Tier 2 — integration runtime tests)
         timeout-minutes: 10
-        continue-on-error: true # Tier 2 has thread/I/O tests that may fail on CI runners
+        # Issue #2038: `continue-on-error: true` REMOVED. Tier 2 now gates the
+        # merge exactly as Tier 1 does, and `gh pr checks` is once again a
+        # discriminating instrument for integration behaviour.
+        #
+        # The removed flag's comment read "Tier 2 has thread/I/O tests that may
+        # fail on CI runners". Measured against three consecutive full Tier-2
+        # runs, that was true of exactly ONE test out of 46 failures:
+        #   * 45 failed 3/3 — consistent, not flaky, and structurally invisible
+        #     for as long as this flag was set. All 45 are now FIXED:
+        #       15  test_workflow_scheduler.py — sys.modules stubbed the parent
+        #           `apscheduler` package, so the `apscheduler.events` import
+        #           added for issue #914 could not resolve
+        #        8  runtime/test_distributed_runtime.py — MagicMock(spec=TaskQueue)
+        #           does not expose the instance attr `_default_visibility_timeout`
+        #        6  mcp_server/test_oauth.py — ResourceServer now requires an
+        #           absolute RFC 9728 `resource` URL; the fixture passed a bare
+        #           audience token
+        #        7  mock_node_factory (tests/conftest.py) built Node subclasses
+        #           with no concrete `run`, so every one was abstract
+        #        1  runtime/test_docker.py — expected module path went stale
+        #           when the file moved out of tests/unit/
+        #        8  missing optional deps — fixed by the install step above
+        #   * 1 flaked (1/3): runtime/test_phase0d_optimizations.py::
+        #     test_repeated_execution_performance, an absolute wall-clock bound.
+        #     Quarantined INDIVIDUALLY at the test with a documented skip and a
+        #     reason explaining why xfail(strict=True) cannot work for a test
+        #     that passes most runs.
+        #
+        # If this step goes red, a Tier-2 test genuinely regressed. Do NOT
+        # restore continue-on-error; quarantine the individual test instead.
         run: |
           .venv/bin/python -m pytest \
             tests/tier2_integration/ \
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
             --maxfail=20 -q -p no:xdist --timeout=60
+
+  # Issue #2002: root `tests/regression/` had no blanket CI coverage. Before this
+  # job, exactly TWO of its ~156 files were named by any workflow
+  # (trust-tests.yml runs test_issue_1332_rfc3161_*.py, and only on PRs whose
+  # diff matches that workflow's trust/** paths filter). The Tier-1 step in the
+  # `test` job above runs tests/unit/, tests/trust/plane/unit/ and tests/security/
+  # — not tests/regression/. The regression step in `test-dataflow` below covers
+  # the DataFlow PACKAGE's regression dir, a different directory.
+  #
+  # Regression tests are the never-delete tier: each one pins a bug that already
+  # shipped once. A regression test that never executes records the intent to
+  # prevent a recurrence while providing none of the prevention.
+  #
+  # Why this is a SEPARATE job rather than a step in the `test` matrix:
+  # root tests/regression/ imports three sibling packages at MODULE level
+  # (unguarded), which the `test` job does not install:
+  #   dataflow       — 17 files (e.g. test_dataflow_pool_bridge.py, test_issue_184.py)
+  #   nexus          —  7 files (e.g. test_issue_500_router_on_startup.py: `from nexus import Nexus`)
+  #   kaizen         —  4 files (e.g. test_provider_registry_backcompat.py:
+  #                              `from kaizen.providers.registry import ...`)
+  #   kailash_mcp    —  3 files (already installed by the `test` job)
+  #   kaizen_agents  —  1 file  (test_issue_443_kaizen_mcp_dependency.py)
+  # Adding five editable sibling installs to a 4-version matrix would pay that
+  # cost 4×; this job pays it once on a single interpreter.
+  #
+  # Per issue #2023 § sibling-install discipline — siblings exercised by this
+  # step and how each resolves: kailash (editable, this tree), kailash-dataflow
+  # (editable), kailash-kaizen (editable), kailash-nexus (editable),
+  # kailash-mcp (editable), kaizen-agents (editable). NONE resolve from PyPI.
+  test-root-regression:
+    name: Test Root Regression Suite (Python 3.12)
+    needs: check-duplicate
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-py3.12-rootregr-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py3.12-rootregr-
+
+      - name: Install dependencies
+        # Extras are the `test` job's set PLUS `shamir`. The shamir extra is
+        # REQUIRED, not optional garnish: without shamir-mnemonic, five tests
+        # (test_eatp12_vault_3way_discrimination.py ×3,
+        # test_eatp12_vault_quickstart.py ×2) fail with
+        # `RuntimeError: SLIP-0039 Shamir secret-sharing requires the 'shamir'
+        # optional extra` raised from src/kailash/trust/vault/shamir.py. Those
+        # are real assertions on a real code path, not env noise — the fix is to
+        # provision the dependency, not to skip the tests.
+        #
+        # Root kailash editable BEFORE the sub-packages, per
+        # rules/deployment.md § "Sibling-Package CI Installs Root SDK Editable".
+        #
+        # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+        # Selection: tests/regression/ minus the infra markers (1916 collected).
+        # Determined by grepping module-level sibling imports across the
+        # directory, then confirmed by building this exact venv from scratch and
+        # running the suite in it:
+        #   dataflow      -> EXERCISED (17 files) -> editable below
+        #   nexus         -> EXERCISED  (7 files) -> editable below
+        #   kaizen        -> EXERCISED  (4 files) -> editable below
+        #   kailash_mcp   -> EXERCISED  (3 files) -> editable below
+        #   kaizen_agents -> EXERCISED  (1 file)  -> editable below
+        #   kailash_ml / kailash_align / kailash_pact -> 0 files, NOT installed
+        # Several of these imports are UNGUARDED at module scope
+        # (`from nexus import Nexus`, `from kaizen.providers.registry import ...`),
+        # so a missing sibling is a COLLECTION error, not a skip.
+        run: |
+          uv venv .venv
+          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data,shamir]" --python .venv/bin/python
+          uv pip install -e packages/kailash-mcp --python .venv/bin/python
+          uv pip install -e packages/kailash-dataflow --python .venv/bin/python
+          uv pip install -e packages/kailash-kaizen --python .venv/bin/python
+          uv pip install -e packages/kailash-nexus --python .venv/bin/python
+          # test_issue_443_kaizen_mcp_dependency.py does `from kaizen_agents
+          # import Delegate` — without this the test fails ModuleNotFoundError.
+          uv pip install -e packages/kaizen-agents --python .venv/bin/python
+
+      - name: Test root regression suite (infra-free)
+        timeout-minutes: 15
+        # tests/regression/ is a MIXED dir — the same shape as the DataFlow
+        # regression dir handled below. The explicit `-m` filter mirrors that
+        # step's, and is REQUIRED for the same reason: the root pytest.ini
+        # `addopts` carries NO marker filter at all (only --strict-markers and
+        # --tb=short), so nothing else deselects the infra-requiring tests.
+        #
+        # The filter deselects 22 tests across 7 files, all Postgres/DB-pool
+        # bound (test_issue_697_pool_leak.py, test_dataflow_pool_bridge.py,
+        # test_issue_953_async_sql_pool_tracking.py, test_issue_713_*.py ×2,
+        # test_issue_1248_localruntime_cross_loop_pool_disposal.py,
+        # test_w3_security_fixes.py). Those run in `test-dataflow-infra` below,
+        # which already provides Postgres + Redis service containers.
+        #
+        # Overlap with trust-tests.yml: that workflow names
+        # test_issue_1332_rfc3161_verify_fail_closed.py and
+        # test_issue_1332_rfc3161_live_binding.py explicitly (13 tests, ~0.3s
+        # collected). The overlap is deliberate and costs a fraction of a
+        # second: trust-tests.yml is path-filtered to trust/** and does NOT run
+        # on most PRs, and it emits a separate JUnit artifact for the trust
+        # surface. Deduplicating would reintroduce the gap on every non-trust PR.
+        # test_issue_1332_rfc3161_live_binding.py self-skips here (`rfc3161`
+        # extra deliberately NOT installed — the live-binding path is
+        # trust-tests.yml's to provision).
+        #
+        # Verified green before landing: 1913 passed, 3 skipped, 22 deselected,
+        # 0 failed in 207s, in a from-scratch uv venv built with exactly the
+        # install block above (Python 3.12). The same selection run in a
+        # fully-loaded dev venv reported 1917 passed / 2 skipped — which is why
+        # the clean-venv run is the one quoted: it is the only one that can
+        # surface a missing-extra failure.
+        run: |
+          .venv/bin/python -m pytest tests/regression/ \
+            -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
+            --maxfail=10 -q -p no:xdist --timeout=300
 
   test-pact:
     name: Test PACT (Python 3.11)
@@ -358,3 +529,69 @@ jobs:
           ../../.venv/bin/python -m pytest tests/regression/ \
             -m "requires_postgres or requires_redis" \
             --maxfail=10 -q --timeout=120
+
+      - name: Run ROOT regression infra-marked tests (issue #2002 AC#2)
+        timeout-minutes: 10
+        # Issue #2002 AC#2: "Infra-requiring root regression tests run in the
+        # infrastructure workflow." They land HERE rather than in a new job
+        # because this job already has Postgres + Redis service containers up —
+        # a dedicated job would pay for a second pair for 22 tests.
+        # (test-with-infrastructure.yml was the other candidate and is NOT
+        # suitable: it invokes no pytest at all, it is a config validator.)
+        #
+        # The selector is the exact COMPLEMENT of the infra-free step in
+        # `test-root-regression`, so between the two, every test in root
+        # tests/regression/ runs on every PR and none runs twice. Keep the two
+        # marker expressions in sync — if one gains a marker, so must the other.
+        #
+        # The 22 tests live in 7 files, all Postgres/DB-pool bound:
+        # test_issue_697_pool_leak.py, test_dataflow_pool_bridge.py,
+        # test_issue_953_async_sql_pool_tracking.py,
+        # test_issue_713_subsystems_follow_runtime_swap.py,
+        # test_issue_713_module_import_then_async_ddl.py,
+        # test_issue_1248_localruntime_cross_loop_pool_disposal.py,
+        # test_w3_security_fixes.py.
+        #
+        # `cd` back to the repo root: the step above leaves the shell in
+        # packages/kailash-dataflow, but each `run:` block starts fresh at the
+        # workspace root, so no cd is needed — root tests/regression/ resolves
+        # from here. The root pytest.ini (pythonpath = src) applies.
+        #
+        # The env block below is LOAD-BEARING, not decoration. These files read
+        # FOUR DIFFERENT env var names for the same DSN, and each falls back to
+        # `localhost:5434` — the port the repo's local `./test-env up` compose
+        # stack uses, NOT the 5432 this job's service container publishes:
+        #   TEST_DATABASE_URL           test_issue_713_module_import_then_async_ddl.py
+        #   DATAFLOW_TEST_POSTGRES_URL  test_issue_713_subsystems_follow_runtime_swap.py
+        #   TEST_POSTGRES_DSN           test_issue_1248_localruntime_cross_loop_pool_disposal.py
+        #   TEST_PG_URL                 test_w3_security_fixes.py
+        # Six of the seven files self-skip when the DSN is unreachable, so
+        # WITHOUT these vars this step would report a green built almost
+        # entirely out of skips — a check that cannot come out the other way.
+        # `-rs` keeps every skip visible in the log for the same reason.
+        #
+        # Measured locally against a real Postgres 16 on the tests' own default
+        # DSN: 1 failed, 11 passed, 11 skipped of 23 collected. The 11 skips are
+        # the `docker_config`-gated tests in test_issue_697_pool_leak.py and
+        # test_issue_953_async_sql_pool_tracking.py, which require the repo's
+        # `./test-env up` compose stack rather than a bare service container;
+        # they will skip here too. Closing that gap needs the compose stack in
+        # CI and is out of scope for #2002 — recorded so the next reader does
+        # not mistake this step for full coverage of the infra-marked set.
+        # The 1 failure was a genuine pool leak, now #2075, marked
+        # xfail(strict=True) at the test so this step starts green and
+        # self-clears loudly when the leak is fixed.
+        env:
+          DATAFLOW_TEST_POSTGRES_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+          TEST_POSTGRES_DSN: postgresql://test_user:test_password@localhost:5432/kailash_test
+          TEST_PG_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: kailash_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          .venv/bin/python -m pytest tests/regression/ \
+            -m "requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e" \
+            --maxfail=10 -q -p no:xdist --timeout=300 -rs

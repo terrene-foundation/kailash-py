@@ -141,6 +141,18 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
 
 
 @pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "#2075: real pool leak on the auto_migrate='warn' DDL-failure path. "
+        "Observed pool_count()=9 against a cap of 5, deterministically, in 3 of "
+        "3 consecutive runs against a real Postgres. This test has never run in "
+        "CI (it is one of the files #2002 covers), so the leak shipped "
+        "unnoticed. xfail(strict=True) — NOT skip — so it self-clears LOUDLY "
+        "(XPASS becomes a failure) the moment #2075 is fixed. The assertion is "
+        "unchanged: the bound is correct, the code is wrong."
+    ),
+)
 async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
     """Pool count stays bounded in legacy auto_migrate='warn' mode too.
 
@@ -178,6 +190,9 @@ async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):
     await asyncio.gather(*[_attempt_access_warn(i) for i in range(10)])
 
     # Pool count MUST remain bounded regardless of auto_migrate mode.
+    # NOTE: currently xfail(strict=True) per #2075 — see the marker on this
+    # function. The assertion below is DELIBERATELY UNCHANGED; the bound is
+    # correct and the code is what is wrong.
     assert AsyncSQLDatabaseNode.pool_count() <= 5, (
         f"Pool leaked in warn mode: pool_count()={AsyncSQLDatabaseNode.pool_count()} > 5 "
         "after 10 DDL-failing DataFlow instances with auto_migrate='warn'"

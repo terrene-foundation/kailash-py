@@ -49,8 +49,7 @@ Lint rules are configured in `pyproject.toml` under `[tool.ruff]`.
 
 ## Testing
 
-Kailash uses a 3-tier testing strategy. **All 5708+ tests must pass before a PR
-can be merged.**
+Kailash uses a 3-tier testing strategy.
 
 | Tier            | Scope                                 | Command                     |
 | --------------- | ------------------------------------- | --------------------------- |
@@ -68,6 +67,40 @@ pytest tests/unit/ tests/parity/ tests/shared/ \
 
 **No mocking in Tier 2 or Tier 3 tests.** Use real infrastructure.
 See [CLAUDE.md](CLAUDE.md) and `.claude/rules/testing.md` for the full testing policy.
+
+### What "CI is green" actually means
+
+Read this before treating a green `gh pr checks` as evidence about your change.
+Each row below is a suite in `.github/workflows/unified-ci.yml`; "gates a merge"
+means a failure turns the check red.
+
+| Suite                                                        | Runs on                    | Gates a merge?                     |
+| ------------------------------------------------------------ | -------------------------- | ---------------------------------- |
+| Tier 1 — `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` | every PR, Python 3.11–3.14 | **Yes**                            |
+| Tier 2 — `tests/tier2_integration/`                          | every PR, Python 3.11–3.14 | **Yes** (since #2038)              |
+| Root regression — `tests/regression/`, infra-free            | every PR, Python 3.12      | **Yes** (since #2002)              |
+| Root regression — infra-marked                               | every PR (Postgres+Redis)  | **Yes** (since #2002)              |
+| DataFlow unit + regression                                   | every PR                   | **Yes**                            |
+| PACT                                                         | every PR                   | **Yes**                            |
+| Type check (pyright)                                         | every PR                   | No — `continue-on-error`, see #73  |
+| CUDA jobs (`test-kailash-ml.yml`)                            | manual dispatch only       | No — `continue-on-error` until the GPU runner is live |
+| kailash-ml / kailash-align / trust / CodeQL                  | only when their paths change | Yes, when they run              |
+
+Two consequences worth internalising:
+
+- **A tier that is not listed is not run.** Notably `tests/integration/` and
+  `tests/e2e/` are not part of the PR gate; run them locally when your change
+  touches those paths.
+- **Skipped is not passed.** A suite can be green because every test in it
+  skipped for a missing service. When you add a step that depends on external
+  infrastructure, pass `-rs` so the skips are visible, and check that the step
+  can actually come out the other way.
+
+Until #2038 the Tier-2 step carried `continue-on-error: true`, so a Tier-2
+failure reported green. It no longer does. If your PR reds on Tier 2, a real
+integration test regressed — do not restore `continue-on-error`; quarantine the
+individual test with `xfail(strict=True)` and a tracking issue, so it clears
+itself loudly when fixed.
 
 ## Commit Style
 
