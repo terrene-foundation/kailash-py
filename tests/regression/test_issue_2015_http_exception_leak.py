@@ -605,9 +605,31 @@ def test_every_module_calling_the_helper_also_imports_it():
 
     repo_root = pathlib.Path(__file__).resolve().parents[2]
 
+    # Scope to FIRST-PARTY source. `packages/*/` carries local `.venv` /
+    # `site-packages` trees in a developer checkout, so an unscoped rglob walks
+    # ~78k files instead of ~4.8k -- 94% of them third-party. That is not just
+    # slow (6min vs seconds): this sweep asserts a property of OUR modules, so
+    # auditing a vendored dependency's source can only produce a finding no one
+    # in this repo can act on. CI checkouts have no such trees, which is exactly
+    # why the cost is invisible there and only ever bites a local full-suite run.
+    _VENDORED = {
+        ".venv",
+        "venv",
+        "site-packages",
+        "node_modules",
+        "build",
+        ".tox",
+        "dist",
+    }
+
+    def _first_party(root: pathlib.Path):
+        for p in root.rglob("*.py"):
+            if _VENDORED.isdisjoint(p.parts):
+                yield p
+
     offenders = []
-    for path in list((repo_root / "src").rglob("*.py")) + list(
-        (repo_root / "packages").rglob("*.py")
+    for path in list(_first_party(repo_root / "src")) + list(
+        _first_party(repo_root / "packages")
     ):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
