@@ -180,6 +180,47 @@ class TestResolveAgentProvider:
             resolve_agent_provider(None)
 
 
+class TestFrameworkExecutePath:
+    """`Kaizen.execute` is a SIXTH swallow site, on the `Agent` path.
+
+    The strategies were guarded first, but `core/framework.py::Kaizen.execute`
+    wraps `LocalRuntime` too, and eight `self.kaizen.execute(...)` call sites in
+    `core/agents.py` route through it — including `:383`, an agent execution
+    path. Without the guard a ConfigurationError arriving there is returned as a
+    result dict, which is the #2022 symptom on a path the strategy fixes do not
+    cover.
+    """
+
+    def test_execute_raises_rather_than_returning_failed_node(self, keyless):
+        from kailash.workflow.builder import WorkflowBuilder
+        from kaizen.core.framework import Kaizen
+
+        workflow = WorkflowBuilder()
+        workflow.add_node(
+            "LLMAgentNode",
+            "agent_exec",
+            {"provider": None, "model": "gpt-4o-mini", "system_prompt": "hi"},
+        )
+
+        with pytest.raises(ConfigurationError):
+            Kaizen().execute(
+                workflow.build(),
+                {"agent_exec": {"messages": [{"role": "user", "content": "hi"}]}},
+            )
+
+    def test_successful_execute_still_returns_results_and_run_id(self):
+        """NEGATIVE CONTROL — the guard must not disturb the return contract."""
+        from kailash.workflow.builder import WorkflowBuilder
+        from kaizen.core.framework import Kaizen
+
+        workflow = WorkflowBuilder()
+        workflow.add_node("PythonCodeNode", "ok", {"code": "result = {'value': 1}"})
+
+        results, run_id = Kaizen().execute(workflow.build(), {})
+        assert isinstance(results, dict)
+        assert run_id is not None
+
+
 class TestCrossPackageCallSite:
     """A REAL consumer of the resolver, exercised where CI installs both packages.
 
