@@ -77,7 +77,7 @@ means a failure turns the check red.
 | Suite                                                        | Runs on                    | Gates a merge?                     |
 | ------------------------------------------------------------ | -------------------------- | ---------------------------------- |
 | Tier 1 — `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` | every PR, Python 3.11–3.14 | **Yes**                            |
-| Tier 2 — `tests/tier2_integration/`                          | every PR, Python 3.11–3.14 | **Yes** (since #2038)              |
+| Tier 2 — `tests/tier2_integration/`                          | every PR, Python 3.11–3.14 | **Not yet** — non-blocking, but a failure now posts a loud annotation + job summary. Blocked on #2078; see below. |
 | Root regression — `tests/regression/`, infra-free            | every PR, Python 3.12      | **Yes** (since #2002)              |
 | Root regression — infra-marked                               | every PR (Postgres+Redis)  | **Yes** (since #2002)              |
 | DataFlow unit + regression                                   | every PR                   | **Yes**                            |
@@ -96,11 +96,28 @@ Two consequences worth internalising:
   infrastructure, pass `-rs` so the skips are visible, and check that the step
   can actually come out the other way.
 
-Until #2038 the Tier-2 step carried `continue-on-error: true`, so a Tier-2
-failure reported green. It no longer does. If your PR reds on Tier 2, a real
-integration test regressed — do not restore `continue-on-error`; quarantine the
-individual test with `xfail(strict=True)` and a tracking issue, so it clears
-itself loudly when fixed.
+#### Tier 2 is visible but not yet blocking
+
+Until #2038 the Tier-2 step carried a bare `continue-on-error: true`, so a
+Tier-2 failure — and, on Python 3.11/3.12, a 10-minute step **timeout** —
+reported green with no signal at all.
+
+It is still non-blocking, but it is no longer silent: a failure now emits a
+`::error::` annotation and a job-summary block naming the count. **A green PR
+check does not mean Tier 2 passed** — open the step log.
+
+The reason it does not gate yet is #2078. Once `--maxfail=20` was lifted so the
+suite could complete on CI for the first time, it reported 174 failed / 58
+errors, dominated by 130 `RuntimeError: can't start new thread` and 90
+`sqlite3.OperationalError: disk I/O error` — the paired signature of thread and
+file-descriptor exhaustion, from one pre-existing leak rather than 232 separate
+defects. The same suite is `2604 passed / 0 failed` on macOS, so a local green
+is not evidence about the runner.
+
+When #2078 is fixed: delete `continue-on-error` **and** the annotation step from
+`unified-ci.yml`, and update this table. If a Tier-2 test fails after that, do
+not restore the flag — quarantine that individual test with `xfail(strict=True)`
+and a tracking issue, so it clears itself loudly when fixed.
 
 ## Commit Style
 
