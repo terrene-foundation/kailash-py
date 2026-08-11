@@ -186,17 +186,39 @@ def test_core_sdk_import_independence():
 
     failed_imports = []
 
-    for module_name in core_modules:
-        # Clear module from cache to test fresh import
-        if module_name in sys.modules:
-            del sys.modules[module_name]
+    # Snapshot the ORIGINAL module objects so they can be restored below.
+    #
+    # Without the restore, this test corrupts every later test in the session.
+    # Deleting "kailash.nodes.base" and re-importing it creates a SECOND,
+    # distinct `Node` class object. Modules imported earlier still hold the
+    # first one, so `isinstance(<instance of new Node>, <old Node>)` is False
+    # and the workflow builder rejects a perfectly valid node with
+    # "Invalid node type: ... Expected: str, Node class, or Node instance".
+    # That is how tests/tier2_integration/runtime/test_testing.py::
+    # TestSecurityTestHelper failed in the full suite while passing in
+    # isolation. Restoring the originals keeps the independence check (a fresh
+    # import still has to succeed) without leaking split class identity.
+    original_modules = {
+        name: sys.modules[name] for name in core_modules if name in sys.modules
+    }
 
-        try:
-            importlib.import_module(module_name)
-            print(f"✅ {module_name} imported independently")
-        except ImportError as e:
-            print(f"❌ {module_name} failed: {e}")
-            failed_imports.append(f"{module_name}: {e}")
+    try:
+        for module_name in core_modules:
+            # Clear module from cache to test fresh import
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+
+            try:
+                importlib.import_module(module_name)
+                print(f"✅ {module_name} imported independently")
+            except ImportError as e:
+                print(f"❌ {module_name} failed: {e}")
+                failed_imports.append(f"{module_name}: {e}")
+    finally:
+        # Put the ORIGINAL objects back, discarding the freshly-imported
+        # duplicates. Order does not matter — these are already-initialised
+        # module objects, not a re-execution.
+        sys.modules.update(original_modules)
 
     assert (
         len(failed_imports) == 0

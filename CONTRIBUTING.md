@@ -49,8 +49,7 @@ Lint rules are configured in `pyproject.toml` under `[tool.ruff]`.
 
 ## Testing
 
-Kailash uses a 3-tier testing strategy. **All 5708+ tests must pass before a PR
-can be merged.**
+Kailash uses a 3-tier testing strategy.
 
 | Tier            | Scope                                 | Command                     |
 | --------------- | ------------------------------------- | --------------------------- |
@@ -68,6 +67,70 @@ pytest tests/unit/ tests/parity/ tests/shared/ \
 
 **No mocking in Tier 2 or Tier 3 tests.** Use real infrastructure.
 See [CLAUDE.md](CLAUDE.md) and `.claude/rules/testing.md` for the full testing policy.
+
+### What "CI is green" actually means
+
+Read this before treating a green `gh pr checks` as evidence about your change.
+Each row below is a suite in `.github/workflows/unified-ci.yml`; "gates a merge"
+means a failure turns the check red.
+
+| Suite                                                        | Runs on                    | Gates a merge?                     |
+| ------------------------------------------------------------ | -------------------------- | ---------------------------------- |
+| Tier 1 — `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` | every PR, Python 3.11–3.14 | **Yes**                            |
+| Tier 2 — `tests/tier2_integration/`                          | every PR, Python 3.11–3.14 | **Not yet** — non-blocking, but a failure now posts a loud annotation + job summary. Blocked on #2078; see below. |
+| Root regression — `tests/regression/`                        | **not run** — see #2081    | No                                 |
+| Regression lint (`test_issue_2023_*`)                        | every PR, Python 3.11–3.14 | **Yes**                            |
+| DataFlow unit + regression                                   | every PR                   | **Yes**                            |
+| PACT                                                         | every PR                   | **Yes**                            |
+| Type check (pyright)                                         | every PR                   | No — `continue-on-error`, see #73  |
+| CUDA jobs (`test-kailash-ml.yml`)                            | manual dispatch only       | No — `continue-on-error` until the GPU runner is live |
+| kailash-ml / kailash-align / trust / CodeQL                  | only when their paths change | Yes, when they run              |
+
+#### Root `tests/regression/` is still not run
+
+#2002 asked for it and it is still open. The gate was built and could not be
+shipped: root `tests/regression/` **hangs on the ubuntu CI runner**. Three runs
+with progressively sharper instruments ended in a timeout or a truncated
+`--maxfail`; the last enumerated 30 hung tests across 8 files having executed
+757 of 1916. The same suite is `1916 passed / 0 failed in 217s` locally. Blocker
+is #2081; the complete, working job is preserved in PR #2077's history and
+should be restored from there rather than rebuilt.
+
+Practically: **run `pytest tests/regression/` locally before you push.** Nothing
+in CI does it for you.
+
+Two consequences worth internalising:
+
+- **A tier that is not listed is not run.** Notably `tests/integration/` and
+  `tests/e2e/` are not part of the PR gate; run them locally when your change
+  touches those paths.
+- **Skipped is not passed.** A suite can be green because every test in it
+  skipped for a missing service. When you add a step that depends on external
+  infrastructure, pass `-rs` so the skips are visible, and check that the step
+  can actually come out the other way.
+
+#### Tier 2 is visible but not yet blocking
+
+Until #2038 the Tier-2 step carried a bare `continue-on-error: true`, so a
+Tier-2 failure — and, on Python 3.11/3.12, a 10-minute step **timeout** —
+reported green with no signal at all.
+
+It is still non-blocking, but it is no longer silent: a failure now emits a
+`::error::` annotation and a job-summary block naming the count. **A green PR
+check does not mean Tier 2 passed** — open the step log.
+
+The reason it does not gate yet is #2078. Once `--maxfail=20` was lifted so the
+suite could complete on CI for the first time, it reported 174 failed / 58
+errors, dominated by 130 `RuntimeError: can't start new thread` and 90
+`sqlite3.OperationalError: disk I/O error` — the paired signature of thread and
+file-descriptor exhaustion, from one pre-existing leak rather than 232 separate
+defects. The same suite is `2604 passed / 0 failed` on macOS, so a local green
+is not evidence about the runner.
+
+When #2078 is fixed: delete `continue-on-error` **and** the annotation step from
+`unified-ci.yml`, and update this table. If a Tier-2 test fails after that, do
+not restore the flag — quarantine that individual test with `xfail(strict=True)`
+and a tracking issue, so it clears itself loudly when fixed.
 
 ## Commit Style
 

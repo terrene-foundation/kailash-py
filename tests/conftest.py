@@ -1209,6 +1209,17 @@ def mock_node_factory():
         def execute_method(self, **kwargs):
             return execute_return
 
+        # `Node.run` is ABSTRACT. Without a concrete override here, `type()`
+        # produces a class that cannot be instantiated at all — every caller
+        # got `TypeError: Can't instantiate abstract class <name> without an
+        # implementation for abstract method 'run'`, surfacing as a
+        # WorkflowValidationError from WorkflowBuilder.add_node. The factory
+        # overrides `execute` directly, so `run` is never invoked on the happy
+        # path; it exists to satisfy the ABC and returns the same payload so a
+        # caller that does reach it sees consistent data.
+        def run_method(self, **kwargs):
+            return execute_return
+
         # Handle special execute_method if provided in extra_attrs
         if "execute_method" in extra_attrs:
             execute_method = extra_attrs.pop("execute_method")
@@ -1218,6 +1229,7 @@ def mock_node_factory():
             "__init__": init_method,
             "get_parameters": get_parameters_method,
             "execute": execute_method,
+            "run": run_method,
         }
 
         # Add any extra attributes

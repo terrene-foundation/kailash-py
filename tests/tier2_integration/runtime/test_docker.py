@@ -813,6 +813,12 @@ class TestDockerRuntimeIntegration:
             node_data = json.load(f)
 
         assert node_data["class"] == "MockSimpleNode"
-        assert node_data["module"] == "tests.unit.runtime.test_docker"
+        # Derive the expected module from the class rather than hardcoding it.
+        # The literal here used to read "tests.unit.runtime.test_docker" and
+        # went stale when this file moved to tests/tier2_integration/runtime/ —
+        # the assertion then pinned a path that no longer existed. Deriving it
+        # tests the real proposition (the wrapper records the node's own module)
+        # and cannot rot on the next move.
+        assert node_data["module"] == MockSimpleNode.__module__
         assert "parameters" in node_data
         assert len(node_data["parameters"]) == 2  # input_data and multiplier

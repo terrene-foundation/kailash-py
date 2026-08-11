@@ -12,6 +12,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+
 from src.kailash.runtime.distributed import (
     _HEARTBEAT_PREFIX,
     _PROCESSING_KEY,
@@ -386,6 +387,14 @@ class TestWorker:
         mock_queue.recover_stale_tasks.return_value = 0
         mock_queue.queue_length.return_value = 0
         mock_queue.processing_length.return_value = 0
+        # `_default_visibility_timeout` is set in TaskQueue.__init__, not on the
+        # class, so `MagicMock(spec=TaskQueue)` does not expose it. The worker
+        # reads it (src/kailash/runtime/distributed.py:1054) when re-queueing a
+        # task, and every test using this helper died on
+        # `AttributeError: Mock object has no attribute
+        # '_default_visibility_timeout'`. Mirror the real default
+        # (src/kailash/infrastructure/task_queue.py:202).
+        mock_queue._default_visibility_timeout = 300
 
         worker = Worker(
             redis_url="redis://test:6379",

@@ -6,6 +6,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash_mcp.auth.oauth import (
     AccessToken,
     AuthorizationCode,
@@ -674,8 +675,21 @@ class TestResourceServer:
             mock_jwt_instance = MagicMock()
             mock_jwt.return_value = mock_jwt_instance
 
+            # `resource` is REQUIRED here, not decoration. ResourceServer
+            # derives its RFC 9728 Protected Resource Metadata from `resource`,
+            # which defaults to `audience`; a bare token like "mcp-api" is not
+            # an absolute http(s) URL, so construction raises
+            #   ValueError: ResourceServer resource identifier must be an
+            #   absolute http(s) URL for RFC 9728 PRM derivation
+            # and every test in this class errored during setup. The SDK's own
+            # error message prescribes this remedy: pass `resource` explicitly
+            # when `audience` is a bare token. `audience` is deliberately left
+            # as "mcp-api" because the tests below assert on that exact value —
+            # audience and resource are independent by design.
             self.server = ResourceServer(
-                issuer="https://auth.example.com", audience="mcp-api"
+                issuer="https://auth.example.com",
+                audience="mcp-api",
+                resource="https://mcp.example.com/mcp-api",
             )
 
     @pytest.mark.asyncio

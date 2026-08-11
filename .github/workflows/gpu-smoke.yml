@@ -112,9 +112,35 @@ jobs:
           uv venv .venv
           # Install root kailash editable first so kailash.diagnostics.protocols
           # resolves from the local tree (not yet released to PyPI).
+          #
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # This job has TWO kinds of consumer, and they differ:
+          #
+          # 1. The inline `km.doctor` / torch-CUDA scripts below. Probed by
+          #    importing exactly what they import:
+          #      `from kailash_ml.doctor import doctor`
+          #        dataflow      -> 0 modules   NOT exercised
+          #        kailash_align -> 0 modules   NOT exercised
+          #        kailash_ml    -> 95, kailash -> 207
+          #    So the canary path itself needs no sibling beyond kailash-ml.
+          #
+          # 2. The "DeviceReport populated on training call" pytest step, which
+          #    names packages/kailash-ml/tests/integration/. Probed on that
+          #    exact selection:
+          #        dataflow      -> 112 modules  EXERCISED at COLLECTION time
+          #        kailash_align -> 13  modules  EXERCISED at COLLECTION time
+          #        kailash_ml    -> 115, kailash -> 251
+          #    tests/integration/ holds the feature-store files that import
+          #    dataflow at module scope, so collection reaches them whatever the
+          #    marker filter selects. Both siblings are therefore installed
+          #    editable below — this job is the human gate before CUDA CI is
+          #    flipped to blocking, so it must not be the one place a
+          #    branch-core/PyPI-sibling pairing sneaks through.
           uv pip install -e "." --python .venv/bin/python
           # Install kailash-ml with deep-learning extras (torch + cuda deps)
           uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: Verify torch CUDA is available
         shell: bash
@@ -194,6 +220,20 @@ jobs:
           # DeviceReport.backend == "cuda" when CUDA is available.
           # Uses pytest with the integration + cuda markers to pick up only
           # the CUDA-specific wiring tests.
+          #
+          # CAVEAT (measured 2026-08-11): `-m 'cuda or gpu'` over this selection
+          # currently matches ZERO tests (593 deselected) — no `cuda` or `gpu`
+          # marker exists anywhere under packages/kailash-ml/tests/. pytest then
+          # exits 5 (no tests collected) and this step FAILS. Verified:
+          #   $ pytest packages/kailash-ml/tests/integration/ \
+          #       packages/kailash-ml/tests/unit/test_device_report.py \
+          #       -m 'cuda or gpu' --collect-only -q; echo $?
+          #   no tests collected (593 deselected)
+          #   5
+          # Tracked in #2076. This matters more here than in the dispatch-only
+          # ml jobs: gpu-smoke.yml is the canary a human runs FIRST after
+          # provisioning the runner, so today it would red for a marker reason
+          # and be read as a hardware problem.
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/integration/ \
             packages/kailash-ml/tests/unit/test_device_report.py \
