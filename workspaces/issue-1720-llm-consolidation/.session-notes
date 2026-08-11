@@ -56,6 +56,151 @@ auth changes already merged (#2035, #2054). **#2060 belongs in the same decision
 
 # Session Notes — 2026-08-10 (session N: forest merged, security triage, #1995 closed out)
 
+# ══════════ UPDATE 13 (LATEST, 2026-08-11) — main `8507ec525` ══════════
+
+**Read `workspaces/issue-1720-llm-consolidation/launch-ledger-cont16.md` FIRST.** It is the
+live lane/PR table and the compaction-surviving launch record.
+
+## ⚠ THE FINDING: a LIVE FULL SSRF on main, nearly dismissed as a false positive
+
+Both proxy handlers captured closure state as DEFAULT ARGUMENTS:
+
+    async def proxy_handler(request: Request, path: str, _url=proxy_url, _allowlist=path_allowlist):
+
+**FastAPI treats any non-path handler parameter carrying a plain default as a QUERY
+parameter.** So `_url`, `_allowlist`, `_name`, `_backends` were all caller-writable.
+Measured against a second HTTP server standing in for the attacker:
+
+    NORMAL -> 200 {"who": "legitimate-backend"}
+    ?_url= -> 200 {"who": "ATTACKER-CONTROLLED-HOST"}
+    VERDICT: FULL SSRF — caller redirected the request to an arbitrary host
+
+The path allowlist was writable the same way, so the registration-time restriction could be
+widened from the query string. **Fixed in `4a243fb17` (PR #2064), still UNMERGED — the defect
+is live on main until it lands.**
+
+**How it was nearly missed, twice, the same way:** #2025's inherited analysis said "no
+authority pivot is constructible", reasoning about the string concatenation; the lane then
+repeated the error in a written Rule 1b deferral proof (#2065). Both probed the URL
+*string-building* and read a clean result as clearing the whole flow. The taint entered
+through the handler's PARAMETERS — the thing neither instrument looked at. **CodeQL was
+right and `py/partial-ssrf` under-rated it.** The deferral is WITHDRAWN, #2065 closed as
+invalid with the refutation written into it. Nothing was ever dismissed in the Security tab.
+
+**What forced the catch:** Rule 1b's fourth artifact (release-specialist signoff, which the
+lane could not self-grant). Requiring an independent signer is what produced the re-look.
+Independently, the release-specialist read alert #11497 and found its two source lines were
+`path` AND `_url` — NOT path+query as the proof claimed. Two routes to the same defect.
+
+**The thread:** a `py/log-injection` alert on `extra={"workflow": _name}`. A registration-time
+constant should not be tainted; chasing *why* exposed the SSRF. **The finding that looked
+cosmetic was the thread to the critical one.**
+
+## The bug CLASS, swept repo-wide (orchestrator)
+
+AST sweep over decorated route handlers, excluding vendored trees and legitimate FastAPI
+markers (`Depends`/`Query`/`Path`/`Body`/`Header`/`Cookie`/`Form`/`File`/`Security`):
+**27 handlers carry default args; nearly all are INTENDED query params** (`limit`, `page`,
+`session_id`). **Exactly two** were closure-captures — both the proxy handlers above.
+Blind-spot checked: `add_api_route`/`add_websocket_route` appear nowhere as real
+registrations, so the decorator-scoped sweep missed no registration form.
+
+**A third instance lives in a DIFFERENT framework** — `MCPMixin` bound tool methods with
+`async def tool_wrapper(_bound_method=method, **kwargs)`. MCP derives each tool's published
+schema from the signature, so `_bound_method` was advertised to every client
+(`ADVERTISED PARAMETERS: ['_bound_method', 'kwargs']`) and, being NAMED, binds by name and
+displaces the bound method. Not RCE (JSON values aren't callable → TypeError). **PR #2080.**
+
+Generalised lesson: **internal closure state placed in a signature that a framework reads as
+a public contract.** Any framework that introspects signatures (FastAPI, MCP, Click, Pydantic)
+has this shape available.
+
+## ⚠ CI CANNOT RUN THESE SUITES — #2002/#2038 premise refuted on the runner
+
+I measured root regression LOCALLY at **1,928 passed / 0 failed / 3m15s** and relayed
+"~3-4 min per PR" to the user, who approved gating on that basis. **That number does not
+survive the runner** and I corrected it with them:
+
+| suite                        | local (macOS)          | GitHub runner                          |
+| ---------------------------- | ---------------------- | -------------------------------------- |
+| root regression, infra-free  | 1916 pass / 0 fail /210s | **HANGS** — killed at 40-min cap, ~8% run |
+| root regression, infra-marked| 11 pass / 11 skip      | **HANGS** — killed at 30-min cap, 3 of 22 |
+| Tier 2                       | 2604 pass / 0 fail     | **174 failed + 58 errors**             |
+
+Tier-2's 232 failures are ~one cause: **130 `RuntimeError: can't start new thread` + 90
+`sqlite3.OperationalError: disk I/O error`** — thread/fd exhaustion, **reproduced identically
+against UNMODIFIED code** (run 31478307416). Neither suite has ever been observed to complete
+on CI, which is very likely *why* neither was wired in.
+
+**USER DECISION: land the verified value; gate AFTER the leak is fixed.** #2002 lands
+**DIAGNOSED, NOT FIXED** — do NOT close it. Issues: **#2075** (DataFlow pool leak), **#2076**
+(5 CI selectors matching zero tests), **#2078** (Tier-2 resource exhaustion), **#2079/#2081**
+(regression hangs).
+
+### Two instrument findings that explain the whole blind spot
+
+1. **On Python 3.11/3.12 the Tier-2 step TIMED OUT at 10 minutes on every inspected run — and
+   every one reported SUCCESS.** `continue-on-error` swallowed the *timeouts* as well as the
+   failures. The check could not fail even by running out of time.
+2. **`pytest.ini` sets `timeout_method = thread`, which CANNOT kill a test blocked in a C
+   call.** pytest-timeout printed its 300s banner repeatedly while the process ran on to the
+   job cap. A timeout that cannot enforce a timeout.
+3. `--maxfail=20` made every run a truncated WINDOW, not a failure set — so **no "N failures"
+   figure ever produced by this repo was a complete count.**
+
+## ⚠ ANOTHER 855 tests that never run (#2074)
+
+`packages/kailash-kaizen/tests/regression/` — **107 files / 855 test functions — is in NO
+pytest invocation** in `test-kailash-kaizen.yml`. Found by a lane whose own new regression
+tests were sitting there and would have merged **green-by-absence, never collected**. Needs a
+real baseline run before gating; some will be red.
+
+## Traps confirmed THIS session (brief every new lane)
+
+1. **`pytest.ini`'s `pythonpath = src` is inserted AHEAD of `PYTHONPATH`.** Comparing against
+   another checkout via `PYTHONPATH` silently tests YOUR OWN tree. One lane got a false
+   **20/20 pass**; the real result was 19-of-20 FAIL. Assert the resolved module `__file__`
+   in-process — never trust the flag. (To genuinely block a module, use a `meta_path` blocker
+   AND assert the blocker itself worked.)
+2. **Wiring a dormant audit sink is a DISCLOSURE change.** Wiring the MFA sink nearly shipped
+   the **TOTP seed, `otpauth://` URI, and backup codes to the log in plaintext** — strictly
+   worse than leaving it unwired. Caught by an adversarial reviewer.
+3. **`gh` alert/issue queries truncate silently.** `per_page=100` without `--paginate` returned
+   exactly 100 rows; grepping that for `partial-ssrf` found nothing — *indistinguishable from a
+   real absence*. Main actually has **2310** open alerts. Watch for the exact-100 tell.
+4. **A `(rule, severity, path)` key collapses multiple instances in one file** — it reported
+   "no new alerts" while `py/log-injection` went 3 → 4. Compare COUNTS too.
+5. **`gh issue list --search` / `gh issue view` do NOT see comment threads.** Two lanes
+   mis-scoped work because the governing analysis lived in a COMMENT. Use `--comments`.
+6. **A timeout is not an assertion failure.** I read a FAILED summary line as a live regression
+   and began hunting a polluting test; the traceback said `Failed: Timeout (>120.0s)` from a
+   flag *I* passed. I had truncated with `tail -35`, dropping the traceback. **Read the
+   FAILURES block, not the summary, before naming a cause.**
+7. **Tests can be non-discriminating in BOTH directions.** One lane found 3 of its own tests
+   passed against the broken tree. Passing pre-fix is a defect in the TEST.
+8. **A source grep cannot tell code from prose about code.** My own structural test grepped for
+   the old idiom and matched the fix's explanatory comment. Parse the AST.
+
+## PR queue at handoff
+
+| PR    | closes            | state                                                  |
+| ----- | ----------------- | ------------------------------------------------------ |
+| #2071 | (#2015 sweep)     | **MERGED** — sweep 78,152→first-party files, 379s→8.3s |
+| #2064 | Refs #2025, #2072 | **HIGHEST PRIORITY** — contains the live SSRF fix       |
+| #2063 | #2041             | green, in review                                        |
+| #2066 | #2060             | green, in review — makes #2035's identity binding live  |
+| #2068 | #2030 #2022       | green, in review                                        |
+| #2073 | #2070             | green                                                   |
+| #2080 | (MCP wrapper)     | green-pending, in review                                |
+| #2077 | #2023 (+#2002/#2038 partial) | land as diagnosed-not-fixed                  |
+| #2031 | —                 | DRAFT, 2 open gating questions — do NOT sweep-merge     |
+
+**#2025 stays OPEN** (`Refs`, not `Fixes`): `POST /workflows/{name}/execute` is still anonymous
+arbitrary workflow execution on a default `create_gateway()` — **#2072**, proven under uvicorn
+on a real socket (`the workflow actually ran`). `Depends` does not reach a mounted sub-app;
+middleware does. **USER APPROVED fail-closed `require_auth=True` server-wide, as a SEPARATE
+shard off #2064's merged state** (task #27, BLOCKED until #2064 lands).
+
 ## Where we are
 
 **PR #2016 merged** (admin, 341 commits) → main is `25973edb5`. That auto-closed
