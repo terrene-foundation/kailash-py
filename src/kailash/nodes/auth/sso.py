@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from kailash.nodes.api import AsyncHTTPRequestNode
+from kailash.nodes.auth._http_response import http_body
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -378,13 +380,18 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             else:
                 result["success"] = True
 
-            # Log security event
+            # Log security event. The verdict is the operation's own, not a
+            # hardcoded True: this recorded success=True three lines after
+            # deriving result["success"] = False, so a failed SSO operation was
+            # audited as a successful one (issue #2060).
             await self._log_security_event(
-                event_type="sso_operation",
+                event_type=(
+                    "sso_operation" if result["success"] else "sso_operation_denied"
+                ),
                 action=action,
                 provider=provider,
                 user_id=user_id,
-                success=True,
+                success=result["success"],
                 processing_time_ms=processing_time,
             )
 
@@ -970,7 +977,10 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                     f"Token exchange failed: {token_response.get('error')}"
                 )
 
-            return token_response["response"]
+            # The token document lives at the envelope's "content" key;
+            # returning the envelope made the caller's
+            # token_result["access_token"] raise KeyError (issue #2060).
+            return http_body(token_response)
         except Exception as e:
             # Fail closed for every endpoint. A failed token exchange NEVER
             # yields a token: there is no URL, host, or substring for which a
@@ -1005,7 +1015,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                     f"User info request failed: {userinfo_response.get('error')}"
                 )
 
-            return userinfo_response["response"]
+            return http_body(userinfo_response)
         except Exception as e:
             # Fail closed. Deriving an identity from the *value* of a bearer
             # token let anyone presenting "test_access_token" be provisioned as
@@ -1080,12 +1090,14 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             self.audit_logger.execute,
             event_type="user_provisioned",
             message=f"Provisioned SSO user {email} from {provider}",
-            user_id=email,
-            event_data={
-                "provider": provider,
-                "attributes": attributes,
-                "profile": user_profile,
-            },
+            user_id=log_safe(email),
+            event_data=redact_mapping(
+                {
+                    "provider": provider,
+                    "attributes": attributes,
+                    "profile": user_profile,
+                }
+            ),
         )
 
         return user_profile
@@ -1236,7 +1248,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             self.audit_logger.execute,
             event_type="sso_logout",
             message=f"SSO logout for user {user_id}",
-            user_id=user_id,
+            user_id=log_safe(user_id),
             event_data={"provider": provider, "sessions_removed": sessions_removed},
         )
 
@@ -1281,24 +1293,44 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         ``async_run`` end to end; surfaced by the sync-bridge tests added for
         issue #2026.
 
-        Dispatches to whichever surface the logger actually provides, and never
-        lets a logging failure abort the authentication that already succeeded
-        -- while still reporting that the event went unrecorded.
+        The probe loop that used to stand here -- ``getattr(self.security_logger,
+        surface, None)`` over ``("async_run", "execute_async")`` -- was dead
+        code: ``SecurityEventNode`` extends the plain ``Node`` and defines
+        neither, so both probes yielded ``None`` on every call and execution
+        always fell through. That is the dead-attribute-guard shape issue #2057
+        names as BLOCKED, and it hid the second half of the defect: the payload
+        below was built from ``source``/``timestamp``/``details``, none of which
+        are parameters of the node, so they were dropped and ``severity`` /
+        ``message`` / ``user_id`` were never supplied. Every SSO security event
+        -- including authentication FAILURES -- was recorded as a blank INFO
+        line with no user, well under any alerting threshold (issue #2060).
+
+        The sink is now named statically and offloaded to a worker thread, and
+        it is given the parameters it reads.
         """
-        payload = {
-            "event_type": event_data.get("event_type", "sso_event"),
-            "source": "sso_authentication_node",
-            "timestamp": datetime.now(UTC).isoformat(),
-            "details": event_data,
-        }
+        event_type = event_data.get("event_type", "sso_event")
+        severity = str(event_data.get("severity") or "INFO").upper()
+        if severity == "INFO" and (
+            "failure" in event_type or "error" in event_type or "denied" in event_type
+        ):
+            # An authentication failure recorded at INFO sits below the default
+            # HIGH alert threshold and never pages anyone.
+            severity = "HIGH"
 
         try:
-            for surface in ("async_run", "execute_async"):
-                fn = getattr(self.security_logger, surface, None)
-                if fn is not None:
-                    await fn(**payload)
-                    return
-            self.security_logger.execute(**payload)
+            await asyncio.to_thread(
+                self.security_logger.execute,
+                event_type=event_type,
+                severity=severity,
+                message=f"{event_type} via sso_authentication_node",
+                user_id=log_safe(event_data.get("user_id")),
+                metadata=redact_mapping(
+                    {
+                        "source": "sso_authentication_node",
+                        **{k: v for k, v in event_data.items() if k != "severity"},
+                    }
+                ),
+            )
         except Exception as e:  # noqa: BLE001 - logging must not break auth
             self.log_info(
                 f"Security event was NOT recorded ({type(e).__name__}); "

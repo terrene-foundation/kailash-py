@@ -24,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.nodes.api import AsyncHTTPRequestNode
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -660,8 +661,8 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             await asyncio.to_thread(
                 self.audit_logger.execute,
                 event_type="directory_authentication_success",
-                message=f"Directory authentication succeeded for {username}",
-                user_id=username,
+                message=f"Directory authentication succeeded for {log_safe(username, 64)}",
+                user_id=log_safe(username),
                 event_data={"directory_type": self.directory_type},
             )
         else:
@@ -670,8 +671,8 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 self.security_logger.execute,
                 event_type="authentication_failure",
                 severity="HIGH",
-                message=f"Directory authentication failed for {username}",
-                user_id=username,
+                message=f"Directory authentication failed for {log_safe(username, 64)}",
+                user_id=log_safe(username),
                 metadata={
                     "source": "directory_integration",
                     "username": username,
@@ -844,13 +845,18 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         await asyncio.to_thread(
             self.audit_logger.execute,
             event_type="user_provisioned_from_directory",
-            message=f"Provisioned user {user_id} from {self.directory_type}",
-            user_id=user_id,
-            event_data={
-                "directory_type": self.directory_type,
-                "directory_data": user_data,
-                "provisioning_data": provisioning_data,
-            },
+            message=f"Provisioned user {log_safe(user_id, 64)} from {self.directory_type}",
+            user_id=log_safe(user_id),
+            # The directory record is whatever the IdP returned -- for an
+            # LDAP/AD sync that is the full mapped entry. Redacted rather than
+            # copied verbatim into a log the whole org can read (issue #2060).
+            event_data=redact_mapping(
+                {
+                    "directory_type": self.directory_type,
+                    "directory_data": user_data,
+                    "provisioning_data": provisioning_data,
+                }
+            ),
         )
 
         return {
@@ -1548,8 +1554,10 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             event_type=event_type,
             severity=severity,
             message=f"{event_type} via directory_integration_node",
-            user_id=event_data.get("user_id"),
-            metadata={"source": "directory_integration_node", **event_data},
+            user_id=log_safe(event_data.get("user_id")),
+            metadata=redact_mapping(
+                {"source": "directory_integration_node", **event_data}
+            ),
         )
 
     def get_directory_statistics(self) -> Dict[str, Any]:

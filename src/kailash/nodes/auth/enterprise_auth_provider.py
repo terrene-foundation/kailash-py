@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 from kailash.nodes.api import AsyncHTTPRequestNode
+from kailash.nodes.auth._http_response import http_body
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.auth.session_management import SessionManagementNode
@@ -319,11 +321,27 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             # The claim is retained alongside it, because a caller asserting a
             # subject it did not authenticate as is exactly what an auditor
             # needs to see.
+            # "auth_success" is reserved for actions that actually authenticate
+            # a principal. get_methods / assess_risk / challenge_mfa echo the
+            # caller's own user_id back and default to success=True, so emitting
+            # auth_success for them wrote a record byte-identical to a genuine
+            # login for a subject nobody authenticated -- an unauthenticated
+            # caller could forge "alice logged in" at will, and the counter
+            # agreed with it (issue #2060).
+            # "validate" is deliberately NOT here. It is a per-request session
+            # check, and counting each one as a successful authentication makes
+            # auth_statistics["successful_auths"] mean something other than
+            # "logins" -- an auditor counting auth_success would over-count by
+            # however chatty the caller is.
+            authenticating = action in {"authenticate", "authorize"}
             if result.get("success", True):
-                self.auth_statistics["successful_auths"] += 1
+                if authenticating:
+                    self.auth_statistics["successful_auths"] += 1
                 resolved_user_id = result.get("user_id") or user_id
                 await self._log_auth_event(
-                    event_type="auth_success",
+                    event_type=(
+                        "auth_success" if authenticating else f"{action}_success"
+                    ),
                     action=action,
                     auth_id=auth_id,
                     user_id=resolved_user_id,
@@ -858,7 +876,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             )
 
             if response.get("success"):
-                user_info = response["response"]
+                # http_body(), not response["response"]: the value under
+                # "response" is the HTTPResponse envelope and the provider's
+                # userinfo document lives at its "content" key. Reading the
+                # envelope found no email/login and reported a valid token as
+                # invalid (issue #2060).
+                user_info = http_body(response)
                 return {
                     "valid": True,
                     "user_id": user_info.get("email") or user_info.get("login"),
@@ -1545,14 +1568,20 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # details= this used to pass were dropped on the floor by execute(), and
         # message/user_id/metadata were never supplied -- so every event would
         # have been recorded blank even once the call resolved (issue #2060).
-        # The node stamps its own timestamp.
+        # The node stamps its own timestamp. The action is named in the message
+        # so a record cannot be mistaken for one from a different action.
         await asyncio.to_thread(
             self.security_logger.execute,
             event_type=event_type,
             severity=severity,
-            message=f"{event_type} via enterprise_auth_provider",
-            user_id=event_data.get("user_id"),
-            metadata={"source": "enterprise_auth_provider", **event_data},
+            message=(
+                f"{event_type} (action={log_safe(event_data.get('action'), 64)}) "
+                f"via enterprise_auth_provider"
+            ),
+            user_id=log_safe(event_data.get("user_id")),
+            metadata=redact_mapping(
+                {"source": "enterprise_auth_provider", **event_data}
+            ),
         )
 
     def get_auth_statistics(self) -> Dict[str, Any]:

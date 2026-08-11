@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -1108,7 +1109,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         audit_entry = {
             "event_type": f"session_{operation}",
             "message": f"Session {operation} for user {session_data.user_id}",
-            "user_id": session_data.user_id,
+            "user_id": log_safe(session_data.user_id),
             "event_data": {
                 "operation": operation,
                 "resource_type": "session",
@@ -1148,7 +1149,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             "event_type": event_type,
             "severity": severity.upper(),
             "message": f"Session management: {event_type}",
-            "user_id": user_id,
+            "user_id": log_safe(user_id),
             "metadata": {
                 "session_management": True,
                 "source_ip": metadata.get("ip_address", "unknown"),

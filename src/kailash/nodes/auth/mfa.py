@@ -14,11 +14,13 @@ import logging
 import secrets
 import threading
 import time
+from collections import deque
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import qrcode
 
+from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -321,6 +323,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Thread lock for concurrent access
         self._data_lock = threading.Lock()
 
+        # Audit records queued by handlers running under _data_lock, flushed by
+        # the dispatcher once the lock is released (see _log_mfa_event).
+        # Bounded so a caller that never reaches a flush cannot grow it without
+        # limit; the oldest record is dropped rather than the process.
+        self._pending_audit_records: deque = deque(maxlen=10000)
+        # In-process record of emitted events. Bounded for the same reason
+        # as the queue above: an unbounded sibling list would retain every
+        # event for the node's lifetime and defeat the cap next to it.
+        self.audit_events: deque = deque(maxlen=10000)
+
         # MFA statistics
         self.mfa_stats = {
             "total_setups": 0,
@@ -560,7 +572,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # because they are not attacker-driven probe surfaces.
             if action == "verify" and not self._check_rate_limit(user_id):
                 self.mfa_stats["rate_limited_attempts"] += 1
-                return {
+                rate_limited = {
                     "success": False,
                     "verified": False,
                     "user_id": user_id,
@@ -570,6 +582,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "processing_time_ms": 0.0,
                     "timestamp": start_time.isoformat(),
                 }
+                # Audit before returning. This early return used to skip the
+                # audit call at the end of the dispatcher, so a sustained
+                # brute-force produced records up to the rate-limit threshold
+                # and then went SILENT for the rest of the attack -- the trail
+                # stopped exactly when it became interesting (issue #2060).
+                self._audit_mfa_operation_sync(user_id, action, method, rate_limited)
+                return rate_limited
 
             # Route to appropriate action handler
             if action in ["setup", "enroll"]:  # Handle both setup and enroll
@@ -753,6 +772,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         except Exception as e:
             # self.log_error_with_traceback(e, "mfa_operation")
             raise
+        finally:
+            # In a finally so that the early returns above (rate limit,
+            # malformed input) and the exception paths still drain the queue.
+            # A record queued under _data_lock and never flushed would sit in
+            # the deque until some later dispatch happened to pick it up, or
+            # fall off the end of the bounded queue entirely.
+            self._flush_audit_records()
 
     async def execute_async(self, **kwargs) -> Dict[str, Any]:
         """Execute method for async compatibility."""
@@ -1642,8 +1668,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # Create MFA session (internal, lock-free)
                 session_id = self._create_mfa_session_internal(user_id)
 
-                # Log security event (async - disabled for sync operation)
-                # self._log_security_event(user_id, "backup_code_used", "medium")
+                self._queue_security_event(user_id, "backup_code_used", "medium")
 
                 return {
                     "success": True,
@@ -1725,8 +1750,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # Create MFA session (internal, lock-free)
                 session_id = self._create_mfa_session_internal(user_id)
 
-                # Log security event (async - disabled for sync operation)
-                # self._log_security_event(user_id, "mfa_verification_success", "low")
+                self._queue_security_event(user_id, "mfa_verification_success", "low")
 
                 return {
                     "success": True,
@@ -2070,8 +2094,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 UTC
             ).isoformat()
 
-            # Log security event
-            # self._log_security_event(user_id, "backup_codes_generated", "low")
+            self._queue_security_event(user_id, "backup_codes_generated", "low")
 
             return {
                 "success": True,
@@ -2120,8 +2143,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # already held here and is not reentrant.
             self._invalidate_user_sessions_internal(user_id)
 
-            # Log security event
-            # self._log_security_event(user_id, "mfa_revoked", "high")
+            self._queue_security_event(user_id, "mfa_revoked", "high")
 
             return {
                 "success": True,
@@ -2535,6 +2557,82 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self._audit_mfa_operation_sync, user_id, action, method, result
         )
 
+    # Result keys that may be copied into an audit record. This is an
+    # ALLOWLIST, not a denylist, and that is deliberate: MFA results carry
+    # credential material -- the TOTP seed, the provisioning URI that embeds
+    # it, backup/recovery codes, device trust tokens, MFA session ids, and
+    # unmasked phone/email -- and an audit sink writes to whatever handler the
+    # operator attached, typically a log aggregator with far wider read access
+    # than the credential store. Copying a whole result dict here would put a
+    # user's second factor in the SIEM: strictly worse than the unwired sink
+    # this replaced. A new result key is omitted until it is reviewed and
+    # added, so the failure mode of forgetting to update this list is a
+    # thinner record rather than a leaked secret.
+    _AUDITABLE_RESULT_KEYS = frozenset(
+        {
+            "success",
+            "action",
+            "method",
+            "user_id",
+            "verified",
+            "error",
+            "reason",
+            "reset",
+            "revoked",
+            "disabled",
+            "enabled",
+            "mfa_enabled",
+            "methods",
+            "challenge_required",
+            # A trusted-device bypass is arguably the single most important
+            # fact this node can record: it means the second factor was NOT
+            # presented for this login.
+            "trusted",
+            "skip_mfa",
+            "device_id",
+            # What a destructive admin action actually destroyed.
+            "revoked_methods",
+            "disabled_methods",
+            "mfa_disabled",
+            "method_disabled",
+            "challenge_id",
+            "recovery_method",
+            "pending_verification",
+            "valid",
+            "enrolled_methods",
+            "rate_limited",
+            "too_many_attempts",
+            "locked",
+            "admin_override",
+            "codes_remaining",
+            "backup_codes_remaining",
+            "attempts_remaining",
+            "verification_sent",
+            "masked_phone",
+            "masked_email",
+            "expires_at",
+            "setup_at",
+            "processing_time_ms",
+            "timestamp",
+        }
+    )
+
+    @classmethod
+    def _audit_safe_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Project a result down to the keys that are safe to record.
+
+        Returns the allowlisted keys plus ``omitted_keys``, so the record
+        states what it withheld rather than silently presenting a partial
+        result as a whole one.
+        """
+        if not isinstance(result, dict):
+            return {"omitted_keys": []}
+        safe = {k: v for k, v in result.items() if k in cls._AUDITABLE_RESULT_KEYS}
+        safe["omitted_keys"] = sorted(
+            k for k in result if k not in cls._AUDITABLE_RESULT_KEYS
+        )
+        return safe
+
     def _audit_mfa_operation_sync(
         self, user_id: str, action: str, method: str, result: Dict[str, Any]
     ) -> None:
@@ -2561,8 +2659,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "method": method,
                 "resource_type": "mfa",
                 "resource_id": f"{user_id}:{method}",
-                "success": result.get("success", False),
-                "result": result,
+                "success": (
+                    result.get("success", False) if isinstance(result, dict) else False
+                ),
+                "result": self._audit_safe_result(result),
                 # user_id above is the SUBJECT of the operation, never the
                 # actor: this node has no caller identity to record, and
                 # admin_override is a caller-supplied boolean rather than an
@@ -2686,7 +2786,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # Mirrors the sync run() rate-limit dispatch.
             if action == "verify" and not self._check_rate_limit(user_id):
                 self.mfa_stats["rate_limited_attempts"] += 1
-                return {
+                rate_limited = {
                     "success": False,
                     "verified": False,
                     "user_id": user_id,
@@ -2696,6 +2796,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "processing_time_ms": 0.0,
                     "timestamp": start_time.isoformat(),
                 }
+                # Audit before returning. This early return used to skip the
+                # audit call at the end of the dispatcher, so a sustained
+                # brute-force produced records up to the rate-limit threshold
+                # and then went SILENT for the rest of the attack -- the trail
+                # stopped exactly when it became interesting (issue #2060).
+                await self._audit_mfa_operation(user_id, action, method, rate_limited)
+                return rate_limited
 
             # Route to appropriate action handler
             if action == "setup":
@@ -2793,6 +2900,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         except Exception as e:
             # self.log_error_with_traceback(e, "mfa_operation")
             raise
+        finally:
+            # See the sync dispatcher: in a finally so early returns and the
+            # exception paths still drain the queue. Offloaded because this one
+            # runs on the caller's event loop.
+            await asyncio.to_thread(self._flush_audit_records)
 
     def _verify_backup_code(self, user_id: str, code: str) -> Dict[str, Any]:
         """Verify backup code for user.
@@ -2936,34 +3048,86 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             return {"success": True, "methods": methods}
 
     def _log_mfa_event(self, event_type: str, metadata: Dict[str, Any]) -> None:
-        """Log MFA-related security events."""
-        # In a real implementation, this would log to a security audit system
-        # For testing, we just store it internally
-        if not hasattr(self, "audit_events"):
-            self.audit_events = []
+        """Record an MFA event for the audit sink.
 
+        This is called from handlers that hold ``_data_lock`` (``_setup_totp``
+        runs inside ``_setup_mfa``'s ``with self._data_lock:``), so it does NOT
+        write to the sink here. ``AuditLogNode.execute`` calls whatever logging
+        handler the operator attached; a syslog/HTTP/SIEM handler blocking on
+        the network while ``_data_lock`` is held would stall every MFA
+        operation in the process behind it -- a slow log collector becoming an
+        authentication outage. The record is queued and flushed by the
+        dispatcher after the lock is released.
+        """
         event = {
+            "kind": "audit",
             "event_type": event_type,
             "metadata": metadata,
             "timestamp": datetime.now(UTC).isoformat(),
         }
         self.audit_events.append(event)
+        self._pending_audit_records.append(event)
 
-        # Also write to the audit sink. The `hasattr(...) and self.audit_log_node`
-        # guard that used to stand here is gone: __init__ always constructs the
-        # sink now, so the absent-branch was unreachable and would have silently
-        # returned success while recording nothing (issue #2060). Parameters are
-        # the ones AuditLogNode reads -- action=/metadata= were dropped.
-        try:
-            self.audit_log_node.execute(
-                event_type=event_type,
-                message=f"MFA event {event_type}",
-                user_id=metadata.get("user_id"),
-                event_data=metadata,
-            )
-        except Exception as e:
-            # Don't fail the main operation if audit logging fails
-            logger.warning(f"Audit logging failed: {e}")
+    def _queue_security_event(
+        self, user_id: str, event_type: str, severity: str
+    ) -> None:
+        """Queue a security event for the sink. Safe to call under ``_data_lock``.
+
+        The four callers of this sit inside ``_data_lock``-held handlers, which
+        is why they stood commented out as "disabled for sync operation": the
+        only surface available was the async ``_log_security_event``. So the
+        ``mfa_revoked`` HIGH-severity event -- the one that pages someone when
+        a second factor is destroyed -- has never fired (issue #2060). Queueing
+        is synchronous and lock-safe; the dispatcher flushes after release.
+        """
+        self._pending_audit_records.append(
+            {
+                "kind": "security",
+                "event_type": event_type,
+                "severity": severity,
+                "user_id": user_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
+
+    def _flush_audit_records(self) -> None:
+        """Write queued records to the sinks. MUST run outside ``_data_lock``.
+
+        The ``hasattr(...) and self.audit_log_node`` guard that used to stand
+        at the write site is gone: ``__init__`` always constructs the sink now,
+        so the absent-branch was unreachable and would have returned success
+        while recording nothing (issue #2060).
+        """
+        while True:
+            try:
+                event = self._pending_audit_records.popleft()
+            except IndexError:
+                # Empty, or drained concurrently by the other dispatcher. Both
+                # are the same non-event; popleft is checked rather than
+                # guarded by a truthiness test so a concurrent drain cannot
+                # raise out of a logging call.
+                return
+
+            try:
+                if event["kind"] == "security":
+                    self.security_event_node.execute(
+                        event_type=event["event_type"],
+                        severity=str(event["severity"] or "INFO").upper(),
+                        message=f"MFA {event['event_type']} for user {log_safe(event['user_id'], 64)}",
+                        user_id=log_safe(event["user_id"]),
+                        metadata={"mfa_operation": True, "source_ip": "unknown"},
+                    )
+                else:
+                    metadata = event["metadata"]
+                    self.audit_log_node.execute(
+                        event_type=event["event_type"],
+                        message=f"MFA event {event['event_type']}",
+                        user_id=log_safe(metadata.get("user_id")),
+                        event_data=self._audit_safe_result(metadata),
+                    )
+            except Exception as e:
+                # Don't fail the main operation if audit logging fails
+                logger.warning(f"Audit logging failed: {e}")
 
     def _initiate_recovery(
         self,
