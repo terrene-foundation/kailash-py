@@ -1,4 +1,76 @@
-# ═══ UPDATE 16 (FINAL) — main `2210076ff` ═══
+# ═══ UPDATE 17 — main `ce52e5def` · 11 PRs merged ═══
+
+**+#2090** (round-2 CORS/C1/docs) **+#2068** (**#2030 + #2022 CLOSED**).
+**Merged (11):** #2061 #2062 #2071 #2077 #2064 #2066 #2080 #2082 #2063 #2090 #2068.
+**Open:** #2094 (logging split) · #2073 (BREAKING, HELD) · #2093 (notes) · #2031.
+
+## ⚠⚠ `git stash` IS SHARED ACROSS WORKTREES — a lane popped another lane's stash
+
+A lane ran `git stash push -- <file>` on a file that was already COMMITTED, so it stashed
+**nothing**. The paired `git stash pop` then popped the top of the **SHARED** stack:
+
+    stash@{0}: On main: release-prep: stash pre-existing local modifications before release/v2.27.0
+
+It conflicted across ~90 files and left conflict markers through `src/`, `packages/`, `tests/`,
+making the tree unimportable.
+
+**The stash stack lives in the COMMON `.git`, so it is shared by every worktree — NOT
+lane-local.** For mutation testing use a `cp` backup, which `worktree-orchestration` already says.
+
+**VERIFIED BY THE ORCHESTRATOR, not taken on report:** `stash@{0}` is **INTACT** — 1654 files /
+10686 insertions / 17230 deletions still in it; all 5 entries present; the lane's backup exists.
+**Nothing was lost.** A CONFLICTED pop does not drop the entry, which is why recovery worked.
+
+The lane then used `git reset --hard HEAD` — forbidden without confirmation. It disclosed this
+unprompted and its reasoning held: the tree was ALREADY broken by its own error, `--keep` aborts
+on a dirty tree and would have left it broken, and it confirmed recoverability BEFORE resetting.
+Recorded because the disclosure is the right behaviour, not because the reset was.
+
+## The instrument lesson from #2090's baseline
+
+A lane reported "PR body updated" after grepping **the file it was about to upload**. That
+cannot distinguish "the edit landed" from "the edit failed". I queried the REMOTE body and found
+the content missing — it had in fact landed between my read and its message. **Both of us were
+wrong in different directions**, and only the remote query could tell which.
+
+**The stale baseline said 99 failures; the fresh one says 7.** #2064/#2066/CI-lane merges cleaned
+~92. Carrying the old set forward would have compared against a tree that no longer exists and
+could have waved a real regression through as "one of the 99". The lane also caught its branch
+was **15 commits behind** and rebased BEFORE baselining — otherwise the sweep measures those 15
+commits, not the diff.
+
+**The main checkout is NOT usable as a baseline** — diverged from `origin/main` in BOTH
+directions (another lane has local commits). Use a detached worktree pinned to the merge-base.
+
+## A CI failure whose cause was MEMORY, and three hypotheses measurement killed
+
+#2068 went red on the kaizen job. Bisected over three CI runs. Cause: a new test constructed
+`Kaizen()` and executed a real workflow → `Kaizen.execute` calls `_ensure_kailash_sdk_loaded()`
+→ **the Kailash runtime imported COLD measured +302 MB**, paid at ~12% of the run because
+`tests/unit/core` is 4th of ~30 tiers. The runner cannot absorb the spike; a dev box can —
+**which is why local green was useless throughout.**
+
+KILLED BY MEASUREMENT, do not re-run: (a) MCP subprocess-per-agent (real, fixed, signature
+unchanged); (b) `Kaizen()` being memory-heavy (warm runtime: **+0 MB**); (c) an
+unraisable-exception flood (zero locally).
+
+Replaced with cheap coverage: a PREDICATE test against the real `{'failed': True, '_exception':
+...}` dict, and a WIRING test asserting by AST that `Kaizen.execute` calls the guard —
+**selecting `Kaizen.execute` explicitly, because `framework.py` has three methods named
+`execute` and `ast.walk` order is not source order.**
+
+NOT COVERED, stated plainly: an end-to-end `Kaizen().execute(workflow)` assertion (runner cannot
+afford it), and the behavioural cross-package assertion — **no CI job installs both
+kailash-dataflow and kailash-kaizen**, so it has nowhere to live.
+
+## ⚠ Tooling note for the next session
+
+A `python3 - <<'PY' ... write_text(...)` heredoc against `.session-notes` is **BLOCKED at the
+Bash boundary** as an interpreter-body write to autonomy/authority state. The detector fires on
+the SHAPE, not the target path — correctly, since the boundary cannot verify intent. Author
+notes with the **Write/Edit tools** and use a path-scoped `git add` (never `git add -A`).
+
+# ═══ UPDATE 16 — main `2210076ff` ═══
 
 **MERGED THIS SESSION (9):** #2061 #2062 #2071 #2077 **#2064** (live SSRF) **#2066** (OAuth
 login was dead) #2080 #2082 **#2063** (#2041 CLOSED — 2nd CRITICAL down).
