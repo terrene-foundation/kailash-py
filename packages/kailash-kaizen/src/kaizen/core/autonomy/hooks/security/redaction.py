@@ -6,14 +6,25 @@ including API keys, passwords, PII, credit cards, and SSNs.
 """
 
 import copy
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Optional, Set
 
 from kaizen.utils.credential_scrub import scrub_credentials
 
+from .._payload import (
+    render_scrubbed_payload,
+    should_log_full_payload,
+    summarize_payload,
+)
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
+
+#: Module-level so the DEBUG gate reads the SAME logger the text sink writes to
+#: (`self.logger` is `getLogger(__name__)` in text mode, and a structlog wrapper
+#: over the stdlib hierarchy in JSON mode).
+logger = logging.getLogger(__name__)
 
 
 class SensitiveDataRedactor:
@@ -206,20 +217,25 @@ class SecureLoggingHook(BaseHook):
         include_data: bool = True,
         format: str = "text",
         redact_sensitive: bool = True,
+        log_full_payloads: bool = False,
     ):
         super().__init__(name="secure_logging_hook")
         self.log_level = log_level
         self.include_data = include_data
         self.format = format
         self.redact_sensitive = redact_sensitive
+        self.log_full_payloads = log_full_payloads
 
-        # Initialize redactor
+        # Initialize redactor. The `else` is not tidy-up: without it
+        # `self.redactor` was simply never assigned when redaction was off, so
+        # any future read outside the `if self.redact_sensitive` guard raises
+        # AttributeError rather than reading a falsy value.
         if self.redact_sensitive:
-            self.redactor = SensitiveDataRedactor()
+            self.redactor: Optional[SensitiveDataRedactor] = SensitiveDataRedactor()
+        else:
+            self.redactor = None
 
-        # Configure logger
-        import logging
-
+        # Configure logger (`logging` is imported at module scope)
         if format == "json":
             import structlog
 
@@ -249,7 +265,18 @@ class SecureLoggingHook(BaseHook):
             else:
                 safe_context = context
 
-            # STEP 2: Log redacted data
+            # STEP 2: Log STRUCTURE, never values (#2070).
+            #
+            # Redaction alone does NOT close this. The redactor claims
+            # credential shapes and PII patterns; a user's prompt, a retrieved
+            # document, or free-form tool output matches neither and survived
+            # verbatim into an INFO line under a class named
+            # `SecureLoggingHook`. Same contract as `LoggingHook` — shared via
+            # `.._payload` so the two cannot drift apart again, which is how
+            # this copy came to keep a defect the original had fixed.
+            data_summary = summarize_payload(safe_context.data)
+            meta_summary = summarize_payload(safe_context.metadata)
+
             if self.format == "json":
                 log_event = {
                     "event_type": safe_context.event_type.value,
@@ -260,8 +287,9 @@ class SecureLoggingHook(BaseHook):
                 }
 
                 if self.include_data:
-                    log_event["context"] = safe_context.data
-                    log_event["metadata"] = safe_context.metadata
+                    log_event["context_keys"] = data_summary["keys"]
+                    log_event["context_field_count"] = data_summary["count"]
+                    log_event["metadata_keys"] = meta_summary["keys"]
 
                 log_fn = getattr(self.logger, self.log_level.lower())
                 log_fn("hook_event", **log_event)
@@ -274,13 +302,27 @@ class SecureLoggingHook(BaseHook):
                         f"[{safe_context.event_type.value}] "
                         f"Agent={safe_context.agent_id} "
                         f"TraceID={safe_context.trace_id} "
-                        f"Data={safe_context.data}"
+                        f"DataKeys={data_summary['keys']} "
+                        f"({data_summary['count']} field(s))"
                     )
                 else:
                     log_fn(
                         f"[{safe_context.event_type.value}] "
                         f"Agent={safe_context.agent_id} "
                         f"TraceID={safe_context.trace_id}"
+                    )
+
+            # STEP 3: Values, only on deliberate opt-in, only at DEBUG,
+            # only scrubbed.
+            if should_log_full_payload(self.log_full_payloads, logger):
+                scrubbed = render_scrubbed_payload(safe_context.data)
+                if self.format == "json":
+                    self.logger.debug("hook_event_payload", payload=scrubbed)
+                else:
+                    self.logger.debug(
+                        f"[{safe_context.event_type.value}] "
+                        f"Agent={safe_context.agent_id} "
+                        f"Payload={scrubbed}"
                     )
 
             return HookResult(success=True)

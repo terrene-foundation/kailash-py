@@ -8,31 +8,17 @@ SECURITY: Supports sensitive data redaction (Finding #4 fix).
 """
 
 import logging
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
+from .._payload import (
+    render_scrubbed_payload,
+    should_log_full_payload,
+    summarize_payload,
+)
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
 
 logger = logging.getLogger(__name__)
-
-#: Cap on a rendered payload before it reaches the DEBUG sink. Applied BEFORE
-#: scrubbing: ``scrub_credentials`` runs ~25 regex passes, each building a fresh
-#: string, and it was written for error text — whereas a hook payload can carry
-#: a whole retrieved document. Capping first bounds both scrub cost and log
-#: volume. Mirrors the same constant in the ``BaseAgent`` fix (#2030).
-MAX_PAYLOAD_CHARS = 2000
-
-
-def _summarize(payload: Any) -> dict[str, Any]:
-    """Describe a payload's SHAPE without reproducing any of its values.
-
-    Key names are structure, not content: they come from the signature /
-    event schema, not from user input, so they are safe to log where the
-    values they index are not.
-    """
-    if isinstance(payload, dict):
-        return {"count": len(payload), "keys": sorted(str(k) for k in payload)}
-    return {"count": 0 if payload is None else 1, "keys": []}
 
 
 class LoggingHook(BaseHook):
@@ -207,8 +193,8 @@ class LoggingHook(BaseHook):
             # INFO log. Redaction is not a substitute here: it claims credential
             # SHAPES and PII patterns, and a user's prose matches neither.
             # Withholding values is what actually closes it.
-            data_summary = _summarize(safe_context.data)
-            meta_summary = _summarize(safe_context.metadata)
+            data_summary = summarize_payload(safe_context.data)
+            meta_summary = summarize_payload(safe_context.metadata)
 
             if self.format == "json":
                 # Structured JSON logging
@@ -274,20 +260,10 @@ class LoggingHook(BaseHook):
         precisely why the `log_full_payloads` gate defaults False rather than
         relying on the scrubber to make payloads safe.
         """
-        if not self.log_full_payloads:
-            return
-        if not logger.isEnabledFor(logging.DEBUG):
+        if not should_log_full_payload(self.log_full_payloads, logger):
             return
 
-        from kaizen.utils.credential_scrub import scrub_credentials
-
-        rendered = repr(safe_context.data)
-        if len(rendered) > MAX_PAYLOAD_CHARS:
-            rendered = (
-                f"{rendered[:MAX_PAYLOAD_CHARS]}"
-                f"...[truncated {len(rendered)} chars]"
-            )
-        scrubbed = scrub_credentials(rendered)
+        scrubbed = render_scrubbed_payload(safe_context.data)
 
         if self.format == "json":
             self.logger.debug("hook_event_payload", payload=scrubbed)
