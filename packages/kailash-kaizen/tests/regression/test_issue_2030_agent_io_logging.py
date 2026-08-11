@@ -211,6 +211,59 @@ class TestFullPayloadIsOptInAndScrubbed:
         assert SECRET not in text
 
 
+class TestResultKeyNamesAreBoundedAndScrubbed:
+    """Result keys can be MODEL-controlled, so key names are not automatically safe.
+
+    A strategy returns the model's parsed JSON verbatim when no signature field
+    matches, and ``_validate_signature_output`` returns early on a ``response``
+    key without inspecting the others. So a prompt-injected model can choose the
+    key names that reach INFO.
+    """
+
+    def test_credential_shaped_key_name_is_scrubbed(self, caplog):
+        agent = _agent()
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            agent._post_execution_hook({"response": "ok", SECRET: "value"})
+
+        text = _rendered(caplog.records)
+        assert SECRET not in text, "a credential-shaped KEY leaked at INFO"
+
+    def test_key_count_is_capped(self, caplog):
+        """A model returning thousands of keys must not amplify the log."""
+        from kaizen.core._log_hygiene import MAX_SUMMARY_KEYS
+
+        payload = {f"k{i:05d}": i for i in range(MAX_SUMMARY_KEYS + 500)}
+        agent = _agent()
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            agent._post_execution_hook(payload)
+
+        text = _rendered(caplog.records)
+        assert "more" in text, "elision marker missing"
+        assert f"k{MAX_SUMMARY_KEYS + 499:05d}" not in text, "cap not applied"
+        # NEGATIVE CONTROL — the true total must still be reported.
+        assert str(MAX_SUMMARY_KEYS + 500) in text, "true key count must survive"
+
+    def test_long_key_is_truncated(self, caplog):
+        from kaizen.core._log_hygiene import MAX_SUMMARY_KEY_LEN
+
+        long_key = "z" * (MAX_SUMMARY_KEY_LEN * 4)
+        agent = _agent()
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            agent._post_execution_hook({long_key: 1})
+
+        text = _rendered(caplog.records)
+        assert long_key not in text, "over-long key emitted in full"
+
+    def test_nested_values_are_never_descended_into(self, caplog):
+        agent = _agent()
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            agent._post_execution_hook({"outer": {"inner": SECRET}})
+
+        text = _rendered(caplog.records)
+        assert SECRET not in text
+        assert "outer" in text, "top-level key must still be reported"
+
+
 class TestLoggingDisabledStillSilent:
     """``logging_enabled=False`` remains a full opt-out (backward compat)."""
 

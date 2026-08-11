@@ -597,6 +597,7 @@ def from_brief(
     df: pl.DataFrame,
     *,
     model: Optional[str] = None,
+    llm_provider: Optional[str] = None,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
 ) -> Tuple[FeatureSchema, ModelSpec, EvalSpec]:
     """Realize a ``(FeatureSchema, ModelSpec, EvalSpec)`` triple from a brief.
@@ -634,6 +635,13 @@ def from_brief(
             ``DEFAULT_LLM_MODEL`` in the environment (per
             ``rules/env-models.md``); raises
             :class:`MissingDefaultLLMModelError` when neither is set.
+        llm_provider: Optional provider override (``"openai"``,
+            ``"anthropic"``, ``"ollama"``, ...). Defaults to
+            :func:`kaizen.core.resolve_agent_provider` on ``model``, which is
+            model-keyed first and falls back to the environment. Pass this
+            explicitly for a model outside kaizen's provider registry — a
+            local Ollama build, for instance — where resolution would
+            otherwise fail loudly (#2022).
         confidence_threshold: Minimum interpretation confidence
             required to realize the plan (default 0.6).
 
@@ -650,6 +658,9 @@ def from_brief(
             gate, or the metric allowlist gate.
         MissingDefaultLLMModelError: When ``model`` is None AND
             ``DEFAULT_LLM_MODEL`` is unset.
+        ConfigurationError: When no LLM provider can be resolved for the
+            model and none was passed as ``llm_provider`` (#2022). This
+            previously surfaced as a misleading malformed-plan failure.
         TypeError: When ``df`` is not a polars DataFrame.
 
     Example:
@@ -744,9 +755,8 @@ def from_brief(
     # to the environment, and fails loud with an actionable message.
     agent_config = BaseAgentConfig(
         model=resolved_model,
-        llm_provider=resolve_agent_provider(
-            resolved_model, component="kailash_ml.from_brief"
-        ),
+        llm_provider=llm_provider
+        or resolve_agent_provider(resolved_model, component="kailash_ml.from_brief"),
         strategy_type="single_shot",
     )
     agent = BaseAgent(

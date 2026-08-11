@@ -92,11 +92,32 @@ class TestHandleErrorDoesNotSwallowConfigurationErrors:
 
 
 class TestUnresolvedProviderSurfacesThroughRun:
-    """End-to-end through the REAL AgentLoop swallow site."""
+    """End-to-end through the REAL strategy + AgentLoop swallow sites.
 
-    def test_run_raises_configuration_error_not_empty_result(self, keyless):
+    Parametrized over EVERY strategy type. The first fix landed the re-raise in
+    AsyncSingleShotStrategy only; MultiCycleStrategy still converted the
+    ConfigurationError into a returned dict, and because it RETURNS rather than
+    raises, ``_handle_error`` never ran and could not backstop it. Enforcement
+    -surface parity: one predicate, every surface that swallows.
+    """
+
+    @pytest.mark.parametrize("strategy_type", ["single_shot", "multi_cycle"])
+    def test_run_raises_configuration_error_not_empty_result(
+        self, keyless, strategy_type
+    ):
         agent = BaseAgent(
-            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type="single_shot")
+            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type=strategy_type)
+        )
+        with pytest.raises(ConfigurationError):
+            agent.run(input="hello")
+
+    def test_sync_single_shot_strategy_also_reraises(self, keyless):
+        """SingleShotStrategy is public API — a caller may pass it directly."""
+        from kaizen.strategies.single_shot import SingleShotStrategy
+
+        agent = BaseAgent(
+            config=BaseAgentConfig(model="gpt-4o-mini"),
+            strategy=SingleShotStrategy(),
         )
         with pytest.raises(ConfigurationError):
             agent.run(input="hello")

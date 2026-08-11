@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.deprecation import deprecated
+from kaizen.errors import raise_if_configuration_error, unwrap_configuration_error
 from kaizen.nodes.ai.audio_utils import (
     encode_audio,
     get_audio_media_type,
@@ -233,6 +234,9 @@ class AsyncSingleShotStrategy:
                 results, run_id = await runtime.execute_workflow_async(
                     workflow.build(), inputs=workflow_params
                 )
+                # #2022 — parity with the sync strategies: a runtime that
+                # returns node failures instead of raising must not slip past.
+                raise_if_configuration_error(results)
 
                 # MCP tool-call execution loop (#339)
                 # After the LLM responds, check if it requested tool calls.
@@ -346,6 +350,7 @@ class AsyncSingleShotStrategy:
                         results, run_id = await runtime_next.execute_workflow_async(
                             workflow.build(), inputs=workflow_params
                         )
+                    raise_if_configuration_error(results)
 
                     # Update messages for potential next round
                     messages = updated_messages
@@ -397,8 +402,6 @@ class AsyncSingleShotStrategy:
             # "not available" substrings match it, so it fell through to the
             # generic error-dict return. The cause-chain walk is what makes the
             # distinction; matching on message text is what missed it.
-            from kaizen.errors import unwrap_configuration_error
-
             configuration_error = unwrap_configuration_error(e)
             if configuration_error is not None:
                 raise configuration_error

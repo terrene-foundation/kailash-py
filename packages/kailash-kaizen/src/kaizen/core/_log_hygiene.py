@@ -19,16 +19,48 @@ from typing import Any, Dict, Optional
 
 __all__ = ["summarize_payload", "safe_log_extra", "log_full_payload"]
 
+#: Most key names emitted in one summary. Beyond this the summary is elided.
+MAX_SUMMARY_KEYS = 25
+#: Longest single key name emitted before truncation.
+MAX_SUMMARY_KEY_LEN = 64
+#: Longest opt-in DEBUG payload render, applied BEFORE scrubbing.
+MAX_PAYLOAD_CHARS = 8192
+
 
 def summarize_payload(payload: Any) -> Dict[str, Any]:
     """Value-FREE description of an agent I/O dict: key names and a count.
 
-    Key names are schema, not data — they are what an operator needs in order
-    to correlate a run, and they are safe. Values never appear.
+    On the INPUT path key names really are schema: inputs arrive as ``**kwargs``
+    so top-level keys are Python identifiers chosen by the agent author.
+
+    On the RESULT path that is NOT true, which is why this function bounds and
+    scrubs what it emits. A strategy returns the model's parsed JSON verbatim
+    when no signature field matches, so result keys can be MODEL-controlled and
+    therefore attacker-influenced via prompt injection — a document map keyed by
+    content, or a dict keyed by an email address, would otherwise have every key
+    name written to INFO. Three defences:
+
+    * key names are truncated to ``MAX_SUMMARY_KEY_LEN``;
+    * at most ``MAX_SUMMARY_KEYS`` are emitted (the rest become a count), which
+      also caps the log-amplification cost of a model returning 10k keys;
+    * the emitted names go through ``scrub_credentials``, so a credential-shaped
+      key name is redacted like a value would be.
+
+    Values are never emitted, and nested dicts are never descended into.
     """
-    if isinstance(payload, dict):
-        return {"keys": sorted(str(key) for key in payload), "count": len(payload)}
-    return {"keys": [], "count": 0, "type": type(payload).__name__}
+    if not isinstance(payload, dict):
+        return {"keys": [], "count": 0, "type": type(payload).__name__}
+
+    from kaizen.utils.credential_scrub import scrub_credentials
+
+    names = sorted(str(key) for key in payload)
+    shown = [
+        scrub_credentials(name[:MAX_SUMMARY_KEY_LEN])
+        for name in names[:MAX_SUMMARY_KEYS]
+    ]
+    if len(names) > MAX_SUMMARY_KEYS:
+        shown.append(f"...+{len(names) - MAX_SUMMARY_KEYS} more")
+    return {"keys": shown, "count": len(names)}
 
 
 def safe_log_extra(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -81,4 +113,11 @@ def log_full_payload(
 
     from kaizen.utils.credential_scrub import scrub_credentials
 
-    logger.debug("Full %s payload: %s", label, scrub_credentials(repr(payload)))
+    # Truncated BEFORE scrubbing. `scrub_credentials` runs ~25 regex passes,
+    # each building a fresh string; it was written for error strings, whereas an
+    # agent payload can carry whole retrieved documents. Capping first bounds
+    # both the scrub cost and the log volume.
+    rendered = repr(payload)
+    if len(rendered) > MAX_PAYLOAD_CHARS:
+        rendered = f"{rendered[:MAX_PAYLOAD_CHARS]}...[truncated {len(rendered)} chars]"
+    logger.debug("Full %s payload: %s", label, scrub_credentials(rendered))

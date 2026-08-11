@@ -1138,9 +1138,16 @@ CRITICAL RULES:
                     response_structure["answer"] = intelligent_response
                     response_structure["response"] = intelligent_response
                 else:
-                    # Log warning for other issues
+                    # #2030 — enforcement-surface parity with the mock-upgrade
+                    # branch 20 lines above: raw content at DEBUG, a
+                    # non-reversible fingerprint at WARNING. `response_content`
+                    # is the model's own output, which echoes user prompts and
+                    # retrieved-document text, so rendering it at WARNING was
+                    # the same disclosure that branch already avoids.
+                    logger.debug(f"LLM unexpected response (raw): {response_content}")
                     logger.warning(
-                        f"LLM returned unexpected response: {response_content}"
+                        "LLM returned unexpected response (%s)",
+                        _fingerprint_payload(response_content),
                     )
                     fallback_content = (
                         response_content.strip()

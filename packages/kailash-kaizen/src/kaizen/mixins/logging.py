@@ -144,16 +144,25 @@ class LoggingMixin:
         self.execution_id = str(uuid.uuid4())[:8]
 
         # Task 3.7: Log execution start
+        # #2030 — key names + counts only, never input VALUES. This is the same
+        # disclosure BaseAgent's hooks carried: agent inputs routinely hold user
+        # prompts, retrieved documents, PII and sometimes credentials. The JSON
+        # branch was the worse of the two, since structured handlers are exactly
+        # what ships records off-host.
+        from kaizen.core._log_hygiene import summarize_payload
+
+        summary = summarize_payload(inputs or {})
         if self.structured and self.log_format_type == "json":
             log_data = {
                 "event": "execution_start",
                 "execution_id": self.execution_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "inputs": inputs or {},
+                "input_keys": summary["keys"],
+                "input_count": summary["count"],
             }
             self.logger.info(f"Execution start: {log_data}")
         else:
-            input_str = f" with inputs: {inputs}" if inputs else ""
+            input_str = f" with input keys: {summary['keys']}" if inputs else ""
             self.logger.info(f"Execution start [ID: {self.execution_id}]{input_str}")
 
     def log_execution_end(self, result: Optional[Dict[str, Any]] = None):
@@ -168,16 +177,22 @@ class LoggingMixin:
             - Tracks execution time if start was logged
         """
         # Task 3.7: Log execution end
+        # #2030 — the non-JSON branch below already logged result KEYS only; the
+        # JSON branch rendered the whole result dict. Both now summarize.
+        from kaizen.core._log_hygiene import summarize_payload
+
+        summary = summarize_payload(result or {})
         if self.structured and self.log_format_type == "json":
             log_data = {
                 "event": "execution_end",
                 "execution_id": self.execution_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "result": result or {},
+                "result_keys": summary["keys"],
+                "result_count": summary["count"],
             }
             self.logger.info(f"Execution end: {log_data}")
         else:
-            result_str = f" with result keys: {list(result.keys())}" if result else ""
+            result_str = f" with result keys: {summary['keys']}" if result else ""
             self.logger.info(f"Execution end [ID: {self.execution_id}]{result_str}")
 
     def log_error(self, error: Exception):

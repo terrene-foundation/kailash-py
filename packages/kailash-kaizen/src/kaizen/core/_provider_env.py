@@ -156,8 +156,15 @@ def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
             "provider credential (e.g. OPENAI_API_KEY / ANTHROPIC_API_KEY)."
         )
 
+    # Distinguish "no model" from "a model of the wrong type" — reporting
+    # b"gpt-4o" as "no model was supplied" sends the reader looking for a
+    # missing env var instead of at the value they actually passed.
+    if model is None or (isinstance(model, str) and not model.strip()):
+        detail = "no model was supplied"
+    else:
+        detail = f"model must be a non-empty string, got {type(model).__name__}"
     raise ConfigurationError(
-        f"Could not resolve an LLM provider: no model was supplied{where}. "
+        f"Could not resolve an LLM provider: {detail}{where}. "
         "Pass a model, and pass llm_provider= explicitly if the model is not "
         "served by a registered provider prefix."
     )

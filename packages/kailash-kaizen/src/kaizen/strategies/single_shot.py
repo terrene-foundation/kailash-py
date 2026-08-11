@@ -29,6 +29,7 @@ from typing import Any, Dict, List
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kaizen.core.deprecation import deprecated
+from kaizen.errors import raise_if_configuration_error, unwrap_configuration_error
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,9 @@ class SingleShotStrategy:
                 results, run_id = runtime.execute(
                     workflow.build(), parameters=workflow_params
                 )
+            # #2022 — LocalRuntime returns node failures as a result dict rather
+            # than raising, so the except-handler below never sees them.
+            raise_if_configuration_error(results)
 
             # MCP tool-call execution loop (#377)
             # After the LLM responds, check if it requested tool calls.
@@ -251,6 +255,7 @@ class SingleShotStrategy:
                     results, run_id = runtime_next.execute(
                         workflow.build(), parameters=workflow_params
                     )
+                raise_if_configuration_error(results)
 
                 # Update messages for potential next round
                 messages = updated_messages
@@ -283,6 +288,16 @@ class SingleShotStrategy:
             return final_result
 
         except Exception as e:
+            # #2022 — a CONFIGURATION failure must never be converted into a
+            # returned dict; see kaizen/errors.py. Enforcement-surface parity
+            # with AsyncSingleShotStrategy and MultiCycleStrategy: all three
+            # strategies swallow the same way, so all three re-raise the same
+            # way. Runs FIRST — the substring classification below cannot see
+            # a ConfigurationError, which arrives wrapped by the runtime.
+            configuration_error = unwrap_configuration_error(e)
+            if configuration_error is not None:
+                raise configuration_error
+
             # Task 2.10: Error handling - propagate real errors, only use skeleton for missing providers
             # ``error_msg`` stays RAW for the internal classification below (the
             # substring probes need the untouched provider text); every surface

@@ -778,14 +778,19 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         if getattr(self.config, "error_handling_enabled", True):
             from kaizen.utils.credential_scrub import scrub_credentials
 
+            # Scrubbed ONCE and used for BOTH egress surfaces. Scrubbing only
+            # the log while returning the raw message would be theatre: this
+            # dict is the public return value of agent.run(), so it is what a
+            # Nexus/HTTP caller serializes into a response body.
+            sanitized = scrub_credentials(str(error))
             # extra=context carried AgentLoop's {"inputs": inputs} verbatim
             # onto the record; summarize to key names + counts.
             logger.error(
                 "Error during execution: %s",
-                scrub_credentials(str(error)),
+                sanitized,
                 extra=safe_log_extra(context),
             )
-            return {"error": str(error), "type": type(error).__name__, "success": False}
+            return {"error": sanitized, "type": type(error).__name__, "success": False}
         else:
             raise error
 

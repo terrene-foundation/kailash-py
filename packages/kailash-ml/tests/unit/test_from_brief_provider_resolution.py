@@ -59,15 +59,54 @@ class TestFromBriefResolvesProviderBeforeDispatch:
         assert "kailash_ml.from_brief" in message, "must name the calling component"
 
     def test_error_is_not_a_brief_interpretation_error(self, keyless, frame):
-        """The misattribution itself is the defect — pin it directly."""
+        """The misattribution itself is the defect — pin it directly.
+
+        Asserted via ``pytest.raises(Exception)`` plus an explicit type check,
+        NOT via ``pytest.raises(ConfigurationError)``: the latter would make the
+        isinstance assertion vacuous, since ConfigurationError can never be a
+        BriefInterpretationError by MRO. Written this way the test genuinely
+        discriminates — it reddens if the swallow returns and the empty plan is
+        rejected downstream as malformed model output, which is the exact
+        pre-fix behaviour.
+        """
         from kailash_ml.from_brief import from_brief
 
         from kailash._from_brief.exceptions import BriefInterpretationError
 
-        with pytest.raises(ConfigurationError) as caught:
+        with pytest.raises(Exception) as caught:
             from_brief("predict churn", frame, model="some-unregistered-local-model")
 
-        assert not isinstance(caught.value, BriefInterpretationError)
+        assert not isinstance(
+            caught.value, BriefInterpretationError
+        ), "a configuration failure was reported as a malformed-plan failure"
+        assert isinstance(caught.value, ConfigurationError)
+
+
+class TestExplicitProviderPassthrough:
+    """``llm_provider=`` is the escape hatch the error message names.
+
+    Without this parameter the advice "pass llm_provider= explicitly" was
+    un-followable from ``from_brief`` — the kwarg did not exist.
+    """
+
+    def test_explicit_provider_bypasses_resolution(self, keyless, frame):
+        """An unregistered model + explicit provider must NOT raise at resolution."""
+        from kailash_ml.from_brief import from_brief
+
+        try:
+            from_brief(
+                "predict churn",
+                frame,
+                model="some-unregistered-local-model",
+                llm_provider="ollama",
+            )
+        except ConfigurationError as exc:  # pragma: no cover - regression guard
+            pytest.fail(f"explicit llm_provider should bypass resolution: {exc}")
+        except Exception:
+            # Any LATER failure (no Ollama running, plan validation, ...) is
+            # fine and expected here — this test pins only that provider
+            # resolution no longer rejects the call.
+            pass
 
 
 class TestResolutionContractUsedByFromBrief:
