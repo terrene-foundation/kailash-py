@@ -1,3 +1,59 @@
+# SWEEP + WRAPUP — 2026-08-11 (READ THIS FIRST)
+
+main `cc44f5471`. **21 PRs merged, 11 issues closed** (#1995 #2015 #2014 #2027 #2004 #2006 #1997
+#2024 #2013 #2026 + masker follow-up). Both original CRITICALs closed. 24 issues open.
+
+## ⛔ HEADLINE — this session's own regression tests NEVER RAN IN CI
+
+CI's root pytest covers ONLY `tests/unit/`, `tests/trust/plane/unit/`, `tests/security/` (Tier 1)
+and `tests/tier2_integration/` (Tier 2, `continue-on-error: true`). **Root `tests/regression/`
+appears in NO invocation.** It now collects **1,941 tests** — including every fail-first regression
+test written this session for #2004, #2006, #2015, #2026, #2027.
+
+Their fail-first evidence was verified LOCALLY (by the lanes and re-verified by the orchestrator);
+**CI green on those PRs said nothing about them.** The `../../.venv` invocations at
+unified-ci.yml:277/358 are `packages/kailash-dataflow`'s regression dir, NOT root.
+
+This escalates **#2002** (filed as "1,564 of 1,566 never run") and compounds with **#2038**
+(Tier-2 `continue-on-error`). **Fixing #2002 is the highest-value item in the backlog** — until it
+lands, "CI green" carries no information about the regression suite.
+
+## PCF triage — 24 open
+
+**BUG / gating (13):** #2025 · #2060 · #2047 · #2041 · #2030 · #2040 · #2022 · #2057 · #2052 ·
+#2056 · #2000 · #2010 · #2029
+**INVEST-NOW (5):** #2002 (headline) · #2038 · #2023 · #2039 · #2044
+**INCREMENTAL / deferred-quality (6):** #2011 #2017 #2018 #2019 #2020 #2021
+
+## ⚠ Sweep-N — ALL SIX deferred-quality items are INVALID DEFERS
+
+Enumerated `--label deferred-quality`; checked each body for the four generalized-1b conditions:
+
+| issue | blocking-safety | value-anchor | acceptance | trigger |
+| --- | --- | --- | --- | --- |
+| #2011 | ✗ | ✗ | ✓ | ✗ |
+| #2017 | ✗ | ✗ | ✗ | ✓ |
+| #2018 | ✓ | ✗ | ✗ | ✓ |
+| #2019 | ✗ | ✗ | ✗ | ✓ |
+| #2020 | ✓ | ✗ | ✗ | ✓ |
+| #2021 | ✗ | ✗ | ✗ | ✓ |
+
+**NONE carries a value-anchor.** Per the sweep skill §3 an item missing any section is not a valid
+defer — it is silent deferral (`product-completion-first.md` MUST-2, BLOCKED). All six are ≥2
+sessions old, so the MUST-3 "still wanted?" gate fires. **User-gated disposition required per item;
+do NOT auto-close.**
+
+Spot-verified still-real: **#2010** (`BaseAgent.__init__` has no `description`, no `**kwargs`),
+**#2011** (module-scope `basicConfig` + relative `FileHandler`), **#2000**
+(`_get_cached_allowed_types()` still on the `sanitize_input` path), **#2038** (`continue-on-error`
+still at unified-ci.yml:149).
+
+## Awaiting the co-owner
+
+**#2025** fail-closed vs opt-in — gates the fix shape AND the CHANGELOG framing for two breaking
+auth changes already merged (#2035, #2054). **#2060 belongs in the same decision**: it gates whether
+#2035's identity-binding work is live at all.
+
 # Session Notes — 2026-08-10 (session N: forest merged, security triage, #1995 closed out)
 
 ## Where we are
