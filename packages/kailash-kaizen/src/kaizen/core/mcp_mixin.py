@@ -751,13 +751,27 @@ class MCPMixin:
 
             method = getattr(self, tool_name)
 
-            async def tool_wrapper(_bound_method=method, **kwargs):
-                """Auto-generated MCP tool from agent method."""
-                result = _bound_method(**kwargs)
-                if hasattr(result, "__await__"):
-                    result = await result
-                return result
+            # Bind via an enclosing scope, NOT a default argument. The default-arg
+            # idiom (`_bound_method=method`) is the usual way to dodge Python's
+            # late-binding-in-a-loop trap, but it is wrong here: the wrapper is
+            # registered as an MCP tool, and the server derives the tool's
+            # advertised parameter schema from this signature. A default arg is a
+            # PARAMETER, so `_bound_method` was published to every client as a
+            # callable tool argument, and a client passing it displaced the bound
+            # method (binding by name, never reaching **kwargs). A factory closure
+            # solves the late-binding problem without putting internal state in the
+            # public signature.
+            def _make_tool_wrapper(bound_method):
+                async def tool_wrapper(**kwargs):
+                    """Auto-generated MCP tool from agent method."""
+                    result = bound_method(**kwargs)
+                    if hasattr(result, "__await__"):
+                        result = await result
+                    return result
 
+                return tool_wrapper
+
+            tool_wrapper = _make_tool_wrapper(method)
             tool_wrapper.__name__ = tool_name
             server.tool()(tool_wrapper)
 
