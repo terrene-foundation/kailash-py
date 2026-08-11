@@ -597,6 +597,7 @@ def from_brief(
     *,
     confidence_threshold: float = 0.6,
     llm_model: Optional[str] = None,
+    llm_provider: Optional[str] = None,
 ) -> Any:
     """Realize a :class:`DataFlow` from a natural-language brief.
 
@@ -617,6 +618,13 @@ def from_brief(
             Defaults to 0.6 per
             :data:`kailash._from_brief.DEFAULT_CONFIDENCE_THRESHOLD`.
         llm_model: Override the LLM model used by the Signature.
+        llm_provider: Optional provider override (``"openai"``,
+            ``"anthropic"``, ``"ollama"``, ...). Defaults to
+            :func:`kaizen.core.resolve_agent_provider` on the resolved model,
+            which is model-keyed first and falls back to the environment. Pass
+            this explicitly for a model outside kaizen's provider registry —
+            a local Ollama build, for instance — where resolution would
+            otherwise fail loudly (#2022).
             ``None`` reads ``DEFAULT_LLM_MODEL`` from the
             environment per :func:`get_default_llm_model`.
 
@@ -632,6 +640,9 @@ def from_brief(
             discriminator fields).
         MissingDefaultLLMModelError: When ``llm_model`` is None and
             ``DEFAULT_LLM_MODEL`` is unset.
+        ConfigurationError: When no LLM provider can be resolved for the
+            model and none was passed as ``llm_provider`` (#2022). This
+            previously surfaced as a misleading malformed-plan failure.
     """
     # Lazy kaizen imports — deferred to call time so importing this module
     # does not require kaizen (the DataFlow conftest collection path). A
@@ -639,6 +650,7 @@ def from_brief(
     # present. `get_default_llm_model` lives in `kailash._from_brief.signatures`
     # which imports kaizen at module scope, so it is lazy too.
     from kailash._from_brief import get_default_llm_model
+    from kaizen.core import resolve_agent_provider
     from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 
     # Invariant 3 — scrub credentials before any logging or LLM call.
@@ -658,8 +670,14 @@ def from_brief(
     # Signature into a single LLM call. We use ``single_shot``
     # strategy (one-pass; no tool-use loop is required for schema
     # synthesis from prose per architecture §3.2).
+    # `llm_provider` is resolved EXPLICITLY (#2022 sibling site — the issue
+    # names only the kailash-ml one, but this call site had the identical
+    # omission and the identical failure mode). See the ml comment for why the
+    # env-keyed fallback alone was wrong.
     agent_config = BaseAgentConfig(
         model=resolved_model,
+        llm_provider=llm_provider
+        or resolve_agent_provider(resolved_model, component="dataflow.from_brief"),
         strategy_type="single_shot",
         # Hooks / MCP / async-LLM defaults are off; this is a pure
         # synchronous one-shot inference.

@@ -14,6 +14,7 @@ This module contains the foundational classes and interfaces for the Kaizen fram
 # resolves on a fresh install.
 from kaizen.signatures import InputField, OutputField, Signature
 
+from ._provider_env import detect_provider_from_env, resolve_agent_provider
 from .agents import Agent, AgentManager
 from .base_agent import BaseAgent
 from .config import KaizenConfig, MemoryProvider, OptimizationEngine
@@ -40,6 +41,13 @@ from .token_counter import (
 )
 
 __all__ = [
+    # Provider resolution — the PUBLIC surface for "which provider should this
+    # agent config use?" (#2022). Cross-package callers (kailash-ml,
+    # kailash-dataflow) MUST use these rather than reaching into private
+    # modules such as `kaizen.nodes._env_model`, which makes an undeclared
+    # coupling the next kaizen refactor breaks silently.
+    "resolve_agent_provider",
+    "detect_provider_from_env",
     "Kaizen",
     "MemoryProvider",
     "OptimizationEngine",

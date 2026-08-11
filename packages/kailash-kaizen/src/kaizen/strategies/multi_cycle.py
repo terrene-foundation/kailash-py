@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from kaizen.errors import raise_if_configuration_error, unwrap_configuration_error
 
 
 class MultiCycleStrategy:
@@ -193,6 +194,11 @@ class MultiCycleStrategy:
                         raw_result, run_id = runtime.execute(
                             workflow.build(), parameters=workflow_params
                         )
+                    # #2022 — LocalRuntime returns node failures as a result
+                    # dict rather than raising. Without this, a cycle whose
+                    # provider was never wired just "fails" and the loop keeps
+                    # spending cycles on a configuration problem.
+                    raise_if_configuration_error(raw_result)
 
                     # CRITICAL: Check for OpenAI native tool calls FIRST
                     # This handles OpenAI's native function calling (tool_calls field)
@@ -482,6 +488,15 @@ class MultiCycleStrategy:
                 )
 
             except Exception as e:
+                # #2022 — a CONFIGURATION failure must never be converted into
+                # a returned dict; see kaizen/errors.py. Enforcement-surface
+                # parity with the two single-shot strategies. Runs FIRST, before
+                # the sanitize/format below, so a provider that was never wired
+                # is not reported to the user as a failed cycle.
+                configuration_error = unwrap_configuration_error(e)
+                if configuration_error is not None:
+                    raise configuration_error
+
                 # Task 2.15: Error termination
                 # A cycle drives an LLM call; its exception can echo a credential
                 # into the returned dict and onto stdout (#1970 sweep). The

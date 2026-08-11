@@ -597,6 +597,7 @@ def from_brief(
     df: pl.DataFrame,
     *,
     model: Optional[str] = None,
+    llm_provider: Optional[str] = None,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
 ) -> Tuple[FeatureSchema, ModelSpec, EvalSpec]:
     """Realize a ``(FeatureSchema, ModelSpec, EvalSpec)`` triple from a brief.
@@ -634,6 +635,13 @@ def from_brief(
             ``DEFAULT_LLM_MODEL`` in the environment (per
             ``rules/env-models.md``); raises
             :class:`MissingDefaultLLMModelError` when neither is set.
+        llm_provider: Optional provider override (``"openai"``,
+            ``"anthropic"``, ``"ollama"``, ...). Defaults to
+            :func:`kaizen.core.resolve_agent_provider` on ``model``, which is
+            model-keyed first and falls back to the environment. Pass this
+            explicitly for a model outside kaizen's provider registry — a
+            local Ollama build, for instance — where resolution would
+            otherwise fail loudly (#2022).
         confidence_threshold: Minimum interpretation confidence
             required to realize the plan (default 0.6).
 
@@ -650,6 +658,9 @@ def from_brief(
             gate, or the metric allowlist gate.
         MissingDefaultLLMModelError: When ``model`` is None AND
             ``DEFAULT_LLM_MODEL`` is unset.
+        ConfigurationError: When no LLM provider can be resolved for the
+            model and none was passed as ``llm_provider`` (#2022). This
+            previously surfaced as a misleading malformed-plan failure.
         TypeError: When ``df`` is not a polars DataFrame.
 
     Example:
@@ -700,6 +711,7 @@ def from_brief(
     # `kailash._from_brief.signatures` which imports kaizen at module scope,
     # so it is lazy too.
     from kailash._from_brief import get_default_llm_model
+    from kaizen.core import resolve_agent_provider
     from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 
     # Step 1 — extract dataframe schema BEFORE the LLM call. This is
@@ -733,8 +745,18 @@ def from_brief(
     # is the LLM-mediation surface; the agent dispatches a single
     # one-shot inference (no tool-use loop required for schema
     # synthesis from prose).
+    # `llm_provider` is resolved EXPLICITLY (#2022). Omitting it left the
+    # provider to BaseAgent's env-keyed fallback, which returns None when no
+    # credential is exported — and that unresolved provider surfaced to users
+    # as "the LLM emitted a malformed plan" rather than "your provider is not
+    # configured". `resolve_agent_provider` is kaizen's PUBLIC resolution
+    # surface: it is model-keyed first (so a Claude DEFAULT_LLM_MODEL is not
+    # dispatched to OpenAI merely because OPENAI_API_KEY is set), falls back
+    # to the environment, and fails loud with an actionable message.
     agent_config = BaseAgentConfig(
         model=resolved_model,
+        llm_provider=llm_provider
+        or resolve_agent_provider(resolved_model, component="kailash_ml.from_brief"),
         strategy_type="single_shot",
     )
     agent = BaseAgent(

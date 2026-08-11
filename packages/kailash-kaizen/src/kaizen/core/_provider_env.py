@@ -78,3 +78,93 @@ def detect_provider_from_env() -> Optional[str]:
     if _keyless_mock_allowed():
         return "mock"
     return None
+
+
+def resolve_agent_provider(model: Optional[str], *, component: str = "") -> str:
+    """Public provider resolution for an agent config (#2022).
+
+    WHICH RESOLVER OWNS WHICH QUESTION
+    ----------------------------------
+    Kaizen deliberately keeps several provider resolvers, because they answer
+    genuinely different questions with genuinely different failure contracts.
+    #1952 ratified that non-equivalence; what it did NOT do is say which one a
+    caller building an agent config should reach for. This function is that
+    answer, and it is the ONLY one callers outside kaizen should use.
+
+    * "Given a MODEL, which provider serves it?" -> canonical:
+      :meth:`kaizen.llm.LlmProvider.from_model`. Its prefix table is DERIVED
+      from the provider registry (``_PREFIX_TO_NAME``), so it cannot drift, and
+      it fails closed with ``UnknownModelProvider``.
+    * "Given the ENVIRONMENT, which provider is usable?" -> canonical:
+      :func:`detect_provider_from_env` above.
+    * "Given a full config, which provider plus credentials and endpoint?" ->
+      canonical: ``kaizen.config.auto_detect_provider``.
+
+    This function ADDS NO MAPPING OF ITS OWN. It composes the first two in a
+    defined order, which is the whole reason it exists: publishing a fourth
+    model->provider table would recreate exactly the drift #1952 ended. In
+    particular it deliberately does NOT publish
+    ``kaizen.nodes._env_model.detect_provider``, whose hand-maintained
+    substring table is a weaker duplicate of the registry-derived one and is
+    pinned to no registry.
+
+    ORDER, AND WHY MODEL BEATS ENVIRONMENT
+    --------------------------------------
+    The model wins. A ``claude-*`` model must dispatch to Anthropic even when
+    ``OPENAI_API_KEY`` happens to be set; the env-first order sent it to
+    OpenAI, which is a silent wrong-vendor dispatch.
+
+    The env fallback is retained for models OUTSIDE the registry's prefixes
+    (local/Ollama builds, ``chatgpt-4o-latest``, fine-tuned names). Stated
+    plainly rather than glossed: for such a model the fallback is a GUESS, and
+    it can pick a vendor that does not serve the model. That is not a
+    regression — it is exactly what every caller already got by leaving
+    ``llm_provider`` unset — and it is strictly narrowed here, because every
+    registry-recognised model now bypasses the guess entirely. Callers who
+    need certainty for an unregistered model pass ``llm_provider`` explicitly.
+
+    Args:
+        model: The model identifier the agent will run.
+        component: Short caller identifier surfaced in the error message.
+
+    Returns:
+        A provider name suitable for ``BaseAgentConfig.llm_provider``.
+
+    Raises:
+        ConfigurationError: The provider could not be resolved from either the
+            model or the environment. Fails LOUD and names the fix — never
+            returns ``None`` into the ``LLMAgentNode`` #1947 gate, whose error
+            cannot say which model or component was responsible.
+    """
+    from kaizen.config.providers import ConfigurationError
+    from kaizen.llm.provider import LlmProvider, UnknownModelProvider
+
+    where = f" (component: {component})" if component else ""
+
+    if isinstance(model, str) and model.strip():
+        try:
+            return LlmProvider.from_model(model).name
+        except UnknownModelProvider:
+            from_env = detect_provider_from_env()
+            if from_env is not None:
+                return from_env
+        raise ConfigurationError(
+            f"Could not resolve an LLM provider for model {model!r}{where}. "
+            "The model is not served by any registered provider prefix, and no "
+            "provider could be detected from the environment. Fix by passing "
+            "llm_provider= explicitly on the agent config, or by setting a "
+            "provider credential (e.g. OPENAI_API_KEY / ANTHROPIC_API_KEY)."
+        )
+
+    # Distinguish "no model" from "a model of the wrong type" — reporting
+    # b"gpt-4o" as "no model was supplied" sends the reader looking for a
+    # missing env var instead of at the value they actually passed.
+    if model is None or (isinstance(model, str) and not model.strip()):
+        detail = "no model was supplied"
+    else:
+        detail = f"model must be a non-empty string, got {type(model).__name__}"
+    raise ConfigurationError(
+        f"Could not resolve an LLM provider: {detail}{where}. "
+        "Pass a model, and pass llm_provider= explicitly if the model is not "
+        "served by a registered provider prefix."
+    )

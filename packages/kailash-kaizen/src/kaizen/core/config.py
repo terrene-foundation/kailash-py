@@ -80,6 +80,15 @@ class BaseAgentConfig:
 
     # Feature Flags (Mixins)
     logging_enabled: bool = True
+    # #2030 — full agent I/O (input values, result values) is NEVER emitted at
+    # INFO. When this flag is opted IN, and only when the logger is at DEBUG,
+    # the payload is dumped through ``scrub_credentials``. It defaults False so
+    # that merely turning DEBUG on globally — routine during incident response
+    # — does not start dumping user prompts, retrieved documents and PII.
+    # Per rules/security.md § Secure-Default: a new logging surface that would
+    # expose data must fail closed rather than rely on operators keeping a log
+    # level off. NOT a mixin flag — deliberately absent from ``_MIXIN_MAP``.
+    log_full_payloads: bool = False
     performance_enabled: bool = True
     error_handling_enabled: bool = True
     batch_processing_enabled: bool = False
@@ -381,6 +390,7 @@ class BaseAgentConfig:
             "optimization_enabled",
             "monitoring_enabled",
             "logging_enabled",
+            "log_full_payloads",
             "performance_enabled",
             "error_handling_enabled",
             "batch_processing_enabled",

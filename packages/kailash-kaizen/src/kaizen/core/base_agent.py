@@ -29,12 +29,14 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from kailash_mcp.client import MCPClient
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.builder import WorkflowBuilder
-from kailash_mcp.client import MCPClient
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 
+from ._log_hygiene import log_full_payload, safe_log_extra, summarize_payload
 from ._provider_env import detect_provider_from_env as _detect_provider
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
@@ -44,6 +46,13 @@ from .mcp_mixin import MCPMixin
 __all__ = ["BaseAgent", "BaseAgentConfig"]
 
 logger = logging.getLogger(__name__)
+
+
+# Log-hygiene helpers live in ``_log_hygiene`` and the configuration-error
+# predicate in ``kaizen.errors`` — neither is redefined here. The predicate is
+# SHARED with kaizen.strategies.async_single_shot, the other site that must
+# distinguish a broken setup from a failed run, and two copies of a
+# correctness-relevant predicate drift.
 
 
 class BaseAgent(MCPMixin, A2AMixin, Node):
@@ -720,28 +729,68 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         return True
 
     def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Default pre-execution hook (logs execution start)."""
-        logging_enabled = getattr(self.config, "logging_enabled", True)
-        if logging_enabled:
-            signature_name = getattr(self.signature, "name", "unknown")
-            logger.info(f"Executing {signature_name} with inputs: {inputs}")
+        """Default pre-execution hook: logs input STRUCTURE, never values (#2030)."""
+        if getattr(self.config, "logging_enabled", True):
+            summary = summarize_payload(inputs)
+            logger.info(
+                "Executing %s with %d input(s): %s",
+                getattr(self.signature, "name", "unknown"),
+                summary["count"],
+                summary["keys"],
+            )
+            log_full_payload(self.config, logger, "inputs", inputs)
         return inputs
 
     def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Default post-execution hook (logs completion)."""
-        logging_enabled = getattr(self.config, "logging_enabled", True)
-        if logging_enabled:
-            logger.info(f"Execution complete. Result: {result}")
+        """Default post-execution hook: logs result STRUCTURE, never values (#2030)."""
+        if getattr(self.config, "logging_enabled", True):
+            summary = summarize_payload(result)
+            logger.info(
+                "Execution complete. %d result field(s): %s",
+                summary["count"],
+                summary["keys"],
+            )
+            log_full_payload(self.config, logger, "result", result)
         return result
 
     def _handle_error(
         self, error: Exception, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Default error handler."""
-        error_handling_enabled = getattr(self.config, "error_handling_enabled", True)
-        if error_handling_enabled:
-            logger.error(f"Error during execution: {error}", extra=context)
-            return {"error": str(error), "type": type(error).__name__, "success": False}
+        """Default error handler.
+
+        Configuration failures re-raise unconditionally (#2022); every other
+        error keeps the historical ``{"success": False}`` envelope with the
+        message scrubbed and the context summarized, not rendered (#2030).
+        """
+        # #2022 — a configuration failure is not an execution failure. Folding
+        # one into {"success": False} hands the caller an EMPTY result, which
+        # downstream validators reject as a malformed MODEL response: the user
+        # is told the LLM misbehaved when their provider was never wired, and
+        # the stack trace that would have said so is gone. Deliberately NOT
+        # gated on ``error_handling_enabled`` — that flag governs run-time
+        # resilience, not the reporting of a broken setup.
+        from kaizen.errors import unwrap_configuration_error
+
+        configuration_error = unwrap_configuration_error(error)
+        if configuration_error is not None:
+            raise configuration_error
+
+        if getattr(self.config, "error_handling_enabled", True):
+            from kaizen.utils.credential_scrub import scrub_credentials
+
+            # Scrubbed ONCE and used for BOTH egress surfaces. Scrubbing only
+            # the log while returning the raw message would be theatre: this
+            # dict is the public return value of agent.run(), so it is what a
+            # Nexus/HTTP caller serializes into a response body.
+            sanitized = scrub_credentials(str(error))
+            # extra=context carried AgentLoop's {"inputs": inputs} verbatim
+            # onto the record; summarize to key names + counts.
+            logger.error(
+                "Error during execution: %s",
+                sanitized,
+                extra=safe_log_extra(context),
+            )
+            return {"error": sanitized, "type": type(error).__name__, "success": False}
         else:
             raise error
 

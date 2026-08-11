@@ -51,6 +51,23 @@ def detect_provider(model: str, component: str = "") -> str:
     fail-open (the node "works" while its AI path returns canned mock
     output). Callers that genuinely want the mock provider pass
     ``provider="mock"`` explicitly.
+
+    NOT CANONICAL, AND DELIBERATELY NOT PUBLISHED (#2022)
+    ----------------------------------------------------
+    This is intentionally NOT the answer to "given a model, which provider?"
+    for anything outside this package. The canonical model-keyed resolver is
+    :meth:`kaizen.llm.LlmProvider.from_model`, whose prefix table is DERIVED
+    from the provider registry (``_PREFIX_TO_NAME``) and therefore cannot
+    drift; the substring table below is hand-maintained and pinned to no
+    registry. Callers building an agent config use the public
+    :func:`kaizen.core.resolve_agent_provider`.
+
+    It survives as a node-constructor helper for a narrow reason: it covers
+    Ollama-family names (``llama``/``mistral``/``mixtral``) that the registry
+    has no prefix row for, and it carries the ``component=`` diagnostic that
+    ``UnknownModelProvider`` lacks. Retiring it into the registry-derived
+    resolver requires adding that Ollama row first, which is a separate
+    change from #2022 and is NOT done here.
     """
     lowered = model.lower()
     if "gpt" in lowered or "o1" in lowered or "davinci" in lowered:
