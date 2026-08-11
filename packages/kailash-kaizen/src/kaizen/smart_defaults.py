@@ -234,12 +234,16 @@ class SmartDefaultsManager:
         - If any subsystem explicitly requested → raise (none are implemented)
         - Otherwise → warn once and return None
         """
-        # Layer 3: Custom hook manager override
-        if config.has_custom_observability():
-            self.logger.info("Using custom hook manager")
-            return config.custom_hook_manager
-
         # NOT-IMPLEMENTED gate (#2084).
+        #
+        # BEFORE the custom-manager override, deliberately. When the override
+        # came first it short-circuited this gate, so
+        # `custom_hook_manager=X, enable_tracing=True` raised nothing and
+        # `rich_output` went on to print "Jaeger tracing
+        # (http://localhost:16686)" — the same banner lie, surviving on one
+        # path. Supplying your own manager does not make the FRAMEWORK's
+        # tracing exist, and the flag cannot reach that manager anyway: it is
+        # returned verbatim, so an explicit request stays unsatisfiable.
         #
         # This function used to import four hook classes that do not exist,
         # catch the resulting ImportError, log "not available, skipping", and
@@ -259,6 +263,14 @@ class SmartDefaultsManager:
         if explicitly_requested:
             flag, subsystem, provides = explicitly_requested[0]
             raise ObservabilityNotImplemented(subsystem, flag, provides)
+
+        # Layer 3: Custom hook manager override. Reached only once no
+        # unsatisfiable request is outstanding, and it does NOT warn — a
+        # caller who brought their own hooks does not need to be told the
+        # framework's are missing.
+        if config.has_custom_observability():
+            self.logger.info("Using custom hook manager")
+            return config.custom_hook_manager
 
         # Left at default: the caller did not ask, so do not break them — but
         # do not stay quiet about advertising four features that do not exist.

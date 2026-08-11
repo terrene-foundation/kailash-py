@@ -189,6 +189,49 @@ class TestExplicitOptInFailsLoudly:
         )
 
 
+class TestCustomManagerDoesNotExemptTheGate:
+    """A custom hook manager must not re-open the path the gate closed.
+
+    Found by sweeping every reader of the four flags for truthiness branches.
+    The custom-manager override returns early, so it originally short-circuited
+    the NOT-IMPLEMENTED gate: `custom_hook_manager=X, enable_tracing=True`
+    raised nothing, and `rich_output` then printed
+
+        ✅ Observability:
+           • Jaeger tracing (http://localhost:16686)
+
+    — the exact banner lie this branch removed, surviving on one path.
+    Supplying your own manager does not make the FRAMEWORK's Jaeger tracing
+    exist, and the flag has no mechanism to reach the custom manager anyway:
+    it is returned verbatim. So an explicit request is still unsatisfiable.
+    """
+
+    def test_explicit_true_raises_even_with_custom_manager(self) -> None:
+        from kaizen.core.autonomy.hooks import HookManager
+
+        config = AgentConfig(
+            model=MODEL,
+            enable_tracing=True,
+            custom_hook_manager=HookManager(),
+        )
+
+        with pytest.raises(ObservabilityNotImplemented):
+            SmartDefaultsManager().create_observability(config)
+
+    def test_custom_manager_alone_still_works(self) -> None:
+        """NEGATIVE control — the gate must not break the custom path itself.
+
+        Without this, moving the gate ahead of the override could reject every
+        caller who legitimately supplies their own hooks.
+        """
+        from kaizen.core.autonomy.hooks import HookManager
+
+        supplied = HookManager()
+        config = AgentConfig(model=MODEL, custom_hook_manager=supplied)
+
+        assert SmartDefaultsManager().create_observability(config) is supplied
+
+
 class TestIsObservabilityEnabledBecomesTruthful:
     """The config must stop reporting observability it does not have."""
 
