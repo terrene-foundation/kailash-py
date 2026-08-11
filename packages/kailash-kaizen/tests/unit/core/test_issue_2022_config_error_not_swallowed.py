@@ -58,7 +58,7 @@ class TestHandleErrorDoesNotSwallowConfigurationErrors:
     """The unit-level contract on the disposition itself."""
 
     def test_configuration_error_propagates(self):
-        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"))
+        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"), mcp_servers=[])
         with pytest.raises(ConfigurationError):
             agent._handle_error(
                 ConfigurationError("LLMAgentNode: 'provider' is unresolved (None)"),
@@ -68,14 +68,15 @@ class TestHandleErrorDoesNotSwallowConfigurationErrors:
     def test_configuration_error_propagates_even_when_handling_enabled(self):
         """error_handling_enabled governs run-time resilience, not broken setup."""
         agent = BaseAgent(
-            config=BaseAgentConfig(llm_provider="mock", error_handling_enabled=True)
+            config=BaseAgentConfig(llm_provider="mock", error_handling_enabled=True),
+            mcp_servers=[],
         )
         with pytest.raises(ConfigurationError):
             agent._handle_error(ConfigurationError("unresolved"), {"inputs": {}})
 
     def test_ordinary_runtime_error_still_returns_envelope(self):
         """NEGATIVE CONTROL — this must NOT become a blanket re-raise."""
-        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"))
+        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"), mcp_servers=[])
         out = agent._handle_error(
             RuntimeError("model returned garbage"), {"inputs": {}}
         )
@@ -84,7 +85,7 @@ class TestHandleErrorDoesNotSwallowConfigurationErrors:
 
     def test_original_exception_object_is_preserved(self):
         """The cause must survive — that is the whole point of not swallowing."""
-        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"))
+        agent = BaseAgent(config=BaseAgentConfig(llm_provider="mock"), mcp_servers=[])
         original = ConfigurationError("provider unresolved")
         with pytest.raises(ConfigurationError) as caught:
             agent._handle_error(original, {"inputs": {}})
@@ -106,7 +107,8 @@ class TestUnresolvedProviderSurfacesThroughRun:
         self, keyless, strategy_type
     ):
         agent = BaseAgent(
-            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type=strategy_type)
+            config=BaseAgentConfig(model="gpt-4o-mini", strategy_type=strategy_type),
+            mcp_servers=[],
         )
         with pytest.raises(ConfigurationError):
             agent.run(input="hello")
@@ -118,6 +120,7 @@ class TestUnresolvedProviderSurfacesThroughRun:
         agent = BaseAgent(
             config=BaseAgentConfig(model="gpt-4o-mini"),
             strategy=SingleShotStrategy(),
+            mcp_servers=[],
         )
         with pytest.raises(ConfigurationError):
             agent.run(input="hello")

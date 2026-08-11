@@ -64,7 +64,16 @@ def _rendered(records) -> str:
 
 
 def _agent(**config_kwargs) -> BaseAgent:
-    return BaseAgent(config=BaseAgentConfig(llm_provider="mock", **config_kwargs))
+    # mcp_servers=[] is REQUIRED, not incidental: passing None (the default)
+    # auto-injects the builtin MCP server config and constructs an MCPClient
+    # per agent, which spawns `python -m kaizen.mcp.builtin_server`. Harmless
+    # in a small local run; in CI's single-process 6600-test suite it
+    # accumulated into a MemoryError, an orphaned python process and a job
+    # timeout. Every other BaseAgent unit test in this package passes [].
+    return BaseAgent(
+        config=BaseAgentConfig(llm_provider="mock", **config_kwargs),
+        mcp_servers=[],
+    )
 
 
 class TestPreExecutionHookInfoLevel:
