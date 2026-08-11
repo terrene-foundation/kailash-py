@@ -4,7 +4,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from kailash.api.gateway import (
     WorkflowAPIGateway,
@@ -70,7 +72,12 @@ class TestHealthCheck:
 
     def test_proxy_health_check_unreachable(self, gateway, test_client):
         """Proxied workflow health check shows unreachable when backend is down."""
-        gateway.proxy_workflow("remote", "http://nonexistent:9999")
+        gateway.proxy_workflow(
+            "remote",
+            "http://nonexistent:9999",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
 
         resp = test_client.get("/health")
         assert resp.status_code == 200
@@ -133,20 +140,54 @@ class TestWebSocketSubscription:
             assert resp["type"] == "ack"
 
 
+async def _proxy_auth(request: Request):
+    """Real auth dependency for proxy registrations.
+
+    Since issue #2025 `proxy_workflow` is fail-closed: it refuses to register
+    without an authentication control and an explicit path allowlist. These
+    tests cover routing and registration bookkeeping, so they supply the
+    minimum real control; the refusals are covered in
+    tests/regression/test_issue_2025_gateway_proxy_parity.py.
+    """
+    if not request.headers.get("Authorization"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"user_id": "test"}
+
+
 class TestProxyRouting:
     def test_proxy_workflow_registration(self, gateway):
-        gateway.proxy_workflow("remote", "http://backend:8080")
+        gateway.proxy_workflow(
+            "remote",
+            "http://backend:8080",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
         assert "remote" in gateway.workflows
         assert gateway.workflows["remote"].type == "proxied"
 
     def test_proxy_duplicate_raises(self, gateway):
-        gateway.proxy_workflow("remote", "http://backend:8080")
+        gateway.proxy_workflow(
+            "remote",
+            "http://backend:8080",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
         with pytest.raises(ValueError, match="already registered"):
-            gateway.proxy_workflow("remote", "http://other:8080")
+            gateway.proxy_workflow(
+                "remote",
+                "http://other:8080",
+                allowed_paths=["*"],
+                auth_dependency=_proxy_auth,
+            )
 
     def test_proxy_multi_backend(self, gateway):
         """Comma-separated URLs should be split into multiple backends."""
-        gateway.proxy_workflow("multi", "http://backend1:8080,http://backend2:8080")
+        gateway.proxy_workflow(
+            "multi",
+            "http://backend1:8080,http://backend2:8080",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
         assert gateway.workflows["multi"].proxy_url == "http://backend1:8080"
 
 
@@ -223,6 +264,12 @@ class TestWorkflowOrchestrator:
                 "run-123",
             )
             mock_runtime_cls.return_value = mock_runtime
+            # execute_chain now uses `with LocalRuntime() as runtime:` so the
+            # runtime is released even when a hop raises. Without this line
+            # `__enter__()` returns a FRESH auto-generated MagicMock and
+            # `runtime.execute(...)` yields a Mock instead of the tuple -- the
+            # mock would silently model a different object than production uses.
+            mock_runtime.__enter__.return_value = mock_runtime
 
             result = await orchestrator.execute_chain("chain1", {"input": "data"})
 
