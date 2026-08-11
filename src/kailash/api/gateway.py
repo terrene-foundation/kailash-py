@@ -39,11 +39,18 @@ Example:
     >>> gateway.register_mcp_server("tools", mcp)
 
     >>> # With proxied workflows
-    >>> # Proxy to external workflow service
+    >>> # Proxy registration is FAIL-CLOSED since issue #2025: it raises
+    >>> # unless an authentication control and an explicit path allowlist
+    >>> # are supplied. `allowed_methods` defaults to ["GET"].
+    >>> from kailash.middleware.auth import MiddlewareAuthManager
+    >>> gateway = WorkflowAPIGateway(
+    ...     auth_manager=MiddlewareAuthManager(secret_key=...),
+    ... )
     >>> gateway.proxy_workflow(
     ...     "ml_pipeline",
     ...     "http://ml-service:8080",
-    ...     health_check="/health"
+    ...     health_check="/health",
+    ...     allowed_paths=["predict", "status"],
     ... )
 """
 
@@ -214,10 +221,19 @@ class WorkflowAPIGateway:
 
         # Add CORS middleware
         if cors_origins:
+            # Credentials are allowed ONLY when the origins are named
+            # explicitly. With `allow_origins=["*"]` plus
+            # `allow_credentials=True`, any web page can drive this gateway --
+            # including the now-authenticated proxy routes -- using the
+            # victim's cookies, which turns cookie auth into a cross-origin
+            # invocable surface. WorkflowServer already guarded this; the two
+            # surfaces disagreeing on it is the same drift class as the
+            # credential-stripping and redirect-policy divergences #2025 fixed.
+            allow_creds = "*" not in cors_origins
             self.app.add_middleware(
                 CORSMiddleware,
                 allow_origins=cors_origins,
-                allow_credentials=True,
+                allow_credentials=allow_creds,
                 allow_methods=["*"],
                 allow_headers=["*"],
             )

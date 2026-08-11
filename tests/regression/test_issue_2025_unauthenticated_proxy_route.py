@@ -482,6 +482,22 @@ def test_repeated_query_keys_are_preserved(server, backend, auth_manager):
         ("a\\b", "path contains a backslash"),
         ("a\x00b", "path contains a null byte"),
         ("a\rb", "path contains a control character"),
+        # C1 controls. These reach the helper decoded and are line
+        # terminators to several parsers, so they are the same injection
+        # vector as CR/LF. Asserted HERE and not only against the charset
+        # regex: a mutation dropping the helper's C1 arm reddened nothing
+        # while these cases lived only in the regex parametrisation, which
+        # meant the helper's branch was unmeasured.
+        ("a\u0080b", "path contains a control character"),
+        ("a\u0085b", "path contains a control character"),
+        ("a\u009fb", "path contains a control character"),
+        # Unicode line/paragraph separators get their own reason.
+        ("a\u2028b", "path contains a Unicode line or paragraph separator"),
+        ("a\u2029b", "path contains a Unicode line or paragraph separator"),
+        # Immediately outside the excluded ranges -- still forwardable.
+        ("a\u00a0b", None),
+        ("a\u2027b", None),
+        ("a\u202ab", None),
         # A dotfile is not traversal and MUST still be forwardable.
         (".well-known/x", None),
     ],
@@ -500,6 +516,11 @@ def test_reject_unsafe_proxy_path(path, expected):
         "a\x00b",
         "a\x7fb",
         "a\\b",
+        "a\u0080b",  # C1 block
+        "a\u0085b",  # NEL -- a line terminator to several parsers
+        "a\u009fb",  # C1 block, upper bound
+        "a\u2028b",  # Unicode LINE SEPARATOR
+        "a\u2029b",  # Unicode PARAGRAPH SEPARATOR
         "a<b",
         "a>b",
         "a?b",
@@ -533,6 +554,9 @@ def test_safe_forward_path_charset_rejects(value):
         "a~b",
         "café/x",  # internationalized paths still forward
         "文件/x",
+        "a\u00a0b",  # NBSP is the first codepoint ABOVE the excluded C1 block
+        "a\u2027b",  # immediately below U+2028
+        "a\u202ab",  # immediately above U+2029
     ],
 )
 def test_safe_forward_path_charset_accepts(value):
@@ -817,7 +841,10 @@ class _RedirectingHandler(BaseHTTPRequestHandler):
 class _OffHostHandler(BaseHTTPRequestHandler):
     """Stands in for a host the caller would like to reach, e.g. metadata."""
 
+    hit_count = 0
+
     def do_GET(self):
+        type(self).hit_count += 1
         payload = json.dumps({"secret": "OFF-HOST-PIVOT-BODY"}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(payload)))
@@ -837,6 +864,7 @@ def redirecting_backend():
         f"http://127.0.0.1:{off_host.server_address[1]}/meta"
     )
     _RedirectingHandler.hop_by_hop_seen = {}
+    _OffHostHandler.hit_count = 0
 
     backend = ThreadingHTTPServer(("127.0.0.1", 0), _RedirectingHandler)
     t2 = threading.Thread(target=backend.serve_forever, daemon=True)
@@ -883,9 +911,15 @@ def test_backend_redirect_is_not_followed(server, redirecting_backend, auth_mana
         follow_redirects=False,
     )
 
+    # The property is that the redirect target is never CONTACTED. Asserting
+    # only on the response body would still pass if the proxy fetched the
+    # off-host resource and then failed to return it -- the request would
+    # already have been made, and with it any credentials attached.
     assert (
-        "OFF-HOST-PIVOT-BODY" not in response.text
-    ), "SSRF: the proxy followed the backend's redirect to another host"
+        _OffHostHandler.hit_count == 0
+    ), "SSRF: the proxy issued a request to the redirect target"
+    assert "OFF-HOST-PIVOT-BODY" not in response.text
+    # The backend's 302 is handed back to the caller as a 302, not resolved.
     assert response.status_code == 302, response.status_code
 
     # Control: a non-redirecting path on the same registration still works,
@@ -987,3 +1021,32 @@ def test_enterprise_server_auth_manager_protects_a_proxy(redirecting_backend):
         assert allowed.status_code == 200, allowed.text
     finally:
         srv.close()
+
+
+def test_head_is_not_silently_added_to_a_get_only_route(server, backend, auth_manager):
+    """Starlette's plain `Route` adds HEAD whenever GET is present.
+
+    FastAPI's `api_route` does not, so `allowed_methods=["GET"]` really means
+    GET alone -- but that is a property of the framework, not of this code, so
+    it is pinned here. If a future FastAPI adopts Starlette's behaviour the
+    method allowlist silently widens, and a HEAD leaks the backend's status
+    and headers for any path the allowlist permits.
+    """
+    server.proxy_workflow(
+        name="internal",
+        proxy_url=backend,
+        allowed_paths=["*"],
+        allowed_methods=["GET"],
+    )
+    client = TestClient(server.app)
+    headers = {"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"}
+
+    assert client.head("/workflows/internal/x", headers=headers).status_code == 405
+    assert client.get("/workflows/internal/x", headers=headers).status_code == 200
+
+    route = next(
+        r
+        for r in server.app.router.routes
+        if getattr(r, "path", "") == "/workflows/internal/{path:path}"
+    )
+    assert set(route.methods) == {"GET"}, sorted(route.methods)

@@ -91,8 +91,15 @@ __all__ = [
 #:
 #: RFC 3986 ``pchar`` (unreserved + sub-delims + ``:`` ``@`` ``%``) plus ``/``,
 #: plus every non-ASCII codepoint so internationalized paths still forward.
-#: Everything else is refused -- notably SPACE, CR, LF, TAB, every other C0/C1
-#: control, and ``? # \ < > " { } | ^ ` ``.
+#: Everything else is refused -- notably SPACE, CR, LF, TAB, every other C0
+#: control, the C1 block (U+0080-U+009F, which includes U+0085 NEL), the
+#: Unicode line/paragraph separators U+2028/U+2029, and ``? # \ < > " { } | ^ ` ``.
+#:
+#: The C1 block and U+2028/U+2029 are excluded EXPLICITLY. An earlier version of
+#: this range ran from U+0080 and so admitted all of them while this comment
+#: claimed they were refused -- and no test carried a C1 character, so the suite
+#: could not have detected the gap. They matter because several parsers treat
+#: NEL and U+2028/U+2029 as line terminators.
 #:
 #: This is a **barrier**, not decoration. The captured group -- never the raw
 #: parameter -- is what the target URL is built from, so no un-validated byte
@@ -101,7 +108,7 @@ __all__ = [
 #: request-line injection. With this allowlist it cannot, regardless of how
 #: the HTTP client happens to re-encode.
 SAFE_FORWARD_PATH_RE: re.Pattern = re.compile(
-    r"[/A-Za-z0-9._~!$&'()*+,;=:@%\u0080-\U0010FFFF-]*"
+    r"[/A-Za-z0-9._~!$&'()*+,;=:@%\u00a0-\u2027\u202a-\U0010FFFF-]*"
 )
 
 #: Every HTTP method a proxy registration may forward.
@@ -137,10 +144,22 @@ PROXY_CREDENTIAL_HEADERS: frozenset = frozenset(
         "cookie",
         "x-api-key",
         "x-auth-token",
+        "x-access-token",
+        "x-session-token",
+        "x-csrf-token",
+        "x-amz-security-token",
         "proxy-authorization",
         "set-cookie",
     }
 )
+# NOTE on shape: the RESPONSE direction is an allowlist, this is a denylist,
+# and that asymmetry is deliberate. A reverse proxy must pass arbitrary
+# application headers through to its backend, so an allowlist here would
+# break every backend relying on a custom header. The denylist is therefore
+# maintained explicitly and is known-incomplete by construction -- a bearer
+# token under a header this set does not name still reaches the backend.
+# `forward_credentials=False` is the real control; this set narrows the blast
+# radius, it does not close the class.
 
 #: Hop-by-hop headers (RFC 9110 §7.6.1). These describe the CALLER's connection
 #: to this proxy and are meaningless -- and dangerous -- on the separate
@@ -506,7 +525,12 @@ def reject_unsafe_proxy_path(path: str) -> Optional[str]:
     if "\x00" in path:
         return "path contains a null byte"
     for char in path:
-        if ord(char) < 0x20 or ord(char) == 0x7F:
+        code = ord(char)
+        # C0 (incl. DEL) and C1. C1 is checked because U+0085 NEL and the
+        # rest of that block are treated as line terminators by several
+        # parsers, which makes them a header/request-line injection vector
+        # exactly like CR and LF.
+        if code < 0x20 or code == 0x7F or 0x80 <= code <= 0x9F:
             return "path contains a control character"
     if "\\" in path:
         return "path contains a backslash"
@@ -516,4 +540,6 @@ def reject_unsafe_proxy_path(path: str) -> Optional[str]:
             return f"path contains an encoded path separator or dot-segment ({token})"
     if any(segment == ".." for segment in path.split("/")):
         return "path contains a parent-directory segment (..)"
+    if "\u2028" in path or "\u2029" in path:
+        return "path contains a Unicode line or paragraph separator"
     return None
