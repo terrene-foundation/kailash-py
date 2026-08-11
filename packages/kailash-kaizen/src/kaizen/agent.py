@@ -84,10 +84,16 @@ class Agent:
         # Tools
         tools: Union[str, List[str], None] = "all",
         # Observability
-        enable_tracing: bool = True,
-        enable_metrics: bool = True,
-        enable_logging: bool = True,
-        enable_audit: bool = True,
+        # TRI-STATE, mirroring AgentConfig (#2084). These MUST default None,
+        # not True: they are forwarded verbatim to AgentConfig below, and a
+        # `True` there means "explicitly requested" and raises because none of
+        # the four subsystems exists. Leaving these at `True` would send an
+        # explicit True on EVERY Agent() construction — reintroducing, through
+        # this wrapper, exactly the break the tri-state exists to avoid.
+        enable_tracing: Optional[bool] = None,
+        enable_metrics: Optional[bool] = None,
+        enable_logging: Optional[bool] = None,
+        enable_audit: Optional[bool] = None,
         # Checkpointing
         enable_checkpointing: bool = True,
         checkpoint_path: str = ".kaizen/checkpoints",

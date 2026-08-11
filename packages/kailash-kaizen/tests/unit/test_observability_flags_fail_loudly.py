@@ -44,7 +44,24 @@ import pytest
 
 from kaizen.agent_config import AgentConfig
 from kaizen.errors import ObservabilityNotImplemented
-from kaizen.smart_defaults import SmartDefaultsManager
+from kaizen.smart_defaults import (
+    SmartDefaultsManager,
+    _warn_observability_unimplemented,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_one_time_warning() -> None:
+    """Clear the process-wide warn cache before EVERY test in this module.
+
+    Load-bearing, not hygiene. The warning fires once per process, so without
+    this reset a test that asserts the warning is ABSENT (`explicit_false_is
+    _silent`) would pass merely because an earlier test consumed it — a
+    non-discriminating pass. Clearing first makes each absence assertion mean
+    what it says.
+    """
+    _warn_observability_unimplemented.cache_clear()
+
 
 #: Deliberately synthetic. `AgentConfig` requires SOME model string, but
 #: nothing in this suite dispatches to a provider — every assertion is about
@@ -106,6 +123,32 @@ class TestDefaultConstructionStaysWorking:
                 f"Warning did not name {subsystem!r}. An operator cannot act "
                 f"on a warning that does not say which feature is missing."
             )
+
+    def test_warning_fires_once_per_process_not_per_construction(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`create_observability` runs on EVERY agent construction.
+
+        Warning per call turns a real signal into log spam, and a spammed
+        warning is a silenced one — operators filter it, which is how the
+        loud-warning remedy quietly becomes no remedy at all. An instance
+        flag cannot fix this: `SmartDefaultsManager` is constructed per
+        agent, so every instance would warn once and the spam would remain.
+        """
+        config = AgentConfig(model=MODEL)
+
+        with caplog.at_level(logging.WARNING):
+            for _ in range(5):
+                SmartDefaultsManager().create_observability(config)
+
+        hits = [
+            r for r in caplog.records if "not implemented" in r.getMessage().lower()
+        ]
+        assert len(hits) == 1, (
+            f"Expected exactly ONE unimplemented-subsystem warning across 5 "
+            f"agent constructions, got {len(hits)}. Per-construction warning "
+            f"is log spam on the hot path."
+        )
 
 
 class TestExplicitOptInFailsLoudly:

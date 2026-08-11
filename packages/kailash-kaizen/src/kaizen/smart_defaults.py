@@ -12,6 +12,7 @@ Part of ADR-020: Unified Agent API Architecture (Layer 1: Zero-Config)
 """
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 from kaizen.agent_config import AgentConfig
@@ -31,6 +32,31 @@ _UNIMPLEMENTED_OBSERVABILITY = (
     ("enable_logging", "logging", "structured JSON logging"),
     ("enable_audit", "audit", "compliance audit trails"),
 )
+
+
+@lru_cache(maxsize=None)
+def _warn_observability_unimplemented(subsystems: tuple[str, ...]) -> None:
+    """Emit the unimplemented-subsystem warning ONCE per process.
+
+    ``create_observability`` runs on EVERY agent construction, so warning per
+    call turns a real signal into log spam — and a spammed warning is a
+    silenced one: operators filter it, and the loud-warning remedy quietly
+    becomes no remedy at all.
+
+    ``lru_cache`` rather than an instance flag, because
+    ``SmartDefaultsManager`` is constructed per agent — an instance flag would
+    warn once per instance and leave the spam intact. Keyed on the subsystem
+    tuple so a genuinely different set still gets its own warning.
+
+    Tests reset it with ``_warn_observability_unimplemented.cache_clear()``.
+    """
+    logger.warning(
+        "Observability subsystems are NOT IMPLEMENTED and no hooks were "
+        "registered: %s. These config flags are advertised but install "
+        "nothing (tracking: #2084). Set them to False to silence this, or "
+        "True to fail loudly instead.",
+        ", ".join(subsystems),
+    )
 
 
 # =============================================================================
@@ -246,13 +272,8 @@ class SmartDefaultsManager:
             if getattr(config, flag, None) is None
         ]
         if unset:
-            self.logger.warning(
-                "Observability subsystems are NOT IMPLEMENTED and no hooks "
-                "were registered: %s. These config flags are advertised but "
-                "install nothing (tracking: #2084). Set them to False to "
-                "silence this, or True to fail loudly instead.",
-                ", ".join(unset),
-            )
+            # ONCE per process, not once per construction — see the helper.
+            _warn_observability_unimplemented(tuple(unset))
 
         self.logger.info("Observability disabled")
         return None
