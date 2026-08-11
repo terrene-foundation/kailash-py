@@ -111,6 +111,42 @@ def backend():
         thread.join(timeout=5)
 
 
+class _CredentialRecordingHandler(BaseHTTPRequestHandler):
+    """Real backend that records the credential headers it was handed."""
+
+    received: dict = {}
+
+    def do_GET(self):
+        type(self).received = {
+            "authorization": self.headers.get("Authorization"),
+            "cookie": self.headers.get("Cookie"),
+            "x-api-key": self.headers.get("X-API-Key"),
+        }
+        payload = json.dumps({"ok": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
+@pytest.fixture
+def recording_backend():
+    _CredentialRecordingHandler.received = {}
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _CredentialRecordingHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 @pytest.fixture
 def auth_manager():
     """The SHIPPED auth manager, minting real HS256 tokens."""
@@ -672,3 +708,64 @@ def test_proxy_handler_exposes_no_query_parameters(server, backend):
     assert all(
         p.default is inspect.Parameter.empty for p in params.values()
     ), "a defaulted handler parameter is a caller-writable query parameter"
+
+
+# ---------------------------------------------------------------------------
+# Credential forwarding on THIS surface
+# ---------------------------------------------------------------------------
+
+
+def test_credentials_are_stripped_by_default(server, recording_backend, auth_manager):
+    """The default MUST strip the caller's credentials before forwarding.
+
+    Driven end to end rather than asserted structurally: this branch decides
+    whether `Authorization` reaches the backend, so a name error or an
+    inverted condition here is a real disclosure. A backend that records what
+    it actually received is the only instrument that can tell the difference.
+    """
+    server.proxy_workflow(
+        name="internal", proxy_url=recording_backend, allowed_paths=["*"]
+    )
+    client = TestClient(server.app)
+    token = asyncio.run(_token(auth_manager))
+
+    response = client.get(
+        "/workflows/internal/data",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Cookie": "session=abc123",
+            "X-API-Key": "caller-api-key",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert _CredentialRecordingHandler.received["authorization"] is None
+    assert _CredentialRecordingHandler.received["cookie"] is None
+    assert _CredentialRecordingHandler.received["x-api-key"] is None
+
+
+def test_forward_credentials_opt_in_reaches_the_backend(
+    server, recording_backend, auth_manager
+):
+    """#2025 noted that stripping unconditionally left the backend unable to
+    re-authorize. `forward_credentials=True` is the documented way to allow it.
+
+    This is the opposite polarity of the test above: without it, a branch that
+    stripped in BOTH cases would pass the default test and the opt-in would be
+    silently dead.
+    """
+    token = asyncio.run(_token(auth_manager))
+    server.proxy_workflow(
+        name="internal",
+        proxy_url=recording_backend,
+        allowed_paths=["*"],
+        forward_credentials=True,
+    )
+    client = TestClient(server.app)
+
+    response = client.get(
+        "/workflows/internal/data", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert _CredentialRecordingHandler.received["authorization"] == f"Bearer {token}"
