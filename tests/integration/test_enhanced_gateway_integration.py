@@ -40,7 +40,12 @@ async def real_resource_registry():
 @pytest_asyncio.fixture
 async def gateway_with_resources(real_resource_registry):
     """Create gateway with real resources."""
-    secret_manager = SecretManager()
+    # An explicit key is required to store an encrypted secret (#2041). Earlier
+    # releases generated one here and continued, so anything this fixture wrote
+    # was unreadable by the next process.
+    secret_manager = SecretManager(
+        encryption_key="integration-test-passphrase-at-least-32-chars"
+    )
 
     # Store test credentials matching Docker setup
     await secret_manager.store_secret(

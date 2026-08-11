@@ -2,9 +2,16 @@
 
 This module provides credential management with multiple backend options for
 storing secrets. Only :class:`FileSecretBackend` encrypts what it stores;
-:class:`EnvironmentSecretBackend` holds values in the process environment and
-:class:`SecretManager`'s own Fernet layer is applied by the caller, so read the
-backend you actually construct before assuming a secret is protected at rest.
+:class:`EnvironmentSecretBackend` holds values in the process environment, so
+read the backend you actually construct before assuming a secret is protected
+at rest.
+
+:class:`SecretManager` applies its own encryption layer on top of whichever
+backend it is given. That layer needs a key, and there is deliberately no
+default: a manager with nothing configured refuses to encrypt or decrypt rather
+than inventing a key. Both classes derive their per-secret keys through the
+same PBKDF2 helpers below, and both write the same self-describing envelope, so
+the iteration floor and the reference binding cannot drift apart between them.
 """
 
 import asyncio
@@ -80,6 +87,172 @@ class SecretRollbackError(SecretEncryptionError):
     pass
 
 
+#: Envelope format version written by both encrypting classes here.
+SECRET_ENVELOPE_VERSION = 1
+
+#: KDF identifier recorded in — and required by — the envelope.
+SECRET_ENVELOPE_KDF = "pbkdf2-sha256"
+
+#: PBKDF2 iteration count used for new envelopes. Matches
+#: ``kailash.trust.security.SecureKeyStorage``.
+SECRET_KDF_ITERATIONS = 100_000
+
+#: Floor accepted when READING an envelope. The iteration count is read back
+#: from the stored value, and anyone able to write there could otherwise hand
+#: us ``iterations: 1`` and turn every subsequent read into a cheap oracle for
+#: brute-forcing the master key.
+_MIN_KDF_ITERATIONS = 100_000
+
+#: Ceiling accepted when reading, so the same writer cannot turn a read into an
+#: unbounded CPU burn.
+_MAX_KDF_ITERATIONS = 10_000_000
+
+#: Salt length in bytes. Fresh per stored secret, persisted in the envelope.
+_SALT_BYTES = 32
+
+#: Shortest accepted key material, matching ``trust.auth.jwt.JWTConfig`` and
+#: :class:`FileSecretBackend`. 100k PBKDF2 iterations do not rescue a
+#: four-character passphrase, so the floor is enforced rather than advertised.
+MIN_SECRET_KEY_LENGTH = 32
+
+
+def _derive_fernet(key_material: bytes, salt: bytes, iterations: int) -> Fernet:
+    """Stretch ``key_material`` into a Fernet key for one envelope.
+
+    Shared by :class:`SecretManager` and :class:`FileSecretBackend` rather than
+    copied into each: the derivation and the iteration floor that guards it are
+    one contract, and two copies of a security parameter drift.
+    """
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=iterations,
+    )
+    return Fernet(base64.urlsafe_b64encode(kdf.derive(key_material)))
+
+
+def _build_envelope(key_material: bytes, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Seal ``payload`` under a freshly salted key.
+
+    The salt is generated per call and travels in the envelope beside the
+    ciphertext. Salts are not secret, and persisting it is the whole reason the
+    store survives a restart — a salt held only in memory would reproduce the
+    defect this envelope exists to prevent, one layer down.
+
+    ``json.dumps`` rather than ``str()``: it round-trips dicts and strings back
+    to their original type, so a read returns what was handed in.
+    """
+    salt = os.urandom(_SALT_BYTES)
+    token = _derive_fernet(key_material, salt, SECRET_KDF_ITERATIONS).encrypt(
+        json.dumps(payload).encode()
+    )
+    return {
+        "v": SECRET_ENVELOPE_VERSION,
+        "kdf": SECRET_ENVELOPE_KDF,
+        "iterations": SECRET_KDF_ITERATIONS,
+        "salt": base64.b64encode(salt).decode(),
+        "ciphertext": token.decode(),
+    }
+
+
+def _open_envelope_payload(
+    key_material: bytes,
+    reference: str,
+    envelope: Dict[str, Any],
+    *,
+    key_source: str,
+) -> Dict[str, Any]:
+    """Validate and decrypt an envelope, returning its whole payload.
+
+    The whole payload, not just the secret: :class:`FileSecretBackend` reads
+    the version and timestamp underneath the ciphertext for its rollback check.
+
+    Every field is validated before it is used, because each one is chosen by
+    whoever can write the stored value. There is no plaintext fallback on any
+    branch — one would let anyone who can write into the store replace an
+    envelope with content of their choosing and have it honoured.
+    """
+    version = envelope.get("v")
+    if version != SECRET_ENVELOPE_VERSION:
+        raise SecretEncryptionError(
+            f"Secret {reference} uses envelope version {version!r}, "
+            f"expected {SECRET_ENVELOPE_VERSION}."
+        )
+
+    kdf_name = envelope.get("kdf")
+    if kdf_name != SECRET_ENVELOPE_KDF:
+        raise SecretEncryptionError(
+            f"Secret {reference} names KDF {kdf_name!r}, expected "
+            f"{SECRET_ENVELOPE_KDF!r}."
+        )
+
+    iterations = envelope.get("iterations")
+    if (
+        not isinstance(iterations, int)
+        or isinstance(iterations, bool)
+        or not _MIN_KDF_ITERATIONS <= iterations <= _MAX_KDF_ITERATIONS
+    ):
+        raise SecretEncryptionError(
+            f"Secret {reference} declares an unacceptable iteration count "
+            f"{iterations!r}; refusing to derive a key weaker than "
+            f"{_MIN_KDF_ITERATIONS}."
+        )
+
+    try:
+        salt = base64.b64decode(envelope["salt"], validate=True)
+    except (KeyError, TypeError, ValueError, binascii.Error) as e:
+        raise SecretEncryptionError(
+            f"Secret {reference} has a missing or malformed salt."
+        ) from e
+    if len(salt) < 16:
+        raise SecretEncryptionError(
+            f"Secret {reference} has a {len(salt)}-byte salt; refusing to "
+            f"derive a key from fewer than 16."
+        )
+
+    ciphertext = envelope["ciphertext"]
+    if not isinstance(ciphertext, str):
+        raise SecretEncryptionError(f"Secret {reference} has a non-string ciphertext.")
+
+    try:
+        plaintext = _derive_fernet(key_material, salt, iterations).decrypt(
+            ciphertext.encode()
+        )
+    except InvalidToken as e:
+        # Covers both a wrong key and a tampered value: Fernet authenticates
+        # its ciphertext, and neither case may return data.
+        raise SecretEncryptionError(
+            f"Secret {reference} did not decrypt. The key in {key_source} does "
+            f"not match the one it was stored under, or the stored value has "
+            f"been modified."
+        ) from e
+
+    payload = json.loads(plaintext.decode())
+    if not isinstance(payload, dict) or "ref" not in payload:
+        raise SecretEncryptionError(
+            f"Secret {reference} decrypted to an unbound payload. It was "
+            f"written by a build that did not bind the ciphertext to its "
+            f"reference; rotate the secret and store it again."
+        )
+    if "secret" not in payload:
+        raise SecretEncryptionError(
+            f"Secret {reference} decrypted to a payload with no value."
+        )
+    # The binding check. Fernet proves the bytes were written by a holder of
+    # this key -- NOT that they were written for THIS reference. Without this,
+    # copying one envelope over another substitutes the secret while every
+    # integrity check still passes. It does NOT close rollback: a restored
+    # backup carries the CORRECT ref, which is what the version check is for.
+    if payload["ref"] != reference:
+        raise SecretEncryptionError(
+            f"Secret {reference} holds an envelope written for a different "
+            f"reference. The stored value has been substituted or restored over."
+        )
+
+    return payload
+
+
 class SecretBackend(ABC):
     """Abstract backend for secret storage."""
 
@@ -101,36 +274,270 @@ class SecretBackend(ABC):
         pass
 
 
+#: Environment variable holding the manager's key material.
+SECRET_MANAGER_KEY_ENV = "KAILASH_ENCRYPTION_KEY"
+
+#: Set truthy to promote the missing-key failure from first use to
+#: construction. The two default constructions of :class:`SecretManager` live
+#: inside other classes' ``__init__`` bodies, so an operator who wants start-up
+#: failure has no code seam to pass ``require_encryption=`` through.
+SECRET_MANAGER_STRICT_ENV = "KAILASH_REQUIRE_SECRET_ENCRYPTION"
+
+#: Prefix written by kailash <= 2.63: a bare Fernet token under a RAW key.
+_LEGACY_ENCRYPTED_PREFIX = "encrypted:"
+
+#: Prefix written now: base64 of a self-describing envelope carrying its own
+#: salt. Distinct from the legacy prefix rather than a superset of it, so the
+#: read path dispatches on an exact match instead of guessing at a parse.
+_ENVELOPE_ENCRYPTED_PREFIX = "encrypted-v2:"
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+@lru_cache(maxsize=1)
+def _warn_secret_encryption_unconfigured() -> None:
+    """Announce, once per process, that the manager cannot encrypt.
+
+    ERROR rather than WARNING, and once rather than per instance. The message
+    it replaces was ``logger.warning("Using default encryption key - not secure
+    for production!")``, which named neither the variable that fixes it nor the
+    consequence of leaving it unset — and a per-instance WARNING from a library
+    is the kind of line an operator learns to filter out.
+
+    Loud even though every encrypting call also raises: a service may construct
+    this at start-up and not reach an encrypting call until much later, and the
+    operator should learn at boot which protection is off.
+    """
+    logger.error(
+        "Secret encryption is NOT configured: %s is unset and no "
+        "encryption_key= was passed. This SecretManager cannot encrypt or "
+        "decrypt; store_secret(..., encrypt=True) and reads of "
+        "already-encrypted values will raise SecretEncryptionError rather "
+        "than proceed. Releases up to kailash 2.63 generated a throwaway key "
+        "here and continued, which made every secret written by the process "
+        "unreadable after a restart. Set %s to a passphrase of at least %d "
+        "characters (it is stretched with PBKDF2-HMAC-SHA256), or pass "
+        "encryption_key=. Set %s=1 to make this a start-up failure instead of "
+        "a log line.",
+        SECRET_MANAGER_KEY_ENV,
+        SECRET_MANAGER_KEY_ENV,
+        MIN_SECRET_KEY_LENGTH,
+        SECRET_MANAGER_STRICT_ENV,
+    )
+
+
+def _fernet_for_raw_key(key_material: bytes) -> Optional[Fernet]:
+    """Return a Fernet if ``key_material`` IS itself a raw Fernet key.
+
+    Only values written by kailash <= 2.63 need this. Those were encrypted
+    directly under whatever ``KAILASH_ENCRYPTION_KEY`` held, and the only such
+    values that were ever recoverable are the ones whose key was a valid Fernet
+    key — anything else raised inside ``Fernet()`` at construction, so no
+    working deployment can have stored under one.
+    """
+    try:
+        return Fernet(key_material)
+    except (ValueError, TypeError, binascii.Error):
+        return None
+
+
 class SecretManager:
-    """Manages secrets for resource credentials."""
+    """Manages secrets for resource credentials, encrypting them in transit.
+
+    Values handed to :meth:`store_secret` are sealed into an envelope before
+    they reach the backend, so a backend that stores what it is given verbatim
+    (``EnvironmentSecretBackend``, or any custom one) never sees the plaintext.
+
+    **A key is required to encrypt, and there is no default.** With neither
+    ``encryption_key=`` nor ``KAILASH_ENCRYPTION_KEY`` set, this class refuses
+    to encrypt or decrypt and says so at construction. It does NOT generate one:
+    releases up to kailash 2.63 did exactly that, at WARNING level, which made
+    every secret the process wrote unrecoverable the moment it restarted.
+
+    The key is a passphrase, not a Fernet key. It is stretched with
+    PBKDF2-HMAC-SHA256 over a salt generated per stored secret and persisted in
+    the envelope, so any string of at least
+    :data:`MIN_SECRET_KEY_LENGTH` characters works and the store survives a
+    restart. A value that happens to be a valid Fernet key is also accepted, and
+    is additionally used to read values written by earlier releases.
+
+    Where the failure surfaces
+    --------------------------
+
+    Construction succeeds without a key; the error is raised by the operations
+    that would otherwise make a promise they cannot keep. This is deliberate:
+    ``SecretManager()`` is the default construction inside
+    ``EnhancedDurableAPIGateway`` and ``EnterpriseWorkflowServer``, and a
+    constructor that raised would stop those servers from starting for every
+    operator who never encrypts a secret. Nothing is silently downgraded --
+    every encrypting and decrypting path raises, and construction logs a
+    one-time ERROR naming the variable. Pass ``require_encryption=True`` (or set
+    ``KAILASH_REQUIRE_SECRET_ENCRYPTION=1``) to demand the start-up failure.
+
+    Args:
+        backend: Where sealed values are stored. Defaults to
+            :class:`EnvironmentSecretBackend`.
+        encryption_key: Passphrase to derive from, at least
+            :data:`MIN_SECRET_KEY_LENGTH` characters. Prefer the environment
+            variable; pass this only when the key comes from another vault.
+        cache_ttl: How long a decrypted secret is held in memory, in seconds.
+        require_encryption: Raise at construction, rather than at first use,
+            when no key is configured. Defaults to the value of
+            ``KAILASH_REQUIRE_SECRET_ENCRYPTION``.
+
+    Raises:
+        SecretEncryptionError: If key material is configured but shorter than
+            :data:`MIN_SECRET_KEY_LENGTH`, or if none is configured and
+            ``require_encryption`` is set.
+    """
+
+    #: Shortest accepted key material. Module-level constant, so this floor and
+    #: :class:`FileSecretBackend`'s cannot drift apart.
+    MIN_ENCRYPTION_KEY_LENGTH = MIN_SECRET_KEY_LENGTH
 
     def __init__(
         self,
         backend: Optional[SecretBackend] = None,
         encryption_key: Optional[str] = None,
         cache_ttl: int = 300,  # 5 minutes
+        *,
+        require_encryption: Optional[bool] = None,
     ):
         self.backend = backend or EnvironmentSecretBackend()
         self._cache: Dict[str, Tuple[Any, datetime]] = {}
         self._ttl = timedelta(seconds=cache_ttl)
         self._lock = asyncio.Lock()
 
-        # Set up encryption
-        if encryption_key:
-            self._cipher = Fernet(encryption_key.encode())
-        else:
-            # Generate key from environment or use default
-            key = os.environ.get("KAILASH_ENCRYPTION_KEY")
-            if not key:
-                # Warning: This is not secure for production!
-                logger.warning(
-                    "Using default encryption key - not secure for production!"
+        if require_encryption is None:
+            require_encryption = (
+                os.environ.get(SECRET_MANAGER_STRICT_ENV, "").strip().lower() in _TRUTHY
+            )
+        self.require_encryption = require_encryption
+
+        material = (
+            encryption_key
+            if encryption_key is not None
+            else os.environ.get(SECRET_MANAGER_KEY_ENV)
+        )
+        self._key_source = (
+            "the encryption_key argument"
+            if encryption_key is not None
+            else f"the {SECRET_MANAGER_KEY_ENV} environment variable"
+        )
+
+        if not material:
+            if require_encryption:
+                raise SecretEncryptionError(
+                    f"Secret encryption is required but not configured. Set "
+                    f"the {SECRET_MANAGER_KEY_ENV} environment variable to a "
+                    f"passphrase of at least {self.MIN_ENCRYPTION_KEY_LENGTH} "
+                    f"characters, or pass encryption_key= explicitly. "
+                    f"Refusing to construct a manager that cannot encrypt."
                 )
-                # Generate a proper Fernet key
-                key = Fernet.generate_key()
-            elif isinstance(key, str):
-                key = key.encode()
-            self._cipher = Fernet(key)
+            self._key_material: Optional[bytes] = None
+            self._legacy_cipher: Optional[Fernet] = None
+            _warn_secret_encryption_unconfigured()
+            return
+
+        if len(material) < self.MIN_ENCRYPTION_KEY_LENGTH:
+            # The length is named, the key is not: an exception message can
+            # reach a log or a crash report.
+            raise SecretEncryptionError(
+                f"The encryption key from {self._key_source} is "
+                f"{len(material)} characters; at least "
+                f"{self.MIN_ENCRYPTION_KEY_LENGTH} are required. A passphrase "
+                f"that brief is brute-forceable regardless of the KDF's "
+                f"iteration count."
+            )
+
+        self._key_material = (
+            material.encode() if isinstance(material, str) else material
+        )
+        self._legacy_cipher = _fernet_for_raw_key(self._key_material)
+
+    def _key_or_raise(self) -> bytes:
+        """Return the key material, or refuse the operation.
+
+        This is the fail-closed boundary. Every path that would encrypt or
+        decrypt goes through it, so there is no branch on which an unconfigured
+        manager quietly does something weaker instead.
+        """
+        if self._key_material is None:
+            raise SecretEncryptionError(
+                f"Secret encryption is not configured, so this secret cannot "
+                f"be encrypted or decrypted. Set the "
+                f"{SECRET_MANAGER_KEY_ENV} environment variable to a "
+                f"passphrase of at least {self.MIN_ENCRYPTION_KEY_LENGTH} "
+                f"characters, or pass encryption_key=. Releases up to kailash "
+                f"2.63 generated a throwaway key at this point and continued, "
+                f"which made every secret unreadable after a restart; that "
+                f"fallback has been removed rather than made quieter."
+            )
+        return self._key_material
+
+    @staticmethod
+    def _is_encrypted(value: str) -> bool:
+        """Whether ``value`` carries either wire format's marker."""
+        return value.startswith(_ENVELOPE_ENCRYPTED_PREFIX) or value.startswith(
+            _LEGACY_ENCRYPTED_PREFIX
+        )
+
+    def _encrypt(self, reference: str, secret: Any) -> str:
+        """Seal ``secret`` into a self-describing, reference-bound token.
+
+        The envelope is base64'd so the result is a single opaque string with
+        no structural characters: backends are free to JSON-parse, quote, or
+        escape what they are handed, and none of that can corrupt it.
+        """
+        envelope = _build_envelope(
+            self._key_or_raise(), {"ref": reference, "secret": secret}
+        )
+        packed = base64.urlsafe_b64encode(json.dumps(envelope).encode()).decode()
+        return f"{_ENVELOPE_ENCRYPTED_PREFIX}{packed}"
+
+    def _decrypt(self, reference: str, value: str) -> Any:
+        """Open a value written by either wire format."""
+        key_material = self._key_or_raise()
+
+        if value.startswith(_ENVELOPE_ENCRYPTED_PREFIX):
+            raw = value[len(_ENVELOPE_ENCRYPTED_PREFIX) :]
+            try:
+                envelope = json.loads(base64.urlsafe_b64decode(raw))
+            except (ValueError, TypeError, binascii.Error) as e:
+                raise SecretEncryptionError(
+                    f"Secret {reference} carries a malformed encrypted "
+                    f"envelope and is deliberately not read as-is."
+                ) from e
+            if not isinstance(envelope, dict) or "ciphertext" not in envelope:
+                raise SecretEncryptionError(
+                    f"Secret {reference} carries a malformed encrypted "
+                    f"envelope and is deliberately not read as-is."
+                )
+            return _open_envelope_payload(
+                key_material, reference, envelope, key_source=self._key_source
+            )["secret"]
+
+        token = value[len(_LEGACY_ENCRYPTED_PREFIX) :]
+        if self._legacy_cipher is None:
+            raise SecretEncryptionError(
+                f"Secret {reference} was written by kailash <= 2.63 directly "
+                f"under a raw Fernet key, but {self._key_source} holds a "
+                f"passphrase, which cannot open it. Set that original Fernet "
+                f"key to read the value once and store it again, or rotate "
+                f"the credential. If it was written by a manager that "
+                f"generated its own key, it is not recoverable by anyone."
+            )
+        try:
+            plaintext = self._legacy_cipher.decrypt(token.encode())
+        except InvalidToken as e:
+            raise SecretEncryptionError(
+                f"Secret {reference} did not decrypt under {self._key_source}. "
+                f"It was written by kailash <= 2.63 under a different key, or "
+                f"has been modified. If the key that wrote it was generated "
+                f"automatically by that release, it existed only in that "
+                f"process and the value is not recoverable."
+            ) from e
+        return json.loads(plaintext.decode())
 
     async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Get secret by reference."""
@@ -147,18 +554,16 @@ class SecretManager:
         # Fetch from backend
         encrypted_secret = await self.backend.get_secret(reference)
 
-        # Decrypt if needed
-        if isinstance(encrypted_secret, str) and encrypted_secret.startswith(
-            "encrypted:"
-        ):
-            decrypted = self._cipher.decrypt(encrypted_secret[10:].encode()).decode()
-            secret = json.loads(decrypted)
+        # Decrypt if needed. A value with no marker was never sealed by this
+        # class and is returned as-is; only a marked value asserts protection,
+        # and only that path needs a key.
+        if isinstance(encrypted_secret, str) and self._is_encrypted(encrypted_secret):
+            secret = self._decrypt(reference, encrypted_secret)
         elif isinstance(encrypted_secret, dict) and "value" in encrypted_secret:
             # Handle case where backend returns {"value": "encrypted:..."}
             value = encrypted_secret["value"]
-            if isinstance(value, str) and value.startswith("encrypted:"):
-                decrypted = self._cipher.decrypt(value[10:].encode()).decode()
-                secret = json.loads(decrypted)
+            if isinstance(value, str) and self._is_encrypted(value):
+                secret = self._decrypt(reference, value)
             else:
                 secret = encrypted_secret
         else:
@@ -173,14 +578,18 @@ class SecretManager:
     async def store_secret(
         self, reference: str, secret: Dict[str, Any], encrypt: bool = True
     ) -> None:
-        """Store a secret."""
+        """Store a secret, sealed by default.
+
+        Raises:
+            SecretEncryptionError: ``encrypt`` is set and no key is configured.
+                The write is refused rather than performed under a generated
+                key, which would leave a value nobody can read after a restart.
+        """
         if encrypt:
-            # Encrypt the secret
-            secret_json = json.dumps(secret)
-            encrypted = self._cipher.encrypt(secret_json.encode())
-            encrypted_value = f"encrypted:{encrypted.decode()}"
-            await self.backend.store_secret(reference, encrypted_value)
+            await self.backend.store_secret(reference, self._encrypt(reference, secret))
         else:
+            # An explicit caller decision, not a fallback: nothing is being
+            # promised here, so nothing is being silently downgraded.
             await self.backend.store_secret(reference, secret)
 
         # Clear from cache
@@ -240,29 +649,6 @@ class EnvironmentSecretBackend(SecretBackend):
         if env_var in os.environ:
             del os.environ[env_var]
 
-
-#: Envelope format version written by :class:`FileSecretBackend`.
-SECRET_ENVELOPE_VERSION = 1
-
-#: KDF identifier recorded in — and required by — the envelope.
-SECRET_ENVELOPE_KDF = "pbkdf2-sha256"
-
-#: PBKDF2 iteration count used for new envelopes. Matches
-#: ``kailash.trust.security.SecureKeyStorage``.
-SECRET_KDF_ITERATIONS = 100_000
-
-#: Floor accepted when READING an envelope. The iteration count is read back
-#: from the file, and anyone able to write into the secrets directory could
-#: otherwise hand us ``iterations: 1`` and turn every subsequent read into a
-#: cheap oracle for brute-forcing the master key.
-_MIN_KDF_ITERATIONS = 100_000
-
-#: Ceiling accepted when reading, so the same writer cannot turn a read into an
-#: unbounded CPU burn.
-_MAX_KDF_ITERATIONS = 10_000_000
-
-#: Salt length in bytes. Fresh per stored secret, persisted in the envelope.
-_SALT_BYTES = 32
 
 #: Filename of the high-water-mark manifest. Leading dot, so it can never
 #: collide with a secret: ``validate_id`` restricts references to
@@ -415,8 +801,10 @@ class FileSecretBackend(SecretBackend):
         those secrets as disclosed, rotate them, and store them again.
     """
 
-    #: Minimum master-key length, matching ``trust.auth.jwt.JWTConfig``.
-    MIN_MASTER_KEY_LENGTH = 32
+    #: Minimum master-key length, matching ``trust.auth.jwt.JWTConfig``. Shared
+    #: with :class:`SecretManager` through the module constant so the two
+    #: floors cannot drift apart.
+    MIN_MASTER_KEY_LENGTH = MIN_SECRET_KEY_LENGTH
 
     def __init__(
         self,
@@ -527,16 +915,6 @@ class FileSecretBackend(SecretBackend):
             self._manifest_path, self._seal(_VERSION_MANIFEST_REF, marks, version=0)
         )
 
-    def _cipher_for(self, salt: bytes, iterations: int) -> Fernet:
-        """Derive the per-file Fernet key from the master key and salt."""
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=iterations,
-        )
-        return Fernet(base64.urlsafe_b64encode(kdf.derive(self._master_key)))
-
     async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Decrypt and return the secret stored under ``reference``.
 
@@ -627,112 +1005,33 @@ class FileSecretBackend(SecretBackend):
                 f"deliberately NOT read as-is."
             )
 
-        version = envelope.get("v")
-        if version != SECRET_ENVELOPE_VERSION:
-            raise SecretEncryptionError(
-                f"Secret {reference} uses envelope version {version!r}, "
-                f"expected {SECRET_ENVELOPE_VERSION}."
-            )
-
-        kdf_name = envelope.get("kdf")
-        if kdf_name != SECRET_ENVELOPE_KDF:
-            raise SecretEncryptionError(
-                f"Secret {reference} names KDF {kdf_name!r}, expected "
-                f"{SECRET_ENVELOPE_KDF!r}."
-            )
-
-        iterations = envelope.get("iterations")
-        if (
-            not isinstance(iterations, int)
-            or isinstance(iterations, bool)
-            or not _MIN_KDF_ITERATIONS <= iterations <= _MAX_KDF_ITERATIONS
-        ):
-            raise SecretEncryptionError(
-                f"Secret {reference} declares an unacceptable iteration count "
-                f"{iterations!r}; refusing to derive a key weaker than "
-                f"{_MIN_KDF_ITERATIONS}."
-            )
-
-        try:
-            salt = base64.b64decode(envelope["salt"], validate=True)
-        except (KeyError, TypeError, ValueError, binascii.Error) as e:
-            raise SecretEncryptionError(
-                f"Secret {reference} has a missing or malformed salt."
-            ) from e
-        if len(salt) < 16:
-            raise SecretEncryptionError(
-                f"Secret {reference} has a {len(salt)}-byte salt; refusing to "
-                f"derive a key from fewer than 16."
-            )
-
-        ciphertext = envelope["ciphertext"]
-        if not isinstance(ciphertext, str):
-            raise SecretEncryptionError(
-                f"Secret {reference} has a non-string ciphertext."
-            )
-
-        try:
-            plaintext = self._cipher_for(salt, iterations).decrypt(ciphertext.encode())
-        except InvalidToken as e:
-            # Covers both a wrong master key and a tampered file: Fernet
-            # authenticates the ciphertext, and neither case may return data.
-            raise SecretEncryptionError(
-                f"Secret {reference} did not decrypt. The master key in "
-                f"{self.master_key_source} does not match the one it was "
-                f"stored under, or the file has been modified."
-            ) from e
-
-        payload = json.loads(plaintext.decode())
-        if not isinstance(payload, dict) or "ref" not in payload:
-            raise SecretEncryptionError(
-                f"Secret {reference} decrypted to an unbound payload. It was "
-                f"written by a build that did not bind the ciphertext to its "
-                f"reference; rotate the secret and store it again."
-            )
-        if "secret" not in payload:
-            raise SecretEncryptionError(
-                f"Secret {reference} decrypted to a payload with no value."
-            )
-        # The binding check. Fernet proves the bytes were written by a holder
-        # of this master key -- NOT that they were written for THIS reference.
-        # Without this, copying one envelope over another substitutes the
-        # secret while every integrity check still passes. It does NOT close
-        # rollback: a restored backup carries the CORRECT ref, which is what
-        # _reject_if_rolled_back exists for.
-        if payload["ref"] != reference:
-            raise SecretEncryptionError(
-                f"Secret {reference} holds an envelope written for a different "
-                f"reference. The file has been substituted or restored over."
-            )
-
-        return payload
+        # Everything past the cleartext check is the shared envelope contract,
+        # and is shared in code rather than restated: the iteration floor and
+        # the reference binding must hold identically for this backend and for
+        # SecretManager's own layer.
+        return _open_envelope_payload(
+            self._master_key,
+            reference,
+            envelope,
+            key_source=self.master_key_source,
+        )
 
     def _seal(self, reference: str, secret: Any, version: int) -> Dict[str, Any]:
         """Build an encrypted envelope binding ``secret`` to ref and version.
 
         The reference and the version travel INSIDE the ciphertext: Fernet has
         no associated-data channel, so anything left outside it is editable by
-        whoever can write the file. ``json.dumps`` rather than ``str()`` — it
-        round-trips dicts and strings back to their original type, so
-        ``get_secret`` returns what was handed in.
+        whoever can write the file.
         """
-        salt = os.urandom(_SALT_BYTES)
-        payload = {
-            "ref": reference,
-            "version": version,
-            "stored_at": time.time(),
-            "secret": secret,
-        }
-        token = self._cipher_for(salt, SECRET_KDF_ITERATIONS).encrypt(
-            json.dumps(payload).encode()
+        return _build_envelope(
+            self._master_key,
+            {
+                "ref": reference,
+                "version": version,
+                "stored_at": time.time(),
+                "secret": secret,
+            },
         )
-        return {
-            "v": SECRET_ENVELOPE_VERSION,
-            "kdf": SECRET_ENVELOPE_KDF,
-            "iterations": SECRET_KDF_ITERATIONS,
-            "salt": base64.b64encode(salt).decode(),
-            "ciphertext": token.decode(),
-        }
 
     def _next_version(self, reference: str) -> int:
         """One past the highest version seen for ``reference``.

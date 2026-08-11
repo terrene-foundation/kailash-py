@@ -38,7 +38,12 @@ def temp_workspace(tmp_path):
 async def production_gateway():
     """Create production-like gateway setup."""
     registry = ResourceRegistry()
-    secret_manager = SecretManager()
+    # Production-like means the key is configured explicitly: since #2041 a
+    # manager with none refuses to encrypt rather than inventing one that dies
+    # with the process.
+    secret_manager = SecretManager(
+        encryption_key="e2e-production-like-passphrase-at-least-32"
+    )
 
     # Store production-like secrets
     await secret_manager.store_secret(
