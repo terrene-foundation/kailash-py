@@ -1,3 +1,75 @@
+# ═══ UPDATE 16 (FINAL) — main `2210076ff` ═══
+
+**MERGED THIS SESSION (9):** #2061 #2062 #2071 #2077 **#2064** (live SSRF) **#2066** (OAuth
+login was dead) #2080 #2082 **#2063** (#2041 CLOSED — 2nd CRITICAL down).
+
+**STILL OPEN:** #2090 (round-2 CORS/C1 findings) · #2068 (one-line `framework.py:1397` guard) ·
+#2073 (**BREAKING** — awaiting co-owner) · #2031 (draft, pre-existing gating questions).
+
+## ⚠ A RUN CAN REPORT `success` WHILE ONE OF ITS JOBS NEVER COMPLETED
+
+On #2063's head, `Test DataFlow Unit Suite (Tier 1)` sat `in_progress` for 38 minutes while:
+
+    RUN status=completed conclusion=success
+      in_progress/-   Test DataFlow Unit Suite (Tier 1)     <-- never resolved
+
+**GitHub computed a run-level `success` with an unresolved job inside it.** Same
+non-discriminating class as Trap 9 (skipped≠passed), one layer up: the RUN conclusion is not
+evidence about a JOB. Discriminating check — the same job had `completed/success` on #2090 and
+#2068, so it was stuck on THIS head, not a systemic outage. `gh run rerun <run> --job <id>`
+produced a real `completed/success`. **Never read a run-level green as a per-job result.**
+
+## The key-generation class: THREE instances, three different generators
+
+| issue | site | signal on the unconfigured path |
+| --- | --- | --- |
+| #2041 (FIXED, #2063) | `SecretManager` | `logger.warning` |
+| #2083 | `JWTAuthManager` HS256 **signing secret** | `logger.info` |
+| **#2092** | kaizen `EncryptionProvider` AES-256-GCM | **nothing at all** |
+
+**#2041's own sibling sweep missed #2083 because it was scoped to the literal string
+`Fernet.generate_key`.** Each instance uses a different generator. **Sweep the SHAPE — a
+key/secret generator reachable from a default path — never the generator name.**
+
+## Filed this session (evidence-backed, do not lose)
+
+#2065(closed-invalid) #2067 #2069 #2070 #2072 #2074 #2075 #2076 #2078 #2079 #2081 #2083 #2084
+#2085 #2086 #2087 #2088 #2089 #2092.
+
+Highest-value: **#2072** (anonymous `POST /workflows/{name}/execute` on a default
+`create_gateway()`, proven under uvicorn — the workflow ACTUALLY RAN) · **#2074** (855 kaizen
+tests in NO pytest invocation) · **#2084** (four advertised observability subsystems install
+nothing; `rich_output.py` printed Jaeger/Prometheus endpoints and an audit path that never
+existed) · **#2088** (sink-level log sanitizing — a SWEEP found 2 sites a manual enumeration
+missed, inside one branch under review).
+
+## USER DECISIONS TAKEN
+
+1. **#2002 gate-every-PR** — approved, then the premise was REFUTED on the runner (CI cannot
+   run the suite to completion). Re-surfaced; user chose **land verified value, gate after the
+   leak**. #2002 left OPEN, diagnosed-not-fixed.
+2. **#2038 Tier-2 gates** — AC#1/2/3 met via loud annotation; "gates a merge" NOT met, blocked
+   on #2078.
+3. **#2025 fail-closed `require_auth=True` server-wide** — approved; **task #27, UNBLOCKED**,
+   deliberately not started (do not build a breaking change on a moving base).
+4. **#2073 (b′) tri-state** — orchestrator-decided, BREAKING, surfaced for ratification.
+
+## Orchestrator errors — all three caught by lanes that RAN the premise
+
+1. "observability flags default False" — all four are `= True`; the specified fix would have
+   made **every agent construction raise**.
+2. Briefed a `security-reviewer` to run `gh pr diff` — that agent type has **no Bash**.
+3. Specified an M5 repro using `risk_context={}` — the ONE input that cannot fire it.
+
+**A delegation brief is a durable artifact.** It directs a whole run and is acted on before
+anyone reads it critically. Verify its code-claims like a CHANGELOG entry.
+
+## Reviewer-dispatch reality
+
+**5 of 7 reviewer completions arrived as CONTENT-FREE idle notifications.** One ping recovered a
+full verdict twice; a second ping on the same agent recovered nothing → re-dispatch. Treating an
+empty idle as "clean" would have merged two security-critical PRs with **no security lens**.
+
 # ═══ UPDATE 15 (LATEST) — main `114d3c06e`: #2066 MERGED, OAuth login was DEAD ═══
 
 **#2060 closed.** `authenticate`/`authorize`/`logout`/`validate` complete end-to-end and
