@@ -201,6 +201,38 @@ QUIETER than the `warning` #2063 removes.
    passed against the broken tree. Passing pre-fix is a defect in the TEST.
 8. **A source grep cannot tell code from prose about code.** My own structural test grepped for
    the old idiom and matched the fix's explanatory comment. Parse the AST.
+9. **A DELEGATION BRIEF is a durable artifact — verify its code-claims before sending.**
+   ORCHESTRATOR ERROR, twice. (i) I briefed a lane that four observability flags "default to
+   unset/False"; they are all `= True` (`agent_config.py:117,123,129,135`) and
+   `create_observability` runs on EVERY agent construction — so the fix I specified would have
+   made **every agent construction raise**. (ii) I briefed a `security-reviewer` to run
+   `gh pr diff`; that agent type has **no Bash**, so it sat blocked. Both were unverified
+   assertions in a brief that directs a whole lane's run and gets acted on before anyone reads
+   it critically. **Two greps would have prevented (i).**
+   Corollary that saved it: a lane that STOPS on a false premise rather than implementing it
+   is worth more than one that complies. This happened twice with the same lane.
+
+## ⚠ #2084 — four advertised observability subsystems install NOTHING
+
+`enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit` — **all default `True`**,
+all silently dead. `observability/tracing.py` does not exist; the other three modules define
+zero `*Hook` classes; the handler methods (`start_trace`, `end_trace`, `record_start`,
+`record_end`, `log_start`, `log_end`) have **zero definitions anywhere in `src/`**, so a
+corrected import path would fail at the next line — a STUB, not a typo. `create_observability`
+always returns an empty `HookManager`; even its closing `logger.info("Enabled observability:…")`
+never fires. Runtime trace on the default path: `flags = True True True True`,
+`is_observability_enabled() = True`, **`hooks actually registered = 0`**.
+
+`is_observability_enabled()` ORs the four flags, so it returns `True` by default while nothing
+is registered — **it lies today**. "Enable compliance audit trails" recording nothing is the
+compliance-shaped failure and the strongest implement-rather-than-remove candidate.
+
+**DISPOSITION (b′), tri-state `Optional[bool] = None`:** `None` (default) → loud one-time WARN,
+behaviour byte-identical; `True` (explicit opt-in) → typed raise; `False` → silent. Literal
+fail-loud-on-True was REJECTED because default-`True` means it breaks every agent construction,
+not the opt-in population — which also kills the "callers who break are already broken"
+argument that justified fail-closed on #2025. Same tri-state mechanism as #2070's
+`redact_sensitive`. The assertion whose absence let this ship: **`len(hook_manager._hooks) > 0`**.
 
 ## PR queue at handoff
 
