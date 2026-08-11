@@ -483,3 +483,52 @@ def test_gateway_response_framing_headers_are_not_echoed(
     response = client.get("/internal/api/data", headers=_auth_headers())
     assert response.status_code == 200, response.text
     assert "content-encoding" not in {k.lower() for k in response.headers}
+
+
+def test_wildcard_cors_does_not_allow_credentials(backend):
+    """With `allow_origins=["*"]`, credentials MUST NOT be allowed.
+
+    Otherwise any web page can drive the now-authenticated proxy routes using
+    the victim's cookies -- cookie auth becomes cross-origin invocable.
+    WorkflowServer already guarded this; the gateway did not, which is the
+    same drift class as the credential-stripping and redirect-policy
+    divergences #2025 fixed.
+    """
+    gw = WorkflowAPIGateway(title="cors-wild", cors_origins=["*"])
+    try:
+        gw.proxy_workflow(
+            name="internal",
+            proxy_url=backend,
+            allowed_paths=["*"],
+            auth_dependency=_allow,
+        )
+        client = TestClient(gw.app)
+        response = client.get(
+            "/internal/x",
+            headers={**_auth_headers(), "Origin": "https://evil.example"},
+        )
+        assert (
+            response.headers.get("access-control-allow-credentials") is None
+        ), "wildcard CORS advertised credential support"
+    finally:
+        gw.close()
+
+
+def test_explicit_cors_origins_still_allow_credentials(backend):
+    """Control: the guard narrows the wildcard case only, it is not a blanket off."""
+    origin = "https://app.example"
+    gw = WorkflowAPIGateway(title="cors-explicit", cors_origins=[origin])
+    try:
+        gw.proxy_workflow(
+            name="internal",
+            proxy_url=backend,
+            allowed_paths=["*"],
+            auth_dependency=_allow,
+        )
+        client = TestClient(gw.app)
+        response = client.get(
+            "/internal/x", headers={**_auth_headers(), "Origin": origin}
+        )
+        assert response.headers.get("access-control-allow-credentials") == "true"
+    finally:
+        gw.close()
