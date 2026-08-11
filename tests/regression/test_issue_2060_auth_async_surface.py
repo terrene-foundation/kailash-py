@@ -938,3 +938,58 @@ def test_redact_mapping_bounds_recursion_depth():
     node["self"] = node
     rendered = json.dumps(redact_mapping(node))
     assert "REDACTED_DEPTH" in rendered
+
+
+def test_concurrent_session_creation_does_not_lose_counter_updates():
+    """A tripwire, NOT evidence that the lock is doing anything.
+
+    Stated plainly because it was measured: this test PASSES against the
+    pre-fix bare ``+=`` (3 runs out of 3, switch interval at 1e-6). Under
+    CPython's GIL a read-modify-write on a dict value is not reliably
+    interrupted at this load, so the test cannot currently produce a
+    falsifying result and must not be cited as proof that ``_bump_stat``
+    closed a demonstrated race.
+
+    It is kept as a regression tripwire: the guarantee should not rest on a
+    GIL implementation detail, and on a free-threaded build this becomes a
+    real instrument. ``test_active_session_counter_cannot_go_negative`` is the
+    one that does discriminate today -- it fails against the pre-fix
+    check-then-act.
+    """
+    import sys
+    import threading
+
+    node = SessionManagementNode(name="sess_race", max_sessions=10_000)
+    workers, per_worker = 8, 40
+    start = threading.Barrier(workers)
+
+    def _create():
+        start.wait()
+        for i in range(per_worker):
+            node.execute(action="create", user_id=f"u{i % 7}", ip_address="203.0.113.7")
+
+    original = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        threads = [threading.Thread(target=_create) for _ in range(workers)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        sys.setswitchinterval(original)
+
+    expected = workers * per_worker
+    assert node.session_stats["total_sessions_created"] == expected, (
+        "lost counter updates under concurrency: "
+        f"{node.session_stats['total_sessions_created']} of {expected}"
+    )
+
+
+def test_active_session_counter_cannot_go_negative():
+    """The decrement was a read-then-write: two threads could both observe
+    > 0 and drive the counter below zero."""
+    node = SessionManagementNode(name="sess_floor")
+    node._bump_stat("active_sessions", -1, floor=0)
+    node._bump_stat("active_sessions", -1, floor=0)
+    assert node.session_stats["active_sessions"] == 0

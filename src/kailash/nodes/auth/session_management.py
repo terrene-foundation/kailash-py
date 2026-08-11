@@ -176,6 +176,12 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # Thread locks for concurrent access
         self._sessions_lock = threading.Lock()
+        # Statistics are mutated from paths both inside and outside
+        # _sessions_lock, so they get their own lock rather than reusing that
+        # one -- _sessions_lock is non-reentrant and several of these sites run
+        # while it is already held. async_run offloads to a worker thread, so
+        # concurrent callers genuinely race here (issue #2060).
+        self._stats_lock = threading.Lock()
 
         # Session statistics
         self.session_stats = {
@@ -190,6 +196,19 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # Last cleanup time
         self._last_cleanup = datetime.now(UTC)
+
+    def _bump_stat(self, name: str, delta: int = 1, floor: int | None = None) -> None:
+        """Adjust a counter atomically.
+
+        ``floor`` makes the check-then-act at the decrement sites a single
+        critical section; reading the value and then decrementing it as two
+        steps let two threads both observe > 0 and drive the counter negative.
+        """
+        with self._stats_lock:
+            value = self.session_stats.get(name, 0) + delta
+            if floor is not None and value < floor:
+                value = floor
+            self.session_stats[name] = value
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Get node parameters for validation and documentation.
@@ -331,7 +350,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                     additional_factors=additional_factors,
                     auth_risk_score=risk_score,
                 )
-                self.session_stats["total_sessions_created"] += 1
+                self._bump_stat("total_sessions_created")
 
             elif action == "validate":
                 if not session_id:
@@ -421,7 +440,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             # Check concurrent session limit
             user_session_count = len(self.user_sessions.get(user_id, set()))
             if user_session_count >= self.max_sessions:
-                self.session_stats["concurrent_limit_hits"] += 1
+                self._bump_stat("concurrent_limit_hits")
 
                 # Terminate oldest session
                 oldest_session = self._get_oldest_user_session(user_id)
@@ -492,11 +511,11 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 device_fingerprint = device.fingerprint
                 if device_fingerprint not in self.device_sessions:
                     self.device_sessions[device_fingerprint] = set()
-                    self.session_stats["devices_tracked"] += 1
+                    self._bump_stat("devices_tracked")
                 self.device_sessions[device_fingerprint].add(session_id)
 
             # Update statistics
-            self.session_stats["active_sessions"] += 1
+            self._bump_stat("active_sessions")
 
             # Audit log session creation
             self._audit_session_operation("create", session_data)
@@ -506,7 +525,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 anomalies = self._detect_session_anomalies(session_data)
                 if anomalies:
                     session_data.anomaly_flags.extend(anomalies)
-                    self.session_stats["anomalies_detected"] += len(anomalies)
+                    self._bump_stat("anomalies_detected", len(anomalies))
                     self._log_security_event(
                         user_id,
                         "session_anomaly_detected",
@@ -623,7 +642,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 )
                 if new_anomalies:
                     session_data.anomaly_flags.extend(new_anomalies)
-                    self.session_stats["anomalies_detected"] += len(new_anomalies)
+                    self._bump_stat("anomalies_detected", len(new_anomalies))
 
                     # Mark session as suspicious if too many anomalies
                     if len(session_data.anomaly_flags) > 3:
@@ -733,7 +752,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         self._cleanup_session_internal(session_id)
 
         # Update statistics
-        self.session_stats["sessions_terminated"] += 1
+        self._bump_stat("sessions_terminated")
 
     def _cleanup_session_internal(self, session_id: str) -> None:
         """Internal session cleanup.
@@ -764,8 +783,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         del self.sessions[session_id]
 
         # Update statistics
-        if self.session_stats["active_sessions"] > 0:
-            self.session_stats["active_sessions"] -= 1
+        self._bump_stat("active_sessions", -1, floor=0)
 
     def _cleanup_expired_sessions(self) -> Dict[str, Any]:
         """Clean up expired and idle sessions.
@@ -795,7 +813,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
         # Update statistics
         total_cleaned = len(expired_sessions) + len(idle_sessions)
-        self.session_stats["expired_sessions_cleaned"] += total_cleaned
+        self._bump_stat("expired_sessions_cleaned", total_cleaned)
 
         # Update last cleanup time
         self._last_cleanup = current_time
@@ -1178,7 +1196,13 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         writes an audit record through a sync ``AuditLogNode``. It is offloaded
         to a worker thread rather than run inline so that an async caller's
         event loop is not blocked by whatever logging handler the operator has
-        attached to the audit logger. The node is already thread-safe by
-        construction (``threading.Lock``), which is what makes the offload safe.
+        attached to the audit logger.
+
+        The offload makes concurrent callers genuinely parallel where they were
+        previously serialized on the loop thread, so it is paired with locking
+        that actually covers the shared state: session storage under
+        ``_sessions_lock``, and the statistics counters under ``_stats_lock``
+        via :meth:`_bump_stat`. Those counters were mutated with bare ``+=``
+        outside any lock, including a check-then-act on ``active_sessions``.
         """
         return await asyncio.to_thread(self.execute, **kwargs)
