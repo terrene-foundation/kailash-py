@@ -29,8 +29,6 @@ def _lazy_import_kailash_workflow():
     return WorkflowBuilder
 
 
-from kaizen.errors import raise_if_configuration_error
-
 from .config import KaizenConfig
 
 
@@ -1396,18 +1394,7 @@ class Kaizen:
 
         # Use context manager for proper resource cleanup
         with self._LocalRuntime() as runtime:
-            results, run_id = runtime.execute(
-                workflow, task_manager=None, parameters=parameters
-            )
-        # #2022 — LocalRuntime does NOT raise on node failure; it returns
-        # {node_id: {"failed": True, "_exception": exc}}. Without this guard a
-        # ConfigurationError reaching here is swallowed and resurfaces to the
-        # user as malformed model output. This is the SIXTH swallow site and
-        # the one reachable from `Agent`: eight `self.kaizen.execute(...)` call
-        # sites in core/agents.py route through here (:383, :484, :755, :854,
-        # :2085, :2152, :2521, :2859), and :383 is an agent execution path.
-        raise_if_configuration_error(results)
-        return results, run_id
+            return runtime.execute(workflow, task_manager=None, parameters=parameters)
 
     def register_signature(self, name: str, signature: Any):
         """
