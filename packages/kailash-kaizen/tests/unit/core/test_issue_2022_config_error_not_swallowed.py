@@ -178,3 +178,33 @@ class TestResolveAgentProvider:
 
         with pytest.raises(ConfigurationError):
             resolve_agent_provider(None)
+
+
+class TestCrossPackageCallSite:
+    """A REAL consumer of the resolver, exercised where CI installs both packages.
+
+    The kaizen CI job installs ``kailash-dataflow`` (it does NOT install
+    kailash-ml), so ``DataFlow.from_brief`` is the call site that can actually
+    be driven here. It reaches provider resolution before any database work, so
+    this needs no infrastructure and no live LLM.
+
+    This is what makes #2022's acceptance criterion 4 real: the regression is
+    caught by a job that RUNS, rather than by a test that skips without a model
+    env var — which is precisely why the defect shipped.
+    """
+
+    def test_dataflow_from_brief_raises_actionable_configuration_error(self, keyless):
+        dataflow = pytest.importorskip(
+            "dataflow",
+            reason="kailash-dataflow not installed in this environment",
+        )
+
+        with pytest.raises(ConfigurationError) as caught:
+            dataflow.DataFlow.from_brief(
+                "users have email and name",
+                llm_model="some-unregistered-local-model",
+            )
+
+        message = str(caught.value)
+        assert "dataflow.from_brief" in message, "must name the calling component"
+        assert "llm_provider" in message, "must name the kwarg that fixes it"

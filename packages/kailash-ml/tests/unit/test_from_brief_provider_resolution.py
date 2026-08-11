@@ -1,127 +1,118 @@
-"""Provider resolution in ``km.from_brief`` — runnable on CI, no live LLM (#2022).
+"""``km.from_brief`` provider-resolution surface — kaizen-FREE by construction (#2022).
 
-Why this file exists at all. The three tests that would have caught #2022 are
-Tier-3 real-LLM tests that SKIP whenever no model env var is configured, so
-they never ran on CI and the defect shipped. It was only visible where a
-``.env`` is present — i.e. to the developer or user following the README, which
-is the worst possible place to discover it.
+WHY THIS FILE IMPORTS NO KAIZEN
+------------------------------
+`from_brief.py`'s own module header states the contract:
 
-These tests exercise the provider-resolution path structurally: they assert on
-what ``from_brief`` resolves and on how it fails, without ever reaching a
-provider. They run everywhere.
+    kaizen is a SEPARATE downstream package (kailash-kaizen); kailash-ml
+    MUST NOT import it at module scope ... breaking every kailash-ml CI test
+    at collection time when kaizen is absent.
+
+The `Base` CI job installs `kailash-ml[dev]`, which does NOT include kaizen
+(it lives in the optional `agents` / `kaizen-judges` extras). A module-scope
+`import kaizen` in a test here is therefore a COLLECTION error, and a
+collection error interrupts the whole run rather than failing one test.
+
+That is not hypothetical: the first version of this file did exactly that and
+took all five matrix jobs red. The first test below pins the contract so the
+next person cannot repeat it.
+
+The BEHAVIOURAL half of provider resolution — that an unresolvable provider
+raises an actionable `ConfigurationError` naming the component and the kwarg —
+is exercised in `packages/kailash-kaizen/tests/unit/core/`
+`test_issue_2022_config_error_not_swallowed.py::TestCrossPackageCallSite`,
+using `DataFlow.from_brief`, because the kaizen CI job installs
+kailash-dataflow and can actually run it. No CI job installs both kailash-ml
+and kailash-kaizen, so that is where real cross-package coverage can live.
 """
 
 from __future__ import annotations
 
-import polars as pl
-import pytest
-
-from kaizen.config.providers import ConfigurationError
-from kaizen.core import resolve_agent_provider
-
-KEYLESS_VARS = (
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GOOGLE_API_KEY",
-    "DEEPSEEK_API_KEY",
-    "KAIZEN_ALLOW_KEYLESS_MOCK",
-)
+import ast
+import inspect
+from pathlib import Path
 
 
-@pytest.fixture
-def keyless(monkeypatch):
-    for var in KEYLESS_VARS:
-        monkeypatch.delenv(var, raising=False)
-    return monkeypatch
+class TestLazyKaizenImportContract:
+    """`kailash_ml` must import without kaizen present.
 
+    This is the regression guard for the CI failure this file itself caused.
+    """
 
-@pytest.fixture
-def frame() -> pl.DataFrame:
-    return pl.DataFrame({"age": [31, 44], "spend": [12.5, 88.0], "churned": [0, 1]})
+    def test_from_brief_module_has_no_module_scope_kaizen_import(self):
+        """AST, not grep: a kaizen import inside a function body is CORRECT."""
+        import kailash_ml.from_brief as mod
 
+        source = Path(inspect.getfile(mod)).read_text()
+        tree = ast.parse(source)
 
-class TestFromBriefResolvesProviderBeforeDispatch:
-    """The failure a user hits must name the CONFIGURATION, not the model."""
+        offenders = []
+        for node in tree.body:  # module scope ONLY — nested bodies are fine
+            if isinstance(node, ast.Import):
+                offenders += [
+                    a.name for a in node.names if a.name.split(".")[0] == "kaizen"
+                ]
+            elif isinstance(node, ast.ImportFrom):
+                if (node.module or "").split(".")[0] == "kaizen":
+                    offenders.append(node.module)
 
-    def test_unresolvable_provider_raises_configuration_error(self, keyless, frame):
-        """Previously: an empty plan, reported as "the LLM emitted a malformed plan"."""
+        assert not offenders, (
+            f"module-scope kaizen import(s) {offenders} in {mod.__file__} — this "
+            "breaks kailash-ml CI collection wherever kaizen is not installed"
+        )
+
+    def test_importing_kailash_ml_does_not_require_kaizen(self):
+        """NEGATIVE CONTROL — the import must genuinely succeed here."""
+        import kailash_ml
         from kailash_ml.from_brief import from_brief
 
-        with pytest.raises(ConfigurationError) as caught:
-            from_brief(
-                "predict which customers churn",
-                frame,
-                model="some-unregistered-local-model",
-            )
+        assert callable(from_brief)
+        assert kailash_ml is not None
 
-        message = str(caught.value)
-        assert "llm_provider" in message, "must name the kwarg that fixes it"
-        assert "kailash_ml.from_brief" in message, "must name the calling component"
 
-    def test_error_is_not_a_brief_interpretation_error(self, keyless, frame):
-        """The misattribution itself is the defect — pin it directly.
+class TestProviderKwargIsExposed:
+    """`llm_provider` must be reachable by callers.
 
-        Asserted via ``pytest.raises(Exception)`` plus an explicit type check,
-        NOT via ``pytest.raises(ConfigurationError)``: the latter would make the
-        isinstance assertion vacuous, since ConfigurationError can never be a
-        BriefInterpretationError by MRO. Written this way the test genuinely
-        discriminates — it reddens if the swallow returns and the empty plan is
-        rejected downstream as malformed model output, which is the exact
-        pre-fix behaviour.
+    `resolve_agent_provider`'s error tells the user to "pass llm_provider=
+    explicitly". That advice is only followable if `from_brief` actually
+    accepts it — it did not until #2022.
+    """
+
+    def test_from_brief_accepts_llm_provider(self):
+        from kailash_ml.from_brief import from_brief
+
+        params = inspect.signature(from_brief).parameters
+        assert "llm_provider" in params, (
+            "from_brief must expose llm_provider — the ConfigurationError raised "
+            "on an unresolvable model instructs callers to pass it"
+        )
+        assert params["llm_provider"].default is None, "must stay optional"
+        assert params["llm_provider"].kind is inspect.Parameter.KEYWORD_ONLY
+
+    def test_llm_provider_is_threaded_to_the_agent_config(self):
+        """Structural: the kwarg must reach BaseAgentConfig, not be accepted and dropped.
+
+        A documented kwarg with no effect on the body is the silent-fallback
+        mode at the API surface (`rules/zero-tolerance.md` Rule 3c). Verified by
+        AST rather than by calling, since calling requires kaizen.
         """
-        from kailash_ml.from_brief import from_brief
+        import kailash_ml.from_brief as mod
 
-        from kailash._from_brief.exceptions import BriefInterpretationError
+        tree = ast.parse(Path(inspect.getfile(mod)).read_text())
 
-        with pytest.raises(Exception) as caught:
-            from_brief("predict churn", frame, model="some-unregistered-local-model")
+        constructions = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "BaseAgentConfig"
+        ]
+        assert constructions, "no BaseAgentConfig construction found in from_brief.py"
 
-        assert not isinstance(
-            caught.value, BriefInterpretationError
-        ), "a configuration failure was reported as a malformed-plan failure"
-        assert isinstance(caught.value, ConfigurationError)
-
-
-class TestExplicitProviderPassthrough:
-    """``llm_provider=`` is the escape hatch the error message names.
-
-    Without this parameter the advice "pass llm_provider= explicitly" was
-    un-followable from ``from_brief`` — the kwarg did not exist.
-    """
-
-    def test_explicit_provider_bypasses_resolution(self, keyless, frame):
-        """An unregistered model + explicit provider must NOT raise at resolution."""
-        from kailash_ml.from_brief import from_brief
-
-        try:
-            from_brief(
-                "predict churn",
-                frame,
-                model="some-unregistered-local-model",
-                llm_provider="ollama",
+        for call in constructions:
+            kwargs = {kw.arg for kw in call.keywords}
+            assert "llm_provider" in kwargs, (
+                "BaseAgentConfig built without llm_provider — this is the #2022 "
+                "defect: the provider falls back to env detection, resolves to "
+                "None keyless, and the failure is reported as a malformed plan"
             )
-        except ConfigurationError as exc:  # pragma: no cover - regression guard
-            pytest.fail(f"explicit llm_provider should bypass resolution: {exc}")
-        except Exception:
-            # Any LATER failure (no Ollama running, plan validation, ...) is
-            # fine and expected here — this test pins only that provider
-            # resolution no longer rejects the call.
-            pass
-
-
-class TestResolutionContractUsedByFromBrief:
-    """The resolver from_brief depends on, pinned at the ml boundary.
-
-    ``kailash-ml`` reaches kaizen's provider resolution through the PUBLIC
-    ``kaizen.core`` surface. A regression that moved or unpublished it would
-    fail here rather than at a user's first README run.
-    """
-
-    def test_public_surface_is_importable(self):
-        from kaizen.core import resolve_agent_provider as public
-
-        assert callable(public)
-
-    def test_model_keyed_resolution_ignores_mismatched_credential(self, keyless):
-        keyless.setenv("OPENAI_API_KEY", "sk-test-not-used")
-        assert resolve_agent_provider("claude-3-5-haiku") == "anthropic"
