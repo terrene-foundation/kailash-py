@@ -195,6 +195,30 @@ def test_the_loud_signal_is_emitted_once_not_once_per_instance(caplog) -> None:
     assert len(matching) == 1, f"expected exactly one record, got {len(matching)}"
 
 
+def test_the_loud_signal_names_the_current_constants(caplog) -> None:
+    """The signal spells its variable names out literally; this catches drift.
+
+    They are literals rather than ``%s`` interpolations of the constants
+    because CodeQL's ``py/clear-text-logging-sensitive-data`` matches on
+    identifier names and reads ``SECRET_MANAGER_KEY_ENV`` as key material. A
+    literal has no dataflow into the sink, which settles the alert rather than
+    suppressing it -- at the cost of the message being able to drift from the
+    constants that define it. This is the test that costs.
+
+    Falsifying result: a constant is renamed or the floor changes, and the
+    message still names the old one.
+    """
+    from kailash.gateway import security as security_module
+
+    with caplog.at_level(logging.ERROR, logger="kailash.gateway.security"):
+        SecretManager(backend=DictSecretBackend())
+
+    message = " ".join(r.getMessage() for r in caplog.records)
+    assert security_module.SECRET_MANAGER_KEY_ENV in message
+    assert security_module.SECRET_MANAGER_STRICT_ENV in message
+    assert str(security_module.MIN_SECRET_KEY_LENGTH) in message
+
+
 def test_strict_mode_refuses_to_construct_at_all() -> None:
     """Operators who want start-up failure must be able to demand it.
 

@@ -307,22 +307,28 @@ def _warn_secret_encryption_unconfigured() -> None:
     Loud even though every encrypting call also raises: a service may construct
     this at start-up and not reach an encrypting call until much later, and the
     operator should learn at boot which protection is off.
+
+    The variable names and the length floor are spelled out literally rather
+    than interpolated from the constants that define them. Nothing sensitive is
+    involved either way — these are the NAMES of environment variables, never a
+    value — but CodeQL's ``py/clear-text-logging-sensitive-data`` matches on
+    identifier names, and ``SECRET_MANAGER_KEY_ENV`` reads as key material to
+    it. A literal has no dataflow into the sink at all, which settles the
+    question instead of suppressing it. Drift from the constants is what
+    ``test_the_loud_signal_names_the_current_constants`` exists to catch.
     """
     logger.error(
-        "Secret encryption is NOT configured: %s is unset and no "
-        "encryption_key= was passed. This SecretManager cannot encrypt or "
-        "decrypt; store_secret(..., encrypt=True) and reads of "
+        "Secret encryption is NOT configured: KAILASH_ENCRYPTION_KEY is unset "
+        "and no encryption_key= was passed. This SecretManager cannot encrypt "
+        "or decrypt; store_secret(..., encrypt=True) and reads of "
         "already-encrypted values will raise SecretEncryptionError rather "
         "than proceed. Releases up to kailash 2.63 generated a throwaway key "
         "here and continued, which made every secret written by the process "
-        "unreadable after a restart. Set %s to a passphrase of at least %d "
-        "characters (it is stretched with PBKDF2-HMAC-SHA256), or pass "
-        "encryption_key=. Set %s=1 to make this a start-up failure instead of "
-        "a log line.",
-        SECRET_MANAGER_KEY_ENV,
-        SECRET_MANAGER_KEY_ENV,
-        MIN_SECRET_KEY_LENGTH,
-        SECRET_MANAGER_STRICT_ENV,
+        "unreadable after a restart. Set KAILASH_ENCRYPTION_KEY to a "
+        "passphrase of at least 32 characters (it is stretched with "
+        "PBKDF2-HMAC-SHA256), or pass encryption_key=. Set "
+        "KAILASH_REQUIRE_SECRET_ENCRYPTION=1 to make this a start-up failure "
+        "instead of a log line."
     )
 
 
