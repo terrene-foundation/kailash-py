@@ -81,4 +81,52 @@ class ProviderUndetectable(RuntimeError):
         )
 
 
-__all__ = ["EnvModelMissing", "ProviderUndetectable"]
+def configuration_error_types() -> tuple[type[BaseException], ...]:
+    """Error classes meaning "this was never wired", not "the run failed" (#2022).
+
+    Imported lazily: ``kaizen.config`` and ``kaizen.llm`` sit above this module
+    in the import graph, so module-scope imports would create a cycle.
+    """
+    from kaizen.config.providers import ConfigurationError
+    from kaizen.llm.errors import MissingCredential
+    from kaizen.llm.provider import UnknownModelProvider
+
+    return (
+        ConfigurationError,
+        EnvModelMissing,
+        ProviderUndetectable,
+        UnknownModelProvider,
+        MissingCredential,
+    )
+
+
+def unwrap_configuration_error(exc: BaseException) -> BaseException | None:
+    """Return the configuration-class error in ``exc``'s cause chain, else None.
+
+    The chain walk is the load-bearing part. A ``ConfigurationError`` raised
+    inside ``LLMAgentNode`` reaches the strategy already wrapped by the runtime
+    as ``WorkflowExecutionError("Node 'agent_exec' execution failed: ...")``, so
+    a plain ``isinstance(exc, ConfigurationError)`` is FALSE exactly where the
+    decision has to be made. Walking ``__cause__``/``__context__`` is what makes
+    the check discriminate a broken SETUP from a failed RUN.
+
+    ``seen`` guards against a self-referential chain, which would otherwise
+    spin forever.
+    """
+    types = configuration_error_types()
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, types):
+            return current
+        current = current.__cause__ or current.__context__
+    return None
+
+
+__all__ = [
+    "EnvModelMissing",
+    "ProviderUndetectable",
+    "configuration_error_types",
+    "unwrap_configuration_error",
+]

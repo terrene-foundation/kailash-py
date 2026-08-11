@@ -36,6 +36,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 
+from ._log_hygiene import log_full_payload, safe_log_extra, summarize_payload
 from ._provider_env import detect_provider_from_env as _detect_provider
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
@@ -47,73 +48,11 @@ __all__ = ["BaseAgent", "BaseAgentConfig"]
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Log-hygiene helpers (#2030)
-# ---------------------------------------------------------------------------
-# Agent inputs and results routinely carry user prompts, retrieved documents,
-# PII and — for agents that take credentials as parameters — secrets. NOTHING
-# below ever renders a VALUE into a log record at INFO or above. The structured
-# summary (key names + counts) is what makes the trace useful; the values are
-# what makes it a disclosure.
-
-
-def _summarize_payload(payload: Any) -> Dict[str, Any]:
-    """Value-FREE description of an agent I/O dict: key names and a count.
-
-    Key names are schema, not data — they are what an operator needs to
-    correlate a run, and they are safe. Values never appear.
-    """
-    if isinstance(payload, dict):
-        return {"keys": sorted(str(key) for key in payload), "count": len(payload)}
-    return {"keys": [], "count": 0, "type": type(payload).__name__}
-
-
-def _safe_log_extra(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Summarize a caller-supplied context into record attributes safe to emit.
-
-    ``AgentLoop`` calls ``_handle_error(error, {"inputs": inputs})``, so passing
-    the context straight through as ``extra=`` put the FULL agent inputs onto
-    the LogRecord at ERROR — a level that survives every production log config.
-    Default formatters do not render extra attributes, but structured handlers
-    (python-json-logger, structlog, OTel log export) do, which is precisely
-    where logs get shipped off-host.
-
-    Every emitted name is ``ctx_``-prefixed, which cannot collide with a
-    reserved ``LogRecord`` attribute (none of them start with ``ctx_``); a
-    collision would otherwise make ``logging`` raise at the call site.
-    """
-    safe: Dict[str, Any] = {}
-    for key, value in (context or {}).items():
-        name = f"ctx_{key}"
-        if isinstance(value, dict):
-            summary = _summarize_payload(value)
-            safe[f"{name}_keys"] = summary["keys"]
-            safe[f"{name}_count"] = summary["count"]
-        else:
-            safe[f"{name}_type"] = type(value).__name__
-    return safe
-
-
-def _configuration_error_types() -> tuple:
-    """Error classes meaning "the agent was never wired", not "the run failed".
-
-    Imported lazily: ``kaizen.config`` and ``kaizen.llm`` sit above
-    ``kaizen.core`` in the import graph, so a module-scope import would create
-    a cycle. Resolved once per call and cheap (all modules are already in
-    ``sys.modules`` by the time an execution error can occur).
-    """
-    from kaizen.config.providers import ConfigurationError
-    from kaizen.errors import EnvModelMissing, ProviderUndetectable
-    from kaizen.llm.errors import MissingCredential
-    from kaizen.llm.provider import UnknownModelProvider
-
-    return (
-        ConfigurationError,
-        EnvModelMissing,
-        ProviderUndetectable,
-        UnknownModelProvider,
-        MissingCredential,
-    )
+# Log-hygiene helpers live in ``_log_hygiene`` and the configuration-error
+# predicate in ``kaizen.errors`` — neither is redefined here. The predicate is
+# SHARED with kaizen.strategies.async_single_shot, the other site that must
+# distinguish a broken setup from a failed run, and two copies of a
+# correctness-relevant predicate drift.
 
 
 class BaseAgent(MCPMixin, A2AMixin, Node):
@@ -789,63 +728,29 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                     raise ValueError(f"Missing required output field: {field_name}")
         return True
 
-    def _log_full_payload(self, label: str, payload: Any) -> None:
-        """Dump a full agent payload at DEBUG — opt-in only, always scrubbed.
-
-        Two independent gates, both of which must open (#2030):
-
-        1. ``config.log_full_payloads`` — defaults False, so turning DEBUG on
-           globally (routine during incident response) does NOT start dumping
-           user prompts, retrieved documents and PII.
-        2. the logger actually being at DEBUG.
-
-        Even then the rendered payload routes through ``scrub_credentials``,
-        the single credential-scrub implementation in Kaizen. Scrubbing claims
-        credential SHAPES, not arbitrary PII — gate (1) is what protects PII,
-        which is why it fails closed.
-        """
-        if not getattr(self.config, "log_full_payloads", False):
-            return
-        if not logger.isEnabledFor(logging.DEBUG):
-            return
-
-        from kaizen.utils.credential_scrub import scrub_credentials
-
-        logger.debug("Full %s payload: %s", label, scrub_credentials(repr(payload)))
-
     def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Default pre-execution hook (logs execution start).
-
-        Emits STRUCTURE (signature name, input key names, count) at INFO —
-        never input values. See ``_summarize_payload``.
-        """
-        logging_enabled = getattr(self.config, "logging_enabled", True)
-        if logging_enabled:
-            signature_name = getattr(self.signature, "name", "unknown")
-            summary = _summarize_payload(inputs)
+        """Default pre-execution hook: logs input STRUCTURE, never values (#2030)."""
+        if getattr(self.config, "logging_enabled", True):
+            summary = summarize_payload(inputs)
             logger.info(
                 "Executing %s with %d input(s): %s",
-                signature_name,
+                getattr(self.signature, "name", "unknown"),
                 summary["count"],
                 summary["keys"],
             )
-            self._log_full_payload("inputs", inputs)
+            log_full_payload(self.config, logger, "inputs", inputs)
         return inputs
 
     def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Default post-execution hook (logs completion).
-
-        Emits result key names and count at INFO — never result values.
-        """
-        logging_enabled = getattr(self.config, "logging_enabled", True)
-        if logging_enabled:
-            summary = _summarize_payload(result)
+        """Default post-execution hook: logs result STRUCTURE, never values (#2030)."""
+        if getattr(self.config, "logging_enabled", True):
+            summary = summarize_payload(result)
             logger.info(
                 "Execution complete. %d result field(s): %s",
                 summary["count"],
                 summary["keys"],
             )
-            self._log_full_payload("result", result)
+            log_full_payload(self.config, logger, "result", result)
         return result
 
     def _handle_error(
@@ -853,32 +758,32 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
     ) -> Dict[str, Any]:
         """Default error handler.
 
-        Configuration failures are re-raised unconditionally (#2022). Every
-        other error keeps the historical ``{"success": False}`` envelope, with
-        the message scrubbed and the context summarized rather than rendered
-        (#2030).
+        Configuration failures re-raise unconditionally (#2022); every other
+        error keeps the historical ``{"success": False}`` envelope with the
+        message scrubbed and the context summarized, not rendered (#2030).
         """
         # #2022 — a configuration failure is not an execution failure. Folding
         # one into {"success": False} hands the caller an EMPTY result, which
-        # downstream validators then reject as a malformed model response: the
-        # user is told the LLM misbehaved when in fact their provider was never
-        # wired, and the stack trace that would have said so is gone. This is
-        # the rules/zero-tolerance.md Rule 3 silent-error-hiding shape, so the
-        # re-raise is NOT gated on ``error_handling_enabled`` — that flag
-        # governs run-time resilience, not the reporting of a broken setup.
-        if isinstance(error, _configuration_error_types()):
-            raise error
+        # downstream validators reject as a malformed MODEL response: the user
+        # is told the LLM misbehaved when their provider was never wired, and
+        # the stack trace that would have said so is gone. Deliberately NOT
+        # gated on ``error_handling_enabled`` — that flag governs run-time
+        # resilience, not the reporting of a broken setup.
+        from kaizen.errors import unwrap_configuration_error
 
-        error_handling_enabled = getattr(self.config, "error_handling_enabled", True)
-        if error_handling_enabled:
+        configuration_error = unwrap_configuration_error(error)
+        if configuration_error is not None:
+            raise configuration_error
+
+        if getattr(self.config, "error_handling_enabled", True):
             from kaizen.utils.credential_scrub import scrub_credentials
 
-            # extra=context used to carry AgentLoop's {"inputs": inputs}
-            # verbatim onto the record; summarize to key names + counts.
+            # extra=context carried AgentLoop's {"inputs": inputs} verbatim
+            # onto the record; summarize to key names + counts.
             logger.error(
                 "Error during execution: %s",
                 scrub_credentials(str(error)),
-                extra=_safe_log_extra(context),
+                extra=safe_log_extra(context),
             )
             return {"error": str(error), "type": type(error).__name__, "success": False}
         else:

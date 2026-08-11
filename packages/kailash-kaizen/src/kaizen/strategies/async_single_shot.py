@@ -384,6 +384,25 @@ class AsyncSingleShotStrategy:
             return final_result
 
         except Exception as e:
+            # #2022 — a CONFIGURATION failure must never be converted into a
+            # returned dict. Doing so strips the exception type and traceback,
+            # so the empty result that follows is rejected downstream as a
+            # malformed MODEL response: the user is told the LLM misbehaved
+            # when in fact their provider was never wired.
+            #
+            # This check runs FIRST and deliberately precedes the substring
+            # classification below, which cannot see it: the node's
+            # ConfigurationError arrives wrapped by the runtime as
+            # WorkflowExecutionError, and none of the "api error" / "api key" /
+            # "not available" substrings match it, so it fell through to the
+            # generic error-dict return. The cause-chain walk is what makes the
+            # distinction; matching on message text is what missed it.
+            from kaizen.errors import unwrap_configuration_error
+
+            configuration_error = unwrap_configuration_error(e)
+            if configuration_error is not None:
+                raise configuration_error
+
             # Error handling - propagate real errors, only use skeleton for missing providers
             # ``error_msg`` stays RAW for the internal classification below and
             # for _get_recovery_suggestions (both match on provider substrings and

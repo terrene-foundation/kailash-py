@@ -700,6 +700,7 @@ def from_brief(
     # `kailash._from_brief.signatures` which imports kaizen at module scope,
     # so it is lazy too.
     from kailash._from_brief import get_default_llm_model
+    from kaizen.core import resolve_agent_provider
     from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 
     # Step 1 — extract dataframe schema BEFORE the LLM call. This is
@@ -733,8 +734,19 @@ def from_brief(
     # is the LLM-mediation surface; the agent dispatches a single
     # one-shot inference (no tool-use loop required for schema
     # synthesis from prose).
+    # `llm_provider` is resolved EXPLICITLY (#2022). Omitting it left the
+    # provider to BaseAgent's env-keyed fallback, which returns None when no
+    # credential is exported — and that unresolved provider surfaced to users
+    # as "the LLM emitted a malformed plan" rather than "your provider is not
+    # configured". `resolve_agent_provider` is kaizen's PUBLIC resolution
+    # surface: it is model-keyed first (so a Claude DEFAULT_LLM_MODEL is not
+    # dispatched to OpenAI merely because OPENAI_API_KEY is set), falls back
+    # to the environment, and fails loud with an actionable message.
     agent_config = BaseAgentConfig(
         model=resolved_model,
+        llm_provider=resolve_agent_provider(
+            resolved_model, component="kailash_ml.from_brief"
+        ),
         strategy_type="single_shot",
     )
     agent = BaseAgent(
