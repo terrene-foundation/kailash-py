@@ -1,3 +1,47 @@
+# ═══ UPDATE 15 (LATEST) — main `114d3c06e`: #2066 MERGED, OAuth login was DEAD ═══
+
+**#2060 closed.** `authenticate`/`authorize`/`logout`/`validate` complete end-to-end and
+**#2035's identity binding is LIVE for the first time**. 19 broken collaborator calls -> 0.
+`mfa_revoked` (the HIGH-severity event fired when a second factor is destroyed) had **never
+fired** and now does. Largest user-facing breakage found: `sso.py` awaited `async_run` on a
+sync `HTTPRequestNode` at both OAuth token exchange and userinfo, so **every OAuth login
+failed**, misreported as a token-exchange failure.
+
+## ⚠ ORCHESTRATOR ERROR #3 — I specified a repro that could not fire
+
+Security review found M5: `authenticate` returned `success/authenticated: True` with
+`session_id: None` and emitted an `auth_success` audit record. Real. **But I told the lane to
+pin it with `risk_context={}` — which is the ONE input that does NOT trigger it.** An empty
+dict is falsy, so `async_run` takes `if not risk_context: risk_context =
+self._extract_risk_context(kwargs)` and a default `127.0.0.1` fills in. Measured by the lane:
+
+    {}                            -> success=True  session_id='Njy7...'  (fallback fills IP)
+    {'user_agent': 'curl'}        -> success=True  session_id=None       <-- DEFECT
+    {'device_info': {...}}        -> success=True  session_id=None       <-- DEFECT
+    {'ip_address': '203.0.113.7'} -> success=True  session_id='YkXF...'
+
+Following my instruction would have shipped a pin that passes on broken code — while I was, in
+the same message, flagging exactly that failure mode. I asserted a runtime behaviour from
+reading a signature instead of driving it. **Third premise error handed to a lane this
+session** (the others: observability flags "default False" when all four are `True`; briefing a
+`security-reviewer` to run `gh` when it has no Bash).
+
+**The generalisation: a delegation brief is a durable artifact.** It directs a whole run and is
+acted on before anyone reads it critically. Verify its code-claims like a CHANGELOG entry.
+
+## An ENUMERATION missed what a SWEEP caught — three times on one branch
+
+M6's sweep test found **two raw `user_id` sites the author's manual pass had missed** (MFA audit
+entry, provider logout) — drift inside a single branch, under active review, by the person who
+had just written the helper. That is the argument for the sink-level fix, now **#2088**.
+
+## Filed this round
+
+**#2088** (log-injection sanitizing belongs in `SecurityEventNode.execute` /
+`AuditLogNode.execute`, not N call sites — with the drift evidence) · **#2089** (`jwt_config`
+issuer unset logs "any token signed with this key is accepted" at **INFO**, below every alert
+threshold; pre-existing from #2035).
+
 # ═══ UPDATE 14 (LATEST) — main `fae6d1c28`: THE LIVE SSRF IS CLOSED ═══
 
 **PR #2064 MERGED.** The full SSRF described in UPDATE 13 is no longer live on main.
