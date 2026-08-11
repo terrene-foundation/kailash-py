@@ -365,6 +365,15 @@ jobs:
         # If tests still hang after this, the log will list them individually
         # and they can be quarantined; the previous instrument could not even
         # produce that list.
+        #
+        # It did: the first SIGALRM run named 5 hangs in
+        # test_channel_parameters_envelope_behaviour.py and 5 in
+        # test_create_index_identifier_safety.py, then stopped at
+        # `--maxfail=10`. maxfail raised to 30 and the per-test timeout dropped
+        # 120s -> 60s to enumerate the rest within the step budget: 60s is still
+        # 3x the slowest healthy test in this suite (19.94s,
+        # test_issue_2015_http_exception_leak.py), so it cannot false-positive
+        # on a merely-slow test, and it halves the cost of each genuine hang.
         timeout-minutes: 40
         # tests/regression/ is a MIXED dir — the same shape as the DataFlow
         # regression dir handled below. The explicit `-m` filter mirrors that
@@ -399,8 +408,8 @@ jobs:
         run: |
           .venv/bin/python -m pytest tests/regression/ \
             -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
-            --maxfail=10 -v -p no:xdist --durations=25 \
-            --timeout=120 --timeout-method=signal
+            --maxfail=30 -v -p no:xdist --durations=25 \
+            --timeout=60 --timeout-method=signal
 
   test-pact:
     name: Test PACT (Python 3.11)
