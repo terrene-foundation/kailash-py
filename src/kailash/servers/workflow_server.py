@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable, Optional
 # Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
 # MUST raise loudly with an actionable error naming the extra.
 try:
-    from fastapi import FastAPI
+    from fastapi import Depends, FastAPI
     from starlette.middleware.cors import CORSMiddleware
     from starlette.requests import Request
     from starlette.websockets import WebSocket
@@ -38,6 +38,14 @@ from ..workflow import Workflow
 from .connection_metrics_router import (
     ConnectionMetricsProvider,
     create_connection_metrics_router,
+)
+from .proxy_guard import (
+    PathPattern,
+    compile_path_allowlist,
+    normalize_allowed_methods,
+    path_matches_allowlist,
+    reject_unsafe_proxy_path,
+    resolve_proxy_auth_dependency,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,6 +135,7 @@ class WorkflowServer:
         startup_hook: Optional[Callable[[], Awaitable[None]]] = None,
         shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
         startup_hook_timeout: Optional[float] = None,
+        auth_manager: Any = None,
         **kwargs,
     ):
         """Initialize the workflow server.
@@ -138,6 +147,16 @@ class WorkflowServer:
             max_workers: Maximum thread pool workers
             cors_origins: Allowed CORS origins
             runtime: Optional LocalRuntime instance for signal/query support
+            auth_manager: Optional authentication manager used to protect
+                routes that require it. Must expose
+                ``get_current_user_dependency()`` returning a FastAPI
+                dependency;
+                :class:`kailash.middleware.auth.MiddlewareAuthManager` is the
+                shipped implementation. :meth:`proxy_workflow` refuses to
+                register a route unless this (or a per-registration
+                ``auth_dependency``) is present -- see issue #2025 and
+                :mod:`kailash.servers.proxy_guard`. Can also be supplied after
+                construction via :meth:`set_auth_manager`.
             startup_hook: Optional async callback awaited inside the FastAPI
                 lifespan, after `router._startup()` fires, BEFORE the server
                 starts accepting requests. Tasks created here run inside
@@ -187,6 +206,12 @@ class WorkflowServer:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.runtime = runtime
         self._rate_limiter = _SignalQueryRateLimiter()
+
+        # Authentication wiring for proxy routes (issue #2025). `set_auth_manager`
+        # is also the name `nexus.plugins` probed for on this gateway and never
+        # found (#2013) -- it now exists and does something.
+        self._auth_manager: Any = auth_manager
+        self._external_auth_reason: Optional[str] = None
 
         # Coordinated shutdown via ShutdownCoordinator
         self.shutdown_coordinator = ShutdownCoordinator(
@@ -616,6 +641,78 @@ class WorkflowServer:
                 )
         self._workflow_apis = {}
 
+    def set_auth_manager(self, auth_manager: Any) -> None:
+        """Attach an authentication manager to this server.
+
+        The manager must expose ``get_current_user_dependency()`` returning a
+        FastAPI dependency that raises ``HTTPException(401)`` for
+        unauthenticated callers;
+        :class:`kailash.middleware.auth.MiddlewareAuthManager` is the shipped
+        implementation. :meth:`proxy_workflow` consumes it to protect proxy
+        routes (issue #2025).
+
+        Routes already registered are unaffected -- FastAPI resolves route
+        dependencies at registration time, so call this **before**
+        :meth:`proxy_workflow`.
+
+        Args:
+            auth_manager: The authentication manager.
+
+        Raises:
+            ValueError: If ``auth_manager`` is None. Clearing authentication is
+                not expressible through this method, because a caller that
+                cleared it would silently widen every subsequent registration.
+        """
+        if auth_manager is None:
+            raise ValueError(
+                "set_auth_manager(None) is not allowed. Construct the server "
+                "without auth_manager= if it should have no authentication "
+                "manager; clearing one after the fact would silently widen "
+                "every subsequent proxy registration (issue #2025)."
+            )
+        self._auth_manager = auth_manager
+        logger.info(
+            "workflow_server.auth_manager_set",
+            extra={"auth_manager": type(auth_manager).__name__},
+        )
+
+    def declare_external_auth(self, reason: str) -> None:
+        """Record that an external ASGI middleware authenticates this app.
+
+        :meth:`proxy_workflow` fails closed when no authentication is
+        configured (issue #2025). That gate can only see route-level
+        dependencies, so a deployment whose requests are authenticated by an
+        ASGI middleware installed outside this class -- for example
+        ``nexus.auth.jwt.JWTMiddleware``, which ``Nexus(enable_auth=True)``
+        installs on this server's ``app`` (#2013 / PR #2054) -- would
+        otherwise be unable to register a proxy at all.
+
+        This is an explicit, logged acknowledgement, not an install: it
+        attaches no dependency and verifies nothing. Every proxy registration
+        made under it logs a WARNING naming the route.
+
+        Args:
+            reason: Non-empty description of what authenticates the app,
+                recorded in the log line so an operator reading it can check
+                the claim.
+
+        Raises:
+            ValueError: If ``reason`` is empty or blank.
+        """
+        if not reason or not reason.strip():
+            raise ValueError(
+                "declare_external_auth() requires a non-empty reason naming "
+                "the middleware that authenticates this app. It is an "
+                "acknowledgement that proxy routes carry no route-level "
+                "authentication (issue #2025), and an unexplained "
+                "acknowledgement is indistinguishable from a mistake."
+            )
+        self._external_auth_reason = reason.strip()
+        logger.warning(
+            "workflow_server.external_auth_declared",
+            extra={"reason": self._external_auth_reason},
+        )
+
     def register_workflow(
         self,
         name: str,
@@ -733,8 +830,17 @@ class WorkflowServer:
         health_check: str = "/health",
         description: str | None = None,
         tags: list[str] | None = None,
+        *,
+        allowed_paths: list[PathPattern] | None = None,
+        allowed_methods: list[str] | None = None,
+        auth_dependency: Callable[..., Any] | None = None,
     ):
         """Register a proxied workflow running on another server.
+
+        The registered route forwards requests to ``proxy_url``. Because that
+        publishes the backend through this server, registration is fail-closed
+        (issue #2025): it raises unless the caller supplies an authentication
+        control **and** an explicit path allowlist.
 
         Args:
             name: Unique workflow identifier
@@ -742,9 +848,49 @@ class WorkflowServer:
             health_check: Health check endpoint path
             description: Optional workflow description
             tags: Optional tags for categorization
+            allowed_paths: **Required.** Paths beneath ``/workflows/{name}/``
+                that may be forwarded. Strings match the path with the leading
+                ``/`` stripped: ``"status"`` exactly, ``"api/*"`` as a prefix
+                at any depth, ``"*"`` for every path (the pre-#2025 behaviour,
+                now explicit). Compiled ``re.Pattern`` entries are matched with
+                ``fullmatch``. A request whose path matches nothing gets 404 --
+                it is not a path this proxy serves. See
+                :func:`kailash.servers.proxy_guard.compile_path_allowlist`.
+            allowed_methods: HTTP methods to forward. Defaults to ``["GET"]``;
+                any other verb gets 405 from the router because the route is
+                registered only for the methods named here.
+            auth_dependency: FastAPI dependency protecting the route. When
+                omitted, the server's ``auth_manager`` supplies one. When
+                neither is available and
+                :meth:`declare_external_auth` was not called,
+                :class:`~kailash.servers.proxy_guard.ProxyAuthNotConfiguredError`
+                is raised.
+
+        Raises:
+            ProxyAuthNotConfiguredError: No authentication control is
+                configured for the route.
+            ValueError: ``name`` is already registered, or ``allowed_paths`` /
+                ``allowed_methods`` is missing or invalid.
         """
         if name in self.workflows:
             raise ValueError(f"Workflow '{name}' already registered")
+
+        # Fail-closed registration guards. These run BEFORE the workflow is
+        # recorded and BEFORE the route is added, so a refused registration
+        # leaves no half-registered proxy behind.
+        route_auth_dependency = resolve_proxy_auth_dependency(
+            name=name,
+            surface="WorkflowServer",
+            auth_dependency=auth_dependency,
+            auth_manager=self._auth_manager,
+            external_auth_reason=self._external_auth_reason,
+        )
+        path_allowlist = compile_path_allowlist(allowed_paths, name=name)
+        methods = normalize_allowed_methods(
+            allowed_methods,
+            name=name,
+            supported=("GET", "POST", "PUT", "DELETE", "PATCH"),
+        )
 
         # Create proxied workflow registration
         registration = WorkflowRegistration(
@@ -758,14 +904,48 @@ class WorkflowServer:
 
         self.workflows[name] = registration
 
+        route_kwargs: dict[str, Any] = {}
+        if route_auth_dependency is not None:
+            route_kwargs["dependencies"] = [Depends(route_auth_dependency)]
+
         # Create proxy endpoints that forward requests to the remote server
         @self.app.api_route(
             f"/workflows/{name}/{{path:path}}",
-            methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+            methods=methods,
+            **route_kwargs,
         )
-        async def proxy_handler(request: Request, path: str, _url=proxy_url):
+        async def proxy_handler(
+            request: Request,
+            path: str,
+            _url=proxy_url,
+            _allowlist=path_allowlist,
+        ):
             """Forward requests to proxied workflow server."""
             import aiohttp
+            from starlette.responses import JSONResponse
+
+            # Refuse traversal before the target URL is built, rather than
+            # relying on yarl's normalization (issue #2025).
+            unsafe_reason = reject_unsafe_proxy_path(path)
+            if unsafe_reason is not None:
+                logger.warning(
+                    "workflow_server.proxy.path_rejected",
+                    extra={"workflow": name, "reason": unsafe_reason},
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": f"Invalid proxy path: {unsafe_reason}"},
+                )
+
+            if not path_matches_allowlist(path, _allowlist):
+                logger.warning(
+                    "workflow_server.proxy.path_not_allowed",
+                    extra={"workflow": name},
+                )
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Not found"},
+                )
 
             target_url = f"{_url.rstrip('/')}/{path}"
             timeout = aiohttp.ClientTimeout(total=30)
@@ -801,7 +981,9 @@ class WorkflowServer:
                     target_url,
                     headers=headers,
                     data=body,
-                    params=dict(request.query_params),
+                    # multi_items() preserves repeated keys (?tag=a&tag=b);
+                    # dict() silently kept only the last (issue #2025).
+                    params=list(request.query_params.multi_items()),
                 ) as resp:
                     content = await resp.read()
                     from starlette.responses import Response as StarletteResponse
