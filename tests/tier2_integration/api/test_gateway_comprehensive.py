@@ -3,8 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from kailash.api.gateway import (
     WorkflowAPIGateway,
@@ -52,6 +53,21 @@ class TestWorkflowRegistration:
         assert reg.description == "Test workflow"
         assert reg.version == "2.1.0"
         assert reg.tags == ["test", "demo"]
+
+
+async def _proxy_auth(request: Request):
+    """Real auth dependency for proxy registrations.
+
+    Since issue #2025 `proxy_workflow` is fail-closed: it refuses to register
+    without an authentication control and an explicit path allowlist. These
+    tests exercise registration bookkeeping, so they supply the minimum real
+    control rather than asserting the old open-by-default behaviour. The
+    refusals themselves are covered in
+    tests/regression/test_issue_2025_gateway_proxy_parity.py.
+    """
+    if not request.headers.get("Authorization"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"user_id": "test"}
 
 
 class TestWorkflowAPIGateway:
@@ -126,6 +142,8 @@ class TestWorkflowAPIGateway:
             description="External workflow",
             version="1.5.0",
             tags=["external", "proxy"],
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
         )
 
         assert "proxied_test" in gateway.workflows
@@ -141,10 +159,20 @@ class TestWorkflowAPIGateway:
 
     def test_proxy_workflow_duplicate_name(self, gateway):
         """Test proxying workflow with duplicate name."""
-        gateway.proxy_workflow("test", "http://service:8080")
+        gateway.proxy_workflow(
+            "test",
+            "http://service:8080",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
 
         with pytest.raises(ValueError, match="Workflow 'test' already registered"):
-            gateway.proxy_workflow("test", "http://other:8080")
+            gateway.proxy_workflow(
+                "test",
+                "http://other:8080",
+                allowed_paths=["*"],
+                auth_dependency=_proxy_auth,
+            )
 
     def test_register_mcp_server(self, gateway):
         """Test registering an MCP server."""
@@ -232,7 +260,11 @@ class TestWorkflowAPIGateway:
         """Test listing workflows when some are registered."""
         gateway.register_workflow("test", sample_workflow, description="Test workflow")
         gateway.proxy_workflow(
-            "proxy", "http://external:8080", description="Proxy workflow"
+            "proxy",
+            "http://external:8080",
+            description="Proxy workflow",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
         )
 
         client = TestClient(gateway.app)
@@ -308,7 +340,13 @@ class TestWorkflowAPIGateway:
 
     def test_proxied_workflow_endpoints(self, gateway):
         """Test that proxied workflows get proper endpoint setup."""
-        gateway.proxy_workflow("proxy", "http://external:8080", health_check="/health")
+        gateway.proxy_workflow(
+            "proxy",
+            "http://external:8080",
+            health_check="/health",
+            allowed_paths=["*"],
+            auth_dependency=_proxy_auth,
+        )
 
         # TODO: Proxy endpoint routing not fully implemented yet
         # This test would verify proxy endpoints work when implemented

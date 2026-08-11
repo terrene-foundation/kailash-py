@@ -48,11 +48,12 @@ Example:
 """
 
 import asyncio
+import json
 import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Callable
 
 # `httpx`, `fastapi`, and `starlette` are OPTIONAL dependencies under the
 # `server` extra (pyproject.toml:55-67), not in slim-core dependencies. Per
@@ -66,7 +67,7 @@ from typing import Any
 # unguarded.
 try:
     import httpx
-    from fastapi import FastAPI
+    from fastapi import Depends, FastAPI
     from starlette.middleware.cors import CORSMiddleware
     from starlette.requests import Request
     from starlette.responses import Response, StreamingResponse
@@ -84,6 +85,18 @@ from ..utils.http_errors import safe_http_detail
 from ..utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
+)
+from ..utils.proxy_guard import PROXY_CREDENTIAL_HEADERS as _PROXY_CREDENTIAL_HEADERS
+from ..utils.proxy_guard import (
+    PROXY_HOP_BY_HOP_HEADERS,
+    PROXY_SAFE_RESPONSE_HEADERS,
+    SAFE_FORWARD_PATH_RE,
+    PathPattern,
+    compile_path_allowlist,
+    normalize_allowed_methods,
+    path_matches_allowlist,
+    reject_unsafe_proxy_path,
+    resolve_proxy_auth_dependency,
 )
 from ..workflow import Workflow
 from .workflow_api import WorkflowAPI
@@ -131,6 +144,7 @@ class WorkflowAPIGateway:
         version: str = "1.0.0",
         max_workers: int = 10,
         cors_origins: list[str] | None = None,
+        auth_manager: Any = None,
     ):
         """Initialize the API gateway.
 
@@ -140,9 +154,26 @@ class WorkflowAPIGateway:
             version: API version
             max_workers: Maximum thread pool workers
             cors_origins: Allowed CORS origins
+            auth_manager: Optional authentication manager used to protect
+                routes that require it. Must expose
+                ``get_current_user_dependency()`` returning a FastAPI
+                dependency;
+                :class:`kailash.middleware.auth.MiddlewareAuthManager` is the
+                shipped implementation. :meth:`proxy_workflow` refuses to
+                register a route unless this (or a per-registration
+                ``auth_dependency``) is present -- see issue #2025 and
+                :mod:`kailash.utils.proxy_guard`. Can also be supplied after
+                construction via :meth:`set_auth_manager`.
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
+
+        # Authentication wiring for proxy routes (issue #2025). This gateway is
+        # an INDEPENDENT surface from kailash.servers.WorkflowServer with the
+        # same defect, so it learns the same gate through the same shared
+        # guard module (security.md, Enforcement-Surface Parity).
+        self._auth_manager: Any = auth_manager
+        self._external_auth_reason: str | None = None
         # Per-workflow API wrappers, tracked so their runtimes are released on
         # shutdown/close() (issue #1285 — each WorkflowAPI builds its own
         # AsyncLocalRuntime that otherwise leaks at GC).
@@ -197,7 +228,15 @@ class WorkflowAPIGateway:
     async def _get_proxy_client(self) -> httpx.AsyncClient:
         """Get or create the shared async HTTP client for proxying."""
         if self._proxy_client is None or self._proxy_client.is_closed:
-            self._proxy_client = httpx.AsyncClient(timeout=30.0)
+            # follow_redirects is stated EXPLICITLY rather than inherited.
+            # httpx happens to default it to False today, but the invariant
+            # this proxy depends on must not rest on a library default that
+            # can change under us -- and the sibling surface uses aiohttp,
+            # which defaults the same knob to True. Every control the proxy
+            # route enforces (auth gate, path allowlist, traversal rejection,
+            # charset barrier) applies to hop 1 only, so a followed redirect
+            # is an authority pivot past all of them.
+            self._proxy_client = httpx.AsyncClient(timeout=30.0, follow_redirects=False)
         return self._proxy_client
 
     async def _check_proxy_health(self, reg: WorkflowRegistration) -> str:
@@ -393,8 +432,17 @@ class WorkflowAPIGateway:
                     self._ws_subscriptions[wf_name].discard(queue)
                 try:
                     await websocket.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Cleanup path -- the peer has usually already gone away,
+                    # so a failure here is expected and must not mask the
+                    # original error. Logged rather than swallowed silently
+                    # so a close that fails for an UNexpected reason is still
+                    # visible (zero-tolerance.md Rule 3).
+                    logger.debug(
+                        "Error closing gateway WebSocket: %s: %s",
+                        type(exc).__name__,
+                        exc,
+                    )
 
         # ---------- MCP tool REST endpoints ----------
         @self.app.get("/mcp/tools")
@@ -508,6 +556,66 @@ class WorkflowAPIGateway:
 
         logger.info(f"Registered embedded workflow: {name}")
 
+    def set_auth_manager(self, auth_manager: Any) -> None:
+        """Attach an authentication manager to this gateway.
+
+        Mirrors :meth:`kailash.servers.WorkflowServer.set_auth_manager` --
+        both surfaces consume the same shared guard (issue #2025). The manager
+        must expose ``get_current_user_dependency()``;
+        :class:`kailash.middleware.auth.MiddlewareAuthManager` is the shipped
+        implementation.
+
+        Call this **before** :meth:`proxy_workflow`; FastAPI resolves route
+        dependencies at registration time, so routes already registered are
+        unaffected.
+
+        Args:
+            auth_manager: The authentication manager.
+
+        Raises:
+            ValueError: If ``auth_manager`` is None -- clearing it would
+                silently widen every subsequent registration.
+        """
+        if auth_manager is None:
+            raise ValueError(
+                "set_auth_manager(None) is not allowed. Construct the gateway "
+                "without auth_manager= if it should have no authentication "
+                "manager; clearing one after the fact would silently widen "
+                "every subsequent proxy registration (issue #2025)."
+            )
+        self._auth_manager = auth_manager
+        logger.info(
+            "gateway.auth_manager_set",
+            extra={"auth_manager": type(auth_manager).__name__},
+        )
+
+    def declare_external_auth(self, reason: str) -> None:
+        """Record that an external ASGI middleware authenticates this app.
+
+        Mirrors :meth:`kailash.servers.WorkflowServer.declare_external_auth`.
+        This is an explicit, logged acknowledgement that proxy routes carry no
+        route-level authentication -- it installs nothing and verifies nothing.
+
+        Args:
+            reason: Non-empty description of what authenticates the app.
+
+        Raises:
+            ValueError: If ``reason`` is empty or blank.
+        """
+        if not reason or not reason.strip():
+            raise ValueError(
+                "declare_external_auth() requires a non-empty reason naming "
+                "the middleware that authenticates this app. It is an "
+                "acknowledgement that proxy routes carry no route-level "
+                "authentication (issue #2025), and an unexplained "
+                "acknowledgement is indistinguishable from a mistake."
+            )
+        self._external_auth_reason = reason.strip()
+        logger.warning(
+            "gateway.external_auth_declared",
+            extra={"reason": self._external_auth_reason},
+        )
+
     def proxy_workflow(
         self,
         name: str,
@@ -516,12 +624,24 @@ class WorkflowAPIGateway:
         description: str | None = None,
         version: str = "1.0.0",
         tags: list[str] | None = None,
+        *,
+        allowed_paths: list[PathPattern] | None = None,
+        allowed_methods: list[str] | None = None,
+        auth_dependency: Callable[..., Any] | None = None,
+        forward_credentials: bool = False,
     ):
         """Register a proxied workflow with real request forwarding.
 
         Incoming requests to /{name}/{path} will be forwarded to
         proxy_url/{path} using round-robin if multiple backends are
         configured (comma-separated in proxy_url).
+
+        Registration is fail-closed (issue #2025): it raises unless the caller
+        supplies an authentication control **and** an explicit path allowlist.
+        This is the same gate, from the same shared module, that
+        :meth:`kailash.servers.WorkflowServer.proxy_workflow` enforces --
+        ``security.md`` § Enforcement-Surface Parity requires every
+        independent surface with this shape to learn it together.
 
         Args:
             name: Unique workflow identifier
@@ -530,9 +650,48 @@ class WorkflowAPIGateway:
             description: Workflow description
             version: Workflow version
             tags: Workflow tags
+            allowed_paths: **Required.** Paths beneath ``/{name}/`` that may be
+                forwarded. ``"status"`` exactly, ``"api/*"`` as a prefix at any
+                depth, ``"*"`` for every path (the pre-#2025 behaviour, now
+                explicit), or a compiled ``re.Pattern`` matched with
+                ``fullmatch``. A non-matching path gets 404.
+            allowed_methods: HTTP methods to forward. Defaults to ``["GET"]``;
+                the route is registered only for the methods named here, so
+                anything else gets 405. Previously all seven verbs were
+                forwarded, including HEAD and OPTIONS.
+            auth_dependency: FastAPI dependency protecting the route. When
+                omitted, the gateway's ``auth_manager`` supplies one.
+            forward_credentials: When False (the default) the caller's
+                ``Authorization``, ``Cookie``, ``X-API-Key``,
+                ``X-Auth-Token`` and ``Proxy-Authorization`` headers are
+                STRIPPED before forwarding. This gateway previously forwarded
+                all of them -- it excluded only ``host`` and
+                ``content-length`` -- so a caller's credentials were handed to
+                whichever round-robin backend was selected. Set True only when
+                the backend is trusted and genuinely needs to re-authorize the
+                original caller.
+
+        Raises:
+            ProxyAuthNotConfiguredError: No authentication control is
+                configured for the route.
+            ValueError: ``name`` is already registered, or ``allowed_paths`` /
+                ``allowed_methods`` is missing or invalid.
         """
         if name in self.workflows:
             raise ValueError(f"Workflow '{name}' already registered")
+
+        # Fail-closed registration guards, BEFORE the workflow is recorded and
+        # BEFORE the route is added, so a refused registration leaves no
+        # half-registered proxy behind.
+        route_auth_dependency = resolve_proxy_auth_dependency(
+            name=name,
+            surface="WorkflowAPIGateway",
+            auth_dependency=auth_dependency,
+            auth_manager=self._auth_manager,
+            external_auth_reason=self._external_auth_reason,
+        )
+        path_allowlist = compile_path_allowlist(allowed_paths, name=name)
+        methods = normalize_allowed_methods(allowed_methods, name=name)
 
         # Support multiple backends via comma-separated URLs
         backends = [u.strip() for u in proxy_url.split(",") if u.strip()]
@@ -551,26 +710,99 @@ class WorkflowAPIGateway:
         # Store all backends for round-robin
         self._proxy_round_robin[name] = 0
 
-        # Register a catch-all route that forwards requests
+        route_kwargs: dict[str, Any] = {}
+        if route_auth_dependency is not None:
+            route_kwargs["dependencies"] = [Depends(route_auth_dependency)]
+
+        # Register the forwarding route, constrained to the allowlisted methods
         @self.app.api_route(
             f"/{name}/{{path:path}}",
-            methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+            methods=methods,
+            **route_kwargs,
         )
-        async def _proxy_handler(
-            path: str, request: Request, _name=name, _backends=backends
-        ):
-            """Forward request to backend using round-robin."""
-            idx = self._proxy_round_robin.get(_name, 0)
-            backend = _backends[idx % len(_backends)]
-            self._proxy_round_robin[_name] = idx + 1
+        async def _proxy_handler(path: str, request: Request):
+            """Forward request to backend using round-robin.
+
+            `name`, `backends` and `path_allowlist` are captured from the
+            enclosing scope, NOT passed as default arguments. FastAPI treats a
+            non-path parameter carrying a plain default as a QUERY parameter,
+            so the previous `backends=backends` idiom let a caller redirect
+            the forward with `?backends=http://attacker/` -- SSRF. Each
+            `proxy_workflow` call has its own scope, so direct capture is
+            correct and the late-binding hazard the idiom guards against does
+            not apply.
+            """
+            # Refuse traversal before the target URL is built (issue #2025),
+            # rather than relying on the HTTP client's URL normalization.
+            unsafe_reason = reject_unsafe_proxy_path(path)
+            if unsafe_reason is not None:
+                logger.warning(
+                    "gateway.proxy.path_rejected",
+                    extra={"workflow": name, "reason": unsafe_reason},
+                )
+                return Response(
+                    content=json.dumps(
+                        {"error": f"Invalid proxy path: {unsafe_reason}"}
+                    ),
+                    status_code=400,
+                    media_type="application/json",
+                )
+
+            if not path_matches_allowlist(path, path_allowlist):
+                logger.warning(
+                    "gateway.proxy.path_not_allowed", extra={"workflow": name}
+                )
+                return Response(
+                    content=json.dumps({"error": "Not found"}),
+                    status_code=404,
+                    media_type="application/json",
+                )
+
+            # Positive charset barrier. The target URL is built from the
+            # MATCHED GROUP, never the raw path parameter, so no byte outside
+            # the allowlist can reach the wire whatever the client does with
+            # re-encoding.
+            safe_path_match = SAFE_FORWARD_PATH_RE.fullmatch(path)
+            if safe_path_match is None:
+                logger.warning(
+                    "gateway.proxy.path_charset_rejected", extra={"workflow": name}
+                )
+                return Response(
+                    content=json.dumps(
+                        {
+                            "error": "Invalid proxy path: contains a character "
+                            "that may not be forwarded"
+                        }
+                    ),
+                    status_code=400,
+                    media_type="application/json",
+                )
+            # `path` is used directly below, NOT `safe_path_match.group(0)`.
+            # For a SUCCESSFUL fullmatch those are the same string, so the
+            # extraction never sanitized anything -- the safety is entirely in
+            # the REJECTION above. Written as an extraction it invited a later
+            # `fullmatch` -> `match` edit that looks equivalent and silently
+            # forwards a TRUNCATED path ('a b' -> 'a') instead of refusing it.
+
+            idx = self._proxy_round_robin.get(name, 0)
+            backend = backends[idx % len(backends)]
+            self._proxy_round_robin[name] = idx + 1
 
             target_url = f"{backend.rstrip('/')}/{path}"
 
-            # Forward headers (exclude host)
+            # Forward headers, stripping the caller's credentials unless the
+            # registration explicitly opted in. Before issue #2025 this filter
+            # excluded only host/content-length, so Authorization, Cookie and
+            # every API-key header were handed to whichever round-robin
+            # backend was selected.
+            _excluded_headers = {"host", "content-length"}
+            _excluded_headers |= PROXY_HOP_BY_HOP_HEADERS
+            if not forward_credentials:
+                _excluded_headers |= _PROXY_CREDENTIAL_HEADERS
             headers = {
                 k: v
                 for k, v in request.headers.items()
-                if k.lower() not in ("host", "content-length")
+                if k.lower() not in _excluded_headers
             }
 
             body = await request.body()
@@ -582,20 +814,14 @@ class WorkflowAPIGateway:
                     url=target_url,
                     headers=headers,
                     content=body,
-                    params=dict(request.query_params),
+                    # multi_items() preserves repeated keys (?tag=a&tag=b);
+                    # dict() silently kept only the last (issue #2025).
+                    params=list(request.query_params.multi_items()),
                 )
-                _ALLOWED_RESPONSE_HEADERS = {
-                    "content-type",
-                    "content-length",
-                    "content-encoding",
-                    "cache-control",
-                    "etag",
-                    "last-modified",
-                }
                 filtered_headers = {
                     k: v
                     for k, v in resp.headers.items()
-                    if k.lower() in _ALLOWED_RESPONSE_HEADERS
+                    if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
                 }
                 return Response(
                     content=resp.content,
@@ -604,7 +830,18 @@ class WorkflowAPIGateway:
                     media_type=resp.headers.get("content-type"),
                 )
             except httpx.RequestError as exc:
-                logger.error(f"Proxy request to {target_url} failed: {exc}")
+                # Log the workflow and the registered backend -- both fixed at
+                # registration -- not `target_url`, which embeds the caller's
+                # path. Interpolating that put caller-controlled text into the
+                # log stream (py/log-injection); a forged newline there can
+                # fabricate whole log entries for anything reading the file.
+                logger.error(
+                    "Proxy request for workflow %s to backend %s failed: %s: %s",
+                    name,
+                    backend,
+                    type(exc).__name__,
+                    exc,
+                )
                 return Response(
                     content='{"error": "Backend unreachable"}',
                     status_code=502,
@@ -729,51 +966,54 @@ class WorkflowOrchestrator:
 
         result = initial_input
 
-        runtime = LocalRuntime()
-        for workflow_name in self.chains[chain_name]:
-            reg = self.gateway.workflows[workflow_name]
+        # Context-managed so the runtime's resources are released even if a
+        # hop raises. The bare `LocalRuntime()` here leaked on every call and
+        # emitted a DeprecationWarning that becomes an error in v0.12.0.
+        with LocalRuntime() as runtime:
+            for workflow_name in self.chains[chain_name]:
+                reg = self.gateway.workflows[workflow_name]
 
-            if reg.type == "embedded" and reg.workflow is not None:
-                # Execute embedded workflow in-process
-                # Bind BOTH shapes. On the FIRST hop `result` IS the caller's
-                # `initial_input`, so this is a caller-facing entry point with
-                # one arguments slot and the structural rule in
-                # `kailash/workflow/input_envelope.py` says it binds -- passing
-                # it raw left a workflow reading `parameters.get(...)` raising
-                # NameError here while running on every channel.
-                #
-                # Later hops carry the PREVIOUS workflow's flattened node
-                # outputs rather than caller data, and they bind too, on
-                # purpose: one workflow in a chain must not see a different
-                # input contract depending on its position. The envelope does
-                # not accumulate across hops -- `result` is rebuilt from
-                # `wf_results` each iteration, so the key is re-derived, never
-                # nested.
-                from kailash.workflow.input_envelope import bind_parameter_envelope
+                if reg.type == "embedded" and reg.workflow is not None:
+                    # Execute embedded workflow in-process
+                    # Bind BOTH shapes. On the FIRST hop `result` IS the caller's
+                    # `initial_input`, so this is a caller-facing entry point with
+                    # one arguments slot and the structural rule in
+                    # `kailash/workflow/input_envelope.py` says it binds -- passing
+                    # it raw left a workflow reading `parameters.get(...)` raising
+                    # NameError here while running on every channel.
+                    #
+                    # Later hops carry the PREVIOUS workflow's flattened node
+                    # outputs rather than caller data, and they bind too, on
+                    # purpose: one workflow in a chain must not see a different
+                    # input contract depending on its position. The envelope does
+                    # not accumulate across hops -- `result` is rebuilt from
+                    # `wf_results` each iteration, so the key is re-derived, never
+                    # nested.
+                    from kailash.workflow.input_envelope import bind_parameter_envelope
 
-                wf_results, _run_id = runtime.execute(
-                    reg.workflow, parameters=bind_parameter_envelope(result)
-                )
-                # Flatten results: use all node outputs as next input
-                result = {}
-                for _node_id, node_output in wf_results.items():
-                    if isinstance(node_output, dict):
-                        result.update(node_output)
-                    else:
-                        result[_node_id] = node_output
+                    wf_results, _run_id = runtime.execute(
+                        reg.workflow, parameters=bind_parameter_envelope(result)
+                    )
+                    # Flatten results: use all node outputs as next input
+                    result = {}
+                    for _node_id, node_output in wf_results.items():
+                        if isinstance(node_output, dict):
+                            result.update(node_output)
+                        else:
+                            result[_node_id] = node_output
 
-            elif reg.type == "proxied" and reg.proxy_url:
-                # Forward to proxied backend via HTTP POST
-                client = await self.gateway._get_proxy_client()
-                url = f"{reg.proxy_url.rstrip('/')}/execute"
-                resp = await client.post(url, json=result, timeout=60.0)
-                resp.raise_for_status()
-                result = resp.json()
+                elif reg.type == "proxied" and reg.proxy_url:
+                    # Forward to proxied backend via HTTP POST
+                    client = await self.gateway._get_proxy_client()
+                    url = f"{reg.proxy_url.rstrip('/')}/execute"
+                    resp = await client.post(url, json=result, timeout=60.0)
+                    resp.raise_for_status()
+                    result = resp.json()
 
-            else:
-                raise ValueError(
-                    f"Workflow '{workflow_name}' is not executable "
-                    f"(type={reg.type}, workflow={reg.workflow is not None})"
-                )
+                else:
+                    raise ValueError(
+                        f"Workflow '{workflow_name}' is not executable "
+                        f"(type={reg.type}, workflow={reg.workflow is not None})"
+                    )
 
         return result

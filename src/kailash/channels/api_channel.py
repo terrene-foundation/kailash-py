@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 # `uvicorn` and `starlette` are OPTIONAL dependencies under the `server` extra.
 # Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
@@ -492,8 +492,24 @@ class APIChannel(Channel):
         health_check: Optional[str] = None,
         description: Optional[str] = None,
         tags: Optional[list] = None,
+        *,
+        allowed_paths: Optional[list] = None,
+        allowed_methods: Optional[list] = None,
+        auth_dependency: Optional[Callable[..., Any]] = None,
+        forward_credentials: bool = False,
     ) -> None:
         """Register a proxied workflow with this API channel.
+
+        Delegates to :meth:`kailash.servers.WorkflowServer.proxy_workflow`,
+        which is fail-closed since issue #2025: it raises unless an
+        authentication control and an explicit ``allowed_paths`` allowlist are
+        supplied.
+
+        Every security-relevant argument of the underlying call is forwarded
+        here rather than defaulted locally (``security.md`` § Multi-Site Kwarg
+        Plumbing). Without this plumbing the gate would be unconfigurable
+        through the channel, which makes it a gate that gets worked around by
+        whoever needs to configure it.
 
         Args:
             name: Workflow name
@@ -501,6 +517,18 @@ class APIChannel(Channel):
             health_check: Optional health check endpoint
             description: Optional description
             tags: Optional tags
+            allowed_paths: **Required** by the underlying server. Paths that
+                may be forwarded; ``["*"]`` for every path, written down
+                explicitly.
+            allowed_methods: HTTP methods to forward. Defaults to ``["GET"]``.
+            auth_dependency: FastAPI dependency protecting the route. When
+                omitted, the underlying server's ``auth_manager`` supplies one.
+            forward_credentials: Forward the caller's credential headers to the
+                backend. Defaults to False (stripped).
+
+        Raises:
+            ProxyAuthNotConfiguredError: No authentication control configured.
+            ValueError: ``allowed_paths`` missing or invalid.
         """
         self.workflow_server.proxy_workflow(
             name=name,
@@ -508,6 +536,10 @@ class APIChannel(Channel):
             health_check=health_check or "/health",
             description=description or "",
             tags=tags or [],
+            allowed_paths=allowed_paths,
+            allowed_methods=allowed_methods,
+            auth_dependency=auth_dependency,
+            forward_credentials=forward_credentials,
         )
         logger.info(
             f"Registered proxied workflow '{name}' with API channel {self.name}"

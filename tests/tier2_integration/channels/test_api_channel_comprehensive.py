@@ -319,13 +319,43 @@ class TestAPIChannel:
             tags=["proxy"],
         )
 
+        # Every security-relevant argument of the underlying call is forwarded
+        # rather than defaulted locally (issue #2025, security.md § Multi-Site
+        # Kwarg Plumbing). Asserting them explicitly is what would catch a
+        # future edit that silently stops threading one through -- at which
+        # point the gate becomes unconfigurable via this channel.
         api_channel.workflow_server.proxy_workflow.assert_called_once_with(
             name="proxied_workflow",
             proxy_url="http://external:8080",
             health_check="/health",
             description="Proxied workflow",
             tags=["proxy"],
+            allowed_paths=None,
+            allowed_methods=None,
+            auth_dependency=None,
+            forward_credentials=False,
         )
+
+    def test_proxy_workflow_threads_security_kwargs(self, api_channel):
+        """The channel MUST pass the gate's arguments through, not drop them."""
+
+        def dep():
+            return {"user_id": "x"}
+
+        api_channel.proxy_workflow(
+            name="proxied_workflow",
+            proxy_url="http://external:8080",
+            allowed_paths=["reports/*"],
+            allowed_methods=["GET", "POST"],
+            auth_dependency=dep,
+            forward_credentials=True,
+        )
+
+        kwargs = api_channel.workflow_server.proxy_workflow.call_args.kwargs
+        assert kwargs["allowed_paths"] == ["reports/*"]
+        assert kwargs["allowed_methods"] == ["GET", "POST"]
+        assert kwargs["auth_dependency"] is dep
+        assert kwargs["forward_credentials"] is True
 
     @pytest.mark.asyncio
     async def test_health_check(self, api_channel):
