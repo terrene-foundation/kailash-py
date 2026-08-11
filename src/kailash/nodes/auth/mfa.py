@@ -2531,7 +2531,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             method: MFA method
             result: Operation result
         """
-        await asyncio.to_thread(self._audit_mfa_operation_sync, user_id, action, method, result)
+        await asyncio.to_thread(
+            self._audit_mfa_operation_sync, user_id, action, method, result
+        )
 
     def _audit_mfa_operation_sync(
         self, user_id: str, action: str, method: str, result: Dict[str, Any]
