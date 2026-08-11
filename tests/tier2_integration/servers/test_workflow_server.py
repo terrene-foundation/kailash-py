@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.servers import WorkflowServer
 from src.kailash.workflow import Workflow
 from src.kailash.workflow.builder import WorkflowBuilder
@@ -155,7 +156,22 @@ class TestWorkflowServer:
             server.register_mcp_server("duplicate_mcp", mcp2)
 
     def test_proxy_workflow_registration(self):
-        """Test proxied workflow registration functionality."""
+        """Test proxied workflow registration functionality.
+
+        Since issue #2025 a proxy registration is fail-closed: it must carry an
+        authentication control and an explicit path allowlist. This test drives
+        the authorised path; the refusals are covered in
+        tests/regression/test_issue_2025_unauthenticated_proxy_route.py.
+        """
+        from starlette.requests import Request
+
+        async def require_token(request: Request):
+            from fastapi import HTTPException
+
+            if not request.headers.get("Authorization"):
+                raise HTTPException(status_code=401, detail="Not authenticated")
+            return {"user_id": "test"}
+
         server = WorkflowServer(title="Proxy Test Server")
         server.proxy_workflow(
             name="proxy_workflow",
@@ -163,6 +179,8 @@ class TestWorkflowServer:
             health_check="/health",
             description="External workflow",
             tags=["proxy", "external"],
+            allowed_paths=["*"],
+            auth_dependency=require_token,
         )
 
         # Check proxied workflow was registered
