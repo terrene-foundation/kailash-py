@@ -81,4 +81,45 @@ class ProviderUndetectable(RuntimeError):
         )
 
 
-__all__ = ["EnvModelMissing", "ProviderUndetectable"]
+class ObservabilityNotImplemented(RuntimeError):
+    """An observability subsystem was explicitly requested but does not exist.
+
+    Raised by :meth:`kaizen.smart_defaults.SmartDefaultsManager.create_observability`
+    when a caller sets ``enable_tracing`` / ``enable_metrics`` /
+    ``enable_logging`` / ``enable_audit`` to ``True`` explicitly. None of the
+    four subsystems is implemented: the hook classes the call site imports do
+    not exist, and neither do the handler methods it registers.
+
+    Previously each import raised ``ImportError``, which was caught and logged
+    as "not available, skipping" — so the flags reported success while
+    registering nothing (``rules/zero-tolerance.md`` Rule 2 stub + Rule 3
+    silent fallback). ``enable_audit`` is the sharp case: audit trails that
+    silently record nothing are invisible exactly when they matter.
+
+    Raised ONLY for an EXPLICIT ``True``. The flags default to ``None``, which
+    warns loudly and otherwise behaves as before — raising on the default
+    would break every agent construction, including callers who never
+    mentioned observability.
+
+    Tracking issue for whether these subsystems get implemented or removed:
+    #2084.
+
+    Attributes:
+        subsystem: Human name of the missing subsystem (e.g. ``"audit"``).
+        flag: The config flag the caller set (e.g. ``"enable_audit"``).
+    """
+
+    def __init__(self, subsystem: str, flag: str, provides: str) -> None:
+        self.subsystem = subsystem
+        self.flag = flag
+        super().__init__(
+            f"{flag}=True was requested, but the {subsystem} subsystem is NOT "
+            f"IMPLEMENTED — it would have provided {provides}. There is "
+            f"nothing to install; the hook class and its handlers do not "
+            f"exist in this package. Set {flag}=False to proceed without it, "
+            f"or leave it unset to get a warning instead of this error. "
+            f"Tracking: https://github.com/terrene-foundation/kailash-py/issues/2084"
+        )
+
+
+__all__ = ["EnvModelMissing", "ObservabilityNotImplemented", "ProviderUndetectable"]

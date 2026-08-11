@@ -13,6 +13,52 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING) — the four observability flags no longer silently install nothing (#2084)
+
+`AgentConfig.enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit`
+each **defaulted to `True`** while the subsystems they enable **do not exist**.
+`create_observability()` imported four hook classes that are not in the package,
+caught the resulting `ImportError`, logged `"… not available, skipping"`, and
+returned a `HookManager` with **zero hooks registered**. `enable_audit` is the
+sharp case: compliance audit trails that silently record nothing are invisible
+exactly when they matter.
+
+The flags are now **tri-state** (`Optional[bool]`, default `None`):
+
+| value             | behaviour                                                        |
+| ----------------- | ---------------------------------------------------------------- |
+| `None` (default)  | one consolidated WARNING naming the unimplemented subsystems; otherwise unchanged |
+| `True` (explicit) | raises `kaizen.errors.ObservabilityNotImplemented`, naming the subsystem and flag |
+| `False`           | silent                                                            |
+
+Raising only on an explicit `True` is deliberate: `True` was also the default, so
+raising on the default would break every agent construction — including callers
+who never mentioned observability.
+
+**Also corrected: `AgentConfig.is_observability_enabled()`.** Previously returned
+`True` by default while zero hooks were registered — it reported observability the
+framework did not have, so a caller branching on it ran its observability-dependent
+path against an empty manager. It now returns `False` unless a subsystem is
+explicitly requested. This is a correction from false to true, not a change from
+one correct behaviour to another.
+
+`create_observability()` now returns `None` on the default path instead of an empty
+`HookManager`. `BaseAgent` already declares `hook_manager: Optional[Any] = None` and
+handles it (`base_agent.py:184-192`), constructing its own manager when
+`hooks_enabled` — so the observable behaviour is unchanged.
+
+**Migration.** If you pass any of these flags explicitly:
+
+- **Set them to `False`**, or remove them — they never did anything.
+- Do **not** set them to `True`: that now raises, because the feature does not exist.
+- If you were relying on `is_observability_enabled()` returning `True`, note it was
+  reporting a subsystem set that registered nothing; supply your own manager via
+  `custom_hook_manager=` to get real hooks.
+- To pin the previous (silent) behaviour: `kailash-kaizen==<previous exact version>`.
+
+Whether these four subsystems get implemented or removed is tracked in **#2084**;
+this change makes the flags honest, it does not make the features exist.
+
 ### Fixed — `EnterpriseMemorySystem` no longer widens tenant scope on a falsy tenant id (#2005)
 
 `_build_tenant_key` resolved its scope with `tenant_id or self._current_tenant`.

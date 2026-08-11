@@ -15,8 +15,22 @@ import logging
 from pathlib import Path
 
 from kaizen.agent_config import AgentConfig
+from kaizen.errors import ObservabilityNotImplemented
 
 logger = logging.getLogger(__name__)
+
+#: The four observability subsystems this module advertises and does NOT
+#: implement: ``(config flag, human name, what it would have provided)``.
+#: The hook classes imported by the old call site do not exist, and neither do
+#: the handler methods it registered (``start_trace`` / ``end_trace`` /
+#: ``record_start`` / ``record_end`` / ``log_start`` / ``log_end`` have zero
+#: definitions anywhere in ``src/``). Tracking: #2084.
+_UNIMPLEMENTED_OBSERVABILITY = (
+    ("enable_tracing", "tracing", "distributed tracing via Jaeger"),
+    ("enable_metrics", "metrics", "Prometheus metrics collection"),
+    ("enable_logging", "logging", "structured JSON logging"),
+    ("enable_audit", "audit", "compliance audit trails"),
+)
 
 
 # =============================================================================
@@ -172,106 +186,76 @@ class SmartDefaultsManager:
 
     def create_observability(self, config: AgentConfig):
         """
-        Create observability with smart defaults.
+        Resolve observability configuration.
 
-        Sets up:
-        - Tracing: Jaeger distributed tracing
-        - Metrics: Prometheus metrics collection
-        - Logging: Structured JSON logging
-        - Audit: Compliance audit trails
+        NONE of the four advertised subsystems — tracing, metrics, logging,
+        audit — is implemented (#2084). This method no longer pretends
+        otherwise: it either returns a caller-supplied hook manager, raises for
+        an explicit request it cannot satisfy, or warns and returns None.
 
         Args:
             config: Agent configuration
 
         Returns:
-            HookManager with observability hooks or None
+            The custom hook manager if one was supplied, otherwise None.
+
+        Raises:
+            ObservabilityNotImplemented: if any of the four flags was set to
+                ``True`` explicitly. Left unset (``None``), they warn instead.
 
         Logic:
         - If custom_hook_manager provided → use it
-        - If all observability disabled → no hooks
-        - Otherwise → create HookManager with enabled subsystems
+        - If any subsystem explicitly requested → raise (none are implemented)
+        - Otherwise → warn once and return None
         """
         # Layer 3: Custom hook manager override
         if config.has_custom_observability():
             self.logger.info("Using custom hook manager")
             return config.custom_hook_manager
 
-        # No observability if all disabled
-        if not config.is_observability_enabled():
-            self.logger.info("Observability disabled")
-            return None
+        # NOT-IMPLEMENTED gate (#2084).
+        #
+        # This function used to import four hook classes that do not exist,
+        # catch the resulting ImportError, log "not available, skipping", and
+        # return an EMPTY HookManager — so all four flags reported success
+        # while registering nothing. `enable_audit` is the sharp case:
+        # compliance audit trails that silently record nothing are invisible
+        # exactly when they matter.
+        #
+        # Deliberately NOT wrapped in try/except ImportError. The defect being
+        # fixed IS a swallowed ImportError; reproducing that shape one layer
+        # out would defeat the purpose.
+        explicitly_requested = [
+            (flag, subsystem, provides)
+            for flag, subsystem, provides in _UNIMPLEMENTED_OBSERVABILITY
+            if getattr(config, flag, None) is True
+        ]
+        if explicitly_requested:
+            flag, subsystem, provides = explicitly_requested[0]
+            raise ObservabilityNotImplemented(subsystem, flag, provides)
 
-        # Layer 1: Smart defaults
-        from kaizen.core.autonomy.hooks import HookManager
-        from kaizen.core.autonomy.hooks.types import HookEvent
+        # Left at default: the caller did not ask, so do not break them — but
+        # do not stay quiet about advertising four features that do not exist.
+        # ONE consolidated warning, not the four separate "not available,
+        # skipping" lines this replaced: "not available" reads as a missing
+        # optional dependency an operator could install, and there is nothing
+        # to install.
+        unset = [
+            subsystem
+            for flag, subsystem, _ in _UNIMPLEMENTED_OBSERVABILITY
+            if getattr(config, flag, None) is None
+        ]
+        if unset:
+            self.logger.warning(
+                "Observability subsystems are NOT IMPLEMENTED and no hooks "
+                "were registered: %s. These config flags are advertised but "
+                "install nothing (tracking: #2084). Set them to False to "
+                "silence this, or True to fail loudly instead.",
+                ", ".join(unset),
+            )
 
-        hook_manager = HookManager()
-        enabled_systems = []
-
-        # Tracing (Jaeger)
-        if config.enable_tracing:
-            try:
-                from kaizen.core.autonomy.observability.tracing import TracingHook
-
-                tracing_hook = TracingHook(endpoint=config.tracing_endpoint)
-                hook_manager.register(
-                    HookEvent.PRE_AGENT_LOOP, tracing_hook.start_trace
-                )
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, tracing_hook.end_trace)
-                enabled_systems.append("Jaeger tracing")
-            except ImportError:
-                self.logger.warning("Tracing hook not available, skipping")
-
-        # Metrics (Prometheus)
-        if config.enable_metrics:
-            try:
-                from kaizen.core.autonomy.observability.metrics import MetricsHook
-
-                metrics_hook = MetricsHook(port=config.metrics_port)
-                hook_manager.register(
-                    HookEvent.PRE_AGENT_LOOP, metrics_hook.record_start
-                )
-                hook_manager.register(
-                    HookEvent.POST_AGENT_LOOP, metrics_hook.record_end
-                )
-                enabled_systems.append(
-                    f"Prometheus metrics (port {config.metrics_port})"
-                )
-            except ImportError:
-                self.logger.warning("Metrics hook not available, skipping")
-
-        # Logging (Structured JSON)
-        if config.enable_logging:
-            try:
-                from kaizen.core.autonomy.observability.logging import LoggingHook
-
-                logging_hook = LoggingHook(level=config.log_level)
-                hook_manager.register(HookEvent.PRE_AGENT_LOOP, logging_hook.log_start)
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, logging_hook.log_end)
-                enabled_systems.append(f"Structured logging ({config.log_level})")
-            except ImportError:
-                self.logger.warning("Logging hook not available, skipping")
-
-        # Audit (Compliance)
-        if config.enable_audit:
-            try:
-                from kaizen.core.autonomy.observability.audit import AuditHook
-
-                # Ensure audit log directory exists
-                audit_path = Path(config.audit_log_path)
-                audit_path.parent.mkdir(parents=True, exist_ok=True)
-
-                audit_hook = AuditHook(path=config.audit_log_path)
-                hook_manager.register(HookEvent.PRE_AGENT_LOOP, audit_hook.record_start)
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, audit_hook.record_end)
-                enabled_systems.append("Audit trails")
-            except ImportError:
-                self.logger.warning("Audit hook not available, skipping")
-
-        if enabled_systems:
-            self.logger.info(f"Enabled observability: {', '.join(enabled_systems)}")
-
-        return hook_manager
+        self.logger.info("Observability disabled")
+        return None
 
     # =========================================================================
     # Checkpointing Creation
