@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_ALLOWED_METHODS",
+    "PROXY_CREDENTIAL_HEADERS",
     "PROXY_SUPPORTED_METHODS",
     "SAFE_FORWARD_PATH_RE",
     "PathPattern",
@@ -101,6 +102,26 @@ DEFAULT_ALLOWED_METHODS: tuple[str, ...] = ("GET",)
 
 #: A compiled allowlist entry accepts either a string pattern or a regex.
 PathPattern = Union[str, re.Pattern]
+
+#: Request headers carrying the CALLER's credentials, stripped before a proxy
+#: forward unless the registration explicitly opts into pass-through.
+#:
+#: The two surfaces disagreed before #2025 and both were wrong in opposite
+#: directions: ``WorkflowServer`` stripped ``Authorization`` unconditionally,
+#: so the backend could never re-authorize; ``WorkflowAPIGateway`` excluded
+#: only ``host``/``content-length``, so it handed the caller's credentials to
+#: whichever round-robin backend was selected. One constant, one default
+#: (strip), one explicit opt-in (``forward_credentials=True``).
+PROXY_CREDENTIAL_HEADERS: frozenset = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "x-api-key",
+        "x-auth-token",
+        "proxy-authorization",
+        "set-cookie",
+    }
+)
 
 
 class ProxyAuthNotConfiguredError(RuntimeError):

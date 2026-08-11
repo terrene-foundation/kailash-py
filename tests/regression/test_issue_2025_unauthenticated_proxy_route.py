@@ -45,7 +45,7 @@ from kailash.servers import (
     ProxyAuthNotConfiguredError,
     WorkflowServer,
 )
-from kailash.servers.proxy_guard import (
+from kailash.utils.proxy_guard import (
     SAFE_FORWARD_PATH_RE,
     compile_path_allowlist,
     normalize_allowed_methods,

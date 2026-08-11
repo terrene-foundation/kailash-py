@@ -29,13 +29,13 @@ Note:
     refuses to register an unauthenticated proxy route without it (#2025).
 """
 
-from .durable_workflow_server import DurableWorkflowServer
-from .enterprise_workflow_server import EnterpriseWorkflowServer
-from .proxy_guard import (
+from ..utils.proxy_guard import (
     DEFAULT_ALLOWED_METHODS,
     PROXY_SUPPORTED_METHODS,
     ProxyAuthNotConfiguredError,
 )
+from .durable_workflow_server import DurableWorkflowServer
+from .enterprise_workflow_server import EnterpriseWorkflowServer
 from .workflow_server import WorkflowServer
 
 # Recommended default for production

@@ -34,12 +34,8 @@ from ..utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
-from ..workflow import Workflow
-from .connection_metrics_router import (
-    ConnectionMetricsProvider,
-    create_connection_metrics_router,
-)
-from .proxy_guard import (
+from ..utils.proxy_guard import (
+    PROXY_CREDENTIAL_HEADERS,
     SAFE_FORWARD_PATH_RE,
     PathPattern,
     compile_path_allowlist,
@@ -47,6 +43,11 @@ from .proxy_guard import (
     path_matches_allowlist,
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
+)
+from ..workflow import Workflow
+from .connection_metrics_router import (
+    ConnectionMetricsProvider,
+    create_connection_metrics_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ class WorkflowServer:
                 shipped implementation. :meth:`proxy_workflow` refuses to
                 register a route unless this (or a per-registration
                 ``auth_dependency``) is present -- see issue #2025 and
-                :mod:`kailash.servers.proxy_guard`. Can also be supplied after
+                :mod:`kailash.utils.proxy_guard`. Can also be supplied after
                 construction via :meth:`set_auth_manager`.
             startup_hook: Optional async callback awaited inside the FastAPI
                 lifespan, after `router._startup()` fires, BEFORE the server
@@ -835,6 +836,7 @@ class WorkflowServer:
         allowed_paths: list[PathPattern] | None = None,
         allowed_methods: list[str] | None = None,
         auth_dependency: Callable[..., Any] | None = None,
+        forward_credentials: bool = False,
     ):
         """Register a proxied workflow running on another server.
 
@@ -856,7 +858,7 @@ class WorkflowServer:
                 now explicit). Compiled ``re.Pattern`` entries are matched with
                 ``fullmatch``. A request whose path matches nothing gets 404 --
                 it is not a path this proxy serves. See
-                :func:`kailash.servers.proxy_guard.compile_path_allowlist`.
+                :func:`kailash.utils.proxy_guard.compile_path_allowlist`.
             allowed_methods: HTTP methods to forward. Defaults to ``["GET"]``;
                 any other verb gets 405 from the router because the route is
                 registered only for the methods named here.
@@ -864,8 +866,16 @@ class WorkflowServer:
                 omitted, the server's ``auth_manager`` supplies one. When
                 neither is available and
                 :meth:`declare_external_auth` was not called,
-                :class:`~kailash.servers.proxy_guard.ProxyAuthNotConfiguredError`
+                :class:`~kailash.utils.proxy_guard.ProxyAuthNotConfiguredError`
                 is raised.
+            forward_credentials: When False (the default) the caller's
+                ``Authorization``, ``Cookie``, ``X-API-Key``,
+                ``X-Auth-Token`` and ``Proxy-Authorization`` headers are
+                STRIPPED before forwarding -- the behaviour this server has
+                always had. Set True when the backend is trusted and needs to
+                re-authorize the original caller; #2025 noted that stripping
+                unconditionally left the backend unable to re-authorize, and
+                this is the documented way to allow it.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control is
@@ -973,23 +983,18 @@ class WorkflowServer:
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                # Forward headers, excluding host and sensitive headers
-                _sensitive_headers = frozenset(
-                    {
-                        "host",
-                        "content-length",
-                        "authorization",
-                        "cookie",
-                        "x-api-key",
-                        "x-auth-token",
-                        "proxy-authorization",
-                        "set-cookie",
-                    }
-                )
+                # Forward headers, excluding hop-by-hop headers and -- unless
+                # the registration opted in -- the caller's credentials. The
+                # credential set is shared with WorkflowAPIGateway so the two
+                # proxy surfaces cannot drift (security.md, Enforcement-Surface
+                # Parity); before #2025 they disagreed in opposite directions.
+                _excluded_headers = {"host", "content-length"}
+                if not forward_credentials:
+                    _excluded_headers |= PROXY_CREDENTIAL_HEADERS
                 headers = {
                     k: v
                     for k, v in request.headers.items()
-                    if k.lower() not in _sensitive_headers
+                    if k.lower() not in _excluded_headers
                 }
 
                 body = (
