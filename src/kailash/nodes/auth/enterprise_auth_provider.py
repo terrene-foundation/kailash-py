@@ -24,7 +24,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-from kailash.nodes.api import HTTPRequestNode
+from kailash.nodes.api import AsyncHTTPRequestNode
+from kailash.nodes.auth._http_response import http_body
+from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.auth.session_management import SessionManagementNode
@@ -148,7 +150,14 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         )
 
         # Supporting nodes
-        self.http_client = HTTPRequestNode(name=f"{self.name}_http")
+        #
+        # AsyncHTTPRequestNode, not HTTPRequestNode: every caller of this node
+        # is on an async path (_validate_social_token), and the sync
+        # HTTPRequestNode has no awaitable surface at all -- the previous
+        # execute_async() call against it raised AttributeError, which the
+        # caller's except-clause then reported as "Token validation failed"
+        # (issue #2060). Both return {"success": ..., "response": ...}.
+        self.http_client = AsyncHTTPRequestNode(name=f"{self.name}_http")
 
         self.security_logger = SecurityEventNode(name=f"{self.name}_security")
 
@@ -301,14 +310,42 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 else:
                     result["success"] = True
 
-            # Log successful operation
+            # Log successful operation.
+            #
+            # The event is attributed to the principal the operation RESOLVED
+            # to, not to the user_id the caller typed. _authenticate and
+            # _authorize both discard the caller's claim in favour of the
+            # credential's / session's subject (issue #2026, PR #2035); an
+            # audit record still naming the caller's claim would attribute
+            # alice's login to "admin" and defeat the same fix one layer up.
+            # The claim is retained alongside it, because a caller asserting a
+            # subject it did not authenticate as is exactly what an auditor
+            # needs to see.
+            # "auth_success" is reserved for actions that actually authenticate
+            # a principal. get_methods / assess_risk / challenge_mfa echo the
+            # caller's own user_id back and default to success=True, so emitting
+            # auth_success for them wrote a record byte-identical to a genuine
+            # login for a subject nobody authenticated -- an unauthenticated
+            # caller could forge "alice logged in" at will, and the counter
+            # agreed with it (issue #2060).
+            # "validate" is deliberately NOT here. It is a per-request session
+            # check, and counting each one as a successful authentication makes
+            # auth_statistics["successful_auths"] mean something other than
+            # "logins" -- an auditor counting auth_success would over-count by
+            # however chatty the caller is.
+            authenticating = action in {"authenticate", "authorize"}
             if result.get("success", True):
-                self.auth_statistics["successful_auths"] += 1
+                if authenticating:
+                    self.auth_statistics["successful_auths"] += 1
+                resolved_user_id = result.get("user_id") or user_id
                 await self._log_auth_event(
-                    event_type="auth_success",
+                    event_type=(
+                        "auth_success" if authenticating else f"{action}_success"
+                    ),
                     action=action,
                     auth_id=auth_id,
-                    user_id=user_id,
+                    user_id=resolved_user_id,
+                    claimed_user_id=user_id,
                     auth_method=auth_method,
                     risk_context=risk_context,
                     processing_time_ms=processing_time,
@@ -456,7 +493,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # All authentication successful - create session
         self.log_info(f"Creating session for user {user_id}...")
-        session_result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+        session_result = await self.session_node.async_run(
             action="create",
             user_id=user_id,
             auth_method=auth_method,
@@ -465,6 +502,31 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             ip_address=risk_context.get("ip_address"),
             device_info=risk_context.get("device_info"),
         )
+        # A credential that verifies but yields no session is NOT an
+        # authentication. This returned success=True / authenticated=True with
+        # session_id=None whenever the session step refused, took the caller's
+        # success branch, incremented successful_auths, and emitted an
+        # auth_success record for a login that minted nothing (issue #2060).
+        #
+        # Reachable today: SessionManagementNode refuses "create" without an
+        # ip_address, and _extract_risk_context only supplies a default when
+        # risk_context is FALSY. A caller passing a non-empty risk_context that
+        # omits ip_address -- device_info or user_agent only, the ordinary
+        # shape -- skips that fallback and lands here. Same class as the
+        # success-derivation fix in async_run: the verdict comes from the
+        # operation, never from a default.
+        if not session_result.get("success") or not session_result.get("session_id"):
+            return {
+                "success": False,
+                "authenticated": False,
+                "error": "session_creation_failed",
+                "reason": "session_creation_failed",
+                "user_id": user_id,
+                "auth_method": auth_method,
+                "risk_score": risk_score,
+                "session_details": session_result,
+            }
+
         self.log_info(f"Session created: {session_result.get('session_id')}")
 
         # Clear failed attempts on successful auth
@@ -493,7 +555,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     ) -> Dict[str, Any]:
         """Perform authentication using specified method."""
         if auth_method == "sso":
-            return await self.sso_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            return await self.sso_node.async_run(
                 action="callback",
                 provider=credentials.get("provider"),
                 request_data=credentials.get("request_data"),
@@ -501,12 +563,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             )
 
         elif auth_method == "directory":
-            return await self.directory_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            return await self.directory_node.async_run(
                 action="authenticate", credentials=credentials
             )
 
         elif auth_method == "mfa":
-            return await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            return await self.mfa_node.async_run(
                 action="verify",
                 user_id=user_id,
                 code=credentials.get("mfa_code"),
@@ -832,14 +894,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         try:
             # Make request to validate token
-            response = await self.http_client.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            response = await self.http_client.async_run(
                 method="GET",
                 url=url,
                 headers={"Authorization": f"Bearer {access_token}"},
             )
 
             if response.get("success"):
-                user_info = response["response"]
+                # http_body(), not response["response"]: the value under
+                # "response" is the HTTPResponse envelope and the provider's
+                # userinfo document lives at its "content" key. Reading the
+                # envelope found no email/login and reported a valid token as
+                # invalid (issue #2060).
+                user_info = http_body(response)
                 return {
                     "valid": True,
                     "user_id": user_info.get("email") or user_info.get("login"),
@@ -953,7 +1020,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 }
 
             # Verify MFA
-            mfa_result = await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            mfa_result = await self.mfa_node.async_run(
                 action="verify",
                 user_id=user_id,
                 code=mfa_code,
@@ -1346,7 +1413,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 "reason": "session_required",
             }
 
-        session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+        session_validation = await self.session_node.async_run(
             action="validate", session_id=session_id
         )
 
@@ -1428,13 +1495,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # Logout from session management
         if session_id:
-            session_result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+            session_result = await self.session_node.async_run(
                 action="terminate", session_id=session_id
             )
             logout_results.append({"component": "session", "result": session_result})
 
         # Logout from SSO if applicable
-        sso_result = await self.sso_node.execute_async(action="logout", user_id=user_id)  # type: ignore[reportAttributeAccessIssue]
+        sso_result = await self.sso_node.async_run(action="logout", user_id=user_id)
         logout_results.append({"component": "sso", "result": sso_result})
 
         # Clear risk scores
@@ -1442,10 +1509,18 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             del self.risk_scores[user_id]
 
         # Log logout
-        await self.audit_logger.execute_async(  # type: ignore[reportAttributeAccessIssue]
-            action="user_logout",
-            user_id=user_id,
-            details={"session_id": session_id, "logout_results": logout_results},
+        # AuditLogNode is a sync-only Node: it defines neither execute_async nor
+        # async_run, so it is offloaded to a worker thread rather than awaited.
+        # Its parameters are event_type/message/user_id/event_data -- the
+        # action=/details= this used to pass were not read by execute() at all,
+        # so a working call would still have written {"message": "", "data": {}}:
+        # an audit record that does not say what happened (issue #2060).
+        await asyncio.to_thread(
+            self.audit_logger.execute,
+            event_type="user_logout",
+            message=f"User {log_safe(user_id, 64)} logged out",
+            user_id=log_safe(user_id),
+            event_data={"session_id": session_id, "logout_results": logout_results},
         )
 
         return {
@@ -1457,7 +1532,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
     async def _validate_session(self, session_id: str, **kwargs) -> Dict[str, Any]:
         """Validate session."""
-        result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+        result = await self.session_node.async_run(
             action="validate", session_id=session_id
         )
 
@@ -1479,7 +1554,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
             if method == "mfa":
                 # Check if user has MFA configured
-                mfa_status = await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+                mfa_status = await self.mfa_node.async_run(
                     action="status", user_id=user_id
                 )
                 method_info["configured"] = mfa_status.get("mfa_enabled", False)
@@ -1497,7 +1572,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         self, user_id: str, auth_method: str, **kwargs
     ) -> Dict[str, Any]:
         """Challenge user for MFA."""
-        return await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
+        return await self.mfa_node.async_run(
             action="challenge", user_id=user_id, method=auth_method
         )
 
@@ -1512,12 +1587,26 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         else:
             severity = "MEDIUM"
 
-        await self.security_logger.execute_async(  # type: ignore[reportAttributeAccessIssue]
+        # SecurityEventNode is a sync-only Node (neither execute_async nor
+        # async_run), so it is offloaded to a worker thread. Its parameters are
+        # event_type/severity/message/user_id/metadata; the source=/timestamp=/
+        # details= this used to pass were dropped on the floor by execute(), and
+        # message/user_id/metadata were never supplied -- so every event would
+        # have been recorded blank even once the call resolved (issue #2060).
+        # The node stamps its own timestamp. The action is named in the message
+        # so a record cannot be mistaken for one from a different action.
+        await asyncio.to_thread(
+            self.security_logger.execute,
             event_type=event_type,
             severity=severity,
-            source="enterprise_auth_provider",
-            timestamp=datetime.now(UTC).isoformat(),
-            details=event_data,
+            message=(
+                f"{event_type} (action={log_safe(event_data.get('action'), 64)}) "
+                f"via enterprise_auth_provider"
+            ),
+            user_id=log_safe(event_data.get("user_id")),
+            metadata=redact_mapping(
+                {"source": "enterprise_auth_provider", **event_data}
+            ),
         )
 
     def get_auth_statistics(self) -> Dict[str, Any]:
