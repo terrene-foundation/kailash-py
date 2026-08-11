@@ -2509,39 +2509,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         head = local[:2] if len(local) > 2 else local[:1]
         return f"{head}***@{domain}"
 
-    async def _log_security_event(
-        self, user_id: str, event_type: str, severity: str
-    ) -> None:
-        """Log security event.
-
-        Args:
-            user_id: User ID
-            event_type: Type of security event
-            severity: Event severity
-        """
-        # SecurityEventNode is a sync-only Node: it defines neither async_run
-        # nor execute_async, so this await raised AttributeError (issue #2060).
-        # Its parameters are event_type/severity/message/user_id/metadata --
-        # description= and source_ip= were dropped and message= never supplied.
-        # severity is upper-cased because SeverityLevel() rejects lowercase.
-        security_event = {
-            "event_type": event_type,
-            "severity": severity.upper(),
-            "message": f"MFA {event_type} for user {user_id}",
-            "user_id": user_id,
-            "metadata": {
-                "mfa_operation": True,
-                # No request context reaches this node -- it has no caller,
-                # session, or principal parameter. See #2047.
-                "source_ip": "unknown",
-            },
-        }
-
-        try:
-            await asyncio.to_thread(self.security_event_node.execute, **security_event)
-        except Exception as e:
-            self.log_with_context("WARNING", f"Failed to log security event: {e}")
-
     async def _audit_mfa_operation(
         self, user_id: str, action: str, method: str, result: Dict[str, Any]
     ) -> None:
@@ -2644,7 +2611,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         out call, so ``revoke`` / ``disable`` / ``reset`` through the sync
         surface completed with no record whatsoever (issue #2060).
 
-        AuditLogNode is a sync-only Node -- see ``_log_security_event``. Its
+        AuditLogNode is a sync-only Node -- see ``_flush_audit_records``. Its
         parameters are event_type/message/user_id/event_data; the previous
         action=/resource_type=/resource_id=/metadata=/ip_address= were all
         dropped by execute(), so even a resolved call would have written
@@ -3075,7 +3042,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         The four callers of this sit inside ``_data_lock``-held handlers, which
         is why they stood commented out as "disabled for sync operation": the
-        only surface available was the async ``_log_security_event``. So the
+        only surface available was an async ``_log_security_event``. So the
         ``mfa_revoked`` HIGH-severity event -- the one that pages someone when
         a second factor is destroyed -- has never fired (issue #2060). Queueing
         is synchronous and lock-safe; the dispatcher flushes after release.

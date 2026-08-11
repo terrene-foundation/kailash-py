@@ -342,10 +342,15 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                         "success": False,
                         "error": "user_id and ip_address required for create",
                     }
-                result = self._create_session(  # type: ignore[reportArgumentType]
+                # `or {}` rather than a type: ignore. device_info is narrowed
+                # to a dict at the top of this method and round-trips through
+                # validate_and_sanitize_inputs, which widens it back to
+                # Optional; asserting that at the call makes the argument
+                # provably well-typed instead of suppressing the check.
+                result = self._create_session(
                     user_id,
                     ip_address,
-                    device_info,
+                    device_info or {},
                     auth_method=auth_method,
                     additional_factors=additional_factors,
                     auth_risk_score=risk_score,
