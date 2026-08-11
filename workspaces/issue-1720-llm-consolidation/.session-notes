@@ -1,3 +1,32 @@
+# ═══ UPDATE 14 (LATEST) — main `fae6d1c28`: THE LIVE SSRF IS CLOSED ═══
+
+**PR #2064 MERGED.** The full SSRF described in UPDATE 13 is no longer live on main.
+
+Two independent adversarial security reviewers + a release specialist each re-derived the
+analysis rather than accepting a summary. Both reviewers independently found a SECOND SSRF the
+first fix did not close: `aiohttp` defaults `allow_redirects=True`, so the four registration-time
+controls bounded **hop 1 only**. Reproduced live before fixing — a backend open-redirect returned
+`{"AccessKeyId": "ASIA-PIVOTED-CREDENTIAL"}` to the caller with the `location` header hidden from
+the response allowlist. Now `allow_redirects=False` (server) + explicit `follow_redirects=False`
+(gateway, stated rather than inherited because the two clients' defaults disagree).
+
+Measured, `aiohttp 3.13.3`: across a redirect **`Authorization` is STRIPPED but `Cookie` is
+FORWARDED** — so the exfil half was a session cookie, not a bearer token. (Caveat: both endpoints
+were 127.0.0.1 on different PORTS, i.e. cross-ORIGIN not cross-hostname.)
+
+**CodeQL #11497 dismissed** as a bounded reverse-proxy residual, with the full proof posted as a
+PR #2064 comment because the Security-tab comment caps at **280 characters**. Dismissal was
+gated on the redirect fix landing: both reviewers said the residual was NOT dispositionable while
+the bound was stated over a flow that continued past where the controls stopped.
+
+**Alert-state instrument note:** `gh api .../code-scanning/alerts/<n>` returns `state: null` for a
+PR-ref alert. The discriminating read is the LISTING endpoint **with an explicit `ref=`** — PR
+alerts index under `refs/pull/<n>/merge`, not the branch. That read also showed main carried its
+own open critical `#11252` at the PRE-FIX line, independently confirming the class was live.
+
+Still open: **#2072** (anonymous `POST /workflows/{name}/execute` on a default `create_gateway()`)
+— user-approved fail-closed `require_auth=True` server-wide is **task #27, now UNBLOCKED**.
+
 # SWEEP + WRAPUP — 2026-08-11 (READ THIS FIRST)
 
 main `cc44f5471`. **21 PRs merged, 11 issues closed** (#1995 #2015 #2014 #2027 #2004 #2006 #1997
