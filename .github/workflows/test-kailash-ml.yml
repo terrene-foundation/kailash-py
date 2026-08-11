@@ -114,6 +114,23 @@ jobs:
           # Install root kailash editable — kailash.diagnostics.protocols
           # (PR #570) is not yet on PyPI, so a transitive resolve would miss
           # the module that PR#2+ (issue #567) diagnostics adapters import.
+          #
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/unit/ -m 'not (slow or gpu or bench)'
+          #            (1924 tests collected)
+          # Probe: a pytest plugin reporting len(sys.modules) per sibling at
+          # collection finish, run against this exact selection.
+          #   dataflow      -> 0 modules  NOT exercised
+          #   kailash_align -> 0 modules  NOT exercised
+          #   kailash_ml    -> 138        (the package under test)
+          #   kailash       -> 213        editable, this tree
+          # The two files under tests/unit/rl/ that mention `kailash_align`
+          # reference it only in a mock side_effect STRING and a docstring —
+          # neither is an import. So no sibling editable install is warranted
+          # here; adding one would lengthen a 5-version matrix for no benefit.
+          # Resolution: kailash = editable (this tree); kailash-ml = editable
+          # (this tree); dataflow / kailash-align = whatever the transitive
+          # resolve produces, and that is FINE because no code path reaches them.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
 
@@ -172,6 +189,16 @@ jobs:
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
           # pytest-httpserver for test_drift_alerting_wiring webhook tests
           uv pip install pytest-cov pytest-httpserver --python .venv/bin/python
+          #
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/unit/ + tests/integration/
+          #            -m 'not (slow or gpu or bench)'  (2493 tests collected)
+          #   dataflow      -> 112 modules  EXERCISED -> installed editable above
+          #   kailash_align -> 13  modules  EXERCISED -> installed editable above
+          #   kailash_ml    -> 139          (the package under test, editable)
+          #   kailash       -> 251          editable, this tree
+          # This step is the ONE that already had the right answer; the two
+          # installs above are what #2023 asks every other site to justify.
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/unit/ \
             packages/kailash-ml/tests/integration/ \
@@ -207,11 +234,31 @@ jobs:
       - name: Install kailash-ml[dl,dev]
         run: |
           uv venv .venv
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/ -m 'dl or deep_learning'
+          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
+          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
+          #   kailash_ml    -> 139          (package under test, editable)
+          #   kailash       -> 251          editable, this tree
+          # Naming the whole tests/ dir means pytest IMPORTS every test module
+          # before the -m filter deselects anything, so a PyPI-resolved dataflow
+          # can break this step at collection — the exact #2023 trap, one layer
+          # earlier than the runtime TypeError that motivated the issue.
+          # Hence both siblings are installed editable below.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: Test DL
         timeout-minutes: 15
+        # CAVEAT (measured 2026-08-11): `-m 'dl or deep_learning'` currently
+        # selects ZERO tests — 2602 collected, 2602 deselected — because no
+        # test under packages/kailash-ml/ carries a `dl` or `deep_learning`
+        # marker, and neither name is registered in that package's
+        # [tool.pytest.ini_options] markers list. pytest then exits 5 (no tests
+        # collected), so this workflow_dispatch-only job FAILS whenever it is
+        # dispatched. Tracked in #2076.
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \
@@ -243,11 +290,29 @@ jobs:
       - name: Install kailash-ml[rl,dev]
         run: |
           uv venv .venv
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/ -m 'rl or reinforcement_learning'
+          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
+          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
+          #                    (tests/integration/rl/test_rl_align_cross_sdk_wiring.py
+          #                     imports kailash_align at module scope — this is
+          #                     the RL job, so that import is squarely on-path)
+          #   kailash_ml    -> 139          (package under test, editable)
+          #   kailash       -> 251          editable, this tree
+          # Both installed editable below: naming the whole tests/ dir imports
+          # every module before -m deselects, so a PyPI-resolved sibling breaks
+          # collection.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[rl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: Test RL
         timeout-minutes: 15
+        # CAVEAT (measured 2026-08-11): `-m 'rl or reinforcement_learning'`
+        # selects ZERO tests (2602 deselected) — no such marker exists in the
+        # package. pytest exits 5, so this dispatch-only job fails on dispatch.
+        # Tracked in #2076.
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \
@@ -313,8 +378,20 @@ jobs:
       - name: Install kailash-ml[dl,dev] + root kailash editable
         run: |
           uv venv .venv
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/unit/ + tests/integration/
+          #            -m 'cuda or gpu'
+          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
+          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
+          #   kailash_ml    -> 139          (package under test, editable)
+          #   kailash       -> 251          editable, this tree
+          # tests/integration/ contains the feature-store files that import
+          # dataflow at module scope, so collection touches them regardless of
+          # the marker filter. Installed editable below.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: km.doctor gpu — assert CUDA DeviceReport populated
         run: |
@@ -388,11 +465,26 @@ jobs:
       - name: Install kailash-ml[dl,dev] + root kailash editable
         run: |
           uv venv .venv
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-ml/tests/
+          #            -m '(dl or deep_learning) and (cuda or gpu)'
+          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
+          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
+          #   kailash_ml    -> 139          (package under test, editable)
+          #   kailash       -> 251          editable, this tree
+          # Installed editable below — whole-tests/ collection imports them.
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: Test DL on CUDA (torch + GPU-backed tests)
         timeout-minutes: 35
+        # CAVEAT (measured 2026-08-11): this conjunction selects ZERO tests —
+        # neither operand's markers exist in the package. Tracked in #2076.
+        # Masked today by `continue-on-error: true` (IT-1, runner not yet
+        # provisioned); it becomes a hard failure the moment that flag is
+        # removed, so fix #2076 BEFORE flipping.
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \

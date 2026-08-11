@@ -106,6 +106,22 @@ jobs:
           # milestone branch and is not yet on PyPI; align tests import it
           # directly per `rules/deployment.md` § "Sibling-Package CI
           # Installs Root SDK Editable For Unreleased Core Modules".
+          #
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-align/tests/ -m 'not (gpu or slow)'
+          #            (485 tests collected)
+          # Probe: sibling module count in sys.modules at collection finish.
+          #   kailash_ml    -> 95 modules  EXERCISED -> installed editable below
+          #   dataflow      -> 0  modules  NOT exercised -> deliberately NOT
+          #                    installed. kailash-ml eagerly imports
+          #                    kailash_ml.features, and features/ does name
+          #                    dataflow — but every one of those imports is
+          #                    either inside `if TYPE_CHECKING:` or inside a
+          #                    function body, so none fires at import time.
+          #                    Adding dataflow here would pull the DB stack into
+          #                    a 5-version matrix for zero reachable code.
+          #   kailash_align -> 23          (the package under test, editable)
+          #   kailash       -> 213         editable, this tree
           uv pip install -e "packages/kailash-ml" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
 
@@ -160,6 +176,18 @@ jobs:
           uv pip install -e "." --python .venv/bin/python
           # See unit-test install step — kailash_ml.rl.align_adapter is
           # unreleased; install editable from the source tree.
+          #
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-align/tests/ -m 'gpu'
+          #   kailash_ml    -> 95 modules  EXERCISED -> installed editable below
+          #   dataflow      -> 0  modules  NOT exercised -> not installed
+          #   kailash_align -> 23          (package under test, editable)
+          #   kailash       -> 213         editable, this tree
+          # CAVEAT recorded at the same time: `-m 'gpu'` currently selects ZERO
+          # tests (485 deselected) because no test in packages/kailash-align/
+          # carries a `gpu` marker, so pytest exits 5 (no tests collected) and
+          # this job FAILS whenever it is dispatched. Tracked in #2076. The
+          # sibling determination above is independent of it.
           uv pip install -e "packages/kailash-ml" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev,rlhf]" --python .venv/bin/python
 
@@ -194,6 +222,14 @@ jobs:
       - name: Install dev kailash-ml + kailash-align
         run: |
           uv venv .venv
+          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+          # Selection: packages/kailash-align/tests/ -m 'not (gpu or slow)'
+          #            (485 tests collected) — same selection as the `test` job.
+          #   kailash_ml    -> 95 modules  EXERCISED -> installed editable below
+          #                    (this job's whole purpose: align against DEV ml)
+          #   dataflow      -> 0  modules  NOT exercised -> not installed
+          #   kailash_align -> 23          (package under test, editable)
+          #   kailash       -> 213         editable, this tree
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
           uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
