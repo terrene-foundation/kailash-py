@@ -181,3 +181,102 @@ class TestResolveAgentProvider:
 
         with pytest.raises(ConfigurationError):
             resolve_agent_provider(None)
+
+
+class TestRuntimeResultsGuard:
+    """`Kaizen.execute` is a SIXTH swallow site, on the `Agent` path.
+
+    Eight ``self.kaizen.execute(...)`` call sites in ``core/agents.py`` route
+    through ``core/framework.py::Kaizen.execute`` (:383, :484, :755, :854,
+    :2085, :2152, :2521, :2859), and :383 is an agent execution path. Because
+    ``LocalRuntime`` returns node failures instead of raising, a
+    ConfigurationError arriving there was returned as a result dict — the
+    #2022 symptom on a path the strategy guards do not cover.
+
+    DELIBERATELY NOT AN END-TO-END ``Kaizen().execute(workflow)`` TEST.
+    An earlier version of this class did exactly that and took the kaizen CI
+    job down with a MemoryError, an orphaned process and a 10-minute timeout,
+    bisected over three CI runs. ``Kaizen.execute`` calls
+    ``_ensure_kailash_sdk_loaded()``, and importing the Kailash runtime cold
+    measured **+302 MB** — a spike this machine absorbs and the runner does
+    not, which is why local green was uninformative. ``tests/unit/core`` runs
+    4th of ~30 tiers, early enough that this test could be the first in the
+    process to pay that cost.
+
+    So the guard is covered by its two separable halves instead, at no runtime
+    cost: the PREDICATE against the exact dict shape the runtime produces, and
+    the WIRING by AST. Together they fail if either the predicate breaks or the
+    call is removed.
+    """
+
+    def _runtime_shaped_failure(self, cause: BaseException) -> dict:
+        """The literal shape LocalRuntime returns for a failed node.
+
+        Captured from a real run rather than invented:
+        {'error': ..., 'error_type': 'NodeExecutionError', 'failed': True,
+         '_exception': <exception object>}
+        """
+        wrapper = RuntimeError(f"Node 'agent_exec' execution failed: {cause}")
+        wrapper.__cause__ = cause
+        return {
+            "agent_exec": {
+                "error": str(wrapper),
+                "error_type": "NodeExecutionError",
+                "failed": True,
+                "_exception": wrapper,
+            }
+        }
+
+    def test_guard_raises_on_a_runtime_shaped_configuration_failure(self):
+        from kaizen.errors import raise_if_configuration_error
+
+        results = self._runtime_shaped_failure(
+            ConfigurationError("LLMAgentNode: 'provider' is unresolved (None)")
+        )
+        with pytest.raises(ConfigurationError):
+            raise_if_configuration_error(results)
+
+    def test_guard_is_silent_on_success_and_on_ordinary_failures(self):
+        """NEGATIVE CONTROL — it must not raise on anything else."""
+        from kaizen.errors import raise_if_configuration_error
+
+        raise_if_configuration_error({"agent_exec": {"response": "ok"}})
+        raise_if_configuration_error(
+            self._runtime_shaped_failure(ValueError("model returned garbage"))
+        )
+        raise_if_configuration_error({})
+        raise_if_configuration_error(None)
+
+    def test_framework_execute_is_wired_to_the_guard(self):
+        """WIRING — catches the guard being dropped from Kaizen.execute."""
+        import ast
+        import inspect
+        from pathlib import Path
+
+        import kaizen.core.framework as framework
+
+        tree = ast.parse(Path(inspect.getfile(framework)).read_text())
+        # Select Kaizen.execute EXPLICITLY. framework.py defines three methods
+        # named `execute` (Kaizen, EnterpriseSession, EnterpriseCoordinator),
+        # and ast.walk order is not source order — a bare `next(...)` could
+        # assert against the wrong one and pass or fail for the wrong reason.
+        kaizen_cls = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef) and node.name == "Kaizen"
+        )
+        execute = next(
+            node
+            for node in kaizen_cls.body
+            if isinstance(node, ast.FunctionDef) and node.name == "execute"
+        )
+        called = {
+            n.func.id
+            for n in ast.walk(execute)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        }
+        assert "raise_if_configuration_error" in called, (
+            "Kaizen.execute must guard its LocalRuntime results — without it a "
+            "ConfigurationError is returned as a result dict and resurfaces to "
+            "the user as malformed model output (#2022)"
+        )
