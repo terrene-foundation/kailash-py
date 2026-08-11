@@ -15,11 +15,28 @@ onto the backend's entire surface, and ``WorkflowServer`` compounded it by
 stripping ``Authorization`` on forward so the backend could not re-authorize
 either.
 
-CodeQL surfaced this as ``py/partial-ssrf``. That framing is wrong: the scheme,
-host, and port come from the developer-supplied ``proxy_url`` at registration
-time and ``path`` lands in the path component, so no authority pivot is
-constructible. The severity is right; the mechanism is the **missing auth
-gate**, which is what this module closes.
+CodeQL surfaced this as ``py/partial-ssrf`` and the alert was **right**. An
+earlier version of this docstring argued that no authority pivot was
+constructible because the scheme, host and port come from the developer-supplied
+``proxy_url``. That claim was false twice over, and both refutations are worth
+carrying because each was reasoned-about rather than measured:
+
+1. The handlers captured ``proxy_url`` as a **default argument**
+   (``_url=proxy_url``). FastAPI treats any non-path parameter carrying a plain
+   default as a QUERY parameter, so the destination was caller-writable:
+   ``?_url=http://attacker/`` redirected the proxy outright. Fixed by capturing
+   from the enclosing scope.
+2. Even with the destination fixed, the claim holds **only for hop 1**. All the
+   controls below stop where a redirect begins: a backend with any open redirect
+   (an SSO ``?next=`` bounce is ubiquitous) hands the caller an authority pivot
+   on hop 2, and the response-header allowlist hides ``location`` so the caller
+   cannot even tell it happened. Redirect-following is therefore DISABLED
+   explicitly at both call sites, and the no-authority-pivot property is
+   conditional on that: **it holds only while redirects are not followed.**
+
+The severity was right and, if anything, under-rated -- ``partial-ssrf`` on what
+was a full SSRF. The mechanism named in the issue, the **missing auth gate**, is
+real but was not the whole of it.
 
 Per ``rules/security.md`` § Enforcement-Surface Parity both surfaces MUST learn
 the gate together, through ONE shared implementation -- hence this module rather
@@ -57,6 +74,8 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "DEFAULT_ALLOWED_METHODS",
     "PROXY_CREDENTIAL_HEADERS",
+    "PROXY_HOP_BY_HOP_HEADERS",
+    "PROXY_SAFE_RESPONSE_HEADERS",
     "PROXY_SUPPORTED_METHODS",
     "SAFE_FORWARD_PATH_RE",
     "PathPattern",
@@ -120,6 +139,48 @@ PROXY_CREDENTIAL_HEADERS: frozenset = frozenset(
         "x-auth-token",
         "proxy-authorization",
         "set-cookie",
+    }
+)
+
+#: Hop-by-hop headers (RFC 9110 §7.6.1). These describe the CALLER's connection
+#: to this proxy and are meaningless -- and dangerous -- on the separate
+#: connection this proxy opens to the backend. They MUST NOT be forwarded.
+#:
+#: ``transfer-encoding`` is the sharp one: forwarding ``chunked`` alongside a
+#: body the HTTP client will frame itself gives the backend two disagreeing
+#: statements about where the request ends, which is the CL.TE request-smuggling
+#: primitive. ``connection``/``keep-alive``/``upgrade``/``te``/``trailer``/
+#: ``proxy-connection`` leak or attempt to renegotiate connection semantics
+#: across a boundary they do not span; ``expect: 100-continue`` desynchronises
+#: the two legs.
+PROXY_HOP_BY_HOP_HEADERS: frozenset = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        "expect",
+    }
+)
+
+#: Response headers safe to pass back to the caller.
+#:
+#: ``content-encoding`` and ``content-length`` are deliberately ABSENT. Both
+#: HTTP clients used here return DECOMPRESSED bytes (``aiohttp``'s
+#: ``resp.read()``, ``httpx``'s ``resp.content``), so echoing the backend's
+#: ``Content-Encoding: gzip`` labels plaintext as compressed and echoing its
+#: ``Content-Length`` states the COMPRESSED length over a decompressed body.
+#: Either mismatch is a response-smuggling primitive for anything parsing the
+#: stream downstream. The ASGI server computes the correct framing itself.
+PROXY_SAFE_RESPONSE_HEADERS: frozenset = frozenset(
+    {
+        "content-type",
+        "cache-control",
+        "etag",
+        "last-modified",
     }
 )
 

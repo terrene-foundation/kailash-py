@@ -35,6 +35,7 @@ No ``Mock`` appears in this file: the backend is a real HTTP server on a real
 socket, and it records what it actually received.
 """
 
+import gzip
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -381,3 +382,104 @@ def test_gateway_proxy_handler_exposes_no_query_parameters(gateway, backend):
         f"with a plain default becomes a caller-writable query parameter"
     )
     assert all(p.default is inspect.Parameter.empty for p in params.values())
+
+
+# ---------------------------------------------------------------------------
+# Redirect following and response framing on this surface (security review)
+# ---------------------------------------------------------------------------
+
+
+class _GatewayRedirectHandler(BaseHTTPRequestHandler):
+    redirect_to = ""
+
+    def do_GET(self):
+        if self.path.startswith("/api/login"):
+            self.send_response(302)
+            self.send_header("Location", type(self).redirect_to)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        payload = gzip.compress(json.dumps({"who": "legitimate-backend"}).encode())
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Content-Encoding", "gzip")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
+class _GatewayOffHost(BaseHTTPRequestHandler):
+    def do_GET(self):
+        payload = json.dumps({"secret": "OFF-HOST-PIVOT-BODY"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
+@pytest.fixture
+def gateway_redirecting_backend():
+    off_host = ThreadingHTTPServer(("127.0.0.1", 0), _GatewayOffHost)
+    t1 = threading.Thread(target=off_host.serve_forever, daemon=True)
+    t1.start()
+    _GatewayRedirectHandler.redirect_to = (
+        f"http://127.0.0.1:{off_host.server_address[1]}/meta"
+    )
+    backend = ThreadingHTTPServer(("127.0.0.1", 0), _GatewayRedirectHandler)
+    t2 = threading.Thread(target=backend.serve_forever, daemon=True)
+    t2.start()
+    try:
+        yield f"http://127.0.0.1:{backend.server_address[1]}"
+    finally:
+        for srv, thread in ((backend, t2), (off_host, t1)):
+            srv.shutdown()
+            srv.server_close()
+            thread.join(timeout=5)
+
+
+def test_gateway_backend_redirect_is_not_followed(gateway, gateway_redirecting_backend):
+    """Parity with the server surface. httpx defaults follow_redirects=False,
+    but the client now states it explicitly rather than inheriting a default
+    that can change -- and the sibling surface's aiohttp defaults it to True.
+    """
+    gateway.proxy_workflow(
+        name="internal",
+        proxy_url=gateway_redirecting_backend,
+        allowed_paths=["api/*"],
+        auth_dependency=_allow,
+    )
+    client = TestClient(gateway.app)
+
+    response = client.get(
+        "/internal/api/login?next=http://169.254.169.254/latest/",
+        headers=_auth_headers(),
+        follow_redirects=False,
+    )
+    assert "OFF-HOST-PIVOT-BODY" not in response.text
+    assert response.status_code == 302
+
+    ok = client.get("/internal/api/data", headers=_auth_headers())
+    assert ok.status_code == 200, ok.text
+
+
+def test_gateway_response_framing_headers_are_not_echoed(
+    gateway, gateway_redirecting_backend
+):
+    """`resp.content` is decompressed; echoing Content-Encoding mislabels it."""
+    gateway.proxy_workflow(
+        name="internal",
+        proxy_url=gateway_redirecting_backend,
+        allowed_paths=["*"],
+        auth_dependency=_allow,
+    )
+    client = TestClient(gateway.app)
+
+    response = client.get("/internal/api/data", headers=_auth_headers())
+    assert response.status_code == 200, response.text
+    assert "content-encoding" not in {k.lower() for k in response.headers}

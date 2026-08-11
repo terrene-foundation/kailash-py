@@ -88,6 +88,8 @@ from ..utils.lifespan import (
 )
 from ..utils.proxy_guard import PROXY_CREDENTIAL_HEADERS as _PROXY_CREDENTIAL_HEADERS
 from ..utils.proxy_guard import (
+    PROXY_HOP_BY_HOP_HEADERS,
+    PROXY_SAFE_RESPONSE_HEADERS,
     SAFE_FORWARD_PATH_RE,
     PathPattern,
     compile_path_allowlist,
@@ -226,7 +228,15 @@ class WorkflowAPIGateway:
     async def _get_proxy_client(self) -> httpx.AsyncClient:
         """Get or create the shared async HTTP client for proxying."""
         if self._proxy_client is None or self._proxy_client.is_closed:
-            self._proxy_client = httpx.AsyncClient(timeout=30.0)
+            # follow_redirects is stated EXPLICITLY rather than inherited.
+            # httpx happens to default it to False today, but the invariant
+            # this proxy depends on must not rest on a library default that
+            # can change under us -- and the sibling surface uses aiohttp,
+            # which defaults the same knob to True. Every control the proxy
+            # route enforces (auth gate, path allowlist, traversal rejection,
+            # charset barrier) applies to hop 1 only, so a followed redirect
+            # is an authority pivot past all of them.
+            self._proxy_client = httpx.AsyncClient(timeout=30.0, follow_redirects=False)
         return self._proxy_client
 
     async def _check_proxy_health(self, reg: WorkflowRegistration) -> str:
@@ -767,13 +777,18 @@ class WorkflowAPIGateway:
                     status_code=400,
                     media_type="application/json",
                 )
-            safe_path = safe_path_match.group(0)
+            # `path` is used directly below, NOT `safe_path_match.group(0)`.
+            # For a SUCCESSFUL fullmatch those are the same string, so the
+            # extraction never sanitized anything -- the safety is entirely in
+            # the REJECTION above. Written as an extraction it invited a later
+            # `fullmatch` -> `match` edit that looks equivalent and silently
+            # forwards a TRUNCATED path ('a b' -> 'a') instead of refusing it.
 
             idx = self._proxy_round_robin.get(name, 0)
             backend = backends[idx % len(backends)]
             self._proxy_round_robin[name] = idx + 1
 
-            target_url = f"{backend.rstrip('/')}/{safe_path}"
+            target_url = f"{backend.rstrip('/')}/{path}"
 
             # Forward headers, stripping the caller's credentials unless the
             # registration explicitly opted in. Before issue #2025 this filter
@@ -781,6 +796,7 @@ class WorkflowAPIGateway:
             # every API-key header were handed to whichever round-robin
             # backend was selected.
             _excluded_headers = {"host", "content-length"}
+            _excluded_headers |= PROXY_HOP_BY_HOP_HEADERS
             if not forward_credentials:
                 _excluded_headers |= _PROXY_CREDENTIAL_HEADERS
             headers = {
@@ -802,18 +818,10 @@ class WorkflowAPIGateway:
                     # dict() silently kept only the last (issue #2025).
                     params=list(request.query_params.multi_items()),
                 )
-                _ALLOWED_RESPONSE_HEADERS = {
-                    "content-type",
-                    "content-length",
-                    "content-encoding",
-                    "cache-control",
-                    "etag",
-                    "last-modified",
-                }
                 filtered_headers = {
                     k: v
                     for k, v in resp.headers.items()
-                    if k.lower() in _ALLOWED_RESPONSE_HEADERS
+                    if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
                 }
                 return Response(
                     content=resp.content,

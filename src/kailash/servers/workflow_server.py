@@ -19,6 +19,7 @@ try:
     from fastapi import Depends, FastAPI
     from starlette.middleware.cors import CORSMiddleware
     from starlette.requests import Request
+    from starlette.responses import Response as StarletteResponse
     from starlette.websockets import WebSocket
 except ImportError as exc:  # pragma: no cover — covered by structural invariant test
     raise ImportError(
@@ -36,6 +37,8 @@ from ..utils.lifespan import (
 )
 from ..utils.proxy_guard import (
     PROXY_CREDENTIAL_HEADERS,
+    PROXY_HOP_BY_HOP_HEADERS,
+    PROXY_SAFE_RESPONSE_HEADERS,
     SAFE_FORWARD_PATH_RE,
     PathPattern,
     compile_path_allowlist,
@@ -983,9 +986,15 @@ class WorkflowServer:
                         "may not be forwarded"
                     },
                 )
-            safe_path = safe_path_match.group(0)
+            # Use `path` itself, not `safe_path_match.group(0)`. For a
+            # SUCCESSFUL fullmatch those are the same string by definition, so
+            # the extraction never sanitized anything -- the safety comes
+            # entirely from the REJECTION above. Writing it as an extraction
+            # invited a later `fullmatch` -> `match` edit that looks equivalent
+            # and silently forwards a TRUNCATED path ('a b' -> 'a') instead of
+            # refusing it.
 
-            target_url = f"{proxy_url.rstrip('/')}/{safe_path}"
+            target_url = f"{proxy_url.rstrip('/')}/{path}"
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -995,6 +1004,7 @@ class WorkflowServer:
                 # proxy surfaces cannot drift (security.md, Enforcement-Surface
                 # Parity); before #2025 they disagreed in opposite directions.
                 _excluded_headers = {"host", "content-length"}
+                _excluded_headers |= PROXY_HOP_BY_HOP_HEADERS
                 if not forward_credentials:
                     _excluded_headers |= PROXY_CREDENTIAL_HEADERS
                 headers = {
@@ -1017,24 +1027,25 @@ class WorkflowServer:
                     # multi_items() preserves repeated keys (?tag=a&tag=b);
                     # dict() silently kept only the last (issue #2025).
                     params=list(request.query_params.multi_items()),
+                    # EXPLICIT, and load-bearing. aiohttp defaults this to
+                    # True. Every control this route enforces -- the auth
+                    # gate, the path allowlist, traversal rejection, the
+                    # charset barrier -- applies to hop 1 only, so following a
+                    # redirect hands the caller an authority pivot on hop 2:
+                    # a backend with any open redirect (an SSO `?next=` bounce
+                    # is ubiquitous, and query strings are forwarded verbatim)
+                    # makes the proxy fetch an arbitrary host and return the
+                    # body as if it were the backend's. `location` is not in
+                    # the response allowlist, so the caller cannot even see
+                    # that it happened. Measured before this line existed:
+                    # a fully-hardened registration fetched cloud-metadata.
+                    allow_redirects=False,
                 ) as resp:
                     content = await resp.read()
-                    from starlette.responses import Response as StarletteResponse
-
-                    _allowed_response_headers = frozenset(
-                        {
-                            "content-type",
-                            "content-length",
-                            "cache-control",
-                            "etag",
-                            "last-modified",
-                            "content-encoding",
-                        }
-                    )
                     safe_headers = {
                         k: v
                         for k, v in resp.headers.items()
-                        if k.lower() in _allowed_response_headers
+                        if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
                     }
                     return StarletteResponse(
                         content=content,

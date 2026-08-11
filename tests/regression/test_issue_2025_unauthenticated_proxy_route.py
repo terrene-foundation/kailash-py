@@ -28,6 +28,7 @@ the SAME route with a valid token and gets 200 with the backend's body, so the
 """
 
 import asyncio
+import gzip
 import json
 import re
 import threading
@@ -769,3 +770,220 @@ def test_forward_credentials_opt_in_reaches_the_backend(
 
     assert response.status_code == 200, response.text
     assert _CredentialRecordingHandler.received["authorization"] == f"Bearer {token}"
+
+
+# ---------------------------------------------------------------------------
+# Redirect following, hop-by-hop headers, response framing (security review)
+# ---------------------------------------------------------------------------
+
+
+class _RedirectingHandler(BaseHTTPRequestHandler):
+    """A backend with the open redirect that is ubiquitous under `api/`."""
+
+    redirect_to = ""
+    hop_by_hop_seen: dict = {}
+
+    def do_GET(self):
+        type(self).hop_by_hop_seen = {
+            "transfer-encoding": self.headers.get("Transfer-Encoding"),
+            "connection": self.headers.get("Connection"),
+            "te": self.headers.get("TE"),
+            "upgrade": self.headers.get("Upgrade"),
+            "expect": self.headers.get("Expect"),
+        }
+        if self.path.startswith("/api/login"):
+            self.send_response(302)
+            self.send_header("Location", type(self).redirect_to)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        # GENUINELY gzipped, so the HTTP client decompresses successfully and
+        # the test measures what the proxy echoes rather than a decode error.
+        # This is the realistic shape: the client hands the handler PLAINTEXT
+        # bytes while the backend's Content-Encoding/Content-Length still
+        # describe the COMPRESSED form.
+        payload = gzip.compress(json.dumps({"who": "legitimate-backend"}).encode())
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Content-Encoding", "gzip")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
+class _OffHostHandler(BaseHTTPRequestHandler):
+    """Stands in for a host the caller would like to reach, e.g. metadata."""
+
+    def do_GET(self):
+        payload = json.dumps({"secret": "OFF-HOST-PIVOT-BODY"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, *args):  # noqa: D102
+        return
+
+
+@pytest.fixture
+def redirecting_backend():
+    off_host = ThreadingHTTPServer(("127.0.0.1", 0), _OffHostHandler)
+    t1 = threading.Thread(target=off_host.serve_forever, daemon=True)
+    t1.start()
+    _RedirectingHandler.redirect_to = (
+        f"http://127.0.0.1:{off_host.server_address[1]}/meta"
+    )
+    _RedirectingHandler.hop_by_hop_seen = {}
+
+    backend = ThreadingHTTPServer(("127.0.0.1", 0), _RedirectingHandler)
+    t2 = threading.Thread(target=backend.serve_forever, daemon=True)
+    t2.start()
+    try:
+        yield f"http://127.0.0.1:{backend.server_address[1]}"
+    finally:
+        for srv, thread in ((backend, t2), (off_host, t1)):
+            srv.shutdown()
+            srv.server_close()
+            thread.join(timeout=5)
+
+
+def test_backend_redirect_is_not_followed(server, redirecting_backend, auth_manager):
+    """The authority pivot IS constructible on hop 2 without this guard.
+
+    Every control this route enforces -- auth gate, path allowlist, traversal
+    rejection, charset barrier -- applies to hop 1 only. A backend with any
+    open redirect therefore hands an authenticated caller an arbitrary host.
+
+    Measured before `allow_redirects=False` existed, with a registration
+    hardened to `allowed_paths=["api/*"], allowed_methods=["GET"]`:
+
+        status: 200
+        body:   {"AccessKeyId": "ASIA-PIVOTED-CREDENTIAL", ...}
+        caller sees 'location' header: False
+
+    The proxy fetched the off-host body and returned it as the backend's, and
+    because `location` is not in the response allowlist the caller could not
+    tell a redirect had happened.
+    """
+    server.proxy_workflow(
+        name="internal",
+        proxy_url=redirecting_backend,
+        allowed_paths=["api/*"],
+        allowed_methods=["GET"],
+    )
+    client = TestClient(server.app)
+    headers = {"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"}
+
+    response = client.get(
+        "/workflows/internal/api/login?next=http://169.254.169.254/latest/",
+        headers=headers,
+        follow_redirects=False,
+    )
+
+    assert (
+        "OFF-HOST-PIVOT-BODY" not in response.text
+    ), "SSRF: the proxy followed the backend's redirect to another host"
+    assert response.status_code == 302, response.status_code
+
+    # Control: a non-redirecting path on the same registration still works,
+    # so the absence of the pivot body is not simply a broken route.
+    ok = client.get("/workflows/internal/api/data", headers=headers)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["who"] == "legitimate-backend"
+
+
+def test_hop_by_hop_headers_are_not_forwarded(
+    server, redirecting_backend, auth_manager
+):
+    """Hop-by-hop headers describe the CALLER's connection, not the backend's.
+
+    Forwarding `Transfer-Encoding: chunked` alongside a body the HTTP client
+    frames itself gives the backend two disagreeing statements about where the
+    request ends -- the CL.TE request-smuggling primitive.
+    """
+    server.proxy_workflow(
+        name="internal", proxy_url=redirecting_backend, allowed_paths=["*"]
+    )
+    client = TestClient(server.app)
+
+    response = client.get(
+        "/workflows/internal/api/data",
+        headers={
+            "Authorization": f"Bearer {asyncio.run(_token(auth_manager))}",
+            "Transfer-Encoding": "chunked",
+            "Connection": "keep-alive",
+            "TE": "trailers",
+            "Upgrade": "websocket",
+            "Expect": "100-continue",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert _RedirectingHandler.hop_by_hop_seen == {
+        "transfer-encoding": None,
+        "connection": None,
+        "te": None,
+        "upgrade": None,
+        "expect": None,
+    }
+
+
+def test_response_framing_headers_are_not_echoed(
+    server, redirecting_backend, auth_manager
+):
+    """`resp.read()` returns DECOMPRESSED bytes.
+
+    Echoing the backend's `Content-Encoding: gzip` labels plaintext as
+    compressed, and echoing its `Content-Length` states the compressed length
+    over a decompressed body. Either mismatch is a response-smuggling
+    primitive for anything parsing the stream downstream.
+    """
+    server.proxy_workflow(
+        name="internal", proxy_url=redirecting_backend, allowed_paths=["*"]
+    )
+    client = TestClient(server.app)
+
+    response = client.get(
+        "/workflows/internal/api/data",
+        headers={"Authorization": f"Bearer {asyncio.run(_token(auth_manager))}"},
+    )
+
+    assert response.status_code == 200, response.text
+    # The backend sent Content-Encoding: gzip; it must not reach the caller.
+    assert "content-encoding" not in {k.lower() for k in response.headers}
+    # Content-type is still passed through, so this is not a blanket strip.
+    assert response.headers.get("content-type", "").startswith("application/json")
+
+
+def test_enterprise_server_auth_manager_protects_a_proxy(redirecting_backend):
+    """F8: the positive branch of the newly-advertised auth_manager path.
+
+    `servers/__init__.py` now documents
+    `EnterpriseWorkflowServer(auth_manager=...)`. Only the REFUSAL branch was
+    tested, which would still pass if `auth_manager` were silently swallowed
+    into `**kwargs` after a future refactor -- exactly the `enable_auth`
+    defect this PR corrected. This drives the accepted branch end to end.
+    """
+    manager = MiddlewareAuthManager(
+        secret_key=_SECRET, enable_audit=False, enable_api_keys=False
+    )
+    srv = EnterpriseWorkflowServer(title="f8", auth_manager=manager)
+    try:
+        srv.proxy_workflow(
+            name="internal", proxy_url=redirecting_backend, allowed_paths=["*"]
+        )
+        client = TestClient(srv.app)
+
+        assert client.get("/workflows/internal/api/data").status_code == 401
+
+        token = asyncio.run(manager.create_access_token("u", permissions=[]))
+        allowed = client.get(
+            "/workflows/internal/api/data",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert allowed.status_code == 200, allowed.text
+    finally:
+        srv.close()
