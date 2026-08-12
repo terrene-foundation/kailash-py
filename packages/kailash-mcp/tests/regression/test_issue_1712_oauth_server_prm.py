@@ -61,7 +61,7 @@ def _resource_server(**overrides) -> ResourceServer:
     kwargs = dict(
         issuer=_ISSUER,
         audience=_RESOURCE,
-        jwt_manager=JWTManager(issuer=_ISSUER),
+        jwt_manager=JWTManager(issuer=_ISSUER, allow_ephemeral_key=True),
         required_scopes=list(_SCOPES),
     )
     kwargs.update(overrides)
@@ -221,7 +221,7 @@ def test_missing_token_raises_with_challenge():
 
 
 def test_audience_absent_token_rejected_fail_closed():
-    jwt_manager = JWTManager(issuer=_ISSUER)
+    jwt_manager = JWTManager(issuer=_ISSUER, allow_ephemeral_key=True)
     rs = _resource_server(jwt_manager=jwt_manager)
     # Token minted with NO audience claim.
     token = jwt_manager.create_access_token(
@@ -236,7 +236,7 @@ def test_audience_absent_token_rejected_fail_closed():
 
 
 def test_foreign_audience_token_rejected_fail_closed():
-    jwt_manager = JWTManager(issuer=_ISSUER)
+    jwt_manager = JWTManager(issuer=_ISSUER, allow_ephemeral_key=True)
     rs = _resource_server(jwt_manager=jwt_manager)
     # Token minted for a DIFFERENT resource server.
     token = jwt_manager.create_access_token(
@@ -250,7 +250,7 @@ def test_foreign_audience_token_rejected_fail_closed():
 
 
 def test_valid_audience_and_scope_authenticates():
-    jwt_manager = JWTManager(issuer=_ISSUER)
+    jwt_manager = JWTManager(issuer=_ISSUER, allow_ephemeral_key=True)
     rs = _resource_server(jwt_manager=jwt_manager)
     token = jwt_manager.create_access_token(
         subject="user-1",
@@ -265,7 +265,7 @@ def test_valid_audience_and_scope_authenticates():
 
 
 def test_insufficient_scope_carries_scope_param():
-    jwt_manager = JWTManager(issuer=_ISSUER)
+    jwt_manager = JWTManager(issuer=_ISSUER, allow_ephemeral_key=True)
     rs = _resource_server(jwt_manager=jwt_manager)
     # Valid audience, but missing mcp:write.
     token = jwt_manager.create_access_token(

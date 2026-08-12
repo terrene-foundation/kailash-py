@@ -71,6 +71,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import re
 import secrets
 import time
@@ -79,6 +80,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -580,8 +582,68 @@ class InMemoryTokenStore(TokenStore):
         return auth_code
 
 
+#: Environment variable holding the PEM signing key, so an operator can
+#: configure a deployment without a code seam — ``JWTManager`` is constructed
+#: inside ``AuthorizationServer.__init__`` and ``ResourceServer.__init__``,
+#: where a caller has nowhere to pass a key through.
+MCP_JWT_PRIVATE_KEY_ENV = "KAILASH_MCP_JWT_PRIVATE_KEY"
+
+#: Environment variable holding the PEM verification key. A resource server
+#: verifies but never signs, so it needs only this one.
+MCP_JWT_PUBLIC_KEY_ENV = "KAILASH_MCP_JWT_PUBLIC_KEY"
+
+
+class JWTKeyNotConfiguredError(AuthenticationError):
+    """Raised when a token operation needs a key that was never configured.
+
+    Subclasses :class:`AuthenticationError` so existing OAuth error handling
+    still catches it, rather than surfacing as an unhandled 500.
+    """
+
+
+@lru_cache(maxsize=1)
+def _warn_ephemeral_jwt_key() -> None:
+    """Announce, once per process, that OAuth signing keys are ephemeral.
+
+    ERROR rather than INFO, and once per process rather than per manager.
+    Matches the one-time-ERROR shape adopted for this failure class in kailash
+    #2041 / PR #2063 and #2083.
+
+    The variable name is spelled literally rather than interpolated from
+    :data:`MCP_JWT_PRIVATE_KEY_ENV`, because CodeQL's
+    ``py/clear-text-logging-sensitive-data`` matches on identifier names and
+    reads a constant named ``..._PRIVATE_KEY_ENV`` as key material flowing into
+    a log sink. A literal has no dataflow into the sink at all. No key material
+    is ever logged.
+    """
+    logger.error(
+        "OAuth JWT signing keys were GENERATED, not configured: "
+        "allow_ephemeral_key=True and no private key was supplied. The key pair "
+        "exists only inside this process, so every access and refresh token "
+        "minted now stops verifying after a restart, and another replica signs "
+        "with a different key and will reject these tokens. The advertised JWKS "
+        "changes with it. This is for local development only. Set "
+        "KAILASH_MCP_JWT_PRIVATE_KEY to a PEM private key, or pass "
+        "private_key=, and leave allow_ephemeral_key at its default of False."
+    )
+
+
 class JWTManager:
-    """JWT token manager for OAuth 2.1."""
+    """JWT token manager for OAuth 2.1.
+
+    **A signing key is required to mint tokens, and there is no default.** With
+    neither ``private_key=`` nor ``KAILASH_MCP_JWT_PRIVATE_KEY`` set, this
+    constructs but refuses to sign or verify: it does NOT generate a key pair.
+    Releases up to kailash-mcp 0.9 generated one silently, which meant every
+    OAuth token died at the next restart and replicas behind a load balancer
+    rejected each other's tokens — an intermittent auth failure that presents as
+    a client bug (same class as kailash #2041 / #2083).
+
+    Construction is still permitted without a key so that metadata-only uses —
+    a :class:`ResourceServer` emitting RFC 9728 protected-resource metadata —
+    keep working; the refusal lands at the signing and verification boundary,
+    where it can name the missing wiring.
+    """
 
     def __init__(
         self,
@@ -591,12 +653,18 @@ class JWTManager:
         issuer: Optional[str] = None,
         private_key_pem: Optional[str] = None,  # Backward compatibility
         public_key_pem: Optional[str] = None,  # Backward compatibility
+        allow_ephemeral_key: bool = False,
     ):
         """Initialize JWT manager.
 
         Args:
-            private_key: Private key for signing (PEM format)
-            public_key: Public key for verification (PEM format)
+            private_key: Private key for signing (PEM format). When omitted,
+                ``KAILASH_MCP_JWT_PRIVATE_KEY`` is read. If neither is set no
+                key is generated — signing and verification raise
+                :class:`JWTKeyNotConfiguredError` naming the wiring.
+            public_key: Public key for verification (PEM format). When omitted,
+                ``KAILASH_MCP_JWT_PUBLIC_KEY`` is read, then the public half of
+                ``private_key`` if one was supplied.
             algorithm: JWT algorithm
             issuer: Token issuer. When set, ``verify_access_token`` and
                 ``verify_refresh_token`` REQUIRE the ``iss`` claim AND
@@ -604,6 +672,10 @@ class JWTManager:
                 the Rust SDK (#599) / PR #602). When ``None``,
                 absent-iss tokens still verify so callers that opt out of
                 issuer enforcement see no behaviour change.
+            allow_ephemeral_key: Opt in to a generated process-local key pair
+                for local development. Announces itself once per process at
+                ERROR level. Tokens signed with it do not survive a restart and
+                are rejected by every other replica.
         """
         _require_oauth_extras()
         self.algorithm = algorithm
@@ -613,20 +685,68 @@ class JWTManager:
         private_key = private_key or private_key_pem
         public_key = public_key or public_key_pem
 
+        # Environment wiring, so a JWTManager built inside another class's
+        # __init__ can still be configured by an operator.
+        private_key = private_key or os.environ.get(MCP_JWT_PRIVATE_KEY_ENV)
+        public_key = public_key or os.environ.get(MCP_JWT_PUBLIC_KEY_ENV)
+
         if private_key:
             self.private_key = serialization.load_pem_private_key(
                 private_key.encode(), password=None
             )
-        else:
-            # Generate key pair
+        elif allow_ephemeral_key:
+            # Explicit opt-in: generate, but say so loudly.
+            _warn_ephemeral_jwt_key()
             self.private_key = rsa.generate_private_key(
                 public_exponent=65537, key_size=2048
             )
+        else:
+            # No key, and no generated stand-in. Signing raises at the boundary
+            # rather than silently producing tokens nothing else can verify.
+            self.private_key = None
 
         if public_key:
             self.public_key = serialization.load_pem_public_key(public_key.encode())
-        else:
+        elif self.private_key is not None:
             self.public_key = self.private_key.public_key()
+        else:
+            self.public_key = None
+
+    def _signing_key_or_raise(self):
+        """Return the signing key, or refuse to mint a token.
+
+        One chokepoint for both ``create_*_token`` methods, so there is no
+        branch on which an unconfigured manager quietly signs with something
+        weaker.
+        """
+        if self.private_key is None:
+            raise JWTKeyNotConfiguredError(
+                "Cannot mint an OAuth token: no JWT signing key is configured "
+                "and this manager will not generate one. Set the "
+                "KAILASH_MCP_JWT_PRIVATE_KEY environment variable to a PEM "
+                "private key, or pass private_key= to JWTManager. Pass "
+                "allow_ephemeral_key=True ONLY for local development — a "
+                "generated key lives in this process, so tokens stop verifying "
+                "after a restart and other replicas reject them."
+            )
+        return self.private_key
+
+    def _verification_key_or_raise(self):
+        """Return the verification key, or refuse to verify.
+
+        Refusing is louder than the alternative: with a randomly generated key
+        every token failed verification, which reads as "the client sent a bad
+        token" rather than "this server was never given a key".
+        """
+        if self.public_key is None:
+            raise JWTKeyNotConfiguredError(
+                "Cannot verify an OAuth token: no JWT verification key is "
+                "configured. Set the KAILASH_MCP_JWT_PUBLIC_KEY environment "
+                "variable to a PEM public key (or KAILASH_MCP_JWT_PRIVATE_KEY "
+                "on a server that also signs), or pass public_key= to "
+                "JWTManager."
+            )
+        return self.public_key
 
     def create_access_token(
         self,
@@ -691,7 +811,9 @@ class JWTManager:
                 ]:
                     payload[key] = token_data_dict[key]
 
-        token = jwt.encode(payload, self.private_key, algorithm=self.algorithm)  # type: ignore[arg-type]
+        token = jwt.encode(
+            payload, self._signing_key_or_raise(), algorithm=self.algorithm
+        )
 
         # For backward compatibility, return string if called with dict
         if token_data_dict:
@@ -748,7 +870,9 @@ class JWTManager:
             options["require"] = ["exp", "iss"]
 
         try:
-            payload = jwt.decode(token, self.public_key, **decode_kwargs)  # type: ignore[arg-type]
+            payload = jwt.decode(
+                token, self._verification_key_or_raise(), **decode_kwargs
+            )
 
             # Verify token type
             if payload.get("token_type") != "access_token":
@@ -796,7 +920,9 @@ class JWTManager:
         else:
             payload["client_id"] = token_data
 
-        return jwt.encode(payload, self.private_key, algorithm=self.algorithm)  # type: ignore[arg-type]
+        return jwt.encode(
+            payload, self._signing_key_or_raise(), algorithm=self.algorithm
+        )
 
     def verify_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify JWT refresh token.
@@ -829,7 +955,7 @@ class JWTManager:
         try:
             payload = jwt.decode(  # type: ignore[arg-type]
                 token,
-                self.public_key,  # type: ignore[reportArgumentType]
+                self._verification_key_or_raise(),
                 **decode_kwargs,
             )
 
@@ -858,7 +984,7 @@ class JWTManager:
         Returns:
             JWKS public key
         """
-        public_numbers = self.public_key.public_numbers()  # type: ignore[union-attr]
+        public_numbers = self._verification_key_or_raise().public_numbers()
 
         # Convert to base64url encoding
         def int_to_base64url(value: int) -> str:
@@ -890,6 +1016,7 @@ class AuthorizationServer:
         jwt_manager: Optional[JWTManager] = None,
         default_scopes: Optional[List[str]] = None,
         private_key_path: Optional[str] = None,  # For backward compatibility
+        allow_ephemeral_key: bool = False,
     ):
         """Initialize authorization server.
 
@@ -899,6 +1026,10 @@ class AuthorizationServer:
             token_store: Token storage
             jwt_manager: JWT manager
             default_scopes: Default scopes
+            private_key_path: Path to a PEM signing key. A missing file now
+                RAISES rather than falling back to a generated key.
+            allow_ephemeral_key: Forwarded to :class:`JWTManager`. Opts in to a
+                generated process-local signing key for local development.
         """
         _require_oauth_extras()
         self.issuer = issuer
@@ -909,16 +1040,30 @@ class AuthorizationServer:
         if jwt_manager:
             self.jwt_manager = jwt_manager
         elif private_key_path:
-            # Read private key from file
+            # A missing key file is a configuration error, not a cue to invent
+            # a key. This previously swallowed FileNotFoundError and fell back
+            # to a generated pair "for testing", so a typo in the path silently
+            # downgraded a production server to ephemeral signing — the failure
+            # was invisible until tokens stopped verifying after a restart.
             try:
                 with open(private_key_path, "r") as f:
                     private_key = f.read()
-                self.jwt_manager = JWTManager(issuer=issuer, private_key=private_key)
-            except FileNotFoundError:
-                # For testing, create a default JWT manager
-                self.jwt_manager = JWTManager(issuer=issuer)
+            except FileNotFoundError as exc:
+                raise JWTKeyNotConfiguredError(
+                    f"OAuth signing key not found at {private_key_path!r}. "
+                    "Fix the path, set KAILASH_MCP_JWT_PRIVATE_KEY instead, or "
+                    "pass allow_ephemeral_key=True for local development "
+                    "(tokens then stop verifying after a restart)."
+                ) from exc
+            self.jwt_manager = JWTManager(
+                issuer=issuer,
+                private_key=private_key,
+                allow_ephemeral_key=allow_ephemeral_key,
+            )
         else:
-            self.jwt_manager = JWTManager(issuer=issuer)
+            self.jwt_manager = JWTManager(
+                issuer=issuer, allow_ephemeral_key=allow_ephemeral_key
+            )
 
         self.default_scopes = default_scopes or ["mcp.basic"]
 
@@ -1475,13 +1620,22 @@ class ResourceServer:
         authorization_servers: Optional[List[str]] = None,
         bearer_methods_supported: Optional[List[str]] = None,
         resource_metadata_url: Optional[str] = None,
+        # Appended rather than inserted: every parameter above keeps its
+        # position, so an existing positional call site is unaffected.
+        allow_ephemeral_key: bool = False,
     ):
         """Initialize resource server.
 
         Args:
             issuer: Authorization server issuer
             audience: Expected token audience
-            jwt_manager: JWT manager for token verification
+            jwt_manager: JWT manager for token verification. When omitted, one
+                is built that reads KAILASH_MCP_JWT_PUBLIC_KEY (or
+                KAILASH_MCP_JWT_PRIVATE_KEY) — it does NOT generate a key, so
+                verification raises JWTKeyNotConfiguredError naming the
+                wiring rather than rejecting every token as invalid.
+            allow_ephemeral_key: Opt in to a generated process-local key pair
+                for local development and self-signed test tokens.
             required_scopes: Required scopes for access
             resource: Canonical RFC 8707 resource identifier this server
                 represents (the ``resource`` field of the RFC 9728 Protected
@@ -1501,7 +1655,9 @@ class ResourceServer:
         _require_oauth_extras()
         self.issuer = issuer
         self.audience = audience
-        self.jwt_manager = jwt_manager or JWTManager(issuer=issuer)
+        self.jwt_manager = jwt_manager or JWTManager(
+            issuer=issuer, allow_ephemeral_key=allow_ephemeral_key
+        )
         self.required_scopes = required_scopes or []
         # RFC 8707 resource identifier == token audience for a resource server.
         # ``resource`` and ``audience`` stay INDEPENDENT: the AS mints ``aud``

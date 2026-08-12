@@ -6,10 +6,12 @@ This consolidates the functionality of both JWTAuthManager and KailashJWTAuthMan
 """
 
 import logging
+import os
 import secrets
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
 # JWT and cryptography imports
@@ -33,6 +35,47 @@ from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 from .utils import generate_secret_key, is_token_expired
 
 logger = logging.getLogger(__name__)
+
+#: Environment variable holding the HS256 signing secret. Read when neither
+#: ``secret_key=`` nor ``JWTConfig.secret_key`` is supplied, so an operator has
+#: a wiring path that needs no code change — the failure mode #2041 documented
+#: was an error message naming a variable nothing ever read.
+JWT_SECRET_KEY_ENV = "KAILASH_JWT_SECRET_KEY"
+
+
+@lru_cache(maxsize=1)
+def _warn_ephemeral_signing_key() -> None:
+    """Announce, once per process, that signing keys are ephemeral.
+
+    ERROR rather than INFO, and once per process rather than once per manager.
+    The line it replaces was ``logger.info("Generated new HS256 secret key")``,
+    which named neither the consequence nor the wiring that avoids it — and an
+    INFO line from a library during start-up is exactly what an operator learns
+    to scroll past. Matches the one-time-ERROR shape ``SecretManager`` adopted
+    for the same failure class in #2041 / PR #2063.
+
+    The variable name is spelled out literally rather than interpolated from
+    :data:`JWT_SECRET_KEY_ENV`. Nothing sensitive is involved either way — this
+    is the NAME of an environment variable, never a value — but CodeQL's
+    ``py/clear-text-logging-sensitive-data`` matches on identifier names and
+    reads a constant called ``..._SECRET_KEY_ENV`` as key material. A literal
+    has no dataflow into the sink at all, which answers the alert rather than
+    suppressing it. Drift between the two is what
+    ``test_the_loud_signal_names_the_current_constants`` pins.
+
+    The generated secret itself is NEVER logged: a fix that fails loudly must
+    not turn a durability bug into a disclosure bug (``security.md``).
+    """
+    logger.error(
+        "JWT signing keys were GENERATED, not configured: auto_generate_keys=True "
+        "and no signing key was supplied. The keys exist only inside this "
+        "process, so every token issued now becomes invalid at the next restart, "
+        "and any other replica signs with a different key and will reject these "
+        "tokens. This is for local development only. Set "
+        "KAILASH_JWT_SECRET_KEY, or pass secret_key= (HS256) or "
+        "private_key=/public_key= (RSA), and leave auto_generate_keys at its "
+        "default of False."
+    )
 
 
 class JWTAuthManager:
@@ -133,30 +176,63 @@ class JWTAuthManager:
         self._initialize_keys()
 
     def _initialize_keys(self):
-        """Initialize keys based on configured algorithm."""
+        """Initialize keys based on configured algorithm.
+
+        A signing key is REQUIRED and there is no default (issue #2083). With
+        nothing configured this raises rather than minting a throwaway key:
+        releases up to kailash 2.64 generated one here and continued at INFO
+        level, which invalidated every outstanding token at each restart and
+        made a multi-replica deployment authenticate non-deterministically.
+
+        Generation is still available for local development, but only as an
+        explicit ``auto_generate_keys=True`` opt-in, and it announces itself
+        once per process at ERROR level.
+        """
         if self.config.use_rsa or self.config.algorithm.startswith("RS"):
             # RSA mode
             if self.config.private_key and self.config.public_key:
                 # Load provided keys
                 self._load_rsa_keys()
             elif self.config.auto_generate_keys:
-                # Generate new RSA keys
+                # Explicit opt-in: generate, but say so loudly. The signal fires
+                # here rather than inside _generate_key_pair so that deliberate
+                # key ROTATION on a configured manager stays quiet.
+                _warn_ephemeral_signing_key()
                 self._generate_key_pair()
             else:
                 raise ValueError(
-                    "RSA mode requires either provided keys or auto_generate_keys=True"
+                    "RSA mode requires a configured key pair: pass "
+                    "private_key= and public_key= (PEM), or a JWTConfig "
+                    "carrying them. Set auto_generate_keys=True ONLY for local "
+                    "development — generated keys live in this process, so all "
+                    "tokens die at restart and other replicas reject them "
+                    "(issue #2083)."
                 )
         else:
             # HS256 mode
             if not self._secret_key:
+                # Environment wiring, so an operator can configure this without
+                # a code seam — the error below names this variable, and an
+                # error naming a variable nothing reads is worse than silence.
+                env_secret = os.environ.get(JWT_SECRET_KEY_ENV)
+                if env_secret:
+                    self._secret_key = env_secret
+                    self.config.secret_key = env_secret
+
+            if not self._secret_key:
                 if self.config.auto_generate_keys:
-                    # Generate random secret
+                    # Explicit opt-in: generate, but say so loudly.
+                    _warn_ephemeral_signing_key()
                     self._secret_key = secrets.token_urlsafe(32)
                     self.config.secret_key = self._secret_key
-                    logger.info("Generated new HS256 secret key")
                 else:
                     raise ValueError(
-                        "HS256 mode requires secret_key or auto_generate_keys=True"
+                        "HS256 mode requires a configured signing secret: set "
+                        "the KAILASH_JWT_SECRET_KEY environment variable, or "
+                        "pass secret_key=. Set auto_generate_keys=True ONLY for "
+                        "local development — a generated secret lives in this "
+                        "process, so all tokens die at restart and other "
+                        "replicas reject them (issue #2083)."
                     )
 
     def _load_rsa_keys(self):

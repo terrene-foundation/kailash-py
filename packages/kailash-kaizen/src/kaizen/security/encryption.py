@@ -1,29 +1,210 @@
 """Data encryption and decryption for Kaizen AI framework."""
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Union
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+logger = logging.getLogger(__name__)
+
+#: Environment variable holding the key material for this module. Shared with
+#: ``CheckpointEncryptor`` (``kaizen.core.autonomy.security.encryption``) and
+#: already mapped to ``KaizenConfig.encryption_key``, so an operator configures
+#: Kaizen encryption in one place rather than one variable per subsystem.
+KAIZEN_ENCRYPTION_KEY_ENV = "KAIZEN_ENCRYPTION_KEY"
+
+#: Required length of raw key material, in bytes (AES-256).
+AES_256_KEY_BYTES = 32
+
+#: PBKDF2 iterations used to stretch a passphrase. Matches
+#: ``CheckpointEncryptor``, which derives from the same variable — two different
+#: iteration counts for one variable would silently produce two different keys.
+_PASSPHRASE_KDF_ITERATIONS = 600_000
+
+#: Fixed salt for passphrase derivation. Deliberately FIXED, not random: the
+#: derived key has to be the same in every process that reads the same
+#: passphrase, or the store does not survive a restart — which is the defect
+#: this module is being fixed for (#2092). A random per-process salt here would
+#: reproduce it one layer down. Salts are not secret; their job in a
+#: deterministic derivation is domain separation, which a constant provides.
+_PASSPHRASE_KDF_SALT = b"kaizen.security.encryption.passphrase.v1"
+
+
+class EncryptionKeyNotConfiguredError(ValueError):
+    """Raised when an encryption primitive is built with no key material.
+
+    Subclasses :class:`ValueError` because it reports an invalid argument, and
+    because callers already guarding construction with ``except ValueError``
+    keep working.
+
+    Distinct from ``kaizen.core.autonomy.security.encryption.EncryptionError``,
+    which reports a FAILED encrypt/decrypt in the checkpoint subsystem. This one
+    reports missing configuration and is raised before any data is touched. The
+    two live in different subsystems deliberately: importing the autonomy error
+    here would make this leaf module depend on ``kaizen.core.autonomy``.
+    """
+
+
+@lru_cache(maxsize=1)
+def _warn_ephemeral_encryption_key() -> None:
+    """Announce, once per process, that encryption keys are ephemeral.
+
+    ERROR rather than WARNING, and once per process rather than once per
+    instance. What it replaces was silence — this path previously emitted no
+    error, no warning, not even an INFO line, so the first symptom of the defect
+    was unreadable data with nothing in the logs pointing at why.
+
+    The variable name is spelled out literally rather than interpolated from
+    :data:`KAIZEN_ENCRYPTION_KEY_ENV`. Nothing sensitive is involved either way —
+    this is the NAME of an environment variable, never a value — but CodeQL's
+    ``py/clear-text-logging-sensitive-data`` matches on identifier names and
+    reads a constant called ``..._ENCRYPTION_KEY_ENV`` as key material. A
+    literal has no dataflow into the sink at all. The drift this buys is pinned
+    by ``test_the_loud_signal_names_the_current_constants``.
+
+    The generated key is NEVER logged, in any encoding: a fix that fails loudly
+    must not turn a durability bug into a disclosure bug.
+    """
+    logger.error(
+        "Kaizen encryption keys were GENERATED, not configured: "
+        "allow_ephemeral_key=True and no key was supplied. The key exists only "
+        "inside this process, so anything encrypted now is UNRECOVERABLE after "
+        "a restart, and another replica encrypts under a different key and "
+        "cannot read these values. This is for local development only. Set "
+        "KAIZEN_ENCRYPTION_KEY, or pass key= (a 32-byte value or a passphrase), "
+        "and leave allow_ephemeral_key at its default of False."
+    )
+
+
+def _derive_key_from_passphrase(passphrase: str) -> bytes:
+    """Stretch a passphrase into a 32-byte AES key, deterministically.
+
+    Deterministic is the whole requirement: the same passphrase must yield the
+    same key in every process, or encrypted data does not survive a restart.
+    """
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=AES_256_KEY_BYTES,
+        salt=_PASSPHRASE_KDF_SALT,
+        iterations=_PASSPHRASE_KDF_ITERATIONS,
+    )
+    return kdf.derive(passphrase.encode("utf-8"))
+
+
+def resolve_key_material(
+    key: Union[bytes, str, None],
+    *,
+    allow_ephemeral_key: bool = False,
+    what: str = "EncryptionProvider",
+) -> bytes:
+    """Resolve key material for an encryption primitive, or refuse to build one.
+
+    One chokepoint shared by :class:`EncryptionProvider`, :class:`KeyManager`
+    and :class:`FieldEncryptor`, so the floor and the wiring message cannot
+    drift between the three classes that all mint AES keys in this module.
+
+    Resolution order: the explicit ``key`` argument, then
+    ``KAIZEN_ENCRYPTION_KEY``. If neither is present this RAISES — it does not
+    generate one. Releases up to kaizen 0.9 generated a key here in total
+    silence, which made every value the process encrypted unreadable after it
+    exited.
+
+    Args:
+        key: 32 raw bytes, or a passphrase to stretch. ``None`` falls through to
+            the environment.
+        allow_ephemeral_key: Opt in to a generated process-local key for local
+            development. Announces itself once per process at ERROR level.
+        what: Class name used in the error message.
+
+    Returns:
+        32 bytes of key material.
+
+    Raises:
+        EncryptionKeyNotConfiguredError: If no key is configured and
+            ``allow_ephemeral_key`` is False, or if raw key material is the
+            wrong length.
+    """
+    if key is None:
+        env_value = os.environ.get(KAIZEN_ENCRYPTION_KEY_ENV)
+        if env_value:
+            key = env_value
+
+    if isinstance(key, str):
+        return _derive_key_from_passphrase(key)
+
+    if isinstance(key, (bytes, bytearray)):
+        if len(key) != AES_256_KEY_BYTES:
+            raise EncryptionKeyNotConfiguredError(
+                f"{what} requires {AES_256_KEY_BYTES} bytes of raw key material "
+                f"for AES-256, got {len(key)}. Pass a {AES_256_KEY_BYTES}-byte "
+                "value, or pass a passphrase as a str and it will be stretched "
+                "with PBKDF2-HMAC-SHA256."
+            )
+        return bytes(key)
+
+    if allow_ephemeral_key:
+        _warn_ephemeral_encryption_key()
+        return AESGCM.generate_key(bit_length=256)
+
+    raise EncryptionKeyNotConfiguredError(
+        f"{what} requires an encryption key and will not generate one: set the "
+        "KAIZEN_ENCRYPTION_KEY environment variable, or pass key= (a 32-byte "
+        "value or a passphrase). Pass allow_ephemeral_key=True ONLY for local "
+        "development — a generated key lives in this process, so anything "
+        "encrypted under it is unrecoverable once the process exits and other "
+        "replicas cannot read it (issue #2092)."
+    )
 
 
 class EncryptionProvider:
-    """AES-256-GCM encryption provider for sensitive data."""
+    """AES-256-GCM encryption provider for sensitive data.
 
-    def __init__(self, key: bytes = None, salt: bytes = None):
+    **A key is required, and there is no default.** With neither ``key=`` nor
+    ``KAIZEN_ENCRYPTION_KEY`` set this refuses to construct rather than minting
+    a throwaway key: releases up to kaizen 0.9 did exactly that, silently, which
+    made every value encrypted by the process unreadable after a restart and
+    left a multi-replica deployment unable to read its own data (#2092).
+    """
+
+    def __init__(
+        self,
+        key: Union[bytes, str, None] = None,
+        salt: bytes = None,
+        *,
+        allow_ephemeral_key: bool = False,
+    ):
         """
         Initialize encryption provider.
 
         Args:
-            key: 32-byte encryption key (if None, generates random key)
-            salt: Salt used for key derivation (optional, for password-based keys)
+            key: 32-byte encryption key, or a passphrase (str) stretched with
+                PBKDF2-HMAC-SHA256. When omitted, ``KAIZEN_ENCRYPTION_KEY`` is
+                read. If neither is configured this RAISES rather than
+                generating a key — a generated key would make everything
+                encrypted under it unrecoverable at the next restart.
+            salt: Salt used for key derivation (optional, for password-based
+                keys created through :meth:`from_password`).
+            allow_ephemeral_key: Opt in to a generated process-local key for
+                local development. Announces itself once per process at ERROR
+                level. Data encrypted under it CANNOT be read after this process
+                exits.
+
+        Raises:
+            EncryptionKeyNotConfiguredError: If no key is configured and
+                ``allow_ephemeral_key`` is False.
         """
-        if key is None:
-            # Generate random 256-bit key
-            key = AESGCM.generate_key(bit_length=256)
+        key = resolve_key_material(
+            key,
+            allow_ephemeral_key=allow_ephemeral_key,
+            what="EncryptionProvider",
+        )
 
         self.key = key
         self.salt = salt  # Store salt for password-derived keys
@@ -34,9 +215,23 @@ class EncryptionProvider:
         """
         Create encryption provider from password using PBKDF2.
 
+        **The caller MUST persist the salt.** When ``salt`` is omitted a random
+        one is generated, and :meth:`encrypt` does NOT store it beside the
+        ciphertext — only the nonce travels with the data. A caller who does not
+        persist :meth:`get_salt` and pass it back cannot re-derive the key, and
+        the data is unreadable for the same reason #2092 describes, by a
+        different mechanism. Pass an explicit ``salt`` you already store, or
+        store ``provider.get_salt()`` alongside the ciphertext.
+
+        For the common case — one key for the process, configured by an
+        operator — construct ``EncryptionProvider()`` directly and set
+        ``KAIZEN_ENCRYPTION_KEY``; that path derives deterministically and needs
+        no salt bookkeeping.
+
         Args:
             password: Password to derive key from
-            salt: Salt for key derivation (if None, generates random salt)
+            salt: Salt for key derivation (if None, generates a random salt that
+                the caller must persist via :meth:`get_salt`)
 
         Returns:
             EncryptionProvider instance with derived key
@@ -114,10 +309,45 @@ class EncryptionProvider:
 
 
 class KeyManager:
-    """Manages multiple encryption key versions and rotation."""
+    """Manages multiple encryption key versions and rotation.
 
-    def __init__(self):
-        """Initialize key manager."""
+    Every version's key is DERIVED from one configured master key rather than
+    generated, so the manager can read back what it wrote after a restart. It
+    previously took no key parameter at all and called ``EncryptionProvider()``
+    bare for each version, which meant every version was throwaway: a restart
+    made all stored ciphertext permanently unreadable, and :meth:`re_encrypt` —
+    the documented migration path — destroyed the pre-rotation data too (#2092).
+
+    Derivation is HKDF-SHA256 over the master key with the version number as
+    ``info``, so versions are cryptographically distinct (rotation is real) and
+    reproducible (rotation is durable).
+    """
+
+    def __init__(
+        self,
+        key: Union[bytes, str, None] = None,
+        *,
+        allow_ephemeral_key: bool = False,
+    ):
+        """Initialize key manager.
+
+        Args:
+            key: Master key material — 32 bytes, or a passphrase stretched with
+                PBKDF2-HMAC-SHA256. When omitted, ``KAIZEN_ENCRYPTION_KEY`` is
+                read. If neither is configured this RAISES.
+            allow_ephemeral_key: Opt in to a generated process-local master key
+                for local development. Announces itself once per process at
+                ERROR level. Nothing encrypted under it survives this process.
+
+        Raises:
+            EncryptionKeyNotConfiguredError: If no key is configured and
+                ``allow_ephemeral_key`` is False.
+        """
+        self._master_key = resolve_key_material(
+            key,
+            allow_ephemeral_key=allow_ephemeral_key,
+            what="KeyManager",
+        )
         self.keys = {}  # version -> EncryptionProvider
         self.metadata = {}  # version -> metadata dict
         self.current_version = 1
@@ -125,9 +355,25 @@ class KeyManager:
         # Create initial key version 1
         self._create_key_version(version=1)
 
+    def _derive_version_key(self, version: int) -> bytes:
+        """Derive the key for one version from the master key.
+
+        HKDF is the right primitive here rather than PBKDF2: the master key is
+        already high-entropy (either 32 raw bytes or a PBKDF2-stretched
+        passphrase), so this step needs domain separation per version, not
+        another round of stretching.
+        """
+        hkdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=AES_256_KEY_BYTES,
+            salt=None,
+            info=f"kaizen.security.encryption.key-version.{version}".encode("utf-8"),
+        )
+        return hkdf.derive(self._master_key)
+
     def _create_key_version(self, version: int):
         """Create a new key version."""
-        provider = EncryptionProvider()
+        provider = EncryptionProvider(key=self._derive_version_key(version))
         self.keys[version] = provider
         self.metadata[version] = {
             "version": version,
@@ -230,18 +476,42 @@ class KeyManager:
 
 
 class FieldEncryptor:
-    """Field-level encryption for selective data protection."""
+    """Field-level encryption for selective data protection.
 
-    def __init__(self, sensitive_fields: list = None, key: bytes = None):
+    ``FieldEncryptor(sensitive_fields=["ssn"])`` reads as fully configured, and
+    its ``key=None`` default used to forward straight into a silently generated
+    key — so PII was encrypted under material that died with the process. That
+    wrapper propagation is what kept #2092 hidden from a sweep scoped to the
+    generator call itself; a key is now required here too.
+    """
+
+    def __init__(
+        self,
+        sensitive_fields: list = None,
+        key: Union[bytes, str, None] = None,
+        *,
+        allow_ephemeral_key: bool = False,
+    ):
         """
         Initialize field encryptor.
 
         Args:
             sensitive_fields: List of field paths to encrypt (supports dot notation)
-            key: Encryption key (if None, generates random key)
+            key: 32-byte encryption key, or a passphrase. When omitted,
+                ``KAIZEN_ENCRYPTION_KEY`` is read. If neither is configured this
+                RAISES rather than generating a key.
+            allow_ephemeral_key: Opt in to a generated process-local key for
+                local development. Encrypted fields cannot be read back after
+                this process exits.
+
+        Raises:
+            EncryptionKeyNotConfiguredError: If no key is configured and
+                ``allow_ephemeral_key`` is False.
         """
         self.sensitive_fields = sensitive_fields or []
-        self.provider = EncryptionProvider(key=key)
+        self.provider = EncryptionProvider(
+            key=key, allow_ephemeral_key=allow_ephemeral_key
+        )
 
     def _is_sensitive_field(self, field_path: str) -> bool:
         """Check if field path should be encrypted."""

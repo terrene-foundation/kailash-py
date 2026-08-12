@@ -30,7 +30,17 @@ class JWTConfig:
     audience: str = "kailash-api"
 
     # Key management
-    auto_generate_keys: bool = True
+    #
+    # Defaults to False (issue #2083). It defaulted to True through kailash
+    # 2.64, which meant a manager with no configured key minted a throwaway
+    # signing secret and carried on: every token died at the next restart, and
+    # in a multi-replica deployment each replica signed with a different secret
+    # so a token issued by one was rejected by the next — intermittently,
+    # depending on which replica the load balancer picked.
+    #
+    # Setting this True is still supported for local development, but it is now
+    # an EXPLICIT opt-in and announces itself once per process at ERROR level.
+    auto_generate_keys: bool = False
     key_rotation_days: int = 30  # Only applies to RSA mode
 
     # Token settings
