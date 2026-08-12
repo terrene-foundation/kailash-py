@@ -94,7 +94,7 @@ from kailash.sdk_exceptions import (
     NodeExecutionError,
     SafetyViolationError,
 )
-from kailash.security import ExecutionTimeoutError
+from kailash.security import ExecutionTimeoutError, MemoryLimitError, memory_limit_guard
 
 logger = logging.getLogger(__name__)
 
@@ -842,9 +842,20 @@ async def {func_name}(_namespace):
             try:
                 # Execute with timeout
                 start_time = time.time()
-                exported_vars = await asyncio.wait_for(
-                    user_function(namespace), timeout=self.timeout
-                )
+                # `max_memory_mb` is documented on this node (see the class
+                # docstring and the config schema) but until #2078 it was
+                # assigned in __init__ and read by nothing — the cap had no
+                # effect whatsoever, while this node execs caller-supplied
+                # code. Same documented-kwarg-with-no-effect class as the bug
+                # #2078 fixed in PythonCodeNode, so it is closed here rather
+                # than deferred. Scope of the guarantee is the same and is
+                # documented on `memory_limit_guard`: it bounds this block's
+                # ADDITIONAL address space, and is not a sandbox for untrusted
+                # code.
+                with memory_limit_guard(self.max_memory_mb * 1024 * 1024):
+                    exported_vars = await asyncio.wait_for(
+                        user_function(namespace), timeout=self.timeout
+                    )
                 execution_time = time.time() - start_time
 
                 logger.debug(
@@ -868,6 +879,12 @@ async def {func_name}(_namespace):
             raise NodeExecutionError(
                 f"Async code execution exceeded {self.timeout}s timeout"
             )
+        except MemoryLimitError:
+            # Surfaced as itself, not flattened into NodeExecutionError: a
+            # caller that set `max_memory_mb` needs to distinguish "the cap I
+            # configured fired" from "the code failed", and PythonCodeNode
+            # already re-raises it for the same reason.
+            raise
         except Exception as e:
             logger.error(f"Async code execution failed: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")

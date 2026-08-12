@@ -578,17 +578,29 @@ class TestRetryPolicyEngine:
         async def keyboard_interrupt_function():
             raise KeyboardInterrupt("User interrupted")
 
-        # Wrap in timeout to prevent hanging
+        # Wrap in timeout to prevent hanging.
+        #
+        # `asyncio.timeout`, NOT `asyncio.wait_for`. On Python 3.11 wait_for
+        # wraps the coroutine in a separate Task, and a BaseException raised
+        # inside that Task escapes to the event loop instead of propagating
+        # through the await — so the `except` below never sees it, pytest
+        # receives a real KeyboardInterrupt, and the whole session aborts with
+        # exit code 2 partway through the tier. Measured, same code, no deps:
+        #     py3.11: ESCAPED -> KeyboardInterrupt: User interrupted
+        #     py3.12: CAUGHT-INSIDE
+        #     py3.13: CAUGHT-INSIDE
+        # `asyncio.timeout` drives the CURRENT task rather than a child, so the
+        # exception stays inside this frame on every version. The assertions
+        # below are unchanged; only the harness differs.
         import asyncio
 
         try:
-            result = await asyncio.wait_for(
-                engine.execute_with_retry(keyboard_interrupt_function), timeout=1.0
-            )
+            async with asyncio.timeout(1.0):
+                result = await engine.execute_with_retry(keyboard_interrupt_function)
             assert not result.success
             assert result.total_attempts == 1  # Should not retry
             assert isinstance(result.final_exception, KeyboardInterrupt)
-        except (KeyboardInterrupt, asyncio.TimeoutError):
+        except (KeyboardInterrupt, TimeoutError):
             # Test passed - KeyboardInterrupt was properly handled
             pass
 

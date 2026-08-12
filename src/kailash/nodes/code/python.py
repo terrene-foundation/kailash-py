@@ -52,11 +52,6 @@ import inspect
 import json
 import logging
 import os
-
-try:
-    import resource  # Unix-only module
-except ImportError:
-    resource = None  # type: ignore[assignment]  # Not available on Windows
 import traceback
 from collections.abc import Callable
 from datetime import date, datetime
@@ -76,6 +71,7 @@ from kailash.security import (
     SecurityConfig,
     execution_timeout,
     get_security_config,
+    memory_limit_guard,
     validate_node_parameters,
 )
 
@@ -462,37 +458,43 @@ class CodeExecutor:
         # They are added to local_namespace below to prevent variable persistence
 
         try:
-            # Set memory limit if supported (Unix systems)
-            if (
-                resource is not None
-                and hasattr(resource, "RLIMIT_AS")
-                and self.security_config.memory_limit
-            ):
-                try:
-                    resource.setrlimit(
-                        resource.RLIMIT_AS,
-                        (
-                            self.security_config.memory_limit,
-                            self.security_config.memory_limit,
-                        ),
-                    )
-                except (OSError, ValueError):
-                    logger.warning(
-                        "Could not set memory limit - continuing without limit"
-                    )
-
             # Execute with timeout using separate global and local namespaces
             # This prevents variable persistence across executions (CRITICAL FIX)
             # See: SDK Bug Report - PythonCodeNode Variable Persistence
             local_namespace = {}
             local_namespace.update(sanitized_inputs)
 
-            with execution_timeout(
-                self.security_config.execution_timeout, self.security_config
-            ):
-                # Use separate globals (namespace) and locals (local_namespace)
-                # This ensures complete variable isolation between executions
-                exec(code, namespace, local_namespace)
+            # Memory limit (issue #2078). This used to call
+            #   resource.setrlimit(RLIMIT_AS, (memory_limit, memory_limit))
+            # directly here, which set an ABSOLUTE, PROCESS-WIDE, IRREVERSIBLE
+            # cap of 512 MB (both soft AND hard) the first time any workflow ran
+            # a PythonCodeNode.
+            #
+            # RLIMIT_AS caps VIRTUAL address space, which on Linux runs far
+            # above resident memory: glibc reserves a 64 MB malloc arena per
+            # thread and every pthread stack reserves 8 MB. Measured in a
+            # python:3.12-slim container, a 25-thread process sat at 1889 MB of
+            # address space while importing the SDK alone cost only 62 MB. One
+            # PythonCodeNode execution then capped that 1889 MB process at
+            # 512 MB, and every subsequent mmap failed — including the stack
+            # allocation pthread_create needs. That is where CI's 130
+            # `RuntimeError: can't start new thread` and 90 `sqlite3.
+            # OperationalError: disk I/O error` came from, in tests with no
+            # connection to this node. Because Tier 2 runs `-p no:xdist`, a
+            # single execution poisoned the rest of the run, which is why the
+            # failure counts were identical to the test across runs.
+            #
+            # macOS never showed it: that kernel rejects setrlimit(RLIMIT_AS)
+            # with `ValueError: current limit exceeds maximum limit`, so the
+            # old except-branch ran and the limit was silently never applied.
+            # A macOS run is therefore not a discriminating instrument here.
+            with memory_limit_guard(config=self.security_config):
+                with execution_timeout(
+                    self.security_config.execution_timeout, self.security_config
+                ):
+                    # Use separate globals (namespace) and locals (local_namespace)
+                    # This ensures complete variable isolation between executions
+                    exec(code, namespace, local_namespace)
 
             # Return all non-private variables from LOCAL namespace only
             # Variables from previous executions cannot leak through
