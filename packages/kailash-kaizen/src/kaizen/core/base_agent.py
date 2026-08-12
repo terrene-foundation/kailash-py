@@ -961,13 +961,11 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         priority: "HookPriority" = None,
     ) -> None:
         """Register a hook for an event type."""
-        # Gate on the manager, not on `hooks_enabled` (#2084). __init__ already
-        # resolves the two into one: `self.hook_manager` is non-None exactly
-        # when a manager was SUPPLIED or `hooks_enabled` asked for one. Testing
-        # the flag instead made an explicitly-passed hook_manager a documented
-        # kwarg with no effect -- SmartDefaultsManager handed BaseAgent a fully
-        # populated manager and every hook on it stayed dormant, because
-        # `hooks_enabled` is a separate opt-in nothing on that path sets.
+        # Gate on the manager, not `hooks_enabled` (#2084): __init__ folds both
+        # inputs into it. Testing the flag made a SUPPLIED hook_manager a kwarg
+        # with no effect -- SmartDefaultsManager handed over a fully populated
+        # manager whose hooks stayed dormant, `hooks_enabled` being a separate
+        # opt-in nothing on that path sets.
         if self._hook_manager is None:
             raise RuntimeError(
                 "Hooks are not enabled. Set hooks_enabled=True in "
@@ -988,8 +986,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> List[Any]:
         """Trigger all hooks for an event type."""
-        # See register_hook: the manager is the authority, not the flag (#2084).
-        if self._hook_manager is None:
+        if self._hook_manager is None:  # see register_hook (#2084)
             return []
 
         return await self._hook_manager.trigger(
@@ -1002,8 +999,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
     def get_hook_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get hook execution statistics."""
-        # See register_hook: the manager is the authority, not the flag (#2084).
-        if self._hook_manager is None:
+        if self._hook_manager is None:  # see register_hook (#2084)
             return {}
 
         return self._hook_manager.get_stats()
