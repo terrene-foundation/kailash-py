@@ -15,6 +15,7 @@ import importlib
 from typing import TYPE_CHECKING
 
 from .audit_hook import AuditHook
+from .audit_trail_hook import AuditTrailHook
 from .cost_tracking_hook import CostTrackingHook
 from .performance_profiler_hook import PerformanceProfilerHook
 
@@ -32,6 +33,7 @@ __all__ = [
     "CostTrackingHook",
     "PerformanceProfilerHook",
     "AuditHook",
+    "AuditTrailHook",
     "TracingHook",
 ]
 

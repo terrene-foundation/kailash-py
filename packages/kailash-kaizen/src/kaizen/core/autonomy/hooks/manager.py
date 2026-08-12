@@ -198,6 +198,33 @@ class HookManager:
         hook_name = getattr(hook, "name", hook.__class__.__name__)
         logger.info(f"Registered hook {hook_name} for {len(events)} events")
 
+    def registered_hook_names(self) -> set[str]:
+        """
+        Names of every handler currently registered, across all events.
+
+        Registration was previously only inspectable through the private
+        ``_hooks`` mapping -- ``get_stats()`` reports EXECUTION counts, so a
+        manager that had registered nothing at all was indistinguishable from
+        one whose hooks had simply not fired yet. That blind spot is how four
+        observability subsystems shipped advertising themselves as enabled
+        while registering nothing (#2084): no caller, banner, or test could
+        ask what was actually installed.
+
+        Returns:
+            Set of handler names (deduplicated -- a hook registered for all 12
+            events appears once).
+
+        Example:
+            >>> manager.register_hook(LoggingHook())
+            >>> manager.registered_hook_names()
+            {'logging_hook'}
+        """
+        return {
+            getattr(handler, "name", safe_handler_name(handler))
+            for handlers in self._hooks.values()
+            for _priority, handler in handlers
+        }
+
     def unregister(
         self, event_type: HookEvent | str, handler: HookHandler | None = None
     ) -> int:

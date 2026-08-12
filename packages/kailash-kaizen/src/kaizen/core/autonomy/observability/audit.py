@@ -15,6 +15,7 @@ Part of Phase 4: Observability & Performance Monitoring (ADR-017)
 
 import json
 import logging
+import stat
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,22 +115,101 @@ class FileAuditStorage:
         >>> entries = await storage.query(agent_id="qa-agent")
     """
 
+    # Owner-only. An audit trail records which agent did what, when, and the
+    # SHAPE of every payload involved; the default path puts it in the process
+    # CWD, where 0o644 would make it world-readable to every local account.
+    _FILE_MODE = 0o600
+    _DIR_MODE = 0o700
+
     def __init__(self, file_path: str = ".kaizen/audit.jsonl"):
         """
         Initialize file-based audit storage.
 
+        The FILE is owner-only (0o600), including one created BEFORE this
+        behaviour existed -- an audit trail any local account can read is a
+        weak compliance artifact, and leaving upgraded installs on 0o644 would
+        mean the fix never reaches them, since the file is created once and
+        reused forever. Every mode change is announced rather than silent,
+        naming the path and the mode it had, because re-permissioning a file
+        the operator may have configured deliberately is not something to do
+        quietly.
+
+        The DIRECTORY is pinned to 0o700 only when this class CREATES it. See
+        the comment in the body: the parent may be the process working
+        directory or a location shared with other services, and neither is
+        this class's to re-permission.
+
         Args:
             file_path: Path to JSONL audit file (created if not exists)
+
+        Raises:
+            OSError: If the path cannot be created (read-only filesystem,
+                permissions). Callers wiring this on a default-on path must
+                handle it -- see ``SmartDefaultsManager.create_observability``.
         """
         self.file_path = Path(file_path)
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # The DIRECTORY is tightened only if this class created it. The
+        # asymmetry with the file below is deliberate: `file_path.parent` may
+        # be `.` for a bare filename (the process working directory) or a
+        # shared location like `/var/log/kaizen` that other services also
+        # write to. Chmodding either to 0o700 is a surprise well outside this
+        # class's remit -- and it is not what protects the record. The FILE
+        # mode is. `mkdir(mode=...)` is masked by umask, so when we do create
+        # it, set the mode explicitly rather than trusting the create call.
+        parent = self.file_path.parent
+        parent_existed = parent.exists()
+        parent.mkdir(parents=True, exist_ok=True)
+        if not parent_existed:
+            self._enforce_mode(parent, self._DIR_MODE)
 
         # Create file if not exists
         if not self.file_path.exists():
-            self.file_path.touch()
+            # `touch(mode=...)` is also umask-masked, and a umask of 0 would
+            # leave the file group/world readable, so chmod unconditionally
+            # below rather than trusting the create mode.
+            self.file_path.touch(mode=self._FILE_MODE)
             logger.info(f"Created audit file: {self.file_path}")
+        self._enforce_mode(self.file_path, self._FILE_MODE)
 
         logger.debug(f"FileAuditStorage initialized: {self.file_path}")
+
+    @staticmethod
+    def _enforce_mode(path: Path, mode: int) -> None:
+        """
+        Pin ``path`` to ``mode``, announcing EVERY mode it changes.
+
+        Compares the REAL mode after the fact rather than trusting the create
+        call: a mode requested at creation and stripped by umask is
+        indistinguishable from one never requested.
+
+        Both directions are announced, not just the group/world-accessible
+        one. Pinning is not always a tightening: an operator-set ``0o400``
+        becomes ``0o600``, which ADDS write. Warning only on the loose case
+        would leave that particular change -- the one an operator is most
+        likely to have made deliberately -- silent.
+        """
+        current = stat.S_IMODE(path.stat().st_mode)
+        if current == mode:
+            return
+        if current & 0o077:
+            logger.warning(
+                "Audit path %s was %s (group/world accessible); tightening to "
+                "%s. An audit trail readable by other local accounts is not a "
+                "compliance artifact.",
+                path,
+                oct(current),
+                oct(mode),
+            )
+        else:
+            logger.warning(
+                "Audit path %s was %s; setting %s, which the append-only "
+                "trail requires. No other local account gains access.",
+                path,
+                oct(current),
+                oct(mode),
+            )
+        path.chmod(mode)
 
     async def append(self, entry: AuditEntry) -> None:
         """

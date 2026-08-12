@@ -961,9 +961,15 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         priority: "HookPriority" = None,
     ) -> None:
         """Register a hook for an event type."""
-        if not self.config.hooks_enabled:
+        # Gate on the manager, not `hooks_enabled` (#2084): __init__ folds both
+        # inputs into it. Testing the flag made a SUPPLIED hook_manager a kwarg
+        # with no effect -- SmartDefaultsManager handed over a fully populated
+        # manager whose hooks stayed dormant, `hooks_enabled` being a separate
+        # opt-in nothing on that path sets.
+        if self._hook_manager is None:
             raise RuntimeError(
-                "Hooks are not enabled. Set hooks_enabled=True in BaseAgentConfig."
+                "Hooks are not enabled. Set hooks_enabled=True in "
+                "BaseAgentConfig, or pass a hook_manager to BaseAgent()."
             )
 
         from kaizen.core.autonomy.hooks.types import HookPriority
@@ -980,7 +986,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> List[Any]:
         """Trigger all hooks for an event type."""
-        if not self.config.hooks_enabled:
+        if self._hook_manager is None:  # see register_hook (#2084)
             return []
 
         return await self._hook_manager.trigger(
@@ -993,7 +999,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
     def get_hook_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get hook execution statistics."""
-        if not self.config.hooks_enabled:
+        if self._hook_manager is None:  # see register_hook (#2084)
             return {}
 
         return self._hook_manager.get_stats()

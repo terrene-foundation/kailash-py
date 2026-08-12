@@ -1032,6 +1032,9 @@ class SmartDefaultsManager:
 
         return registry
 
+    # SUPERSEDED -- see the implementation note below this code block (#2084).
+    # The sketch here was shipped verbatim and never worked: neither the
+    # import path nor the handler methods it registers have ever existed.
     def create_observability(self, config: AgentConfig):
         """Create observability with smart defaults."""
         from kaizen.core.autonomy.hooks import HookManager
@@ -1075,6 +1078,36 @@ class SmartDefaultsManager:
 
         storage = FilesystemStorage(config.checkpoint_path)
         return CheckpointManager(storage)
+```
+
+> **Implementation note — `create_observability` (#2084).** The
+> `create_observability` sketch above is an ADR illustration that was copied
+> into the implementation verbatim and shipped for as long as this ADR stood.
+> It never worked. `kaizen.core.autonomy.observability` contains **no hook
+> classes**, and the handler methods it registers — `start_trace`, `end_trace`,
+> `record_start`, `record_end`, `log_start`, `log_end` — have **zero
+> definitions anywhere in the source tree**, so correcting the import path
+> alone would still have failed on the next line. Every `ImportError` was
+> caught and skipped, so four subsystems reported themselves enabled while
+> registering nothing.
+>
+> What actually ships:
+>
+> - The hooks live in `kaizen.core.autonomy.hooks.builtin` — `TracingHook`,
+>   `MetricsHook`, `LoggingHook`, and (for the file-backed compliance trail)
+>   `AuditTrailHook`.
+> - They are registered with `HookManager.register_hook(hook)`, which attaches
+>   a hook to every event in its `events` list. There is no per-lifecycle-method
+>   registration API; a hook implements one async `handle(context)`.
+> - `TracingHook` takes a `TracingManager`, not an `endpoint=` string.
+>   `MetricsHook` takes no port — `metrics_port` configures `MetricsEndpoint`,
+>   which the operator starts.
+> - `prometheus_client` and `opentelemetry` ship in the optional
+>   `observability` extra, so tracing and metrics can legitimately be absent;
+>   that case warns once, naming the flag and the extra, rather than skipping
+>   silently.
+
+```python
 
     def create_control_protocol(self, config: AgentConfig):
         """Create control protocol with smart defaults."""

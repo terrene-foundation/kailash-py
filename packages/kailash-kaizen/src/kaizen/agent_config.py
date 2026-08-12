@@ -115,22 +115,54 @@ class AgentConfig:
     # =========================================================================
 
     enable_tracing: bool = True
-    """Enable distributed tracing (Jaeger)"""
+    """Enable distributed tracing (OpenTelemetry spans exported to Jaeger)"""
 
-    tracing_endpoint: str = "http://localhost:16686"
-    """Jaeger tracing endpoint"""
+    tracing_endpoint: str = "http://localhost:4317"
+    """
+    OTLP gRPC INGEST endpoint that spans are exported to.
+
+    This is the collector's ingest port (4317), not the Jaeger web UI (16686).
+    The default was ``http://localhost:16686`` while nothing read the field;
+    now that it is wired, pointing it at the UI port would export every span
+    into a socket that cannot accept them.
+    """
 
     enable_metrics: bool = True
     """Enable Prometheus metrics collection"""
 
     metrics_port: int = 9090
-    """Prometheus metrics port"""
+    """
+    Port for serving collected metrics.
+
+    Read by :class:`~kaizen.core.autonomy.hooks.endpoints.MetricsEndpoint`,
+    which the operator starts explicitly -- agent construction collects metrics
+    into an in-process registry but never binds a listener, because opening a
+    network port is not something a zero-config default may do on its own.
+    """
 
     enable_logging: bool = True
     """Enable structured JSON logging"""
 
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
+
+    log_payload_keys: bool = False
+    """
+    Log the KEY NAMES of agent payloads (never the values). Off by default.
+
+    ``enable_logging`` is on by default, so this hook runs on every agent
+    construction in every downstream consumer. Key names are a genuine
+    disclosure even with values withheld: a payload keyed ``ssn``,
+    ``patient_diagnosis``, ``termination_reason`` or ``acme_contract_value``
+    leaks schema, subject matter, and often the fact that such a record exists
+    at all. That is a bounded leak, not an absent one, and a default-on logger
+    is the wrong place to spend it.
+
+    Set ``True`` to get payload structure (key names and field counts) in the
+    lifecycle logs. Payload VALUES are never emitted at this level whatever
+    this is set to -- see ``LoggingHook.log_full_payloads`` (#2070), which is a
+    separate, additionally DEBUG-gated opt-in.
+    """
 
     enable_audit: bool = True
     """Enable compliance audit trails"""

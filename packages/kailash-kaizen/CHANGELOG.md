@@ -13,6 +13,231 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — the four observability flags now install the hooks they advertise (#2084)
+
+`AgentConfig.enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit`
+all default `True`, and `Agent.__init__` calls `SmartDefaultsManager.create_observability`
+on every construction. That function imported four hook classes from
+`kaizen.core.autonomy.observability.{tracing,metrics,logging,audit}` — a package
+that contains **no hook classes at all** — caught every resulting `ImportError`,
+and returned an empty `HookManager`. On the untouched default path:
+`is_observability_enabled()` returned `True` and **zero hooks were registered**.
+`enable_audit`, documented as *"Enable compliance audit trails"*, recorded nothing.
+
+The subsystems were never missing, only mislocated: `TracingHook`, `MetricsHook`,
+`LoggingHook` and `AuditHook` all live in `kaizen.core.autonomy.hooks.builtin`,
+and `HookManager.register_hook()` is the contract they were written for. The old
+call site registered per-method handlers (`start_trace`, `record_start`, …) that
+have zero definitions anywhere in the source tree, so even a corrected import
+path would have failed on the next line.
+
+**What now happens on a default agent construction:**
+
+| Flag | Hook installed | Requires |
+| --- | --- | --- |
+| `enable_logging` | `LoggingHook` | core deps only |
+| `enable_audit` | `AuditTrailHook` (new) writing `audit_log_path` | core deps only |
+| `enable_metrics` | `MetricsHook` | `kailash-kaizen[observability]` |
+| `enable_tracing` | `TracingHook` | `kailash-kaizen[observability]` |
+
+- **New `AuditTrailHook`** bridges the observability `AuditTrailManager`
+  (append-only JSONL, honours `audit_log_path`) into the hook system. The
+  existing `AuditHook` is unchanged and still wraps the PostgreSQL-backed
+  security `AuditTrailProvider`, which a zero-config path has no connection for.
+  The audit trail records event STRUCTURE, never payload values. BOTH
+  payload-bearing fields are reduced through the same `summarize_payload`
+  helper `LoggingHook` uses: `context.data` to its sorted key names, and
+  `context.metadata` — a documented public kwarg on `HookManager.trigger` and
+  `BaseAgent.trigger_hook` — to `{count, keys}`. What reaches the file
+  verbatim is the audit record itself: agent id, event name, trace id,
+  timestamp, and the success/failure verdict.
+
+  **Key names are a bounded leak, not an absent one**, and the audit trail
+  writes them unconditionally — there is no `log_payload_keys` equivalent for
+  it. This is deliberate and it is the one place the two sinks are asymmetric
+  on purpose: a payload keyed `ssn` or `patient_diagnosis` discloses schema
+  and subject matter (see the `log_payload_keys` entry below, where that
+  reasoning makes key names opt-IN for the log sink), but an audit record
+  stripped of event shape records that something happened and nothing about
+  what — which is not an audit record. The trade is made explicit here rather
+  than left implied, and it is why the file is created owner-only.
+- **A missing optional dependency is now loud.** `"Metrics hook not available,
+  skipping"` named neither what stopped working nor how to restore it. The
+  replacement names the flag, the extra, and `enable_metrics=False` as the
+  deliberate opt-out — emitted **once per process**, because this path runs per
+  agent construction and a warning repeated on a hot path is one operators filter.
+- **`create_observability` returns `None`** when every enabled subsystem fails to
+  install, instead of an empty `HookManager`. Returning the empty manager is what
+  made the original defect invisible. `BaseAgent` already handles a `None`
+  hook manager (`base_agent.py` declares `hook_manager: Optional[Any] = None`).
+
+### Fixed — a `hook_manager` passed to `BaseAgent` now actually fires (#2084, second layer)
+
+`BaseAgent.__init__` accepts a `hook_manager`, stores it, and then
+`trigger_hook` / `register_hook` / `get_hook_stats` gated on
+`config.hooks_enabled` — a SEPARATE opt-in defaulting `False`. `Agent` builds a
+hook manager via `SmartDefaultsManager` and passes it down without setting that
+flag, so a fully populated manager stayed dormant: every hook registered, none
+ever invoked. Fixing only the registration half would have left the audit trail
+recording nothing on exactly the path users take.
+
+The three gates now test `self._hook_manager is None`, which `__init__` already
+resolves from BOTH inputs. Passing a `hook_manager` is now itself the opt-in;
+`hooks_enabled=True` without one is unchanged, and supplying neither still
+leaves hooks inert.
+
+### Changed (BREAKING) — all three hook gates now honour a supplied `hook_manager`
+
+This is the other side of the fix above, and it is **not** limited to the
+broken path. The old gates keyed on `hooks_enabled` alone, so all three
+changed — with `hooks_enabled=False` **and** a manager supplied:
+
+| gate | before | after |
+| --- | --- | --- |
+| `register_hook` | raises `RuntimeError` | registers |
+| `trigger_hook` | returns `[]` — no handler runs | **fires every registered handler** |
+| `get_hook_stats` | returns `{}` | returns real stats |
+
+`trigger_hook` is the larger of the three for a caller who was relying on the
+flag: handlers that never ran now execute, with whatever side effects they
+carry. It is the same transition the "Fixed" entry above describes — on the
+`Agent` path it is precisely the fix, since the manager was already populated
+and firing nothing; on a hand-wired `BaseAgent` it is a behavioural break.
+Both are true of one change.
+
+Written out for `register_hook`, the row that changes is the third:
+
+| `hooks_enabled` | `hook_manager` supplied | `register_hook` before | after |
+| --- | --- | --- | --- |
+| `False` | no | raises | raises |
+| `True` | either | registers | registers |
+| `False` | **yes** | **raises** | **registers** |
+
+On the `Agent` path it is unambiguously the fix:
+`SmartDefaultsManager` supplies a populated manager and nothing sets
+`hooks_enabled`, so `register_hook` was rejecting registrations against a
+manager that was already installed and firing. But a `BaseAgent` caller who
+passed a manager AND left `hooks_enabled` at its `False` default now finds
+`register_hook(evt, handler)` **succeeds** where it previously raised — if you
+relied on that `RuntimeError` as an off-switch, it is gone.
+
+`hooks_enabled=False` is not restored as an override for this case because
+`False` is the field's DEFAULT: a dataclass cannot distinguish "explicitly
+disabled" from "never mentioned", so honouring it would reject the supplied
+manager on every default `Agent` construction — reinstating exactly the
+"documented kwarg with no effect" defect this entry fixes
+(`zero-tolerance.md` Rule 3c). To keep hooks off, pass no `hook_manager`.
+
+### Fixed — the audit trail is created owner-only (0o600 / 0o700)
+
+`audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so with
+`enable_audit` now actually installing a hook, a default agent writes an audit
+trail into whatever directory the process runs in. `FileAuditStorage` created
+that file with `touch()` — 0o644 under a normal umask, readable by every local
+account. The trail records which agent did what, when, and the SHAPE of every
+payload involved.
+
+Files and directories are now 0o600 / 0o700, pinned with an explicit `chmod`
+because both `touch(mode=...)` and `mkdir(mode=...)` are masked by umask — and
+the mode is read back from `stat()` rather than trusted from the create call,
+since a mode requested and then stripped by umask is indistinguishable from one
+never requested.
+
+A **pre-existing FILE** is tightened too. Restricting this to files the class
+creates would mean the fix never reaches an upgraded install: the audit file is
+created once and reused forever, so every existing deployment would keep its
+0o644 trail indefinitely. Re-permissioning a path an operator may have
+configured deliberately is not something to do quietly, so **every** mode
+change is announced at WARN naming the path and the mode it had — including
+the case that is not a tightening, where an operator-set `0o400` becomes the
+`0o600` the append-only trail requires.
+
+A pre-existing **DIRECTORY** is left alone; only one this class creates is
+pinned to 0o700. The asymmetry is deliberate. `Path(file_path).parent` is `.`
+for a bare filename — the process working directory — and for a configured
+`audit_log_path` it is frequently a shared location such as `/var/log/kaizen`
+that other services also write to. Chmodding either to 0o700 is well outside
+this class's remit, and it is not what protects the record: the file mode is.
+
+A failed audit append is loud: the exception propagates to `HookManager`, which
+records `HookResult(success=False)`, logs the failure, and calls the hook's
+`on_error`. An audit trail that silently stops recording is worse than one
+never enabled, so this is pinned by a test that makes a real append fail.
+
+### Fixed — an unwritable audit path no longer breaks `Agent()` construction
+
+Wiring `enable_audit` made `create_observability` touch the filesystem for the
+first time, and `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl` —
+so it writes into whatever directory the process runs in. Under Kubernetes
+`readOnlyRootFilesystem: true`, a distroless image, or Lambda's read-only
+`/var/task`, that `mkdir` raises `PermissionError`; `agent.py` calls
+`create_observability` BEFORE `Agent.__init__`'s own `try`, so the error
+propagated out and `Agent(model=...)` failed to construct at all.
+
+This was unreachable before this release — the audit branch died on a caught
+`ImportError` ahead of the write — but it would have been a hard upgrade break
+for every read-only-filesystem deployment.
+
+A compliance sink that cannot write must fail LOUDLY, not fail construction.
+The branch now catches `OSError`, emits a one-time WARN naming
+`audit_log_path`, the underlying error, and `enable_audit=False` as the
+deliberate opt-out, and skips only the audit hook — every other subsystem still
+installs. Pinned by a test that constructs a real `Agent()` with the CWD set to
+a real unwritable directory.
+
+### Added — `AgentConfig.log_payload_keys` (default `False`)
+
+Wiring `enable_logging` turns a previously dormant `LoggingHook` into a
+**default-on** sink running on every agent construction in every downstream
+consumer, so it is a disclosure change and is treated as one.
+
+Since #2070 `LoggingHook` emits payload KEY NAMES and field counts rather than
+values — but key names are a **bounded** leak, not an absent one. A payload
+keyed `ssn`, `patient_diagnosis`, `termination_reason` or
+`acme_contract_value` discloses schema, subject matter, and often that such a
+record exists at all. The auto-wired hook therefore drives `include_data` from
+this new field, which defaults `False`; lifecycle logs still carry event,
+agent id and trace id. Set `log_payload_keys=True` for payload structure.
+
+Payload VALUES remain unreachable at this level whatever it is set to —
+`LoggingHook.log_full_payloads` is a separate opt-in, additionally gated on
+DEBUG. That names-not-values property is now pinned by a test in this change
+rather than inherited from #2070: a regression restoring value logging in
+`LoggingHook` reds this suite instead of leaving it green.
+
+### Added — `HookManager.registered_hook_names()`
+
+Returns the set of handler names currently registered across all events.
+`get_stats()` reports EXECUTION counts, so a manager that had registered nothing
+was indistinguishable from one whose hooks simply had not fired yet — no caller,
+banner, or test could ask what was actually installed. That blind spot is why
+four dead subsystems shipped.
+
+### Changed — startup banner reports installed subsystems, not config flags
+
+`RichOutputManager._show_observability_status` read the four flags, so a default
+agent printed four subsystems with endpoints and file paths while none was
+registered. It now renders from `registered_hook_names()`. A subsystem whose
+optional dependency is missing keeps its flag `True`, so a flag-driven banner
+reports it as running; it is now omitted. A caller-supplied `custom_hook_manager`
+renders as `"custom hook manager"` rather than guessing its contents.
+
+### Changed — `AgentConfig.tracing_endpoint` default is now the OTLP ingest port
+
+`"http://localhost:16686"` → `"http://localhost:4317"`.
+
+16686 is the Jaeger **web UI**; it accepts no OTLP traffic. While the field was
+inert nothing depended on the value, so **no existing behaviour changes** — but
+now that spans are actually exported, the old default would have dropped every
+one of them at the socket while tracing reported itself enabled. An endpoint
+still pointed at 16686 (for example a config that pinned the old default
+explicitly) emits a one-time warning naming the port and the correct one.
+
+`metrics_port` is documented as what it is: the port
+`MetricsEndpoint` serves on, started explicitly by the operator. Agent
+construction collects metrics into an in-process registry and never binds a
+listener — opening a network port is not something a zero-config default may do.
+
 ### Fixed — `EnterpriseMemorySystem` no longer widens tenant scope on a falsy tenant id (#2005)
 
 `_build_tenant_key` resolved its scope with `tenant_id or self._current_tenant`.
