@@ -790,9 +790,7 @@ def _current_address_space_bytes() -> int | None:
 
 
 @contextmanager
-def memory_limit_guard(
-    limit: int | None = None, config: SecurityConfig | None = None
-):
+def memory_limit_guard(limit: int | None = None, config: SecurityConfig | None = None):
     """
     Context manager bounding how much address space the guarded block may add.
 

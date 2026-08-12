@@ -166,9 +166,9 @@ def test_memory_limit_guard_applies_headroom_above_current_usage():
         soft, _ = resource.getrlimit(resource.RLIMIT_AS)
 
     assert soft > current, "ceiling must exceed current address-space usage"
-    assert soft <= current + headroom + (8 * 1024 * 1024), (
-        "ceiling must stay close to current usage + headroom"
-    )
+    assert soft <= current + headroom + (
+        8 * 1024 * 1024
+    ), "ceiling must stay close to current usage + headroom"
 
 
 @requires_enforced_rlimit_as
@@ -206,9 +206,9 @@ def test_python_code_node_raises_memory_limit_error_for_a_hog(
     while err is not None and err not in chain:
         chain.append(err)
         err = err.__cause__ or err.__context__
-    assert any(isinstance(e, MemoryLimitError) for e in chain), (
-        f"expected MemoryLimitError in the cause chain, got {chain!r}"
-    )
+    assert any(
+        isinstance(e, MemoryLimitError) for e in chain
+    ), f"expected MemoryLimitError in the cause chain, got {chain!r}"
 
 
 def test_memory_error_is_not_relabelled_when_nothing_is_enforced(monkeypatch):
@@ -222,9 +222,7 @@ def test_memory_error_is_not_relabelled_when_nothing_is_enforced(monkeypatch):
     import kailash.security as security_module
 
     # Simulate the platform where the ceiling cannot be established.
-    monkeypatch.setattr(
-        security_module, "_current_address_space_bytes", lambda: None
-    )
+    monkeypatch.setattr(security_module, "_current_address_space_bytes", lambda: None)
     monkeypatch.setattr(security_module, "_address_space_saved", None)
 
     with pytest.raises(MemoryError) as excinfo:
