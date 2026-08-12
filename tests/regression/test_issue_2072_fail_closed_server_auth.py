@@ -672,9 +672,9 @@ def test_nexus_does_not_declare_external_auth_it_never_installs():
     enabled = core_gateway_auth_kwargs(True)
     assert "external_auth_reason" in enabled
     assert enabled["external_auth_reason"].strip()
-    assert "require_auth" not in enabled, (
-        "declaring external auth AND opting out would install nothing twice over"
-    )
+    assert (
+        "require_auth" not in enabled
+    ), "declaring external auth AND opting out would install nothing twice over"
 
     disabled = core_gateway_auth_kwargs(False)
     assert disabled == {"require_auth": False}, (
@@ -750,9 +750,9 @@ def test_mounted_workflow_api_does_not_install_a_second_gate(authed_env):
     server = _server_with_probe()
 
     sub = server._workflow_apis["probe"]
-    assert sub._auth_config is None, (
-        "the mounted sub-app installed its own gate; the parent already owns it"
-    )
+    assert (
+        sub._auth_config is None
+    ), "the mounted sub-app installed its own gate; the parent already owns it"
     # And the parent's gate still covers the mounted route, both polarities.
     client = TestClient(server.app)
     assert (
@@ -792,9 +792,9 @@ def test_create_gateway_app_authenticates_the_app_it_returns(authed_env):
     app = asyncio.run(_build())
 
     installed = [m.cls.__name__ for m in app.user_middleware]
-    assert "JWTAuthMiddleware" in installed, (
-        f"the served app carries no auth layer; middleware={installed}"
-    )
+    assert (
+        "JWTAuthMiddleware" in installed
+    ), f"the served app carries no auth layer; middleware={installed}"
 
     client = TestClient(app)
     assert client.get("/api/v1/workflows").status_code == 401

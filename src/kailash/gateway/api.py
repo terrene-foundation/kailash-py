@@ -330,6 +330,7 @@ def create_gateway_app(
     Returns:
         The FastAPI application that actually serves the routes.
     """
+
     # `@app.on_event(...)` is deprecated in FastAPI and emits a
     # DeprecationWarning on every construction; a lifespan context manager is
     # the supported form and runs the same startup/shutdown work. The body

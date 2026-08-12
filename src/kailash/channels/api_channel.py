@@ -105,7 +105,9 @@ class APIChannel(Channel):
             # Parity). An EXPLICIT `enable_auth=False` is still honoured, and
             # is never silent: resolve_server_auth logs a WARN naming the
             # exposure and its wiring (security.md § Secure-Default).
-            require_auth=True if self.config.enable_auth is None else self.config.enable_auth,
+            require_auth=(
+                True if self.config.enable_auth is None else self.config.enable_auth
+            ),
             auth_config=self.config.auth_config or None,
             enable_durability=self.config.extra_config.get("enable_durability", True),
             enable_resource_management=self.config.extra_config.get(

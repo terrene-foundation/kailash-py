@@ -184,7 +184,6 @@ class HTTPTransport(Transport):
         if self._gateway is None:
             # If gateway wasn't pre-created, create it now
             from kailash.servers.gateway import create_gateway
-
             from nexus.auth_bootstrap import core_gateway_auth_kwargs
 
             self._gateway = create_gateway(
