@@ -174,6 +174,96 @@ def _exempt_paths(
     return list(dict.fromkeys(paths))
 
 
+def _jwtconfig_default_exempt_paths() -> List[str]:
+    """The ``exempt_paths`` list a ``JWTConfig`` gets when the caller sets none.
+
+    Read from the dataclass field's own ``default_factory`` rather than copied,
+    so this cannot drift from ``JWTConfig`` the way a second literal list would.
+    """
+    import dataclasses
+
+    from kailash.trust.auth.jwt import JWTConfig
+
+    for f in dataclasses.fields(JWTConfig):
+        if f.name == "exempt_paths":
+            factory = f.default_factory
+            if factory is not dataclasses.MISSING:
+                return list(factory())
+    return []
+
+
+def _narrow_caller_config(
+    config: "JWTConfig",
+    *,
+    extra_exempt_paths: Optional[Sequence[str]] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> "JWTConfig":
+    """Apply this module's exempt-path policy to a CALLER-supplied ``JWTConfig``.
+
+    Two defects this closes, both of which made the ``auth_config=`` branch
+    weaker than the environment branch next to it.
+
+    **The untouched default is re-narrowed.** ``JWTConfig``'s own
+    ``exempt_paths`` default is ``/health, /metrics, /docs, /openapi.json,
+    /redoc, /auth/login, /auth/refresh, /auth/sso/*`` -- the list the comment on
+    :data:`DEFAULT_EXEMPT_PATHS` says is deliberately NOT reused here, because
+    the OpenAPI documents hand an anonymous caller the full route map. Returning
+    the caller's config untouched reused it anyway, so
+    ``create_gateway(auth_config=JWTConfig(secret=...))`` -- the natural way to
+    write it, and the way the docstring shows -- restored anonymous
+    ``GET /openapi.json`` route enumeration on a server the caller had just
+    asked to authenticate.
+
+    **``extra_exempt_paths`` is honoured.** It is threaded from every server
+    surface but was read only on the environment branch, so
+    ``create_gateway(auth_config=..., auth_exempt_paths=["/probe"])`` accepted a
+    documented security kwarg that had no effect -- ``zero-tolerance.md`` Rule
+    3c, a documented kwarg consumed by no branch.
+
+    STATED RESIDUAL. "Untouched" is decided by comparing the caller's list to
+    ``JWTConfig``'s default-factory output, because a plain dataclass keeps no
+    record of which fields the caller passed. A caller who EXPLICITLY passes a
+    list byte-equal to that default is therefore narrowed as though they had
+    passed nothing. That is the fail-CLOSED direction of the ambiguity and it is
+    the one to take on an auth path; a caller who genuinely wants ``/docs``
+    public can say so by adding any path to the list, or via
+    ``KAILASH_AUTH_EXEMPT_PATHS``.
+
+    Returns a COPY. Mutating the caller's object would silently change a config
+    they may hold a reference to and reuse for a second server.
+    """
+    import dataclasses
+
+    caller_paths = list(config.exempt_paths or [])
+    if caller_paths == _jwtconfig_default_exempt_paths():
+        # Untouched default -> this module's narrow list wins.
+        resolved = _exempt_paths(extra_exempt_paths, env=env)
+    else:
+        # Explicit caller list -> kept in full, with the extras appended. The
+        # caller's own choices are never dropped; `_exempt_paths`'s built-ins
+        # are not force-merged in either, because an explicit list is a
+        # deliberate statement about this server.
+        merged = list(caller_paths)
+        raw = (os.environ if env is None else env).get(EXEMPT_PATHS_ENV, "")
+        merged.extend(p.strip() for p in raw.split(",") if p.strip())
+        if extra_exempt_paths:
+            merged.extend(p.strip() for p in extra_exempt_paths if p and p.strip())
+        resolved = list(dict.fromkeys(merged))
+
+    if resolved == caller_paths:
+        return config
+    logger.info(
+        "server_auth.caller_config_exempt_paths_resolved",
+        extra={
+            "caller_paths": len(caller_paths),
+            "resolved_paths": len(resolved),
+            "narrowed_from_default": caller_paths
+            == _jwtconfig_default_exempt_paths(),
+        },
+    )
+    return dataclasses.replace(config, exempt_paths=resolved)
+
+
 def build_server_auth_config(
     *,
     extra_exempt_paths: Optional[Sequence[str]] = None,
@@ -298,7 +388,12 @@ def resolve_server_auth(
     2. ``require_auth=False`` -- an explicit opt-out. Returns ``None`` and
        emits a loud WARN naming the exposure.
     3. ``auth_config`` -- an explicit :class:`JWTConfig` (or a ``dict`` of its
-       fields). Used as given.
+       fields). Used as given EXCEPT for ``exempt_paths``, which is put through
+       this module's policy by :func:`_narrow_caller_config`: an untouched
+       ``JWTConfig`` default (which exempts ``/docs`` and ``/openapi.json``) is
+       replaced with :data:`DEFAULT_EXEMPT_PATHS`, and ``extra_exempt_paths``
+       is appended either way. Both were previously ignored on this branch,
+       which made ``auth_config=`` the weakest way to ask for authentication.
     4. The environment, via :func:`build_server_auth_config`. Raises
        :class:`ServerAuthNotConfiguredError` when nothing is configured.
 
@@ -381,8 +476,14 @@ def resolve_server_auth(
     if auth_config is not None:
         from kailash.trust.auth.jwt import JWTConfig
 
+        # BOTH accepted shapes route through `_narrow_caller_config`. A dict
+        # without an `exempt_paths` key produces a JWTConfig carrying the same
+        # broad default a bare JWTConfig() does, so exempting the dict form
+        # would leave half the branch on the old behaviour.
         if isinstance(auth_config, JWTConfig):
-            return auth_config
+            return _narrow_caller_config(
+                auth_config, extra_exempt_paths=extra_exempt_paths, env=env
+            )
         if isinstance(auth_config, dict):
             # An empty dict is NOT a config. Treating it as one would build a
             # JWTConfig with no secret and hand back a server that installs a
@@ -390,7 +491,11 @@ def resolve_server_auth(
             # shape this whole module exists to prevent. Fall through to the
             # environment instead, which fails closed.
             if auth_config:
-                return JWTConfig(**auth_config)
+                return _narrow_caller_config(
+                    JWTConfig(**auth_config),
+                    extra_exempt_paths=extra_exempt_paths,
+                    env=env,
+                )
         else:
             raise TypeError(
                 "auth_config must be a JWTConfig or a dict of its fields, "

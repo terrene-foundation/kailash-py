@@ -105,13 +105,40 @@ _UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/\\]")
 #: Unicode categories that can forge a log RECORD rather than merely appear odd
 #: in one: Cc (control, incl. CR/LF), Cf (format, incl. bidi overrides that
 #: reorder a rendered line), Zl/Zp (LINE and PARAGRAPH SEPARATOR, which many log
-#: viewers and JSON consumers break lines on exactly as they do on ``\n``).
-_RECORD_FORGING_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+#: viewers and JSON consumers break lines on exactly as they do on ``\n``), and
+#: Cs (lone surrogates).
+#:
+#: ``Cs`` SUPPRESSES a record rather than forging one, which is why it was
+#: missed: a lone surrogate is representable in a ``str`` but not encodable to
+#: UTF-8, so the failure happens inside the HANDLER's encode step, after every
+#: check in this module has passed. Measured on a UTF-8 ``StreamHandler``::
+#:
+#:     safe_log_text("a\ud800b")  -> 'a\ud800b'      (passed through)
+#:     logger.info("record %s", _)  -> UnicodeEncodeError
+#:                                     'utf-8' codec can't encode character
+#:                                     '\ud800': surrogates not allowed
+#:     emitted bytes: b''
+#:
+#: ``logging`` routes that to ``Handler.handleError``, which prints to stderr
+#: and DROPS the record. On this module's own call sites that record is the one
+#: documenting authentication being skipped, so a caller who puts a lone
+#: surrogate in a server title deletes the evidence of its own exposure. Record
+#: DESTRUCTION and record FORGERY are the same threat to an operator reading the
+#: log, so they belong in the same frozenset.
+_RECORD_FORGING_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
 #: The ASCII line terminators, stripped by an explicit substitution in
-#: :func:`safe_log_text` before the category sweep. Redundant with ``Cc`` on
+#: :func:`safe_log_text` after the category sweep. Redundant with ``Cc`` on
 #: purpose -- see the two-pass note there.
-_LOG_LINE_TERMINATORS = re.compile(r"[\r\n]")
+#:
+#: A STRING, not a compiled pattern, and that is load-bearing for tooling rather
+#: than for behaviour. ``safe_log_text`` passes it to the ``re.sub`` MODULE
+#: FUNCTION; the previous revision compiled it here and called the
+#: ``Pattern.sub`` METHOD instead. CodeQL's ``py/log-injection`` sanitizer model
+#: recognizes the module-function form as a barrier and does not recognize the
+#: compiled-method form, so the compiled version left the taint unbroken at
+#: every call site. See the barrier note in :func:`safe_log_text`.
+_LOG_LINE_TERMINATORS = r"[\r\n]"
 
 #: Prose log fields get a longer bound than identifiers: a server label or an
 #: auth reason is a sentence, and truncating it at the 120-char identifier bound
@@ -254,7 +281,14 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
        SEPARATOR is treated as a line break by many log viewers and JSON
        consumers, so stripping only ASCII newlines leaves the injection open
        in a form that reads as invisible whitespace in a diff.
-    2. **Bounded.** Never longer than ``limit`` plus a fixed marker, so a
+    2. **No record DESTRUCTION.** Category ``Cs`` -- a lone surrogate -- is
+       swept for a different reason than the rest. It cannot forge a line; it
+       makes the record un-encodable, so the handler raises
+       ``UnicodeEncodeError`` inside its own ``emit`` and ``logging`` drops the
+       record entirely. On this module's auth call sites the dropped record is
+       the one saying authentication was skipped. Suppressing the evidence and
+       forging it are the same attack on the operator reading the log.
+    3. **Bounded.** Never longer than ``limit`` plus a fixed marker, so a
        caller-supplied string cannot drive log volume.
 
     Total -- never raises. A logging call site must not fail on the thing it is
@@ -298,13 +332,22 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
     #    join last, `py/log-injection` was still reported at every call site,
     #    because the value actually returned came from the join.
     #
+    #    THE CALL FORM IS PART OF THE BARRIER, not a style choice. This is the
+    #    ``re.sub`` MODULE FUNCTION with the pattern passed as an argument. The
+    #    previous revision pre-compiled the pattern at module scope and called
+    #    ``Pattern.sub``, which is behaviourally identical and which CodeQL's
+    #    ``py/log-injection`` sanitizer model does NOT recognize -- so pass 2
+    #    barriered nothing and two alerts stayed live at the ``server_auth``
+    #    call sites even though the runtime behaviour was already correct. If a
+    #    future change re-compiles this for speed, the alerts come back.
+    #
     # Dropping either is a regression: pass 1 alone loses the recognized
     # barrier, pass 2 alone is the ASCII-only strip this function replaces.
     swept = "".join(
         "?" if unicodedata.category(ch) in _RECORD_FORGING_CATEGORIES else ch
         for ch in text
     )
-    cleaned = _LOG_LINE_TERMINATORS.sub("?", swept)
+    cleaned = re.sub(_LOG_LINE_TERMINATORS, "?", swept)
     if len(cleaned) > limit:
         # Marker uses <> precisely because... they are ours: the categories
         # stripped above cannot produce them, and a caller who writes a literal
