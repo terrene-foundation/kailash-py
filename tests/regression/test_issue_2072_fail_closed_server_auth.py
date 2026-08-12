@@ -1247,16 +1247,62 @@ def test_middleware_gateway_websocket_is_gated(middleware_gateway_env):
 
 
 def test_middleware_gateway_fails_closed_without_any_credential(clean_auth_env):
-    """No credential source anywhere -> refuses to construct.
+    """Default construction with no credential source anywhere -> refuses.
 
-    ``enable_auth=False`` turns off token ISSUANCE and is deliberately not an
-    opt-out from the request gate, so it must not rescue this.
+    Asserts ``RuntimeError``, not ``ServerAuthNotConfiguredError``, because on
+    THIS path the #636 issuer check fires first: ``enable_auth`` defaults to
+    ``True``, so the gateway tries to build its token ISSUER before the #2072
+    gate is ever resolved, and refuses on the missing
+    ``KAILASH_API_GATEWAY_SECRET``. Both raises are ``RuntimeError`` subclasses
+    and both refuse to construct, which is the property that matters here.
+    ``test_middleware_gateway_require_auth_is_tri_state`` covers the path where
+    the #2072 raise is the one that fires.
+    """
+    from kailash.middleware import create_gateway
+
+    with pytest.raises(RuntimeError):
+        create_gateway(title="probe")
+
+
+def test_middleware_gateway_require_auth_is_tri_state(clean_auth_env):
+    """``enable_auth=False`` is an EXPLICIT opt-out, not silence.
+
+    ``require_auth`` is ``Optional[bool]`` for the same reason
+    ``ChannelConfig.enable_auth`` is: a plain ``bool`` cannot tell "the operator
+    never said" from "the operator said no". Before #2072, ``enable_auth`` was
+    the ONLY auth control this class had, so a caller who set it to ``False``
+    said what they wanted in the words available to them (#636's contract).
+    Raising on them would punish an explicit choice.
+
+    An explicit ``require_auth`` is the newer, more specific statement and wins
+    in both directions.
     """
     from kailash.middleware import create_gateway
     from kailash.utils.server_auth import ServerAuthNotConfiguredError
 
+    # Unstated + legacy opt-out -> honoured, serves openly.
+    assert create_gateway(title="probe", enable_auth=False)._auth_config is None
+
+    # Explicit True overrides the legacy opt-out and still fails closed.
     with pytest.raises(ServerAuthNotConfiguredError):
-        create_gateway(title="probe", enable_auth=False)
+        create_gateway(title="probe", enable_auth=False, require_auth=True)
+
+
+def test_middleware_gateway_keyless_auth_manager_does_not_gate(clean_auth_env):
+    """A manager with no derivable key cannot verify, so it must not gate.
+
+    Accepting it as "authentication configured" would install a middleware with
+    nothing to verify against -- the #2013 shape, a control that reports success
+    and enforces nothing.
+    """
+    from kailash.middleware import create_gateway
+    from kailash.utils.server_auth import ServerAuthNotConfiguredError
+
+    class _KeylessAuthManager:
+        algorithm = "HS256"
+
+    with pytest.raises(ServerAuthNotConfiguredError):
+        create_gateway(title="probe", auth_manager=_KeylessAuthManager())
 
 
 def test_middleware_gateway_explicit_opt_out_is_honoured(clean_auth_env, caplog):

@@ -84,17 +84,62 @@ def test_construction_with_valid_env_var_succeeds(monkeypatch, env_serialized):
 def test_construction_with_explicit_auth_manager_ignores_env_var(
     monkeypatch, env_serialized
 ):
-    """When auth_manager is provided, env var is not required (caller owns secret)."""
-    monkeypatch.delenv("KAILASH_API_GATEWAY_SECRET", raising=False)
+    """When auth_manager is provided, env var is not required (caller owns secret).
 
-    class _FakeAuthManager:
+    UPDATED BY #2072. The manager now has to *actually own a secret* for this to
+    hold, because the request gate added in #2072 derives its verifier from the
+    manager's own key — so the gateway accepts exactly the tokens it issues.
+
+    The previous version of this test passed a stub with an `algorithm` but **no
+    key material at all**, which is not what "caller owns secret" describes: a
+    manager with no key can neither issue nor verify. That stub now fails
+    closed, which is pinned separately by
+    `test_keyless_auth_manager_fails_closed_rather_than_gating_nothing`.
+    """
+    monkeypatch.delenv("KAILASH_API_GATEWAY_SECRET", raising=False)
+    monkeypatch.delenv("KAILASH_JWT_SECRET", raising=False)
+
+    class _FakeConfig:
+        secret_key = "caller-owned-secret-at-least-32-bytes-long!!"
         algorithm = "HS256"
         issuer = "test-issuer"
         audience = "test-aud"
 
+    class _FakeAuthManager:
+        config = _FakeConfig()
+
     fake = _FakeAuthManager()
     gw = APIGateway(enable_auth=True, auth_manager=fake)
     assert gw.auth_manager is fake
+    # The env var was genuinely not consulted, and the gate uses the caller's key.
+    assert gw._auth_config is not None
+    assert gw._auth_config.secret == _FakeConfig.secret_key
+
+
+@pytest.mark.regression
+def test_keyless_auth_manager_fails_closed_rather_than_gating_nothing(
+    monkeypatch, env_serialized
+):
+    """An auth_manager with no derivable key cannot verify, so it must not gate.
+
+    Added by #2072. Accepting a keyless manager as "authentication configured"
+    would install a middleware with nothing to verify against — the #2013
+    silent-no-op shape, where a control reports success and enforces nothing.
+    It raises instead, and logs a WARN naming the manager so the caller does not
+    read the "no credential source" message as though they had passed nothing.
+    """
+    import logging
+
+    from kailash.utils.server_auth import ServerAuthNotConfiguredError
+
+    monkeypatch.delenv("KAILASH_API_GATEWAY_SECRET", raising=False)
+    monkeypatch.delenv("KAILASH_JWT_SECRET", raising=False)
+
+    class _KeylessAuthManager:
+        algorithm = "HS256"
+
+    with pytest.raises(ServerAuthNotConfiguredError):
+        APIGateway(enable_auth=True, auth_manager=_KeylessAuthManager())
 
 
 @pytest.mark.regression

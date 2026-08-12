@@ -147,7 +147,7 @@ class APIGateway:
         enable_auth: bool = True,
         auth_manager=None,  # Dependency injection for auth
         database_url: Optional[str] = None,
-        require_auth: bool = True,
+        require_auth: Optional[bool] = None,
         auth_config: Any = None,
         external_auth_reason: Optional[str] = None,
         auth_exempt_paths: Optional[List[str]] = None,
@@ -162,6 +162,17 @@ class APIGateway:
           :class:`~kailash.middleware.auth.jwt_auth.JWTAuthManager` (issue #636
           behaviour, unchanged).
         * ``require_auth`` -- whether every request must PRESENT a credential.
+
+        ``require_auth`` is TRI-STATE (``Optional[bool]``, default ``None``) for
+        the same reason ``ChannelConfig.enable_auth`` is: a plain ``bool``
+        cannot distinguish "the operator never said" from "the operator said
+        no". ``None`` means unstated and inherits fail-closed -- EXCEPT when
+        ``enable_auth=False``, which was the only auth control this class had
+        before #2072 and is therefore an EXPLICIT opt-out, not silence. Reading
+        it as silence would raise on callers who already said what they wanted,
+        in the words that were available to them (issue #636's contract).
+        ``require_auth=True`` alongside ``enable_auth=False`` still gates: the
+        newer, more specific statement wins.
 
         Before issue #2072 only the first existed, and it gated nothing: with
         ``enable_auth=True`` a ``JWTAuthManager`` was constructed that **no
@@ -206,8 +217,10 @@ class APIGateway:
             enable_auth: Hold a token-issuing auth manager
             auth_manager: Optional auth manager instance (creates default if None and auth enabled)
             database_url: Optional database URL for persistence
-            require_auth: Reject unauthenticated requests. Defaults to ``True``
-                and RAISES when no credential source is configured.
+            require_auth: Reject unauthenticated requests. ``None`` (default)
+                inherits fail-closed unless ``enable_auth=False`` explicitly
+                opted out; ``True`` gates and RAISES when no credential source
+                is configured; ``False`` serves openly and logs a loud WARN.
             auth_config: Explicit ``kailash.trust.auth.jwt.JWTConfig`` (or a
                 dict of its fields) for the request gate.
             external_auth_reason: Non-empty when an ASGI middleware outside
@@ -216,10 +229,12 @@ class APIGateway:
                 ``kailash.utils.server_auth.DEFAULT_EXEMPT_PATHS``.
 
         Raises:
-            ServerAuthNotConfiguredError: ``require_auth=True`` with no
-                credential source. Pass ``require_auth=False`` to run open --
-                ``enable_auth=False`` does NOT opt out of the gate, because it
-                turns off token issuance rather than request checking.
+            ServerAuthNotConfiguredError: The gate is required and no credential
+                source could be resolved -- including the case where an
+                ``auth_manager`` was supplied but carries no derivable key, in
+                which case it cannot verify anything and installing nothing
+                would be the #2013 silent-no-op shape. Pass ``require_auth=
+                False`` to run open.
         """
         self.title = title
         self.version = version
@@ -296,9 +311,20 @@ class APIGateway:
         # after CORS ends up inside it and answers cross-origin preflight
         # OPTIONS with 401 before CORS can. PR #2054 hit exactly this ordering
         # bug on the Nexus surface.
+        # Tri-state resolution. `None` is "unstated", and the only thing that
+        # turns unstated into an opt-out is `enable_auth=False` -- the sole auth
+        # control this class had before #2072, so a caller who set it DID say
+        # what they wanted. An explicit `require_auth` always wins over it.
+        resolved_require_auth = (
+            bool(enable_auth) if require_auth is None else bool(require_auth)
+        )
         self._auth_config = resolve_server_auth(
-            require_auth=require_auth,
-            auth_config=auth_config if auth_config is not None else self._auth_config_from_manager(),
+            require_auth=resolved_require_auth,
+            auth_config=(
+                auth_config
+                if auth_config is not None
+                else self._auth_config_from_manager()
+            ),
             external_auth_reason=external_auth_reason,
             extra_exempt_paths=auth_exempt_paths,
             server_label=title,
@@ -345,6 +371,17 @@ class APIGateway:
             return None
         config = getattr(manager, "config", None)
         if config is None:
+            # A manager with no config carries no key, so no verifier can be
+            # built from it. Loud, because the caller supplied a manager and
+            # would otherwise read the downstream "no credential source"
+            # message as though they had supplied nothing.
+            logger.warning(
+                "api_gateway.auth_manager_yields_no_verifier",
+                extra={
+                    "manager_type": type(manager).__name__,
+                    "reason": "no .config, so no key material to verify against",
+                },
+            )
             return None
 
         algorithm = getattr(config, "algorithm", "HS256") or "HS256"
@@ -1026,7 +1063,7 @@ def create_gateway(
     agent_ui_middleware: Optional[AgentUIMiddleware] = None,
     auth_manager=None,
     *,
-    require_auth: bool = True,
+    require_auth: Optional[bool] = None,
     auth_config: Any = None,
     external_auth_reason: Optional[str] = None,
     auth_exempt_paths: Optional[List[str]] = None,
@@ -1054,8 +1091,10 @@ def create_gateway(
     Args:
         agent_ui_middleware: Optional existing AgentUIMiddleware instance
         auth_manager: Optional auth manager instance (e.g., JWTAuthManager)
-        require_auth: Reject unauthenticated requests. Defaults to ``True``
-            and RAISES when no credential source is configured (#2072).
+        require_auth: Reject unauthenticated requests. ``None`` (default)
+            inherits fail-closed unless ``enable_auth=False`` explicitly opted
+            out; ``True`` gates and RAISES when no credential source is
+            configured; ``False`` serves openly with a loud WARN (#2072).
         auth_config: Explicit ``kailash.trust.auth.jwt.JWTConfig`` (or dict) for
             the request gate.
         external_auth_reason: Non-empty when an ASGI middleware outside this

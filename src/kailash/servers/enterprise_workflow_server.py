@@ -14,13 +14,20 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Union
 
-# `fastapi` is an OPTIONAL dependency under the `server` extra, but this module
-# already imports DurableWorkflowServer, which requires it -- so a bare import
-# here cannot make anything importable that was not already. `WebSocket` must be
-# resolvable at MODULE scope: FastAPI reads a websocket endpoint's annotations
-# at decoration time, and a name imported inside the handler body is invisible
-# to it (see websocket_endpoint's docstring).
-from fastapi import WebSocket
+# `fastapi` is an OPTIONAL dependency under the `server` extra. Per
+# `rules/dependencies.md` § "Declared = Imported": optional-extra imports MUST
+# raise loudly with an actionable error naming the extra.
+#
+# `WebSocket` must be resolvable at MODULE scope: FastAPI reads a websocket
+# endpoint's annotations at decoration time, and a name imported inside the
+# handler body is invisible to it (see websocket_endpoint's docstring).
+try:
+    from fastapi import WebSocket
+except ImportError as exc:  # pragma: no cover -- covered by structural test
+    raise ImportError(
+        "kailash.servers.enterprise_workflow_server requires server "
+        "dependencies (fastapi). Install with: pip install 'kailash[server]'"
+    ) from exc
 
 from ..gateway.resource_resolver import ResourceReference, ResourceResolver
 from ..gateway.security import SecretManager
