@@ -396,6 +396,7 @@ class MCPChannel(Channel):
             # status proceeds to teardown while requests are still being
             # answered (issue #2018). The WARNs below always knew; the status
             # did not, on the one resource the bool does not cover.
+            #
             # THE HANDLE IS CLEARED ONLY WHERE THE THREAD HAS BEEN OBSERVED
             # DEAD -- never optimistically before an await. Swapping it to
             # `None` up front and restoring it after the join put the restore
@@ -449,10 +450,8 @@ class MCPChannel(Channel):
                     # No usable shutdown entry point, so nothing will ever
                     # unwind the serve loop -- joining would burn the timeout
                     # waiting for something that cannot happen. Say so instead.
-                    # The handle stays put, unconditionally: there is no await
-                    # on this branch, but keeping the retention structural
-                    # rather than re-assigned is what makes it cancellation-safe
-                    # by construction on the branch above.
+                    # The handle needs no restore here because it was never
+                    # cleared -- that is the whole point of the ownership above.
                     server_thread_live = True
                     logger.warning(
                         "MCP channel %s did NOT stop: %s exposes no usable "
