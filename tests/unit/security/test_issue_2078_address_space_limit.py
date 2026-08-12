@@ -6,16 +6,22 @@
 
 executed inline, in the host process. ``RLIMIT_AS`` is process-wide and the
 call set the HARD limit too, so an unprivileged process could never raise it
-again. With the 512 MB default and an interpreter that already occupies
-~635 MB of address space once the SDK is imported, the first workflow to run a
-``PythonCodeNode`` capped the process BELOW its own footprint. Every later
-``mmap`` in that process then failed — including the stack allocation
-``pthread_create`` needs — which is where CI's
+again.
+
+``RLIMIT_AS`` caps VIRTUAL address space, not resident memory, and on Linux the
+two diverge sharply: glibc reserves a 64 MB malloc arena per thread and every
+pthread stack reserves 8 MB. Measured in a python:3.12-slim container, a
+25-thread process sat at 1889 MB of address space while importing the SDK alone
+cost only 62 MB. One ``PythonCodeNode`` execution then capped that 1889 MB
+process at the 512 MB default, and every later ``mmap`` failed — including the
+stack allocation ``pthread_create`` needs — which is where CI's
 
     130 x RuntimeError: can't start new thread
      90 x sqlite3.OperationalError: disk I/O error
 
-came from, in tests that had nothing to do with PythonCodeNode.
+came from, in tests that had nothing to do with PythonCodeNode. Tier 2 runs
+``-p no:xdist``, so one execution poisoned the remainder of the run; that is
+why the failure counts were identical across runs to the test.
 
 Platform note, and it is the whole reason this went unseen for so long: the
 Darwin kernel REJECTS ``setrlimit(RLIMIT_AS)``, so on macOS the old code took
@@ -203,6 +209,38 @@ def test_python_code_node_raises_memory_limit_error_for_a_hog(
     assert any(isinstance(e, MemoryLimitError) for e in chain), (
         f"expected MemoryLimitError in the cause chain, got {chain!r}"
     )
+
+
+def test_memory_error_is_not_relabelled_when_nothing_is_enforced(monkeypatch):
+    """An unenforced guard must not claim credit for a genuine MemoryError.
+
+    On a platform that rejects ``setrlimit`` (macOS) no ceiling is ever in
+    force, so a ``MemoryError`` inside the block is real host exhaustion.
+    Reporting it as ``MemoryLimitError`` would name the wrong cause and send
+    the reader to a knob that is not connected to anything.
+    """
+    import kailash.security as security_module
+
+    # Simulate the platform where the ceiling cannot be established.
+    monkeypatch.setattr(
+        security_module, "_current_address_space_bytes", lambda: None
+    )
+    monkeypatch.setattr(security_module, "_address_space_saved", None)
+
+    with pytest.raises(MemoryError) as excinfo:
+        with memory_limit_guard(64 * 1024 * 1024):
+            raise MemoryError("host is genuinely out of memory")
+
+    assert not isinstance(excinfo.value, MemoryLimitError)
+    assert "genuinely out of memory" in str(excinfo.value)
+
+
+@requires_enforced_rlimit_as
+def test_memory_error_is_relabelled_when_the_ceiling_is_in_force():
+    """The other polarity: with a ceiling applied, the relabel MUST happen."""
+    with pytest.raises(MemoryLimitError):
+        with memory_limit_guard(16 * 1024 * 1024):
+            raise MemoryError("hit the ceiling")
 
 
 @requires_rlimit_as

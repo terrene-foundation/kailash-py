@@ -838,6 +838,15 @@ def memory_limit_guard(
     try:
         yield
     except MemoryError as exc:
+        # Only claim the LIMIT was hit if a ceiling is actually in force.
+        # Where setrlimit was rejected (macOS) or the ceiling could not be
+        # computed, nothing is enforced, so a MemoryError is genuine host
+        # exhaustion — relabelling it as this guard's doing would misattribute
+        # the cause and send the reader looking at the wrong knob.
+        with _ADDRESS_SPACE_LOCK:
+            enforced = _address_space_saved is not None
+        if not enforced:
+            raise
         raise MemoryLimitError(
             f"Memory limit exceeded: code execution requested more than "
             f"{limit} bytes of additional address space"

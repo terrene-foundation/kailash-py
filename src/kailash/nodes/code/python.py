@@ -468,14 +468,26 @@ class CodeExecutor:
             #   resource.setrlimit(RLIMIT_AS, (memory_limit, memory_limit))
             # directly here, which set an ABSOLUTE, PROCESS-WIDE, IRREVERSIBLE
             # cap of 512 MB (both soft AND hard) the first time any workflow ran
-            # a PythonCodeNode. An interpreter with the SDK imported already
-            # occupies ~635 MB of address space, so the process capped itself
-            # BELOW its own footprint and every later mmap failed — including
-            # the stack allocation for a new thread. That is where CI's 130
+            # a PythonCodeNode.
+            #
+            # RLIMIT_AS caps VIRTUAL address space, which on Linux runs far
+            # above resident memory: glibc reserves a 64 MB malloc arena per
+            # thread and every pthread stack reserves 8 MB. Measured in a
+            # python:3.12-slim container, a 25-thread process sat at 1889 MB of
+            # address space while importing the SDK alone cost only 62 MB. One
+            # PythonCodeNode execution then capped that 1889 MB process at
+            # 512 MB, and every subsequent mmap failed — including the stack
+            # allocation pthread_create needs. That is where CI's 130
             # `RuntimeError: can't start new thread` and 90 `sqlite3.
-            # OperationalError: disk I/O error` came from. macOS never showed it
-            # because its kernel rejects the call, so the except-branch ran and
-            # the limit was silently never applied.
+            # OperationalError: disk I/O error` came from, in tests with no
+            # connection to this node. Because Tier 2 runs `-p no:xdist`, a
+            # single execution poisoned the rest of the run, which is why the
+            # failure counts were identical to the test across runs.
+            #
+            # macOS never showed it: that kernel rejects setrlimit(RLIMIT_AS)
+            # with `ValueError: current limit exceeds maximum limit`, so the
+            # old except-branch ran and the limit was silently never applied.
+            # A macOS run is therefore not a discriminating instrument here.
             with memory_limit_guard(config=self.security_config):
                 with execution_timeout(
                     self.security_config.execution_timeout, self.security_config
