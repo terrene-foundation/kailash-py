@@ -932,11 +932,11 @@ def memory_limit_guard(limit: int | None = None, config: SecurityConfig | None =
     requested, so a block configured with a strict limit is never hosted under
     a laxer concurrent one.
 
-    Where the platform cannot support the ceiling — no readable ``/proc``
-    (macOS, the BSDs), or a kernel that refuses ``setrlimit(RLIMIT_AS)`` — the
-    block runs unguarded and a single warning is logged. That is a real gap,
-    not a silent one: the limit is advertised as unenforced rather than
-    pretended.
+    Where the platform cannot support the ceiling — no ``resource`` module or no
+    ``RLIMIT_AS`` (Windows), no readable ``/proc`` (macOS, the BSDs), or a kernel
+    that refuses ``setrlimit(RLIMIT_AS)`` — the block runs unguarded and a single
+    warning is logged, on all three paths. That is a real gap, not a silent one:
+    the limit is advertised as unenforced rather than pretended.
 
     This bounds ONE block's additional address space. It is not a sandbox for
     untrusted code, and it does not bound a run's total footprint; see the
@@ -960,7 +960,22 @@ def memory_limit_guard(limit: int | None = None, config: SecurityConfig | None =
     if limit is None:
         limit = config.memory_limit
 
-    applicable = bool(limit) and resource is not None and hasattr(resource, "RLIMIT_AS")
+    has_rlimit = resource is not None and hasattr(resource, "RLIMIT_AS")
+    applicable = bool(limit) and has_rlimit
+
+    # Warn HERE, not only from inside _enter_address_space_guard. That function
+    # runs only when `applicable` is true, so on a platform with no RLIMIT_AS at
+    # all (Windows: `resource` does not exist) the guard would otherwise apply no
+    # ceiling AND emit no warning -- the silent failure this control exists to
+    # avoid. `bool(limit)` is excluded deliberately: an unset limit is disabled
+    # by configuration, not unenforceable by platform, and warning on it would
+    # train readers to ignore the message.
+    if limit and not has_rlimit:
+        _log_address_space_unsupported(
+            "the `resource` module is unavailable"
+            if resource is None
+            else "`resource.RLIMIT_AS` is not defined"
+        )
 
     # Per-guard, never a module global: whether THIS guard put a ceiling in
     # force is what licenses relabelling a MemoryError as MemoryLimitError.

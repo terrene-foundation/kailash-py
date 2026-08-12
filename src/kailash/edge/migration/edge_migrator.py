@@ -744,13 +744,20 @@ class EdgeMigrator:
                         )
                         # Fallback: 100 MB estimate per workload
                         total_size += 100 * 1024 * 1024
-        # asyncio.TimeoutError is listed alongside aiohttp.ClientError at every
-        # unreachable-edge handler in this module. aiohttp raises it (not a
-        # ClientError) when a request exceeds its timeout, so a slow or
-        # black-holed edge was the ONE unreachable mode that escaped the
-        # documented fallback and propagated out of plan_migration. Surfaced by
-        # #2078: the two tests that hit it had been failing on CI for a
-        # different reason and could not be seen until that was fixed.
+        # aiohttp raises asyncio.TimeoutError -- NOT an aiohttp.ClientError --
+        # when a request exceeds its timeout, so a slow or black-holed edge was
+        # an unreachable mode this READ-ONLY probe's documented fallback did not
+        # cover: it propagated out of plan_migration instead. Surfaced by #2078:
+        # the two tests that hit it had been failing on CI for a different
+        # reason and could not be seen until that was fixed.
+        #
+        # asyncio.TimeoutError is added ONLY at the read-only probe handlers
+        # (size estimation, capacity, verification, functionality, cleanup),
+        # where warn-and-fall-back is the documented contract. The mutating
+        # cutover-critical handlers -- _drain_source_edge, _perform_delta_sync,
+        # _switch_traffic -- deliberately let it escape, because an alive-but-
+        # unresponsive source must abort the migration rather than have cutover
+        # switch traffic away from an edge that was never drained. See #2078.
         except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
             logger.warning("Could not reach edge %s for size estimation: %s", edge, exc)
             total_size = len(workloads) * 100 * 1024 * 1024
@@ -1004,8 +1011,16 @@ class EdgeMigrator:
                         logger.warning(
                             "Delta sync for %s returned HTTP %d", workload, resp.status
                         )
-        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            logger.warning("Delta sync failed: %s", exc)
+        except (ValueError, aiohttp.ClientError) as exc:
+            # Cutover-critical: NOT swallowed. On MigrationStrategy.LIVE this is
+            # the only pass that captures writes made during transfer, so
+            # continuing past a failure would have cutover discard them.
+            # asyncio.TimeoutError is deliberately absent from this tuple and
+            # escapes for the same reason -- an alive-but-unresponsive source
+            # must fail the migration, which execute_migration turns into
+            # phase=FAILED plus a rollback.
+            logger.error("Delta sync failed: %s", exc)
+            raise
 
     async def _drain_source_edge(self, edge: str, workloads: List[str]):
         """Drain the source edge by telling it to stop accepting new requests.
@@ -1032,8 +1047,14 @@ class EdgeMigrator:
                         )
                     else:
                         logger.info("Drained workload %s on edge %s", workload, edge)
-        except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            logger.warning("Could not drain source edge %s: %s", edge, exc)
+        except (ValueError, aiohttp.ClientError) as exc:
+            # Cutover-critical: NOT swallowed. _execute_cutover calls this and
+            # then switches traffic unconditionally, so a swallowed failure here
+            # routes traffic away from a source that was never drained and drops
+            # its in-flight requests. asyncio.TimeoutError is deliberately absent
+            # from this tuple and escapes for the same reason.
+            logger.error("Could not drain source edge %s: %s", edge, exc)
+            raise
 
     async def _perform_final_sync(
         self, plan: MigrationPlan, progress: MigrationProgress
@@ -1089,8 +1110,14 @@ class EdgeMigrator:
                             target,
                             len(workloads),
                         )
-            except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (ValueError, aiohttp.ClientError) as exc:
+                # Cutover-critical: NOT swallowed. A swallowed failure here
+                # leaves routing half-switched -- one of source/target updated,
+                # the other not -- which silently blackholes or double-serves
+                # the workload. asyncio.TimeoutError is deliberately absent from
+                # this tuple and escapes for the same reason.
                 logger.error("Traffic switch failed on %s: %s", edge, exc)
+                raise
 
     async def _start_workload(self, edge: str, workload: str):
         """Start a workload on the target edge node.

@@ -374,3 +374,107 @@ def test_nested_and_parallel_guards_restore_exactly_once():
     probe.start()
     probe.join(timeout=10)
     assert started.is_set()
+
+
+# ---------------------------------------------------------------------------
+# The unenforceable-platform warning must actually fire on every path that
+# leaves the limit unenforced -- including the one where `resource` is absent.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def reset_unsupported_log_latch():
+    """Clear the log-once latch so a warning can be observed in this test."""
+    import kailash.security as security_module
+
+    previous = security_module._address_space_unsupported_logged
+    security_module._address_space_unsupported_logged = False
+    yield
+    security_module._address_space_unsupported_logged = previous
+
+
+def test_warning_fires_when_the_resource_module_is_unavailable(
+    monkeypatch, caplog, reset_unsupported_log_latch
+):
+    """Windows has no ``resource`` module, so `applicable` is False.
+
+    Both existing call sites of ``_log_address_space_unsupported`` live INSIDE
+    ``_enter_address_space_guard``, which runs only when `applicable` is true.
+    Pre-fix this platform therefore got no ceiling AND no warning -- the exact
+    silent failure the docstring promised it would not have. This test reddens
+    with "expected a warning ... got []" if that guard is removed again.
+    """
+    import kailash.security as security_module
+
+    monkeypatch.setattr(security_module, "resource", None)
+
+    with caplog.at_level("WARNING", logger=security_module.logger.name):
+        with memory_limit_guard(64 * 1024 * 1024):
+            sum(range(100))
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings, (
+        "expected a warning naming the unenforced memory limit on a platform "
+        f"with no `resource` module, got {warnings!r}"
+    )
+    message = warnings[0].getMessage()
+    assert "NOT enforced" in message
+    assert "`resource` module is unavailable" in message
+
+
+def test_warning_fires_when_rlimit_as_is_undefined(
+    monkeypatch, caplog, reset_unsupported_log_latch
+):
+    """The sibling path: ``resource`` exists but carries no ``RLIMIT_AS``."""
+    import kailash.security as security_module
+
+    class _NoRlimitAs:
+        pass
+
+    monkeypatch.setattr(security_module, "resource", _NoRlimitAs())
+
+    with caplog.at_level("WARNING", logger=security_module.logger.name):
+        with memory_limit_guard(64 * 1024 * 1024):
+            sum(range(100))
+
+    messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("RLIMIT_AS` is not defined" in m for m in messages), messages
+
+
+def test_no_warning_when_the_limit_is_simply_unset(
+    monkeypatch, caplog, reset_unsupported_log_latch
+):
+    """The other polarity: an unset limit is disabled by CONFIGURATION.
+
+    Warning here would fire on every unlimited guard and train readers to
+    ignore the message, so `bool(limit)` gates it. Without this test the fix
+    could be written as an unconditional warn and still look correct.
+    """
+    import kailash.security as security_module
+
+    monkeypatch.setattr(security_module, "resource", None)
+
+    with caplog.at_level("WARNING", logger=security_module.logger.name):
+        with memory_limit_guard(0):
+            sum(range(100))
+
+    assert not [
+        r for r in caplog.records if r.levelname == "WARNING"
+    ], "an unset limit is not a platform gap and must not warn"
+
+
+def test_the_unsupported_warning_is_logged_only_once(
+    monkeypatch, caplog, reset_unsupported_log_latch
+):
+    """It fails identically every time; per-execution warnings bury the log."""
+    import kailash.security as security_module
+
+    monkeypatch.setattr(security_module, "resource", None)
+
+    with caplog.at_level("WARNING", logger=security_module.logger.name):
+        for _ in range(5):
+            with memory_limit_guard(64 * 1024 * 1024):
+                sum(range(100))
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1, f"expected exactly one warning, got {len(warnings)}"
