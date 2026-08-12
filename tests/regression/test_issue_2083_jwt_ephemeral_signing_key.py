@@ -360,3 +360,47 @@ def test_auto_generate_keys_is_not_the_shipped_default():
         "auto_generate_keys must default to False; it being True is what put "
         "ephemeral signing keys on the path of operators who configured nothing."
     )
+
+
+@pytest.mark.regression
+def test_the_env_secret_floor_is_the_same_number_but_not_the_same_measurement():
+    """Pins a claim that was WRONG in the first draft of this fix.
+
+    ``MIN_ENV_SECRET_LENGTH`` was documented as "matching the existing
+    ``KAILASH_API_GATEWAY_SECRET`` check". The number matches; the measurement
+    does not. That gateway check counts UTF-8 BYTES and does not trim
+    (``src/kailash/middleware/communication/api_gateway.py:261-268``); this one
+    counts non-whitespace CHARACTERS (``jwt_auth.py``, the
+    ``len(env_secret.strip())`` comparison). Any non-ASCII secret separates
+    them, so "matching" would send a reader looking for behaviour that is not
+    there.
+
+    Both are deliberate at their own site: the gateway secret feeds an HMAC that
+    consumes bytes, while this one is a human-set passphrase where a trailing
+    newline out of a config file is the common failure. Neither is an ENTROPY
+    floor -- ``"a" * 32`` clears both.
+
+    Falsifying result: the counterexample lands on the same side of both checks,
+    which would mean the two really are interchangeable and the corrected
+    comment is the inaccurate one.
+    """
+    counterexample = "a" * 20 + "é" * 6
+
+    assert len(counterexample.strip()) == 26
+    assert len(counterexample.encode("utf-8")) == 32
+
+    passes_gateway = len(counterexample.encode("utf-8")) >= 32
+    passes_env_floor = (
+        len(counterexample.strip()) >= jwt_auth_module.MIN_ENV_SECRET_LENGTH
+    )
+
+    assert passes_gateway and not passes_env_floor, (
+        "the two floors are the same number measured differently; if this ever "
+        "agrees, one of the two checks changed and the comments on both need to "
+        "be re-derived rather than assumed"
+    )
+
+    single_character_run = "a" * jwt_auth_module.MIN_ENV_SECRET_LENGTH
+    assert (
+        len(single_character_run.strip()) >= jwt_auth_module.MIN_ENV_SECRET_LENGTH
+    ), "a length floor is not an entropy floor: a run of one character clears it"

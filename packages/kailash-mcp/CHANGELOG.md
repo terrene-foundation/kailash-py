@@ -4,6 +4,26 @@ All notable changes to the Kailash MCP package will be documented in this file.
 
 ## [Unreleased]
 
+### Security (BREAKING) — `JWTManager` no longer invents its own OAuth signing key (#2083, #2092)
+
+**Read the migration note below before upgrading. A server that signs or verifies OAuth tokens without a configured key will now raise at the signing boundary.** That is the intended behaviour, and the reason is in the first bullet.
+
+- **`kailash_mcp.auth.oauth.JWTManager` generated an RSA signing key with no signal of any kind (HIGH).** It read `if private_key: load(...) else: rsa.generate_private_key(...)` — silent generation applied to **OAuth 2.1 token signing**. **Measured on the pre-fix source:** two default-constructed managers generated different keys and replica B rejected replica A's token with `InvalidSignatureError → AuthenticationError: Invalid token`, with nothing logged even at DEBUG. Every token issued before a restart failed verification after it, and behind a load balancer the failure was intermittent and looked like a client bug.
+- **Reachability was never hypothetical.** `AuthorizationServer` and `ResourceServer` both default-construct a `JWTManager`, so this reached operators who configured nothing — the same wrapper-propagation shape that hid the sibling defect in `kailash-kaizen`.
+- **Construction is still permitted without a key**, so metadata-only uses (RFC 9728 protected-resource metadata) keep working. The refusal lands at the signing and verification boundary via `_signing_key_or_raise` / `_verification_key_or_raise`, where it can name the wiring. `KAILASH_MCP_JWT_PRIVATE_KEY` / `KAILASH_MCP_JWT_PUBLIC_KEY` are the new environment wiring.
+- **`verify_refresh_token` reported the missing key differently from `verify_access_token`.** Its handler chain ends in a bare `except Exception`, and `JWTKeyNotConfiguredError` subclasses `AuthenticationError` rather than `jwt.InvalidTokenError` — so with the key resolved inside the `try` the typed refusal was caught there, logged, and returned as a `None` the caller renders as "Invalid refresh token", while its sibling propagated it. One manager in one unconfigured state told an operator to check their wiring on one path and to blame the client on the other. The key is now resolved **ahead of** the `try` rather than re-raised ahead of the catch-all, so the fix does not depend on handler ordering a later edit could disturb.
+- **The opt-in announces itself.** `allow_ephemeral_key=True` restores generation for local development and logs **once per process at ERROR**, naming the wiring that turns it off. The message never carries key material.
+
+#### Migration (#2083, #2092)
+
+Set `KAILASH_MCP_JWT_PRIVATE_KEY` to a PEM private key (the **same** value on every replica that must accept each other's tokens), or pass `private_key=`:
+
+```bash
+export KAILASH_MCP_JWT_PRIVATE_KEY="$(cat oauth-signing-key.pem)"
+```
+
+A verify-only resource server needs `KAILASH_MCP_JWT_PUBLIC_KEY` (or `public_key=`) instead. For local development, pass `allow_ephemeral_key=True`. There is deliberately no compatibility shim: a shim would have to keep generating the key, which is the defect.
+
 ## [0.5.1] — 2026-08-09 — Cap mcp<2.0 (packaging only)
 
 ### Fixed

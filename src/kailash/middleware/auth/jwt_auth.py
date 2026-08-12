@@ -43,10 +43,21 @@ logger = logging.getLogger(__name__)
 JWT_SECRET_KEY_ENV = "KAILASH_JWT_SECRET_KEY"
 
 #: Shortest secret accepted from :data:`JWT_SECRET_KEY_ENV`. RFC 7518 §3.2
-#: requires an HMAC-SHA256 key of at least 256 bits, and this matches both
-#: ``kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH`` and the existing
-#: ``KAILASH_API_GATEWAY_SECRET`` check in
-#: ``middleware/communication/api_gateway.py``.
+#: requires an HMAC-SHA256 key of at least 256 bits, which is where the 32 comes
+#: from; it is the same NUMBER as
+#: ``kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH``
+#: (``src/kailash/trust/auth/jwt.py:151``) and as the
+#: ``KAILASH_API_GATEWAY_SECRET`` check
+#: (``src/kailash/middleware/communication/api_gateway.py:261-268``).
+#:
+#: It is NOT the same MEASUREMENT, and calling it a match would be wrong. That
+#: gateway check counts UTF-8 BYTES and does not trim; this one counts
+#: non-whitespace CHARACTERS. The two disagree on any non-ASCII secret:
+#: ``"a" * 20 + "é" * 6`` is 26 characters but 32 bytes, so it PASSES there and
+#: FAILS here. Both are deliberate at their own site — the gateway secret feeds
+#: an HMAC that consumes bytes, while this one is a human-set passphrase where
+#: trailing newlines from a config file are the common failure — and neither is
+#: an entropy floor: ``"a" * 32`` clears both.
 #:
 #: Scoped to the ENVIRONMENT path deliberately. This variable is introduced by
 #: the #2083 fix, so validating it breaks nothing that exists — whereas an
