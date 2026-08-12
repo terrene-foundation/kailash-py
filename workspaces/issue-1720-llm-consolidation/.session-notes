@@ -1,3 +1,48 @@
+# ═══ WRAPUP cont-16 — main `f8056b2ca` · 13 PRs merged · READ THIS FIRST ═══
+
+**Read `sweep-cont16-report.md` alongside this** — it carries the management decision report
+(completion status, ETA in cycles, prioritized queue, the 5 decision points).
+
+## Start here next session
+
+1. **Task #27 — #2072 fail-closed `require_auth=True` middleware.** APPROVED by the co-owner,
+   UNBLOCKED (#2064+#2090 landed), NOT started. Highest open exposure: a default
+   `create_gateway()` serves **anonymous arbitrary workflow execution**, proven under uvicorn on
+   a real socket — the workflow actually ran. Full requirements are recorded in w1a's task #27.
+   Branch off current main; may say `Fixes #2025` and should close #2072.
+2. **#2078 — the CI keystone.** Until it lands, "CI is green" says nothing about Tier-2 or the
+   regression suites, and #2002 / #2038 / #2081 / #2079 all stay blocked behind it.
+3. **D1: #2073 is HELD** pending ~0.5 cycle on whether `ObservabilityManager` (which EXISTS) can
+   be wired instead of raising. Do not merge it without that answer.
+
+## In-flight state
+
+- **Open PRs: #2073** (BREAKING, held — see D1) and **#2031** (draft, 2 pre-existing gating
+  questions, untouched this session).
+- **Worktrees: only `w2b` remains** (`fix/2070-logging-hook-redaction-defeat`, #2073). It is
+  **NOT in main** — do NOT remove it; L2 hit its quota and cannot recreate those 5 commits.
+  Six others were retired this session after verifying IN-MAIN + 0 uncommitted.
+- **All lanes idle.** L2 dead (quota). w1a/w1b/w1c/w1d/w2a complete.
+
+## ⚠ DISK — was 100% FULL (121 MiB free), now 81% (356 GiB)
+
+Reclaimed ~6 GB: 6 worktrees (1.6 G) + 6 per-package `.venv` (4.1 G) + mypy/ruff caches (0.6 G).
+The rest was macOS releasing purgeable space. **The per-package venvs were redundant** — the root
+`.venv` resolves all seven packages editable (verified), and CI uses `../../.venv`. They are also
+what made the `#2015` sweep walk 78,152 files. If a workflow needs one, regenerate with `uv venv`.
+
+**Retire a worktree AS PART OF the merge step.** Six accumulated across this session because
+"lane reported done" was treated as done while its 200–560 MB workspace stayed on disk.
+
+## The six deferred-quality items are INVALID DEFERS — second sweep running
+
+#2011 #2017 #2018 #2019 #2020 #2021. Measured: 1–2 of the four required sections, **none with a
+value-anchor**. Per `product-completion-first.md` MUST-2 that is silent deferral (BLOCKED), and
+all six are ≥2 sessions old so MUST-3's "still wanted?" gate fires. **Flagged in the prior
+session too, and nothing changed** — the decay the label exists to prevent. Recommendation D2:
+re-triage as ordinary BUGs (#2018–#2021 are real shutdown-correctness defects) and retire the
+label. **User-gated; do NOT auto-close.**
+
 # ═══ UPDATE 17 — main `ce52e5def` · 11 PRs merged ═══
 
 **+#2090** (round-2 CORS/C1/docs) **+#2068** (**#2030 + #2022 CLOSED**).
