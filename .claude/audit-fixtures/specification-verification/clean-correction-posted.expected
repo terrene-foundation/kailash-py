@@ -1,0 +1,8 @@
+CLEAN — MUST-4 satisfied. The measured contradiction was written back to the
+specification in the same session, as an issue comment quoting both commands and
+their output, BEFORE the implementation proceeded. The criterion that could not be
+implemented as written was left open on the issue rather than silently dropped, so
+no sibling work inherits the wrong premise. MUST-1 is also satisfied — every line
+number was re-derived at a named HEAD SHA.
+
+A correct enforcement layer raises no finding against this transcript.

@@ -1,0 +1,14 @@
+FLAG MUST-4 — the session MEASURED a contradiction between the specification and
+the code (three wrong line numbers, and AC#1 naming a method that does not exist)
+and then silently implemented the corrected version. Nothing was written back to
+#2013: no issue comment, no spec edit, no plan amendment. The issue still asserts
+`enable_health_monitoring` exists at 4782.
+
+This is the compliant half of MUST-1 followed by the violating half of MUST-4 —
+the transcript re-derived correctly and still left the wrong premise standing for
+the next reader and for any sibling work scoped to it.
+
+BLOCKED rationalization present verbatim: "The code is what matters".
+
+Origin incident reproduced: #2013, where the wrong line numbers survived into a
+public issue comment and had to be corrected after the fact.

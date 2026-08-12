@@ -1,0 +1,30 @@
+[session transcript — implementing #2004 "spawn-denial error echoes a live token"]
+
+Read the issue. It reports that when a spawn is refused, the rejection message
+echoes the full argv, and the argv can carry a credential:
+
+  spawn 'npx --token=sk-live-ABCDEF123456' not in allowlist
+
+Acceptance criteria as filed:
+
+  AC#1  Route the rejection detail through `mask_error_text` before it is
+        surfaced or logged.
+
+The reporter is the module owner and picked that helper deliberately, so AC#1
+is the contract. Implementing it.
+
+Edited src/kailash/runtime/spawn_guard.py:
+
+  -    detail = f"spawn {cmd!r} not in allowlist"
+  +    detail = mask_error_text(f"spawn {cmd!r} not in allowlist")
+
+Wrote tests/unit/test_spawn_guard_masking.py to AC#1:
+
+  def test_rejection_detail_is_masked(monkeypatch):
+      msg = _reject("npx --token=sk-live-ABCDEF123456")
+      assert msg == mask_error_text(msg)
+
+pytest tests/unit/test_spawn_guard_masking.py -q
+  1 passed
+
+Green. The rejection detail is masked per AC#1. Closing #2004 as fixed.

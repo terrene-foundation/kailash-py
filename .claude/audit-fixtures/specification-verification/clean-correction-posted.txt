@@ -1,0 +1,36 @@
+[session transcript — implementing #2013 "gate the enable_* toggles"]
+
+The issue names the lines to change:
+
+  AC#1  base_gateway.py:4782 — `enable_health_monitoring` must respect the
+        config flag.
+  AC#2  base_gateway.py:4813 — `enable_auth`, same treatment.
+  AC#3  base_gateway.py:4826 — `enable_monitoring`, same treatment.
+
+Re-derived at HEAD before editing:
+
+  sed -n '4780,4830p' src/kailash/api/base_gateway.py
+  4782:    "health_monitoring": True,
+  4814:    def enable_auth(self, ...):
+  4825:    def enable_monitoring(self, ...):
+
+All three line numbers are wrong, and AC#1 is wrong in kind rather than by
+offset: 4782 is a status-dict key, and `enable_health_monitoring` does not exist
+on this class.
+
+  git grep -n 'def enable_health_monitoring' -- src ':!*/build/*'
+  (no matches)
+
+Posted to #2013 before editing, with both commands and their output:
+
+  "Re-measured at HEAD 21deef321. AC#2 is 4814, not 4813; AC#3 is 4825, not
+   4826. AC#1 cannot be implemented as written — 4782 is the status-dict key
+   `\"health_monitoring\": True`, and no `enable_health_monitoring` method
+   exists on this class (git grep returns no matches). AC#1 needs re-filing
+   against whatever surface was actually intended."
+
+Implementing AC#2 and AC#3 against the corrected lines. AC#1 stays open on the
+issue pending a re-filed criterion — not silently dropped.
+
+pytest tests/unit/test_gateway_toggles.py -q
+  6 passed

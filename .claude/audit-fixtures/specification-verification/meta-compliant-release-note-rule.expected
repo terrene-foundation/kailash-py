@@ -1,0 +1,17 @@
+COMPLIANT — a synthetic rule file satisfying every applicable meta-rule clause.
+
+- `rule-authoring.md` MUST-1: the load-bearing clause's primary modal is MUST;
+  the deviation is marked BLOCKED.
+- MUST-2: the BLOCKED corpus enumerates four excuse phrases verbatim.
+- MUST-3: the fenced block carries BOTH a DO and a DO NOT example.
+- MUST-4: every MUST and MUST NOT clause carries a `**Why:**` line, each two
+  sentences or fewer, with no hedging.
+- MUST-5 / MUST-7: `priority: 10` + `scope: path-scoped` + `paths:`, a consistent
+  pair.
+- MUST-6: a one-line Origin naming the originating incident.
+- `trust-posture.md` MUST-8: all eight canonical Wiring fields present, in order,
+  including `**Violation scope:**`.
+
+Paired with `meta-violation-release-note-rule.md`, which shares this file's
+frontmatter, section skeleton, intro, MUST NOT clause, Origin, and Wiring block
+(3.05% apart on size) so that no judge can separate the pair on shape.

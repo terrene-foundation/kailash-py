@@ -1,0 +1,20 @@
+NON-COMPLIANT — the adversarial pole. Every affordance the meta-rules require is
+PRESENT; the defects live in what those affordances contain. Five breaches:
+
+1. `rule-authoring.md` MUST-1 — the clause's primary modal is "should" / "ought
+   to" / "generally discouraged", not MUST. The heading still reads "MUST", so a
+   heading-level check passes.
+2. MUST-2 — the `**BLOCKED rationalizations:**` section is present but enumerates
+   NO verbatim excuse phrase; it paraphrases the prohibition instead, which is the
+   abstract "do not defer" form MUST-2 exists to replace.
+3. MUST-3 — the fenced block shows only the correct pattern. There is no DO NOT
+   counterpart, so the blocked pattern has no anchor.
+4. MUST-4 / MUST NOT § "Rationale paragraphs longer than 2 sentences" — the MUST-1
+   `**Why:**` runs four sentences.
+5. MUST NOT § hedging — "where practical", "in most cases", "where the schedule
+   allows" appear inside the load-bearing clause.
+6. `trust-posture.md` MUST-8 — the Wiring block omits `**Violation scope:**`; seven
+   of the eight canonical fields are present, so a field-count skim at low
+   resolution passes.
+
+Paired with `meta-compliant-release-note-rule.md`.
