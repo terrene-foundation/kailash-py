@@ -57,6 +57,23 @@ path would have failed on the next line.
   made the original defect invisible. `BaseAgent` already handles a `None`
   hook manager (`base_agent.py` declares `hook_manager: Optional[Any] = None`).
 
+### Fixed — a `hook_manager` passed to `BaseAgent` now actually fires (#2084, second layer)
+
+`BaseAgent.__init__` accepts a `hook_manager`, stores it, and then
+`trigger_hook` / `register_hook` / `get_hook_stats` gated on
+`config.hooks_enabled` — a SEPARATE opt-in defaulting `False`. `Agent` builds a
+hook manager via `SmartDefaultsManager` and passes it down without setting that
+flag, so a fully populated manager stayed dormant: every hook registered, none
+ever invoked. Fixing only the registration half would have left the audit trail
+recording nothing on exactly the path users take.
+
+The three gates now test `self._hook_manager is None`, which `__init__` already
+resolves from BOTH inputs. This is equivalent to the old predicate in every case
+except the broken one — a supplied manager with `hooks_enabled=False`, where the
+kwarg previously had no effect at all (`zero-tolerance.md` Rule 3c). Passing a
+`hook_manager` is now itself the opt-in; `hooks_enabled=True` without one is
+unchanged, and supplying neither still leaves hooks inert.
+
 ### Added — `HookManager.registered_hook_names()`
 
 Returns the set of handler names currently registered across all events.
