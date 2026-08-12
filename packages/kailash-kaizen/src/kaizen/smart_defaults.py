@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 # when `tracing_endpoint` carries no explicit port.
 _DEFAULT_OTLP_GRPC_PORT = 4317
 
+# Jaeger's web UI port. It accepts no OTLP traffic, so an endpoint pointed here
+# drops every span. Called out by name because it was this SDK's own
+# `tracing_endpoint` default for as long as nothing read the field -- anyone who
+# pinned that value explicitly is exactly the population at risk.
+_JAEGER_WEB_UI_PORT = 16686
+
 
 @lru_cache(maxsize=None)
 def _warn_observability_unavailable(subsystem: str, flag: str, detail: str) -> None:
@@ -88,7 +94,29 @@ def _parse_otlp_endpoint(endpoint: str) -> tuple[str, int]:
         (host, port) -- port falls back to the OTLP gRPC default.
     """
     parsed = urlparse(endpoint if "//" in endpoint else f"//{endpoint}")
-    return parsed.hostname or "localhost", parsed.port or _DEFAULT_OTLP_GRPC_PORT
+    host = parsed.hostname or "localhost"
+    port = parsed.port or _DEFAULT_OTLP_GRPC_PORT
+
+    if port == _JAEGER_WEB_UI_PORT:
+        # Exporting to the UI port fails at the socket, and OpenTelemetry's
+        # batch processor drops spans on export failure -- so the operator sees
+        # tracing "enabled" and an empty Jaeger. Say it once, by name.
+        _warn_tracing_endpoint_is_web_ui(endpoint)
+
+    return host, port
+
+
+@lru_cache(maxsize=None)
+def _warn_tracing_endpoint_is_web_ui(endpoint: str) -> None:
+    """Warn once that tracing_endpoint points at the Jaeger UI, not OTLP ingest."""
+    logger.warning(
+        "tracing_endpoint=%r targets port %d, which is the Jaeger WEB UI and "
+        "accepts no OTLP traffic -- every span will be dropped on export. Point "
+        "it at the collector's OTLP gRPC ingest port instead (default %d).",
+        endpoint,
+        _JAEGER_WEB_UI_PORT,
+        _DEFAULT_OTLP_GRPC_PORT,
+    )
 
 
 # =============================================================================

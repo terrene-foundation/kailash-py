@@ -13,6 +13,83 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Fixed — the four observability flags now install the hooks they advertise (#2084)
+
+`AgentConfig.enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit`
+all default `True`, and `Agent.__init__` calls `SmartDefaultsManager.create_observability`
+on every construction. That function imported four hook classes from
+`kaizen.core.autonomy.observability.{tracing,metrics,logging,audit}` — a package
+that contains **no hook classes at all** — caught every resulting `ImportError`,
+and returned an empty `HookManager`. On the untouched default path:
+`is_observability_enabled()` returned `True` and **zero hooks were registered**.
+`enable_audit`, documented as *"Enable compliance audit trails"*, recorded nothing.
+
+The subsystems were never missing, only mislocated: `TracingHook`, `MetricsHook`,
+`LoggingHook` and `AuditHook` all live in `kaizen.core.autonomy.hooks.builtin`,
+and `HookManager.register_hook()` is the contract they were written for. The old
+call site registered per-method handlers (`start_trace`, `record_start`, …) that
+have zero definitions anywhere in the source tree, so even a corrected import
+path would have failed on the next line.
+
+**What now happens on a default agent construction:**
+
+| Flag | Hook installed | Requires |
+| --- | --- | --- |
+| `enable_logging` | `LoggingHook` | core deps only |
+| `enable_audit` | `AuditTrailHook` (new) writing `audit_log_path` | core deps only |
+| `enable_metrics` | `MetricsHook` | `kailash-kaizen[observability]` |
+| `enable_tracing` | `TracingHook` | `kailash-kaizen[observability]` |
+
+- **New `AuditTrailHook`** bridges the observability `AuditTrailManager`
+  (append-only JSONL, honours `audit_log_path`) into the hook system. The
+  existing `AuditHook` is unchanged and still wraps the PostgreSQL-backed
+  security `AuditTrailProvider`, which a zero-config path has no connection for.
+  The audit trail records event STRUCTURE — event name, payload key names,
+  trace id — never payload values, so enabling compliance audit does not itself
+  become a disclosure channel.
+- **A missing optional dependency is now loud.** `"Metrics hook not available,
+  skipping"` named neither what stopped working nor how to restore it. The
+  replacement names the flag, the extra, and `enable_metrics=False` as the
+  deliberate opt-out — emitted **once per process**, because this path runs per
+  agent construction and a warning repeated on a hot path is one operators filter.
+- **`create_observability` returns `None`** when every enabled subsystem fails to
+  install, instead of an empty `HookManager`. Returning the empty manager is what
+  made the original defect invisible. `BaseAgent` already handles a `None`
+  hook manager (`base_agent.py` declares `hook_manager: Optional[Any] = None`).
+
+### Added — `HookManager.registered_hook_names()`
+
+Returns the set of handler names currently registered across all events.
+`get_stats()` reports EXECUTION counts, so a manager that had registered nothing
+was indistinguishable from one whose hooks simply had not fired yet — no caller,
+banner, or test could ask what was actually installed. That blind spot is why
+four dead subsystems shipped.
+
+### Changed — startup banner reports installed subsystems, not config flags
+
+`RichOutputManager._show_observability_status` read the four flags, so a default
+agent printed four subsystems with endpoints and file paths while none was
+registered. It now renders from `registered_hook_names()`. A subsystem whose
+optional dependency is missing keeps its flag `True`, so a flag-driven banner
+reports it as running; it is now omitted. A caller-supplied `custom_hook_manager`
+renders as `"custom hook manager"` rather than guessing its contents.
+
+### Changed — `AgentConfig.tracing_endpoint` default is now the OTLP ingest port
+
+`"http://localhost:16686"` → `"http://localhost:4317"`.
+
+16686 is the Jaeger **web UI**; it accepts no OTLP traffic. While the field was
+inert nothing depended on the value, so **no existing behaviour changes** — but
+now that spans are actually exported, the old default would have dropped every
+one of them at the socket while tracing reported itself enabled. An endpoint
+still pointed at 16686 (for example a config that pinned the old default
+explicitly) emits a one-time warning naming the port and the correct one.
+
+`metrics_port` is documented as what it is: the port
+`MetricsEndpoint` serves on, started explicitly by the operator. Agent
+construction collects metrics into an in-process registry and never binds a
+listener — opening a network port is not something a zero-config default may do.
+
 ### Fixed — `EnterpriseMemorySystem` no longer widens tenant scope on a falsy tenant id (#2005)
 
 `_build_tenant_key` resolved its scope with `tenant_id or self._current_tenant`.

@@ -31,8 +31,8 @@ class RichOutputManager:
         ✅ Memory: Enabled (10 turns, buffer backend)
         ✅ Tools: 12 builtin tools registered
         ✅ Observability:
-           • Jaeger tracing (localhost:16686)
-           • Prometheus metrics (localhost:9090)
+           • Distributed tracing (http://localhost:4317)
+           • Prometheus metrics (serve on port 9090)
            • Structured logging (INFO level)
            • Audit trail (.kaizen/audit.jsonl)
         ✅ Checkpointing: Filesystem (.kaizen/checkpoints/)
@@ -153,39 +153,52 @@ class RichOutputManager:
         else:
             print("⚪ Tools: Disabled")
 
+    # What each registered hook name means to a user, and where its output
+    # goes. Keyed on `BaseHook.name`, which is what the manager reports.
+    _OBSERVABILITY_LABELS = {
+        "tracing_hook": lambda config: f"Distributed tracing ({config.tracing_endpoint})",
+        "metrics_hook": lambda config: (
+            f"Prometheus metrics (serve on port {config.metrics_port})"
+        ),
+        "logging_hook": lambda config: f"Structured logging ({config.log_level} level)",
+        "audit_trail_hook": lambda config: f"Audit trail ({config.audit_log_path})",
+    }
+
     def _show_observability_status(
         self, config: AgentConfig, hook_manager: Any
     ) -> None:
-        """Show observability feature status."""
-        if hook_manager is not None:
-            observability_items = []
+        """
+        Show observability feature status.
 
-            if config.enable_tracing:
-                observability_items.append(
-                    f"Jaeger tracing ({config.tracing_endpoint})"
-                )
-
-            if config.enable_metrics:
-                observability_items.append(
-                    f"Prometheus metrics (localhost:{config.metrics_port})"
-                )
-
-            if config.enable_logging:
-                observability_items.append(
-                    f"Structured logging ({config.log_level} level)"
-                )
-
-            if config.enable_audit:
-                observability_items.append(f"Audit trail ({config.audit_log_path})")
-
-            if observability_items:
-                print("✅ Observability:")
-                for item in observability_items:
-                    print(f"   • {item}")
-            else:
-                print("⚪ Observability: Enabled but no subsystems configured")
-        else:
+        Rendered from the hooks ACTUALLY registered, never from the config
+        flags. Reading the flags is how this banner came to announce four
+        subsystems -- with endpoints and file paths -- that had registered
+        nothing (#2084); a subsystem whose optional dependency is missing is
+        still flagged True, so a flag-driven banner reports it as running.
+        """
+        if hook_manager is None:
             print("⚪ Observability: Disabled")
+            return
+
+        if config.has_custom_observability():
+            # A caller-supplied manager holds whatever that caller registered;
+            # naming subsystems here would be guessing.
+            print("✅ Observability: custom hook manager")
+            return
+
+        registered = hook_manager.registered_hook_names()
+        observability_items = [
+            label(config)
+            for name, label in self._OBSERVABILITY_LABELS.items()
+            if name in registered
+        ]
+
+        if observability_items:
+            print("✅ Observability:")
+            for item in observability_items:
+                print(f"   • {item}")
+        else:
+            print("⚪ Observability: Enabled but no subsystems could be installed")
 
     def _show_checkpointing_status(
         self, config: AgentConfig, checkpoint_manager: Any

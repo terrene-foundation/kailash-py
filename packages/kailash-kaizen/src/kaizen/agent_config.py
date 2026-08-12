@@ -115,16 +115,30 @@ class AgentConfig:
     # =========================================================================
 
     enable_tracing: bool = True
-    """Enable distributed tracing (Jaeger)"""
+    """Enable distributed tracing (OpenTelemetry spans exported to Jaeger)"""
 
-    tracing_endpoint: str = "http://localhost:16686"
-    """Jaeger tracing endpoint"""
+    tracing_endpoint: str = "http://localhost:4317"
+    """
+    OTLP gRPC INGEST endpoint that spans are exported to.
+
+    This is the collector's ingest port (4317), not the Jaeger web UI (16686).
+    The default was ``http://localhost:16686`` while nothing read the field;
+    now that it is wired, pointing it at the UI port would export every span
+    into a socket that cannot accept them.
+    """
 
     enable_metrics: bool = True
     """Enable Prometheus metrics collection"""
 
     metrics_port: int = 9090
-    """Prometheus metrics port"""
+    """
+    Port for serving collected metrics.
+
+    Read by :class:`~kaizen.core.autonomy.hooks.endpoints.MetricsEndpoint`,
+    which the operator starts explicitly -- agent construction collects metrics
+    into an in-process registry but never binds a listener, because opening a
+    network port is not something a zero-config default may do on its own.
+    """
 
     enable_logging: bool = True
     """Enable structured JSON logging"""

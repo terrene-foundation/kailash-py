@@ -24,7 +24,12 @@ import sys
 import pytest
 
 from kaizen.agent_config import AgentConfig
-from kaizen.smart_defaults import SmartDefaultsManager, _warn_observability_unavailable
+from kaizen.smart_defaults import (
+    SmartDefaultsManager,
+    _parse_otlp_endpoint,
+    _warn_observability_unavailable,
+    _warn_tracing_endpoint_is_web_ui,
+)
 
 # No LLM call is made anywhere in this module -- `model` is a required
 # AgentConfig field and nothing more, so a sentinel is used rather than a real
@@ -62,8 +67,10 @@ def _reset_one_time_warning():
     assertion that cannot fail is not evidence.
     """
     _warn_observability_unavailable.cache_clear()
+    _warn_tracing_endpoint_is_web_ui.cache_clear()
     yield
     _warn_observability_unavailable.cache_clear()
+    _warn_tracing_endpoint_is_web_ui.cache_clear()
 
 
 @pytest.fixture
@@ -306,3 +313,105 @@ def test_explicit_false_emits_no_warning(tmp_path, monkeypatch, caplog):
     assert not [r for r in caplog.records if "enable_metrics" in r.getMessage()], [
         r.getMessage() for r in caplog.records
     ]
+
+
+# =========================================================================
+# The startup banner must report reality, not the flags
+# =========================================================================
+
+
+def _banner(config, hook_manager, capsys):
+    from kaizen.rich_output import RichOutputManager
+
+    RichOutputManager(enabled=True)._show_observability_status(config, hook_manager)
+    return capsys.readouterr().out
+
+
+def test_banner_lists_only_installed_subsystems(config, monkeypatch, capsys):
+    """
+    A subsystem that could not load must NOT appear in the startup banner.
+
+    The banner previously read the config flags, so a default agent announced
+    four subsystems -- with endpoints and file paths -- while zero were
+    registered. A missing optional dependency leaves the flag True, so a
+    flag-driven banner reports a subsystem that installed nothing.
+    """
+    monkeypatch.setitem(sys.modules, "prometheus_client", None)
+    monkeypatch.delitem(
+        sys.modules,
+        "kaizen.core.autonomy.hooks.builtin.metrics_hook",
+        raising=False,
+    )
+
+    hook_manager = _manager(config)
+    out = _banner(config, hook_manager, capsys)
+
+    assert config.enable_metrics is True, "the flag must still be set for this to bite"
+    assert "Prometheus metrics" not in out, out
+    assert "Structured logging" in out, out
+    assert "Audit trail" in out, out
+
+
+def test_banner_reports_disabled_when_no_manager(config, capsys):
+    """NEGATIVE CONTROL. No manager means no claims."""
+    assert "Disabled" in _banner(config, None, capsys)
+
+
+def test_banner_does_not_name_subsystems_of_a_custom_manager(tmp_path, capsys):
+    """
+    NEGATIVE CONTROL. A caller-supplied manager holds unknown hooks.
+
+    Naming subsystems for it would be guessing -- the same guess, from the same
+    place, that produced the original false banner.
+    """
+    from kaizen.core.autonomy.hooks import HookManager
+
+    config = AgentConfig(
+        model=MODEL,
+        llm_provider=PROVIDER,
+        custom_hook_manager=HookManager(),
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    out = _banner(config, config.custom_hook_manager, capsys)
+
+    assert "custom hook manager" in out
+    assert "Structured logging" not in out, out
+
+
+# =========================================================================
+# tracing_endpoint parsing
+# =========================================================================
+
+
+@pytest.mark.parametrize(
+    "endpoint,expected",
+    [
+        ("http://localhost:4317", ("localhost", 4317)),
+        ("collector.internal:4317", ("collector.internal", 4317)),
+        ("http://collector.internal", ("collector.internal", 4317)),
+        ("https://otel.example.com:4318", ("otel.example.com", 4318)),
+    ],
+)
+def test_parse_otlp_endpoint(endpoint, expected):
+    """URL form and bare host:port both resolve; the port defaults to OTLP gRPC."""
+    assert _parse_otlp_endpoint(endpoint) == expected
+
+
+def test_default_tracing_endpoint_is_the_otlp_ingest_port(config):
+    """
+    The shipped default must be an OTLP ingest port, not the Jaeger web UI.
+
+    16686 accepts no OTLP traffic, so every span would be dropped on export and
+    the operator would see tracing "enabled" against an empty Jaeger.
+    """
+    assert _parse_otlp_endpoint(config.tracing_endpoint) == ("localhost", 4317)
+
+
+def test_web_ui_port_warns_by_name(caplog):
+    """An operator still pinning the old default is told what is wrong."""
+    with caplog.at_level(logging.WARNING):
+        _parse_otlp_endpoint("http://localhost:16686")
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "16686" in text and "4317" in text, text
+    assert "dropped" in text, text
