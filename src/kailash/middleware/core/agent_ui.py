@@ -146,6 +146,7 @@ from ...nodes.base import Node, NodeRegistry
 from ...nodes.data import AsyncSQLDatabaseNode
 from ...nodes.security import CredentialManagerNode
 from ...nodes.transform import DataTransformer
+from ...utils.secure_logging import sanitize_log_value
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
 from ..communication.events import (
@@ -443,8 +444,16 @@ class AgentUIMiddleware:
         self.sessions[session_id] = session
         self.sessions_created += 1
 
-        # Log session creation
-        logger.info(f"Session created: {session_id} for user {user_id}")
+        # Log session creation. ``user_id`` reaches here as the caller-supplied
+        # request-body value (api_gateway forwards it), so interpolating it
+        # lets an embedded newline forge a second log record -- the sibling of
+        # the api_gateway site in issue #2040, found by sweeping rather than
+        # by enumerating the one site the issue named.
+        logger.info(
+            "Session created: %s for user %s",
+            sanitize_log_value(session_id, 128),
+            sanitize_log_value(user_id, 128),
+        )
 
         # Emit session created event
         await self.event_stream.emit_workflow_started(
@@ -455,7 +464,11 @@ class AgentUIMiddleware:
             session_id=session_id,
         )
 
-        logger.info(f"Created session {session_id} for user {user_id}")
+        logger.info(
+            "Created session %s for user %s",
+            sanitize_log_value(session_id, 128),
+            sanitize_log_value(user_id, 128),
+        )
         return session_id
 
     async def get_session(self, session_id: str) -> Optional[WorkflowSession]:

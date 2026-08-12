@@ -38,6 +38,7 @@ from ...utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
+from ...utils.secure_logging import sanitize_log_value
 from ...utils.server_auth import install_server_auth_middleware, resolve_server_auth
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
@@ -583,8 +584,16 @@ class APIGateway:
                 session = await self.agent_ui.get_session(session_id)
                 self.requests_processed += 1
 
-                # Log session creation
-                logger.info(f"Session created: {session_id} for user {user_id}")
+                # Log session creation. ``user_id`` is caller-controlled: it
+                # comes from the POST body and is only overridden when auth is
+                # enabled AND a principal resolved, so on the default path it
+                # is the raw request value. Interpolated, an embedded newline
+                # forges a second well-formed log record (issue #2040).
+                logger.info(
+                    "Session created: %s for user %s",
+                    sanitize_log_value(session_id, 128),
+                    sanitize_log_value(user_id, 128),
+                )
 
                 # Transform response using SDK node
                 response_data = {

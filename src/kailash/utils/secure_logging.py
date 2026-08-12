@@ -350,6 +350,121 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
     return cleaned
 
 
+# Default and ceiling for one caller-controlled VALUE entering a log record.
+# The default is generous enough for an identifier, an email, or a short
+# message; the ceiling exists because ``limit`` is caller-supplied and a bound
+# a call site can opt out of is not a bound. Escaping and capping are separate
+# problems -- an unbounded value survives escaping intact (issue #2088).
+_DEFAULT_LOG_VALUE_CHARS = 256
+_MAX_LOG_VALUE_CHARS = 1024
+
+# Recursion bound for sanitize_log_structure. A self-referential or
+# pathologically nested attribute bag must not exhaust the stack inside a
+# logging call.
+_MAX_LOG_STRUCTURE_DEPTH = 6
+
+
+def sanitize_log_value(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> str:
+    """Flatten one caller-controlled VALUE to a bounded, single-line token.
+
+    THE PUBLIC value-sanitizer for untrusted data entering a log line
+    (issue #2040). Use this wherever a request field -- ``user_id``, a tenant
+    id, a header value, a path segment, an email -- is rendered into a log
+    record, and prefer it to a hand-rolled ``replace("\\n", "")`` at the call
+    site: five hand-rolled copies is how the sites drift
+    (``rules/security.md`` § Credential Decode Helpers).
+
+    Distinct from :func:`_safe_identifier`, which confines its input to a
+    conservative IDENTIFIER charset and is right for a class/function/frame
+    name. That charset mangles ordinary prose -- every space and comma becomes
+    ``?`` -- so it is the wrong tool for a free-form ``message``. This function
+    neutralizes only what can forge log STRUCTURE.
+
+    Two properties, both pinned by regression tests rather than asserted:
+
+    1. **Single-line and structurally inert.** Every non-printable character --
+       newline, carriage return, NUL, and the ANSI/terminal escape sequences
+       that can rewrite a console operator's screen -- is replaced with a
+       space, so one call can only ever produce one line.
+    2. **Bounded.** Output never exceeds ``limit`` characters, so a caller
+       cannot drive log volume with a megabyte-long field. Escaping alone does
+       not bound anything: an unbounded value survives it intact.
+
+    NOT a redaction step. A short attacker-chosen value survives on purpose --
+    it is usually the only diagnostic there is. For withholding credential
+    material by key name, compose
+    :func:`kailash.nodes.auth._log_hygiene.redact_mapping` instead.
+
+    Total: never raises. A logging call site must not fail on the thing it is
+    describing, so a value whose ``__str__`` raises degrades to a marker.
+    """
+    try:
+        raw = value if isinstance(value, str) else str(value)
+        # Normalize to a plain ``str`` on TYPE IDENTITY before any predicate
+        # runs -- ``isinstance`` admits a subclass, and a subclass can override
+        # ``__len__`` to lie about its own length and so defeat the bound
+        # below. Same hardening, and same reason, as _safe_identifier; noqa
+        # E721 is CORRECT here and MUST NOT be "fixed" to isinstance().
+        text = raw if type(raw) is str else str.__str__(raw)  # noqa: E721
+    except Exception:
+        return "<unrepresentable>"
+    flattened = "".join(ch if ch.isprintable() else " " for ch in text)
+    # ``limit`` is caller-supplied; a negative or non-integer value would make
+    # the slice a no-op or raise inside a logging call. Clamp rather than
+    # trust, and clamp to the module ceiling so no call site can opt out of
+    # the bound entirely.
+    try:
+        bound = min(int(limit), _MAX_LOG_VALUE_CHARS)
+    except (TypeError, ValueError):
+        bound = _MAX_LOG_VALUE_CHARS
+    if bound < 0:
+        bound = 0
+    return flattened[:bound]
+
+
+def sanitize_log_structure(
+    data: Any,
+    limit: int = _DEFAULT_LOG_VALUE_CHARS,
+    _depth: int = 0,
+) -> Any:
+    """Recursively sanitize the STRING leaves of a structure, keeping its shape.
+
+    The companion to :func:`sanitize_log_value` for the free-form attribute
+    bags (``event_data``, ``metadata``) that audit and security sinks accept.
+    A sink that renders such a bag with ``str(...)`` or an f-string carries
+    every nested string into the record verbatim, so sanitizing only the
+    top-level identifier fields reproduces the original defect one level down.
+
+    Non-string leaves -- ``int``, ``float``, ``bool``, ``None``, ``datetime``
+    -- pass through UNCHANGED, so a record keeps its types and a downstream
+    JSON consumer still sees numbers as numbers. Mapping KEYS are sanitized
+    too: a key is rendered into the record exactly as a value is.
+
+    Depth is bounded so a self-referential or pathologically nested bag cannot
+    exhaust the stack inside a logging call.
+    """
+    if _depth >= _MAX_LOG_STRUCTURE_DEPTH:
+        return "<depth-limited>"
+    if isinstance(data, str):
+        return sanitize_log_value(data, limit)
+    if isinstance(data, dict):
+        return {
+            sanitize_log_value(key, limit): sanitize_log_structure(
+                value, limit, _depth + 1
+            )
+            for key, value in data.items()
+        }
+    if isinstance(data, (list, tuple, set, frozenset)):
+        return [sanitize_log_structure(item, limit, _depth + 1) for item in data]
+    # bool is a subclass of int; both, plus float/None/datetime/Decimal, are
+    # rendered by repr and cannot carry a newline. Anything ELSE reaching here
+    # is an arbitrary object whose __str__ is caller-controlled, so it is
+    # flattened rather than trusted.
+    if data is None or isinstance(data, (bool, int, float)):
+        return data
+    return sanitize_log_value(data, limit)
+
+
 def safe_type_name(obj: object) -> str:
     """Bounded, structurally inert name of an object's TYPE, for a log field.
 

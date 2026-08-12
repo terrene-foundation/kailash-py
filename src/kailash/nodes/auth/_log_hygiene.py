@@ -28,6 +28,8 @@ here closes the exposure this change creates.
 
 from typing import Any
 
+from kailash.utils.secure_logging import sanitize_log_value
+
 __all__ = ["log_safe", "redact_mapping"]
 
 # Keys whose values are credential material or bulk personal data and must not
@@ -55,14 +57,22 @@ _SENSITIVE_KEY_FRAGMENTS = (
 def log_safe(value: Any, limit: int = 256) -> str:
     """Flatten a value to one bounded, single-line token for a log record.
 
-    Non-printable characters -- newline, carriage return, and the terminal
-    escape sequences that can rewrite a console operator's screen -- are
-    replaced with a space, and the result is truncated. One call can therefore
-    only ever produce one line.
+    A THIN ALIAS for :func:`kailash.utils.secure_logging.sanitize_log_value`,
+    which is the public, documented value-sanitizer for the whole SDK
+    (issue #2040). It is kept because five call sites in this package import
+    it by this name, but it holds NO implementation of its own: two copies of
+    a sanitizer is exactly the drift this module's header warns about, and the
+    copy that is not the canonical one is the one that stops getting fixed
+    (``rules/security.md`` § Credential Decode Helpers -- one shared helper,
+    never per-package copies).
+
+    ``None`` renders as the empty string here rather than ``"None"``, which is
+    the one behaviour this wrapper adds: these call sites pass optional
+    identifier fields, and a record reading ``(User: None)`` is noise.
     """
-    text = "" if value is None else str(value)
-    flattened = "".join(ch if ch.isprintable() else " " for ch in text)
-    return flattened[:limit]
+    if value is None:
+        return ""
+    return sanitize_log_value(value, limit)
 
 
 def redact_mapping(data: Any, _depth: int = 0) -> Any:
