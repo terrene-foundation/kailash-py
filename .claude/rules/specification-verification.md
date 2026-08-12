@@ -165,13 +165,20 @@ stays open with a closed ticket in front of it.
   Parity took.
 - **Receipt requirement:** SessionStart soft-gate `[ack: specification-verification]` IFF
   `posture.json::pending_verification` includes the `specification-verification` rule_id.
-- **Detection mechanism:** Phase 1 (manual, gate-review) — reviewer at `/implement` inspects any
-  session implementing from an issue/AC/brief and confirms (a) the load-bearing claims were
-  re-derived with a cited command, (b) any prescribed remedy was exercised against the named threat
-  input before adoption, (c) any divergence was posted back to the specification. Phase 2 (deferred
-  per `trust-posture.md` § Two-Phase Rollout) — no hook detector; a lexical detector cannot see
-  whether a number was measured or copied. Audit fixtures land with the Phase-2 detector at
-  `.claude/audit-fixtures/specification-verification/` per `cc-artifacts.md` Rule 9.
+- **Detection mechanism:** scanner `null` — probe-only by construction, NOT by deferral: whether a
+  number was MEASURED or COPIED leaves no lexical trace, so a structural scanner over the transcript
+  would be the non-discriminating instrument `instrument-discipline.md` MUST-1 blocks. Fixtures
+  `.claude/audit-fixtures/specification-verification/` (4 bipolar efficacy pairs, one per MUST, plus
+  a surface-matched meta pair; each `.expected` is the reviewer's expected disposition). Probes
+  `.claude/test-harness/probes/specification-verification.probes.json` — 10 rows / 5 pairs, registered
+  probe-only (`scanner: null`) in `.claude/test-harness/eval-manifest.json`, dispatched at gate-review
+  via `/test-harness-probe --artifacts` (`halt-and-report`; the semantic tier is deliberately not in
+  CI — the loom↔csq boundary keeps CI LLM-free, so a green CI run is never evidence the probes
+  passed). Phase 1 (manual, gate-review) — reviewer at `/implement` inspects any session implementing
+  from an issue/AC/brief and confirms (a) the load-bearing claims were re-derived with a cited
+  command, (b) any prescribed remedy was exercised against the named threat input before adoption,
+  (c) any divergence was posted back to the specification. Phase 2 (hook detector) is NOT deferred —
+  it is declined, on the discrimination ground above.
 - **Violation scope:** MUST-1 (un-re-derived factual claims) + MUST-2 (prescribed remedy adopted
   untested against the named threat) + MUST-3 (inherited enumeration instrument) + MUST-4 (measured
   contradiction left unposted).
@@ -225,11 +232,39 @@ wrong — `base_agent.py` re-derived to 728/735/744, not the 734/743 proposed �
 are the orchestrator's own re-derivation, not the redteam's numbers taken on trust. That is the rule
 working on itself, and it is the strongest evidence for MUST-1 in the file.
 
-**Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** ~217 lines,
-over the guidance. Named rationale: **four-clause contract with a mandated 8-field Wiring** — each
-MUST carries the DO/DO-NOT + verbatim BLOCKED phrases + `**Why:**` the meta-rule requires, and the
-canonical Trust-Posture Wiring is non-decomposable. All worked cases, the full BLOCKED corpora, the
-per-issue evidence table, and the scanner-findings corollary are already EXTRACTED to
-`guides/rule-extracts/specification-verification.md`; the residual is load-bearing clause text.
-`priority: 10` + `scope: path-scoped`, so it pays NO baseline-emission cost and Rule 10's
-proximity-band gate does not fire. Sibling precedent: `upstream-issue-hygiene.md` + `wave-loop.md`.
+**Scope verdict — path-scoped, MEASURED not assumed (2026-08-12).** The open question on PR #2031
+was whether this ships `priority: 0` + `scope: baseline` instead. Both halves were tested rather
+than argued.
+
+_Budget._ `node .claude/bin/emit.mjs --all --dry-run` at this branch's base (`21deef321`) reports
+11 baseline rules, 53168 B per lane, **13.46% headroom on codex and gemini** — already inside Rule
+10's 15% proximity band, with 2128 B of slack above the 10% BLOCK floor. Re-running the identical
+command with this file's frontmatter flipped to `priority: 0` / `scope: baseline` returns 12 rules,
+61465 B, and **-0.04% headroom — a hard `headroom-floor BLOCK`, 6169 B under the floor** on both
+lanes. Baseline is not "expensive here"; it is refused by the emitter, and would land only paired
+with ~8.3 KB of extraction out of the other eleven baseline rules. The falsifying result is named:
+a post-promotion headroom at or above 15% would have removed the budget objection entirely.
+
+_Reachability._ The `issue-triage-routing.md` precedent applies when a rule's trigger moment matches
+NO glob — a `gh issue` triage touches zero files. This rule's trigger is not that shape. MUST-1/2/3
+have a subject only when something is IMPLEMENTED from the specification, and implementation
+terminates in a file edit; the `paths:` list above was widened in `ee8274122` to md/yml/yaml/toml/
+json/sh/sql/tsx/jsx + workflows precisely so the YAML-only CI case (#2023) matches. **Residual gap,
+stated rather than glossed:** a MUST-4-only session — one that measures a contradiction with Bash
+and `gh` alone, posts the correction, and edits no file — matches no glob and does not load this
+rule. Closing it costs ~200 B of pointer inside an already-loaded baseline rule, which fits the
+measured 2128 B slack but fires Rule 10's gate and therefore needs its own paired-extraction or
+named-rationale receipt; that is a separate shard, not a silent omission here.
+
+**Length rationale (per `rule-authoring.md` MUST NOT § "Rules longer than 200 lines").** 270 lines
+(`wc -l`, re-derived at this edit — the prior "~217" was measured before the Detection-mechanism and
+Scope-verdict blocks landed and is corrected here rather than carried, MUST-1 applied to this file's
+own claim about itself). Named rationale: **four-clause contract with a mandated 8-field Wiring** —
+each MUST carries the DO/DO-NOT + verbatim BLOCKED phrases + `**Why:**` the meta-rule requires, and
+the canonical Trust-Posture Wiring is non-decomposable. All worked cases, the full BLOCKED corpora,
+the per-issue evidence table, and the scanner-findings corollary are already EXTRACTED to
+`guides/rule-extracts/specification-verification.md`; the residual is load-bearing clause text plus
+the two receipt blocks (§ Redteam receipt, § Scope verdict) that record how the open questions were
+settled. `priority: 10` + `scope: path-scoped`, so it pays NO baseline-emission cost and Rule 10's
+proximity-band gate does not fire — measured, see § Scope verdict. Sibling precedent:
+`upstream-issue-hygiene.md` + `wave-loop.md`.
