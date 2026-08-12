@@ -553,16 +553,72 @@ class APIGateway:
         """Setup session management routes."""
 
         # Create auth dependency
-        async def get_optional_current_user():
-            """Optional auth dependency - returns None if auth is disabled."""
-            if self.enable_auth and self.auth_manager:
-                # Use auth manager's dependency if available
+        async def get_optional_current_user(request: Request):
+            """Resolve the authenticated principal, or None when there is none.
+
+            This returned None unconditionally -- "For now, return None to
+            avoid complex auth setup" -- on EVERY path, including with auth
+            enabled and a valid bearer token presented. `enable_auth` defaults
+            to True, so on the default path the session identity was always
+            the caller-supplied `request.user_id` body field and the
+            server-derived principal never won (`zero-tolerance.md` Rule 2;
+            same bug class as #2047 at the HTTP surface). The auth manager's
+            `verify_token` / `verify_api_key` existed the whole time and were
+            simply not called.
+
+            Deliberately still OPTIONAL: a request with no credential resolves
+            to None rather than 401, which preserves this route's contract.
+            Whether an auth-enabled gateway should REFUSE a session create
+            that carries no credential is a separate, breaking decision and is
+            tracked as its own issue rather than smuggled in here.
+            """
+            if not (self.enable_auth and self.auth_manager):
+                return None
+
+            scheme, _, token = (request.headers.get("Authorization") or "").partition(
+                " "
+            )
+            if scheme.lower() == "bearer" and token:
                 try:
-                    # This would normally use the auth manager's get_current_user_dependency
-                    # For now, return None to avoid complex auth setup
+                    payload = await self.auth_manager.verify_token(token)
+                except HTTPException:
+                    # An invalid/expired token is a REJECTED credential, not
+                    # an absent one. Logged rather than swallowed silently
+                    # (`zero-tolerance.md` Rule 3); the request continues
+                    # unauthenticated, which this route already permits.
+                    logger.warning("Session-route bearer token was rejected")
                     return None
-                except Exception:
+                except Exception as exc:
+                    logger.warning(
+                        "Session-route token verification failed: %s",
+                        type(exc).__name__,
+                    )
                     return None
+                return {
+                    "user_id": payload.get("user_id"),
+                    "permissions": payload.get("permissions", []),
+                    "metadata": payload.get("metadata", {}),
+                }
+
+            api_key = request.headers.get("X-API-Key")
+            if api_key:
+                try:
+                    metadata = await self.auth_manager.verify_api_key(api_key)
+                except HTTPException:
+                    logger.warning("Session-route API key was rejected")
+                    return None
+                except Exception as exc:
+                    logger.warning(
+                        "Session-route API key verification failed: %s",
+                        type(exc).__name__,
+                    )
+                    return None
+                return {
+                    "user_id": metadata.get("user_id"),
+                    "permissions": metadata.get("permissions", []),
+                    "metadata": metadata,
+                }
+
             return None
 
         @self.app.post("/api/sessions", response_model=SessionResponse)
@@ -572,10 +628,15 @@ class APIGateway:
         ):
             """Create a new session for a frontend client."""
             try:
-                # Use authenticated user ID if available
+                # A resolved principal WINS. `.get("user_id", user_id)` fell
+                # back to the body value only when the key was ABSENT, so a
+                # principal resolving to a None user_id silently produced a
+                # session with no owner rather than refusing.
                 user_id = request.user_id
                 if self.enable_auth and current_user:
-                    user_id = current_user.get("user_id", user_id)
+                    principal = current_user.get("user_id")
+                    if isinstance(principal, str) and principal:
+                        user_id = principal
 
                 session_id = await self.agent_ui.create_session(
                     user_id=user_id or "", metadata=request.metadata
