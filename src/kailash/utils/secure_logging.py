@@ -283,24 +283,28 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
         return "<unrepresentable>"
     if not text:
         return "<empty>"
-    # TWO passes, and both are load-bearing.
+    # TWO passes, and both are load-bearing. ORDER MATTERS, for a reason that
+    # is about tooling rather than behaviour -- the output is identical either
+    # way, since both passes replace with the same character.
     #
-    # 1. An explicit regex substitution over the ASCII line terminators. This is
-    #    the recognized shape for a log-injection barrier, and it is checked
-    #    FIRST so the property a reader (or a scanner) most cares about is
-    #    visible without reasoning about Unicode category tables.
-    # 2. The category sweep, which is what makes the guarantee real: it also
+    # 1. The category sweep is what makes the guarantee real: beyond CR/LF it
     #    removes U+2028/U+2029, the C1 controls, and the bidi overrides that
-    #    reorder an already-written line. Pass 1 alone would leave those.
+    #    reorder an already-written line.
+    # 2. The explicit regex substitution over the ASCII line terminators is a
+    #    no-op by the time it runs -- pass 1 has already replaced them. It is
+    #    kept, and kept LAST, because it is the recognized shape of a
+    #    log-injection barrier and it must be the final transformation the
+    #    returned value flows through. Measured: with the regex first and the
+    #    join last, `py/log-injection` was still reported at every call site,
+    #    because the value actually returned came from the join.
     #
-    # Dropping either one is a regression. Pass 1 without pass 2 is the
-    # ASCII-only strip this function exists to replace; pass 2 without pass 1
-    # was measured to leave `py/log-injection` reported at every call site.
-    cleaned = _LOG_LINE_TERMINATORS.sub("?", text)
-    cleaned = "".join(
+    # Dropping either is a regression: pass 1 alone loses the recognized
+    # barrier, pass 2 alone is the ASCII-only strip this function replaces.
+    swept = "".join(
         "?" if unicodedata.category(ch) in _RECORD_FORGING_CATEGORIES else ch
-        for ch in cleaned
+        for ch in text
     )
+    cleaned = _LOG_LINE_TERMINATORS.sub("?", swept)
     if len(cleaned) > limit:
         # Marker uses <> precisely because... they are ours: the categories
         # stripped above cannot produce them, and a caller who writes a literal

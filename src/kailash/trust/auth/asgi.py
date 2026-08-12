@@ -145,14 +145,17 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # A MAPPING lookup is the real fix rather than a scanner-pleasing one --
         # every value it can return is a literal owned by this module, so the
         # config string is used only as a KEY and never reaches the record.
-        algorithm = _ALGORITHM_LABELS.get(config.algorithm, "other")
+        #
+        # The exempt-path count and the api-key flag are NOT logged here, and
+        # dropping them is a deduplication rather than a loss:
+        # `server_auth.build_server_auth_config` already emits both on its own
+        # `server_auth.configured` record, from the same values, one call
+        # earlier. Reading them off `config` a second time re-derived
+        # secret-adjacent state at a second sink for information already on the
+        # record.
         logger.info(
             "jwt_auth_middleware.installed",
-            extra={
-                "algorithm": algorithm,
-                "exempt_path_count": len(config.exempt_paths),
-                "api_key_enabled": config.api_key_enabled,
-            },
+            extra={"algorithm": _ALGORITHM_LABELS.get(config.algorithm, "other")},
         )
 
     # ------------------------------------------------------------------
