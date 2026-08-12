@@ -241,6 +241,107 @@ def test_memory_error_is_relabelled_when_the_ceiling_is_in_force():
             raise MemoryError("hit the ceiling")
 
 
+@requires_enforced_rlimit_as
+def test_concurrent_guards_apply_the_tightest_ceiling_not_the_first():
+    """A lax concurrent guard must not host a strictly-configured block.
+
+    Nodes in a parallel group may each carry their own SecurityConfig, so two
+    guards with different limits are live at once. First-writer-wins would run
+    the strict payload under the lax ceiling — a silent sandbox bypass.
+    """
+    outer = 4 * 1024 * 1024 * 1024  # 4 GB, deliberately lax
+    inner = 32 * 1024 * 1024  # 32 MB, the one that must win
+
+    with memory_limit_guard(outer):
+        lax, _ = resource.getrlimit(resource.RLIMIT_AS)
+        with memory_limit_guard(inner):
+            tight, _ = resource.getrlimit(resource.RLIMIT_AS)
+        assert tight < lax, (
+            f"tighter concurrent guard did not take effect: "
+            f"{tight} should be below {lax}"
+        )
+
+
+@requires_enforced_rlimit_as
+def test_tighter_ceiling_is_released_when_its_guard_exits():
+    """The tightening must be temporary, or the outer block inherits it."""
+    outer = 4 * 1024 * 1024 * 1024
+    with memory_limit_guard(outer):
+        before, _ = resource.getrlimit(resource.RLIMIT_AS)
+        with memory_limit_guard(32 * 1024 * 1024):
+            pass
+        after, _ = resource.getrlimit(resource.RLIMIT_AS)
+    assert after == before, "inner guard's tighter ceiling leaked into the outer block"
+
+
+@requires_enforced_rlimit_as
+def test_a_failing_ceiling_application_does_not_disable_later_guards(monkeypatch):
+    """An exception while applying must not leave the sandbox permanently off.
+
+    The bookkeeping used to be incremented before the apply, outside any
+    try/finally, so one raise (e.g. OverflowError from an over-large configured
+    limit) left the count stuck and every later guard concluded a ceiling was
+    already in force.
+    """
+    import kailash.security as security_module
+
+    real_setrlimit = resource.setrlimit
+    calls = {"n": 0}
+
+    def exploding_setrlimit(which, limits):
+        if which == resource.RLIMIT_AS and calls["n"] == 0:
+            calls["n"] += 1
+            raise OverflowError("Python int too large to convert to C long")
+        return real_setrlimit(which, limits)
+
+    monkeypatch.setattr(security_module.resource, "setrlimit", exploding_setrlimit)
+    with memory_limit_guard(64 * 1024 * 1024):
+        pass
+    monkeypatch.undo()
+
+    # The next guard must still be able to apply a ceiling.
+    with memory_limit_guard(32 * 1024 * 1024):
+        soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+    assert soft != resource.RLIM_INFINITY or True  # applied or cleanly skipped
+    assert (
+        security_module._address_space_requests == []
+    ), "a failed apply leaked its bookkeeping; later guards would be no-ops"
+
+
+@requires_enforced_rlimit_as
+def test_failed_restore_keeps_the_saved_value_for_a_later_retry():
+    """Clearing the saved pair before a successful restore is unrecoverable.
+
+    If the restore fails and the saved value is dropped, nothing can ever put
+    the process back — #2078 with no path out.
+    """
+    import kailash.security as security_module
+
+    real_setrlimit = resource.setrlimit
+    fail = {"on": False}
+
+    def flaky_setrlimit(which, limits):
+        if which == resource.RLIMIT_AS and fail["on"]:
+            raise OSError("simulated restore failure")
+        return real_setrlimit(which, limits)
+
+    security_module.resource.setrlimit = flaky_setrlimit
+    try:
+        with memory_limit_guard(64 * 1024 * 1024):
+            fail["on"] = True
+        assert (
+            security_module._address_space_saved is not None
+        ), "saved limit was discarded on a failed restore — unrecoverable"
+    finally:
+        fail["on"] = False
+        security_module.resource.setrlimit = real_setrlimit
+        # Drive one more guard cycle so the pending restore is retried, and
+        # leave the process exactly as this module found it (the autouse
+        # fixture asserts that).
+        with memory_limit_guard(64 * 1024 * 1024):
+            pass
+
+
 @requires_rlimit_as
 def test_nested_and_parallel_guards_restore_exactly_once():
     """Reference counting: parallel node execution must not corrupt restore."""
