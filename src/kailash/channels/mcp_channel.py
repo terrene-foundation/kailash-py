@@ -319,7 +319,13 @@ class MCPChannel(Channel):
         # See the sibling comment in api_channel: the finally guard keys on
         # whether cleanup already ran, not on the status, which a
         # normal-return-but-incomplete stop now also satisfies.
+        #
+        # TWO flags, deliberately. Keying the close-RETRY on `cleanup_ran` made
+        # the retry unreachable in the one case it exists for: `close()` raising
+        # leaves `cleanup_ran` already True, so the `finally` skipped the retry
+        # and the runtime reference stayed stranded (issue #2020).
         cleanup_ran = False
+        close_ran = False
         try:
             self.status = ChannelStatus.STOPPING
 
@@ -383,50 +389,114 @@ class MCPChannel(Channel):
             # silent no-op that left the server running and the pool worker
             # wedged. The join below is the real reclaim; when it times out we
             # say so at WARN rather than pretending the channel stopped.
-            thread, self._mcp_server_thread = self._mcp_server_thread, None
+            # THE THREAD'S LIVENESS FEEDS THE STATUS. `_cleanup` covers
+            # `_running_task` and the event queue and NOT this thread, so
+            # gating STOPPED on `cleaned` alone reported a clean stop over a
+            # server that was still SERVING -- and a caller that trusts the
+            # status proceeds to teardown while requests are still being
+            # answered (issue #2018). The WARNs below always knew; the status
+            # did not, on the one resource the bool does not cover.
+            #
+            # THE HANDLE IS CLEARED ONLY WHERE THE THREAD HAS BEEN OBSERVED
+            # DEAD -- never optimistically before an await. Swapping it to
+            # `None` up front and restoring it after the join put the restore
+            # BEHIND an await, so a caller-aimed cancellation there skipped it
+            # and left the handle already dropped: the next `stop()` then found
+            # nothing to observe and cleared straight to STOPPED over a port
+            # that was still answering. That is the identical #2018 lie one
+            # call later, on the path this method's whole
+            # `cleanup_ran`/`close_ran`/`finally` machinery exists to serve.
+            server_thread_live = False
+            thread = self._mcp_server_thread
             if thread is not None and thread.is_alive():
                 if requested_server_shutdown:
-                    thread.join(timeout=self._MCP_SERVER_JOIN_TIMEOUT)
+                    # OFF THE EVENT LOOP. `Thread.join(timeout=...)` is
+                    # synchronous, so the shipped 5s timeout was a 5-second
+                    # freeze of the ENTIRE loop -- stalling sibling channels'
+                    # stops and the shutdown deadline itself, sixty lines from
+                    # the comment justifying `_CLEANUP_JOIN_TIMEOUT = 1.0` on
+                    # exactly that reasoning (issue #2019).
+                    #
+                    # `to_thread` DOES use asyncio's default executor, which
+                    # the comment above forbids for `run()`. The distinction is
+                    # BOUNDEDNESS, not the pool: `run()` parks a worker forever
+                    # and wedges the `_python_exit` join, whereas this join
+                    # returns within `_MCP_SERVER_JOIN_TIMEOUT` whether or not
+                    # the thread died, so the worker always returns to its
+                    # queue.
+                    await asyncio.to_thread(thread.join, self._MCP_SERVER_JOIN_TIMEOUT)
                     if thread.is_alive():
+                        server_thread_live = True
+                        # RETAINED (by never having been cleared) so a retry
+                        # re-observes it. Dropping the handle makes the SECOND
+                        # stop() report STOPPED over the same live thread --
+                        # the same lie, one call later.
                         logger.warning(
                             "MCP channel %s server thread %r did not exit "
-                            "within %.1fs of mcp_server.stop(); it is a daemon "
-                            "thread and will be abandoned at interpreter exit "
-                            "rather than blocking shutdown.",
+                            "within %.1fs of mcp_server.stop(); the channel is "
+                            "NOT stopped. It is a daemon thread and will be "
+                            "abandoned at interpreter exit rather than "
+                            "blocking shutdown.",
                             self.name,
                             thread.name,
                             self._MCP_SERVER_JOIN_TIMEOUT,
                         )
+                    else:
+                        # Observed dead, so the handle has nothing left to
+                        # report and is released. This is the ONLY place a
+                        # live-thread handle is cleared.
+                        self._mcp_server_thread = None
                 else:
                     # No usable shutdown entry point, so nothing will ever
                     # unwind the serve loop -- joining would burn the timeout
                     # waiting for something that cannot happen. Say so instead.
+                    # The handle needs no restore here because it was never
+                    # cleared -- that is the whole point of the ownership above.
+                    server_thread_live = True
                     logger.warning(
-                        "MCP channel %s stopped, but %s exposes no usable "
-                        "stop(); server thread %r stays parked in run() and "
+                        "MCP channel %s did NOT stop: %s exposes no usable "
+                        "stop(), so server thread %r stays parked in run() and "
                         "will be abandoned at interpreter exit. It is a daemon "
                         "thread, so it does not block shutdown.",
                         self.name,
                         type(self.mcp_server).__name__,
                         thread.name,
                     )
+            else:
+                # Never started, or already dead before the join was needed.
+                self._mcp_server_thread = None
 
-            # STOPPED only when cleanup actually COMPLETED -- the same contract
-            # api_channel and cli_channel hold. `_cleanup` bounds its join on
-            # `_running_task`, so an event task that ignores cancellation
-            # returns False and is still live; recording STOPPED over it would
-            # hand an orchestrator a clean stop that did not happen. Fixing two
-            # of three channels and leaving this one on the unqualified
-            # assignment is the sibling-site gap the parity rule exists to stop.
+            # STOPPED only when cleanup actually COMPLETED **and the server
+            # thread is genuinely gone** -- the same contract api_channel and
+            # cli_channel hold, plus the one resource only this channel owns.
+            # `_cleanup` bounds its join on `_running_task`, so an event task
+            # that ignores cancellation is still live; recording STOPPED over
+            # either it or the server thread hands an orchestrator a clean stop
+            # that did not happen. Fixing two of three channels and leaving this
+            # one on the unqualified assignment is the sibling-site gap the
+            # parity rule exists to stop.
             cleaned = await self._cleanup()
             cleanup_ran = True
 
             self.close()
+            close_ran = True
 
-            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
+            self.status = self._status_after_cleanup(
+                cleaned, other_resource_live=server_thread_live
+            )
 
-            if cleaned:
+            if self.status is ChannelStatus.STOPPED:
                 logger.info(f"MCP channel {self.name} stopped")
+            elif self.status is ChannelStatus.ERROR:
+                # NOT "stop it again" -- see the sibling comment in
+                # api_channel: a FAILED event task is already gone, so a retry
+                # would launder the failure into a clean STOPPED (#2021).
+                logger.warning(
+                    "MCP channel %s stop did NOT complete: its event task "
+                    "FAILED. The channel is ERROR; retrying stop() will not "
+                    "address it",
+                    self.name,
+                )
             else:
                 logger.warning(
                     "MCP channel %s stop did NOT complete; channel is STOPPING "
@@ -440,7 +510,8 @@ class MCPChannel(Channel):
             raise
         finally:
             # The third instance of the orphaned-cleanup gap, and the one that
-            # had no guard at all: this method awaits in four places, so a
+            # had no guard at all: this method awaits in five places -- the
+            # off-loop server-thread join added by #2019 is the fifth -- so a
             # caller-aimed cancellation at any of them left `_running_task`
             # live with `_cleanup` never run. api_channel and cli_channel both
             # carry this block; MCP did not, which is the other half of the
@@ -453,17 +524,25 @@ class MCPChannel(Channel):
                         "MCP channel %s: cleanup failed during an interrupted "
                         "stop; the original cancellation is preserved",
                         self.name,
+                        exc_info=True,
                     )
-                finally:
-                    try:
-                        self.close()
-                    except Exception:
-                        logger.warning(
-                            "MCP channel %s: close() failed during an "
-                            "interrupted stop; the original cancellation is "
-                            "preserved",
-                            self.name,
-                        )
+            # A SEPARATE guard, not the `finally` of the block above. Nesting it
+            # there made it reachable only when `_cleanup` had not run -- so the
+            # single case it exists for, `close()` itself raising on the success
+            # path, skipped it and stranded the runtime (issue #2020). `close()`
+            # is idempotent (it None-guards `self.runtime`), so the worst a
+            # redundant call does is nothing.
+            if not close_ran:
+                try:
+                    self.close()
+                except Exception:
+                    logger.warning(
+                        "MCP channel %s: close() failed during an "
+                        "interrupted stop; the original cancellation is "
+                        "preserved",
+                        self.name,
+                        exc_info=True,
+                    )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle an MCP request.

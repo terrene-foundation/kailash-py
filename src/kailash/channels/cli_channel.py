@@ -316,7 +316,12 @@ class CLIChannel(Channel):
         # See the sibling comment in api_channel: the guard below MUST key on
         # whether cleanup already ran, not on `status is not STOPPED`, which a
         # normal-return-but-incomplete stop now also satisfies.
+        # TWO flags, deliberately. Keying the close-RETRY on `cleanup_ran` made
+        # the retry unreachable in the one case it exists for: `close()` raising
+        # leaves `cleanup_ran` already True, so the `finally` skipped the retry
+        # and the runtime reference stayed stranded (issue #2020).
         cleanup_ran = False
+        close_ran = False
         try:
             self.status = ChannelStatus.STOPPING
             self._running = False
@@ -374,11 +379,22 @@ class CLIChannel(Channel):
             cleanup_ran = True
 
             self.close()
+            close_ran = True
 
-            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
+            self.status = self._status_after_cleanup(cleaned)
 
-            if cleaned:
+            if self.status is ChannelStatus.STOPPED:
                 logger.info(f"CLI channel {self.name} stopped")
+            elif self.status is ChannelStatus.ERROR:
+                # NOT "stop it again" -- see the sibling comment in
+                # api_channel: a FAILED event task is already gone, so a retry
+                # would launder the failure into a clean STOPPED (#2021).
+                logger.warning(
+                    "CLI channel %s stop did NOT complete: its event task "
+                    "FAILED. The channel is ERROR; retrying stop() will not "
+                    "address it",
+                    self.name,
+                )
             else:
                 logger.warning(
                     "CLI channel %s stop did NOT complete; channel is STOPPING "
@@ -407,28 +423,31 @@ class CLIChannel(Channel):
                         "CLI channel %s: cleanup failed during an interrupted "
                         "stop; the original cancellation is preserved",
                         self.name,
+                        exc_info=True,
                     )
-                finally:
-                    # MUST run even when ``_cleanup`` raised. Unguarded, a
-                    # raising ``_cleanup`` skipped this and stranded the
-                    # runtime reference -- defeating the stated goal of the
-                    # very block it sits in.
-                    #
-                    # And guarded in turn: ``close()`` calls
-                    # ``self.runtime.release()`` into another object, so it can
-                    # raise too -- and a raise from THIS ``finally`` replaces
-                    # the propagating CancelledError, which is the third
-                    # instance of that same shape in this method. Low
-                    # likelihood, identical consequence.
-                    try:
-                        self.close()
-                    except Exception:
-                        logger.warning(
-                            "CLI channel %s: releasing the runtime failed "
-                            "during an interrupted stop; the original "
-                            "cancellation is preserved",
-                            self.name,
-                        )
+            # A SEPARATE guard, not the `finally` of the block above. Nesting it
+            # there made it reachable only when `_cleanup` had not run -- so the
+            # single case it exists for, `close()` itself raising on the success
+            # path, skipped it and stranded the runtime (issue #2020). `close()`
+            # is idempotent (it None-guards `self.runtime`), so the worst a
+            # redundant call does is nothing.
+            #
+            # Guarded in turn: ``close()`` calls ``self.runtime.release()`` into
+            # another object, so it can raise too -- and a raise from THIS
+            # ``finally`` replaces the propagating CancelledError, which is the
+            # third instance of that same shape in this method. Low likelihood,
+            # identical consequence.
+            if not close_ran:
+                try:
+                    self.close()
+                except Exception:
+                    logger.warning(
+                        "CLI channel %s: releasing the runtime failed "
+                        "during an interrupted stop; the original "
+                        "cancellation is preserved",
+                        self.name,
+                        exc_info=True,
+                    )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle a CLI request.
@@ -904,16 +923,31 @@ class CLIChannel(Channel):
             self.runtime = None
 
     def __del__(self, _warnings=warnings):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately --
+        # the same contract ``MCPChannel.__del__`` already documents, and this
+        # was the un-swept sibling of it.
+        #
+        # ``rules/patterns.md`` § "Async Resource Cleanup" BLOCKS calling
+        # ``close()`` (or anything that can emit a log line) from ``__del__``:
+        # a finalizer can fire from inside Python's logging machinery during
+        # GC, while that same thread holds the root logging lock. Re-entering
+        # logging then deadlocks the process.
+        #
+        # ``close()`` reaches logging on this exact path:
+        #   close() -> runtime.release() -> LocalRuntime.close()
+        #     -> logger.debug("Explicit close() called ...")
+        #     -> _cleanup_event_loop() -> logger.debug/logger.warning
+        #
+        # The ``except Exception: pass`` this replaces could not have helped
+        # either: a deadlock is not an exception, so the guard swallowed real
+        # release failures while doing nothing about the hazard that motivated
+        # it. Real cleanup stays the caller's job via ``close()`` or ``stop()``.
         if getattr(self, "runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
                 ResourceWarning,
                 source=self,
             )
-            try:
-                self.close()
-            except Exception:
-                pass
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform comprehensive health check."""

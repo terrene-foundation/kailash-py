@@ -10,22 +10,56 @@ vs expected behavior and identify Kaizen codebase issues.
 """
 
 import logging
+import os
+import tempfile
 import time
 import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import Dict
 
-# Setup comprehensive logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("kaizen_implementation_test.log"),
-        logging.StreamHandler(),
-    ],
-)
-
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> Path:
+    """Configure logging for a MANUAL run and return the log path.
+
+    NOT AT MODULE SCOPE, and the file is NOT a bare relative name. Both
+    properties are the defect (#2011), and they compounded:
+
+    * ``logging.FileHandler("kaizen_implementation_test.log")`` resolves
+      against the CURRENT WORKING DIRECTORY, which for any invocation from the
+      repo root is the repo root.
+    * running it at import meant pytest COLLECTING this file was enough to
+      create it -- and this module was named ``test_examples_implementation.py``,
+      so ``python_files = test_*.py`` collected it. It is a manual diagnostic
+      script, not a test; the rename to ``check_*`` is the other half of the
+      fix, so a future move back to module scope still cannot be triggered by
+      a test run.
+
+    A suite that dirties the working tree voids the run-fingerprint protocol
+    (``git status --porcelain`` before and after a run is how a measurement in
+    this repo establishes that it measures what it claims) and leaves a CI
+    checkout dirty for any "tree must be clean" release gate.
+
+    ``KAIZEN_EXAMPLE_CHECK_LOG_DIR`` overrides the destination; the default is
+    a temp directory, which is never inside the repository.
+    """
+    log_dir = Path(
+        os.environ.get("KAIZEN_EXAMPLE_CHECK_LOG_DIR") or tempfile.gettempdir()
+    )
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "kaizen_implementation_test.log"
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_path),
+            logging.StreamHandler(),
+        ],
+    )
+    return log_path
 
 
 class KaizenImplementationTester:
@@ -757,5 +791,7 @@ class KaizenImplementationTester:
 
 
 if __name__ == "__main__":
+    destination = _configure_logging()
+    logger.info("Logging this run to %s", destination)
     tester = KaizenImplementationTester()
     tester.run_all_tests()

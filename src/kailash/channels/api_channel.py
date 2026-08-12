@@ -331,10 +331,20 @@ class APIChannel(Channel):
             # truthful record, exactly as it is on the cancelled path above.
             cleaned = await self._cleanup()
             cleanup_ran = True
-            self.status = ChannelStatus.STOPPED if cleaned else ChannelStatus.STOPPING
+            self.status = self._status_after_cleanup(cleaned)
 
-            if cleaned:
+            if self.status is ChannelStatus.STOPPED:
                 logger.info(f"API channel {self.name} stopped")
+            elif self.status is ChannelStatus.ERROR:
+                # NOT "stop it again". The event task died of a real error, so
+                # it is already gone and a retry would find nothing to cancel
+                # and report a clean STOPPED over a failed teardown (#2021).
+                logger.warning(
+                    "API channel %s stop did NOT complete: its event task "
+                    "FAILED. The channel is ERROR; retrying stop() will not "
+                    "address it",
+                    self.name,
+                )
             else:
                 # The status says STOPPING; the log must not say "stopped".
                 # Gating the inner cleanup log and leaving this one one line
@@ -378,6 +388,7 @@ class APIChannel(Channel):
                         "API channel %s: cleanup failed during an interrupted "
                         "stop; the original cancellation is preserved",
                         self.name,
+                        exc_info=True,
                     )
 
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
