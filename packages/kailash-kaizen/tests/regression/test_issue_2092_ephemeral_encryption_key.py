@@ -95,9 +95,9 @@ def test_provider_on_the_default_path_refuses_to_invent_a_key():
         EncryptionProvider()
 
     message = str(excinfo.value)
-    assert "KAIZEN_ENCRYPTION_KEY" in message, (
-        f"The error must name the environment variable that fixes it. Got: {message}"
-    )
+    assert (
+        "KAIZEN_ENCRYPTION_KEY" in message
+    ), f"The error must name the environment variable that fixes it. Got: {message}"
     assert "key=" in message, "The error must name the constructor wiring."
 
 
@@ -233,9 +233,9 @@ def test_key_manager_versions_are_distinct_yet_survive_a_restart():
     before_restart.rotate_key(2)
     sealed_v2 = before_restart.encrypt("v2 data")
 
-    assert before_restart.keys[1].key != before_restart.keys[2].key, (
-        "Rotation produced the same key material for both versions."
-    )
+    assert (
+        before_restart.keys[1].key != before_restart.keys[2].key
+    ), "Rotation produced the same key material for both versions."
 
     after_restart = KeyManager(key=CONFIGURED_RAW_KEY)
     after_restart.rotate_key(2)
@@ -318,7 +318,9 @@ def test_the_signal_never_carries_the_generated_key_material(caplog):
     for record in caplog.records:
         text = record.getMessage()
         assert key_hex not in text, "The generated key leaked into a log record (hex)."
-        assert str(provider.key) not in text, "The generated key leaked into a log record."
+        assert (
+            str(provider.key) not in text
+        ), "The generated key leaked into a log record."
 
 
 @pytest.mark.regression
@@ -334,7 +336,9 @@ def test_a_configured_provider_emits_no_ephemeral_key_signal(caplog):
         EncryptionProvider(key=CONFIGURED_RAW_KEY)
 
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
-    assert not errors, f"Configured provider signalled: {[r.getMessage() for r in errors]}"
+    assert (
+        not errors
+    ), f"Configured provider signalled: {[r.getMessage() for r in errors]}"
 
 
 @pytest.mark.regression
@@ -365,6 +369,6 @@ def test_from_password_documents_that_the_salt_must_be_persisted():
     Falsifying result: the docstring never mentions persisting the salt.
     """
     doc = EncryptionProvider.from_password.__doc__ or ""
-    assert "get_salt" in doc and "persist" in doc.lower(), (
-        "from_password must document that the caller has to persist the salt."
-    )
+    assert (
+        "get_salt" in doc and "persist" in doc.lower()
+    ), "from_password must document that the caller has to persist the salt."

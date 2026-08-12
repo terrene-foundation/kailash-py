@@ -206,7 +206,9 @@ class TestEncryptionProvider:
         """Test 3.3a: Encrypt specific fields in dictionary."""
         from kaizen.security.encryption import FieldEncryptor
 
-        encryptor = FieldEncryptor(sensitive_fields=["api_key", "password"], key=_TEST_KEY)
+        encryptor = FieldEncryptor(
+            sensitive_fields=["api_key", "password"], key=_TEST_KEY
+        )
 
         # Data with sensitive fields
         data = {
@@ -269,7 +271,9 @@ class TestEncryptionProvider:
         """Test 3.3c: Mask sensitive data for display."""
         from kaizen.security.encryption import FieldEncryptor
 
-        encryptor = FieldEncryptor(sensitive_fields=["credit_card", "ssn"], key=_TEST_KEY)
+        encryptor = FieldEncryptor(
+            sensitive_fields=["credit_card", "ssn"], key=_TEST_KEY
+        )
 
         data = {
             "name": "Bob Smith",

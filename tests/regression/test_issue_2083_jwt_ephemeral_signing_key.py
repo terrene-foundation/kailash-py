@@ -93,8 +93,7 @@ def test_hs256_default_path_refuses_to_invent_a_signing_secret():
 
     message = str(excinfo.value)
     assert "KAILASH_JWT_SECRET_KEY" in message, (
-        "The error must name the environment variable that fixes it. "
-        f"Got: {message}"
+        "The error must name the environment variable that fixes it. " f"Got: {message}"
     )
     assert "secret_key=" in message, "The error must name the constructor wiring."
 
@@ -115,9 +114,9 @@ def test_rsa_default_path_refuses_to_invent_a_key_pair():
         JWTAuthManager(use_rsa=True)
 
     message = str(excinfo.value)
-    assert "private_key" in message and "public_key" in message, (
-        f"The RSA error must name the keys it needs. Got: {message}"
-    )
+    assert (
+        "private_key" in message and "public_key" in message
+    ), f"The RSA error must name the keys it needs. Got: {message}"
 
 
 @pytest.mark.regression
@@ -239,9 +238,9 @@ def test_the_signal_never_carries_the_generated_key_material(caplog):
     secret = manager._secret_key
     assert secret
     for record in caplog.records:
-        assert secret not in record.getMessage(), (
-            "The generated signing secret leaked into a log record."
-        )
+        assert (
+            secret not in record.getMessage()
+        ), "The generated signing secret leaked into a log record."
 
 
 @pytest.mark.regression
@@ -321,7 +320,9 @@ def test_configured_rsa_keys_still_load_without_a_signal(caplog):
     assert manager.verify_token(token)["sub"] == "rsa-user"
 
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
-    assert not errors, f"Configured RSA manager signalled: {[r.getMessage() for r in errors]}"
+    assert (
+        not errors
+    ), f"Configured RSA manager signalled: {[r.getMessage() for r in errors]}"
 
 
 @pytest.mark.regression
