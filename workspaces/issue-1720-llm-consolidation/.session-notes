@@ -1,3 +1,81 @@
+# ═══ cont-17 IN FLIGHT — main `2d16f843c` · READ `launch-ledger-cont17.md` FIRST ═══
+
+**`workspaces/issue-1720-llm-consolidation/launch-ledger-cont17.md` is the live lane table
+and the compaction-surviving record.** It carries the incident post-mortems in full; this is
+the index.
+
+## Start here
+
+1. **6 lanes in flight** — w1a (#2072), w1b (#2083+#2092), w1c (#2078), w2c (#2084),
+   w2d (#2047 cluster), w3b (channel lifecycle). Match every completion against the ledger
+   table BEFORE reacting; the live agent names all end `-r2` except `w3b-channel-lifecycle`.
+2. **Merged this session:** #2095, **#2031** (codify: specification-verification — both gating
+   questions resolved by MEASUREMENT). **#2096** open (the ledger itself).
+3. **`w2b` worktree must NOT be removed** — PR #2073's 5 commits are not in main and cannot
+   be recreated (L2 quota). Everything else retired at merge time.
+
+## ⛔ THE ORCHESTRATOR ERROR — a `failed` notification is NOT evidence of termination
+
+Six lanes reported `You've hit your session limit`. I read that as terminated and spawned
+`-r2` replacements into the SAME worktrees. The account swap **resumed the originals** — two
+agents then ran concurrently in every lane, same branch, same files. The launch ledger showed
+every track `in-flight`; consulting it did not help because I overrode it with an assumption
+about a state I never measured (`evidence-first-claims.md` MUST-3).
+
+**The check that works:** `ps -eo pid,etime,command | grep <worktree-path>` plus an mtime
+comparison against the agent's own last edit. A quota failure is RECOVERABLE and may resume.
+
+Surfaced by `w1a` refusing to push and escalating with process-level evidence. **A lane that
+halts on a bad premise beats one that complies — that paid out twice this session.** All six
+originals stopped; zero stray processes verified; no work lost.
+
+## ⚠ `--continue-on-collection-errors` MAKES A GREEN MEANINGLESS
+
+A worktree cannot import `kailash._kailash` (`_kailash.cpython-312-darwin.so` is a gitignored
+artifact present ONLY in the main checkout), so `tests/regression/test_classification_fail_closed.py`
+fails to COLLECT under any `-o pythonpath=<worktree>/src` run. **That flag silently swallows it**
+— the run reports green while never collecting. Same non-discriminating class as
+`continue-on-error` (#2038) and green-by-absence (#2074, #2002). Never use it in a verification run.
+
+## Decisions taken (co-owner approved)
+
+- **D1 RESOLVED — observability WIRING IS FEASIBLE.** All four hook classes exist in
+  `hooks/builtin/`, not the `observability/` path `smart_defaults` imported. So the flags become
+  honest by becoming TRUE, not by raising. **PR #2073 is superseded and closes once w2c lands**
+  — held open meanwhile so the raise is not retired before its replacement exists.
+  ⚠ `git diff origin/main...` on #2073 shows a phantom +117/+62/+60 on the logging files: that is
+  a MERGE-BASE artifact (never rebased past #2094), NOT unlanded content. The three files are
+  byte-identical to main. Verify by content hash, not by diff.
+- **D2 — the six `deferred-quality` items RE-TRIAGED as ordinary bugs.** Label retired; zero
+  open issues carry it; receipt posted on each. Now lane w3b's scope.
+- **D3 — PR #2031 RESOLVED AND MERGED**, not closed.
+
+## #2072 is BIGGER than one site — parity sweep (orchestrator-verified)
+
+`POST .../execute` anonymous execution is open at **`api/workflow_api.py`** (`run()` →
+`uvicorn.run`, `require_auth` count 0) and **`gateway/api.py::create_gateway_app`** (every
+`Depends` is `Depends(get_gateway)` — an injector, NOT auth). `middleware/communication/api_gateway.py`
+is already fail-closed. **`Fixes #2072` is only honest once both close**; w1a is extending, with
+a stop-condition to fall back to `Refs` if it overruns one shard.
+
+## Filed this session
+
+**#2099** — the two `ci-runners.operator.local*` files carry NO frontmatter, so they load as
+project instructions in EVERY session. The gitignore contains the FILE, not its CONTENTS, which
+are now resident in every agent's context (observed in two independent sessions). Also hard-fails
+`emit.mjs` validator-14 on a clean clone. Classification is the owner's call — it touches emission
+and the #260 disclosure design.
+
+## Reconciliation — check before implementing
+
+**#2039's premise is already FALSE** (`src_paths` landed in `2cf40a17b`); retitled to its
+surviving half (the isort mode disagreement, cause UNKNOWN, three hypotheses already excluded —
+do not re-run them). #2010 #2011 #2000 #2057 #2069 #2029 #2052 verified still real with
+line-level evidence — full table in the ledger. **#2067's red test lives inside the 855 tests
+#2074 says CI never runs**, so it was only ever observed locally.
+
+Remote branches: 13 stale → 0.
+
 # ═══ WRAPUP cont-16 — main `f8056b2ca` · 13 PRs merged · READ THIS FIRST ═══
 
 **Read `sweep-cont16-report.md` alongside this** — it carries the management decision report
