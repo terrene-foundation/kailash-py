@@ -278,14 +278,45 @@ class EncryptionProvider:
         ``KAIZEN_ENCRYPTION_KEY``; that path derives deterministically and needs
         no salt bookkeeping.
 
+        The passphrase floor is the SAME one :func:`resolve_key_material`
+        applies. This classmethod derives its own key and hands the resulting
+        ``bytes`` to the constructor, which accepts any correctly-sized raw key
+        — so without an explicit check here a caller could clear a floor of 32
+        characters simply by switching constructors, and
+        ``EncryptionProvider.from_password("x")`` would succeed on the same
+        public class whose sibling constructor refuses 31 characters. A floor a
+        caller can route around is not a floor.
+
         Args:
-            password: Password to derive key from
+            password: Password to derive key from. At least
+                :data:`MIN_PASSPHRASE_LENGTH` characters; empty or
+                whitespace-only is rejected.
             salt: Salt for key derivation (if None, generates a random salt that
                 the caller must persist via :meth:`get_salt`)
 
         Returns:
             EncryptionProvider instance with derived key
+
+        Raises:
+            EncryptionKeyNotConfiguredError: If ``password`` is shorter than
+                :data:`MIN_PASSPHRASE_LENGTH` non-whitespace characters.
         """
+        # Measured stripped, derived VERBATIM below — same semantics as
+        # resolve_key_material, so a password ending in whitespace keeps
+        # deriving the key it always did.
+        if not isinstance(password, str) or len(password.strip()) < (
+            MIN_PASSPHRASE_LENGTH
+        ):
+            measured = len(password.strip()) if isinstance(password, str) else 0
+            # Names the length, never the password.
+            raise EncryptionKeyNotConfiguredError(
+                f"EncryptionProvider.from_password received a password of "
+                f"{measured} non-whitespace characters; at least "
+                f"{MIN_PASSPHRASE_LENGTH} are required. This is the same floor "
+                f"EncryptionProvider(key=...) enforces — deriving through this "
+                f"classmethod is not a way around it."
+            )
+
         if salt is None:
             salt = os.urandom(16)  # 128-bit salt
 

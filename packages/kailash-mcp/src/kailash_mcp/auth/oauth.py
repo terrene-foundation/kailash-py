@@ -952,10 +952,26 @@ class JWTManager:
                 "require": ["exp", "iss"],
             }
 
+        # Resolved BEFORE the try, deliberately. This method's handler chain
+        # ends in a bare ``except Exception: return None``, and
+        # JWTKeyNotConfiguredError subclasses AuthenticationError rather than
+        # jwt.InvalidTokenError — so evaluated inside the try it was caught by
+        # that final handler, logged, and turned into a None the caller renders
+        # as "Invalid refresh token". That is exactly the generic client-looking
+        # rejection the typed refusal exists to replace, and it made this path
+        # disagree with verify_access_token (whose only handler is
+        # jwt.InvalidTokenError, so the refusal propagates there) for the same
+        # manager in the same unconfigured state.
+        #
+        # Hoisting rather than adding a re-raise clause: a re-raise ahead of the
+        # catch-all restores the behaviour but leaves the ordering load-bearing,
+        # so a later handler inserted above it silently reintroduces the swallow.
+        verification_key = self._verification_key_or_raise()
+
         try:
             payload = jwt.decode(  # type: ignore[arg-type]
                 token,
-                self._verification_key_or_raise(),
+                verification_key,
                 **decode_kwargs,
             )
 
