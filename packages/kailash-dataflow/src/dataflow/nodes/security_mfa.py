@@ -52,6 +52,14 @@ class DataFlowMFANode(AsyncNode):
                 seconds=getattr(self, "timeout_seconds", 900)
             ),
             rate_limit_attempts=getattr(self, "max_attempts", 5),
+            # This wrapper takes `user_id` from its own node inputs and has no
+            # actor of its own to forward, so it takes the SDK node's explicit
+            # opt-out rather than silently failing every call (issue #2047).
+            # It therefore inherits the SDK node's pre-#2047 contract: the
+            # HOST must authenticate and authorise the caller before dispatch,
+            # because `user_id` is taken on trust here. The SDK node warns
+            # once per process to say so.
+            require_actor=False,
         )
 
     def get_parameters(self) -> dict[str, NodeParameter]:

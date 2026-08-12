@@ -11,12 +11,12 @@ class TestMultiFactorAuthNode:
 
     def test_initialization(self):
         """Test MFA node can be initialized."""
-        node = MultiFactorAuthNode(name="test_mfa")
+        node = MultiFactorAuthNode(name="test_mfa", require_actor=False)
         assert node.metadata.name == "test_mfa"
 
     def test_get_parameters(self):
         """Test MFA node parameter definition."""
-        node = MultiFactorAuthNode(name="test_mfa")
+        node = MultiFactorAuthNode(name="test_mfa", require_actor=False)
         params = node.get_parameters()
 
         # Basic parameter validation
@@ -26,7 +26,7 @@ class TestMultiFactorAuthNode:
 
     def test_supports_totp(self):
         """Test MFA node supports TOTP method."""
-        node = MultiFactorAuthNode(name="test_mfa")
+        node = MultiFactorAuthNode(name="test_mfa", require_actor=False)
         result = node.execute(action="get_methods", user_id="test_user")
 
         assert result["success"] is True
@@ -35,7 +35,7 @@ class TestMultiFactorAuthNode:
 
     def test_backup_codes_format(self):
         """Test backup codes are generated in correct format."""
-        node = MultiFactorAuthNode(name="test_mfa")
+        node = MultiFactorAuthNode(name="test_mfa", require_actor=False)
         # Backup codes supplement an existing factor; issuing them to an
         # unenrolled user is enrolment by another name and is now refused
         # (issue #2026), so enrol first.

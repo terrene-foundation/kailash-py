@@ -50,7 +50,7 @@ class TestIssue803MFAResponseContracts:
         Conflating `success` with "operation completed" allows callers gating
         on `success` to grant access on bad codes — security-critical.
         """
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         node.execute(
             action="setup",
             user_id="user-803",
@@ -73,7 +73,7 @@ class TestIssue803MFAResponseContracts:
         """Verify success path MUST echo `user_id` for correlation."""
         from kailash.nodes.auth.mfa import TOTPGenerator
 
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         setup = node.execute(
             action="setup",
             user_id="user-803",
@@ -95,7 +95,7 @@ class TestIssue803MFAResponseContracts:
     def test_status_returns_user_id_and_enabled_methods_alias(self):
         """Status MUST include `user_id` AND both `enrolled_methods` and
         `enabled_methods` (alias) keys."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         result = node.execute(action="status", user_id="user-803")
         assert result["success"] is True
         assert result["user_id"] == "user-803"
@@ -105,7 +105,7 @@ class TestIssue803MFAResponseContracts:
 
     def test_disable_returns_user_id_and_disabled_methods(self):
         """Disable MUST echo `user_id` and report `disabled_methods`."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         node.execute(
             action="setup",
             user_id="user-803",
@@ -126,7 +126,7 @@ class TestIssue803MFAResponseContracts:
     def test_reset_action_clears_state_and_returns_new_setup(self):
         """`action="reset"` MUST be a valid dispatch path, returning a fresh
         setup payload with a new secret distinct from the prior one."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         first = node.execute(
             action="setup",
             user_id="user-803",
@@ -154,7 +154,7 @@ class TestIssue803MFAResponseContracts:
 
     def test_empty_user_id_rejected_with_typed_error(self):
         """Empty `user_id` MUST be rejected — not silently accepted under "" key."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         result = node.execute(
             action="setup",
             user_id="",
@@ -167,7 +167,7 @@ class TestIssue803MFAResponseContracts:
 
     def test_whitespace_user_id_rejected(self):
         """Whitespace-only `user_id` MUST also be rejected."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         result = node.execute(
             action="setup",
             user_id="   ",
@@ -179,7 +179,7 @@ class TestIssue803MFAResponseContracts:
 
     def test_verify_path_rate_limited(self):
         """Verify path MUST enforce rate-limit; brute-force MUST be rejected."""
-        node = MultiFactorAuthNode(rate_limit_attempts=3)
+        node = MultiFactorAuthNode(rate_limit_attempts=3, require_actor=False)
         node.execute(
             action="setup",
             user_id="user-803",
@@ -207,7 +207,7 @@ class TestIssue803MFAResponseContracts:
 
     def test_setup_does_not_print_to_stdout(self, capsys):
         """`_setup_totp` MUST NOT call `print()`; observability rule violation."""
-        node = MultiFactorAuthNode()
+        node = MultiFactorAuthNode(require_actor=False)
         node.execute(
             action="setup",
             user_id="user-803",

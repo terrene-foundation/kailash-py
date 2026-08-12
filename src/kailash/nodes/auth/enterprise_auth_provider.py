@@ -194,7 +194,25 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             name=f"{self.name}_sso", **self.sso_config
         )
 
-        self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **self.mfa_config)
+        # This provider is the authorizing host for its own MFA node, so it
+        # takes the explicit require_actor=False opt-out rather than a fake
+        # actor (issue #2047).
+        #
+        # It is entitled to: every call it makes passes a SERVER-DERIVED
+        # subject. `_authenticate` refuses a request whose credential asserts
+        # no principal and overrides a mismatched caller-supplied user_id with
+        # the asserted one (#2035, ~:455-470), so `user_id` reaching the MFA
+        # node is the principal the credential proved -- not the one the
+        # request asked for. It also cannot pass an actor session: MFA
+        # verification happens BEFORE a session exists, which is what it is
+        # gating the creation of.
+        #
+        # An operator wanting enforcement here supplies it explicitly, e.g.
+        # mfa_config={"require_actor": True, "actor_resolver": ...}; the
+        # setdefault below means their value wins.
+        mfa_config = dict(self.mfa_config)
+        mfa_config.setdefault("require_actor", False)
+        self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **mfa_config)
 
         self.directory_node = DirectoryIntegrationNode(
             name=f"{self.name}_directory", **self.directory_config
