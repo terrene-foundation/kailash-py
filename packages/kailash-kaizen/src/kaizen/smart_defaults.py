@@ -12,11 +12,83 @@ Part of ADR-020: Unified Agent API Architecture (Layer 1: Zero-Config)
 """
 
 import logging
+from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from kaizen.agent_config import AgentConfig
 
 logger = logging.getLogger(__name__)
+
+# Default OTLP gRPC ingest port, matching TracingManager's own default. Used
+# when `tracing_endpoint` carries no explicit port.
+_DEFAULT_OTLP_GRPC_PORT = 4317
+
+
+@lru_cache(maxsize=None)
+def _warn_observability_unavailable(subsystem: str, flag: str, detail: str) -> None:
+    """
+    Announce, once per process, that an enabled subsystem could not load.
+
+    ``create_observability`` runs on every agent construction, so a per-call
+    warning means a process building 100 agents emits 100 copies -- and a
+    warning repeated on a hot path is one operators filter out, which turns the
+    loud-warning remedy back into no remedy.
+
+    ``lru_cache`` rather than an instance flag because ``SmartDefaultsManager``
+    is constructed per agent; an instance flag would warn once per instance and
+    leave the spam intact. Tests clear it via ``cache_clear()``.
+
+    Args:
+        subsystem: Human name of the subsystem ("metrics").
+        flag: The AgentConfig field that requested it ("enable_metrics").
+        detail: The underlying ImportError text, which already names the extra.
+    """
+    logger.warning(
+        "%s is enabled (%s=True) but could not be loaded, so NOTHING will be "
+        "recorded for it. %s Set %s=False to disable it deliberately and "
+        "silence this warning.",
+        subsystem.capitalize(),
+        flag,
+        detail,
+        flag,
+    )
+
+
+@lru_cache(maxsize=None)
+def _shared_tracing_manager(service_name: str, host: str, port: int):
+    """
+    One TracingManager per (service, endpoint), shared across agents.
+
+    Each TracingManager builds its own TracerProvider and BatchSpanProcessor,
+    and the processor runs a background export thread that nothing in the
+    agent lifecycle shuts down. Constructing one per agent would leak a thread
+    per agent; keying on the tuple that actually distinguishes destinations
+    bounds it to the number of distinct destinations.
+    """
+    from kaizen.core.autonomy.observability.tracing_manager import TracingManager
+
+    return TracingManager(
+        service_name=service_name,
+        jaeger_host=host,
+        jaeger_port=port,
+    )
+
+
+def _parse_otlp_endpoint(endpoint: str) -> tuple[str, int]:
+    """
+    Split an OTLP endpoint into (host, port) for TracingManager.
+
+    Accepts both URL form ("http://collector:4317") and bare "host:port".
+
+    Args:
+        endpoint: Value of AgentConfig.tracing_endpoint.
+
+    Returns:
+        (host, port) -- port falls back to the OTLP gRPC default.
+    """
+    parsed = urlparse(endpoint if "//" in endpoint else f"//{endpoint}")
+    return parsed.hostname or "localhost", parsed.port or _DEFAULT_OTLP_GRPC_PORT
 
 
 # =============================================================================
@@ -174,17 +246,24 @@ class SmartDefaultsManager:
         """
         Create observability with smart defaults.
 
-        Sets up:
-        - Tracing: Jaeger distributed tracing
-        - Metrics: Prometheus metrics collection
-        - Logging: Structured JSON logging
-        - Audit: Compliance audit trails
+        Registers one hook per enabled subsystem on a fresh ``HookManager``:
+
+        - ``enable_logging`` → ``LoggingHook`` (core dependencies only)
+        - ``enable_audit`` → ``AuditTrailHook`` writing ``audit_log_path``
+        - ``enable_metrics`` → ``MetricsHook`` (needs the ``observability`` extra)
+        - ``enable_tracing`` → ``TracingHook`` (needs the ``observability`` extra)
+
+        The two extra-dependent subsystems cannot be silently skipped: an
+        enabled flag that installs nothing is the exact defect #2084 records,
+        so a missing dependency produces a one-time warning naming the flag,
+        the extra, and the way to turn it off deliberately.
 
         Args:
             config: Agent configuration
 
         Returns:
-            HookManager with observability hooks or None
+            HookManager with the enabled subsystems registered, or None when
+            observability is entirely disabled or nothing could be installed.
 
         Logic:
         - If custom_hook_manager provided → use it
@@ -203,73 +282,96 @@ class SmartDefaultsManager:
 
         # Layer 1: Smart defaults
         from kaizen.core.autonomy.hooks import HookManager
-        from kaizen.core.autonomy.hooks.types import HookEvent
 
         hook_manager = HookManager()
         enabled_systems = []
 
-        # Tracing (Jaeger)
-        if config.enable_tracing:
-            try:
-                from kaizen.core.autonomy.observability.tracing import TracingHook
+        # ---------------------------------------------------------------
+        # Logging (structured). Core dependencies only, so this one always
+        # installs. `include_data` stays at the class default: since #2070
+        # LoggingHook emits payload KEY NAMES and counts, never values, so
+        # turning observability on cannot itself become a disclosure channel.
+        # ---------------------------------------------------------------
+        if config.enable_logging:
+            from kaizen.core.autonomy.hooks.builtin.logging_hook import LoggingHook
 
-                tracing_hook = TracingHook(endpoint=config.tracing_endpoint)
-                hook_manager.register(
-                    HookEvent.PRE_AGENT_LOOP, tracing_hook.start_trace
+            hook_manager.register_hook(LoggingHook(log_level=config.log_level))
+            enabled_systems.append(f"structured logging ({config.log_level})")
+
+        # ---------------------------------------------------------------
+        # Audit (compliance). AuditTrailHook bridges the observability
+        # AuditTrailManager -- which honours `audit_log_path` and needs only
+        # anyio -- into the hook system. The sibling `AuditHook` is NOT used
+        # here: it wraps the PostgreSQL-backed security AuditTrailProvider,
+        # which a zero-config default path has no connection for.
+        # ---------------------------------------------------------------
+        if config.enable_audit:
+            from kaizen.core.autonomy.hooks.builtin.audit_trail_hook import (
+                AuditTrailHook,
+            )
+            from kaizen.core.autonomy.observability.audit import (
+                AuditTrailManager,
+                FileAuditStorage,
+            )
+
+            audit_path = Path(config.audit_log_path)
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+
+            hook_manager.register_hook(
+                AuditTrailHook(
+                    audit_manager=AuditTrailManager(
+                        storage=FileAuditStorage(str(audit_path))
+                    )
                 )
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, tracing_hook.end_trace)
-                enabled_systems.append("Jaeger tracing")
-            except ImportError:
-                self.logger.warning("Tracing hook not available, skipping")
+            )
+            enabled_systems.append(f"audit trail ({audit_path})")
 
-        # Metrics (Prometheus)
+        # ---------------------------------------------------------------
+        # Metrics (Prometheus). `metrics_port` is deliberately NOT consumed
+        # here -- it configures MetricsEndpoint, which the operator starts;
+        # binding a network listener on every agent construction is not
+        # something a zero-config default may do.
+        # ---------------------------------------------------------------
         if config.enable_metrics:
             try:
-                from kaizen.core.autonomy.observability.metrics import MetricsHook
+                from kaizen.core.autonomy.hooks.builtin import MetricsHook
+            except ImportError as exc:
+                _warn_observability_unavailable("metrics", "enable_metrics", str(exc))
+            else:
+                hook_manager.register_hook(MetricsHook())
+                enabled_systems.append("Prometheus metrics")
 
-                metrics_hook = MetricsHook(port=config.metrics_port)
-                hook_manager.register(
-                    HookEvent.PRE_AGENT_LOOP, metrics_hook.record_start
-                )
-                hook_manager.register(
-                    HookEvent.POST_AGENT_LOOP, metrics_hook.record_end
-                )
-                enabled_systems.append(
-                    f"Prometheus metrics (port {config.metrics_port})"
-                )
-            except ImportError:
-                self.logger.warning("Metrics hook not available, skipping")
-
-        # Logging (Structured JSON)
-        if config.enable_logging:
+        # ---------------------------------------------------------------
+        # Tracing (OpenTelemetry → Jaeger).
+        # ---------------------------------------------------------------
+        if config.enable_tracing:
             try:
-                from kaizen.core.autonomy.observability.logging import LoggingHook
+                from kaizen.core.autonomy.hooks.builtin import TracingHook
+            except ImportError as exc:
+                _warn_observability_unavailable("tracing", "enable_tracing", str(exc))
+            else:
+                host, port = _parse_otlp_endpoint(config.tracing_endpoint)
+                hook_manager.register_hook(
+                    TracingHook(
+                        tracing_manager=_shared_tracing_manager(
+                            f"kaizen-{config.agent_type}", host, port
+                        )
+                    )
+                )
+                enabled_systems.append(f"distributed tracing ({host}:{port})")
 
-                logging_hook = LoggingHook(level=config.log_level)
-                hook_manager.register(HookEvent.PRE_AGENT_LOOP, logging_hook.log_start)
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, logging_hook.log_end)
-                enabled_systems.append(f"Structured logging ({config.log_level})")
-            except ImportError:
-                self.logger.warning("Logging hook not available, skipping")
+        if not enabled_systems:
+            # Every enabled subsystem failed to install. Returning an empty
+            # HookManager here is what made the original defect invisible: a
+            # caller branching on a non-None manager ran its observability
+            # path against zero hooks. Each failure has already warned above.
+            self.logger.warning(
+                "Observability was enabled but no subsystem could be "
+                "installed; returning no hook manager."
+            )
+            return None
 
-        # Audit (Compliance)
-        if config.enable_audit:
-            try:
-                from kaizen.core.autonomy.observability.audit import AuditHook
-
-                # Ensure audit log directory exists
-                audit_path = Path(config.audit_log_path)
-                audit_path.parent.mkdir(parents=True, exist_ok=True)
-
-                audit_hook = AuditHook(path=config.audit_log_path)
-                hook_manager.register(HookEvent.PRE_AGENT_LOOP, audit_hook.record_start)
-                hook_manager.register(HookEvent.POST_AGENT_LOOP, audit_hook.record_end)
-                enabled_systems.append("Audit trails")
-            except ImportError:
-                self.logger.warning("Audit hook not available, skipping")
-
-        if enabled_systems:
-            self.logger.info(f"Enabled observability: {', '.join(enabled_systems)}")
+        self.logger.info(f"Enabled observability: {', '.join(enabled_systems)}")
 
         return hook_manager
 
