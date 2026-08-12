@@ -55,6 +55,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 if TYPE_CHECKING:  # pragma: no cover -- typing only
     from kailash.trust.auth.jwt import JWTConfig
 
+from kailash.utils.secure_logging import safe_log_text
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -209,8 +211,11 @@ def build_server_auth_config(
     api_keys = collect_api_keys(source)
 
     if not (secret or public_key or api_keys):
+        # Sanitized for the same reason the log sinks are: this message is
+        # routinely caught and logged by the caller's bootstrap, so a CR/LF
+        # in a server `title` forges a record from an EXCEPTION path too.
         raise ServerAuthNotConfiguredError(
-            f"{server_label} requires authentication (require_auth=True) but no "
+            f"{safe_log_text(server_label)} requires authentication (require_auth=True) but no "
             "credential source is configured, so no authentication could be "
             "installed. Refusing to start an unauthenticated server: without a "
             "gate, POST /workflows/{name}/execute runs arbitrary registered "
@@ -330,11 +335,16 @@ def resolve_server_auth(
                 "'nexus installs nexus.auth.jwt.JWTMiddleware'). A blank "
                 "reason disables the gate with nothing on the record."
             )
+        # Both fields are caller-supplied: `server_label` interpolates the
+        # server `title`, and `external_auth_reason` is free text. A raw CR/LF
+        # (or U+2028) in either forges a second log record, so an operator
+        # reading the log cannot tell an injected "auth installed" line from a
+        # real one -- on the very record that documents auth being SKIPPED.
         logger.info(
             "server_auth.external",
             extra={
-                "server": server_label,
-                "reason": str(external_auth_reason).strip(),
+                "server": safe_log_text(server_label),
+                "reason": safe_log_text(str(external_auth_reason).strip()),
             },
         )
         return None
@@ -347,14 +357,21 @@ def resolve_server_auth(
         logger.warning(
             "server_auth.disabled",
             extra={
-                "server": server_label,
+                "server": safe_log_text(server_label),
                 "exposure": (
                     "every route is served to anonymous callers, including "
                     "POST /workflows/{name}/execute which runs arbitrary "
                     "registered workflows"
                 ),
+                # A fixed literal, NOT an f-string over JWT_SECRET_ENV. The
+                # constant holds the variable's NAME and never its value, but
+                # interpolating a `*_SECRET_*` symbol into a log line is
+                # indistinguishable from logging the credential to a dataflow
+                # analyzer (CodeQL reported
+                # `py/clear-text-logging-sensitive-data` here), and on an auth
+                # path a reviewer should not have to resolve that by hand.
                 "wiring": (
-                    f"remove require_auth=False and set {JWT_SECRET_ENV}, or "
+                    "remove require_auth=False and set KAILASH_JWT_SECRET, or "
                     "pass auth_config=JWTConfig(...)"
                 ),
             },

@@ -822,6 +822,108 @@ def test_create_gateway_app_fails_closed(clean_auth_env):
 
 
 # ---------------------------------------------------------------------------
+# Log hygiene on the auth path (CodeQL: log injection + clear-text logging).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "payload,forbidden",
+    [
+        ("probe\r\nINFO server_auth.configured auth=INSTALLED", "\r"),
+        ("probe\nINFO forged", "\n"),
+        ("probe INFO forged", " "),  # LINE SEPARATOR
+        ("probe INFO forged", " "),  # PARAGRAPH SEPARATOR
+        ("probe‮DERALCED", "‮"),  # bidi override reorders the line
+    ],
+)
+def test_safe_log_text_cannot_forge_a_record(payload, forbidden):
+    """No caller-supplied string may introduce a record boundary.
+
+    ``\\u2028``/``\\u2029`` matter as much as ``\\n``: many log viewers and JSON
+    consumers break lines on them, so stripping only ASCII newlines leaves the
+    injection open in a form that reads as invisible whitespace in a diff.
+    """
+    from kailash.utils.secure_logging import safe_log_text
+
+    out = safe_log_text(payload)
+
+    assert forbidden not in out
+    # Still readable -- the identifier-shaped sanitizer would have destroyed
+    # the prose, which is why this is a separate primitive.
+    assert "probe" in out
+
+
+def test_safe_log_text_is_bounded_and_total():
+    """Bounded against log-volume abuse, and never raises at a logging site."""
+    from kailash.utils.secure_logging import safe_log_text
+
+    assert len(safe_log_text("x" * 5000)) < 500
+    assert safe_log_text("") == "<empty>"
+
+    class Boom:
+        def __str__(self):
+            raise RuntimeError("nope")
+
+    # A logging call site must not fail on the thing it is describing.
+    assert safe_log_text(Boom()) == "<unrepresentable>"
+
+
+def test_hostile_external_auth_reason_cannot_forge_a_record(clean_auth_env, caplog):
+    """`external_auth_reason` reaches the log as RAW caller text.
+
+    This is the discriminating sink. The sibling `server` field is built with
+    ``f"...(title={title!r})"`` and ``repr`` already escapes CR/LF, so a
+    payload sent through the title is neutralized upstream and asserting on it
+    proves nothing -- verified by mutation: removing the sanitizer from that
+    field leaves such a test GREEN. The reason string passes through no
+    ``repr``, so it is the field where the sanitizer is load-bearing.
+
+    The record matters: it is the one asserting that something ELSE
+    authenticates this server, i.e. the record an auditor reads to accept that
+    no gate was installed here.
+    """
+    import logging
+
+    hostile = "nexus owns auth\r\nINFO:root:server_auth.configured gate=INSTALLED"
+
+    with caplog.at_level(logging.INFO):
+        WorkflowServer(title="probe", external_auth_reason=hostile)
+
+    records = [r for r in caplog.records if r.message == "server_auth.external"]
+    assert records, "the external-auth declaration did not log at all"
+    for record in records:
+        assert "\r" not in record.reason
+        assert "\n" not in record.reason
+        # Still legible -- de-fanged, not destroyed.
+        assert "nexus owns auth" in record.reason
+
+
+def test_installed_log_does_not_echo_config_derived_algorithm(authed_env, caplog):
+    """The install log emits an owned literal, not a config-derived string.
+
+    `JWTConfig` is built from the signing secret, so every attribute read off
+    it is taint-carrying; resolving the algorithm through a membership test
+    keeps a provably secret-free value on the record.
+    """
+    import logging
+
+    from kailash.trust.auth.asgi import JWTAuthMiddleware
+    from kailash.trust.auth.jwt import JWTConfig
+
+    with caplog.at_level(logging.INFO):
+        JWTAuthMiddleware(app=None, config=JWTConfig(secret=_SECRET, algorithm="HS256"))
+
+    installed = [
+        r for r in caplog.records if r.message == "jwt_auth_middleware.installed"
+    ]
+    assert installed, "the install log did not fire"
+    assert installed[0].algorithm == "HS256"
+    # And the secret is nowhere on the record.
+    for record in installed:
+        assert _SECRET not in str(record.__dict__)
+
+
+# ---------------------------------------------------------------------------
 # End-to-end over a real socket -- the literal user path from the issue.
 # ---------------------------------------------------------------------------
 

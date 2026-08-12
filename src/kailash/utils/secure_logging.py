@@ -33,6 +33,7 @@ import logging
 import os
 import re
 import traceback
+import unicodedata
 from functools import wraps
 from typing import Any, Dict, List, Optional, Pattern, Set, Union
 
@@ -100,6 +101,17 @@ _MAX_FRAME_LIMIT = 50
 # ``svc\db\connect.py`` -> ``svc?db?connect.py`` -- degrading the diagnostic this
 # helper exists to preserve, on a platform the module already reasons about.
 _UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/\\]")
+
+#: Unicode categories that can forge a log RECORD rather than merely appear odd
+#: in one: Cc (control, incl. CR/LF), Cf (format, incl. bidi overrides that
+#: reorder a rendered line), Zl/Zp (LINE and PARAGRAPH SEPARATOR, which many log
+#: viewers and JSON consumers break lines on exactly as they do on ``\n``).
+_RECORD_FORGING_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+
+#: Prose log fields get a longer bound than identifiers: a server label or an
+#: auth reason is a sentence, and truncating it at the 120-char identifier bound
+#: routinely cut the operative clause off the end of the message.
+_MAX_LOG_TEXT_CHARS = 300
 
 # CPython's fixed pseudo-identifier literals for frame names and synthetic
 # filenames. Passed through byte-intact on an EXACT match so the frames most
@@ -215,6 +227,66 @@ def _safe_identifier(value: object, *, allow_pseudo: bool = False) -> str:
     if len(cleaned) > _MAX_IDENTIFIER_CHARS:
         # Marker uses <> precisely because input cannot contain them.
         return f"{cleaned[:_MAX_IDENTIFIER_CHARS]}<truncated>"
+    return cleaned
+
+
+def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
+    """Bound and de-fang caller-supplied PROSE destined for a log field.
+
+    The sibling of :func:`_safe_identifier`, for the case that helper is wrong
+    for. Its charset (``[^A-Za-z0-9_.\\-/\\\\]``) is deliberately identifier-
+    shaped, so a human-readable sentence -- a server label, an
+    ``external_auth_reason`` -- comes out as ``mounted?under?Enterprise...``
+    and the operator loses the message. This keeps printable text and removes
+    only what can forge a RECORD.
+
+    Two properties:
+
+    1. **No line forgery.** Every Unicode character in categories ``Cc``
+       (control, including ``\\r`` and ``\\n``), ``Cf`` (format, including the
+       bidi overrides that reorder a rendered line), ``Zl`` and ``Zp`` becomes
+       ``?``. ``Zl``/``Zp`` matter as much as ``\\n``: ``U+2028`` LINE
+       SEPARATOR is treated as a line break by many log viewers and JSON
+       consumers, so stripping only ASCII newlines leaves the injection open
+       in a form that reads as invisible whitespace in a diff.
+    2. **Bounded.** Never longer than ``limit`` plus a fixed marker, so a
+       caller-supplied string cannot drive log volume.
+
+    Total -- never raises. A logging call site must not fail on the thing it is
+    describing, so an object whose ``__str__`` raises degrades to a marker.
+
+    NOT a redaction step. Bounding and de-fanging is the contract; a caller who
+    puts a secret in a server title still gets it logged. Do not pass values
+    that may hold credentials.
+
+    Args:
+        value: The caller-supplied value to render.
+        limit: Maximum characters before truncation.
+
+    Returns:
+        A bounded, control-character-free string safe to place in a log field.
+    """
+    try:
+        raw = value if isinstance(value, str) else str(value)
+        # Normalize a ``str`` SUBCLASS to a plain ``str`` before any predicate
+        # runs, for the reason documented at length in ``_safe_identifier``: a
+        # subclass can override ``__len__``/``__eq__``/``__hash__`` and decide
+        # the bound below in attacker code. Exact type identity, not
+        # isinstance.
+        text = raw if type(raw) is str else str.__str__(raw)  # noqa: E721
+    except Exception:
+        return "<unrepresentable>"
+    if not text:
+        return "<empty>"
+    cleaned = "".join(
+        "?" if unicodedata.category(ch) in _RECORD_FORGING_CATEGORIES else ch
+        for ch in text
+    )
+    if len(cleaned) > limit:
+        # Marker uses <> precisely because... they are ours: the categories
+        # stripped above cannot produce them, and a caller who writes a literal
+        # "<truncated>" forges only a cosmetic suffix, never a new record.
+        return f"{cleaned[:limit]}<truncated>"
     return cleaned
 
 

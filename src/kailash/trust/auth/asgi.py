@@ -67,6 +67,29 @@ __all__ = [
 #: Sent on every 401 so a compliant client knows which scheme to retry with.
 _WWW_AUTHENTICATE = 'Bearer realm="api"'
 
+#: Algorithm names this module will echo into a log line verbatim. Anything
+#: else logs as "other" -- see the resolution in :meth:`JWTAuthMiddleware.__init__`.
+#: NOT an enforcement allowlist: which algorithms are ACCEPTED is
+#: ``JWTValidator``'s decision (it bans ``none`` and rejects confusion), and
+#: duplicating that policy here would create a second list to drift.
+_KNOWN_ALGORITHMS = frozenset(
+    {
+        "HS256",
+        "HS384",
+        "HS512",
+        "RS256",
+        "RS384",
+        "RS512",
+        "ES256",
+        "ES384",
+        "ES512",
+        "PS256",
+        "PS384",
+        "PS512",
+        "EdDSA",
+    }
+)
+
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     """Reject unauthenticated requests with 401 before they reach any route.
@@ -101,10 +124,23 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             )
         self.config = config
         self._validator = JWTValidator(config)
+        # Counts and booleans only, and the algorithm resolved to a LITERAL
+        # from a fixed set rather than echoed from the config.
+        #
+        # `config` is constructed from the signing secret, so every attribute
+        # read off it is taint-carrying to a dataflow analyzer -- CodeQL
+        # reported `py/clear-text-logging-sensitive-data` here for exactly that
+        # reason. `config.algorithm` is not itself the secret, but proving that
+        # to a scanner is not possible and asserting it is not worth doing on
+        # an auth path: resolving through a membership test emits a string this
+        # module owns, which is both provably secret-free and a narrower claim.
+        algorithm = (
+            config.algorithm if config.algorithm in _KNOWN_ALGORITHMS else "other"
+        )
         logger.info(
             "jwt_auth_middleware.installed",
             extra={
-                "algorithm": config.algorithm,
+                "algorithm": algorithm,
                 "exempt_path_count": len(config.exempt_paths),
                 "api_key_enabled": config.api_key_enabled,
             },
