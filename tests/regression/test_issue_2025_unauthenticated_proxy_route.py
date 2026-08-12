@@ -334,7 +334,10 @@ def test_set_auth_manager_cannot_clear_auth(auth_manager):
 )
 def test_subclasses_inherit_the_gate(server_cls, backend):
     """Enforcement-surface parity: both subclasses inherit proxy_workflow."""
-    srv = server_cls(title=f"parity-{server_cls.__name__}")
+    # require_auth=False: this test pins the PROXY gate (#2025), not the
+    # server-wide gate (#2072). Without it the server-wide gate raises first
+    # and the proxy assertion below never runs.
+    srv = server_cls(title=f"parity-{server_cls.__name__}", require_auth=False)
     try:
         with pytest.raises(ProxyAuthNotConfiguredError):
             srv.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])

@@ -826,7 +826,11 @@ class MCPChannel(Channel):
                     "port": self.config.port,
                     "config": {
                         "enable_sessions": self.config.enable_sessions,
-                        "enable_auth": self.config.enable_auth,
+                        # `bool(...)`, not the raw tri-state: this channel
+                        # enforces no authentication of its own, so an unstated
+                        # `None` must report as False. Reporting it as enabled
+                        # would be the false-assurance defect #2072 closes.
+                        "enable_auth": bool(self.config.enable_auth),
                         "enable_event_routing": self.config.enable_event_routing,
                     },
                 }

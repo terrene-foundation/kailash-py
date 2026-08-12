@@ -185,19 +185,18 @@ class HTTPTransport(Transport):
             # If gateway wasn't pre-created, create it now
             from kailash.servers.gateway import create_gateway
 
+            from nexus.auth_bootstrap import core_gateway_auth_kwargs
+
             self._gateway = create_gateway(
                 enable_durability=self._enable_durability,
-                # Same declaration as the primary construction path in
-                # nexus/core.py: Nexus owns authentication for this app via
-                # Nexus(enable_auth=True) -> nexus.auth.jwt.JWTMiddleware
-                # (#2013). Without it this fallback path would raise
-                # ServerAuthNotConfiguredError under the #2072 fail-closed
-                # default, and the two paths would disagree about who
-                # authenticates.
-                external_auth_reason=(
-                    "nexus installs nexus.auth.jwt.JWTMiddleware on this app "
-                    "via Nexus(enable_auth=True) (#2013)"
-                ),
+                # Resolved through the SAME helper as the primary construction
+                # path in nexus/core.py, from the SAME flag this transport was
+                # constructed with, so the two paths cannot disagree about who
+                # authenticates this app (#2072). Passing a fixed
+                # `external_auth_reason` here would declare an external gate on
+                # a transport built with enable_auth=False, where nothing
+                # installs one.
+                **core_gateway_auth_kwargs(self._enable_auth),
             )
             self._apply_cors()
 

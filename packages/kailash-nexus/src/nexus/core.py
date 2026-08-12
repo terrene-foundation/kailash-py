@@ -33,6 +33,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from nexus.auth_bootstrap import (
     AuthNotConfiguredError,
     InvalidAuthSecretError,
+    core_gateway_auth_kwargs,
     install_auth_middleware,
 )
 from nexus.background import BackgroundService
@@ -1282,20 +1283,19 @@ class Nexus:
                 enable_async_execution=True,
                 enable_health_checks=True,
                 cors_origins=None,  # Nexus handles CORS natively
-                # Nexus owns its own authentication layer: enable_auth=True
-                # installs nexus.auth.jwt.JWTMiddleware onto this same app a
-                # few lines below (#2013 / PR #2054). Declaring that here stops
-                # the core gateway installing a SECOND, independently-configured
-                # auth layer with its own exempt-path set (#2072).
-                #
-                # This is NOT a silent opt-out of #2072: whether the Nexus
-                # surface authenticates is decided by Nexus(enable_auth=...),
-                # which is the control #2013 made real. The declaration is
-                # recorded on the server and logged.
-                external_auth_reason=(
-                    "nexus installs nexus.auth.jwt.JWTMiddleware on this app "
-                    "via Nexus(enable_auth=True) (#2013)"
-                ),
+                # Tell the core gateway which of the two is true, and tell it
+                # the one that IS true (#2072). enable_auth=True declares that
+                # install_auth_middleware() below installs
+                # nexus.auth.jwt.JWTMiddleware on this same app, so the core
+                # gateway must not install a SECOND, independently-configured
+                # layer with its own exempt-path set. enable_auth=False maps to
+                # the core gateway's explicit opt-out, which logs a WARN naming
+                # the exposure -- declaring external auth there would put a
+                # false assurance on the record and suppress that WARN.
+                # `_enable_auth` is assigned in __init__ before this method is
+                # called; getattr covers the Nexus.__new__() bootstrap path,
+                # which never ran __init__ and never asked for auth.
+                **core_gateway_auth_kwargs(getattr(self, "_enable_auth", False)),
                 max_workers=max_workers,
                 runtime=getattr(self, "runtime", None),
                 startup_hook=self._call_startup_hooks_async,

@@ -52,7 +52,28 @@ class ChannelConfig:
     port: Optional[int] = None
 
     # Security settings
-    enable_auth: bool = False
+    #
+    # TRI-STATE, and deliberately so (#2072). ``APIChannel`` builds an
+    # ``EnterpriseWorkflowServer``, whose ``POST /workflows/{name}/execute``
+    # runs arbitrary registered workflows; that server now fails CLOSED. This
+    # field decides whether the channel keeps that gate or takes it away, so
+    # "the operator never said" and "the operator said no" cannot be the same
+    # value:
+    #
+    # * ``None``  -- unstated. The channel INHERITS the server's fail-closed
+    #   default, so a caller who never considered authentication gets it
+    #   rather than silently serving anonymous workflow execution.
+    # * ``True``  -- install the gate; ``auth_config`` supplies the credential.
+    # * ``False`` -- an EXPLICIT opt-out. Honoured, and never silent: the
+    #   server logs a WARN naming the exposure (``security.md``
+    #   § Secure-Default).
+    #
+    # A plain ``bool`` default of ``False`` could not express the first case,
+    # which is why the previous default made every ``APIChannel`` an open
+    # server. Channels that do NOT enforce this (CLI, MCP) must report it as
+    # ``bool(...)`` -- reporting an unstated ``None`` as enabled would be a
+    # false assurance, which is the defect class this whole change closes.
+    enable_auth: Optional[bool] = None
     auth_config: Dict[str, Any] = field(default_factory=dict)
 
     # Session management

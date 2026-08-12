@@ -90,16 +90,22 @@ class APIChannel(Channel):
             # `ChannelConfig.enable_auth` was reported by /channel/info and
             # read by NO enforcement path -- a documented security control
             # that did nothing (zero-tolerance.md Rule 3c, noted in the #2025
-            # analysis). It is now load-bearing: True installs the server-wide
-            # gate, and `auth_config` (already on ChannelConfig, likewise
-            # unused) supplies the credential.
+            # analysis). It is now load-bearing: it decides whether this
+            # channel keeps the server's fail-closed gate, and
+            # `auth_config` (already on ChannelConfig, likewise unused)
+            # supplies the credential.
             #
-            # enable_auth=False is ChannelConfig's declared default, so it maps
-            # to an EXPLICIT opt-out rather than a fail-closed raise -- but the
-            # opt-out is never silent: resolve_server_auth logs a WARN naming
-            # the exposure and its wiring (security.md § Secure-Default). A
-            # direct WorkflowServer()/create_gateway() still fails closed.
-            require_auth=self.config.enable_auth,
+            # `None` means UNSTATED, and inherits the server's fail-closed
+            # default (#2072) -- an APIChannel is an HTTP server exposing
+            # POST /workflows/{name}/execute, so a caller who never considered
+            # authentication must not silently get an open one. Mapping the
+            # old `False` default straight through here would have left this
+            # channel serving exactly the anonymous workflow execution the
+            # rest of this change closes (security.md § Enforcement-Surface
+            # Parity). An EXPLICIT `enable_auth=False` is still honoured, and
+            # is never silent: resolve_server_auth logs a WARN naming the
+            # exposure and its wiring (security.md § Secure-Default).
+            require_auth=True if self.config.enable_auth is None else self.config.enable_auth,
             auth_config=self.config.auth_config or None,
             enable_durability=self.config.extra_config.get("enable_durability", True),
             enable_resource_management=self.config.extra_config.get(
@@ -127,7 +133,10 @@ class APIChannel(Channel):
                     "host": self.config.host,
                     "port": self.config.port,
                     "enable_sessions": self.config.enable_sessions,
-                    "enable_auth": self.config.enable_auth,
+                    # Reports what this channel ACTUALLY enforces, not the raw
+                    # tri-state: an unstated `None` inherits the server's
+                    # fail-closed gate, so it is reported as True (#2072).
+                    "enable_auth": self.config.enable_auth is not False,
                     "enable_event_routing": self.config.enable_event_routing,
                 },
             }
