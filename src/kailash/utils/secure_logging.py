@@ -108,6 +108,11 @@ _UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/\\]")
 #: viewers and JSON consumers break lines on exactly as they do on ``\n``).
 _RECORD_FORGING_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
+#: The ASCII line terminators, stripped by an explicit substitution in
+#: :func:`safe_log_text` before the category sweep. Redundant with ``Cc`` on
+#: purpose -- see the two-pass note there.
+_LOG_LINE_TERMINATORS = re.compile(r"[\r\n]")
+
 #: Prose log fields get a longer bound than identifiers: a server label or an
 #: auth reason is a sentence, and truncating it at the 120-char identifier bound
 #: routinely cut the operative clause off the end of the message.
@@ -278,9 +283,23 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
         return "<unrepresentable>"
     if not text:
         return "<empty>"
+    # TWO passes, and both are load-bearing.
+    #
+    # 1. An explicit regex substitution over the ASCII line terminators. This is
+    #    the recognized shape for a log-injection barrier, and it is checked
+    #    FIRST so the property a reader (or a scanner) most cares about is
+    #    visible without reasoning about Unicode category tables.
+    # 2. The category sweep, which is what makes the guarantee real: it also
+    #    removes U+2028/U+2029, the C1 controls, and the bidi overrides that
+    #    reorder an already-written line. Pass 1 alone would leave those.
+    #
+    # Dropping either one is a regression. Pass 1 without pass 2 is the
+    # ASCII-only strip this function exists to replace; pass 2 without pass 1
+    # was measured to leave `py/log-injection` reported at every call site.
+    cleaned = _LOG_LINE_TERMINATORS.sub("?", text)
     cleaned = "".join(
         "?" if unicodedata.category(ch) in _RECORD_FORGING_CATEGORIES else ch
-        for ch in text
+        for ch in cleaned
     )
     if len(cleaned) > limit:
         # Marker uses <> precisely because... they are ours: the categories

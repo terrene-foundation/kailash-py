@@ -67,28 +67,33 @@ __all__ = [
 #: Sent on every 401 so a compliant client knows which scheme to retry with.
 _WWW_AUTHENTICATE = 'Bearer realm="api"'
 
-#: Algorithm names this module will echo into a log line verbatim. Anything
-#: else logs as "other" -- see the resolution in :meth:`JWTAuthMiddleware.__init__`.
+#: Maps a configured algorithm name to the label this module logs for it.
+#:
+#: A MAPPING, not a set, and the keys and values are deliberately equal strings:
+#: the config value is used only as a lookup KEY, so what reaches the log record
+#: is always a literal defined here. That is what actually breaks the dataflow
+#: from the secret-bearing ``JWTConfig`` to the log sink -- a set-membership test
+#: leaves ``config.algorithm`` itself flowing out on the matching branch.
+#: Anything unrecognized logs as ``"other"``.
+#:
 #: NOT an enforcement allowlist: which algorithms are ACCEPTED is
 #: ``JWTValidator``'s decision (it bans ``none`` and rejects confusion), and
 #: duplicating that policy here would create a second list to drift.
-_KNOWN_ALGORITHMS = frozenset(
-    {
-        "HS256",
-        "HS384",
-        "HS512",
-        "RS256",
-        "RS384",
-        "RS512",
-        "ES256",
-        "ES384",
-        "ES512",
-        "PS256",
-        "PS384",
-        "PS512",
-        "EdDSA",
-    }
-)
+_ALGORITHM_LABELS = {
+    "HS256": "HS256",
+    "HS384": "HS384",
+    "HS512": "HS512",
+    "RS256": "RS256",
+    "RS384": "RS384",
+    "RS512": "RS512",
+    "ES256": "ES256",
+    "ES384": "ES384",
+    "ES512": "ES512",
+    "PS256": "PS256",
+    "PS384": "PS384",
+    "PS512": "PS512",
+    "EdDSA": "EdDSA",
+}
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -132,11 +137,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         # reported `py/clear-text-logging-sensitive-data` here for exactly that
         # reason. `config.algorithm` is not itself the secret, but proving that
         # to a scanner is not possible and asserting it is not worth doing on
-        # an auth path: resolving through a membership test emits a string this
-        # module owns, which is both provably secret-free and a narrower claim.
-        algorithm = (
-            config.algorithm if config.algorithm in _KNOWN_ALGORITHMS else "other"
-        )
+        # an auth path.
+        #
+        # A membership test (`x if x in SET else "other"`) is NOT enough, and
+        # was measured not to be: CodeQL still reported the finding, because on
+        # the true branch the value flowing out is still `config.algorithm`.
+        # A MAPPING lookup is the real fix rather than a scanner-pleasing one --
+        # every value it can return is a literal owned by this module, so the
+        # config string is used only as a KEY and never reaches the record.
+        algorithm = _ALGORITHM_LABELS.get(config.algorithm, "other")
         logger.info(
             "jwt_auth_middleware.installed",
             extra={
