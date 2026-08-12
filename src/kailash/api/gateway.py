@@ -107,6 +107,7 @@ from ..utils.proxy_guard import (
 )
 from ..utils.server_auth import (
     install_server_auth_middleware,
+    mounted_subapp_auth_kwargs,
     resolve_server_auth,
 )
 from ..workflow import Workflow
@@ -598,11 +599,18 @@ class WorkflowAPIGateway:
             raise ValueError(f"Workflow '{name}' already registered")
 
         # Create WorkflowAPI wrapper
+        # The sub-app installs NO gate of its own: this gateway's middleware
+        # wraps the mount and has already accepted or rejected the request
+        # before routing hands it over (#2072).
         workflow_api = WorkflowAPI(
             workflow=workflow,
             app_name=f"{name} Workflow API",
             version=version,
             description=description or f"Workflow: {name}",
+            **mounted_subapp_auth_kwargs(
+                parent_label=f"{type(self).__name__}(title={self.app.title!r})",
+                parent_is_authenticated=self._auth_config is not None,
+            ),
         )
         # Track it so its runtime is released on shutdown/close() (issue #1285).
         self._workflow_apis[name] = workflow_api

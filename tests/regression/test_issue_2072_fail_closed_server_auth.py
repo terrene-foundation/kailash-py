@@ -705,6 +705,123 @@ def test_nexus_call_sites_resolve_through_the_shared_helper():
 
 
 # ---------------------------------------------------------------------------
+# The two remaining surfaces that served /execute anonymously.
+# ---------------------------------------------------------------------------
+
+
+def test_standalone_workflow_api_fails_closed(clean_auth_env):
+    """``WorkflowAPI(wf).run()`` was anonymous arbitrary workflow execution.
+
+    ``WorkflowAPI`` registers ``POST /execute`` and ships its own
+    ``uvicorn.run()`` entry point, so it is reachable as a server in its own
+    right -- #2072's defect without touching ``WorkflowServer`` at all.
+    """
+    from kailash.api.workflow_api import WorkflowAPI
+    from kailash.utils.server_auth import ServerAuthNotConfiguredError
+
+    with pytest.raises(ServerAuthNotConfiguredError):
+        WorkflowAPI(_probe_workflow())
+
+
+def test_standalone_workflow_api_gates_execute(authed_env):
+    """...and once configured it gates ``/execute``, with a control."""
+    from kailash.api.workflow_api import WorkflowAPI
+
+    client = TestClient(WorkflowAPI(_probe_workflow()).app)
+
+    assert client.post("/execute", json={"inputs": {}}).status_code == 401
+    assert (
+        client.post(
+            "/execute",
+            json={"inputs": {}},
+            headers={"Authorization": f"Bearer {_make_token()}"},
+        ).status_code
+        == 200
+    )
+
+
+def test_mounted_workflow_api_does_not_install_a_second_gate(authed_env):
+    """A mounted sub-app must NOT demand its own credential.
+
+    The parent's middleware wraps the mount and has already authenticated the
+    request. A second layer would 401 a request the parent accepted, or force
+    callers to satisfy two independently-configured gates for one call.
+    """
+    server = _server_with_probe()
+
+    sub = server._workflow_apis["probe"]
+    assert sub._auth_config is None, (
+        "the mounted sub-app installed its own gate; the parent already owns it"
+    )
+    # And the parent's gate still covers the mounted route, both polarities.
+    client = TestClient(server.app)
+    assert (
+        client.post("/workflows/probe/execute", json={"inputs": {}}).status_code == 401
+    )
+    assert (
+        client.post(
+            "/workflows/probe/execute",
+            json={"inputs": {}},
+            headers={"Authorization": f"Bearer {_make_token()}"},
+        ).status_code
+        == 200
+    )
+
+
+def test_create_gateway_app_authenticates_the_app_it_returns(authed_env):
+    """``create_gateway_app()`` returned an app with NO middleware on it.
+
+    ``EnhancedDurableAPIGateway`` installs the gate on its OWN FastAPI
+    instance, but the returned app is a different object and is the one the
+    router is mounted on; its ``Depends(get_gateway)`` is an instance injector,
+    not authentication. Measured before the fix, WITH a secret configured::
+
+        middleware on RETURNED app: []
+        middleware on GATEWAY  app: ['BaseHTTPMiddleware', 'JWTAuthMiddleware']
+        GET /api/v1/workflows (NO creds) -> 200
+
+    So the constructor's fail-closed raise guarded an app nobody serves.
+    """
+    import asyncio
+
+    from kailash.gateway.api import create_gateway_app
+
+    async def _build():
+        return create_gateway_app()
+
+    app = asyncio.run(_build())
+
+    installed = [m.cls.__name__ for m in app.user_middleware]
+    assert "JWTAuthMiddleware" in installed, (
+        f"the served app carries no auth layer; middleware={installed}"
+    )
+
+    client = TestClient(app)
+    assert client.get("/api/v1/workflows").status_code == 401
+    assert (
+        client.get(
+            "/api/v1/workflows",
+            headers={"Authorization": f"Bearer {_make_token()}"},
+        ).status_code
+        == 200
+    )
+
+
+def test_create_gateway_app_fails_closed(clean_auth_env):
+    """...and refuses to build at all with no credential source."""
+    import asyncio
+
+    from kailash.gateway.api import create_gateway_app
+    from kailash.utils.server_auth import ServerAuthNotConfiguredError
+
+    async def _build():
+        return create_gateway_app()
+
+    with pytest.raises(ServerAuthNotConfiguredError):
+        asyncio.run(_build())
+
+
+# ---------------------------------------------------------------------------
 # End-to-end over a real socket -- the literal user path from the issue.
 # ---------------------------------------------------------------------------
 

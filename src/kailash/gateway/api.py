@@ -6,6 +6,7 @@ with resource management and async workflow support.
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -329,7 +330,27 @@ def create_gateway_app(
     Returns:
         The FastAPI application that actually serves the routes.
     """
-    app = FastAPI(title=title, description=description, version=version)
+    # `@app.on_event(...)` is deprecated in FastAPI and emits a
+    # DeprecationWarning on every construction; a lifespan context manager is
+    # the supported form and runs the same startup/shutdown work. The body
+    # reads `_gateway_instance` at REQUEST time, not definition time, so
+    # defining it before the instance is assigned below is safe.
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        logger.info("Enhanced Gateway starting up...")
+        try:
+            yield
+        finally:
+            # `finally`, so the resource registry is still cleaned up when
+            # startup or serving raises -- otherwise a failed boot leaks every
+            # resource the registry opened.
+            logger.info("Enhanced Gateway shutting down...")
+            if _gateway_instance and _gateway_instance.resource_registry:
+                await _gateway_instance.resource_registry.cleanup()
+
+    app = FastAPI(
+        title=title, description=description, version=version, lifespan=lifespan
+    )
 
     # Set up gateway instance
     global _gateway_instance
@@ -370,20 +391,5 @@ def create_gateway_app(
     # actually receives requests.
     if _gateway_instance._auth_config is not None:
         install_server_auth_middleware(app, _gateway_instance._auth_config)
-
-    # Startup event
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize gateway on startup."""
-        logger.info("Enhanced Gateway starting up...")
-        # Could load workflows from storage here
-
-    # Shutdown event
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        """Cleanup on shutdown."""
-        logger.info("Enhanced Gateway shutting down...")
-        if _gateway_instance and _gateway_instance.resource_registry:
-            await _gateway_instance.resource_registry.cleanup()
 
     return app

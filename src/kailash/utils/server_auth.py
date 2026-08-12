@@ -70,6 +70,7 @@ __all__ = [
     "build_server_auth_config",
     "collect_api_keys",
     "install_server_auth_middleware",
+    "mounted_subapp_auth_kwargs",
     "resolve_server_auth",
 ]
 
@@ -384,6 +385,42 @@ def resolve_server_auth(
         env=env,
         server_label=server_label,
     )
+
+
+def mounted_subapp_auth_kwargs(
+    *, parent_label: str, parent_is_authenticated: bool
+) -> Dict[str, Any]:
+    """Authentication arguments for a sub-application mounted on a parent.
+
+    A sub-app reached through ``parent.app.mount(prefix, child.app)`` is served
+    by the PARENT's ASGI stack, so the parent's middleware has already accepted
+    or rejected the request before routing hands it over. The child must
+    therefore install nothing -- a second layer would demand a second
+    credential on a request the parent already authenticated.
+
+    The parent owns the decision in BOTH directions, which is what makes this
+    an honest ``external_auth_reason`` even when the parent is unauthenticated:
+    the declaration names WHO decides, and the parent has already logged the
+    exposure WARN exactly once at its own construction. Emitting
+    ``require_auth=False`` here instead would re-log that same WARN once per
+    registered workflow, and a warning that repeats per registration is a
+    warning operators filter out.
+
+    Args:
+        parent_label: Human-readable identity of the mounting server.
+        parent_is_authenticated: Whether the parent installed a gate.
+
+    Returns:
+        Keyword arguments to splat into the sub-application's constructor.
+    """
+    if parent_is_authenticated:
+        state = "which authenticates every request before routing to this mount"
+    else:
+        state = (
+            "which has authentication explicitly disabled; it logged that "
+            "exposure once at its own construction"
+        )
+    return {"external_auth_reason": f"mounted under {parent_label}, {state}"}
 
 
 def install_server_auth_middleware(app: Any, config: "JWTConfig") -> None:
