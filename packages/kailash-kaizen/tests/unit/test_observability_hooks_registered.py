@@ -415,3 +415,69 @@ def test_web_ui_port_warns_by_name(caplog):
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "16686" in text and "4317" in text, text
     assert "dropped" in text, text
+
+
+# =========================================================================
+# Registration is not recording -- prove the audit trail actually writes
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_audit_trail_records_a_real_entry_on_a_real_event(config, tmp_path):
+    """
+    Triggering an event must land a line in the configured audit file.
+
+    Registration and recording are different properties, and only the second
+    one is what "Enable compliance audit trails" promises. Real HookManager,
+    real file, real JSON -- a Mock would satisfy every assertion here while
+    recording nothing, which is the shape that let the original defect ship.
+    """
+    import json
+
+    from kaizen.core.autonomy.hooks.types import HookEvent
+
+    hook_manager = _manager(config)
+
+    await hook_manager.trigger(
+        event_type=HookEvent.PRE_AGENT_LOOP,
+        agent_id="agent-2084",
+        data={"inputs": {"prompt": "summarise the board memo"}},
+        timeout=10.0,
+    )
+
+    lines = (tmp_path / "audit.jsonl").read_text().splitlines()
+    assert lines, "audit trail was enabled and an event fired, but nothing was recorded"
+
+    entry = json.loads(lines[0])
+    assert entry["agent_id"] == "agent-2084"
+    assert entry["action"] == "pre_agent_loop"
+    assert entry["result"] == "success"
+    assert entry["details"]["data_keys"] == ["inputs"]
+
+
+@pytest.mark.asyncio
+async def test_audit_trail_records_structure_not_payload_values(config, tmp_path):
+    """
+    The audit file must carry key NAMES, never payload values.
+
+    An audit file is retained and shipped widely, so turning compliance audit
+    on must not itself become the disclosure channel -- the same split #2070
+    drew for LoggingHook.
+    """
+    from kaizen.core.autonomy.hooks.types import HookEvent
+
+    secret = "sk-live-AUDITTRAIL2084SECRETVALUE"
+
+    hook_manager = _manager(config)
+    await hook_manager.trigger(
+        event_type=HookEvent.PRE_TOOL_USE,
+        agent_id="agent-2084",
+        data={"api_key": secret, "prompt": "wire the funds to account 4471"},
+        timeout=10.0,
+    )
+
+    written = (tmp_path / "audit.jsonl").read_text()
+    assert secret not in written, written
+    assert "wire the funds" not in written, written
+    # Structure IS preserved -- a "fix" that writes an empty file cannot pass.
+    assert "api_key" in written and "prompt" in written, written
