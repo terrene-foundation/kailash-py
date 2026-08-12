@@ -11,6 +11,11 @@ from kaizen.security.encryption import EncryptionProvider
 _TEST_KEY = b"kaizen-unit-test-key-32-bytes!!!"
 _OTHER_KEY = b"a-different-key-of-32-bytes!!!!!"
 
+# Was "strong_password_123" (19 characters) until ``from_password`` learned the
+# same 32-character floor its sibling constructor enforces. That this passed is
+# what proved the floor was bypassable by switching constructors.
+_TEST_PASSWORD = "strong_password_123_now_meets_the_floor"
+
 
 class TestEncryptionProvider:
     """Test suite for EncryptionProvider (AES-256-GCM)."""
@@ -115,9 +120,15 @@ class TestEncryptionProvider:
         assert provider.decrypt(encrypted2) == original
 
     def test_key_derivation_from_password(self):
-        """Test 3.2a: Derive encryption key from password."""
+        """Test 3.2a: Derive encryption key from password.
+
+        The password was ``"strong_password_123"`` (19 characters) until
+        ``from_password`` learned the same 32-character floor its sibling
+        constructor enforces. That it passed is what proved the floor was
+        bypassable by switching constructors.
+        """
         # Derive key from password
-        provider = EncryptionProvider.from_password("strong_password_123")
+        provider = EncryptionProvider.from_password(_TEST_PASSWORD)
 
         # Should be able to encrypt/decrypt
         original = "sensitive_data"
@@ -126,9 +137,10 @@ class TestEncryptionProvider:
 
         assert decrypted == original
 
-        # Same password should derive same key
+        # Same password should derive same key. Both calls MUST use the same
+        # constant -- the assertion below is meaningless if they diverge.
         provider2 = EncryptionProvider.from_password(
-            "strong_password_123", salt=provider.get_salt()
+            _TEST_PASSWORD, salt=provider.get_salt()
         )
         assert provider2.decrypt(encrypted) == original
 

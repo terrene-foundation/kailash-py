@@ -33,7 +33,13 @@ from pathlib import Path
 import pytest
 
 from kaizen.security import encryption as encryption_module
-from kaizen.security.encryption import EncryptionProvider, FieldEncryptor, KeyManager
+from kaizen.security.encryption import (
+    MIN_PASSPHRASE_LENGTH,
+    EncryptionKeyNotConfiguredError,
+    EncryptionProvider,
+    FieldEncryptor,
+    KeyManager,
+)
 
 #: A passphrase an operator would plausibly configure.
 CONFIGURED_PASSPHRASE = "a-configured-kaizen-encryption-passphrase"
@@ -372,3 +378,277 @@ def test_from_password_documents_that_the_salt_must_be_persisted():
     assert (
         "get_salt" in doc and "persist" in doc.lower()
     ), "from_password must document that the caller has to persist the salt."
+
+
+# ---------------------------------------------------------------------------
+# The key-material FLOOR.
+#
+# These exist because the guards below had NO test at all when the floor first
+# landed: deleting both `MIN_PASSPHRASE_LENGTH` checks left every other test in
+# this file green. A green suite that stays green with the guard deleted is not
+# evidence the guard works -- it is evidence the suite never asserted it. Every
+# other constant in this module sits comfortably above the floor (39, 44, 32),
+# so nothing here exercised the boundary by accident.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n ", "\n"])
+def test_empty_or_whitespace_key_counts_as_unconfigured_not_as_a_passphrase(blank):
+    """The worst case in this whole change: a FIXED key that looks configured.
+
+    ``EncryptionProvider(key=os.environ.get("K", ""))`` is the ordinary way a
+    caller spells "unset". Stretching ``""`` derives a key that is stable across
+    every deployment on earth and reproducible by anyone reading this module's
+    constants -- strictly worse than the per-process key this fix removes,
+    because it looks configured and survives a restart.
+
+    The refusal must be the NOT-CONFIGURED one, not the length one: a blank
+    value is absent input, not a short passphrase, and the message has to point
+    the operator at the wiring rather than at a character count.
+
+    Falsifying result: construction succeeds, or raises the floor error.
+    """
+    with pytest.raises(EncryptionKeyNotConfiguredError) as exc_info:
+        EncryptionProvider(key=blank)
+
+    message = str(exc_info.value)
+    assert "KAIZEN_ENCRYPTION_KEY" in message, (
+        "A blank key must be reported as missing configuration and name the "
+        "variable that supplies it."
+    )
+    assert "non-whitespace characters" not in message, (
+        "A blank value is absent input, not a short passphrase; reporting a "
+        "character count sends the operator to pad it rather than set it."
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("passphrase", ["x", "short", "a" * 31])
+def test_a_passphrase_below_the_floor_is_refused(passphrase):
+    """600k PBKDF2 iterations do not rescue a brief passphrase.
+
+    Falsifying result: construction succeeds, which is what happened before the
+    floor existed -- ``EncryptionProvider(key="x")`` returned a working provider.
+    """
+    with pytest.raises(EncryptionKeyNotConfiguredError) as exc_info:
+        EncryptionProvider(key=passphrase)
+
+    message = str(exc_info.value)
+    assert str(MIN_PASSPHRASE_LENGTH) in message, "the floor must be named"
+    assert passphrase not in message, (
+        "the refusal must name the length, never the passphrase itself -- this "
+        "message reaches logs and crash reports"
+    )
+
+
+@pytest.mark.regression
+def test_a_passphrase_exactly_at_the_floor_is_accepted():
+    """The boundary is inclusive; the other polarity of the test above.
+
+    Without this, tightening the comparison to ``<=`` would pass unnoticed.
+    """
+    provider = EncryptionProvider(key="a" * MIN_PASSPHRASE_LENGTH)
+    assert len(provider.key) == 32
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("raw", [b"", b"too-short", b"a" * 31, b"a" * 33])
+def test_raw_key_material_of_the_wrong_length_is_refused(raw):
+    """AES-256 needs exactly 32 bytes; anything else is a caller error.
+
+    ``b""`` is included deliberately: it is falsy, so an implementation that
+    tests truthiness rather than type would route it to the not-configured
+    branch and, under ``allow_ephemeral_key=True``, silently generate instead.
+
+    Falsifying result: construction succeeds with wrong-sized material.
+    """
+    with pytest.raises(EncryptionKeyNotConfiguredError):
+        EncryptionProvider(key=raw)
+
+
+@pytest.mark.regression
+def test_whitespace_is_significant_in_the_passphrase_itself():
+    """Measured stripped, derived VERBATIM.
+
+    Trimming would silently change the derived key for anyone whose passphrase
+    ends in whitespace -- and a key that changes under the same configured value
+    is the exact failure #2092 is about, one layer down.
+
+    Falsifying result: the two keys are equal, meaning the value was trimmed
+    before derivation.
+    """
+    bare = EncryptionProvider(key=CONFIGURED_PASSPHRASE)
+    padded = EncryptionProvider(key=CONFIGURED_PASSPHRASE + " ")
+    assert bare.key != padded.key, (
+        "trailing whitespace was stripped before derivation, so a stray newline "
+        "in a config file would silently change the key"
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("password", ["", "   ", "x", "a" * 31])
+def test_from_password_cannot_be_used_to_route_around_the_floor(password):
+    """A floor a caller sidesteps by switching constructors is not a floor.
+
+    ``from_password`` derives its own 32 bytes and hands them to the constructor,
+    which accepts any correctly-sized raw key -- so before this check
+    ``EncryptionProvider.from_password("x")`` succeeded on the same public class
+    whose sibling constructor refuses 31 characters.
+
+    Falsifying result: a provider is returned.
+    """
+    with pytest.raises(EncryptionKeyNotConfiguredError):
+        EncryptionProvider.from_password(password)
+
+
+@pytest.mark.regression
+def test_from_password_still_works_at_and_above_the_floor():
+    """The other polarity: the legitimate password-derivation path is intact."""
+    provider = EncryptionProvider.from_password("p" * MIN_PASSPHRASE_LENGTH)
+    round_tripped = provider.decrypt(provider.encrypt("sensitive"))
+    assert round_tripped == "sensitive"
+
+
+@pytest.mark.regression
+def test_the_wrappers_enforce_the_floor_too(monkeypatch):
+    """``KeyManager`` and ``FieldEncryptor`` route through the same chokepoint.
+
+    Wrapper propagation is what hid #2092 in the first place -- a class that
+    reads as fully configured forwarding an unconfigured default inward. The
+    floor has to survive the same trip.
+
+    Falsifying result: either wrapper accepts a sub-floor passphrase.
+    """
+    monkeypatch.delenv("KAIZEN_ENCRYPTION_KEY", raising=False)
+    with pytest.raises(EncryptionKeyNotConfiguredError):
+        KeyManager(key="tooshort")
+    with pytest.raises(EncryptionKeyNotConfiguredError):
+        FieldEncryptor(sensitive_fields=["ssn"], key="tooshort")
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_blank_environment_variable_does_not_configure_anything(monkeypatch, blank):
+    """An exported-but-empty variable is the shape a shell script produces.
+
+    ``export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET`` yields exactly this, and it
+    must not read as configuration.
+
+    Falsifying result: construction succeeds, meaning the blank export was
+    stretched into a fixed, globally-reproducible key.
+    """
+    monkeypatch.setenv("KAIZEN_ENCRYPTION_KEY", blank)
+    with pytest.raises(EncryptionKeyNotConfiguredError):
+        EncryptionProvider()
+
+
+# ---------------------------------------------------------------------------
+# The SECOND consumer of KAIZEN_ENCRYPTION_KEY.
+#
+# ``CheckpointEncryptor`` reads the SAME environment variable through its
+# ``key_env_var`` default and stretches it with the same PBKDF2-HMAC-SHA256 at
+# the same iteration count. Before this, one variable with one documented floor
+# produced two opposite outcomes: a four-character value got a hard refusal from
+# ``EncryptionProvider`` and silent acceptance here (`security.md`
+# § Enforcement-Surface Parity).
+#
+# The two modules use DIFFERENT PBKDF2 salts, deliberately -- non-interoperability
+# between checkpoint storage and field encryption is the point, and these tests
+# assert nothing about salt equality. Only the FLOOR is shared.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("passphrase", ["x", "short", "a" * 31])
+def test_checkpoint_encryptor_enforces_the_same_floor(passphrase):
+    """The sibling consumer of the same variable refuses the same passphrase.
+
+    Falsifying result: construction succeeds, which is what happened before --
+    the identical value that ``EncryptionProvider`` refuses was accepted here.
+    """
+    from kaizen.core.autonomy.security.encryption import (
+        CheckpointEncryptor,
+        EncryptionError,
+    )
+
+    with pytest.raises(EncryptionError) as exc_info:
+        CheckpointEncryptor(encryption_key=passphrase)
+
+    message = str(exc_info.value)
+    assert str(MIN_PASSPHRASE_LENGTH) in message, "the floor must be named"
+    assert passphrase not in message, (
+        "the refusal must name the length, never the passphrase itself -- this "
+        "message reaches logs and crash reports"
+    )
+
+
+@pytest.mark.regression
+def test_checkpoint_encryptor_accepts_a_passphrase_at_the_floor():
+    """The other polarity: the legitimate path is intact and still derives a key.
+
+    Without this, tightening the comparison to ``<=`` would pass unnoticed.
+    """
+    from kaizen.core.autonomy.security.encryption import CheckpointEncryptor
+
+    encryptor = CheckpointEncryptor(encryption_key="a" * MIN_PASSPHRASE_LENGTH)
+    assert len(encryptor.key) == 32
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n "])
+def test_checkpoint_encryptor_treats_blank_as_unset_not_as_a_passphrase(blank):
+    """A blank value is absent input, not a short passphrase.
+
+    Both spellings reach here: an explicit ``encryption_key=""`` and a blank
+    export. The refusal must point at the wiring rather than at a character
+    count, or the operator pads the value instead of setting it.
+
+    Falsifying result: construction succeeds, or the message reports a length.
+    """
+    from kaizen.core.autonomy.security.encryption import (
+        CheckpointEncryptor,
+        EncryptionError,
+    )
+
+    with pytest.raises(EncryptionError) as exc_info:
+        CheckpointEncryptor(encryption_key=blank)
+
+    message = str(exc_info.value)
+    assert "KAIZEN_ENCRYPTION_KEY" in message, (
+        "a blank value must be reported as missing configuration and name the "
+        "variable that supplies it"
+    )
+    assert "non-whitespace characters" not in message, (
+        "a blank value is absent input, not a short passphrase; reporting a "
+        "character count sends the operator to pad it rather than set it"
+    )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_checkpoint_encryptor_ignores_a_blank_environment_export(monkeypatch, blank):
+    """``export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET`` on the sibling path."""
+    from kaizen.core.autonomy.security.encryption import (
+        CheckpointEncryptor,
+        EncryptionError,
+    )
+
+    monkeypatch.setenv("KAIZEN_ENCRYPTION_KEY", blank)
+    with pytest.raises(EncryptionError):
+        CheckpointEncryptor()
+
+
+@pytest.mark.regression
+def test_checkpoint_encryptor_keeps_whitespace_significant_in_the_passphrase():
+    """Measured stripped, derived VERBATIM -- the sibling's rule, here too.
+
+    Falsifying result: the two keys are equal, meaning the value was trimmed
+    before derivation and a stray newline in a config file would silently change
+    the key.
+    """
+    from kaizen.core.autonomy.security.encryption import CheckpointEncryptor
+
+    bare = CheckpointEncryptor(encryption_key=CONFIGURED_PASSPHRASE)
+    padded = CheckpointEncryptor(encryption_key=CONFIGURED_PASSPHRASE + " ")
+    assert bare.key != padded.key

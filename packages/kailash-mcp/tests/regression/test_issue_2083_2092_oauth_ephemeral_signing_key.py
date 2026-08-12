@@ -43,6 +43,7 @@ pytest.importorskip(
 
 from kailash_mcp.auth import oauth as oauth_module  # noqa: E402
 from kailash_mcp.auth.oauth import (  # noqa: E402
+    AuthenticationError,
     AuthorizationServer,
     JWTKeyNotConfiguredError,
     JWTManager,
@@ -338,3 +339,104 @@ def test_the_servers_that_default_construct_a_manager_are_fail_closed(server_cls
         f"{server_cls.__name__} default-constructed a JWTManager that generated "
         f"a signing key; the wrapper laundered the unconfigured default."
     )
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("method_name", ["verify_access_token", "verify_refresh_token"])
+def test_both_verify_paths_report_the_missing_key_the_same_way(method_name):
+    """One manager, one missing key, one operator experience.
+
+    ``verify_refresh_token``'s handler chain ends in a bare
+    ``except Exception: return None``, and ``JWTKeyNotConfiguredError`` subclasses
+    ``AuthenticationError`` rather than ``jwt.InvalidTokenError`` — so with the
+    key resolved INSIDE the try it was caught by that final handler, logged, and
+    returned as a ``None`` the caller renders as "Invalid refresh token". Its
+    sibling ``verify_access_token`` propagated the typed refusal for the same
+    manager in the same state. An operator debugging one path was told to check
+    their wiring; on the other, that the client sent a bad token.
+
+    Returning ``None`` is a reject, not a fail-open — but it is precisely the
+    generic client-looking rejection the typed refusal exists to replace.
+
+    Falsifying result: the call returns ``None`` (or any value at all) instead of
+    raising, which is what ``verify_refresh_token`` did before the key was
+    hoisted ahead of the try.
+    """
+    manager = JWTManager(issuer=_ISSUER)
+
+    with pytest.raises(JWTKeyNotConfiguredError) as exc_info:
+        getattr(manager, method_name)("any.token.value")
+
+    assert "KAILASH_MCP_JWT_PUBLIC_KEY" in str(exc_info.value) or (
+        "KAILASH_MCP_JWT_PRIVATE_KEY" in str(exc_info.value)
+    ), "the refusal must name the wiring that fixes it, on both paths"
+
+
+@pytest.mark.regression
+def test_the_refresh_path_still_rejects_a_bad_token_when_the_key_is_configured(
+    configured_pem,
+):
+    """The other polarity: hoisting the key resolution changed nothing else.
+
+    A configured manager must still turn a malformed or wrongly-typed token into
+    the ordinary ``AuthenticationError``, not into the not-configured refusal.
+
+    Falsifying result: ``JWTKeyNotConfiguredError`` escapes on a configured
+    manager, meaning the hoist broke the normal rejection path.
+    """
+    manager = JWTManager(
+        issuer=_ISSUER,
+        private_key=configured_pem["private"],
+        public_key=configured_pem["public"],
+    )
+
+    with pytest.raises(AuthenticationError) as exc_info:
+        manager.verify_refresh_token("not.a.jwt")
+
+    assert not isinstance(exc_info.value, JWTKeyNotConfiguredError), (
+        "a configured manager must report a bad token as a bad token, not as "
+        "missing configuration"
+    )
+
+
+@pytest.mark.regression
+def test_an_access_token_is_refused_by_the_refresh_verifier(caplog, configured_pem):
+    """Token-type separation survives the hoist.
+
+    This pins the branch nearest the change: the token-type check that runs
+    INSIDE the try, whose reachability the hoist must not alter.
+
+    It also RECORDS a pre-existing shape this test discovered and deliberately
+    does NOT change. That branch is written as
+    ``raise AuthenticationError("Invalid token type")``, but the method's own
+    trailing ``except Exception`` catches it, logs it at ERROR, and returns
+    ``None`` — so the raise never reaches a caller. The rejection is real and
+    loud, and it matches ``verify_access_token``, which returns ``None`` for the
+    same condition; converting it to a propagating raise would introduce an
+    asymmetry between the two verifiers rather than remove one, and would change
+    a documented ``Optional[Dict]`` contract. Filed as a follow-up rather than
+    fixed here.
+
+    Falsifying result: an access token verifies as a refresh token — i.e. a
+    payload comes back instead of ``None``.
+    """
+    manager = JWTManager(
+        issuer=_ISSUER,
+        private_key=configured_pem["private"],
+        public_key=configured_pem["public"],
+    )
+    issued = manager.create_access_token(subject="user-1", scope="mcp.basic")
+
+    with caplog.at_level(logging.DEBUG):
+        result = manager.verify_refresh_token(_token_str(issued))
+
+    assert result is None, (
+        "an access token was accepted by the refresh verifier; token-type "
+        "separation is what stops a short-lived token being replayed for a "
+        "30-day one"
+    )
+    assert any(
+        "Invalid token type" in r.getMessage()
+        for r in caplog.records
+        if r.levelno >= logging.ERROR
+    ), "the rejection must leave an ERROR record naming the reason"
