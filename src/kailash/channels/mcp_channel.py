@@ -396,8 +396,17 @@ class MCPChannel(Channel):
             # status proceeds to teardown while requests are still being
             # answered (issue #2018). The WARNs below always knew; the status
             # did not, on the one resource the bool does not cover.
+            # THE HANDLE IS CLEARED ONLY WHERE THE THREAD HAS BEEN OBSERVED
+            # DEAD -- never optimistically before an await. Swapping it to
+            # `None` up front and restoring it after the join put the restore
+            # BEHIND an await, so a caller-aimed cancellation there skipped it
+            # and left the handle already dropped: the next `stop()` then found
+            # nothing to observe and cleared straight to STOPPED over a port
+            # that was still answering. That is the identical #2018 lie one
+            # call later, on the path this method's whole
+            # `cleanup_ran`/`close_ran`/`finally` machinery exists to serve.
             server_thread_live = False
-            thread, self._mcp_server_thread = self._mcp_server_thread, None
+            thread = self._mcp_server_thread
             if thread is not None and thread.is_alive():
                 if requested_server_shutdown:
                     # OFF THE EVENT LOOP. `Thread.join(timeout=...)` is
@@ -417,10 +426,10 @@ class MCPChannel(Channel):
                     await asyncio.to_thread(thread.join, self._MCP_SERVER_JOIN_TIMEOUT)
                     if thread.is_alive():
                         server_thread_live = True
-                        # RETAINED so a retry re-observes it. Dropping the
-                        # handle makes the SECOND stop() report STOPPED over
-                        # the same live thread -- the same lie, one call later.
-                        self._mcp_server_thread = thread
+                        # RETAINED (by never having been cleared) so a retry
+                        # re-observes it. Dropping the handle makes the SECOND
+                        # stop() report STOPPED over the same live thread --
+                        # the same lie, one call later.
                         logger.warning(
                             "MCP channel %s server thread %r did not exit "
                             "within %.1fs of mcp_server.stop(); the channel is "
@@ -431,12 +440,20 @@ class MCPChannel(Channel):
                             thread.name,
                             self._MCP_SERVER_JOIN_TIMEOUT,
                         )
+                    else:
+                        # Observed dead, so the handle has nothing left to
+                        # report and is released. This is the ONLY place a
+                        # live-thread handle is cleared.
+                        self._mcp_server_thread = None
                 else:
                     # No usable shutdown entry point, so nothing will ever
                     # unwind the serve loop -- joining would burn the timeout
                     # waiting for something that cannot happen. Say so instead.
+                    # The handle stays put, unconditionally: there is no await
+                    # on this branch, but keeping the retention structural
+                    # rather than re-assigned is what makes it cancellation-safe
+                    # by construction on the branch above.
                     server_thread_live = True
-                    self._mcp_server_thread = thread
                     logger.warning(
                         "MCP channel %s did NOT stop: %s exposes no usable "
                         "stop(), so server thread %r stays parked in run() and "
@@ -446,6 +463,9 @@ class MCPChannel(Channel):
                         type(self.mcp_server).__name__,
                         thread.name,
                     )
+            else:
+                # Never started, or already dead before the join was needed.
+                self._mcp_server_thread = None
 
             # STOPPED only when cleanup actually COMPLETED **and the server
             # thread is genuinely gone** -- the same contract api_channel and
@@ -491,7 +511,8 @@ class MCPChannel(Channel):
             raise
         finally:
             # The third instance of the orphaned-cleanup gap, and the one that
-            # had no guard at all: this method awaits in four places, so a
+            # had no guard at all: this method awaits in five places -- the
+            # off-loop server-thread join added by #2019 is the fifth -- so a
             # caller-aimed cancellation at any of them left `_running_task`
             # live with `_cleanup` never run. api_channel and cli_channel both
             # carry this block; MCP did not, which is the other half of the

@@ -49,6 +49,10 @@ class _RealServer:
         self._honour_stop = honour_stop
         self._shutdown = threading.Event()
         self.run_entered = threading.Event()
+        #: Set the instant ``stop()`` is entered. ``MCPChannel.stop()`` calls
+        #: the server's ``stop()`` immediately before entering the thread join,
+        #: so this is the join's starting gun for a test that must interrupt it.
+        self.stop_entered = threading.Event()
         self.stop_calls = 0
 
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -73,6 +77,7 @@ class _RealServer:
             self._sock.close()
 
     def stop(self) -> None:
+        self.stop_entered.set()
         self.stop_calls += 1
         if self._honour_stop:
             self._shutdown.set()
@@ -247,15 +252,89 @@ class TestStopDoesNotReportStoppedOverALiveServerThread:
             status = channel.status
             assert thread is not None
             thread_alive = thread.is_alive()
+            # The handle is retained everywhere else, so this is the one place
+            # it is released -- and the release has to still happen, or the
+            # cancellation-safety fix would just be a leak.
+            handle_released = channel._mcp_server_thread is None
             still_serving = _port_is_serving(server.port)
         finally:
             await _teardown(channel, server)
 
         assert not thread_alive, "the server thread should have exited"
+        assert handle_released, (
+            "an honest stop left the server-thread handle set; it must be "
+            "cleared once the thread has been observed dead"
+        )
         assert not still_serving, "the port should have been released"
         assert status is ChannelStatus.STOPPED, (
             f"an honest stop was downgraded to {status}; the fix must not "
             "refuse to report success"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancelling_stop_during_the_join_retains_the_handle(self) -> None:
+        """The retention must survive the case it was built for: cancellation.
+
+        The two tests above cover the NON-cancelled paths, where the handle is
+        put back after the join reports the thread still alive. But the restore
+        sits AFTER the join's await, so a caller-aimed cancellation there skips
+        it and the handle is already ``None`` -- and the next ``stop()`` then
+        finds nothing to observe and clears straight to STOPPED over a port
+        that is still answering. That is the identical #2018 lie one call
+        later, which is exactly what
+        ``test_a_retry_does_not_clear_to_stopped_over_the_same_thread`` pins
+        for the non-cancelled path.
+
+        Caller-aimed cancellation is this method's DESIGN CASE -- the entire
+        ``cleanup_ran``/``close_ran``/``finally`` machinery exists for it -- so
+        the retention has to hold on it too. The handle is therefore cleared
+        only where the thread has been positively observed dead, never
+        optimistically before an await.
+        """
+        server = _RealServer(honour_stop=False)
+        channel = _mcp_channel(server, "rt_mcp_cancelled_join")
+        # Long on purpose: the cancellation must land INSIDE the join. The join
+        # cannot finish early because this server ignores stop(), so the test
+        # spends only as long as the sleep below.
+        channel._MCP_SERVER_JOIN_TIMEOUT = 5.0
+
+        try:
+            await channel.start()
+            assert server.run_entered.wait(2.0), "premise: the serve loop never started"
+            assert _port_is_serving(server.port), "premise: the server is not serving"
+            thread = channel._mcp_server_thread
+            assert thread is not None, "premise: no server thread was created"
+
+            stopping = asyncio.create_task(channel.stop())
+            # Wait for the join's starting gun rather than guessing at a sleep
+            # long enough to cover every await before it.
+            await asyncio.to_thread(server.stop_entered.wait, 2.0)
+            await asyncio.sleep(0.1)
+            stopping.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await stopping
+
+            handle_after_cancel = channel._mcp_server_thread
+            alive_after_cancel = thread.is_alive()
+            serving_after_cancel = _port_is_serving(server.port)
+
+            # The follow-up stop() is the one an orchestrator actually acts on.
+            await channel.stop()
+            status = channel.status
+            serving_after_retry = _port_is_serving(server.port)
+        finally:
+            await _teardown(channel, server)
+
+        assert alive_after_cancel, "premise: the server thread did not outlive the join"
+        assert serving_after_cancel, "premise: the server stopped answering on its own"
+        assert handle_after_cancel is thread, (
+            "cancelling stop() inside the join dropped the server-thread "
+            "handle; the restore is unreachable on the cancelled path"
+        )
+        assert serving_after_retry, "premise: the server stopped answering on its own"
+        assert status is not ChannelStatus.STOPPED, (
+            "the stop() following a cancelled stop() reported STOPPED while "
+            "the server thread was still ALIVE and still answering on its port"
         )
 
 
