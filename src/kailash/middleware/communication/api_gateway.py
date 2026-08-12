@@ -600,25 +600,21 @@ class APIGateway:
                     "metadata": payload.get("metadata", {}),
                 }
 
-            api_key = request.headers.get("X-API-Key")
-            if api_key:
-                try:
-                    metadata = await self.auth_manager.verify_api_key(api_key)
-                except HTTPException:
-                    logger.warning("Session-route API key was rejected")
-                    return None
-                except Exception as exc:
-                    logger.warning(
-                        "Session-route API key verification failed: %s",
-                        type(exc).__name__,
-                    )
-                    return None
-                return {
-                    "user_id": metadata.get("user_id"),
-                    "permissions": metadata.get("permissions", []),
-                    "metadata": metadata,
-                }
-
+            # NO `X-API-Key` BRANCH HERE, deliberately.
+            #
+            # A first draft of this added one, calling
+            # `auth_manager.verify_api_key`. That method CANNOT SUCCEED, which
+            # was measured rather than assumed: it calls
+            # `credential_manager.execute(operation=..., credential_name=...)`,
+            # but `CredentialManagerNode.run()` takes `**inputs` and ignores
+            # BOTH -- it reads `self.credential_name`, fixed at construction --
+            # and its return dict has no `"success"` key at all. So
+            # `result.get("success", False)` is always False and the call
+            # always raises 401. An auth path that can only ever reject is a
+            # non-functional feature presented as a working one
+            # (`zero-tolerance.md` Rule 2), so it is not shipped. The
+            # underlying `verify_api_key` defect is pre-existing and tracked
+            # separately.
             return None
 
         @self.app.post("/api/sessions", response_model=SessionResponse)
@@ -628,15 +624,28 @@ class APIGateway:
         ):
             """Create a new session for a frontend client."""
             try:
-                # A resolved principal WINS. `.get("user_id", user_id)` fell
-                # back to the body value only when the key was ABSENT, so a
-                # principal resolving to a None user_id silently produced a
-                # session with no owner rather than refusing.
+                # A resolved principal WINS -- and an UNUSABLE one REFUSES.
+                #
+                # `.get("user_id", user_id)` fell back to the body value only
+                # when the key was ABSENT, so a principal resolving to a None
+                # user_id silently produced a session with no owner. The first
+                # fix for that skipped the assignment instead, which is just
+                # as wrong in the other direction: it reverted to the
+                # caller-supplied body field. A credential that verified but
+                # carries no usable subject is a BROKEN credential, not an
+                # absent one, and falling back to the caller's claim there is
+                # fail-open at an identity-resolution site.
                 user_id = request.user_id
                 if self.enable_auth and current_user:
                     principal = current_user.get("user_id")
-                    if isinstance(principal, str) and principal:
-                        user_id = principal
+                    if not isinstance(principal, str) or not principal:
+                        raise HTTPException(
+                            status_code=401,
+                            detail=(
+                                "Authenticated credential carries no usable " "subject"
+                            ),
+                        )
+                    user_id = principal
 
                 session_id = await self.agent_ui.create_session(
                     user_id=user_id or "", metadata=request.metadata
@@ -670,6 +679,13 @@ class APIGateway:
                 )
 
                 return SessionResponse(**transformed["result"])
+            except HTTPException:
+                # A deliberate status -- the 401 raised above for a credential
+                # with no usable subject -- must reach the client as itself.
+                # The `except Exception` below would otherwise relabel every
+                # auth refusal on this route as a 500, hiding the refusal and
+                # reporting a server fault for a client error.
+                raise
             except Exception as e:
                 # The security event and the client response share one
                 # reference id, so the failed-session record can be tied to
@@ -681,10 +697,14 @@ class APIGateway:
                     e, logger=logger, context="create session", reference=reference
                 )
 
-                # Log security event for failed session creation
+                # Log security event for failed session creation. `user_id` is
+                # the raw POST body value here -- a site the first #2040 sweep
+                # missed even though it sits nine lines below one it fixed,
+                # which is the drift argument in #2088 happening inside this
+                # very change.
                 logger.warning(
                     "Session creation failed for user %s [reference=%s]",
-                    request.user_id,
+                    sanitize_log_value(request.user_id, 128),
                     reference,
                 )
 

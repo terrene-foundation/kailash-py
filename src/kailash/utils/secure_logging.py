@@ -408,18 +408,25 @@ def sanitize_log_value(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> 
         text = raw if type(raw) is str else str.__str__(raw)  # noqa: E721
     except Exception:
         return "<unrepresentable>"
-    flattened = "".join(ch if ch.isprintable() else " " for ch in text)
     # ``limit`` is caller-supplied; a negative or non-integer value would make
     # the slice a no-op or raise inside a logging call. Clamp rather than
     # trust, and clamp to the module ceiling so no call site can opt out of
     # the bound entirely.
     try:
         bound = min(int(limit), _MAX_LOG_VALUE_CHARS)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: int(float("inf")) raises, and this function's
+        # contract is that it never raises inside a logging call.
         bound = _MAX_LOG_VALUE_CHARS
     if bound < 0:
         bound = 0
-    return flattened[:bound]
+    # TRUNCATE FIRST, then flatten. The map is strictly 1:1 char -> char, so
+    # slicing before or after is byte-for-byte identical -- but flattening
+    # first ran one isprintable() call per input character, so a 50 MB
+    # caller-controlled user_id cost 50M calls inside every audit write for a
+    # result that was going to be cut to 256 chars anyway. A sanitizer on the
+    # audit path must not be a denial-of-service lever.
+    return "".join(ch if ch.isprintable() else " " for ch in text[:bound])
 
 
 def sanitize_log_structure(

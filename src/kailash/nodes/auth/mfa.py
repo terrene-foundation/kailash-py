@@ -47,25 +47,46 @@ logger = logging.getLogger(__name__)
 # attribute. Same observable behaviour, one fewer way for two threads to
 # disagree about which binding they hold.
 _WARNED_ONCE: set = set()
+# Cap so a host constructing a uniquely named node per request cannot grow
+# the key set without limit.
+_MAX_WARN_KEYS = 512
 _ACTOR_WARN_LOCK = threading.Lock()
 
 
-def _warn_actor_enforcement_disabled() -> None:
-    """Say ONCE, at WARN, that (actor, action, subject) authorization is OFF."""
+def _warn_actor_enforcement_disabled(node_name: str) -> None:
+    """Say ONCE PER NODE, at WARN, that (actor, action, subject) auth is OFF.
+
+    Keyed on the node's name rather than once per PROCESS. A single global
+    latch was consumed by ``EnterpriseAuthProviderNode.__init__``, which
+    constructs its own MFA node with ``require_actor=False`` -- so the SDK's
+    own internal opt-out burned the one warning, and a USER's genuinely
+    misconfigured ``MultiFactorAuthNode(require_actor=False)`` constructed
+    afterwards warned NOTHING. The loud opt-out was defeated by the SDK
+    (#2047 F5).
+
+    Still bounded: the key set is capped, so a host constructing a uniquely
+    named node per request cannot grow it without limit -- past the cap it
+    stops warning rather than leaking, which is the same trade the audit
+    queues make.
+    """
+    key = f"actor_disabled:{node_name}"
     with _ACTOR_WARN_LOCK:
-        if "actor_disabled" in _WARNED_ONCE:
+        if key in _WARNED_ONCE:
             return
-        _WARNED_ONCE.add("actor_disabled")
+        if len(_WARNED_ONCE) >= _MAX_WARN_KEYS:
+            return
+        _WARNED_ONCE.add(key)
     logger.warning(
-        "MultiFactorAuthNode(require_actor=False): actor authorization is "
-        "DISABLED. Every action -- including revoke/disable/reset and every "
-        "credential-issuing action -- is authorized on the caller-supplied "
-        "user_id and admin_override, so a caller that can choose user_id can "
-        "take over or lock out any account. The host MUST authenticate and "
-        "authorize the caller before dispatch. To enable enforcement, pass "
+        "MultiFactorAuthNode(name=%r, require_actor=False): actor "
+        "authorization is DISABLED for this node. Every action -- including "
+        "revoke/disable/reset and every credential-issuing action -- is "
+        "authorized on the caller-supplied user_id and admin_override, so a "
+        "caller that can choose user_id can take over or lock out any "
+        "account. The host MUST authenticate and authorize the caller before "
+        "dispatch. To enable enforcement, pass "
         "MultiFactorAuthNode(actor_resolver=..., require_actor=True) and send "
-        "actor_session_id on every call. This warning is emitted once per "
-        "process."
+        "actor_session_id on every call. Emitted once per node name.",
+        node_name,
     )
 
 
@@ -368,7 +389,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # (`rules/security.md` § Secure-Default For A New Security
             # Feature). Once per process, not per call: a per-operation
             # message reads as transient and gets filtered.
-            _warn_actor_enforcement_disabled()
+            _warn_actor_enforcement_disabled(name)
 
         # Audit logging IS wired (issue #2060).
         #
@@ -1044,10 +1065,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
     # conclusion action by action; #2047 states it once).
     _ADMIN_ONLY_ACTIONS = frozenset({"revoke", "disable", "reset"})
 
-    # Actions that are read-only with respect to a subject's factors. Listed
-    # to document the split, NOT to relax anything: acting on a subject other
-    # than yourself requires the admin capability whatever the action, because
-    # `status` and `get_methods` disclose which factors an account holds.
+    # Actions an actor may take ON ITSELF. READ as an allowlist by
+    # `_resolve_and_authorize` -- an action in neither this set nor
+    # `_ADMIN_ONLY_ACTIONS` requires the admin capability, so a newly added
+    # dispatch arm fails closed until someone classifies it deliberately.
+    #
+    # It relaxes nothing: acting on a subject other than yourself requires the
+    # admin capability whatever the action, because `status` and `get_methods`
+    # disclose which factors an account holds.
     _SELF_SERVICE_ACTIONS = frozenset(
         {
             "setup",
@@ -1178,8 +1203,19 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             }
 
         acting_on_self = actor.user_id == subject_user_id
+        # `_SELF_SERVICE_ACTIONS` is an ALLOWLIST, not documentation. It was
+        # first written as a comment-only frozenset that nothing read, which
+        # made the docstring beside it a claim about behaviour the code did
+        # not have (#2047 F9). Read as an allowlist it also fails CLOSED for
+        # an action in NEITHER set -- a newly added action requires the admin
+        # capability until it is deliberately classified, rather than
+        # defaulting to self-service the moment someone adds a dispatch arm.
+        known_action = (
+            action in self._SELF_SERVICE_ACTIONS or action in self._ADMIN_ONLY_ACTIONS
+        )
         needs_admin = (
             action in self._ADMIN_ONLY_ACTIONS
+            or not known_action
             or not acting_on_self
             or (action == "initiate_recovery" and recovery_method == "admin")
         )
@@ -1391,7 +1427,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # Log the detail; do NOT return it. Provider exceptions routinely
             # carry the recipient address/number, which would disclose the
             # enrolled destination to the caller (issue #2026).
-            self.log_with_context("ERROR", f"SMS setup failed for user {user_id}: {e}")
+            self.log_with_context(
+                "ERROR",
+                f"SMS setup failed for user {log_safe(user_id, 64)}: {e}",
+            )
             # Roll back the half-enrolment, as the email path does: leaving it
             # in place let a failed setup permanently replace a victim's
             # verified destination with an attacker-chosen number. The temp

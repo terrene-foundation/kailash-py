@@ -480,19 +480,31 @@ class TestAuditRecordsNameTheActor:
 
 
 class TestRequireActorFalseIsLoud:
-    def test_it_warns_once_per_process_naming_the_wiring(self, caplog):
+    def test_it_warns_once_per_NODE_naming_the_node_and_the_wiring(self, caplog):
+        """Once per NODE NAME, not once per process.
+
+        This asserted once-per-process until review round 2 showed that a
+        single global latch is consumed by
+        ``EnterpriseAuthProviderNode.__init__``, which constructs its own MFA
+        node with ``require_actor=False`` -- so the SDK's internal opt-out
+        burned the one warning and a user's genuinely misconfigured node,
+        constructed afterwards, said nothing (#2047 F5). The expectation
+        moves; it does not disappear. Repeat construction under the SAME name
+        still warns once, which is the anti-noise property that mattered.
+        """
         import kailash.nodes.auth.mfa as mfa_mod
 
         mfa_mod._WARNED_ONCE.clear()
         with caplog.at_level("WARNING"):
             MultiFactorAuthNode(name="a", require_actor=False)
-            MultiFactorAuthNode(name="b", require_actor=False)
+            MultiFactorAuthNode(name="a", require_actor=False)
 
-        hits = [r for r in caplog.records if "require_actor=False" in r.message]
-        assert len(hits) == 1, [r.message for r in hits]
+        hits = [r for r in caplog.records if "require_actor=False" in r.getMessage()]
+        assert len(hits) == 1, [r.getMessage() for r in hits]
         assert hits[0].levelname == "WARNING"
-        assert "actor_resolver=" in hits[0].message
-        assert "actor_session_id" in hits[0].message
+        assert "'a'" in hits[0].getMessage(), hits[0].getMessage()
+        assert "actor_resolver=" in hits[0].getMessage()
+        assert "actor_session_id" in hits[0].getMessage()
 
     def test_enforcing_construction_emits_no_such_warning(self, caplog):
         """No-false-positive polarity."""
@@ -610,3 +622,165 @@ class TestActorAndResolvers:
         assert resolver.resolve_actor("s1").user_id == "alice"
         resolver.revoke("s1")
         assert resolver.resolve_actor("s1") is None
+
+
+# ---------------------------------------------------------------------------
+# Review round 2 findings (F1, F5, F9)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewRound2:
+    def test_an_unclassified_action_fails_closed(self):
+        """F9. `_SELF_SERVICE_ACTIONS` is READ as an allowlist, so an action in
+        neither set requires the admin capability rather than defaulting to
+        self-service the moment someone adds a dispatch arm."""
+        node = _node()
+        denied = node.run(
+            action="some_future_action",
+            user_id="alice",
+            actor_session_id=ALICE_SESSION,
+        )
+        assert denied["success"] is False
+        assert denied.get("authorized") is False, denied
+
+        # Discrimination: an admin gets past the gate and reaches the
+        # dispatcher, which is what reports the action unknown.
+        admin = node.run(
+            action="some_future_action",
+            user_id="alice",
+            actor_session_id=ADMIN_SESSION,
+        )
+        assert "Unknown action" in (admin.get("error") or ""), admin
+
+    def test_the_two_action_sets_cover_every_dispatchable_action(self):
+        """A sweep, not an enumeration: every action the dispatcher handles
+        must be classified, or the allowlist above silently admins it."""
+        import ast
+        import inspect
+
+        source = inspect.getsource(MultiFactorAuthNode._dispatch)
+        literals = {
+            n.value
+            for n in ast.walk(ast.parse(source.lstrip()))
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+        }
+        classified = (
+            MultiFactorAuthNode._SELF_SERVICE_ACTIONS
+            | MultiFactorAuthNode._ADMIN_ONLY_ACTIONS
+        )
+        dispatched = {
+            a
+            for a in literals
+            if a
+            in {
+                "setup",
+                "enroll",
+                "verify",
+                "verify_backup",
+                "revoke",
+                "status",
+                "send_push",
+                "verify_push",
+                "approve_push",
+                "deny_push",
+                "trust_device",
+                "check_device_trust",
+                "set_preference",
+                "get_methods",
+                "list_methods",
+                "disable",
+                "initiate_recovery",
+                "reset",
+            }
+        }
+        assert dispatched, "found no dispatched actions; this proves nothing"
+        assert dispatched <= classified, dispatched - classified
+
+    def test_the_opt_out_warning_is_per_node_not_per_process(self, caplog):
+        """F5. A single process-wide latch was consumed by
+        EnterpriseAuthProviderNode's own internal opt-out, so a USER's
+        misconfigured node warned nothing -- the loud opt-out defeated by the
+        SDK."""
+        import kailash.nodes.auth.mfa as mfa_mod
+
+        mfa_mod._WARNED_ONCE.clear()
+        with caplog.at_level("WARNING"):
+            MultiFactorAuthNode(name="sdk_internal", require_actor=False)
+            MultiFactorAuthNode(name="users_own_node", require_actor=False)
+            MultiFactorAuthNode(name="users_own_node", require_actor=False)
+
+        hits = [
+            r.getMessage()
+            for r in caplog.records
+            if "require_actor=False" in r.getMessage()
+        ]
+        assert len(hits) == 2, hits
+        assert any("users_own_node" in h for h in hits), hits
+        assert any("sdk_internal" in h for h in hits), hits
+
+
+class TestProviderSiblingCallSites:
+    """F1 — the two call sites into the MFA node that were NOT qualified.
+
+    Only `_authenticate` and `_authorize` derived their subject server-side.
+    `get_methods` and `challenge_mfa` dispatched from `async_run` with the raw
+    caller-supplied `user_id`, unauthenticated and unrate-limited, and because
+    the provider forces `require_actor=False` the MFA node did not gate them
+    either. `security.md` § Multi-Site Kwarg Plumbing verbatim: the siblings
+    left unqualified shipped the exact failure mode the fix addresses.
+    """
+
+    @staticmethod
+    def _provider():
+        from kailash.nodes.auth.enterprise_auth_provider import (
+            EnterpriseAuthProviderNode,
+        )
+
+        return EnterpriseAuthProviderNode(
+            name="f1_provider",
+            enabled_methods=["jwt", "mfa"],
+            adaptive_auth_enabled=False,
+            risk_assessment_enabled=False,
+            jwt_config={"secret": "k" * 32, "issuer": "https://idp.test.invalid"},
+        )
+
+    @pytest.mark.parametrize("action", ["get_methods", "challenge_mfa"])
+    def test_no_session_is_refused(self, action):
+        """Pre-fix this returned the victim's MFA state to an unauthenticated
+        caller -- an enumeration oracle across the whole user base."""
+        result = asyncio.run(
+            self._provider().async_run(
+                action=action, user_id="victim", auth_method="mfa"
+            )
+        )
+        assert result["success"] is False, result
+        assert result["reason"] == "session_required", result
+
+    @pytest.mark.parametrize("action", ["get_methods", "challenge_mfa"])
+    def test_an_unissued_session_is_refused(self, action):
+        result = asyncio.run(
+            self._provider().async_run(
+                action=action,
+                user_id="victim",
+                session_id="i-made-this-up",
+                auth_method="mfa",
+            )
+        )
+        assert result["success"] is False, result
+        assert result["reason"] == "session_invalid", result
+
+    def test_a_valid_session_wins_over_the_caller_supplied_user_id(self):
+        """Discrimination in the other direction, and the identity-derivation
+        property itself: the SESSION's subject is used, not the request's."""
+        provider = self._provider()
+        created = provider.session_node.run(
+            action="create", user_id="alice", ip_address="10.0.0.1", device_info={}
+        )
+        result = asyncio.run(
+            provider.async_run(
+                action="get_methods",
+                user_id="victim",  # the caller's claim, which must be ignored
+                session_id=created["session_id"],
+            )
+        )
+        assert result.get("user_id") == "alice", result

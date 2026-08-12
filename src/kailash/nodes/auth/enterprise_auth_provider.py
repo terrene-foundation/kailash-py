@@ -199,14 +199,24 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # takes the explicit require_actor=False opt-out rather than a fake
         # actor (issue #2047).
         #
-        # It is entitled to: every call it makes passes a SERVER-DERIVED
-        # subject. `_authenticate` refuses a request whose credential asserts
-        # no principal and overrides a mismatched caller-supplied user_id with
-        # the asserted one (#2035, ~:455-470), so `user_id` reaching the MFA
-        # node is the principal the credential proved -- not the one the
-        # request asked for. It also cannot pass an actor session: MFA
-        # verification happens BEFORE a session exists, which is what it is
-        # gating the creation of.
+        # WHAT ENTITLES IT, stated precisely. An earlier version of this
+        # comment claimed "every call it makes passes a SERVER-DERIVED
+        # subject". That was FALSE and was measured false: there are four
+        # call sites into `mfa_node`, and only the two reached via
+        # `_authenticate` were qualified. `get_methods` and `challenge_mfa`
+        # dispatched from `async_run` with the raw caller-supplied `user_id`,
+        # so an unauthenticated caller could enumerate any account's MFA
+        # state (#2047 F1). Both now resolve their subject from the session
+        # through `_resolve_session_subject`, which is what makes the claim
+        # true rather than asserted.
+        #
+        # So: every path into the MFA node now derives its subject from
+        # server-side state -- from the credential's asserted principal
+        # (`_authenticate` refuses a credential asserting no principal and
+        # overrides a mismatched caller-supplied user_id, #2035) or from a
+        # validated session. The provider also cannot pass an actor session
+        # on the authenticate path: MFA verification happens BEFORE a session
+        # exists, which is what it is gating the creation of.
         #
         # An operator wanting enforcement here supplies it explicitly, e.g.
         # mfa_config={"require_actor": True, "actor_resolver": ...}; the
@@ -354,10 +364,32 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 result = await self._validate_session(session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "assess_risk":
                 result = await self._assess_risk(user_id, risk_context, **kwargs)  # type: ignore[arg-type]
-            elif action == "get_methods":
-                result = await self._get_available_methods(user_id, **kwargs)  # type: ignore[arg-type]
-            elif action == "challenge_mfa":
-                result = await self._challenge_mfa(user_id, auth_method, **kwargs)  # type: ignore[arg-type]
+            elif action in ("get_methods", "challenge_mfa"):
+                # SUBJECT FROM THE SESSION, never from the request (#2047 F1).
+                #
+                # These two dispatched straight from here with the raw
+                # caller-supplied `user_id`: unauthenticated, unrate-limited
+                # (the guard above is `action == "authenticate"` only), and --
+                # because this provider constructs its MFA node with
+                # require_actor=False -- ungated at the node too. An
+                # unauthenticated caller could send
+                # `action="get_methods", user_id="<victim>"` and learn whether
+                # that account has MFA configured: an enumeration oracle over
+                # the whole user base, ideal for finding un-enrolled accounts.
+                # `challenge_mfa` reached the MFA node for an arbitrary
+                # subject the same way.
+                #
+                # `security.md` § Multi-Site Kwarg Plumbing: a sibling left
+                # unqualified ships the EXACT failure mode the fix addresses.
+                # `_authenticate` and `_authorize` were qualified; these two
+                # were the siblings.
+                subject, denial = await self._resolve_session_subject(session_id)  # type: ignore[arg-type]
+                if denial is not None:
+                    result = denial
+                elif action == "get_methods":
+                    result = await self._get_available_methods(subject, **kwargs)  # type: ignore[arg-type]
+                else:
+                    result = await self._challenge_mfa(subject, auth_method, **kwargs)  # type: ignore[arg-type]
             else:
                 raise ValueError(f"Unsupported authentication action: {action}")
 
@@ -1461,6 +1493,50 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             "location": kwargs.get("location", ""),
             "timestamp": kwargs.get("timestamp", datetime.now(UTC).isoformat()),
         }
+
+    async def _resolve_session_subject(
+        self, session_id: Optional[str]
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Derive the subject from a session, or return a refusal.
+
+        Returns ``(user_id, None)`` when the session proves an identity, or
+        ``(None, refusal)`` when it does not. Fail-closed at every exit.
+
+        A session is proof of authentication; without one, ``user_id`` is just
+        a string the caller typed. ``_authorize`` established this shape for
+        issue #2026 and carried it alone -- ``get_methods`` and
+        ``challenge_mfa`` dispatched on the caller's claim (#2047 F1). Sharing
+        one resolver is what stops the next action being added on the
+        unqualified path.
+        """
+        if not session_id:
+            return None, {
+                "success": False,
+                "error": "Session required",
+                "reason": "session_required",
+            }
+
+        validation = await self.session_node.async_run(
+            action="validate", session_id=session_id
+        )
+        if not validation.get("valid"):
+            return None, {
+                "success": False,
+                "error": "Invalid session",
+                "reason": "session_invalid",
+            }
+
+        # The subject is NESTED under "session_data"; reading a top-level
+        # "user_id" always missed and fell back to the caller's claim.
+        session_data = validation.get("session_data") or {}
+        subject = session_data.get("user_id") or validation.get("user_id")
+        if not isinstance(subject, str) or not subject:
+            return None, {
+                "success": False,
+                "error": "Session has no subject",
+                "reason": "session_subject_missing",
+            }
+        return subject, None
 
     async def _authorize(
         self,
