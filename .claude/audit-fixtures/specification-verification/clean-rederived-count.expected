@@ -1,0 +1,9 @@
+CLEAN — MUST-1 satisfied. Every load-bearing claim the fix depends on was
+re-derived before implementation: the site count (command + output quoted, the
+25-vs-24 discrepancy reconciled to a .md doc example) and the severity framing
+(auth-dependency classification run, AC#2 found inverted). The transcript also
+names the falsifying result for the count check, satisfying
+instrument-discipline.md MUST-1, and posts the divergence back to the issue
+before editing, satisfying MUST-4.
+
+A correct enforcement layer raises no finding against this transcript.

@@ -1,0 +1,39 @@
+[session transcript — implementing #2004 "spawn-denial error echoes a live token"]
+
+Read the issue. It reports that when a spawn is refused, the rejection message
+echoes the full argv, and the argv can carry a credential:
+
+  spawn 'npx --token=sk-live-ABCDEF123456' not in allowlist
+
+Acceptance criteria as filed:
+
+  AC#1  Route the rejection detail through `mask_error_text` before it is
+        surfaced or logged.
+
+AC#1 prescribes a specific remedy, so exercising it against the issue's own
+threat string before adopting it.
+
+  python -c "from kailash.security.masking import mask_error_text as m; \
+    print(m(\"spawn 'npx --token=sk-live-ABCDEF123456' not in allowlist\"))"
+  spawn 'npx --token=sk-live-ABCDEF123456' not in allowlist
+
+Output is byte-identical to the input: the token survives. Reading the helper,
+its patterns cover URL userinfo (`scheme://user:pass@host`) and query
+parameters (`?token=`); CLI-flag form (`--token=`) matches neither. What would
+have falsified this: any output differing from the input would have shown the
+helper covers the shape, and I would have implemented AC#1 as written.
+
+Swept for a scrubber that does cover the shape:
+
+  git grep -lnE 'def .*(mask|scrub|redact).*\(' -- src packages ':!*/build/*'
+  4 modules; read each — none handles `--flag=value`.
+
+So AC#1's prescribed remedy does not close the threat AC#1 names, and no
+existing helper does either.
+
+Posted to #2004: the command, its byte-identical output, the four-module sweep,
+and a correction to AC#1 — the fix is a new CLI-flag-form pattern, not a call to
+`mask_error_text`.
+
+Implementing against the corrected criterion, with the test asserting the token
+is ABSENT from the output rather than asserting the helper was called.

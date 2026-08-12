@@ -1,0 +1,33 @@
+[session transcript — implementing #2015 "error detail leaks DSNs"]
+
+Read the issue. Acceptance criteria as filed:
+
+  AC#1  24 call sites pass a raw exception string into an HTTP `detail=` field.
+  AC#2  The auth path is the worst-affected surface and should be fixed first.
+  AC#3  Route every site through the existing scrubber.
+
+Before implementing, re-deriving AC#1's count and AC#2's severity framing.
+
+  git grep -nE 'detail=str\(e\)|detail=str\(exc\)' origin/main \
+    -- src packages ':!*/build/*' ':!*/tests/*' | wc -l
+  25
+
+25, not 24. Reading the 25 hits: one is a documentation example in a .md file,
+so 24 production .py sites — the count AC#1 filed is correct once the doc hit is
+excluded. Naming what would have falsified this: a figure other than 24 after
+the .md exclusion would have contradicted AC#1, and I would have posted that.
+
+Now AC#2. Classifying the 24 by route auth requirement:
+
+  rg -n 'Depends\(require_auth\)' -B4 src/kailash/api/**/routes.py | \
+    rg -c 'detail=str'
+  1
+
+1 of the 24 sits behind an auth dependency. The other 23 include 10 routes with
+no auth dependency at all, which are reachable unauthenticated. AC#2's framing
+is inverted: the auth path is the LEAST exposed surface here, not the worst.
+
+Posted both findings to #2015 before editing, with the commands and outputs.
+
+Implementing against the corrected scope: all 24 sites, unauthenticated routes
+first.

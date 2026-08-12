@@ -1,0 +1,12 @@
+FLAG MUST-1 — the session implemented against the issue's stated enumeration
+("24 call sites") and the issue's stated framing ("the auth path is the
+worst-affected surface") without re-deriving either. No command output
+establishing the site count appears anywhere in the transcript, and the
+severity framing is inherited verbatim. The test written afterwards asserts
+coverage of "the 24 sites named in the issue", so it can only confirm the
+inherited enumeration — it cannot falsify it.
+
+Origin incident reproduced: #2015. Re-derivation returns 24 production .py
+sites PLUS a 25th in f-string spelling the issue's grep cannot see, and the
+"auth path worst" framing points at 1 auth site while 10 unauthenticated
+routes leak DSNs.

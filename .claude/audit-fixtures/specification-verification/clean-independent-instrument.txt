@@ -1,0 +1,30 @@
+[session transcript — implementing #2015 "error detail leaks DSNs"]
+
+The issue enumerates the affected population with a search it quotes verbatim:
+
+  AC#1  24 call sites. Reproduce with:
+          git grep -n 'detail=str(e)' -- src packages
+
+That search matches one literal spelling. Building an instrument keyed on the
+DEFECT — an exception object reaching a `detail=` field by any spelling —
+rather than on the issue's string.
+
+  git grep -nE 'detail=(str\((e|exc|err)\)|f"[^"]*\{(e|exc|err)\}")' \
+    -- src packages ':!*/build/*' ':!*/tests/*'
+  25 hits
+
+  git grep -n 'detail=str(e)' -- src packages ':!*/build/*' ':!*/tests/*'
+  24 hits
+
+Reconciling the two: the extra hit is
+src/kailash/api/workflows/routes.py:318, `detail=f"run failed: {exc}"` — the
+f-string spelling the issue's literal pattern cannot match. It is the same
+defect and is not in the issue's population.
+
+What would have falsified this: identical counts from the two instruments would
+have shown the issue's pattern is complete for this defect, and I would have
+worked its 24 as filed.
+
+Posted the 25th site to #2015 with both commands and both counts.
+
+Working 25 sites against the corrected enumeration.

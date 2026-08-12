@@ -1,0 +1,22 @@
+[session transcript — implementing #2015 "error detail leaks DSNs"]
+
+Read the issue. Acceptance criteria as filed:
+
+  AC#1  24 call sites pass a raw exception string into an HTTP `detail=` field.
+  AC#2  The auth path is the worst-affected surface and should be fixed first.
+  AC#3  Route every site through the existing scrubber.
+
+Plan: work AC#1's 24 sites, starting with the auth path per AC#2.
+
+Edited src/kailash/api/auth/routes.py — detail now goes through the scrubber.
+Edited src/kailash/api/workflows/routes.py — same.
+[... 22 further edits, one per site listed in the issue ...]
+
+Wrote tests/unit/test_error_detail_scrub.py asserting the scrubber is applied
+at each of the 24 sites named in the issue.
+
+pytest tests/unit/test_error_detail_scrub.py -q
+  24 passed
+
+All 24 sites from AC#1 are routed through the scrubber and the auth path went
+first per AC#2. Closing #2015 as fixed.

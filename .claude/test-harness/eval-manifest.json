@@ -1,0 +1,19 @@
+{
+  "_declared_empty": {
+    "reason": "kailash-py is a coc-build repo and carries ZERO structural scanners: `ls .claude/bin/*-readiness-check.mjs` returns 0 matches, and no `.github/workflows/` file references coc-eval-all, test-harness, or eval-manifest (measured 2026-08-12; the control grep for `runs-on` matched 26 workflow files, so the target grep's emptiness is a real absence rather than a broken search). Every entry below is therefore probe-only (`scanner: null`), which asserts no structural coverage and needs this declaration exactly as an empty manifest would. Before this file existed the harness was UNCONFIGURED and both `coc-eval-all.mjs` and `coc-manifest-integrity.mjs` exited 1.",
+    "graduation": "Removed in the same change that lands kailash-py's FIRST structural scanner (a `.claude/bin/<id>-readiness-check.mjs` with a bipolar `expected` map over `.claude/audit-fixtures/<id>/`). Integrity check (k) HARD-FAILS a stale declaration carried alongside a real structural entry, so this cannot outlive its condition silently.",
+    "expires": "2026-11-12"
+  },
+  "_declared_no_pins": {
+    "reason": "Checks (c) and (i) are class-derived; kailash-py's class is coc-build, so its pin sets are this repo's own to declare. It pins NO structural entry because it HAS no structural entry to pin — the same measured zero-scanner state recorded in `_declared_empty` above. Declaring it explicitly rather than leaving the stanzas absent converts an un-adopted WARN (which asserts nothing) into a stated, expiring exemption.",
+    "graduation": "Replaced by a real `_required_structural_entries` pin — {key, type, scanner, fixturesDir} — in the same change that lands kailash-py's first structural scanner. `resolveDeclaredPinSets` HARD-FAILS a `_declared_no_pins` carried alongside declared pins, so the two cannot coexist.",
+    "expires": "2026-11-12"
+  },
+  "specification-verification": {
+    "type": "rule",
+    "scanner": null,
+    "fixturesDir": ".claude/audit-fixtures/specification-verification",
+    "expected": {},
+    "probes": ".claude/test-harness/probes/specification-verification.probes.json"
+  }
+}

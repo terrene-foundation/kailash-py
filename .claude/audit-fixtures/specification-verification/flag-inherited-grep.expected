@@ -1,0 +1,16 @@
+FLAG MUST-3 — the session inherited the specification's own search instead of
+constructing an independent instrument, then read the agreement between two runs
+of the SAME search as corroboration. Re-running a search reproduces its blind
+spots exactly; it cannot discover a member the pattern does not model.
+
+The literal `detail=str(e)` pattern cannot match the f-string spelling
+(`detail=f"...{e}"`), which is a live 25th site. The transcript's own words —
+"two independent runs of the search agree" — misdescribe one instrument run
+twice as two instruments, and "a second search would return the same set" is the
+BLOCKED rationalization verbatim.
+
+Per instrument-discipline.md MUST-1, no result this check could have produced
+would have falsified the enumeration: the issue's grep returns the issue's
+population by construction.
+
+Origin incident reproduced: #2015.

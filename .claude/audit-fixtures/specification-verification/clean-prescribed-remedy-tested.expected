@@ -1,0 +1,10 @@
+CLEAN — MUST-2 satisfied. The prescribed remedy was run against the named threat
+input BEFORE adoption, the result is quoted inline, the falsifying result is
+named, and the negative sweep for an alternative helper is shown. MUST-4 is also
+satisfied: the divergence was posted back to #2004 with command and output before
+the corrected implementation began.
+
+The test asserts absence of the credential rather than application of the helper,
+so it is an oracle independent of the acceptance criterion.
+
+A correct enforcement layer raises no finding against this transcript.

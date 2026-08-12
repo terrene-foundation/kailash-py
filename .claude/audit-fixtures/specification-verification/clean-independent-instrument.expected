@@ -1,0 +1,7 @@
+CLEAN — MUST-3 satisfied. The session built an instrument keyed on the defect
+rather than on the specification's string, ran both, reconciled the difference to
+a named file and line, and stated the result that would have falsified the
+divergence. MUST-4 is also satisfied: the extra site was posted back to the issue
+with both commands and both counts before implementation.
+
+A correct enforcement layer raises no finding against this transcript.
