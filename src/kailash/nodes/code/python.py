@@ -52,11 +52,6 @@ import inspect
 import json
 import logging
 import os
-
-try:
-    import resource  # Unix-only module
-except ImportError:
-    resource = None  # type: ignore[assignment]  # Not available on Windows
 import traceback
 from collections.abc import Callable
 from datetime import date, datetime
@@ -76,6 +71,7 @@ from kailash.security import (
     SecurityConfig,
     execution_timeout,
     get_security_config,
+    memory_limit_guard,
     validate_node_parameters,
 )
 
@@ -462,37 +458,31 @@ class CodeExecutor:
         # They are added to local_namespace below to prevent variable persistence
 
         try:
-            # Set memory limit if supported (Unix systems)
-            if (
-                resource is not None
-                and hasattr(resource, "RLIMIT_AS")
-                and self.security_config.memory_limit
-            ):
-                try:
-                    resource.setrlimit(
-                        resource.RLIMIT_AS,
-                        (
-                            self.security_config.memory_limit,
-                            self.security_config.memory_limit,
-                        ),
-                    )
-                except (OSError, ValueError):
-                    logger.warning(
-                        "Could not set memory limit - continuing without limit"
-                    )
-
             # Execute with timeout using separate global and local namespaces
             # This prevents variable persistence across executions (CRITICAL FIX)
             # See: SDK Bug Report - PythonCodeNode Variable Persistence
             local_namespace = {}
             local_namespace.update(sanitized_inputs)
 
-            with execution_timeout(
-                self.security_config.execution_timeout, self.security_config
-            ):
-                # Use separate globals (namespace) and locals (local_namespace)
-                # This ensures complete variable isolation between executions
-                exec(code, namespace, local_namespace)
+            # Memory limit (issue #2078). This used to call
+            #   resource.setrlimit(RLIMIT_AS, (memory_limit, memory_limit))
+            # directly here, which set an ABSOLUTE, PROCESS-WIDE, IRREVERSIBLE
+            # cap of 512 MB (both soft AND hard) the first time any workflow ran
+            # a PythonCodeNode. An interpreter with the SDK imported already
+            # occupies ~635 MB of address space, so the process capped itself
+            # BELOW its own footprint and every later mmap failed — including
+            # the stack allocation for a new thread. That is where CI's 130
+            # `RuntimeError: can't start new thread` and 90 `sqlite3.
+            # OperationalError: disk I/O error` came from. macOS never showed it
+            # because its kernel rejects the call, so the except-branch ran and
+            # the limit was silently never applied.
+            with memory_limit_guard(config=self.security_config):
+                with execution_timeout(
+                    self.security_config.execution_timeout, self.security_config
+                ):
+                    # Use separate globals (namespace) and locals (local_namespace)
+                    # This ensures complete variable isolation between executions
+                    exec(code, namespace, local_namespace)
 
             # Return all non-private variables from LOCAL namespace only
             # Variables from previous executions cannot leak through

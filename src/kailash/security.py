@@ -115,10 +115,16 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+try:
+    import resource  # Unix-only module
+except ImportError:  # pragma: no cover - Windows
+    resource = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -721,6 +727,166 @@ def execution_timeout(
             raise ExecutionTimeoutError(
                 f"Execution timeout: {elapsed_time:.2f}s > {timeout}s"
             )
+
+
+# --- Address-space (memory) limiting -----------------------------------------
+#
+# RLIMIT_AS is a PROCESS-WIDE limit. Lowering it to an absolute value from
+# inside a library permanently cripples the embedding process: every later
+# mmap in that process fails, including the 8 MB stack pthread_create needs,
+# which surfaces as `RuntimeError: can't start new thread` and as
+# `sqlite3.OperationalError: disk I/O error` in code that has nothing to do
+# with the node that set the limit (issue #2078).
+#
+# The guard below is therefore bounded in BOTH directions:
+#   * in VALUE  - the ceiling is (current address-space usage + limit), so the
+#     limit bounds what the guarded block may ADD, never the footprint the
+#     process already legitimately has;
+#   * in TIME   - the previous soft limit is restored on exit, and only the
+#     SOFT limit is ever touched so the change stays reversible (lowering the
+#     HARD limit is a one-way door for an unprivileged process).
+#
+# Concurrent guarded blocks are reference-counted: the first entrant applies
+# the ceiling, the last one out restores. The lock is held only for that
+# bookkeeping, never across the guarded block, so parallel node execution is
+# not serialized.
+_ADDRESS_SPACE_LOCK = threading.Lock()
+_address_space_depth = 0
+_address_space_saved: tuple[int, int] | None = None
+_address_space_unsupported_logged = False
+
+
+def _log_address_space_unsupported(reason: str) -> None:
+    """Log once that the address-space limit could not be applied.
+
+    Once, not per execution: on macOS every call fails identically, and a
+    per-execution warning would bury the log without adding information.
+    """
+    global _address_space_unsupported_logged
+    if _address_space_unsupported_logged:
+        return
+    _address_space_unsupported_logged = True
+    logger.warning(
+        "Memory limit is NOT enforced for in-process code execution on this "
+        "platform (%s). Code executed by PythonCodeNode may allocate without "
+        "bound. Run untrusted code in a subprocess if the limit must hold.",
+        reason,
+    )
+
+
+def _current_address_space_bytes() -> int | None:
+    """Return this process's current virtual address-space size, or None.
+
+    Reads ``/proc/self/statm`` (field 0, total program size in pages). Returns
+    None where /proc is absent, which is the signal that the ceiling cannot be
+    computed and the limit must not be applied.
+    """
+    try:
+        with open("/proc/self/statm", "rb") as handle:
+            pages = int(handle.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    return pages * os.sysconf("SC_PAGE_SIZE")
+
+
+@contextmanager
+def memory_limit_guard(
+    limit: int | None = None, config: SecurityConfig | None = None
+):
+    """
+    Context manager bounding how much address space the guarded block may add.
+
+    Applies ``limit`` bytes of headroom above the process's CURRENT
+    address-space usage for the duration of the block, then restores the
+    previous soft limit. A ``MemoryError`` raised inside the block is
+    translated to :class:`MemoryLimitError`.
+
+    Where the platform does not enforce ``RLIMIT_AS`` (notably macOS, whose
+    kernel rejects the call) the block runs unguarded and a single warning is
+    logged. That is a real gap, not a silent one: the limit is advertised as
+    unenforced rather than pretended.
+
+    Args:
+        limit: Additional address space the block may use, in bytes
+            (uses ``config.memory_limit`` if None)
+        config: Security configuration
+
+    Raises:
+        MemoryLimitError: If the guarded block exhausts the headroom
+
+    Examples:
+        >>> with memory_limit_guard(64 * 1024 * 1024):
+        ...     data = [0] * 1000
+    """
+    global _address_space_depth, _address_space_saved
+
+    if config is None:
+        config = get_security_config()
+
+    if limit is None:
+        limit = config.memory_limit
+
+    applicable = bool(limit) and resource is not None and hasattr(resource, "RLIMIT_AS")
+
+    if applicable:
+        with _ADDRESS_SPACE_LOCK:
+            entering_outermost = _address_space_depth == 0
+            _address_space_depth += 1
+            if entering_outermost:
+                _apply_address_space_ceiling(limit)
+
+    try:
+        yield
+    except MemoryError as exc:
+        raise MemoryLimitError(
+            f"Memory limit exceeded: code execution requested more than "
+            f"{limit} bytes of additional address space"
+        ) from exc
+    finally:
+        if applicable:
+            with _ADDRESS_SPACE_LOCK:
+                _address_space_depth -= 1
+                if _address_space_depth == 0 and _address_space_saved is not None:
+                    saved, _address_space_saved = _address_space_saved, None
+                    try:
+                        resource.setrlimit(resource.RLIMIT_AS, saved)
+                    except (OSError, ValueError) as exc:
+                        # Failing to restore would leave the whole process
+                        # capped — the exact #2078 failure mode. Loud, never
+                        # swallowed.
+                        logger.error(
+                            "Could not restore RLIMIT_AS to %s after guarded "
+                            "execution; this process's address space stays "
+                            "capped: %s",
+                            saved,
+                            exc,
+                        )
+
+
+def _apply_address_space_ceiling(limit: int) -> None:
+    """Apply the soft RLIMIT_AS ceiling. Caller MUST hold the lock."""
+    global _address_space_saved
+
+    current = _current_address_space_bytes()
+    if current is None:
+        _log_address_space_unsupported("address-space usage is not readable")
+        return
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    ceiling = current + limit
+    if hard != resource.RLIM_INFINITY:
+        ceiling = min(ceiling, hard)
+    if soft != resource.RLIM_INFINITY and soft <= ceiling:
+        # An outer limit is already at least as tight; leave it alone.
+        return
+
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (ceiling, hard))
+    except (OSError, ValueError) as exc:
+        _log_address_space_unsupported(f"setrlimit(RLIMIT_AS) rejected: {exc}")
+        return
+
+    _address_space_saved = (soft, hard)
 
 
 def sanitize_input(
