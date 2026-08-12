@@ -108,17 +108,22 @@ class AuditTrailHook(BaseHook):
 
         # `metadata` gets the SAME reduction as `data`, and for the same
         # reason. It was previously forwarded WHOLE, so every value in it was
-        # serialised verbatim into the audit file -- a documented public kwarg
-        # on both HookManager.trigger and BaseAgent.trigger_hook, whose
-        # intended users are exactly the downstream callers most likely to put
-        # tenant and principal identifiers in it. `LoggingHook` already treats
-        # metadata as payload-class; the asymmetry was the bug.
+        # serialised verbatim into the audit file by `json.dumps(asdict(entry))`
+        # -- and it is a documented public kwarg on both `HookManager.trigger`
+        # and `BaseAgent.trigger_hook`, whose intended users are exactly the
+        # downstream callers most likely to put tenant and principal
+        # identifiers in it. `LoggingHook` already treats metadata as
+        # payload-class; the asymmetry was the bug.
+        #
+        # Absent metadata stays `None` rather than becoming an empty summary,
+        # so the on-disk shape of an entry from an in-tree caller (none of
+        # which populate the kwarg) is unchanged.
         await self.audit_manager.record(
             agent_id=context.agent_id,
             action=context.event_type.value,
             details=details,
             result=result,
-            metadata=summarize_payload(context.metadata),
+            metadata=summarize_payload(context.metadata) if context.metadata else None,
         )
 
         return HookResult(success=True, data={"audited": True, "result": result})

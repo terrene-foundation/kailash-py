@@ -15,6 +15,7 @@ Part of Phase 4: Observability & Performance Monitoring (ADR-017)
 
 import json
 import logging
+import stat
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -167,9 +168,7 @@ class FileAuditStorage:
         call: a mode requested at creation and stripped by umask is
         indistinguishable from one never requested.
         """
-        import stat as _stat
-
-        current = _stat.S_IMODE(path.stat().st_mode)
+        current = stat.S_IMODE(path.stat().st_mode)
         if current == mode:
             return
         if current & 0o077:

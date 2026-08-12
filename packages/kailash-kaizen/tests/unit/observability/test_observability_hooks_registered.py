@@ -19,6 +19,7 @@ shape that let four dead subsystems look alive.
 """
 
 import logging
+import os
 import sys
 
 import pytest
@@ -27,6 +28,7 @@ from kaizen.agent_config import AgentConfig
 from kaizen.smart_defaults import (
     SmartDefaultsManager,
     _parse_otlp_endpoint,
+    _warn_audit_unwritable,
     _warn_observability_unavailable,
     _warn_tracing_endpoint_is_web_ui,
 )
@@ -64,13 +66,17 @@ def _reset_one_time_warning():
     Without this the absence assertion in
     ``test_explicit_false_emits_no_warning`` could pass merely because an
     earlier test had already consumed the single warning -- an absence
-    assertion that cannot fail is not evidence.
+    assertion that cannot fail is not evidence. The same applies in reverse to
+    the unwritable-audit-path warning, whose PRESENCE is asserted: an
+    ``lru_cache`` hit from an earlier test would swallow it.
     """
     _warn_observability_unavailable.cache_clear()
     _warn_tracing_endpoint_is_web_ui.cache_clear()
+    _warn_audit_unwritable.cache_clear()
     yield
     _warn_observability_unavailable.cache_clear()
     _warn_tracing_endpoint_is_web_ui.cache_clear()
+    _warn_audit_unwritable.cache_clear()
 
 
 @pytest.fixture
@@ -463,24 +469,35 @@ async def test_audit_trail_records_structure_not_payload_values(config, tmp_path
     An audit file is retained and shipped widely, so turning compliance audit
     on must not itself become the disclosure channel -- the same split #2070
     drew for LoggingHook.
+
+    BOTH payload-bearing fields are covered. `metadata` is a documented public
+    kwarg on `HookManager.trigger` and `BaseAgent.trigger_hook`, and it was
+    forwarded WHOLE into `AuditEntry(metadata=...)`, which
+    `json.dumps(asdict(entry))` serialises verbatim -- so a sentinel placed
+    only in `data` would leave that half of the claim untested.
     """
     from kaizen.core.autonomy.hooks.types import HookEvent
 
     secret = "sk-live-AUDITTRAIL2084SECRETVALUE"
+    metadata_secret = "sk-live-AUDITMETADATA2084SECRETVALUE"
 
     hook_manager = _manager(config)
     await hook_manager.trigger(
         event_type=HookEvent.PRE_TOOL_USE,
         agent_id="agent-2084",
         data={"api_key": secret, "prompt": "wire the funds to account 4471"},
+        metadata={"tenant_token": metadata_secret, "principal": "dr.reyes@stjude"},
         timeout=10.0,
     )
 
     written = (tmp_path / "audit.jsonl").read_text()
     assert secret not in written, written
     assert "wire the funds" not in written, written
+    assert metadata_secret not in written, written
+    assert "dr.reyes@stjude" not in written, written
     # Structure IS preserved -- a "fix" that writes an empty file cannot pass.
     assert "api_key" in written and "prompt" in written, written
+    assert "tenant_token" in written and "principal" in written, written
 
 
 # =========================================================================
@@ -638,12 +655,22 @@ def test_audit_directory_created_by_the_storage_is_owner_only(tmp_path):
     assert mode == 0o700, f"audit directory is {oct(mode)}, expected 0o700"
 
 
-def test_pre_existing_audit_file_keeps_its_mode(tmp_path):
+def test_pre_existing_audit_file_is_tightened_and_the_change_is_announced(
+    tmp_path, caplog
+):
     """
-    NEGATIVE CONTROL. An operator-configured path is left alone.
+    A pre-existing world-readable trail is tightened, loudly.
 
-    Silently re-permissioning a file this class did not create is its own
-    surprise; the tightening applies only to paths it creates.
+    Restricting the fix to paths this class CREATES would mean it never
+    reaches an upgraded install: the audit file is created once and then
+    reused forever, so every existing deployment would keep its 0o644 trail
+    indefinitely. Re-permissioning a path an operator may have configured
+    deliberately is not something to do quietly, so it is announced with the
+    mode it had.
+
+    The mode is read back from `stat()` rather than trusted from the create
+    call: a mode requested and then stripped by umask is indistinguishable
+    from one never requested.
     """
     import stat
 
@@ -653,9 +680,36 @@ def test_pre_existing_audit_file_keeps_its_mode(tmp_path):
     existing.touch()
     existing.chmod(0o664)
 
-    FileAuditStorage(str(existing))
+    with caplog.at_level(logging.WARNING):
+        FileAuditStorage(str(existing))
 
-    assert stat.S_IMODE(existing.stat().st_mode) == 0o664
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o600
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "0o664" in text, text
+    assert "0o600" in text, text
+    assert str(existing) in text, text
+
+
+def test_an_already_owner_only_path_is_not_announced(tmp_path, caplog):
+    """
+    NEGATIVE CONTROL. Nothing to tighten means nothing to say.
+
+    Without this, the warning above could fire on every construction and the
+    assertion there would still pass -- a warning that always fires carries no
+    information about whether anything was actually loosened.
+    """
+    from kaizen.core.autonomy.observability.audit import FileAuditStorage
+
+    existing = tmp_path / "audit.jsonl"
+    existing.touch()
+    existing.chmod(0o600)
+
+    with caplog.at_level(logging.WARNING):
+        FileAuditStorage(str(existing))
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "tightening" not in text, text
 
 
 @pytest.mark.asyncio
@@ -689,3 +743,87 @@ async def test_audit_write_failure_is_loud_not_silent(config, tmp_path, caplog):
     assert any(
         getattr(r, "success", None) is False for r in results
     ), "the failed audit append was reported as success"
+
+
+# =========================================================================
+# A read-only filesystem must not stop an agent from being constructed
+# =========================================================================
+
+# The audit branch is the only place `create_observability` touches the
+# filesystem, and `agent.py` calls it BEFORE its own try -- so an unguarded
+# OSError there propagates straight out of `Agent.__init__`. Before this
+# change the branch died on an ImportError that was caught, so the write was
+# unreachable; making the branch work made it reachable.
+readonly_fs = pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="needs POSIX mode bits and a non-root euid (root ignores them)",
+)
+
+
+@pytest.fixture
+def unwritable_dir(tmp_path):
+    """A real directory that cannot be written to -- no mock, no patch."""
+    d = tmp_path / "readonly-root"
+    d.mkdir()
+    d.chmod(0o500)
+    yield d
+    d.chmod(0o700)  # so pytest's tmp_path cleanup can remove it
+
+
+@readonly_fs
+def test_unwritable_audit_path_warns_loudly_and_leaves_the_rest_installed(
+    tmp_path, unwritable_dir, caplog
+):
+    """
+    An audit sink that cannot be opened is announced, and skipped -- not fatal.
+
+    A compliance sink that cannot write must fail LOUDLY; failing
+    CONSTRUCTION takes down every unrelated subsystem with it, and takes down
+    the agent too.
+    """
+    config = AgentConfig(
+        model=MODEL,
+        llm_provider=PROVIDER,
+        audit_log_path=str(unwritable_dir / ".kaizen" / "audit.jsonl"),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        hook_manager = _manager(config)
+
+    assert hook_manager is not None
+    names = hook_manager.registered_hook_names()
+    assert "audit_trail_hook" not in names, (
+        "the audit path is unwritable, so the hook must not be registered -- a "
+        "registered hook that cannot write records nothing and says nothing"
+    )
+    assert "logging_hook" in names, (
+        "one unwritable path disabled an unrelated subsystem: " f"{names}"
+    )
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "enable_audit=False" in text, text
+    assert "audit_log_path" in text, text
+    assert str(unwritable_dir) in text, text
+
+
+@readonly_fs
+def test_agent_constructs_on_a_read_only_filesystem(unwritable_dir, monkeypatch):
+    """
+    `Agent()` must still construct when the CWD is not writable.
+
+    `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so the
+    audit branch writes into whatever directory the process runs in. Under
+    Kubernetes `readOnlyRootFilesystem: true`, a distroless image, or Lambda's
+    read-only `/var/task`, that `mkdir` raises -- and it sits ahead of
+    `Agent.__init__`'s own try, so before the guard it aborted construction.
+    This is the whole-object assertion; the test above pins the warning.
+    """
+    from kaizen.agent import Agent
+
+    monkeypatch.chdir(unwritable_dir)
+
+    agent = Agent(model=MODEL, llm_provider=PROVIDER, show_startup_banner=False)
+
+    assert agent is not None
+    assert not (unwritable_dir / ".kaizen").exists()
+    assert "audit_trail_hook" not in agent.hook_manager.registered_hook_names()
