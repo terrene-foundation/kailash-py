@@ -979,3 +979,520 @@ def test_real_uvicorn_socket_rejects_anonymous_execution(authed_env):
     with urllib.request.urlopen(credentialed, timeout=60) as response:
         assert response.status == 200
         assert json.loads(response.read())["outputs"]["n"]["result"] == {"ran": True}
+
+
+# ---------------------------------------------------------------------------
+# HIGH-1: the WebSocket handshake, which BaseHTTPMiddleware cannot see.
+#
+# ``JWTAuthMiddleware`` extends Starlette's ``BaseHTTPMiddleware``, whose
+# ``__call__`` returns early for any scope that is not ``"http"``, so
+# ``dispatch()`` never ran for a websocket and every ``@app.websocket(...)``
+# route was open on a ``require_auth=True`` server. These run unchanged against
+# the pre-fix tree and RED there: the handshake succeeded and the echo replied.
+# ---------------------------------------------------------------------------
+
+
+def _ws_rejected(client, path="/ws", headers=None):
+    """True when the server REFUSED the handshake.
+
+    Starlette's TestClient raises ``WebSocketDisconnect`` when the application
+    sends ``websocket.close`` while the handshake is still pending, which is
+    what rejecting before ``accept`` looks like from the client side.
+    """
+    from starlette.websockets import WebSocketDisconnect
+
+    try:
+        with client.websocket_connect(path, headers=headers or {}) as ws:
+            ws.send_text("probe")
+            ws.receive_text()
+        return False
+    except WebSocketDisconnect:
+        return True
+
+
+def test_websocket_handshake_is_gated(authed_env):
+    """``/ws`` refuses an uncredentialed handshake, with both controls.
+
+    Fail-first: on the pre-fix tree all three rows connect and echo, because
+    ``BaseHTTPMiddleware`` hands every non-``http`` scope straight through.
+    """
+    client = TestClient(_server_with_probe().app)
+
+    assert _ws_rejected(client), "/ws accepted an UNCREDENTIALED handshake"
+    assert _ws_rejected(
+        client, headers={"Authorization": f"Bearer {_make_token(secret='w' * 48)}"}
+    ), "/ws accepted a handshake bearing a token signed with the WRONG key"
+    # Discrimination control: without this the refusals could be a broken route.
+    assert not _ws_rejected(
+        client, headers={"Authorization": f"Bearer {_make_token()}"}
+    ), "/ws refused a VALID credential -- the gate is not discriminating"
+
+
+def test_websocket_gate_covers_the_enterprise_server(authed_env):
+    """``EnterpriseWorkflowServer`` registers its own ``/ws``; same gate."""
+    from kailash.servers.enterprise_workflow_server import EnterpriseWorkflowServer
+
+    client = TestClient(EnterpriseWorkflowServer(title="probe").app)
+
+    assert _ws_rejected(client), "enterprise /ws accepted an anonymous handshake"
+    assert not _ws_rejected(
+        client, headers={"Authorization": f"Bearer {_make_token()}"}
+    )
+
+
+def test_websocket_gate_honours_exempt_paths(authed_env):
+    """An exempt path stays reachable, so the gate is not a blanket refusal."""
+    server = WorkflowServer(title="probe", auth_exempt_paths=["/ws"])
+    assert not _ws_rejected(TestClient(server.app))
+
+
+def test_install_installs_both_scopes(authed_env):
+    """Structural pin: the HTTP layer alone is not the whole gate.
+
+    Behavioural tests above prove the websocket is closed today. This pins WHY,
+    so a future refactor that drops the websocket layer fails here with a
+    readable reason instead of only as a mysterious handshake regression.
+    """
+    from kailash.trust.auth.asgi import JWTAuthMiddleware, JWTWebSocketAuthMiddleware
+
+    installed = {m.cls for m in _server_with_probe().app.user_middleware}
+    assert JWTAuthMiddleware in installed
+    assert JWTWebSocketAuthMiddleware in installed
+
+
+def test_websocket_middleware_is_not_a_basehttpmiddleware():
+    """The websocket layer MUST NOT inherit the base that caused the blind spot.
+
+    ``BaseHTTPMiddleware.__call__`` short-circuits every non-``http`` scope, so
+    a websocket gate built on it would be inert while looking installed -- the
+    #2013 shape. Pinned as a type invariant because it is invisible in a diff.
+    """
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    from kailash.trust.auth.asgi import JWTWebSocketAuthMiddleware
+
+    assert not issubclass(JWTWebSocketAuthMiddleware, BaseHTTPMiddleware)
+
+
+def test_websocket_middleware_requires_a_config():
+    """``None`` would authenticate nothing while appearing to."""
+    from kailash.trust.auth.asgi import JWTWebSocketAuthMiddleware
+
+    with pytest.raises(ValueError, match="requires a JWTConfig"):
+        JWTWebSocketAuthMiddleware(app=lambda *a: None, config=None)
+
+
+def test_enterprise_ws_route_is_not_merely_broken(clean_auth_env):
+    """With the gate OFF, enterprise ``/ws`` must actually connect and echo.
+
+    Guards the gate tests above against passing for the wrong reason. FastAPI
+    treats an UNANNOTATED websocket parameter as a required query parameter, so
+    ``async def websocket_endpoint(websocket)`` closed every handshake on
+    ``EnterpriseWorkflowServer`` regardless of credentials -- an
+    "uncredentialed handshake refused" assertion would have read GREEN against
+    a route that refused everyone. Measured before the annotation was added::
+
+        WorkflowServer           -> OK echo: 'Echo: hi'
+        EnterpriseWorkflowServer -> FAILED WebSocketDisconnect
+    """
+    from kailash.servers.enterprise_workflow_server import EnterpriseWorkflowServer
+
+    for server in (
+        WorkflowServer(title="probe", require_auth=False),
+        EnterpriseWorkflowServer(title="probe", require_auth=False),
+    ):
+        with TestClient(server.app).websocket_connect("/ws") as ws:
+            ws.send_text("hi")
+            assert ws.receive_text() == "Echo: hi", type(server).__name__
+
+
+# ---------------------------------------------------------------------------
+# HIGH-2: the SIXTH surface -- kailash.middleware.create_gateway.
+#
+# ``kailash.middleware`` re-exports ``create_gateway`` from
+# ``communication.api_gateway``, under the SAME NAME as the fixed
+# ``kailash.servers.gateway.create_gateway`` that ``from kailash import
+# create_gateway`` resolves to. The middleware one gated nothing:
+# ``enable_auth=True`` built a ``JWTAuthManager`` no route ever consulted.
+# ---------------------------------------------------------------------------
+
+_GATEWAY_ROUTES = [
+    ("get", "/"),
+    ("get", "/api/workflows"),
+    ("get", "/api/executions?session_id=s"),
+    ("delete", "/api/executions/e?session_id=s"),
+    ("get", "/api/stats"),
+    ("get", "/openapi.json"),
+    ("get", "/docs"),
+]
+
+
+@pytest.fixture
+def middleware_gateway_env(authed_env):
+    """The env the middleware gateway's own token issuer needs, plus the gate's."""
+    authed_env.setenv("KAILASH_API_GATEWAY_SECRET", _SECRET)
+    return authed_env
+
+
+def test_middleware_create_gateway_is_a_different_callable(clean_auth_env):
+    """The two exported ``create_gateway`` names are NOT the same function.
+
+    Pins the collision itself. If they ever converge, this test should be
+    deleted deliberately rather than silently satisfied.
+    """
+    import kailash
+    import kailash.middleware as mw
+
+    assert mw.create_gateway is not kailash.create_gateway
+    assert mw.create_gateway.__module__ != kailash.create_gateway.__module__
+
+
+@pytest.mark.parametrize("method,path", _GATEWAY_ROUTES)
+def test_middleware_gateway_route_requires_authentication(
+    middleware_gateway_env, method, path
+):
+    """Every middleware-gateway route answers an anonymous caller with 401.
+
+    Fail-first: on the pre-fix tree these returned 200/404/500 -- reaching the
+    handler -- never 401. Measured on a real socket before the fix::
+
+        GET  /                          -> 200
+        GET  /api/workflows             -> 200
+        POST /api/executions?session_id -> 500   (handler RAN)
+        GET  /openapi.json              -> 200
+    """
+    from kailash.middleware import create_gateway
+
+    client = TestClient(create_gateway(title="probe").app)
+    assert getattr(client, method)(path).status_code == 401
+
+
+def test_middleware_gateway_execute_route_requires_authentication(
+    middleware_gateway_env,
+):
+    """``POST /api/executions`` -- the route that RUNS a workflow."""
+    from kailash.middleware import create_gateway
+
+    client = TestClient(create_gateway(title="probe").app)
+    response = client.post(
+        "/api/executions?session_id=s",
+        json={"workflow_id": "w", "inputs": {}, "config_overrides": {}},
+    )
+    assert response.status_code == 401
+
+
+def test_middleware_gateway_accepts_the_token_it_issues(middleware_gateway_env):
+    """Discrimination control, and a continuity guarantee in one.
+
+    The gate's verifier is derived from the gateway's OWN ``JWTAuthManager``,
+    so a token this gateway mints must be accepted by this gateway. Were the
+    two wired to different keys -- or were issuer/audience dropped from the
+    derivation -- every legitimately-issued token would 401 and the 401s above
+    would be meaningless.
+    """
+    from kailash.middleware import create_gateway
+
+    gateway = create_gateway(title="probe")
+    token = gateway.auth_manager.create_access_token(user_id="u1", tenant_id="t1")
+    token = token if isinstance(token, str) else token.access_token
+
+    client = TestClient(gateway.app)
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/", headers=headers).status_code == 200
+    assert client.get("/api/workflows", headers=headers).status_code == 200
+
+
+def test_middleware_gateway_rejects_a_wrong_key_token(middleware_gateway_env):
+    """A bearer token signed with a different secret is refused.
+
+    Without this, the 200 above could equally mean "any bearer token is waved
+    through".
+    """
+    import jwt as pyjwt
+
+    from kailash.middleware import create_gateway
+
+    forged = pyjwt.encode(
+        {
+            "sub": "u1",
+            "iss": "kailash-gateway",
+            "aud": "kailash-api",
+            "exp": 9999999999,
+        },
+        "wrong-secret-also-at-least-32-bytes-long-here",
+        algorithm="HS256",
+    )
+    client = TestClient(create_gateway(title="probe").app)
+    assert (
+        client.get(
+            "/api/workflows", headers={"Authorization": f"Bearer {forged}"}
+        ).status_code
+        == 401
+    )
+
+
+def test_middleware_gateway_health_stays_exempt(middleware_gateway_env):
+    """An orchestrator probe must not need a credential."""
+    from kailash.middleware import create_gateway
+
+    client = TestClient(create_gateway(title="probe").app)
+    assert client.get("/health").status_code == 200
+
+
+def test_middleware_gateway_websocket_is_gated(middleware_gateway_env):
+    """The middleware gateway's own ``/ws`` gets the websocket layer too."""
+    from kailash.middleware import create_gateway
+
+    assert _ws_rejected(TestClient(create_gateway(title="probe").app))
+
+
+def test_middleware_gateway_fails_closed_without_any_credential(clean_auth_env):
+    """No credential source anywhere -> refuses to construct.
+
+    ``enable_auth=False`` turns off token ISSUANCE and is deliberately not an
+    opt-out from the request gate, so it must not rescue this.
+    """
+    from kailash.middleware import create_gateway
+    from kailash.utils.server_auth import ServerAuthNotConfiguredError
+
+    with pytest.raises(ServerAuthNotConfiguredError):
+        create_gateway(title="probe", enable_auth=False)
+
+
+def test_middleware_gateway_explicit_opt_out_is_honoured(clean_auth_env, caplog):
+    """``require_auth=False`` constructs, serves openly, and WARNs loudly."""
+    import logging
+
+    from kailash.middleware import create_gateway
+
+    with caplog.at_level(logging.WARNING):
+        gateway = create_gateway(title="probe", enable_auth=False, require_auth=False)
+
+    assert gateway._auth_config is None
+    assert any(r.message == "server_auth.disabled" for r in caplog.records)
+    assert TestClient(gateway.app).get("/api/workflows").status_code == 200
+
+
+def test_middleware_gateway_security_kwargs_are_named_not_kwargs():
+    """``require_auth`` must not ride in ``**kwargs`` on either callable.
+
+    In ``**kwargs`` a typo (``require_authentication=False``) is accepted and
+    ignored -- on a fail-closed gate, the one mistake that must not pass
+    quietly. Named, it is a ``TypeError``.
+    """
+    import inspect
+
+    from kailash.middleware import create_gateway
+    from kailash.middleware.communication.api_gateway import APIGateway
+
+    for target in (create_gateway, APIGateway.__init__):
+        params = inspect.signature(target).parameters
+        for name in (
+            "require_auth",
+            "auth_config",
+            "external_auth_reason",
+            "auth_exempt_paths",
+        ):
+            assert name in params, f"{target.__qualname__} does not name {name}"
+
+
+def test_middleware_gateway_typo_on_the_gate_is_a_typeerror(middleware_gateway_env):
+    """A misspelled control raises rather than silently leaving the gate open."""
+    from kailash.middleware import create_gateway
+
+    with pytest.raises(TypeError):
+        create_gateway(title="probe", require_authentication=False)
+
+
+# ---------------------------------------------------------------------------
+# MEDIUM-1 / MEDIUM-2: the auth_config branch was the WEAKEST way to ask for
+# authentication -- it reused JWTConfig's broad default exempt list and ignored
+# extra_exempt_paths entirely.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", ["/openapi.json", "/docs", "/redoc", "/metrics"])
+def test_auth_config_does_not_reinstate_the_broad_exempt_default(clean_auth_env, path):
+    """``auth_config=JWTConfig(secret=...)`` must not expose the route map.
+
+    ``JWTConfig``'s own default exempts ``/docs``, ``/openapi.json``,
+    ``/metrics`` and ``/redoc``. ``server_auth`` documents that list as
+    deliberately NOT reused, because the OpenAPI documents hand an anonymous
+    caller the full route map -- but the ``auth_config`` branch returned the
+    caller's config untouched and reused it anyway. Measured before the fix,
+    every one of these was ``exempt=True``.
+    """
+    from kailash.trust.auth.jwt import JWTConfig
+    from kailash.utils.server_auth import resolve_server_auth
+
+    config = resolve_server_auth(
+        require_auth=True, auth_config=JWTConfig(secret=_SECRET), env={}
+    )
+    assert path not in config.exempt_paths
+
+    server = WorkflowServer(title="probe", auth_config=JWTConfig(secret=_SECRET))
+    assert TestClient(server.app).get(path).status_code == 401
+
+
+def test_auth_config_branch_honours_extra_exempt_paths(clean_auth_env):
+    """``extra_exempt_paths`` was threaded from five surfaces and never read.
+
+    A documented security kwarg consumed by no branch is ``zero-tolerance.md``
+    Rule 3c. Measured before the fix: ``/probe`` was not exempt.
+    """
+    from kailash.trust.auth.jwt import JWTConfig
+    from kailash.utils.server_auth import resolve_server_auth
+
+    config = resolve_server_auth(
+        require_auth=True,
+        auth_config=JWTConfig(secret=_SECRET),
+        extra_exempt_paths=["/probe"],
+        env={},
+    )
+    assert "/probe" in config.exempt_paths
+
+
+def test_auth_config_dict_branch_gets_the_same_policy(clean_auth_env):
+    """A dict without ``exempt_paths`` carries the same broad default."""
+    from kailash.utils.server_auth import resolve_server_auth
+
+    config = resolve_server_auth(
+        require_auth=True,
+        auth_config={"secret": _SECRET},
+        extra_exempt_paths=["/probe"],
+        env={},
+    )
+    assert "/openapi.json" not in config.exempt_paths
+    assert "/probe" in config.exempt_paths
+
+
+def test_an_explicit_caller_exempt_list_is_preserved(clean_auth_env):
+    """Narrowing applies to the UNTOUCHED default, never to a caller's choice."""
+    from kailash.trust.auth.jwt import JWTConfig
+    from kailash.utils.server_auth import resolve_server_auth
+
+    caller = JWTConfig(secret=_SECRET, exempt_paths=["/mine"])
+    config = resolve_server_auth(
+        require_auth=True,
+        auth_config=caller,
+        extra_exempt_paths=["/probe"],
+        env={},
+    )
+    assert config.exempt_paths == ["/mine", "/probe"]
+    # And the caller's own object is not mutated -- they may reuse it.
+    assert caller.exempt_paths == ["/mine"]
+
+
+def test_env_exempt_paths_reach_the_auth_config_branch(clean_auth_env):
+    """``KAILASH_AUTH_EXEMPT_PATHS`` applied only on the environment branch."""
+    from kailash.trust.auth.jwt import JWTConfig
+    from kailash.utils.server_auth import resolve_server_auth
+
+    config = resolve_server_auth(
+        require_auth=True,
+        auth_config=JWTConfig(secret=_SECRET),
+        env={"KAILASH_AUTH_EXEMPT_PATHS": "/envpath"},
+    )
+    assert "/envpath" in config.exempt_paths
+
+
+def test_narrowing_reads_jwtconfig_default_rather_than_copying_it():
+    """The "untouched" comparison must not drift from ``JWTConfig``.
+
+    Reading the dataclass field's own ``default_factory`` is what keeps this
+    correct when ``JWTConfig``'s default list changes; a hand-copied literal
+    would silently stop matching and disable the narrowing.
+    """
+    from kailash.trust.auth.jwt import JWTConfig
+    from kailash.utils.server_auth import _jwtconfig_default_exempt_paths
+
+    # A secret is required to construct at all (HS256 refuses without one), but
+    # it has no bearing on the exempt-path default this compares.
+    assert _jwtconfig_default_exempt_paths() == JWTConfig(secret=_SECRET).exempt_paths
+
+
+# ---------------------------------------------------------------------------
+# The log-record sanitizer: Cs (lone surrogates) DESTROYS the record.
+# ---------------------------------------------------------------------------
+
+
+def test_lone_surrogate_does_not_destroy_the_log_record():
+    """A lone surrogate must not delete the record documenting an exposure.
+
+    ``Cs`` cannot forge a line, so it was not swept -- but it makes the record
+    un-encodable, so the handler raises ``UnicodeEncodeError`` inside ``emit``
+    and ``logging`` DROPS it. On this module's call sites the dropped record is
+    the one saying auth was skipped. Measured before the fix: ``emitted bytes:
+    b''``.
+
+    Drives a REAL UTF-8 handler rather than asserting on the return value,
+    because the failure happens in the handler, after every check in
+    ``safe_log_text`` has already passed.
+    """
+    import io
+    import logging
+
+    from kailash.utils.secure_logging import safe_log_text
+
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="utf-8")
+    log = logging.getLogger("issue_2072_surrogate_probe")
+    log.handlers = [logging.StreamHandler(stream)]
+    log.setLevel(logging.INFO)
+    log.propagate = False
+
+    log.info("record %s", safe_log_text("a\ud800b"))
+    stream.flush()
+
+    assert buffer.getvalue() == b"record a?b\n"
+
+
+@pytest.mark.parametrize(
+    "raw,forbidden",
+    [
+        ("a\rb", "\r"),                    # Cc  CARRIAGE RETURN
+        ("a\nb", "\n"),                    # Cc  LINE FEED
+        ("a\x1bb", "\x1b"),                # Cc  ESC (ANSI sequences)
+        ("a\x00b", "\x00"),                # Cc  NUL
+        ("a\x85b", "\x85"),                # Cc  NEXT LINE
+        ("a\u2028b", "\u2028"),            # Zl  LINE SEPARATOR
+        ("a\u2029b", "\u2029"),            # Zp  PARAGRAPH SEPARATOR
+        ("a\u202eb", "\u202e"),            # Cf  RIGHT-TO-LEFT OVERRIDE
+        ("a\ud800b", "\ud800"),            # Cs  lone surrogate
+    ],
+)
+def test_record_forging_characters_are_swept(raw, forbidden):
+    """Every category the sanitizer claims to remove is actually removed."""
+    from kailash.utils.secure_logging import safe_log_text
+
+    assert forbidden not in safe_log_text(raw)
+
+
+def test_prose_survives_the_sanitizer():
+    """Negative control: the sweep must not mangle a readable message.
+
+    Without this, the tests above pass for a function that returns ``"?"``.
+    """
+    from kailash.utils.secure_logging import safe_log_text
+
+    message = "mounted under Enterprise Server, which authenticates every request"
+    assert safe_log_text(message) == message
+
+
+def test_line_terminator_barrier_uses_the_module_function_form():
+    """CodeQL recognizes ``re.sub(pattern, ...)``, not ``Pattern.sub(...)``.
+
+    Behaviourally identical; only the call form differs. Pre-compiling the
+    pattern left ``py/log-injection`` reported at the ``server_auth`` sites even
+    though the runtime behaviour was already correct, so a future
+    "optimization" that re-compiles it must fail here rather than silently
+    re-open the alerts.
+    """
+    import inspect
+
+    from kailash.utils import secure_logging
+
+    assert isinstance(secure_logging._LOG_LINE_TERMINATORS, str)
+    assert "re.sub(_LOG_LINE_TERMINATORS" in inspect.getsource(
+        secure_logging.safe_log_text
+    )
