@@ -599,3 +599,93 @@ def test_enabled_with_zero_installable_subsystems_returns_no_manager(
     )
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "no subsystem could be installed" in text, text
+
+
+# =========================================================================
+# The audit trail lands in the CWD by default -- so it must be owner-only
+# =========================================================================
+
+
+def test_audit_file_and_directory_are_owner_only(config, tmp_path):
+    """
+    A default-on audit sink in the working directory must not be world-readable.
+
+    `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so enabling
+    audit by default writes into whatever directory the process happens to run
+    in. The trail records which agent did what, when, and the SHAPE of every
+    payload -- at 0o644 that is readable by every local account.
+    """
+    import stat
+
+    _manager(config)
+
+    audit_file = tmp_path / "audit.jsonl"
+    mode = stat.S_IMODE(audit_file.stat().st_mode)
+    assert mode == 0o600, f"audit file is {oct(mode)}, expected 0o600"
+    assert not mode & 0o077, f"audit file is group/world accessible: {oct(mode)}"
+
+
+def test_audit_directory_created_by_the_storage_is_owner_only(tmp_path):
+    """The `.kaizen/` directory the storage creates is owner-only too."""
+    import stat
+
+    from kaizen.core.autonomy.observability.audit import FileAuditStorage
+
+    nested = tmp_path / "workdir" / ".kaizen"
+    FileAuditStorage(str(nested / "audit.jsonl"))
+
+    mode = stat.S_IMODE(nested.stat().st_mode)
+    assert mode == 0o700, f"audit directory is {oct(mode)}, expected 0o700"
+
+
+def test_pre_existing_audit_file_keeps_its_mode(tmp_path):
+    """
+    NEGATIVE CONTROL. An operator-configured path is left alone.
+
+    Silently re-permissioning a file this class did not create is its own
+    surprise; the tightening applies only to paths it creates.
+    """
+    import stat
+
+    from kaizen.core.autonomy.observability.audit import FileAuditStorage
+
+    existing = tmp_path / "audit.jsonl"
+    existing.touch()
+    existing.chmod(0o664)
+
+    FileAuditStorage(str(existing))
+
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o664
+
+
+@pytest.mark.asyncio
+async def test_audit_write_failure_is_loud_not_silent(config, tmp_path, caplog):
+    """
+    A failed audit append must surface, not vanish.
+
+    An audit trail that silently stops recording is worse than one that was
+    never enabled: the absence is invisible exactly when it matters.
+    """
+    from kaizen.core.autonomy.hooks.types import HookEvent
+
+    hook_manager = _manager(config)
+
+    # Make the append fail for real -- no mock -- by replacing the file with a
+    # directory, so the open() in FileAuditStorage.append raises.
+    audit_file = tmp_path / "audit.jsonl"
+    audit_file.unlink()
+    audit_file.mkdir()
+
+    with caplog.at_level(logging.WARNING):
+        results = await hook_manager.trigger(
+            event_type=HookEvent.PRE_AGENT_LOOP,
+            agent_id="agent-2084",
+            data={"inputs": {}},
+            timeout=10.0,
+        )
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "audit" in text.lower(), text
+    assert any(
+        getattr(r, "success", None) is False for r in results
+    ), "the failed audit append was reported as success"

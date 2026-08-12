@@ -74,6 +74,27 @@ kwarg previously had no effect at all (`zero-tolerance.md` Rule 3c). Passing a
 `hook_manager` is now itself the opt-in; `hooks_enabled=True` without one is
 unchanged, and supplying neither still leaves hooks inert.
 
+### Fixed — the audit trail is created owner-only (0o600 / 0o700)
+
+`audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl`, so with
+`enable_audit` now actually installing a hook, a default agent writes an audit
+trail into whatever directory the process runs in. `FileAuditStorage` created
+that file with `touch()` — 0o644 under a normal umask, readable by every local
+account. The trail records which agent did what, when, and the SHAPE of every
+payload involved.
+
+Files and directories `FileAuditStorage` **creates** are now 0o600 / 0o700,
+pinned with an explicit `chmod` because both `touch(mode=...)` and
+`mkdir(mode=...)` are masked by umask. A **pre-existing** path is left exactly
+as the operator configured it — silently re-permissioning a file this class did
+not create is its own surprise — so an audit file created before this change
+keeps its mode until recreated.
+
+A failed audit append is loud: the exception propagates to `HookManager`, which
+records `HookResult(success=False)`, logs the failure, and calls the hook's
+`on_error`. An audit trail that silently stops recording is worse than one
+never enabled, so this is pinned by a test that makes a real append fail.
+
 ### Added — `AgentConfig.log_payload_keys` (default `False`)
 
 Wiring `enable_logging` turns a previously dormant `LoggingHook` into a

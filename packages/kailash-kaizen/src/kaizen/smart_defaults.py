@@ -355,8 +355,10 @@ class SmartDefaultsManager:
                 FileAuditStorage,
             )
 
+            # No mkdir here: FileAuditStorage creates the directory AND pins it
+            # owner-only. Pre-creating it at this site would hand it the default
+            # umask mode and leave the tightening below with nothing to do.
             audit_path = Path(config.audit_log_path)
-            audit_path.parent.mkdir(parents=True, exist_ok=True)
 
             hook_manager.register_hook(
                 AuditTrailHook(

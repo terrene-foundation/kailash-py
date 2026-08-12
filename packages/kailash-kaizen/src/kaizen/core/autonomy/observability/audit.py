@@ -114,19 +114,41 @@ class FileAuditStorage:
         >>> entries = await storage.query(agent_id="qa-agent")
     """
 
+    # Owner-only. An audit trail records which agent did what, when, and the
+    # SHAPE of every payload involved; the default path puts it in the process
+    # CWD, where 0o644 would make it world-readable to every local account.
+    _FILE_MODE = 0o600
+    _DIR_MODE = 0o700
+
     def __init__(self, file_path: str = ".kaizen/audit.jsonl"):
         """
         Initialize file-based audit storage.
+
+        Files and directories THIS class creates are owner-only (0o600/0o700).
+        A pre-existing path is left exactly as the operator configured it --
+        silently re-permissioning a file someone else owns is its own surprise
+        -- so an audit file created before this change keeps its old mode until
+        it is recreated.
 
         Args:
             file_path: Path to JSONL audit file (created if not exists)
         """
         self.file_path = Path(file_path)
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # `mkdir(mode=...)` is masked by umask, so set the mode explicitly, and
+        # only for a directory we actually created.
+        parent = self.file_path.parent
+        parent_existed = parent.exists()
+        parent.mkdir(parents=True, exist_ok=True)
+        if not parent_existed:
+            parent.chmod(self._DIR_MODE)
 
         # Create file if not exists
         if not self.file_path.exists():
-            self.file_path.touch()
+            self.file_path.touch(mode=self._FILE_MODE)
+            # `touch(mode=...)` is also umask-masked, and a umask of 0 would
+            # leave the file group/world readable. Pin it.
+            self.file_path.chmod(self._FILE_MODE)
             logger.info(f"Created audit file: {self.file_path}")
 
         logger.debug(f"FileAuditStorage initialized: {self.file_path}")
