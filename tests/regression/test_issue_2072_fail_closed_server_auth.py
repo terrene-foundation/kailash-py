@@ -1525,20 +1525,27 @@ def test_prose_survives_the_sanitizer():
     assert safe_log_text(message) == message
 
 
-def test_line_terminator_barrier_uses_the_module_function_form():
-    """CodeQL recognizes ``re.sub(pattern, ...)``, not ``Pattern.sub(...)``.
+def test_line_terminator_barrier_is_a_literal_str_replace():
+    """Pass 2 exists for a dataflow analyzer, so its SHAPE is the contract.
 
-    Behaviourally identical; only the call form differs. Pre-compiling the
-    pattern left ``py/log-injection`` reported at the ``server_auth`` sites even
-    though the runtime behaviour was already correct, so a future
-    "optimization" that re-compiles it must fail here rather than silently
-    re-open the alerts.
+    All candidate forms are behaviourally identical -- by the time pass 2 runs,
+    the category sweep has already replaced every ASCII line terminator, so it
+    is a runtime no-op in every form. Only the shape differs, and only the shape
+    is what a taint analyzer reads. Two forms were MEASURED not to be recognized
+    by ``py/log-injection`` (a compiled ``Pattern.sub`` method, then the
+    ``re.sub`` module function); ``str.replace`` on literals is the canonical
+    barrier shape.
+
+    This test pins the shape so a future "optimization" back to a compiled
+    pattern is a loud failure rather than a silently re-opened alert. It does
+    NOT assert that the scanner is satisfied -- only the scanner can report
+    that, and it is checked on the PR.
     """
     import inspect
 
-    from kailash.utils import secure_logging
-
-    assert isinstance(secure_logging._LOG_LINE_TERMINATORS, str)
-    assert "re.sub(_LOG_LINE_TERMINATORS" in inspect.getsource(
-        secure_logging.safe_log_text
+    source = inspect.getsource(
+        __import__(
+            "kailash.utils.secure_logging", fromlist=["safe_log_text"]
+        ).safe_log_text
     )
+    assert '.replace("\\r", "?").replace("\\n", "?")' in source

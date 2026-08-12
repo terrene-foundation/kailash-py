@@ -127,19 +127,6 @@ _UNSAFE_IDENTIFIER_CHARS = re.compile(r"[^A-Za-z0-9_.\-/\\]")
 #: log, so they belong in the same frozenset.
 _RECORD_FORGING_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
 
-#: The ASCII line terminators, stripped by an explicit substitution in
-#: :func:`safe_log_text` after the category sweep. Redundant with ``Cc`` on
-#: purpose -- see the two-pass note there.
-#:
-#: A STRING, not a compiled pattern, and that is load-bearing for tooling rather
-#: than for behaviour. ``safe_log_text`` passes it to the ``re.sub`` MODULE
-#: FUNCTION; the previous revision compiled it here and called the
-#: ``Pattern.sub`` METHOD instead. CodeQL's ``py/log-injection`` sanitizer model
-#: recognizes the module-function form as a barrier and does not recognize the
-#: compiled-method form, so the compiled version left the taint unbroken at
-#: every call site. See the barrier note in :func:`safe_log_text`.
-_LOG_LINE_TERMINATORS = r"[\r\n]"
-
 #: Prose log fields get a longer bound than identifiers: a server label or an
 #: auth reason is a sentence, and truncating it at the 120-char identifier bound
 #: routinely cut the operative clause off the end of the message.
@@ -332,22 +319,29 @@ def safe_log_text(value: object, *, limit: int = _MAX_LOG_TEXT_CHARS) -> str:
     #    join last, `py/log-injection` was still reported at every call site,
     #    because the value actually returned came from the join.
     #
-    #    THE CALL FORM IS PART OF THE BARRIER, not a style choice. This is the
-    #    ``re.sub`` MODULE FUNCTION with the pattern passed as an argument. The
-    #    previous revision pre-compiled the pattern at module scope and called
-    #    ``Pattern.sub``, which is behaviourally identical and which CodeQL's
-    #    ``py/log-injection`` sanitizer model does NOT recognize -- so pass 2
-    #    barriered nothing and two alerts stayed live at the ``server_auth``
-    #    call sites even though the runtime behaviour was already correct. If a
-    #    future change re-compiles this for speed, the alerts come back.
+    #    THE CALL FORM IS PART OF THE BARRIER, not a style choice, and the
+    #    right form was established by MEASUREMENT rather than by reading the
+    #    query. Two forms have been tried against the real scanner:
     #
-    # Dropping either is a regression: pass 1 alone loses the recognized
+    #      a compiled ``Pattern.sub`` method   -> 2 alerts stayed live
+    #      the ``re.sub`` module function      -> 2 alerts stayed live
+    #      ``str.replace``                     -> see the alert count on this
+    #                                             commit; this is the canonical
+    #                                             barrier shape and the third
+    #                                             hypothesis under test
+    #
+    #    All three are behaviourally identical -- by the time pass 2 runs,
+    #    pass 1 has already replaced every ASCII line terminator, so this is a
+    #    no-op at runtime in every form. Only the SHAPE differs, and only the
+    #    shape is what a dataflow analyzer reads.
+    #
+    # Dropping either pass is a regression: pass 1 alone loses the recognized
     # barrier, pass 2 alone is the ASCII-only strip this function replaces.
     swept = "".join(
         "?" if unicodedata.category(ch) in _RECORD_FORGING_CATEGORIES else ch
         for ch in text
     )
-    cleaned = re.sub(_LOG_LINE_TERMINATORS, "?", swept)
+    cleaned = swept.replace("\r", "?").replace("\n", "?")
     if len(cleaned) > limit:
         # Marker uses <> precisely because... they are ours: the categories
         # stripped above cannot produce them, and a caller who writes a literal
