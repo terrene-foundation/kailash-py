@@ -33,7 +33,10 @@ async def test_workflow_api_drives_router_on_startup():
 
     builder = WorkflowBuilder()
     builder.add_node("PythonCodeNode", "noop", {"code": "result = {'ok': True}"})
-    api = WorkflowAPI(builder.build())
+    # require_auth=False: this test exercises the LIFESPAN, not the auth
+    # gate (#2072). Stated explicitly so the unauthenticated app is a
+    # deliberate test condition rather than an inherited default.
+    api = WorkflowAPI(builder.build(), require_auth=False)
     app: FastAPI = api.app
 
     fired: list[int] = []

@@ -67,7 +67,12 @@ class TestChannelBase:
     @pytest.mark.asyncio
     async def test_abstract_channel_methods(self):
         """Test that Channel is abstract and requires implementation."""
-        config = ChannelConfig(name="test", channel_type=ChannelType.API)
+        config = ChannelConfig(
+            name="test",
+            channel_type=ChannelType.API,
+            # exercises the channel framework, not the #2072 auth gate
+            enable_auth=False,
+        )
 
         # Should not be able to instantiate abstract Channel directly
         with pytest.raises(TypeError):

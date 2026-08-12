@@ -55,7 +55,15 @@ from kailash.channels.cli_channel import CLIChannel  # noqa: E402
 
 def _api_channel():
     return APIChannel(
-        ChannelConfig(name="f13_api", channel_type=ChannelType.API, port=18991)
+        # enable_auth=False: this suite exercises STOP/cancellation
+        # semantics, not the auth gate (#2072). An unstated None would
+        # inherit the server's fail-closed default and refuse to build.
+        ChannelConfig(
+            name="f13_api",
+            channel_type=ChannelType.API,
+            port=18991,
+            enable_auth=False,
+        )
     )
 
 
