@@ -44,9 +44,14 @@ path would have failed on the next line.
   (append-only JSONL, honours `audit_log_path`) into the hook system. The
   existing `AuditHook` is unchanged and still wraps the PostgreSQL-backed
   security `AuditTrailProvider`, which a zero-config path has no connection for.
-  The audit trail records event STRUCTURE — event name, payload key names,
-  trace id — never payload values, so enabling compliance audit does not itself
-  become a disclosure channel.
+  The audit trail records event STRUCTURE, never payload values, so enabling
+  compliance audit does not itself become a disclosure channel. BOTH
+  payload-bearing fields are reduced: `context.data` to its sorted key names,
+  and `context.metadata` — a documented public kwarg on `HookManager.trigger`
+  and `BaseAgent.trigger_hook` — through the same `summarize_payload` helper
+  `LoggingHook` uses, to `{count, keys}`. What reaches the file verbatim is the
+  audit record itself: agent id, event name, trace id, timestamp, and the
+  success/failure verdict.
 - **A missing optional dependency is now loud.** `"Metrics hook not available,
   skipping"` named neither what stopped working nor how to restore it. The
   replacement names the flag, the extra, and `enable_metrics=False` as the
@@ -68,11 +73,36 @@ ever invoked. Fixing only the registration half would have left the audit trail
 recording nothing on exactly the path users take.
 
 The three gates now test `self._hook_manager is None`, which `__init__` already
-resolves from BOTH inputs. This is equivalent to the old predicate in every case
-except the broken one — a supplied manager with `hooks_enabled=False`, where the
-kwarg previously had no effect at all (`zero-tolerance.md` Rule 3c). Passing a
-`hook_manager` is now itself the opt-in; `hooks_enabled=True` without one is
-unchanged, and supplying neither still leaves hooks inert.
+resolves from BOTH inputs. Passing a `hook_manager` is now itself the opt-in;
+`hooks_enabled=True` without one is unchanged, and supplying neither still
+leaves hooks inert.
+
+### Changed (BREAKING) — `register_hook` no longer raises when a `hook_manager` was supplied
+
+This is the other side of the fix above, and it is **not** limited to the
+broken path. The old gate raised whenever `hooks_enabled` was `False`,
+regardless of whether a manager had been supplied. So:
+
+| `hooks_enabled` | `hook_manager` supplied | `register_hook` before | after |
+| --- | --- | --- | --- |
+| `False` | no | raises | raises |
+| `True` | either | registers | registers |
+| `False` | **yes** | **raises** | **registers** |
+
+The third row is the change. On the `Agent` path it is unambiguously the fix:
+`SmartDefaultsManager` supplies a populated manager and nothing sets
+`hooks_enabled`, so `register_hook` was rejecting registrations against a
+manager that was already installed and firing. But a `BaseAgent` caller who
+passed a manager AND left `hooks_enabled` at its `False` default now finds
+`register_hook(evt, handler)` **succeeds** where it previously raised — if you
+relied on that `RuntimeError` as an off-switch, it is gone.
+
+`hooks_enabled=False` is not restored as an override for this case because
+`False` is the field's DEFAULT: a dataclass cannot distinguish "explicitly
+disabled" from "never mentioned", so honouring it would reject the supplied
+manager on every default `Agent` construction — reinstating exactly the
+"documented kwarg with no effect" defect this entry fixes
+(`zero-tolerance.md` Rule 3c). To keep hooks off, pass no `hook_manager`.
 
 ### Fixed — the audit trail is created owner-only (0o600 / 0o700)
 
@@ -83,17 +113,44 @@ that file with `touch()` — 0o644 under a normal umask, readable by every local
 account. The trail records which agent did what, when, and the SHAPE of every
 payload involved.
 
-Files and directories `FileAuditStorage` **creates** are now 0o600 / 0o700,
-pinned with an explicit `chmod` because both `touch(mode=...)` and
-`mkdir(mode=...)` are masked by umask. A **pre-existing** path is left exactly
-as the operator configured it — silently re-permissioning a file this class did
-not create is its own surprise — so an audit file created before this change
-keeps its mode until recreated.
+Files and directories are now 0o600 / 0o700, pinned with an explicit `chmod`
+because both `touch(mode=...)` and `mkdir(mode=...)` are masked by umask — and
+the mode is read back from `stat()` rather than trusted from the create call,
+since a mode requested and then stripped by umask is indistinguishable from one
+never requested.
+
+A **pre-existing** path is tightened too. Restricting this to paths the class
+creates would mean the fix never reaches an upgraded install: the audit file is
+created once and reused forever, so every existing deployment would keep its
+0o644 trail indefinitely. Re-permissioning a path an operator may have
+configured deliberately is not something to do quietly, so it is announced at
+WARN naming the path and the mode it had.
 
 A failed audit append is loud: the exception propagates to `HookManager`, which
 records `HookResult(success=False)`, logs the failure, and calls the hook's
 `on_error`. An audit trail that silently stops recording is worse than one
 never enabled, so this is pinned by a test that makes a real append fail.
+
+### Fixed — an unwritable audit path no longer breaks `Agent()` construction
+
+Wiring `enable_audit` made `create_observability` touch the filesystem for the
+first time, and `audit_log_path` defaults to a RELATIVE `.kaizen/audit.jsonl` —
+so it writes into whatever directory the process runs in. Under Kubernetes
+`readOnlyRootFilesystem: true`, a distroless image, or Lambda's read-only
+`/var/task`, that `mkdir` raises `PermissionError`; `agent.py` calls
+`create_observability` BEFORE `Agent.__init__`'s own `try`, so the error
+propagated out and `Agent(model=...)` failed to construct at all.
+
+This was unreachable before this release — the audit branch died on a caught
+`ImportError` ahead of the write — but it would have been a hard upgrade break
+for every read-only-filesystem deployment.
+
+A compliance sink that cannot write must fail LOUDLY, not fail construction.
+The branch now catches `OSError`, emits a one-time WARN naming
+`audit_log_path`, the underlying error, and `enable_audit=False` as the
+deliberate opt-out, and skips only the audit hook — every other subsystem still
+installs. Pinned by a test that constructs a real `Agent()` with the CWD set to
+a real unwritable directory.
 
 ### Added — `AgentConfig.log_payload_keys` (default `False`)
 

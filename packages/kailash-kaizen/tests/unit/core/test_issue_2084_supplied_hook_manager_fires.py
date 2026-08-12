@@ -121,6 +121,37 @@ async def test_no_manager_and_not_enabled_stays_inert():
 
 
 @pytest.mark.asyncio
+async def test_register_hook_accepts_a_supplied_manager_despite_hooks_enabled_false():
+    """
+    The BREAKING half of this change, pinned rather than merely described.
+
+    The old gate raised whenever `hooks_enabled` was False, even with a
+    manager supplied -- so a caller who relied on `hooks_enabled=False` as an
+    off-switch for `register_hook` loses that RuntimeError. It is recorded as
+    a break in the CHANGELOG and it is asserted here, because a behaviour
+    described only in prose is one the next refactor silently reverts.
+
+    Restoring the flag as an override is not an option: `False` is its
+    DEFAULT, so a dataclass cannot tell "explicitly disabled" from "never
+    mentioned", and honouring it would reject the manager `SmartDefaults`
+    supplies on every default `Agent` construction -- reinstating the exact
+    no-effect-kwarg defect this suite exists to prevent.
+    """
+    manager = HookManager()
+    agent = _agent(hook_manager=manager, hooks_enabled=False)
+    hook = RecordingHook()
+
+    agent.register_hook(HookEvent.PRE_AGENT_LOOP, hook)
+    await agent.trigger_hook(HookEvent.PRE_AGENT_LOOP, data={})
+
+    assert hook.seen, (
+        "register_hook accepted the handler against a supplied manager but the "
+        "handler never fired -- registration that does not record is the "
+        "defect this change fixes, not a fix for it"
+    )
+
+
+@pytest.mark.asyncio
 async def test_stats_reflect_a_supplied_manager():
     """get_hook_stats must report the supplied manager, not an empty dict."""
     manager = HookManager()
