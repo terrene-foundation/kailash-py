@@ -571,6 +571,139 @@ def test_api_channel_enable_auth_is_load_bearing(authed_env):
     )
 
 
+def test_api_channel_default_is_not_an_open_server(authed_env):
+    """An APIChannel whose config never mentions auth still gets the gate.
+
+    ``ChannelConfig.enable_auth`` used to be a plain ``bool`` defaulting to
+    ``False``, which cannot distinguish "the operator never said" from "the
+    operator said no". Mapping that default straight to ``require_auth`` left
+    every default APIChannel serving anonymous workflow execution on
+    ``POST /workflows/{name}/execute`` -- the exact route the rest of this
+    change closes, still open through a sibling surface
+    (security.md § Enforcement-Surface Parity).
+    """
+    from kailash.channels.api_channel import APIChannel
+    from kailash.channels.base import ChannelConfig, ChannelType
+
+    channel = APIChannel(
+        ChannelConfig(name="probe", channel_type=ChannelType.API)
+    )  # NOTE: enable_auth is never mentioned.
+    channel.workflow_server.register_workflow("probe", _probe_workflow())
+    client = TestClient(channel.app)
+
+    assert (
+        client.post("/workflows/probe/execute", json={"inputs": {}}).status_code == 401
+    )
+    # Discrimination control: the 401 is authentication, not a broken route.
+    assert (
+        client.post(
+            "/workflows/probe/execute",
+            json={"inputs": {}},
+            headers={"Authorization": f"Bearer {_make_token()}"},
+        ).status_code
+        == 200
+    )
+
+
+def test_api_channel_explicit_opt_out_is_still_honoured(clean_auth_env):
+    """``enable_auth=False`` remains a real, honoured opt-out.
+
+    Fail-closed-on-unstated must not silently promote an EXPLICIT no into a
+    yes; that would be an undeclared breaking change on the opposite side, and
+    the tri-state exists precisely to keep the two answers distinct.
+    """
+    from kailash.channels.api_channel import APIChannel
+    from kailash.channels.base import ChannelConfig, ChannelType
+
+    channel = APIChannel(
+        ChannelConfig(name="probe", channel_type=ChannelType.API, enable_auth=False)
+    )
+    channel.workflow_server.register_workflow("probe", _probe_workflow())
+
+    assert (
+        TestClient(channel.app)
+        .post("/workflows/probe/execute", json={"inputs": {}})
+        .status_code
+        == 200
+    )
+
+
+def test_channel_info_never_reports_auth_it_does_not_enforce():
+    """``/channel/info`` reports enforcement, never the raw tri-state.
+
+    An unstated ``None`` inherits the gate, so it reports ``True``; an explicit
+    ``False`` reports ``False``. Leaking ``None`` into the payload would be a
+    third value no client knows how to read, and reporting an unenforced
+    ``True`` is the false-assurance defect this issue closes.
+    """
+    from kailash.channels.base import ChannelConfig, ChannelType
+
+    unstated = ChannelConfig(name="p", channel_type=ChannelType.API)
+    opted_out = ChannelConfig(name="p", channel_type=ChannelType.API, enable_auth=False)
+
+    assert unstated.enable_auth is None, "the tri-state must survive on the config"
+    assert (unstated.enable_auth is not False) is True
+    assert (opted_out.enable_auth is not False) is False
+
+    # The MCP channel enforces nothing of its own, so it reports bool(...):
+    # an unstated None must read as False there, never as enabled.
+    assert bool(unstated.enable_auth) is False
+
+
+# ---------------------------------------------------------------------------
+# Nexus declares only the authentication it actually installs.
+# ---------------------------------------------------------------------------
+
+
+def test_nexus_does_not_declare_external_auth_it_never_installs():
+    """``external_auth_reason`` is declared only when Nexus really installs it.
+
+    Nexus builds its HTTP surface on the core gateway. Declaring external auth
+    unconditionally would tell the fail-closed gate that "an outside middleware
+    authenticates every request" on a development ``Nexus()`` -- where
+    ``enable_auth`` defaults to False and NOTHING does -- putting a false
+    assurance on the record and suppressing the opt-out WARN that names the
+    exposure. That is the #2013 shape (a control that reports success and
+    installs nothing) re-entering through the declaration.
+    """
+    pytest.importorskip("nexus")
+    from nexus.auth_bootstrap import core_gateway_auth_kwargs
+
+    enabled = core_gateway_auth_kwargs(True)
+    assert "external_auth_reason" in enabled
+    assert enabled["external_auth_reason"].strip()
+    assert "require_auth" not in enabled, (
+        "declaring external auth AND opting out would install nothing twice over"
+    )
+
+    disabled = core_gateway_auth_kwargs(False)
+    assert disabled == {"require_auth": False}, (
+        "enable_auth=False must map to the explicit, WARN-logged opt-out -- "
+        "never to a declaration that something else authenticates"
+    )
+
+
+def test_nexus_call_sites_resolve_through_the_shared_helper():
+    """Both ``create_gateway()`` call sites use the helper, not a fixed string.
+
+    A second hand-written ``external_auth_reason=`` anywhere is how the two
+    paths drift into disagreeing about who authenticates the same app.
+    """
+    pytest.importorskip("nexus")
+    import inspect
+
+    from nexus import core as nexus_core
+    from nexus.transports import http as nexus_http
+
+    for module in (nexus_core, nexus_http):
+        source = inspect.getsource(module)
+        assert "core_gateway_auth_kwargs(" in source, module.__name__
+        assert "external_auth_reason=" not in source, (
+            f"{module.__name__} hand-writes external_auth_reason instead of "
+            "resolving it from the flag through core_gateway_auth_kwargs()"
+        )
+
+
 # ---------------------------------------------------------------------------
 # End-to-end over a real socket -- the literal user path from the issue.
 # ---------------------------------------------------------------------------

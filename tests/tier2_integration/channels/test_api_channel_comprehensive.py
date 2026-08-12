@@ -89,6 +89,12 @@ class TestAPIChannel:
                 title="Test API Server",
                 description="Test API Description",
                 cors_origins=["http://localhost:3000"],
+                # The channel now forwards the server-wide auth gate (#2072).
+                # This fixture sets enable_auth=False EXPLICITLY, so it maps to
+                # the honoured opt-out; an UNSTATED (None) config would forward
+                # require_auth=True and inherit the fail-closed default.
+                require_auth=False,
+                auth_config=None,
                 enable_durability=True,
                 enable_resource_management=True,
                 enable_async_execution=True,

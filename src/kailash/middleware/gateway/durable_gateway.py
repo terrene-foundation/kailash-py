@@ -58,6 +58,16 @@ class DurableAPIGateway(WorkflowAPIGateway):
         version: str = "1.0.0",
         max_workers: int = 10,
         cors_origins: Optional[list[str]] = None,
+        # Server-wide authentication (#2072). Threaded through EXPLICITLY per
+        # security.md § Multi-Site Kwarg Plumbing: this subclass inherits the
+        # fail-closed gate from WorkflowAPIGateway automatically, but without
+        # these parameters on its own signature the gate would be
+        # unconfigurable through this class -- and an unconfigurable gate is a
+        # gate that gets worked around.
+        require_auth: bool = True,
+        auth_config: Any = None,
+        external_auth_reason: Optional[str] = None,
+        auth_exempt_paths: Optional[list[str]] = None,
         # Durability configuration
         enable_durability: bool = True,
         checkpoint_manager: Optional[CheckpointManager] = None,
@@ -72,6 +82,10 @@ class DurableAPIGateway(WorkflowAPIGateway):
             version=version,
             max_workers=max_workers,
             cors_origins=cors_origins,
+            require_auth=require_auth,
+            auth_config=auth_config,
+            external_auth_reason=external_auth_reason,
+            auth_exempt_paths=auth_exempt_paths,
         )
 
         # Durability components

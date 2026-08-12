@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..resources.registry import ResourceRegistry
 from ..utils.http_errors import safe_http_detail
+from ..utils.server_auth import install_server_auth_middleware
 from .enhanced_gateway import (
     EnhancedDurableAPIGateway,
     ResourceReference,
@@ -303,8 +304,31 @@ def create_gateway_app(
     title: str = "Kailash Enhanced Gateway",
     description: str = "API Gateway for async workflows with resource management",
     version: str = "1.0.0",
+    # Server-wide authentication (#2072) -- NAMED, never **kwargs.
+    require_auth: bool = True,
+    auth_config: Any = None,
+    external_auth_reason: Optional[str] = None,
+    auth_exempt_paths: Optional[list[str]] = None,
 ) -> FastAPI:
-    """Create FastAPI app for gateway."""
+    """Create FastAPI app for gateway.
+
+    Args:
+        resource_registry: Registry supplying workflow resources.
+        secret_manager: Secret manager for resource credentials.
+        title: OpenAPI title.
+        description: OpenAPI description.
+        version: OpenAPI version.
+        require_auth: Whether every request must be authenticated.
+            **Defaults to ``True`` (fail-closed); BREAKING.** See
+            :mod:`kailash.utils.server_auth` and issue #2072.
+        auth_config: Explicit ``JWTConfig`` (or field ``dict``).
+        external_auth_reason: Non-empty string declaring that an ASGI
+            middleware outside this app authenticates every request.
+        auth_exempt_paths: Extra paths exempt from authentication.
+
+    Returns:
+        The FastAPI application that actually serves the routes.
+    """
     app = FastAPI(title=title, description=description, version=version)
 
     # Set up gateway instance
@@ -315,10 +339,37 @@ def create_gateway_app(
         title=title,
         description=description,
         version=version,
+        require_auth=require_auth,
+        auth_config=auth_config,
+        external_auth_reason=external_auth_reason,
+        auth_exempt_paths=auth_exempt_paths,
     )
 
     # Include router
     app.include_router(router)
+
+    # Authenticate THIS app, not the gateway's own (#2072).
+    #
+    # `EnhancedDurableAPIGateway` builds its own FastAPI instance and installs
+    # the auth middleware there -- but that app is NOT the one returned here,
+    # and it is not the one serving these routes. The router above is mounted
+    # on the LOCAL `app`, and its handlers reach the gateway through
+    # `Depends(get_gateway)`, which is an INSTANCE INJECTOR and authenticates
+    # nothing.
+    #
+    # Measured before this line existed, with KAILASH_JWT_SECRET set and the
+    # gateway therefore reporting auth as installed:
+    #
+    #     middleware on RETURNED app: []
+    #     middleware on GATEWAY  app: ['BaseHTTPMiddleware', 'JWTAuthMiddleware']
+    #     GET /api/v1/workflows (NO creds) -> 200
+    #
+    # So the constructor's fail-closed raise protected an app nobody serves
+    # while the served app stayed fully open -- a gate installed one object to
+    # the left of the door. Installing here binds it to the surface that
+    # actually receives requests.
+    if _gateway_instance._auth_config is not None:
+        install_server_auth_middleware(app, _gateway_instance._auth_config)
 
     # Startup event
     @app.on_event("startup")

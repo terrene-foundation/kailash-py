@@ -34,6 +34,10 @@ class TestDurableGatewayBodyExtraction:
     async def gateway_app(self):
         """Create a DurableAPIGateway with durability always on."""
         gateway = DurableAPIGateway(
+            # require_auth=False: this suite exercises DURABILITY, not the
+            # server-wide auth gate (#2072). Stated explicitly so the
+            # unauthenticated server is a deliberate test condition.
+            require_auth=False,
             title="Body Extraction Test Gateway",
             enable_durability=True,
             durability_opt_in=False,  # Durability on for all requests

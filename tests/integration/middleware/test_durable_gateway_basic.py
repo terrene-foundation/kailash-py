@@ -47,6 +47,10 @@ class TestDurableGatewayBasic:
         )
 
         gateway = DurableAPIGateway(
+            # require_auth=False: this suite exercises DURABILITY, not the
+            # server-wide auth gate (#2072). Stated explicitly so the
+            # unauthenticated server is a deliberate test condition.
+            require_auth=False,
             title="Test Durable Gateway",
             enable_durability=True,
             checkpoint_manager=checkpoint_manager,
