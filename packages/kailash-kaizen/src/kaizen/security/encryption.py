@@ -23,9 +23,10 @@ KAIZEN_ENCRYPTION_KEY_ENV = "KAIZEN_ENCRYPTION_KEY"
 #: Required length of raw key material, in bytes (AES-256).
 AES_256_KEY_BYTES = 32
 
-#: PBKDF2 iterations used to stretch a passphrase. Matches
-#: ``CheckpointEncryptor``, which derives from the same variable — two different
-#: iteration counts for one variable would silently produce two different keys.
+#: PBKDF2 iterations used to stretch a passphrase. Set to match
+#: ``CheckpointEncryptor`` (``kaizen.core.autonomy.security.encryption``), which
+#: stretches the SAME environment variable, so the cost of configuring Kaizen
+#: encryption does not depend on which subsystem happens to read it first.
 _PASSPHRASE_KDF_ITERATIONS = 600_000
 
 #: Fixed salt for passphrase derivation. Deliberately FIXED, not random: the
@@ -34,7 +35,21 @@ _PASSPHRASE_KDF_ITERATIONS = 600_000
 #: this module is being fixed for (#2092). A random per-process salt here would
 #: reproduce it one layer down. Salts are not secret; their job in a
 #: deterministic derivation is domain separation, which a constant provides.
+#:
+#: This value is deliberately DIFFERENT from ``CheckpointEncryptor``'s
+#: ``b"kaizen_checkpoint_encryption_salt_v1"``. The two subsystems read one
+#: variable but MUST NOT share a key: domain separation means a checkpoint
+#: ciphertext cannot be opened with this module's key, or vice versa. So the
+#: matching iteration count above buys equal derivation cost, NOT
+#: interchangeable keys — do not "align" these salts to make the two
+#: interoperate, because non-interoperability is the point.
 _PASSPHRASE_KDF_SALT = b"kaizen.security.encryption.passphrase.v1"
+
+#: Shortest accepted passphrase, matching ``SecretManager`` (#2041 / PR #2063)
+#: and ``kailash.trust.auth.jwt.JWTConfig``. 600k PBKDF2 iterations do not
+#: rescue a four-character passphrase: the search space, not the stretching,
+#: is what bounds an offline attack on material that is never rotated.
+MIN_PASSPHRASE_LENGTH = 32
 
 
 class EncryptionKeyNotConfiguredError(ValueError):
@@ -117,8 +132,9 @@ def resolve_key_material(
     exited.
 
     Args:
-        key: 32 raw bytes, or a passphrase to stretch. ``None`` falls through to
-            the environment.
+        key: 32 raw bytes, or a passphrase of at least
+            :data:`MIN_PASSPHRASE_LENGTH` characters to stretch. ``None`` falls
+            through to the environment.
         allow_ephemeral_key: Opt in to a generated process-local key for local
             development. Announces itself once per process at ERROR level.
         what: Class name used in the error message.
@@ -128,8 +144,9 @@ def resolve_key_material(
 
     Raises:
         EncryptionKeyNotConfiguredError: If no key is configured and
-            ``allow_ephemeral_key`` is False, or if raw key material is the
-            wrong length.
+            ``allow_ephemeral_key`` is False, if raw key material is the wrong
+            length, or if a passphrase is shorter than
+            :data:`MIN_PASSPHRASE_LENGTH`.
     """
     if key is None:
         env_value = os.environ.get(KAIZEN_ENCRYPTION_KEY_ENV)
@@ -137,7 +154,38 @@ def resolve_key_material(
             key = env_value
 
     if isinstance(key, str):
-        return _derive_key_from_passphrase(key)
+        # An EMPTY or whitespace-only passphrase is treated as NOT CONFIGURED,
+        # never as a passphrase. `EncryptionProvider(key=os.environ.get("K", ""))`
+        # is the ordinary way a caller expresses "unset", and stretching "" would
+        # derive a fixed key that anyone reading this module can reproduce from
+        # the constants above — a WORSE outcome than the generated key this fix
+        # removes, because it is stable, shared by every deployment, and looks
+        # configured. Falling through to the bottom of this function gives it the
+        # same fail-closed treatment as key=None.
+        if key.strip():
+            # Measured stripped, but stretched VERBATIM: " " * 32 clears a naive
+            # length check while carrying no entropy, and silently trimming would
+            # change the derived key for anyone whose passphrase legitimately
+            # ends in whitespace — re-deriving a different key from the same
+            # configured value is the exact failure this module is being fixed
+            # for.
+            if len(key.strip()) < MIN_PASSPHRASE_LENGTH:
+                # The length is named; the passphrase is NOT. An exception
+                # message reaches logs and crash reports (`security.md`).
+                raise EncryptionKeyNotConfiguredError(
+                    f"{what} received a passphrase of {len(key.strip())} "
+                    f"non-whitespace characters; at least "
+                    f"{MIN_PASSPHRASE_LENGTH} are required. A passphrase that "
+                    f"brief is brute-forceable regardless of the KDF's "
+                    f"iteration count, and whitespace padding adds length "
+                    f"without adding entropy. Pass "
+                    f"{AES_256_KEY_BYTES} raw bytes instead if you are "
+                    f"supplying a generated key rather than a passphrase. Note "
+                    f"that leading and trailing whitespace IS significant in "
+                    f"the passphrase itself — it is measured trimmed but used "
+                    f"verbatim, so a stray newline changes the derived key."
+                )
+            return _derive_key_from_passphrase(key)
 
     if isinstance(key, (bytes, bytearray)):
         if len(key) != AES_256_KEY_BYTES:
@@ -184,11 +232,13 @@ class EncryptionProvider:
         Initialize encryption provider.
 
         Args:
-            key: 32-byte encryption key, or a passphrase (str) stretched with
+            key: 32-byte encryption key, or a passphrase (str) of at least
+                :data:`MIN_PASSPHRASE_LENGTH` characters stretched with
                 PBKDF2-HMAC-SHA256. When omitted, ``KAIZEN_ENCRYPTION_KEY`` is
-                read. If neither is configured this RAISES rather than
-                generating a key — a generated key would make everything
-                encrypted under it unrecoverable at the next restart.
+                read. An empty or whitespace-only string counts as NOT
+                configured, never as a passphrase. If neither is configured this
+                RAISES rather than generating a key — a generated key would make
+                everything encrypted under it unrecoverable at the next restart.
             salt: Salt used for key derivation (optional, for password-based
                 keys created through :meth:`from_password`).
             allow_ephemeral_key: Opt in to a generated process-local key for
@@ -332,9 +382,11 @@ class KeyManager:
         """Initialize key manager.
 
         Args:
-            key: Master key material — 32 bytes, or a passphrase stretched with
+            key: Master key material — 32 bytes, or a passphrase of at least
+                :data:`MIN_PASSPHRASE_LENGTH` characters stretched with
                 PBKDF2-HMAC-SHA256. When omitted, ``KAIZEN_ENCRYPTION_KEY`` is
-                read. If neither is configured this RAISES.
+                read. An empty or whitespace-only string counts as NOT
+                configured. If neither is configured this RAISES.
             allow_ephemeral_key: Opt in to a generated process-local master key
                 for local development. Announces itself once per process at
                 ERROR level. Nothing encrypted under it survives this process.
@@ -497,8 +549,10 @@ class FieldEncryptor:
 
         Args:
             sensitive_fields: List of field paths to encrypt (supports dot notation)
-            key: 32-byte encryption key, or a passphrase. When omitted,
-                ``KAIZEN_ENCRYPTION_KEY`` is read. If neither is configured this
+            key: 32-byte encryption key, or a passphrase of at least
+                :data:`MIN_PASSPHRASE_LENGTH` characters. When omitted,
+                ``KAIZEN_ENCRYPTION_KEY`` is read. An empty or whitespace-only
+                string counts as NOT configured. If neither is configured this
                 RAISES rather than generating a key.
             allow_ephemeral_key: Opt in to a generated process-local key for
                 local development. Encrypted fields cannot be read back after

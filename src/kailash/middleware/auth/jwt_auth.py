@@ -42,6 +42,22 @@ logger = logging.getLogger(__name__)
 #: was an error message naming a variable nothing ever read.
 JWT_SECRET_KEY_ENV = "KAILASH_JWT_SECRET_KEY"
 
+#: Shortest secret accepted from :data:`JWT_SECRET_KEY_ENV`. RFC 7518 §3.2
+#: requires an HMAC-SHA256 key of at least 256 bits, and this matches both
+#: ``kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH`` and the existing
+#: ``KAILASH_API_GATEWAY_SECRET`` check in
+#: ``middleware/communication/api_gateway.py``.
+#:
+#: Scoped to the ENVIRONMENT path deliberately. This variable is introduced by
+#: the #2083 fix, so validating it breaks nothing that exists — whereas an
+#: unvalidated new key surface would hand operators a four-character signing
+#: secret as the ergonomic path, which is the failure this fix exists to
+#: prevent wearing different clothes. The pre-existing ``secret_key=`` argument
+#: is deliberately NOT gated here: that is a separate defect class (weak key,
+#: not absent key) with an unbounded set of existing callers, and it is
+#: reported rather than silently changed under this issue.
+MIN_ENV_SECRET_LENGTH = 32
+
 
 @lru_cache(maxsize=1)
 def _warn_ephemeral_signing_key() -> None:
@@ -215,7 +231,30 @@ class JWTAuthManager:
                 # a code seam — the error below names this variable, and an
                 # error naming a variable nothing reads is worse than silence.
                 env_secret = os.environ.get(JWT_SECRET_KEY_ENV)
-                if env_secret:
+                if env_secret and env_secret.strip():
+                    # Validated because this variable is NEW here: shipping a
+                    # fresh key-input surface that accepts a four-character
+                    # signing secret would re-open the same hole one door down.
+                    # Measured stripped, used verbatim — trimming would change
+                    # the signing key for anyone whose secret ends in
+                    # whitespace, and every token signed before the trim would
+                    # stop verifying.
+                    if len(env_secret.strip()) < MIN_ENV_SECRET_LENGTH:
+                        # Names the length, never the secret: this message
+                        # reaches logs and crash reports (`security.md`).
+                        raise ValueError(
+                            f"The signing secret in KAILASH_JWT_SECRET_KEY "
+                            f"carries {len(env_secret.strip())} non-whitespace "
+                            f"characters; at least {MIN_ENV_SECRET_LENGTH} are "
+                            f"required. RFC 7518 section 3.2 requires an "
+                            f"HMAC-SHA256 key of at least 256 bits, and a "
+                            f"shorter secret is brute-forceable offline from a "
+                            f"single captured token — which would let an "
+                            f"attacker mint tokens this manager accepts. Note "
+                            f"that leading and trailing whitespace IS "
+                            f"significant in the secret itself: it is measured "
+                            f"trimmed but used verbatim."
+                        )
                     self._secret_key = env_secret
                     self.config.secret_key = env_secret
 
