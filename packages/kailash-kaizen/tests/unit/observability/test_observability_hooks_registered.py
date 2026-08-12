@@ -481,3 +481,121 @@ async def test_audit_trail_records_structure_not_payload_values(config, tmp_path
     assert "wire the funds" not in written, written
     # Structure IS preserved -- a "fix" that writes an empty file cannot pass.
     assert "api_key" in written and "prompt" in written, written
+
+
+# =========================================================================
+# The auto-wired logger is a DEFAULT-ON sink -- pin what it may emit
+# =========================================================================
+
+# A value that must never be logged, and a key whose NAME alone discloses.
+SENTINEL_VALUE = "sk-live-OBSERVABILITY2084SECRETVALUE"
+SENSITIVE_KEY = "patient_diagnosis"
+
+
+async def _log_text(config, caplog):
+    """Trigger one event through the auto-wired hooks; return the log text."""
+    from kaizen.core.autonomy.hooks.types import HookEvent
+
+    hook_manager = _manager(config)
+    with caplog.at_level(logging.DEBUG):
+        await hook_manager.trigger(
+            event_type=HookEvent.PRE_AGENT_LOOP,
+            agent_id="agent-2084",
+            data={SENSITIVE_KEY: "stage II", "api_key": SENTINEL_VALUE},
+            timeout=10.0,
+        )
+    return "\n".join(r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_default_path_logs_neither_values_nor_key_names(config, caplog):
+    """
+    The auto-wired LoggingHook must disclose neither payload values nor keys.
+
+    `enable_logging` defaults True, so this hook runs on every agent
+    construction in every downstream consumer. Key names are a real leak even
+    with values withheld -- `patient_diagnosis` discloses subject matter and
+    the existence of the record. `log_payload_keys` therefore defaults False.
+    """
+    text = await _log_text(config, caplog)
+
+    assert SENTINEL_VALUE not in text, text
+    assert "stage II" not in text, text
+    assert SENSITIVE_KEY not in text, text
+    # Structure IS still logged -- a hook that emits nothing cannot pass.
+    assert "pre_agent_loop" in text, text
+    assert "agent-2084" in text, text
+
+
+@pytest.mark.asyncio
+async def test_opting_into_payload_keys_still_withholds_values(tmp_path, caplog):
+    """
+    `log_payload_keys=True` yields key NAMES and still never yields values.
+
+    This pins the names-not-values property inside THIS change rather than
+    inheriting it from #2070/#2094. Without it, a later regression restoring
+    value logging in LoggingHook would leave this suite green while the
+    auto-wired default-on sink started emitting payloads.
+    """
+    config = AgentConfig(
+        model=MODEL,
+        llm_provider=PROVIDER,
+        log_payload_keys=True,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+    text = await _log_text(config, caplog)
+
+    assert SENSITIVE_KEY in text, text  # opted in: names appear
+    assert SENTINEL_VALUE not in text, text  # values never do
+    assert "stage II" not in text, text
+
+
+def test_log_payload_keys_defaults_off(config):
+    """The disclosure-bearing option is opt-in, not opt-out."""
+    assert config.log_payload_keys is False
+
+
+# =========================================================================
+# is_observability_enabled() must not outlive the hooks behind it
+# =========================================================================
+
+
+def test_enabled_with_zero_installable_subsystems_returns_no_manager(
+    tmp_path, monkeypatch, caplog
+):
+    """
+    The narrow case where the flag OR could still lie: metrics-only, no extra.
+
+    `is_observability_enabled()` ORs the four flags and cannot see what
+    installed -- an AgentConfig has no hook manager to consult. So the manager
+    is made the authority instead: when every enabled subsystem fails to
+    install, `create_observability` returns None and says so, rather than
+    handing back an empty HookManager that reads as "observability is on".
+    """
+    monkeypatch.setitem(sys.modules, "prometheus_client", None)
+    monkeypatch.delitem(
+        sys.modules,
+        "kaizen.core.autonomy.hooks.builtin.metrics_hook",
+        raising=False,
+    )
+    config = AgentConfig(
+        model=MODEL,
+        llm_provider=PROVIDER,
+        enable_tracing=False,
+        enable_logging=False,
+        enable_audit=False,
+        enable_metrics=True,
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+
+    assert config.is_observability_enabled() is True
+
+    with caplog.at_level(logging.WARNING):
+        hook_manager = _manager(config)
+
+    assert hook_manager is None, (
+        "every enabled subsystem failed to install, yet a hook manager was "
+        "returned -- a caller branching on it runs against zero hooks"
+    )
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "no subsystem could be installed" in text, text

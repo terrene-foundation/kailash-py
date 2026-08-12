@@ -74,6 +74,26 @@ kwarg previously had no effect at all (`zero-tolerance.md` Rule 3c). Passing a
 `hook_manager` is now itself the opt-in; `hooks_enabled=True` without one is
 unchanged, and supplying neither still leaves hooks inert.
 
+### Added — `AgentConfig.log_payload_keys` (default `False`)
+
+Wiring `enable_logging` turns a previously dormant `LoggingHook` into a
+**default-on** sink running on every agent construction in every downstream
+consumer, so it is a disclosure change and is treated as one.
+
+Since #2070 `LoggingHook` emits payload KEY NAMES and field counts rather than
+values — but key names are a **bounded** leak, not an absent one. A payload
+keyed `ssn`, `patient_diagnosis`, `termination_reason` or
+`acme_contract_value` discloses schema, subject matter, and often that such a
+record exists at all. The auto-wired hook therefore drives `include_data` from
+this new field, which defaults `False`; lifecycle logs still carry event,
+agent id and trace id. Set `log_payload_keys=True` for payload structure.
+
+Payload VALUES remain unreachable at this level whatever it is set to —
+`LoggingHook.log_full_payloads` is a separate opt-in, additionally gated on
+DEBUG. That names-not-values property is now pinned by a test in this change
+rather than inherited from #2070: a regression restoring value logging in
+`LoggingHook` reds this suite instead of leaving it green.
+
 ### Added — `HookManager.registered_hook_names()`
 
 Returns the set of handler names currently registered across all events.

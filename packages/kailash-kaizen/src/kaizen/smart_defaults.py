@@ -316,14 +316,27 @@ class SmartDefaultsManager:
 
         # ---------------------------------------------------------------
         # Logging (structured). Core dependencies only, so this one always
-        # installs. `include_data` stays at the class default: since #2070
-        # LoggingHook emits payload KEY NAMES and counts, never values, so
-        # turning observability on cannot itself become a disclosure channel.
+        # installs.
+        #
+        # `include_data` is driven OFF by default (`log_payload_keys`), not
+        # left at the class default of True. Since #2070 LoggingHook emits
+        # payload KEY NAMES and counts rather than values -- but key names are
+        # a bounded leak, not an absent one (`ssn`, `patient_diagnosis`,
+        # `termination_reason` disclose schema and subject matter on their
+        # own), and this hook runs on EVERY agent construction in every
+        # downstream consumer. Wiring a previously dormant sink onto a
+        # default-on path is a disclosure change; it gets the conservative
+        # default and an explicit opt-in.
         # ---------------------------------------------------------------
         if config.enable_logging:
             from kaizen.core.autonomy.hooks.builtin.logging_hook import LoggingHook
 
-            hook_manager.register_hook(LoggingHook(log_level=config.log_level))
+            hook_manager.register_hook(
+                LoggingHook(
+                    log_level=config.log_level,
+                    include_data=config.log_payload_keys,
+                )
+            )
             enabled_systems.append(f"structured logging ({config.log_level})")
 
         # ---------------------------------------------------------------

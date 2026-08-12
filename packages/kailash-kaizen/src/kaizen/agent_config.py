@@ -146,6 +146,24 @@ class AgentConfig:
     log_level: str = "INFO"
     """Logging level (DEBUG, INFO, WARNING, ERROR)"""
 
+    log_payload_keys: bool = False
+    """
+    Log the KEY NAMES of agent payloads (never the values). Off by default.
+
+    ``enable_logging`` is on by default, so this hook runs on every agent
+    construction in every downstream consumer. Key names are a genuine
+    disclosure even with values withheld: a payload keyed ``ssn``,
+    ``patient_diagnosis``, ``termination_reason`` or ``acme_contract_value``
+    leaks schema, subject matter, and often the fact that such a record exists
+    at all. That is a bounded leak, not an absent one, and a default-on logger
+    is the wrong place to spend it.
+
+    Set ``True`` to get payload structure (key names and field counts) in the
+    lifecycle logs. Payload VALUES are never emitted at this level whatever
+    this is set to -- see ``LoggingHook.log_full_payloads`` (#2070), which is a
+    separate, additionally DEBUG-gated opt-in.
+    """
+
     enable_audit: bool = True
     """Enable compliance audit trails"""
 
