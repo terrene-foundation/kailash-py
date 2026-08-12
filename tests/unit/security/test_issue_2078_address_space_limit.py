@@ -30,6 +30,7 @@ A macOS run is therefore NOT a discriminating instrument for this bug — the
 Linux assertions below are, and CI runs Linux.
 """
 
+import mmap
 import os
 import threading
 
@@ -478,3 +479,46 @@ def test_the_unsupported_warning_is_logged_only_once(
 
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1, f"expected exactly one warning, got {len(warnings)}"
+
+
+@requires_enforced_rlimit_as
+def test_inner_tighter_guard_actually_denies_an_allocation_the_outer_allows():
+    """Behavioural sibling of the tightest-ceiling test, with distinct limits.
+
+    ``test_concurrent_guards_apply_the_tightest_ceiling_not_the_first`` reads
+    the rlimit VALUE. This one reads the CONSEQUENCE: an allocation sized to
+    fit comfortably under the outer ceiling but far above the inner one must be
+    denied while the inner guard is live, and must succeed once it exits.
+
+    Equal limits cannot produce this: with both guards at the same size the
+    allocation either fits both or neither, so the run is identical whether the
+    inner ceiling was applied or ignored. The asymmetry is what makes this
+    discriminating -- under first-writer-wins the allocation SUCCEEDS and the
+    test reads "inner 1 MB ceiling did not deny a 32 MB allocation".
+
+    The payload is an anonymous ``mmap``, NOT a ``bytearray``, and that choice
+    is load-bearing. RLIMIT_AS bounds address space, so only an allocation that
+    GROWS the mapping can trip it. An earlier test in this module frees a large
+    buffer; glibc retains that arena, so a 32 MB ``bytearray`` is then served
+    from free heap without a new mapping and the ceiling never bites -- the test
+    passed in isolation and failed in file order. ``mmap`` always creates a new
+    mapping, which makes the result independent of allocation history.
+    """
+    outer = 64 * 1024 * 1024
+    inner = 1 * 1024 * 1024
+    payload = 32 * 1024 * 1024
+
+    with memory_limit_guard(outer):
+        # OSError (ENOMEM) is the mmap failure mode; the guard relabels only
+        # MemoryError, so both are accepted. Either proves the ceiling applied.
+        with pytest.raises((MemoryLimitError, MemoryError, OSError)):
+            with memory_limit_guard(inner):
+                mmap.mmap(-1, payload)
+
+        # And the outer ceiling is restored, so the same mapping now fits.
+        # Without this half, a guard that simply never released would pass.
+        mapping = mmap.mmap(-1, payload)
+        try:
+            assert len(mapping) == payload
+        finally:
+            mapping.close()
