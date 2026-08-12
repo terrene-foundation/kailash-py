@@ -26,6 +26,7 @@ from typing import ClassVar, List, Optional
 
 from kaizen.core.autonomy.observability.audit import AuditTrailManager
 
+from .._payload import summarize_payload
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
 
@@ -37,10 +38,16 @@ class AuditTrailHook(BaseHook):
     Records agent lifecycle events to an append-only audit trail.
 
     Every handled event becomes one ``AuditEntry`` appended to the configured
-    storage backend. The hook records event STRUCTURE (key names), never
-    payload values, so enabling compliance audit does not itself become a
-    disclosure channel -- the same split ``LoggingHook`` draws between
-    ``include_data`` and ``log_full_payloads``.
+    storage backend. BOTH payload-bearing fields are reduced to STRUCTURE --
+    ``context.data`` to its key names, and ``context.metadata`` through
+    ``summarize_payload`` to ``{count, keys}``. Neither contributes values, so
+    enabling compliance audit does not itself become a disclosure channel --
+    the same split ``LoggingHook`` draws between ``include_data`` and
+    ``log_full_payloads``.
+
+    What DOES reach the file verbatim: ``agent_id``, the event name, the
+    ``trace_id``, the timestamp, and the success/failure verdict. Those are the
+    audit record.
 
     Attributes:
         events: All hook events (audit trails capture the full lifecycle).
@@ -99,12 +106,19 @@ class AuditTrailHook(BaseHook):
             "trace_id": context.trace_id,
         }
 
+        # `metadata` gets the SAME reduction as `data`, and for the same
+        # reason. It was previously forwarded WHOLE, so every value in it was
+        # serialised verbatim into the audit file -- a documented public kwarg
+        # on both HookManager.trigger and BaseAgent.trigger_hook, whose
+        # intended users are exactly the downstream callers most likely to put
+        # tenant and principal identifiers in it. `LoggingHook` already treats
+        # metadata as payload-class; the asymmetry was the bug.
         await self.audit_manager.record(
             agent_id=context.agent_id,
             action=context.event_type.value,
             details=details,
             result=result,
-            metadata=context.metadata or None,
+            metadata=summarize_payload(context.metadata),
         )
 
         return HookResult(success=True, data={"audited": True, "result": result})

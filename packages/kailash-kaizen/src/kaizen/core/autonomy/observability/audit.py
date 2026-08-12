@@ -124,34 +124,64 @@ class FileAuditStorage:
         """
         Initialize file-based audit storage.
 
-        Files and directories THIS class creates are owner-only (0o600/0o700).
-        A pre-existing path is left exactly as the operator configured it --
-        silently re-permissioning a file someone else owns is its own surprise
-        -- so an audit file created before this change keeps its old mode until
-        it is recreated.
+        Files and directories are owner-only (0o600/0o700). A path created
+        BEFORE this behaviour existed is tightened too -- an audit trail that
+        any local account can read is a weak compliance artifact, and leaving
+        upgraded installs on 0o644 would mean the fix never reaches them. That
+        tightening is announced rather than silent, naming the path and the
+        mode it had, because re-permissioning a file the operator may have
+        configured deliberately is not something to do quietly.
 
         Args:
             file_path: Path to JSONL audit file (created if not exists)
+
+        Raises:
+            OSError: If the path cannot be created (read-only filesystem,
+                permissions). Callers wiring this on a default-on path must
+                handle it -- see ``SmartDefaultsManager.create_observability``.
         """
         self.file_path = Path(file_path)
 
-        # `mkdir(mode=...)` is masked by umask, so set the mode explicitly, and
-        # only for a directory we actually created.
+        # `mkdir(mode=...)` is masked by umask, so set the mode explicitly.
         parent = self.file_path.parent
-        parent_existed = parent.exists()
         parent.mkdir(parents=True, exist_ok=True)
-        if not parent_existed:
-            parent.chmod(self._DIR_MODE)
+        self._enforce_mode(parent, self._DIR_MODE)
 
         # Create file if not exists
         if not self.file_path.exists():
-            self.file_path.touch(mode=self._FILE_MODE)
             # `touch(mode=...)` is also umask-masked, and a umask of 0 would
-            # leave the file group/world readable. Pin it.
-            self.file_path.chmod(self._FILE_MODE)
+            # leave the file group/world readable, so chmod unconditionally
+            # below rather than trusting the create mode.
+            self.file_path.touch(mode=self._FILE_MODE)
             logger.info(f"Created audit file: {self.file_path}")
+        self._enforce_mode(self.file_path, self._FILE_MODE)
 
         logger.debug(f"FileAuditStorage initialized: {self.file_path}")
+
+    @staticmethod
+    def _enforce_mode(path: Path, mode: int) -> None:
+        """
+        Pin ``path`` to ``mode``, announcing any loosening it corrects.
+
+        Compares the REAL mode after the fact rather than trusting the create
+        call: a mode requested at creation and stripped by umask is
+        indistinguishable from one never requested.
+        """
+        import stat as _stat
+
+        current = _stat.S_IMODE(path.stat().st_mode)
+        if current == mode:
+            return
+        if current & 0o077:
+            logger.warning(
+                "Audit path %s was %s (group/world accessible); tightening to "
+                "%s. An audit trail readable by other local accounts is not a "
+                "compliance artifact.",
+                path,
+                oct(current),
+                oct(mode),
+            )
+        path.chmod(mode)
 
     async def append(self, entry: AuditEntry) -> None:
         """

@@ -62,6 +62,19 @@ def _warn_observability_unavailable(subsystem: str, flag: str, detail: str) -> N
 
 
 @lru_cache(maxsize=None)
+def _warn_audit_unwritable(path: str, detail: str) -> None:
+    """Warn once that the audit trail could not be opened for writing."""
+    logger.warning(
+        "Compliance audit is enabled (enable_audit=True) but the audit trail "
+        "at %r could not be opened, so NOTHING will be recorded: %s. Point "
+        "audit_log_path at a writable location, or set enable_audit=False to "
+        "disable it deliberately and silence this warning.",
+        path,
+        detail,
+    )
+
+
+@lru_cache(maxsize=None)
 def _shared_tracing_manager(service_name: str, host: str, port: int):
     """
     One TracingManager per (service, endpoint), shared across agents.
@@ -360,14 +373,24 @@ class SmartDefaultsManager:
             # umask mode and leave the tightening below with nothing to do.
             audit_path = Path(config.audit_log_path)
 
-            hook_manager.register_hook(
-                AuditTrailHook(
-                    audit_manager=AuditTrailManager(
-                        storage=FileAuditStorage(str(audit_path))
-                    )
+            # `audit_log_path` defaults to a RELATIVE path, so this opens a file
+            # in whatever directory the process runs in -- which on a read-only
+            # root filesystem (Kubernetes `readOnlyRootFilesystem`, distroless
+            # images, Lambda's `/var/task`) raises. Before #2084 the whole
+            # branch died on an ImportError that was caught, so the write was
+            # unreachable; making the branch work made it reachable, and an
+            # unguarded OSError here propagates straight out of `Agent()`
+            # because `agent.py` calls this BEFORE its own try. A compliance
+            # sink that cannot write must fail LOUDLY, not fail construction.
+            try:
+                storage = FileAuditStorage(str(audit_path))
+            except OSError as exc:
+                _warn_audit_unwritable(str(audit_path), f"{type(exc).__name__}: {exc}")
+            else:
+                hook_manager.register_hook(
+                    AuditTrailHook(audit_manager=AuditTrailManager(storage=storage))
                 )
-            )
-            enabled_systems.append(f"audit trail ({audit_path})")
+                enabled_systems.append(f"audit trail ({audit_path})")
 
         # ---------------------------------------------------------------
         # Metrics (Prometheus). `metrics_port` is deliberately NOT consumed
