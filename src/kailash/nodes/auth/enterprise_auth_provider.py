@@ -40,9 +40,11 @@ from kailash.nodes.security import AuditLogNode, SecurityEventNode
 # One-time-per-process latch for the "JWT issuer is not pinned" warning
 # (issue #2089). Module-level, not per-instance: a provider constructed per
 # request would warn per request, which is the per-operation shape that got
-# the original signal filtered out. Tests reset it by assigning False here --
-# that is the intended and only supported way to re-arm it.
-_ISSUER_UNPINNED_WARNED = False
+# the original signal filtered out.
+#
+# A mutated SET rather than a rebound bool, so no function needs a `global`
+# statement; a test re-arms it with `_WARNED_ONCE.clear()`.
+_WARNED_ONCE: set = set()
 _ISSUER_WARN_LOCK = threading.Lock()
 
 
@@ -167,11 +169,10 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         """
         if self.jwt_config.get("issuer"):
             return
-        global _ISSUER_UNPINNED_WARNED
         with _ISSUER_WARN_LOCK:
-            if _ISSUER_UNPINNED_WARNED:
+            if "issuer_unpinned" in _WARNED_ONCE:
                 return
-            _ISSUER_UNPINNED_WARNED = True
+            _WARNED_ONCE.add("issuer_unpinned")
         self.log_warning(
             "JWT issuer is NOT pinned: jwt_config['issuer'] is unset, so ANY "
             "token signed with the configured key is accepted, whoever minted "

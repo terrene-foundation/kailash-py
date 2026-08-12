@@ -29,10 +29,10 @@ SECRET = "k" * 32
 @pytest.fixture(autouse=True)
 def _rearm_the_latch():
     """Re-arm the one-time-per-process latch so each test observes a fresh
-    process. Assigning the module global is the supported reset path."""
-    eap._ISSUER_UNPINNED_WARNED = False
+    process. Clearing the module latch set is the supported reset path."""
+    eap._WARNED_ONCE.clear()
     yield
-    eap._ISSUER_UNPINNED_WARNED = False
+    eap._WARNED_ONCE.clear()
 
 
 def _issuer_records(caplog):

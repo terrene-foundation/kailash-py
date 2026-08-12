@@ -8,10 +8,16 @@
 # every parsed field on `self` and flags structured log calls that
 # never actually emit credentials.
 #
-# Origin: workspaces/arbor-upstream-fixes/.session-notes (2026-04-12)
+# Extended 2026-08-12 (#2088 / #2040) with
+# `kailash.utils.secure_logging.sanitize_log_value` /
+# `sanitize_log_structure` and the `nodes/auth` alias `log_safe`, which
+# are the SDK-wide barriers for `py/log-injection`. Those three differ
+# from the two above in kind: they genuinely strip the characters that
+# forge a log record, so the row asserts a real property rather than
+# giving a no-op a recognizable name.
 
 name: terrene-foundation/kailash-py-sanitizers
-version: 1.0.0
+version: 1.1.0
 library: true
 extensionTargets:
   codeql/python-queries: "*"

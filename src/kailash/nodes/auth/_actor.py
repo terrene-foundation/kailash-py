@@ -102,7 +102,7 @@ class ActorResolver(Protocol):
     def resolve_actor(
         self, actor_session_id: str
     ) -> Optional[MFAActor]:  # pragma: no cover (Protocol)
-        ...
+        """Return the principal that owns ``actor_session_id``, or None."""
 
 
 class NullActorResolver:

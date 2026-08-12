@@ -483,7 +483,7 @@ class TestRequireActorFalseIsLoud:
     def test_it_warns_once_per_process_naming_the_wiring(self, caplog):
         import kailash.nodes.auth.mfa as mfa_mod
 
-        mfa_mod._ACTOR_DISABLED_WARNED = False
+        mfa_mod._WARNED_ONCE.clear()
         with caplog.at_level("WARNING"):
             MultiFactorAuthNode(name="a", require_actor=False)
             MultiFactorAuthNode(name="b", require_actor=False)
@@ -498,7 +498,7 @@ class TestRequireActorFalseIsLoud:
         """No-false-positive polarity."""
         import kailash.nodes.auth.mfa as mfa_mod
 
-        mfa_mod._ACTOR_DISABLED_WARNED = False
+        mfa_mod._WARNED_ONCE.clear()
         with caplog.at_level("WARNING"):
             _node()
         assert not [r for r in caplog.records if "require_actor=False" in r.message]

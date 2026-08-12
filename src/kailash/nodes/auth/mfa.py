@@ -36,23 +36,26 @@ from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
 
-# One-time-per-process latches (issue #2047). Module-level rather than
+# One-time-per-process latch (issue #2047). Module-level rather than
 # per-instance because a node constructed per request would otherwise emit the
 # same message per request, which is the per-operation shape that gets a
-# security signal filtered out of production logs. Tests re-arm them by
-# assigning False here -- that is the intended and only supported way.
-_ACTOR_DISABLED_WARNED = False
-_ADMIN_OVERRIDE_WARNED = False
+# security signal filtered out of production logs.
+#
+# A mutated SET rather than a rebound bool: the flag is only ever added to, so
+# no function needs a `global` statement to re-bind it, and a test re-arms it
+# with `_WARNED_ONCE.clear()` rather than by assigning over a module
+# attribute. Same observable behaviour, one fewer way for two threads to
+# disagree about which binding they hold.
+_WARNED_ONCE: set = set()
 _ACTOR_WARN_LOCK = threading.Lock()
 
 
 def _warn_actor_enforcement_disabled() -> None:
     """Say ONCE, at WARN, that (actor, action, subject) authorization is OFF."""
-    global _ACTOR_DISABLED_WARNED
     with _ACTOR_WARN_LOCK:
-        if _ACTOR_DISABLED_WARNED:
+        if "actor_disabled" in _WARNED_ONCE:
             return
-        _ACTOR_DISABLED_WARNED = True
+        _WARNED_ONCE.add("actor_disabled")
     logger.warning(
         "MultiFactorAuthNode(require_actor=False): actor authorization is "
         "DISABLED. Every action -- including revoke/disable/reset and every "

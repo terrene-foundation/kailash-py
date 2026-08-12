@@ -54,3 +54,52 @@ extensions:
           "value",
           "manual",
         ]
+      # ---------------------------------------------------------------
+      # Issue #2088 / #2040 — the SDK-wide log value sanitizer.
+      #
+      # Unlike `safe_log_value` above, which the header correctly
+      # describes as byte-identical and existing purely to give CodeQL a
+      # barrier, these two REMOVE the injection vector: every
+      # non-printable character (newline, carriage return, NUL, and the
+      # ANSI escapes that rewrite a console) is replaced with a space,
+      # and the result is length-capped at a ceiling the caller cannot
+      # raise. A value that has passed through them cannot forge a log
+      # record, which is precisely the property `py/log-injection`
+      # asks about — so declaring them is a statement of what the code
+      # does, not a suppression of what it does not.
+      #
+      # `sanitize_log_structure` is the recursive form for attribute
+      # bags (`event_data`, `metadata`); every string leaf it returns
+      # went through `sanitize_log_value`, so the same barrier holds.
+      #
+      # Both are declared under the module path they are IMPORTED from
+      # at the call sites (`kailash.utils.secure_logging`).
+      # ---------------------------------------------------------------
+      - [
+          "kailash.utils.secure_logging",
+          "Member[sanitize_log_value]",
+          "Argument[0]",
+          "ReturnValue",
+          "value",
+          "manual",
+        ]
+      - [
+          "kailash.utils.secure_logging",
+          "Member[sanitize_log_structure]",
+          "Argument[0]",
+          "ReturnValue",
+          "value",
+          "manual",
+        ]
+      # The `nodes/auth` alias, which is now a thin wrapper over
+      # `sanitize_log_value` with no implementation of its own. Declared
+      # so the ~20 existing call sites in that package are recognized
+      # through the name they actually import.
+      - [
+          "kailash.nodes.auth._log_hygiene",
+          "Member[log_safe]",
+          "Argument[0]",
+          "ReturnValue",
+          "value",
+          "manual",
+        ]
