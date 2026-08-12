@@ -368,14 +368,14 @@ class TestWorkflowServerIntegration:
         """WorkflowServer creates a ShutdownCoordinator on init."""
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer()
+        server = WorkflowServer(require_auth=False)
         assert isinstance(server.shutdown_coordinator, ShutdownCoordinator)
 
     def test_executor_registered_at_priority_0(self):
         """The server's thread pool executor is registered at priority 0."""
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer()
+        server = WorkflowServer(require_auth=False)
         executor_handler = [
             h for h in server.shutdown_coordinator._handlers if h[1] == "executor"
         ]
@@ -386,14 +386,14 @@ class TestWorkflowServerIntegration:
         """Server accepts custom shutdown_timeout kwarg."""
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer(shutdown_timeout=60.0)
+        server = WorkflowServer(require_auth=False, shutdown_timeout=60.0)
         assert server.shutdown_coordinator._timeout == 60.0
 
     def test_subsystems_can_register_on_server_coordinator(self):
         """External subsystems can register handlers on the server coordinator."""
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer()
+        server = WorkflowServer(require_auth=False)
         server.shutdown_coordinator.register("event_store", lambda: None, priority=2)
 
         handler_names = [h[1] for h in server.shutdown_coordinator._handlers]

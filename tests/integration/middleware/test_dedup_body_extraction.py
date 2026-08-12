@@ -112,6 +112,7 @@ class TestDurableWorkflowServerBodyExtraction:
     async def server_app(self):
         """Create a DurableWorkflowServer with durability always on."""
         server = DurableWorkflowServer(
+            require_auth=False,
             title="Body Extraction Test Server",
             enable_durability=True,
             durability_opt_in=False,  # Durability on for all requests

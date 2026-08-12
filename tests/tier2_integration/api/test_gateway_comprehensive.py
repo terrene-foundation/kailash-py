@@ -76,7 +76,9 @@ class TestWorkflowAPIGateway:
     @pytest.fixture
     def gateway(self):
         """Create WorkflowAPIGateway instance."""
-        return WorkflowAPIGateway(title="Test Gateway", description="Test Description")
+        return WorkflowAPIGateway(
+            require_auth=False, title="Test Gateway", description="Test Description"
+        )
 
     @pytest.fixture
     def sample_workflow(self):
@@ -100,7 +102,8 @@ class TestWorkflowAPIGateway:
     def test_gateway_initialization_with_cors(self):
         """Test gateway initialization with CORS origins."""
         gateway = WorkflowAPIGateway(
-            cors_origins=["http://localhost:3000", "https://example.com"]
+            require_auth=False,
+            cors_origins=["http://localhost:3000", "https://example.com"],
         )
 
         # Check that CORS middleware was added
@@ -312,7 +315,9 @@ class TestWorkflowAPIGateway:
 
     def test_gateway_cors_preflight(self):
         """Test CORS preflight requests."""
-        gateway = WorkflowAPIGateway(cors_origins=["http://localhost:3000"])
+        gateway = WorkflowAPIGateway(
+            require_auth=False, cors_origins=["http://localhost:3000"]
+        )
         client = TestClient(gateway.app)
 
         # Simulate preflight request
@@ -360,7 +365,7 @@ class TestWorkflowOrchestrator:
     @pytest.fixture
     def gateway(self):
         """Create gateway with sample workflows."""
-        gateway = WorkflowAPIGateway()
+        gateway = WorkflowAPIGateway(require_auth=False)
 
         # Add some mock workflows
         workflow1 = Mock(spec=Workflow)
@@ -446,7 +451,7 @@ class TestGatewayErrorHandling:
     @pytest.fixture
     def gateway(self):
         """Create gateway for error testing."""
-        return WorkflowAPIGateway()
+        return WorkflowAPIGateway(require_auth=False)
 
     def test_register_workflow_without_workflow_or_proxy(self, gateway):
         """Test error when registering without workflow or proxy URL."""
@@ -476,7 +481,7 @@ class TestGatewayLifecycle:
 
     def test_lifespan_context_manager(self):
         """Test that gateway properly sets up lifespan context."""
-        gateway = WorkflowAPIGateway()
+        gateway = WorkflowAPIGateway(require_auth=False)
 
         # The app should have a lifespan context manager
         assert gateway.app.router.lifespan_context is not None
@@ -484,7 +489,7 @@ class TestGatewayLifecycle:
     @patch("kailash.api.gateway.logger")
     def test_startup_logging(self, mock_logger):
         """Test that startup events are logged."""
-        gateway = WorkflowAPIGateway()
+        gateway = WorkflowAPIGateway(require_auth=False)
 
         # Register a workflow to test startup logging
         workflow = Mock(spec=Workflow)

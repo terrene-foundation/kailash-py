@@ -31,6 +31,7 @@ def _make_mock_workflow(name="test_wf"):
 def gateway():
     """Create a WorkflowAPIGateway for testing."""
     return WorkflowAPIGateway(
+        require_auth=False,
         title="Test Gateway",
         description="Test",
         version="1.0.0",

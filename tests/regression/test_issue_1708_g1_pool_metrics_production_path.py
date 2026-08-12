@@ -48,6 +48,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
 from src.kailash.servers import EnterpriseWorkflowServer, WorkflowServer
 
@@ -90,7 +91,9 @@ class TestPoolMetricsReachProductionScrapeWithoutRegisterSource:
         collector.track_pool_exhaustion()
         collector.track_pool_exhaustion()
 
-        server = WorkflowServer(title="G1 Pool Metrics Production Path Server")
+        server = WorkflowServer(
+            require_auth=False, title="G1 Pool Metrics Production Path Server"
+        )
         try:
             # Structural proof that NOTHING wired this collector into the
             # router-level provider -- the historical (and only) path that
@@ -129,7 +132,8 @@ class TestPoolMetricsReachProductionScrapeWithoutRegisterSource:
         collector.track_pool_exhaustion()
 
         server = EnterpriseWorkflowServer(
-            title="G1 Pool Metrics Production Path Enterprise Server"
+            require_auth=False,
+            title="G1 Pool Metrics Production Path Enterprise Server",
         )
         try:
             assert server._connection_metrics_provider._sources == {}
@@ -171,9 +175,9 @@ class TestPoolMetricsReachProductionScrapeWithoutRegisterSource:
         with collector.track_acquisition():
             pass
 
-        base_server = WorkflowServer(title="G1 Parity Base Server")
+        base_server = WorkflowServer(require_auth=False, title="G1 Parity Base Server")
         enterprise_server = EnterpriseWorkflowServer(
-            title="G1 Parity Enterprise Server"
+            require_auth=False, title="G1 Parity Enterprise Server"
         )
         try:
             base_body = TestClient(base_server.app).get("/metrics").text

@@ -47,6 +47,10 @@ from ..utils.proxy_guard import (
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
+from ..utils.server_auth import (
+    install_server_auth_middleware,
+    resolve_server_auth,
+)
 from ..workflow import Workflow
 from .connection_metrics_router import (
     ConnectionMetricsProvider,
@@ -141,6 +145,16 @@ class WorkflowServer:
         shutdown_hook: Optional[Callable[[], Awaitable[None]]] = None,
         startup_hook_timeout: Optional[float] = None,
         auth_manager: Any = None,
+        # Server-wide authentication (#2072). NAMED parameters, never
+        # **kwargs -- `enable_auth=True` was advertised in this package's
+        # docstring while landing in **kwargs and being discarded, so the
+        # documented security control did nothing (zero-tolerance.md Rule 3c).
+        # A named parameter makes that failure mode unexpressible: a typo is
+        # a TypeError, not a silently open server.
+        require_auth: bool = True,
+        auth_config: Any = None,
+        external_auth_reason: Optional[str] = None,
+        auth_exempt_paths: Optional[list[str]] = None,
         **kwargs,
     ):
         """Initialize the workflow server.
@@ -162,6 +176,33 @@ class WorkflowServer:
                 ``auth_dependency``) is present -- see issue #2025 and
                 :mod:`kailash.utils.proxy_guard`. Can also be supplied after
                 construction via :meth:`set_auth_manager`.
+
+                NOTE: ``auth_manager`` does NOT satisfy ``require_auth``. It
+                supplies a FastAPI ``Depends``, and a dependency does not run
+                for routes inside a mounted sub-application -- which is exactly
+                where ``/workflows/{name}/execute`` lives. See #2072.
+            require_auth: Whether every request must be authenticated.
+                **Defaults to ``True`` (fail-closed) and this is a BREAKING
+                change** -- see :mod:`kailash.utils.server_auth`. Construction
+                RAISES :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError`
+                when no credential source is configured, rather than serving
+                anonymous workflow execution. Set ``KAILASH_JWT_SECRET`` (or
+                ``KAILASH_API_KEY_<NAME>``, or pass ``auth_config=``) to
+                configure one. Pass ``require_auth=False`` to run without
+                authentication -- an explicit opt-out that logs a loud WARN.
+            auth_config: Explicit :class:`~kailash.trust.auth.jwt.JWTConfig`
+                (or a ``dict`` of its fields) to authenticate with, bypassing
+                environment lookup.
+            external_auth_reason: Non-empty string declaring that an ASGI
+                middleware OUTSIDE this server authenticates every request, so
+                this server installs none. Nexus uses this because it installs
+                its own ``nexus.auth.jwt.JWTMiddleware``. A blank string is
+                rejected -- a reason that names nothing is an undocumented
+                hole.
+            auth_exempt_paths: Extra paths exempt from authentication, on top
+                of the health-probe defaults. ``/docs``, ``/metrics``,
+                ``/dashboard``, ``/`` and ``/workflows`` are NOT exempt by
+                default; each describes or exposes the protected surface.
             startup_hook: Optional async callback awaited inside the FastAPI
                 lifespan, after `router._startup()` fires, BEFORE the server
                 starts accepting requests. Tasks created here run inside
@@ -203,6 +244,18 @@ class WorkflowServer:
                 3. NOT swallow ``CancelledError`` — after cleaning up,
                    re-raise so ``wait_for`` sees the cancellation complete.
         """
+        # Resolve authentication FIRST (#2072), before any resource is
+        # allocated. A ServerAuthNotConfiguredError raised after the
+        # ThreadPoolExecutor below exists would leak its threads, because
+        # __init__ never returns and no caller holds a reference to close().
+        self._auth_config = resolve_server_auth(
+            require_auth=require_auth,
+            auth_config=auth_config,
+            external_auth_reason=external_auth_reason,
+            extra_exempt_paths=auth_exempt_paths,
+            server_label=f"{type(self).__name__}(title={title!r})",
+        )
+
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
         # Per-workflow API wrappers, tracked so their runtimes are released on
@@ -216,7 +269,11 @@ class WorkflowServer:
         # is also the name `nexus.plugins` probed for on this gateway and never
         # found (#2013) -- it now exists and does something.
         self._auth_manager: Any = auth_manager
-        self._external_auth_reason: Optional[str] = None
+        self._external_auth_reason: Optional[str] = (
+            external_auth_reason.strip()
+            if external_auth_reason and external_auth_reason.strip()
+            else None
+        )
 
         # Coordinated shutdown via ShutdownCoordinator
         self.shutdown_coordinator = ShutdownCoordinator(
@@ -348,6 +405,21 @@ class WorkflowServer:
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan
         )
+
+        # Install authentication BEFORE CORS (#2072).
+        #
+        # Starlette's add_middleware() PREPENDS, so the layer added LAST is the
+        # OUTERMOST one. CORS must stay outermost or a cross-origin preflight
+        # OPTIONS is rejected with 401 by auth before CORS can answer it -- the
+        # ordering bug PR #2054 hit on the Nexus surface. Installing auth here,
+        # ahead of the CORS block below, keeps that ordering.
+        #
+        # Middleware, NOT a route dependency: register_workflow and
+        # register_mcp_server both app.mount(...) a sub-application, and a
+        # Depends declared on the parent does not run for requests routed into
+        # a mount. See kailash.trust.auth.asgi for the measurement.
+        if self._auth_config is not None:
+            install_server_auth_middleware(self.app, self._auth_config)
 
         # Add CORS middleware
         if cors_origins:

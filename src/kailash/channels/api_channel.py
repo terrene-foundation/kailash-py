@@ -87,6 +87,20 @@ class APIChannel(Channel):
             title=server_title,
             description=server_description,
             cors_origins=cors_origins,
+            # `ChannelConfig.enable_auth` was reported by /channel/info and
+            # read by NO enforcement path -- a documented security control
+            # that did nothing (zero-tolerance.md Rule 3c, noted in the #2025
+            # analysis). It is now load-bearing: True installs the server-wide
+            # gate, and `auth_config` (already on ChannelConfig, likewise
+            # unused) supplies the credential.
+            #
+            # enable_auth=False is ChannelConfig's declared default, so it maps
+            # to an EXPLICIT opt-out rather than a fail-closed raise -- but the
+            # opt-out is never silent: resolve_server_auth logs a WARN naming
+            # the exposure and its wiring (security.md § Secure-Default). A
+            # direct WorkflowServer()/create_gateway() still fails closed.
+            require_auth=self.config.enable_auth,
+            auth_config=self.config.auth_config or None,
             enable_durability=self.config.extra_config.get("enable_durability", True),
             enable_resource_management=self.config.extra_config.get(
                 "enable_resource_management", True

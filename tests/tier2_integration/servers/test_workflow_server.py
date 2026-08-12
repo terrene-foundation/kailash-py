@@ -23,6 +23,7 @@ class TestWorkflowServer:
     def test_server_initialization(self):
         """Test basic server initialization."""
         server = WorkflowServer(
+            require_auth=False,
             title="Test Server",
             description="Test Description",
             version="1.0.0",
@@ -38,7 +39,9 @@ class TestWorkflowServer:
     def test_server_with_cors(self):
         """Test server initialization with CORS origins."""
         cors_origins = ["http://localhost:3000", "https://app.example.com"]
-        server = WorkflowServer(title="CORS Test Server", cors_origins=cors_origins)
+        server = WorkflowServer(
+            require_auth=False, title="CORS Test Server", cors_origins=cors_origins
+        )
 
         # Check that CORS middleware was added by checking if we can make CORS requests
         # The mere fact that we passed CORS origins to the constructor should be sufficient
@@ -47,7 +50,9 @@ class TestWorkflowServer:
 
     def test_root_endpoint(self):
         """Test the root endpoint returns server information."""
-        server = WorkflowServer(title="Test Server", version="2.0.0")
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", version="2.0.0"
+        )
         client = TestClient(server.app)
 
         response = client.get("/")
@@ -62,7 +67,7 @@ class TestWorkflowServer:
 
     def test_health_endpoint(self):
         """Test the health check endpoint."""
-        server = WorkflowServer(title="Health Test Server")
+        server = WorkflowServer(require_auth=False, title="Health Test Server")
         client = TestClient(server.app)
 
         response = client.get("/health")
@@ -76,7 +81,7 @@ class TestWorkflowServer:
 
     def test_workflows_endpoint_empty(self):
         """Test workflows endpoint when no workflows are registered."""
-        server = WorkflowServer(title="Empty Workflows Server")
+        server = WorkflowServer(require_auth=False, title="Empty Workflows Server")
         client = TestClient(server.app)
 
         response = client.get("/workflows")
@@ -94,7 +99,7 @@ class TestWorkflowServer:
         workflow.version = "1.0.0"
 
         # Create server and register workflow
-        server = WorkflowServer(title="Workflow Registration Test")
+        server = WorkflowServer(require_auth=False, title="Workflow Registration Test")
         server.register_workflow(
             name="test_workflow",
             workflow=workflow,
@@ -123,7 +128,7 @@ class TestWorkflowServer:
         workflow2.workflow_id = "workflow2_id"
         workflow2.version = "1.0.0"
 
-        server = WorkflowServer(title="Duplicate Test Server")
+        server = WorkflowServer(require_auth=False, title="Duplicate Test Server")
         server.register_workflow("duplicate_name", workflow1)
 
         with pytest.raises(
@@ -135,7 +140,7 @@ class TestWorkflowServer:
         """Test MCP server registration functionality."""
         mock_mcp_server = Mock()
 
-        server = WorkflowServer(title="MCP Test Server")
+        server = WorkflowServer(require_auth=False, title="MCP Test Server")
         server.register_mcp_server("test_mcp", mock_mcp_server)
 
         # Check MCP server was registered
@@ -147,7 +152,7 @@ class TestWorkflowServer:
         mcp1 = Mock()
         mcp2 = Mock()
 
-        server = WorkflowServer(title="Duplicate MCP Test Server")
+        server = WorkflowServer(require_auth=False, title="Duplicate MCP Test Server")
         server.register_mcp_server("duplicate_mcp", mcp1)
 
         with pytest.raises(
@@ -172,7 +177,7 @@ class TestWorkflowServer:
                 raise HTTPException(status_code=401, detail="Not authenticated")
             return {"user_id": "test"}
 
-        server = WorkflowServer(title="Proxy Test Server")
+        server = WorkflowServer(require_auth=False, title="Proxy Test Server")
         server.proxy_workflow(
             name="proxy_workflow",
             proxy_url="http://external-service:8080",
@@ -195,7 +200,7 @@ class TestWorkflowServer:
 
     def test_get_workflow_endpoints(self):
         """Test _get_workflow_endpoints method."""
-        server = WorkflowServer(title="Endpoints Test Server")
+        server = WorkflowServer(require_auth=False, title="Endpoints Test Server")
         endpoints = server._get_workflow_endpoints("test_workflow")
 
         expected_endpoints = [
@@ -214,7 +219,7 @@ class TestWorkflowServer:
         workflow.workflow_id = "registered_workflow_id"
         workflow.version = "1.0.0"
 
-        server = WorkflowServer(title="Registered Workflows Server")
+        server = WorkflowServer(require_auth=False, title="Registered Workflows Server")
         server.register_workflow(
             name="registered_workflow",
             workflow=workflow,
@@ -236,7 +241,7 @@ class TestWorkflowServer:
 
     def test_websocket_endpoint_basic(self):
         """Test basic WebSocket endpoint functionality."""
-        server = WorkflowServer(title="WebSocket Test Server")
+        server = WorkflowServer(require_auth=False, title="WebSocket Test Server")
         client = TestClient(server.app)
 
         # Test WebSocket connection
@@ -249,7 +254,7 @@ class TestWorkflowServer:
 
     def test_server_defaults(self):
         """Test that server has reasonable defaults."""
-        server = WorkflowServer()
+        server = WorkflowServer(require_auth=False)
 
         assert server.app.title == "Kailash Workflow Server"
         assert server.app.description == "Multi-workflow hosting server"

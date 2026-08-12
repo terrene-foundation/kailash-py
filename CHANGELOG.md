@@ -13,6 +13,72 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — server-wide authentication now fails closed (#2072)
+
+**Read the migration note below before upgrading. Every `create_gateway()` / `WorkflowServer()` deployment that has not configured a credential source will stop booting.** That is the intended behaviour, and the reason is in the first bullet.
+
+- **A default `WorkflowServer` / `create_gateway()` served anonymous arbitrary workflow execution (CRITICAL).** With a single `register_workflow(...)` — the primary documented use — `POST /workflows/{name}/execute` **ran the workflow for a caller presenting no credentials of any kind**. `grep -nE 'Depends\(|HTTPBearer|APIKeyHeader|verify_token|authenticate' src/kailash/servers/` returned zero matches across all five server modules; the only middleware in the package was CORS, and it was conditional. **Measured on a real uvicorn process on a real socket, not inferred:** `POST /workflows/probe/execute` with no credentials → **200**, body `{"outputs":{"n":{"result":{"ran":true}}},"execution_time":6.85,...}`. The workflow did not merely route — it **ran**: `{"ran": true}` is the node's own output and `execution_time` is real wall-clock. That is server-side code execution by an unauthenticated caller. Split out of #2025 as the default-reachable half, which PR #2064 did not close.
+- **The whole surface was open, not just `/execute`.** Also unauthenticated on a default server: `POST /workflows/{id}/signals/{signal}` (mutates running-workflow state; rate-limited, not authenticated), `GET /workflows/{id}/queries/{query}`, `GET /workflows` and `/` (enumerate every registered workflow), the entire `/mcp/{name}/…` surface, `GET /durability/requests` (dumps `path`, `method` and **`client_ip`** per in-flight request), `WS /ws`, `GET /metrics`, and `GET /dashboard`.
+- **The fix is ASGI middleware, and it had to be — a route dependency cannot close this.** `register_workflow` and `register_mcp_server` both call `app.mount(...)`, and a `Depends` declared on the parent app does **not** run for a request routed into a mounted sub-application, because the mount hands the raw ASGI scope to a different application whose own dependency stack is empty. **Measured, with a credentialed third row as the discrimination control** — without it the 401 on line 2 of B could equally have been a broken route:
+
+  ```
+  A app-level Depends  -> /direct        : 401
+  A app-level Depends  -> mounted execute: 200      <-- OPEN
+  B middleware         -> /direct        : 401
+  B middleware         -> mounted execute: 401      <-- closed
+  B middleware + creds -> mounted execute: 200      <-- control
+  ```
+
+  A `Depends`-based fix would have looked correct, passed a naive test against a parent route, and left `/execute` wide open.
+- **`require_auth` now defaults to `True` and construction raises when no credential is configured** (`security.md` § Secure-Default). `WorkflowServer`, `DurableWorkflowServer`, `EnterpriseWorkflowServer`, `create_gateway()` and its three aliases raise `ServerAuthNotConfiguredError` (a `RuntimeError` subclass, matching the #636 precedent) naming every accepted environment variable, the `auth_config=` parameter, the `require_auth=False` opt-out and the `external_auth_reason=` declaration. It raises at **construction**, not per request: a server that booted and then 500'd would still have reported itself healthy to an orchestrator.
+- **Controls are NAMED parameters, never `**kwargs`.** `require_auth`, `auth_config`, `external_auth_reason` and `auth_exempt_paths` are declared on every constructor and threaded explicitly through `create_gateway`. This codebase has shipped the swallowed-kwarg defect twice — `enable_auth=True` was advertised in `servers/__init__.py`'s docstring while landing in `**kwargs` and being discarded (#2025), and `Nexus(enable_auth=True)` set three booleans and installed nothing (#2013). A named parameter makes a typo a `TypeError` instead of a silently open server, and a regression test pins it.
+- **Credentials come from the environment** (`env-models.md`): `KAILASH_JWT_SECRET` (HS*, minimum 32 bytes per RFC 7518 §3.2), `KAILASH_JWT_PUBLIC_KEY` + `KAILASH_JWT_ALGORITHM` (RS*/ES*), `KAILASH_API_KEY_<NAME>` (enables `X-API-Key`, validated with `secrets.compare_digest` against every configured key so the comparison count does not depend on which matched), and `KAILASH_AUTH_EXEMPT_PATHS`. An under-length secret raises `InvalidServerAuthSecretError` rather than being used, and the rejected value is never echoed into the message or the log.
+- **Only health probes are exempt by default.** `DEFAULT_EXEMPT_PATHS` is `/health`, `/health/*`, `/enterprise/health` — and nothing else. `JWTConfig`'s **own** default exempt list is broader (it exempts `/docs`, `/metrics` and `/redoc`) and is deliberately **not** reused: `/` and `/workflows` enumerate every registered workflow, `/metrics` and `/dashboard` report operational state, and the OpenAPI documents hand an anonymous caller the full route map. Health probes stay exempt because an authenticated `/health` makes every orchestrator mark the server unhealthy and restart-loop it.
+- **CORS stays outermost.** Starlette's `add_middleware` **prepends**, so the layer added last is the outermost one; auth is installed *before* the CORS block so a cross-origin preflight `OPTIONS` is answered by CORS rather than 401'd by auth. PR #2054 hit exactly this ordering bug on the Nexus surface. A regression test asserts the preflight succeeds **and** that the real cross-origin `POST` is still 401'd, so the ordering fix cannot smuggle the request through.
+- **`auth_manager` deliberately does NOT satisfy `require_auth`.** It supplies a FastAPI `Depends`, which — per the measurement above — does not reach mounted sub-apps. Accepting it would have closed the gate on paper while leaving the reachable route open. Passing `auth_manager=` alone still raises, and the error explains why.
+- **`auth_config={}` does not satisfy the gate either.** An empty dict falls through to the environment and fails closed, rather than building a `JWTConfig` with no secret and installing a middleware that can verify nothing.
+- **`kailash.api.WorkflowAPIGateway` learns the same gate in the same change** (`security.md` § Enforcement-Surface Parity). It is an independent surface — mounted at `/{name}` rather than `/workflows/{name}` — with the same defect, and it now resolves through the **same shared implementation**, the new `kailash.utils.server_auth` module, rather than through a second copy in either server. A sibling left unqualified ships the exact failure mode the fix closes.
+- **`ChannelConfig.enable_auth` is load-bearing for the first time.** It was reported by `APIChannel`'s `/channel/info` endpoint and read by **no enforcement path** — a documented security control that did nothing (`zero-tolerance.md` Rule 3c, noted in the #2025 analysis). `enable_auth=True` now installs the server-wide gate and the already-present `ChannelConfig.auth_config` supplies the credential. `enable_auth=False` remains that type's declared default and maps to an explicit opt-out, which logs the WARN below rather than passing silently.
+- **The opt-out is never silent.** `require_auth=False` constructs, but logs a WARN naming the OFF protection (`every route is served to anonymous callers, including POST /workflows/{name}/execute which runs arbitrary registered workflows`) and its exact wiring.
+- **Nexus declares external auth rather than double-installing.** `nexus.core` and `nexus.transports.http` pass `external_auth_reason=` at both `create_gateway()` call sites, because `Nexus(enable_auth=True)` installs `nexus.auth.jwt.JWTMiddleware` onto the same app (#2013 / PR #2054). Whether the Nexus surface authenticates is still decided by `Nexus(enable_auth=…)`; this change does not alter that contract. A blank `external_auth_reason` is rejected — a reason that names nothing is an undocumented hole.
+- **One crypto path, two HTTP bindings.** The new `kailash.trust.auth.asgi.JWTAuthMiddleware` delegates **all** verification to `kailash.trust.auth.jwt.JWTValidator` — the same class `nexus.auth.jwt.JWTMiddleware` delegates to — so algorithm-confusion rejection, the `none`-algorithm ban, JWKS and the 32-byte floor are shared rather than reimplemented. Core cannot import the Nexus middleware (`kailash-nexus` requires `kailash`, never the reverse), so it is the template and not the dependency; a `request_context` override point exists so the two bindings can converge later.
+- **401 responses leak nothing.** The body carries a stable machine-readable `error` code and a fixed human string, never the token, the exception text, or any configuration value — an `InvalidTokenError` can name the configured algorithm and issuer, which is a fingerprinting aid for an anonymous prober. Details go to the log. Every unexpected verification error is logged with a stack trace and still fails **closed** with 401; none falls through into the protected route.
+
+#### Migration (#2072)
+
+Existing `create_gateway()` / `WorkflowServer()` callers must pick one of four. **Every deployment this breaks was already serving anonymous workflow execution** — the raise does not turn a working system into an outage, it surfaces a pre-existing exposure at deploy time instead of leaving it silently in production.
+
+1. **Configure a credential (recommended).** No code change:
+
+   ```bash
+   export KAILASH_JWT_SECRET="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"
+   # or, for X-API-Key instead of bearer tokens:
+   export KAILASH_API_KEY_SERVICE="<key>"
+   ```
+
+   Callers then send `Authorization: Bearer <token>` (or `X-API-Key`). Mint tokens with `kailash.trust.auth.jwt.JWTValidator(JWTConfig(secret=...)).create_access_token(user_id=...)`.
+
+2. **Pass an explicit config in code:**
+
+   ```python
+   from kailash.trust.auth.jwt import JWTConfig
+   gateway = create_gateway(auth_config=JWTConfig(secret=os.environ["MY_SECRET"]))
+   ```
+
+3. **Opt out explicitly** — for local development, or a server already behind an authenticating proxy. Logs a WARN naming the exposure:
+
+   ```python
+   gateway = create_gateway(require_auth=False)
+   ```
+
+4. **Declare external auth** when an ASGI middleware outside this server already authenticates every request:
+
+   ```python
+   gateway = create_gateway(external_auth_reason="authenticated by the ingress JWT filter")
+   ```
+
+`Nexus` users are unaffected by the default flip: Nexus declares external auth at both call sites and its own `Nexus(enable_auth=…)` contract is unchanged.
+
 ### Security (BREAKING) — workflow-server proxy routes fail closed (#2025)
 
 - **`WorkflowServer.proxy_workflow()` registered an unauthenticated catch-all reverse proxy (CRITICAL).** The route was `/workflows/{name}/{path:path}` for GET/POST/PUT/DELETE/PATCH, and the only middleware in the module was CORS: no dependency, no API-key check, no auth middleware anywhere on the path. It forwarded an arbitrary method, path and query string to the backend at the registered URL and returned the body. Where that backend is an internal service — the usual reason to configure a proxy at all — this published its entire surface to every caller. It compounded the exposure by stripping `Authorization` on forward, so the backend could not re-authorize the caller either: the identity was removed and nothing replaced it. **Measured on the pre-fix source:** register a proxy with no auth argument, then `GET /workflows/internal/admin/users` with no credentials → **200**, with the backend's body returned verbatim.

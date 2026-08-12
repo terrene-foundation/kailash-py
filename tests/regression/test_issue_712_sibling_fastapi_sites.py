@@ -66,7 +66,7 @@ async def test_workflow_api_gateway_drives_router_on_startup():
 
     from kailash.api.gateway import WorkflowAPIGateway
 
-    gateway = WorkflowAPIGateway()
+    gateway = WorkflowAPIGateway(require_auth=False)
     app: FastAPI = gateway.app
 
     fired: list[int] = []

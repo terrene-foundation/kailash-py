@@ -187,6 +187,17 @@ class HTTPTransport(Transport):
 
             self._gateway = create_gateway(
                 enable_durability=self._enable_durability,
+                # Same declaration as the primary construction path in
+                # nexus/core.py: Nexus owns authentication for this app via
+                # Nexus(enable_auth=True) -> nexus.auth.jwt.JWTMiddleware
+                # (#2013). Without it this fallback path would raise
+                # ServerAuthNotConfiguredError under the #2072 fail-closed
+                # default, and the two paths would disagree about who
+                # authenticates.
+                external_auth_reason=(
+                    "nexus installs nexus.auth.jwt.JWTMiddleware on this app "
+                    "via Nexus(enable_auth=True) (#2013)"
+                ),
             )
             self._apply_cors()
 

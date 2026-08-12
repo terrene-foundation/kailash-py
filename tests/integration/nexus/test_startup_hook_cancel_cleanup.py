@@ -59,6 +59,7 @@ async def test_startup_hook_timeout_invokes_shutdown_hook_for_partial_init_clean
             plugin_state["resource_released"] = True
 
     server = WorkflowServer(
+        require_auth=False,
         title="cancel-cleanup-test",
         startup_hook=partially_initializing_startup_hook,
         shutdown_hook=defensive_shutdown_hook,
@@ -135,6 +136,7 @@ async def test_startup_hook_spawned_tasks_survive_via_shutdown_hook_cleanup():
                     task_cancelled_in_shutdown["ran"] = True
 
     server = WorkflowServer(
+        require_auth=False,
         title="spawned-task-cleanup-test",
         startup_hook=startup_hook_with_background_task,
         shutdown_hook=shutdown_hook_cancels_spawned,

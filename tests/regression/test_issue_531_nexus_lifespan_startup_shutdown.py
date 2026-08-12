@@ -53,7 +53,9 @@ async def test_workflow_server_lifespan_runs_on_startup_hooks() -> None:
     registering on_startup / on_shutdown handlers, and driving the
     FastAPI lifespan context manager must fire both.
     """
-    server = WorkflowServer(title="issue-531-regression", version="test")
+    server = WorkflowServer(
+        require_auth=False, title="issue-531-regression", version="test"
+    )
 
     startup_calls: list[str] = []
     shutdown_calls: list[str] = []
@@ -102,7 +104,9 @@ async def test_lifespan_fires_handlers_even_when_dispatch_methods_missing(
     calling either method, this test raises ``AttributeError`` inside
     the context manager.
     """
-    server = WorkflowServer(title="issue-531-no-dispatch", version="test")
+    server = WorkflowServer(
+        require_auth=False, title="issue-531-no-dispatch", version="test"
+    )
     app: FastAPI = server.app
 
     # Poison both potential dispatch method names — if the lifespan

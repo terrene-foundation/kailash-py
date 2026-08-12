@@ -6,6 +6,7 @@ on WorkflowServer.
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.servers import WorkflowServer
 from src.kailash.visualization.live_dashboard import LiveDashboard
 
@@ -61,7 +62,7 @@ class TestDashboardEndpoint:
 
     def test_dashboard_returns_html(self):
         """GET /dashboard returns 200 with HTML content."""
-        server = WorkflowServer(title="Dash Server")
+        server = WorkflowServer(require_auth=False, title="Dash Server")
         client = TestClient(server.app)
 
         resp = client.get("/dashboard")

@@ -22,6 +22,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
 from src.kailash.servers import WorkflowServer
 
@@ -63,7 +64,9 @@ class TestPoolAcquireWaitHistogramReachesUnifiedMetrics:
             with collector.track_acquisition():
                 time.sleep(0.01)
 
-        server = WorkflowServer(title="Acquire Wait Histogram Test Server")
+        server = WorkflowServer(
+            require_auth=False, title="Acquire Wait Histogram Test Server"
+        )
         client = TestClient(server.app)
         resp = client.get("/metrics")
         assert resp.status_code == 200
@@ -122,7 +125,9 @@ class TestPoolAcquireWaitHistogramReachesUnifiedMetrics:
             with collector.track_acquisition():
                 pass  # near-zero duration; still lands in the smallest bucket
 
-        server = WorkflowServer(title="Acquire Wait Ceiling Test Server")
+        server = WorkflowServer(
+            require_auth=False, title="Acquire Wait Ceiling Test Server"
+        )
         client = TestClient(server.app)
         body = client.get("/metrics").text
 
@@ -152,7 +157,9 @@ class TestUSECompletenessReachesUnifiedMetrics:
         collector.track_pool_exhaustion()
         collector.track_pool_exhaustion()
 
-        server = WorkflowServer(title="USE Completeness Test Server")
+        server = WorkflowServer(
+            require_auth=False, title="USE Completeness Test Server"
+        )
         # Register the real collector as a pool source through the exact
         # mechanism production code uses (ConnectionMetricsProvider.
         # register_source), proving the collector -> router -> scrape path
