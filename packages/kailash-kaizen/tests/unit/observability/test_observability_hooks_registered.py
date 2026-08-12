@@ -31,6 +31,7 @@ from kaizen.smart_defaults import (
     _warn_audit_unwritable,
     _warn_observability_unavailable,
     _warn_tracing_endpoint_is_web_ui,
+    _warn_tracing_endpoint_unparseable,
 )
 
 # No LLM call is made anywhere in this module -- `model` is a required
@@ -70,13 +71,17 @@ def _reset_one_time_warning():
     the unwritable-audit-path warning, whose PRESENCE is asserted: an
     ``lru_cache`` hit from an earlier test would swallow it.
     """
-    _warn_observability_unavailable.cache_clear()
-    _warn_tracing_endpoint_is_web_ui.cache_clear()
-    _warn_audit_unwritable.cache_clear()
+    _one_time_warnings = (
+        _warn_observability_unavailable,
+        _warn_tracing_endpoint_is_web_ui,
+        _warn_audit_unwritable,
+        _warn_tracing_endpoint_unparseable,
+    )
+    for warning in _one_time_warnings:
+        warning.cache_clear()
     yield
-    _warn_observability_unavailable.cache_clear()
-    _warn_tracing_endpoint_is_web_ui.cache_clear()
-    _warn_audit_unwritable.cache_clear()
+    for warning in _one_time_warnings:
+        warning.cache_clear()
 
 
 @pytest.fixture
@@ -693,7 +698,7 @@ def test_pre_existing_audit_file_is_tightened_and_the_change_is_announced(
 
 def test_an_already_owner_only_path_is_not_announced(tmp_path, caplog):
     """
-    NEGATIVE CONTROL. Nothing to tighten means nothing to say.
+    NEGATIVE CONTROL. Nothing to change means nothing to say.
 
     Without this, the warning above could fire on every construction and the
     assertion there would still pass -- a warning that always fires carries no
@@ -710,6 +715,72 @@ def test_an_already_owner_only_path_is_not_announced(tmp_path, caplog):
 
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "tightening" not in text, text
+    assert "was 0o600" not in text, text
+
+
+def test_a_pre_existing_read_only_file_is_loosened_and_that_is_announced_too(
+    tmp_path, caplog
+):
+    """
+    Pinning is not always a TIGHTENING, and the loose case must be loud too.
+
+    An operator-set 0o400 becomes 0o600, which ADDS write. Warning only when
+    the old mode had group/world bits would leave this change -- the one most
+    likely to have been made deliberately -- silent, while the code's own
+    docstring claimed it announces every correction.
+
+    This is also the discriminating control for the warn predicate: without
+    it, narrowing the early-exit to `if not (current & 0o077): return` passes
+    every other mode test in this file.
+    """
+    import stat
+
+    from kaizen.core.autonomy.observability.audit import FileAuditStorage
+
+    existing = tmp_path / "audit.jsonl"
+    existing.touch()
+    existing.chmod(0o400)
+
+    with caplog.at_level(logging.WARNING):
+        FileAuditStorage(str(existing))
+
+    # 0o600 is required: the trail is append-only and must be writable.
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o600
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "0o400" in text, text
+    assert "0o600" in text, text
+    assert str(existing) in text, text
+
+
+def test_a_pre_existing_parent_directory_is_left_alone(tmp_path, caplog):
+    """
+    The DIRECTORY is tightened only if this class created it.
+
+    `file_path.parent` is `.` for a bare filename, and for an operator-set
+    `audit_log_path` it is frequently a shared location like `/var/log/kaizen`
+    that other services also write to. Chmodding either to 0o700 is far
+    outside this class's remit -- and it is not what protects the record; the
+    FILE mode is. The asymmetry with the file is deliberate and is asserted
+    here so it cannot be "tidied" into symmetry.
+    """
+    import stat
+
+    from kaizen.core.autonomy.observability.audit import FileAuditStorage
+
+    shared = tmp_path / "var-log-kaizen"
+    shared.mkdir()
+    shared.chmod(0o755)
+
+    with caplog.at_level(logging.WARNING):
+        FileAuditStorage(str(shared / "audit.jsonl"))
+
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755, (
+        "a pre-existing directory the operator configured was re-permissioned; "
+        "on a bare filename this is the process working directory"
+    )
+    # The file inside it is still owner-only -- that is the actual protection.
+    assert stat.S_IMODE((shared / "audit.jsonl").stat().st_mode) == 0o600
 
 
 @pytest.mark.asyncio
@@ -827,3 +898,35 @@ def test_agent_constructs_on_a_read_only_filesystem(unwritable_dir, monkeypatch)
     assert agent is not None
     assert not (unwritable_dir / ".kaizen").exists()
     assert "audit_trail_hook" not in agent.hook_manager.registered_hook_names()
+
+
+def test_an_unparseable_tracing_endpoint_does_not_break_construction(
+    tmp_path, monkeypatch, caplog
+):
+    """
+    A typo'd endpoint must disable the exporter, not the agent.
+
+    `_parse_otlp_endpoint` calls `urlparse(...).port`, which raises
+    ValueError on a non-numeric or out-of-range port -- unguarded, and ahead
+    of `Agent.__init__`'s try. This branch already soft-warns for a
+    SEMANTICALLY wrong port (16686, the Jaeger web UI); a SYNTACTICALLY wrong
+    one was fatal.
+    """
+    config = AgentConfig(
+        model=MODEL,
+        llm_provider=PROVIDER,
+        tracing_endpoint="http://collector:notaport",
+        audit_log_path=str(tmp_path / "audit.jsonl"),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        hook_manager = _manager(config)
+
+    assert hook_manager is not None
+    names = hook_manager.registered_hook_names()
+    assert "tracing_hook" not in names, names
+    assert "logging_hook" in names, f"an unrelated subsystem was taken down: {names}"
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "notaport" in text, text
+    assert "enable_tracing=False" in text, text

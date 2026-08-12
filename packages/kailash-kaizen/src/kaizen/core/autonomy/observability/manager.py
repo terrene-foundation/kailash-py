@@ -91,14 +91,38 @@ class ObservabilityManager:
         self.metrics = MetricsCollector() if enable_metrics else None
         self.logging = LoggingManager() if enable_logging else None
         self.tracing = TracingManager(service_name) if enable_tracing else None
-        self.audit = AuditTrailManager() if enable_audit else None
 
-        # Track enabled components
+        # `AuditTrailManager()` with no storage falls back to a
+        # `FileAuditStorage` on a CWD-relative path, so this is the only
+        # component here that touches the filesystem -- and on a read-only
+        # root it would take down the whole manager, including the three
+        # components that need no disk at all. Same disposition as
+        # `SmartDefaultsManager.create_observability`: a compliance sink that
+        # cannot write fails LOUDLY and alone.
+        self.audit = None
+        if enable_audit:
+            try:
+                self.audit = AuditTrailManager()
+            except OSError as exc:
+                logger.warning(
+                    "Audit trail is enabled but its storage could not be "
+                    "opened, so NOTHING will be recorded: %s: %s. Pass an "
+                    "AuditTrailManager with writable storage, or construct "
+                    "ObservabilityManager(enable_audit=False) to disable it "
+                    "deliberately.",
+                    type(exc).__name__,
+                    exc,
+                )
+
+        # Track enabled components. `audit` reports what was actually
+        # installed, not what was requested -- a flag that outlives the
+        # subsystem behind it is the defect this whole change set exists to
+        # remove (#2084).
         self._enabled_components = {
             "metrics": enable_metrics,
             "logging": enable_logging,
             "tracing": enable_tracing,
-            "audit": enable_audit,
+            "audit": self.audit is not None,
         }
 
         logger.info(

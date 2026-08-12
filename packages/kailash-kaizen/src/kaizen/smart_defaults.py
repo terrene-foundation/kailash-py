@@ -75,6 +75,20 @@ def _warn_audit_unwritable(path: str, detail: str) -> None:
 
 
 @lru_cache(maxsize=None)
+def _warn_tracing_endpoint_unparseable(endpoint: str, detail: str) -> None:
+    """Warn once that `tracing_endpoint` could not be parsed into host:port."""
+    logger.warning(
+        "Tracing is enabled (enable_tracing=True) but tracing_endpoint=%r "
+        "could not be parsed into a host and port, so NO spans will be "
+        "exported: %s. Expected an OTLP gRPC endpoint such as "
+        "'http://localhost:4317'. Fix the endpoint, or set "
+        "enable_tracing=False to disable it deliberately.",
+        endpoint,
+        detail,
+    )
+
+
+@lru_cache(maxsize=None)
 def _shared_tracing_manager(service_name: str, host: str, port: int):
     """
     One TracingManager per (service, endpoint), shared across agents.
@@ -416,15 +430,26 @@ class SmartDefaultsManager:
             except ImportError as exc:
                 _warn_observability_unavailable("tracing", "enable_tracing", str(exc))
             else:
-                host, port = _parse_otlp_endpoint(config.tracing_endpoint)
-                hook_manager.register_hook(
-                    TracingHook(
-                        tracing_manager=_shared_tracing_manager(
-                            f"kaizen-{config.agent_type}", host, port
+                # `urlparse(...).port` raises ValueError on a non-numeric or
+                # out-of-range port, and this sits ahead of `Agent.__init__`'s
+                # own try -- so a typo'd `tracing_endpoint` took down agent
+                # construction. A misconfigured exporter must disable the
+                # exporter, not the agent.
+                try:
+                    host, port = _parse_otlp_endpoint(config.tracing_endpoint)
+                except ValueError as exc:
+                    _warn_tracing_endpoint_unparseable(
+                        str(config.tracing_endpoint), f"{type(exc).__name__}: {exc}"
+                    )
+                else:
+                    hook_manager.register_hook(
+                        TracingHook(
+                            tracing_manager=_shared_tracing_manager(
+                                f"kaizen-{config.agent_type}", host, port
+                            )
                         )
                     )
-                )
-                enabled_systems.append(f"distributed tracing ({host}:{port})")
+                    enabled_systems.append(f"distributed tracing ({host}:{port})")
 
         if not enabled_systems:
             # Every enabled subsystem failed to install. Returning an empty
@@ -488,6 +513,14 @@ class SmartDefaultsManager:
             return checkpoint_manager
 
         except ImportError:
+            # NOTE (#2111): `kaizen.memory.checkpoint` does not exist anywhere
+            # in the source tree, so this except ALWAYS fires and
+            # `enable_checkpointing=True` installs nothing -- the same
+            # advertised-but-unimplemented defect as #2084, one subsystem
+            # over. That also makes the `mkdir` above unreachable, which is
+            # why it carries no OSError guard here: adding one would ship a
+            # branch nothing can enter (`rules/orphan-detection.md` §1). The
+            # guard belongs with the implementation, and #2111 says so.
             self.logger.warning(
                 "Checkpoint module not available, disabling checkpointing"
             )

@@ -44,14 +44,23 @@ path would have failed on the next line.
   (append-only JSONL, honours `audit_log_path`) into the hook system. The
   existing `AuditHook` is unchanged and still wraps the PostgreSQL-backed
   security `AuditTrailProvider`, which a zero-config path has no connection for.
-  The audit trail records event STRUCTURE, never payload values, so enabling
-  compliance audit does not itself become a disclosure channel. BOTH
-  payload-bearing fields are reduced: `context.data` to its sorted key names,
-  and `context.metadata` — a documented public kwarg on `HookManager.trigger`
-  and `BaseAgent.trigger_hook` — through the same `summarize_payload` helper
-  `LoggingHook` uses, to `{count, keys}`. What reaches the file verbatim is the
-  audit record itself: agent id, event name, trace id, timestamp, and the
-  success/failure verdict.
+  The audit trail records event STRUCTURE, never payload values. BOTH
+  payload-bearing fields are reduced through the same `summarize_payload`
+  helper `LoggingHook` uses: `context.data` to its sorted key names, and
+  `context.metadata` — a documented public kwarg on `HookManager.trigger` and
+  `BaseAgent.trigger_hook` — to `{count, keys}`. What reaches the file
+  verbatim is the audit record itself: agent id, event name, trace id,
+  timestamp, and the success/failure verdict.
+
+  **Key names are a bounded leak, not an absent one**, and the audit trail
+  writes them unconditionally — there is no `log_payload_keys` equivalent for
+  it. This is deliberate and it is the one place the two sinks are asymmetric
+  on purpose: a payload keyed `ssn` or `patient_diagnosis` discloses schema
+  and subject matter (see the `log_payload_keys` entry below, where that
+  reasoning makes key names opt-IN for the log sink), but an audit record
+  stripped of event shape records that something happened and nothing about
+  what — which is not an audit record. The trade is made explicit here rather
+  than left implied, and it is why the file is created owner-only.
 - **A missing optional dependency is now loud.** `"Metrics hook not available,
   skipping"` named neither what stopped working nor how to restore it. The
   replacement names the flag, the extra, and `enable_metrics=False` as the
@@ -77,11 +86,26 @@ resolves from BOTH inputs. Passing a `hook_manager` is now itself the opt-in;
 `hooks_enabled=True` without one is unchanged, and supplying neither still
 leaves hooks inert.
 
-### Changed (BREAKING) — `register_hook` no longer raises when a `hook_manager` was supplied
+### Changed (BREAKING) — all three hook gates now honour a supplied `hook_manager`
 
 This is the other side of the fix above, and it is **not** limited to the
-broken path. The old gate raised whenever `hooks_enabled` was `False`,
-regardless of whether a manager had been supplied. So:
+broken path. The old gates keyed on `hooks_enabled` alone, so all three
+changed — with `hooks_enabled=False` **and** a manager supplied:
+
+| gate | before | after |
+| --- | --- | --- |
+| `register_hook` | raises `RuntimeError` | registers |
+| `trigger_hook` | returns `[]` — no handler runs | **fires every registered handler** |
+| `get_hook_stats` | returns `{}` | returns real stats |
+
+`trigger_hook` is the larger of the three for a caller who was relying on the
+flag: handlers that never ran now execute, with whatever side effects they
+carry. It is the same transition the "Fixed" entry above describes — on the
+`Agent` path it is precisely the fix, since the manager was already populated
+and firing nothing; on a hand-wired `BaseAgent` it is a behavioural break.
+Both are true of one change.
+
+Written out for `register_hook`, the row that changes is the third:
 
 | `hooks_enabled` | `hook_manager` supplied | `register_hook` before | after |
 | --- | --- | --- | --- |
@@ -89,7 +113,7 @@ regardless of whether a manager had been supplied. So:
 | `True` | either | registers | registers |
 | `False` | **yes** | **raises** | **registers** |
 
-The third row is the change. On the `Agent` path it is unambiguously the fix:
+On the `Agent` path it is unambiguously the fix:
 `SmartDefaultsManager` supplies a populated manager and nothing sets
 `hooks_enabled`, so `register_hook` was rejecting registrations against a
 manager that was already installed and firing. But a `BaseAgent` caller who
@@ -119,12 +143,21 @@ the mode is read back from `stat()` rather than trusted from the create call,
 since a mode requested and then stripped by umask is indistinguishable from one
 never requested.
 
-A **pre-existing** path is tightened too. Restricting this to paths the class
+A **pre-existing FILE** is tightened too. Restricting this to files the class
 creates would mean the fix never reaches an upgraded install: the audit file is
 created once and reused forever, so every existing deployment would keep its
 0o644 trail indefinitely. Re-permissioning a path an operator may have
-configured deliberately is not something to do quietly, so it is announced at
-WARN naming the path and the mode it had.
+configured deliberately is not something to do quietly, so **every** mode
+change is announced at WARN naming the path and the mode it had — including
+the case that is not a tightening, where an operator-set `0o400` becomes the
+`0o600` the append-only trail requires.
+
+A pre-existing **DIRECTORY** is left alone; only one this class creates is
+pinned to 0o700. The asymmetry is deliberate. `Path(file_path).parent` is `.`
+for a bare filename — the process working directory — and for a configured
+`audit_log_path` it is frequently a shared location such as `/var/log/kaizen`
+that other services also write to. Chmodding either to 0o700 is well outside
+this class's remit, and it is not what protects the record: the file mode is.
 
 A failed audit append is loud: the exception propagates to `HookManager`, which
 records `HookResult(success=False)`, logs the failure, and calls the hook's

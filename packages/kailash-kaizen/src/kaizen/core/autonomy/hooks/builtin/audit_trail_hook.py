@@ -100,9 +100,15 @@ class AuditTrailHook(BaseHook):
         # Record the payload's SHAPE only. Values may carry prompts, retrieved
         # documents and PII; an audit file is retained and shipped widely, so
         # it is the worst place to put them.
+        # `data_keys` goes through the SAME helper as metadata below rather
+        # than a hand-rolled `sorted(context.data.keys())`: the helper coerces
+        # keys to str before sorting, so a payload mixing key types
+        # (`{1: ..., "a": ...}`) summarises instead of raising TypeError and
+        # failing the append. Leaving one of the two payload fields on a
+        # private implementation is the asymmetry that produced this bug.
         details = {
             "event": context.event_type.value,
-            "data_keys": sorted(context.data.keys()),
+            "data_keys": summarize_payload(context.data)["keys"],
             "trace_id": context.trace_id,
         }
 
