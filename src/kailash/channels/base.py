@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
 
@@ -20,6 +20,38 @@ logger = logging.getLogger(__name__)
 # unwind, short enough that a task which ignores cancellation cannot hold the
 # caller.
 _CLEANUP_JOIN_TIMEOUT = 1.0
+
+
+class CleanupOutcome(NamedTuple):
+    """What ``Channel._cleanup`` established, beyond a single bool.
+
+    ``complete=False`` used to denote TWO conditions that a caller must act on
+    DIFFERENTLY, and collapsing them onto one ``STOPPING`` told the caller to
+    do the wrong thing in one of the two (issue #2018/#2021):
+
+    * ``event_task_live`` -- the event task IGNORED its cancellation and is
+      still running. ``STOPPING`` is exactly right: stop again, and keep
+      stopping until it dies.
+    * ``event_task_failed`` -- the event task DIED OF A REAL ERROR. The task is
+      gone, so a retry finds nothing left to cancel and clears straight to
+      ``STOPPED`` -- laundering a failed teardown into a clean stop one call
+      later. ``STOPPING``'s documented meaning ("still running, stop it again")
+      is false here and the advice it carries is actively wrong.
+
+    ``__bool__`` returns ``complete``, so the pre-existing ``if cleaned:``
+    reading is preserved exactly for any caller that only asks the old
+    question.
+    """
+
+    #: Nothing live was left behind and no task failed.
+    complete: bool
+    #: The event task outlived its cancellation and the bounded join.
+    event_task_live: bool = False
+    #: The event task terminated with an exception rather than a cancellation.
+    event_task_failed: bool = False
+
+    def __bool__(self) -> bool:
+        return self.complete
 
 
 class ChannelType(Enum):
@@ -130,6 +162,9 @@ class Channel(ABC):
         self._event_handlers: Dict[str, List[Callable]] = {}
         self._event_queue: Optional[asyncio.Queue] = None
         self._running_task: Optional[asyncio.Task] = None
+        #: Latched by ``_cleanup`` when the event task died of a real error.
+        #: See :meth:`_status_after_cleanup` for why it must survive a retry.
+        self._cleanup_failed: bool = False
 
         logger.info(f"Initialized {config.channel_type.value} channel: {config.name}")
 
@@ -280,25 +315,71 @@ class Channel(ABC):
             }
 
     def _setup_event_queue(self) -> None:
-        """Set up the event queue for this channel."""
+        """Set up the event queue for this channel.
+
+        Also the start-time reset for the ``_cleanup_failed`` latch. All three
+        channels call this from ``start()``, so a channel that is genuinely
+        restarted gets a clean slate while a channel that merely had ``stop()``
+        called twice does not -- which is the whole point of latching.
+        """
+        self._cleanup_failed = False
         if self.config.enable_event_routing:
             self._event_queue = asyncio.Queue(maxsize=self.config.event_buffer_size)
 
-    async def _cleanup(self) -> bool:
-        """Clean up channel resources. Returns whether cleanup COMPLETED.
+    def _status_after_cleanup(
+        self,
+        outcome: Union[CleanupOutcome, bool],
+        *,
+        other_resource_live: bool = False,
+    ) -> ChannelStatus:
+        """Map a cleanup outcome onto the status an orchestrator acts on.
+
+        THREE outcomes, not two, because ``STOPPING`` carries advice ("stop it
+        again") that is only true for one of the two ways cleanup fails -- see
+        :class:`CleanupOutcome`.
+
+        ``other_resource_live`` is for a channel that owns a teardown resource
+        ``_cleanup`` does not cover; ``MCPChannel``'s dedicated server thread is
+        the only one today, and reporting ``STOPPED`` over it was issue #2018.
+
+        A FAILED teardown takes precedence over a live one. Both demand a
+        different action, and ``ERROR`` is the one that stops an orchestrator
+        from retrying its way to a clean-looking ``STOPPED``; a caller that
+        retries an ``ERROR`` channel still finds the live resource and is told
+        so again, so precedence loses no information in that direction.
+
+        The failure is STICKY (``_cleanup_failed``) precisely because the failed
+        task is gone by the second call: without the latch, retrying reports
+        ``STOPPED`` and the failure vanishes from the record. ``start()``
+        clears it via :meth:`_setup_event_queue` -- a restarted channel is
+        entitled to a clean slate; a stopped one is not.
+        """
+        if isinstance(outcome, bool):
+            # Compatibility with a subclass that overrides ``_cleanup`` against
+            # its former ``-> bool`` signature. It degrades to the old two-state
+            # behaviour, which is the most such an override can express -- NOT a
+            # fallback that invents a distinction the caller did not report.
+            outcome = CleanupOutcome(complete=outcome, event_task_live=not outcome)
+        if self._cleanup_failed or outcome.event_task_failed:
+            return ChannelStatus.ERROR
+        if outcome.complete and not other_resource_live:
+            return ChannelStatus.STOPPED
+        return ChannelStatus.STOPPING
+
+    async def _cleanup(self) -> CleanupOutcome:
+        """Clean up channel resources. Reports WHAT cleanup established.
 
         The return value is load-bearing: a caller that promotes an incomplete
         cleanup to ``STOPPED`` reports a clean stop over a live task, which is
         the false-success family this channel work exists to close.
 
-        ``False`` denotes TWO different conditions and a caller retrying on the
-        resulting ``STOPPING`` behaves differently in each. The event task is
-        STILL LIVE (it ignored its cancellation) -- a retry re-cancels, waits
-        again, and returns ``STOPPING`` again until the task genuinely dies. Or
-        the event task DIED OF AN ERROR -- the task is gone, the error has been
-        logged, and a retry clears to ``STOPPED`` immediately without having
-        addressed the error. The WARN text distinguishes them; the bool does
-        not.
+        It returns a :class:`CleanupOutcome` rather than a bare bool because
+        ``complete=False`` denoted TWO conditions a retrying caller must handle
+        DIFFERENTLY -- a live event task versus one that died of an error. The
+        WARN text distinguished them; the bool did not, and the status derived
+        from it therefore could not either (issue #2021). ``CleanupOutcome``
+        remains truthy exactly when cleanup completed, so ``if cleaned:`` is
+        unchanged for a caller asking only the old question.
 
         THE JOIN IS BOUNDED AND DOES NOT RE-RAISE, for two reasons that both
         surfaced when ``stop()`` began running this from a ``finally`` while a
@@ -324,6 +405,8 @@ class Channel(ABC):
         semantics for a task that may never honour it.
         """
         complete = True
+        event_task_live = False
+        event_task_failed = False
         if self._running_task and not self._running_task.done():
             self._running_task.cancel()
             done, pending = await asyncio.wait(
@@ -343,6 +426,12 @@ class Channel(ABC):
                 task_error = task.exception()
                 if task_error is not None:
                     complete = False
+                    event_task_failed = True
+                    # LATCHED, not merely returned. The task is gone by the
+                    # next call, so an unlatched failure evaporates on the
+                    # first retry and the channel reports a clean STOPPED over
+                    # a teardown that failed.
+                    self._cleanup_failed = True
                     logger.warning(
                         "Channel %s: event task failed during cleanup: %s at %s",
                         self.name,
@@ -360,6 +449,7 @@ class Channel(ABC):
                 # `visualization/api.py` already shows the right shape: surface
                 # the timeout, refuse to claim success.
                 complete = False
+                event_task_live = True
                 logger.warning(
                     "Channel %s: event task did not stop within %ss; cleanup is "
                     "INCOMPLETE and the task is still live",
@@ -377,4 +467,8 @@ class Channel(ABC):
 
         if complete:
             logger.info(f"Cleaned up channel {self.name}")
-        return complete
+        return CleanupOutcome(
+            complete=complete,
+            event_task_live=event_task_live,
+            event_task_failed=event_task_failed,
+        )

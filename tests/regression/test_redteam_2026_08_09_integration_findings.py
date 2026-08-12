@@ -579,6 +579,19 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
         died of a real error was silently swallowed once ``done`` was
         discarded. This pins the retrieval: the error surfaces as TYPE + FRAMES
         (never the message, per the F10 discipline), and the status follows.
+
+        UPDATED FOR #2021, deliberately, and NOT weakened. This asserted
+        ``STOPPING``, which pinned the CONFLATION as the contract: a died task
+        and a live one both reported the status whose documented meaning is
+        "still running, stop it again". That advice is false here -- the task
+        is GONE, so a retry finds nothing to cancel and clears straight to
+        ``STOPPED``, laundering a failed teardown into a clean stop one call
+        later. ``ERROR`` is the state that says so, and the retry assertion
+        below is the property the old pin could not have held: it is what makes
+        the latch, rather than a one-shot status write, the thing under test.
+
+        Both original properties are still asserted -- the error surfaces, and
+        the status is NOT ``STOPPED``.
         """
         channel = APIChannel(
             ChannelConfig(
@@ -613,11 +626,27 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
 
         status = channel.status
         rendered = caplog.text
+
+        # THE RETRY IS THE POINT. The failed task is already done, so a second
+        # stop() finds nothing to cancel and `_cleanup` reports complete. Only
+        # the latch keeps the failure in the record; without it this second
+        # call returns a clean STOPPED over a teardown that failed.
+        await channel.stop()
+        status_after_retry = channel.status
+
         await asyncio.gather(running_task, return_exceptions=True)
 
-        assert status is ChannelStatus.STOPPING, (
+        assert status is not ChannelStatus.STOPPED, (
             "the event task died of a real error, so cleanup did NOT complete; "
             "STOPPED would report a clean stop over a failed teardown"
+        )
+        assert status is ChannelStatus.ERROR, (
+            f"status was {status}; a DIED event task is not STOPPING -- that "
+            "status tells the caller to stop again, and the task is gone"
+        )
+        assert status_after_retry is ChannelStatus.ERROR, (
+            f"retrying stop() laundered the failed teardown to "
+            f"{status_after_retry}; the failure must survive the retry"
         )
         assert "ValueError" in rendered, "the task's error was swallowed"
         # F10 discipline: the type and the frames, never the message.

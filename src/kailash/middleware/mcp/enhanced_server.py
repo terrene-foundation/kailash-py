@@ -607,16 +607,31 @@ result = {'execution_result': execution_result}
             self.runtime = None
 
     def __del__(self, _warnings=warnings):
+        # Warn and RETURN. This finalizer performs no cleanup, deliberately --
+        # the contract ``MCPChannel.__del__`` documents, applied to the server
+        # that channel drives. This was the un-swept sibling of it.
+        #
+        # ``rules/patterns.md`` § "Async Resource Cleanup" BLOCKS calling
+        # ``close()`` (or anything that can emit a log line) from ``__del__``:
+        # a finalizer can fire from inside Python's logging machinery during
+        # GC, while that same thread holds the root logging lock. Re-entering
+        # logging then deadlocks the process.
+        #
+        # ``close()`` reaches logging on this exact path:
+        #   close() -> runtime.release() -> LocalRuntime.close()
+        #     -> logger.debug("Explicit close() called ...")
+        #     -> _cleanup_event_loop() -> logger.debug/logger.warning
+        #
+        # The ``except Exception: pass`` this replaces could not have helped
+        # either: a deadlock is not an exception, so the guard swallowed real
+        # release failures while doing nothing about the hazard that motivated
+        # it. Real cleanup stays the caller's job via ``close()`` or ``stop()``.
         if getattr(self, "runtime", None) is not None:
             _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
                 ResourceWarning,
                 source=self,
             )
-            try:
-                self.close()
-            except Exception:
-                pass
 
     async def _emit_mcp_event(self, event_type: str, data: Dict[str, Any]):
         """Emit MCP event to middleware event stream."""

@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from kailash.channels.base import ChannelConfig, ChannelStatus, ChannelType
+from kailash.channels.base import (
+    ChannelConfig,
+    ChannelStatus,
+    ChannelType,
+    CleanupOutcome,
+)
 from kailash.channels.cli_channel import CLIChannel, CLISession
 
 
@@ -206,9 +211,17 @@ class TestCLIChannel:
         task = asyncio.create_task(dummy_task())
         cli_channel._main_task = task
 
+        # THE MOCK MUST RETURN A REAL OUTCOME. A bare `patch.object` returns a
+        # MagicMock, which answers "yes" to every attribute -- including
+        # `event_task_failed`. Before `_cleanup` reported more than a bool that
+        # mock was merely truthy, so this test asserted STOPPED whether or not
+        # cleanup had established anything at all. Returning the real success
+        # value is what makes the assertion discriminate.
         with (
             patch.object(cli_channel, "emit_event") as mock_emit,
-            patch.object(cli_channel, "_cleanup") as mock_cleanup,
+            patch.object(
+                cli_channel, "_cleanup", return_value=CleanupOutcome(complete=True)
+            ) as mock_cleanup,
         ):
             await cli_channel.stop()
 
