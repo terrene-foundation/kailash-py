@@ -248,6 +248,56 @@ _SAFE_EXC_ATTRS = frozenset(
     }
 )
 
+#: Attributes of the STANDARD exception surface that carry message text.
+#:
+#: Used only by shape 9 (``extra={...}``), where the default is deliberately
+#: NOT-flagged -- see :meth:`_SinkScan._flag_traceback_and_bare_args`. The
+#: reported gap (#2017) was that shape 9 matched a BARE exception name and
+#: missed message-bearing ATTRIBUTE CHAINS: measured caught ``{"error": e}``,
+#: ``str(e)``, ``repr(e)``, ``f"{e}"``, ``str(e.args)``; measured missed
+#: ``e.args``, ``e.args[0]``, ``e.strerror``, ``e.response.text`` -- the last
+#: being a whole HTTP body.
+#:
+#: WHY A DENYLIST HERE AND AN ALLOWLIST IN :data:`_SAFE_EXC_ATTRS`. Widening
+#: shape 9 to ``_is_our_value`` (allowlist-complement, the first cut) was
+#: measured to red 9 files / 15 sites on ``exc.model`` / ``exc.helper`` /
+#: ``exc.error`` -- first-party domain fields placed in ``extra`` precisely so
+#: a structured logger can index them. The reconciling allowlist cannot be
+#: :data:`_SAFE_EXC_ATTRS`, because that set is GLOBAL: allowlisting ``error``
+#: there would make ``e.error`` safe on EVERY exception type, which is exactly
+#: how a real leak would hide.
+#:
+#: These names need no per-type knowledge -- they are message-bearing on ANY
+#: exception, being part of ``BaseException`` / ``OSError`` / subprocess /
+#: HTTP-client surfaces. So shape 9 flags what is universally text-bearing and
+#: stays silent on domain fields, which is the distinction the global set could
+#: not express. A per-type allowlist remains the answer for shape 6; this is
+#: not that, and does not pretend to be.
+_MESSAGE_BEARING_EXC_ATTRS = frozenset(
+    {
+        # BaseException / OSError
+        "args",
+        "message",
+        "msg",
+        "reason",
+        "strerror",
+        "filename",
+        "filename2",
+        "doc",
+        # subprocess
+        "stderr",
+        "stdout",
+        "output",
+        # HTTP clients (requests / httpx): a whole response body
+        "response",
+        "request",
+        "body",
+        "text",
+        "content",
+        "detail",
+    }
+)
+
 
 def _key(node: ast.expr) -> tuple[int, int]:
     """Identity of one syntactic site.
@@ -818,6 +868,28 @@ class _SinkScan(ast.NodeVisitor):
             return not all(attr in _SAFE_EXC_ATTRS for attr in chain)
         return False
 
+    def _is_message_bearing_chain(self, node: ast.AST) -> bool:
+        """A chain rooted at our exception touching a standard text attribute.
+
+        ``e.args`` / ``e.args[0]`` / ``e.strerror`` / ``e.response.text`` --
+        but NOT ``e.model``, which is a domain field. See
+        :data:`_MESSAGE_BEARING_EXC_ATTRS` for why this is a denylist while
+        shape 6 uses the complement of an allowlist.
+
+        Subscripts are walked THROUGH rather than treated as terminal:
+        ``e.args[0]`` is the single most common way the first message arg is
+        rendered, and it is a ``Subscript`` wrapping the ``Attribute``.
+        """
+        current: ast.AST = node
+        chain: list[str] = []
+        while isinstance(current, ast.Attribute | ast.Subscript):
+            if isinstance(current, ast.Attribute):
+                chain.append(current.attr)
+            current = current.value
+        if not chain or not self._is_our_name(current):
+            return False
+        return any(attr in _MESSAGE_BEARING_EXC_ATTRS for attr in chain)
+
     def _is_render_of_our_value(self, node: ast.AST) -> bool:
         """``str(e)`` / ``repr(e)`` — so ``scrub(str(e))`` still counts wrapped."""
         return (
@@ -906,10 +978,21 @@ class _SinkScan(ast.NodeVisitor):
         # NO ``value is not None`` guard either: a None entry in ``.values``
         # would mean ``**spread``, and CPython puts the None in ``.keys`` for
         # that form, never in ``.values``. The guard could not fire.
+        #
+        # #2017 WIDENED THIS BY EXACTLY ONE PREDICATE, not to
+        # ``_is_our_value``. The bare name was never the whole gap: measured
+        # missed were ``e.args``, ``e.args[0]``, ``e.strerror`` and
+        # ``e.response.text`` -- an HTTP body reaching a structured sink
+        # unscrubbed. ``_is_message_bearing_chain`` catches those four while
+        # leaving ``exc.model`` / ``exc.helper`` alone, so the nine domain-field
+        # files the first cut reddened stay green and the question shape 6's
+        # global allowlist cannot answer stays open where it belongs.
         for keyword in node.keywords:
             if keyword.arg == "extra" and isinstance(keyword.value, ast.Dict):
                 for value in keyword.value.values:
-                    if self._is_our_name(value):
+                    if self._is_our_name(value) or self._is_message_bearing_chain(
+                        value
+                    ):
                         self.bare.add(_key(value))
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -1101,6 +1184,26 @@ class TestTheScannerSeesEachShape:
             (
                 "extra-dict-bare-second-key",
                 '    logger.error("failed", extra={"ok": 1, "error": exc})',
+            ),
+            # Shape 9, #2017 -- the four MEASURED-MISSED attribute chains. The
+            # bare name was not the whole gap: these render the same text
+            # through the same formatter, and `e.response.text` is a whole
+            # HTTP body.
+            (
+                "extra-dict-attr-args",
+                '    logger.error("failed", extra={"error": exc.args})',
+            ),
+            (
+                "extra-dict-attr-args-subscript",
+                '    logger.error("failed", extra={"error": exc.args[0]})',
+            ),
+            (
+                "extra-dict-attr-strerror",
+                '    logger.error("failed", extra={"error": exc.strerror})',
+            ),
+            (
+                "extra-dict-attr-nested-response-text",
+                '    logger.error("failed", extra={"error": exc.response.text})',
             ),
         ],
     )
@@ -1434,6 +1537,22 @@ class TestTheScannerSeesEachShape:
             (
                 "extra-dict-domain-attribute",
                 '    logger.error("failed", extra={"model": exc.model})',
+            ),
+            # #2017's own negative controls. Widening shape 9 to catch
+            # message-bearing chains must not drag the domain fields in with
+            # them -- these three are the exact ones the `_is_our_value` cut
+            # reddened across nine files.
+            (
+                "extra-dict-domain-helper",
+                '    logger.error("failed", extra={"helper": exc.helper})',
+            ),
+            (
+                "extra-dict-domain-error-field",
+                '    logger.error("failed", extra={"error": exc.error})',
+            ),
+            (
+                "extra-dict-safe-attribute",
+                '    logger.error("failed", extra={"kind": exc.__class__.__name__})',
             ),
         ],
     )
