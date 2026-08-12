@@ -10,6 +10,11 @@ SECURITY: Supports sensitive data redaction (Finding #4 fix).
 import logging
 from typing import ClassVar, Optional
 
+from .._payload import (
+    render_scrubbed_payload,
+    should_log_full_payload,
+    summarize_payload,
+)
 from ..protocol import BaseHook
 from ..types import HookContext, HookEvent, HookResult
 
@@ -45,16 +50,30 @@ class LoggingHook(BaseHook):
         log_level: str = "INFO",
         include_data: bool = True,
         format: str = "text",
-        redact_sensitive: bool = False,
+        redact_sensitive: Optional[bool] = None,
+        log_full_payloads: bool = False,
     ):
         """
         Initialize logging hook.
 
         Args:
             log_level: Log level (DEBUG, INFO, WARNING, ERROR)
-            include_data: Whether to log event data (disable for sensitive data)
+            include_data: Whether to log event data STRUCTURE (key names and
+                counts). Payload VALUES are never emitted at this level; see
+                ``log_full_payloads``.
             format: Log format ("text" or "json")
-            redact_sensitive: Enable automatic sensitive data redaction (SECURITY FIX #4)
+            redact_sensitive: Enable sensitive-data redaction. ``None`` (the
+                default) enables it but permits degradation if the redactor
+                cannot be loaded; ``True`` is an EXPLICIT opt-in and raises
+                rather than degrading; ``False`` disables it outright.
+            log_full_payloads: Emit payload VALUES, at DEBUG only, scrubbed.
+                Defaults False so that turning DEBUG on globally — routine
+                during incident response — does not start dumping user prompts,
+                retrieved documents and PII.
+
+        Raises:
+            RuntimeError: if ``redact_sensitive=True`` was requested explicitly
+                and ``SensitiveDataRedactor`` cannot be imported.
 
         Example:
             >>> # Production usage with redaction
@@ -68,7 +87,16 @@ class LoggingHook(BaseHook):
         self.log_level = log_level
         self.include_data = include_data
         self.format = format
-        self.redact_sensitive = redact_sensitive
+        self.log_full_payloads = log_full_payloads
+
+        # An EXPLICIT `True` is a different request from the default (#2070).
+        # The distinction is load-bearing and is the reason this is tri-state
+        # rather than a bool: raising on a default nobody asked for would break
+        # installs where the redactor is genuinely absent, while degrading an
+        # explicit opt-in silently overrides an operator who already made the
+        # correct decision.
+        redaction_explicitly_requested = redact_sensitive is True
+        self.redact_sensitive = True if redact_sensitive is None else redact_sensitive
 
         # Initialize redactor if needed (SECURITY FIX #4)
         if self.redact_sensitive:
@@ -76,13 +104,33 @@ class LoggingHook(BaseHook):
                 from ..security.redaction import SensitiveDataRedactor
 
                 self.redactor: Optional[SensitiveDataRedactor] = SensitiveDataRedactor()
-            except ImportError:
+            except ImportError as exc:
+                if redaction_explicitly_requested:
+                    # FAIL CLOSED. Previously this branch set
+                    # `redact_sensitive = False` and carried on logging at full
+                    # fidelity behind a WARNING — defeating the operator's own
+                    # explicit choice, which `zero-tolerance.md` Rule 3 blocks.
+                    raise RuntimeError(
+                        "redact_sensitive=True was requested but "
+                        "SensitiveDataRedactor could not be imported, so "
+                        "redaction cannot be performed. Refusing to log "
+                        "unredacted instead. Install the security module, or "
+                        "pass redact_sensitive=False to accept unredacted "
+                        "logging deliberately."
+                    ) from exc
+
+                # NOT explicitly requested: degrading is acceptable, but the
+                # payloads redaction was protecting MUST stop too. A degraded
+                # control that keeps emitting is the disclosure the control
+                # existed to prevent.
                 logger.warning(
-                    "SensitiveDataRedactor not available, disabling redaction. "
-                    "Install security module to enable redaction."
+                    "SensitiveDataRedactor not available, disabling redaction "
+                    "AND payload-value logging. Install security module to "
+                    "enable redaction."
                 )
                 self.redactor = None
                 self.redact_sensitive = False
+                self.log_full_payloads = False
         else:
             self.redactor = None
 
@@ -136,7 +184,18 @@ class LoggingHook(BaseHook):
             else:
                 safe_context = context
 
-            # STEP 2: Log redacted data
+            # STEP 2: Log STRUCTURE, never values (#2070).
+            #
+            # `agent_loop` feeds this hook whole agent I/O — PRE_AGENT_LOOP
+            # carries {"inputs": ...}, POST_AGENT_LOOP carries {"result": ...} —
+            # so the previous `Data={safe_context.data}` put user prompts,
+            # retrieved documents and any credential-bearing parameter on the
+            # INFO log. Redaction is not a substitute here: it claims credential
+            # SHAPES and PII patterns, and a user's prose matches neither.
+            # Withholding values is what actually closes it.
+            data_summary = summarize_payload(safe_context.data)
+            meta_summary = summarize_payload(safe_context.metadata)
+
             if self.format == "json":
                 # Structured JSON logging
                 log_event = {
@@ -148,8 +207,9 @@ class LoggingHook(BaseHook):
                 }
 
                 if self.include_data:
-                    log_event["context"] = safe_context.data
-                    log_event["metadata"] = safe_context.metadata
+                    log_event["context_keys"] = data_summary["keys"]
+                    log_event["context_field_count"] = data_summary["count"]
+                    log_event["metadata_keys"] = meta_summary["keys"]
 
                 # Log using structlog (outputs JSON)
                 log_fn = getattr(self.logger, self.log_level.lower())
@@ -164,7 +224,8 @@ class LoggingHook(BaseHook):
                         f"[{safe_context.event_type.value}] "
                         f"Agent={safe_context.agent_id} "
                         f"TraceID={safe_context.trace_id} "
-                        f"Data={safe_context.data}"
+                        f"DataKeys={data_summary['keys']} "
+                        f"({data_summary['count']} field(s))"
                     )
                 else:
                     log_fn(
@@ -173,11 +234,45 @@ class LoggingHook(BaseHook):
                         f"TraceID={safe_context.trace_id}"
                     )
 
+            # STEP 3: Values, only on deliberate opt-in, only at DEBUG,
+            # only scrubbed. Two independent gates, because either alone is
+            # routinely satisfied by accident: `log_full_payloads` defaults
+            # False so global DEBUG does not start dumping payloads, and the
+            # DEBUG check keeps the render cost off the INFO path entirely.
+            self._log_full_payload(safe_context)
+
             return HookResult(success=True)
 
         except Exception as e:
             # Even logging can fail!
             return HookResult(success=False, error=str(e))
+
+    def _log_full_payload(self, safe_context: HookContext) -> None:
+        """Emit payload VALUES at DEBUG, scrubbed, on explicit opt-in only.
+
+        `safe_context` has already been through the redactor when one is
+        wired; `scrub_credentials` is applied on top because the two cover
+        different classes — the redactor owns PII and payment shapes and
+        delegates vendor credentials to `scrub_credentials`, which is the
+        single credential-scrub implementation in Kaizen.
+
+        Scrubbing claims credential SHAPES, not arbitrary PII, which is
+        precisely why the `log_full_payloads` gate defaults False rather than
+        relying on the scrubber to make payloads safe.
+        """
+        if not should_log_full_payload(self.log_full_payloads, logger):
+            return
+
+        scrubbed = render_scrubbed_payload(safe_context.data)
+
+        if self.format == "json":
+            self.logger.debug("hook_event_payload", payload=scrubbed)
+        else:
+            self.logger.debug(
+                f"[{safe_context.event_type.value}] "
+                f"Agent={safe_context.agent_id} "
+                f"Payload={scrubbed}"
+            )
 
     async def on_error(self, error: Exception, context: HookContext) -> None:
         """Log errors to stderr"""
