@@ -345,18 +345,46 @@ class TestPublicValueSanitizer:
             current = current["next"]
         sanitize_log_structure(payload)  # must not RecursionError
 
-    def test_the_api_gateway_user_id_site_routes_through_it(self):
-        """`request.user_id` is the POST body value on the default path, since
-        the optional-auth dependency resolves no principal."""
-        source = (
+    def test_a_hostile_user_id_produces_exactly_one_record_per_log_call(self, caplog):
+        """#2040 AC#4, BEHAVIOURALLY -- the issue says in terms that asserting
+        on source text is not sufficient.
+
+        Drives ``AgentUIMiddleware.create_session``, which is the function
+        holding the log calls and the one ``POST /api/sessions`` forwards the
+        request-body ``user_id`` straight into. Asserts on the RECORDS, not on
+        the source.
+        """
+        import asyncio
+
+        from kailash.middleware.core.agent_ui import AgentUIMiddleware
+
+        middleware = AgentUIMiddleware(max_sessions=8)
+        with caplog.at_level(logging.INFO, logger="kailash.middleware.core.agent_ui"):
+            asyncio.run(middleware.create_session(user_id=INJECTION + CONTROL_CHARS))
+
+        session_records = [
+            r for r in caplog.records if "session" in r.getMessage().lower()
+        ]
+        assert session_records, "no session record was logged; this proves nothing"
+        for record in session_records:
+            message = record.getMessage()
+            assert len(message.splitlines()) <= 1, message
+            assert "\n" not in message and "\r" not in message, message
+            assert "\x00" not in message and "\x1b" not in message, message
+            # The forged CRITICAL line must not appear as its own record.
+            assert not message.startswith("[CRITICAL]"), message
+
+    def test_the_gateway_and_agent_ui_sites_route_through_the_shared_helper(self):
+        """The structural half, paired with the behavioural test above rather
+        than standing in for it. Covers the two sibling `agent_ui` sites the
+        sweep found, which #2040 did not name."""
+        gateway = (
             REPO_ROOT / "src/kailash/middleware/communication/api_gateway.py"
         ).read_text()
-        assert "from ...utils.secure_logging import sanitize_log_value" in source
-        assert 'f"Session created: {session_id} for user {user_id}"' not in source
+        assert "from ...utils.secure_logging import sanitize_log_value" in gateway
+        assert 'f"Session created: {session_id} for user {user_id}"' not in gateway
 
-    def test_the_agent_ui_sibling_sites_route_through_it(self):
-        """Found by sweeping, not by fixing only the site #2040 named."""
-        source = (REPO_ROOT / "src/kailash/middleware/core/agent_ui.py").read_text()
-        assert "sanitize_log_value" in source
-        assert 'f"Session created: {session_id} for user {user_id}"' not in source
-        assert 'f"Created session {session_id} for user {user_id}"' not in source
+        agent_ui = (REPO_ROOT / "src/kailash/middleware/core/agent_ui.py").read_text()
+        assert "sanitize_log_value" in agent_ui
+        assert 'f"Session created: {session_id} for user {user_id}"' not in agent_ui
+        assert 'f"Created session {session_id} for user {user_id}"' not in agent_ui
