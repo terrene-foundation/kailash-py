@@ -452,7 +452,7 @@ class TestEnterpriseWorkflowServerRuntimeInjection:
     def _make_server(self, runtime=None):
         from kailash.servers.enterprise_workflow_server import EnterpriseWorkflowServer
 
-        return EnterpriseWorkflowServer(runtime=runtime)
+        return EnterpriseWorkflowServer(require_auth=False, runtime=runtime)
 
     def test_constructor_accepts_runtime_parameter(self):
         runtime = AsyncLocalRuntime()

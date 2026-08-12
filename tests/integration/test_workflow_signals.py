@@ -184,7 +184,7 @@ class TestWorkflowServerSignalEndpoints:
 
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer(title="Test Server")
+        server = WorkflowServer(require_auth=False, title="Test Server")
         # No runtime configured
 
         transport = ASGITransport(app=server.app)
@@ -206,7 +206,7 @@ class TestWorkflowServerSignalEndpoints:
 
         from kailash.servers.workflow_server import WorkflowServer
 
-        server = WorkflowServer(title="Test Server")
+        server = WorkflowServer(require_auth=False, title="Test Server")
 
         transport = ASGITransport(app=server.app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -225,7 +225,9 @@ class TestWorkflowServerSignalEndpoints:
         from kailash.servers.workflow_server import WorkflowServer
 
         runtime = LocalRuntime(enable_monitoring=False)
-        server = WorkflowServer(title="Test Server", runtime=runtime)
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", runtime=runtime
+        )
 
         # Manually register a signal channel to simulate an active workflow
         channel = SignalChannel()
@@ -262,7 +264,9 @@ class TestWorkflowServerSignalEndpoints:
         from kailash.servers.workflow_server import WorkflowServer
 
         runtime = LocalRuntime(enable_monitoring=False)
-        server = WorkflowServer(title="Test Server", runtime=runtime)
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", runtime=runtime
+        )
 
         transport = ASGITransport(app=server.app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -284,7 +288,9 @@ class TestWorkflowServerSignalEndpoints:
         from kailash.servers.workflow_server import WorkflowServer
 
         runtime = LocalRuntime(enable_monitoring=False)
-        server = WorkflowServer(title="Test Server", runtime=runtime)
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", runtime=runtime
+        )
 
         # Manually register a query handler
         channel = SignalChannel()
@@ -316,7 +322,9 @@ class TestWorkflowServerSignalEndpoints:
         from kailash.servers.workflow_server import WorkflowServer
 
         runtime = LocalRuntime(enable_monitoring=False)
-        server = WorkflowServer(title="Test Server", runtime=runtime)
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", runtime=runtime
+        )
 
         # Register workflow but no query handler for "missing"
         channel = SignalChannel()
@@ -343,7 +351,9 @@ class TestWorkflowServerSignalEndpoints:
         from kailash.servers.workflow_server import WorkflowServer
 
         runtime = LocalRuntime(enable_monitoring=False)
-        server = WorkflowServer(title="Test Server", runtime=runtime)
+        server = WorkflowServer(
+            require_auth=False, title="Test Server", runtime=runtime
+        )
 
         channel = SignalChannel()
         registry = QueryRegistry()

@@ -37,6 +37,7 @@ async def test_startup_hook_timeout_aborts_hung_hook_and_runs_teardown():
         shutdown_fired["ran"] = True
 
     server = WorkflowServer(
+        require_auth=False,
         title="timeout-test",
         startup_hook=hung_startup_hook,
         shutdown_hook=shutdown_hook,
@@ -86,6 +87,7 @@ async def test_startup_hook_timeout_none_preserves_unbounded_wait():
         fired["shutdown"] = True
 
     server = WorkflowServer(
+        require_auth=False,
         title="no-timeout-test",
         startup_hook=fast_startup_hook,
         shutdown_hook=shutdown_hook,

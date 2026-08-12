@@ -105,6 +105,11 @@ from ..utils.proxy_guard import (
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
+from ..utils.server_auth import (
+    install_server_auth_middleware,
+    mounted_subapp_auth_kwargs,
+    resolve_server_auth,
+)
 from ..workflow import Workflow
 from .workflow_api import WorkflowAPI
 
@@ -152,6 +157,15 @@ class WorkflowAPIGateway:
         max_workers: int = 10,
         cors_origins: list[str] | None = None,
         auth_manager: Any = None,
+        # Server-wide authentication (#2072). NAMED, never **kwargs -- see the
+        # WorkflowServer counterpart for why. This gateway is an INDEPENDENT
+        # surface with the same defect, so per security.md § Enforcement-Surface
+        # Parity it learns the gate in the SAME change, through the SAME shared
+        # implementation (kailash.utils.server_auth).
+        require_auth: bool = True,
+        auth_config: Any = None,
+        external_auth_reason: str | None = None,
+        auth_exempt_paths: list[str] | None = None,
     ):
         """Initialize the API gateway.
 
@@ -171,7 +185,31 @@ class WorkflowAPIGateway:
                 ``auth_dependency``) is present -- see issue #2025 and
                 :mod:`kailash.utils.proxy_guard`. Can also be supplied after
                 construction via :meth:`set_auth_manager`.
+
+                NOTE: ``auth_manager`` does NOT satisfy ``require_auth`` -- it
+                supplies a FastAPI ``Depends``, which does not run for routes
+                inside a mounted sub-application (#2072).
+            require_auth: Whether every request must be authenticated.
+                **Defaults to ``True`` (fail-closed); BREAKING.** Construction
+                raises
+                :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError`
+                when no credential source is configured. See
+                :mod:`kailash.utils.server_auth`.
+            auth_config: Explicit ``JWTConfig`` (or field ``dict``).
+            external_auth_reason: Non-empty string declaring that an ASGI
+                middleware outside this gateway authenticates every request.
+            auth_exempt_paths: Extra paths exempt from authentication.
         """
+        # Resolve authentication FIRST (#2072), before the ThreadPoolExecutor
+        # below is allocated -- a raise afterwards would leak its threads.
+        self._auth_config = resolve_server_auth(
+            require_auth=require_auth,
+            auth_config=auth_config,
+            external_auth_reason=external_auth_reason,
+            extra_exempt_paths=auth_exempt_paths,
+            server_label=f"{type(self).__name__}(title={title!r})",
+        )
+
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
 
@@ -180,7 +218,11 @@ class WorkflowAPIGateway:
         # same defect, so it learns the same gate through the same shared
         # guard module (security.md, Enforcement-Surface Parity).
         self._auth_manager: Any = auth_manager
-        self._external_auth_reason: str | None = None
+        self._external_auth_reason: str | None = (
+            external_auth_reason.strip()
+            if external_auth_reason and external_auth_reason.strip()
+            else None
+        )
         # Per-workflow API wrappers, tracked so their runtimes are released on
         # shutdown/close() (issue #1285 — each WorkflowAPI builds its own
         # AsyncLocalRuntime that otherwise leaks at GC).
@@ -218,6 +260,15 @@ class WorkflowAPIGateway:
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan
         )
+
+        # Install authentication BEFORE CORS (#2072). Starlette's
+        # add_middleware() PREPENDS, so the LAST layer added is the OUTERMOST
+        # one; auth added after CORS would sit inside it and 401 cross-origin
+        # preflight OPTIONS before CORS could answer (the PR #2054 ordering
+        # bug). Middleware and not a Depends, because register_workflow
+        # app.mount()s a sub-application that route dependencies never reach.
+        if self._auth_config is not None:
+            install_server_auth_middleware(self.app, self._auth_config)
 
         # Add CORS middleware
         if cors_origins:
@@ -548,11 +599,18 @@ class WorkflowAPIGateway:
             raise ValueError(f"Workflow '{name}' already registered")
 
         # Create WorkflowAPI wrapper
+        # The sub-app installs NO gate of its own: this gateway's middleware
+        # wraps the mount and has already accepted or rejected the request
+        # before routing hands it over (#2072).
         workflow_api = WorkflowAPI(
             workflow=workflow,
             app_name=f"{name} Workflow API",
             version=version,
             description=description or f"Workflow: {name}",
+            **mounted_subapp_auth_kwargs(
+                parent_label=f"{type(self).__name__}(title={self.app.title!r})",
+                parent_is_authenticated=self._auth_config is not None,
+            ),
         )
         # Track it so its runtime is released on shutdown/close() (issue #1285).
         self._workflow_apis[name] = workflow_api

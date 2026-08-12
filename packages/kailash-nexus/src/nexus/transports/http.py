@@ -184,9 +184,18 @@ class HTTPTransport(Transport):
         if self._gateway is None:
             # If gateway wasn't pre-created, create it now
             from kailash.servers.gateway import create_gateway
+            from nexus.auth_bootstrap import core_gateway_auth_kwargs
 
             self._gateway = create_gateway(
                 enable_durability=self._enable_durability,
+                # Resolved through the SAME helper as the primary construction
+                # path in nexus/core.py, from the SAME flag this transport was
+                # constructed with, so the two paths cannot disagree about who
+                # authenticates this app (#2072). Passing a fixed
+                # `external_auth_reason` here would declare an external gate on
+                # a transport built with enable_auth=False, where nothing
+                # installs one.
+                **core_gateway_auth_kwargs(self._enable_auth),
             )
             self._apply_cors()
 

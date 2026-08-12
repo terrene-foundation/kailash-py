@@ -175,7 +175,11 @@ async def test_api_channel_handle_request_binds_envelope():
 
     channel = APIChannel.__new__(APIChannel)
     channel.config = ChannelConfig(
-        name="api", channel_type=ChannelType.API, enable_event_routing=False
+        name="api",
+        channel_type=ChannelType.API,
+        enable_event_routing=False,
+        # enable_auth=False: exercises parameter binding, not the #2072 gate.
+        enable_auth=False,
     )
     channel._event_queue = None
     channel._event_handlers = []

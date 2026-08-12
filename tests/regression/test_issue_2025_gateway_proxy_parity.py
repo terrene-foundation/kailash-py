@@ -102,7 +102,7 @@ async def _allow(request: Request):
 
 @pytest.fixture
 def gateway():
-    gw = WorkflowAPIGateway(title="issue-2025-parity")
+    gw = WorkflowAPIGateway(require_auth=False, title="issue-2025-parity")
     try:
         yield gw
     finally:
@@ -158,7 +158,7 @@ def test_gateway_auth_manager_path(backend):
         def get_current_user_dependency(self):
             return _allow
 
-    gw = WorkflowAPIGateway(title="mgr", auth_manager=Manager())
+    gw = WorkflowAPIGateway(require_auth=False, title="mgr", auth_manager=Manager())
     try:
         gw.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
         client = TestClient(gw.app)
@@ -494,7 +494,7 @@ def test_wildcard_cors_does_not_allow_credentials(backend):
     same drift class as the credential-stripping and redirect-policy
     divergences #2025 fixed.
     """
-    gw = WorkflowAPIGateway(title="cors-wild", cors_origins=["*"])
+    gw = WorkflowAPIGateway(require_auth=False, title="cors-wild", cors_origins=["*"])
     try:
         gw.proxy_workflow(
             name="internal",
@@ -517,7 +517,9 @@ def test_wildcard_cors_does_not_allow_credentials(backend):
 def test_explicit_cors_origins_still_allow_credentials(backend):
     """Control: the guard narrows the wildcard case only, it is not a blanket off."""
     origin = "https://app.example"
-    gw = WorkflowAPIGateway(title="cors-explicit", cors_origins=[origin])
+    gw = WorkflowAPIGateway(
+        require_auth=False, title="cors-explicit", cors_origins=[origin]
+    )
     try:
         gw.proxy_workflow(
             name="internal",

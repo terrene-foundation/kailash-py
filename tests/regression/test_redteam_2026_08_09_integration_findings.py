@@ -188,7 +188,15 @@ class TestStopRunsCleanupEvenWhenTheCallerIsCancelled:
     @pytest.mark.asyncio
     async def test_api_channel_cancels_running_task_on_cancelled_stop(self) -> None:
         channel = APIChannel(
-            ChannelConfig(name="rt_api", channel_type=ChannelType.API, port=18997)
+            ChannelConfig(
+                name="rt_api",
+                channel_type=ChannelType.API,
+                port=18997,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         async def _never() -> None:
@@ -269,7 +277,15 @@ class TestCleanupFailureDoesNotReplaceTheCallerCancellation:
     @pytest.mark.asyncio
     async def test_api_channel_cleanup_error_does_not_mask_cancellation(self) -> None:
         channel = APIChannel(
-            ChannelConfig(name="rt_api2", channel_type=ChannelType.API, port=18996)
+            ChannelConfig(
+                name="rt_api2",
+                channel_type=ChannelType.API,
+                port=18996,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         release = asyncio.Event()
@@ -386,7 +402,15 @@ class TestCleanupJoinCannotStrandTheCaller:
     @pytest.mark.asyncio
     async def test_uncancellable_running_task_does_not_hold_the_caller(self) -> None:
         channel = APIChannel(
-            ChannelConfig(name="rt_api3", channel_type=ChannelType.API, port=18995)
+            ChannelConfig(
+                name="rt_api3",
+                channel_type=ChannelType.API,
+                port=18995,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         release = asyncio.Event()
@@ -441,7 +465,15 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
     @pytest.mark.asyncio
     async def test_uncancellable_event_task_yields_stopping_not_stopped(self) -> None:
         channel = APIChannel(
-            ChannelConfig(name="rt_api4", channel_type=ChannelType.API, port=18994)
+            ChannelConfig(
+                name="rt_api4",
+                channel_type=ChannelType.API,
+                port=18994,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         release = asyncio.Event()
@@ -549,7 +581,15 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
         (never the message, per the F10 discipline), and the status follows.
         """
         channel = APIChannel(
-            ChannelConfig(name="rt_api6", channel_type=ChannelType.API, port=18991)
+            ChannelConfig(
+                name="rt_api6",
+                channel_type=ChannelType.API,
+                port=18991,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         secret = "postgres://svc:hunter2@db.internal:5432/x"
@@ -588,7 +628,15 @@ class TestIncompleteCleanupIsNotReportedAsStopped:
     async def test_complete_cleanup_still_reports_stopped(self) -> None:
         """Negative control: the honest path must NOT be downgraded."""
         channel = APIChannel(
-            ChannelConfig(name="rt_api5", channel_type=ChannelType.API, port=18993)
+            ChannelConfig(
+                name="rt_api5",
+                channel_type=ChannelType.API,
+                port=18993,
+                # enable_auth=False: this suite exercises channel lifecycle,
+                # not the #2072 auth gate. An unstated None would inherit the
+                # server's fail-closed default and refuse to build.
+                enable_auth=False,
+            )
         )
 
         async def _cooperative() -> None:

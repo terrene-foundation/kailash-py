@@ -13,7 +13,7 @@ def test_gateway_startup_before():
     import httpx
 
     # Start gateway in background thread
-    gateway = create_gateway()
+    gateway = create_gateway(require_auth=False)
     server_thread = threading.Thread(
         target=lambda: gateway.run(host="localhost", port=8080), daemon=True
     )
@@ -37,7 +37,7 @@ def test_gateway_startup_after():
     import httpx
 
     # Start gateway in background thread
-    gateway = create_gateway()
+    gateway = create_gateway(require_auth=False)
     server_thread = threading.Thread(
         target=lambda: gateway.run(host="localhost", port=8080), daemon=True
     )
@@ -70,7 +70,7 @@ async def test_gateway_startup_with_helper():
     from tests.utils.wait_conditions import wait_for_http_health
 
     # Start gateway in background thread
-    gateway = create_gateway()
+    gateway = create_gateway(require_auth=False)
     server_thread = threading.Thread(
         target=lambda: gateway.run(host="localhost", port=8080), daemon=True
     )

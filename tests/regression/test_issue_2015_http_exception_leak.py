@@ -397,7 +397,7 @@ def test_mcp_tools_listing_does_not_leak_server_exceptions():
         def list_tools(self):
             raise ConnectionError(f"MCP transport failed for {DSN}")
 
-    gateway = WorkflowAPIGateway()
+    gateway = WorkflowAPIGateway(require_auth=False)
     gateway.mcp_servers["broken"] = _ExplodingMCPServer()
 
     response = TestClient(gateway.app, raise_server_exceptions=False).get("/mcp/tools")

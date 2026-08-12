@@ -44,6 +44,7 @@ async def test_startup_hook_crash_still_runs_shutdown_branch():
         shutdown_hook_fired["ran"] = True
 
     server = WorkflowServer(
+        require_auth=False,
         title="partial-startup-test",
         startup_hook=startup_hook_that_raises,
         shutdown_hook=shutdown_hook,

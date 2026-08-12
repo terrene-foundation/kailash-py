@@ -38,6 +38,7 @@ from ...utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
+from ...utils.server_auth import install_server_auth_middleware, resolve_server_auth
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
 from ..core.agent_ui import AgentUIMiddleware
@@ -143,9 +144,65 @@ class APIGateway:
         enable_auth: bool = True,
         auth_manager=None,  # Dependency injection for auth
         database_url: Optional[str] = None,
+        require_auth: Optional[bool] = None,
+        auth_config: Any = None,
+        external_auth_reason: Optional[str] = None,
+        auth_exempt_paths: Optional[List[str]] = None,
     ):
         """
         Initialize API Gateway with dependency injection support.
+
+        ``enable_auth`` and ``require_auth`` are DIFFERENT knobs and both are
+        needed, because this gateway both ISSUES and ACCEPTS credentials:
+
+        * ``enable_auth`` -- whether the gateway holds a token-ISSUING
+          :class:`~kailash.middleware.auth.jwt_auth.JWTAuthManager` (issue #636
+          behaviour, unchanged).
+        * ``require_auth`` -- whether every request must PRESENT a credential.
+
+        ``require_auth`` is TRI-STATE (``Optional[bool]``, default ``None``) for
+        the same reason ``ChannelConfig.enable_auth`` is: a plain ``bool``
+        cannot distinguish "the operator never said" from "the operator said
+        no". ``None`` means unstated and inherits fail-closed -- EXCEPT when
+        ``enable_auth=False``, which was the only auth control this class had
+        before #2072 and is therefore an EXPLICIT opt-out, not silence. Reading
+        it as silence would raise on callers who already said what they wanted,
+        in the words that were available to them (issue #636's contract).
+        ``require_auth=True`` alongside ``enable_auth=False`` still gates: the
+        newer, more specific statement wins.
+
+        Before issue #2072 only the first existed, and it gated nothing: with
+        ``enable_auth=True`` a ``JWTAuthManager`` was constructed that **no
+        route ever consulted**. Measured on a real socket against a default
+        ``create_gateway()`` with ``KAILASH_API_GATEWAY_SECRET`` set, every
+        request UNCREDENTIALED::
+
+            enable_auth: True   auth_manager: JWTAuthManager
+            GET    /                          -> 200
+            GET    /api/workflows             -> 200
+            POST   /api/executions?session_id -> 500   (handler RAN)
+            DELETE /api/executions/e          -> 500   (handler RAN)
+            GET    /api/stats                 -> 200
+            GET    /openapi.json              -> 200
+
+        Not one 401. The 500s are the application failing on a missing session
+        AFTER routing, which is what proves the request reached the handler --
+        an anonymous caller holding any live ``session_id`` executed workflows.
+
+        This is the SIXTH surface of #2072 and it was the most dangerous,
+        because ``kailash.middleware`` re-exports ``create_gateway`` under the
+        SAME NAME as the fixed ``kailash.servers.gateway.create_gateway``. The
+        two callables had opposite security postures, and this module's own
+        docstring demonstrates the unsafe one. It now routes through the same
+        :func:`~kailash.utils.server_auth.resolve_server_auth` as the other
+        five, so there is one gate and one policy.
+
+        Credential resolution for the gate, in order: ``auth_config`` if given;
+        else the ``auth_manager``'s own key/issuer/audience -- so the credential
+        this gateway ISSUES is the one it ACCEPTS, and an existing
+        ``KAILASH_API_GATEWAY_SECRET`` deployment keeps working with the tokens
+        it already mints; else the environment
+        (``KAILASH_JWT_SECRET`` / ``KAILASH_API_KEY_*``), which fails closed.
 
         Args:
             title: API title
@@ -154,9 +211,27 @@ class APIGateway:
             cors_origins: Allowed CORS origins
             enable_docs: Enable OpenAPI documentation
             max_sessions: Maximum concurrent sessions
-            enable_auth: Enable authentication
+            enable_auth: Hold a token-issuing auth manager
             auth_manager: Optional auth manager instance (creates default if None and auth enabled)
             database_url: Optional database URL for persistence
+            require_auth: Reject unauthenticated requests. ``None`` (default)
+                inherits fail-closed unless ``enable_auth=False`` explicitly
+                opted out; ``True`` gates and RAISES when no credential source
+                is configured; ``False`` serves openly and logs a loud WARN.
+            auth_config: Explicit ``kailash.trust.auth.jwt.JWTConfig`` (or a
+                dict of its fields) for the request gate.
+            external_auth_reason: Non-empty when an ASGI middleware outside
+                this gateway already authenticates every request.
+            auth_exempt_paths: Extra paths exempt from the gate, on top of
+                ``kailash.utils.server_auth.DEFAULT_EXEMPT_PATHS``.
+
+        Raises:
+            ServerAuthNotConfiguredError: The gate is required and no credential
+                source could be resolved -- including the case where an
+                ``auth_manager`` was supplied but carries no derivable key, in
+                which case it cannot verify anything and installing nothing
+                would be the #2013 silent-no-op shape. Pass ``require_auth=
+                False`` to run open.
         """
         self.title = title
         self.version = version
@@ -228,6 +303,32 @@ class APIGateway:
             lifespan=lifespan,
         )
 
+        # Install the request gate BEFORE CORS. Starlette's `add_middleware`
+        # PREPENDS, so the layer added LAST is the OUTERMOST one; auth added
+        # after CORS ends up inside it and answers cross-origin preflight
+        # OPTIONS with 401 before CORS can. PR #2054 hit exactly this ordering
+        # bug on the Nexus surface.
+        # Tri-state resolution. `None` is "unstated", and the only thing that
+        # turns unstated into an opt-out is `enable_auth=False` -- the sole auth
+        # control this class had before #2072, so a caller who set it DID say
+        # what they wanted. An explicit `require_auth` always wins over it.
+        resolved_require_auth = (
+            bool(enable_auth) if require_auth is None else bool(require_auth)
+        )
+        self._auth_config = resolve_server_auth(
+            require_auth=resolved_require_auth,
+            auth_config=(
+                auth_config
+                if auth_config is not None
+                else self._auth_config_from_manager()
+            ),
+            external_auth_reason=external_auth_reason,
+            extra_exempt_paths=auth_exempt_paths,
+            server_label=title,
+        )
+        if self._auth_config is not None:
+            install_server_auth_middleware(self.app, self._auth_config)
+
         # Add CORS middleware
         self.app.add_middleware(
             CORSMiddleware,
@@ -243,6 +344,93 @@ class APIGateway:
         # Performance tracking
         self.start_time = time.time()
         self.requests_processed = 0
+
+    def _auth_config_from_manager(self) -> Optional[Any]:
+        """Derive the request gate's config from this gateway's token ISSUER.
+
+        The gateway mints tokens with ``JWTAuthManager`` and now also verifies
+        them. If the two used different keys, every token this gateway issued
+        would be rejected by its own gate -- so the verifier is built from the
+        issuer's own key, algorithm, issuer and audience rather than from a
+        second, independently-configured source.
+
+        ``issuer``/``audience`` are NOT optional here. ``JWTAuthManager`` stamps
+        both into every token, and PyJWT raises ``InvalidAudienceError`` when a
+        token carries an ``aud`` claim the verifier was not told to expect. A
+        verifier built without them would 401 every legitimately-issued token.
+
+        Returns ``None`` when there is no manager to derive from (``enable_auth=
+        False``), which lets :func:`resolve_server_auth` fall through to the
+        environment and fail closed there.
+        """
+        manager = getattr(self, "auth_manager", None)
+        if manager is None:
+            return None
+        config = getattr(manager, "config", None)
+        if config is None:
+            # A manager with no config carries no key, so no verifier can be
+            # built from it. Loud, because the caller supplied a manager and
+            # would otherwise read the downstream "no credential source"
+            # message as though they had supplied nothing.
+            logger.warning(
+                "api_gateway.auth_manager_yields_no_verifier",
+                extra={
+                    "manager_type": type(manager).__name__,
+                    "reason": "no .config, so no key material to verify against",
+                },
+            )
+            return None
+
+        algorithm = getattr(config, "algorithm", "HS256") or "HS256"
+        # RSA/EC verification needs the PUBLIC key; the private half must never
+        # reach a verifier config. `JWTAuthManager` exposes the PEM it loaded or
+        # generated via `get_public_key()`.
+        public_key = None
+        secret = None
+        if algorithm.startswith(("RS", "ES", "PS")):
+            # Two shapes. A caller-SUPPLIED key pair leaves the PEM on
+            # `config.public_key`. An AUTO-GENERATED pair does not write the PEM
+            # back to the config -- it lives only as a key object on the
+            # manager's private `_public_key` -- so it has to be serialized.
+            public_key = getattr(config, "public_key", None)
+            if not public_key:
+                key_object = getattr(manager, "_public_key", None)
+                if key_object is not None:
+                    try:
+                        from cryptography.hazmat.primitives import serialization
+
+                        public_key = key_object.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        ).decode("utf-8")
+                    except Exception:
+                        # Not swallowed: reported with a stack trace, and the
+                        # return below leaves `resolve_server_auth` to fall
+                        # through to the environment and FAIL CLOSED rather than
+                        # install a gate that cannot verify. Degrading to "no
+                        # gate" here would be the #2013 shape this whole change
+                        # exists to remove.
+                        logger.exception(
+                            "api_gateway.auth_public_key_unavailable",
+                            extra={"algorithm": algorithm},
+                        )
+                        return None
+            if not public_key:
+                return None
+        else:
+            secret = getattr(config, "secret_key", None)
+            if not secret:
+                return None
+
+        from ...trust.auth.jwt import JWTConfig as TrustJWTConfig
+
+        return TrustJWTConfig(
+            secret=secret,
+            public_key=public_key,
+            algorithm=algorithm,
+            issuer=getattr(config, "issuer", None),
+            audience=getattr(config, "audience", None),
+        )
 
     def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for gateway operations."""
@@ -869,14 +1057,46 @@ class APIGateway:
 
 # Convenience function for quick setup
 def create_gateway(
-    agent_ui_middleware: Optional[AgentUIMiddleware] = None, auth_manager=None, **kwargs
+    agent_ui_middleware: Optional[AgentUIMiddleware] = None,
+    auth_manager=None,
+    *,
+    require_auth: Optional[bool] = None,
+    auth_config: Any = None,
+    external_auth_reason: Optional[str] = None,
+    auth_exempt_paths: Optional[List[str]] = None,
+    **kwargs,
 ) -> APIGateway:
     """
     Create a configured API gateway instance with dependency injection.
 
+    .. warning::
+
+        This is NOT the same callable as
+        :func:`kailash.servers.gateway.create_gateway`, which
+        ``from kailash import create_gateway`` resolves to. Both are exported
+        under the name ``create_gateway`` -- this one from
+        ``kailash.middleware``. They build different gateways with different
+        route sets. Prefer the ``kailash.servers`` one unless you specifically
+        need the agent-UI middleware surface.
+
+    Every security parameter is NAMED rather than left to ``**kwargs``. When
+    ``require_auth`` rode in ``**kwargs`` it could be silently absorbed by a
+    typo (``require_authentication=False`` would be accepted and ignored by
+    ``APIGateway``), which on a fail-closed gate is the one mistake that must
+    not pass quietly.
+
     Args:
         agent_ui_middleware: Optional existing AgentUIMiddleware instance
         auth_manager: Optional auth manager instance (e.g., JWTAuthManager)
+        require_auth: Reject unauthenticated requests. ``None`` (default)
+            inherits fail-closed unless ``enable_auth=False`` explicitly opted
+            out; ``True`` gates and RAISES when no credential source is
+            configured; ``False`` serves openly with a loud WARN (#2072).
+        auth_config: Explicit ``kailash.trust.auth.jwt.JWTConfig`` (or dict) for
+            the request gate.
+        external_auth_reason: Non-empty when an ASGI middleware outside this
+            gateway already authenticates every request.
+        auth_exempt_paths: Extra paths exempt from the gate.
         **kwargs: Additional arguments for APIGateway initialization
 
     Returns:
@@ -885,7 +1105,8 @@ def create_gateway(
     Example:
         >>> from kailash.middleware.auth import JWTAuthManager
         >>>
-        >>> # Create with custom auth
+        >>> # Create with custom auth. The gate verifies the tokens this
+        >>> # manager issues, using the manager's own key.
         >>> auth = JWTAuthManager(use_rsa=True)
         >>> gateway = create_gateway(
         ...     title="My App Gateway",
@@ -893,7 +1114,7 @@ def create_gateway(
         ...     auth_manager=auth
         ... )
         >>>
-        >>> # Or use default auth
+        >>> # Or use default auth (needs KAILASH_API_GATEWAY_SECRET)
         >>> gateway = create_gateway(title="My App")
         >>>
         >>> gateway.execute(port=8000)
@@ -902,7 +1123,13 @@ def create_gateway(
     if auth_manager is not None:
         kwargs["auth_manager"] = auth_manager
 
-    gateway = APIGateway(**kwargs)
+    gateway = APIGateway(
+        require_auth=require_auth,
+        auth_config=auth_config,
+        external_auth_reason=external_auth_reason,
+        auth_exempt_paths=auth_exempt_paths,
+        **kwargs,
+    )
 
     if agent_ui_middleware:
         gateway.agent_ui = agent_ui_middleware

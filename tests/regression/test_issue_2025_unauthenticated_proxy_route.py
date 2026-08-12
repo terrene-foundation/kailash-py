@@ -160,7 +160,9 @@ def auth_manager():
 
 @pytest.fixture
 def server(auth_manager):
-    srv = WorkflowServer(title="issue-2025", auth_manager=auth_manager)
+    srv = WorkflowServer(
+        require_auth=False, title="issue-2025", auth_manager=auth_manager
+    )
     try:
         yield srv
     finally:
@@ -184,7 +186,7 @@ def test_registration_without_auth_is_refused():
     This is the core of #2025. On the pre-fix source this call returns None and
     the route is live and open.
     """
-    srv = WorkflowServer(title="no-auth")
+    srv = WorkflowServer(require_auth=False, title="no-auth")
     try:
         with pytest.raises(ProxyAuthNotConfiguredError) as exc:
             srv.proxy_workflow(
@@ -258,7 +260,7 @@ def test_explicit_auth_dependency_is_honoured(backend):
             raise HTTPException(status_code=403, detail="Forbidden")
         return {"user_id": "keyed"}
 
-    srv = WorkflowServer(title="dep-only")
+    srv = WorkflowServer(require_auth=False, title="dep-only")
     try:
         srv.proxy_workflow(
             name="internal",
@@ -288,7 +290,9 @@ def test_auth_manager_without_dependency_factory_is_refused(backend):
     class NotAnAuthManager:
         """Looks configured, authenticates nothing."""
 
-    srv = WorkflowServer(title="bad-manager", auth_manager=NotAnAuthManager())
+    srv = WorkflowServer(
+        require_auth=False, title="bad-manager", auth_manager=NotAnAuthManager()
+    )
     try:
         with pytest.raises(ProxyAuthNotConfiguredError) as exc:
             srv.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
@@ -299,7 +303,7 @@ def test_auth_manager_without_dependency_factory_is_refused(backend):
 
 def test_declare_external_auth_permits_registration_and_warns(backend, caplog):
     """The declared-external-auth escape is explicit, logged, and reason-bound."""
-    srv = WorkflowServer(title="external")
+    srv = WorkflowServer(require_auth=False, title="external")
     try:
         with pytest.raises(ValueError):
             srv.declare_external_auth("   ")
@@ -317,7 +321,7 @@ def test_declare_external_auth_permits_registration_and_warns(backend, caplog):
 
 def test_set_auth_manager_cannot_clear_auth(auth_manager):
     """Clearing the manager would silently widen later registrations."""
-    srv = WorkflowServer(title="clear", auth_manager=auth_manager)
+    srv = WorkflowServer(require_auth=False, title="clear", auth_manager=auth_manager)
     try:
         with pytest.raises(ValueError):
             srv.set_auth_manager(None)
@@ -330,7 +334,10 @@ def test_set_auth_manager_cannot_clear_auth(auth_manager):
 )
 def test_subclasses_inherit_the_gate(server_cls, backend):
     """Enforcement-surface parity: both subclasses inherit proxy_workflow."""
-    srv = server_cls(title=f"parity-{server_cls.__name__}")
+    # require_auth=False: this test pins the PROXY gate (#2025), not the
+    # server-wide gate (#2072). Without it the server-wide gate raises first
+    # and the proxy assertion below never runs.
+    srv = server_cls(title=f"parity-{server_cls.__name__}", require_auth=False)
     try:
         with pytest.raises(ProxyAuthNotConfiguredError):
             srv.proxy_workflow(name="internal", proxy_url=backend, allowed_paths=["*"])
@@ -1004,7 +1011,7 @@ def test_enterprise_server_auth_manager_protects_a_proxy(redirecting_backend):
     manager = MiddlewareAuthManager(
         secret_key=_SECRET, enable_audit=False, enable_api_keys=False
     )
-    srv = EnterpriseWorkflowServer(title="f8", auth_manager=manager)
+    srv = EnterpriseWorkflowServer(require_auth=False, title="f8", auth_manager=manager)
     try:
         srv.proxy_workflow(
             name="internal", proxy_url=redirecting_backend, allowed_paths=["*"]

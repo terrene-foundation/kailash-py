@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.gateway.security import SecretManager
 from src.kailash.resources.registry import ResourceRegistry
 from src.kailash.servers import EnterpriseWorkflowServer
@@ -22,6 +23,7 @@ class TestEnterpriseWorkflowServer:
     def test_enterprise_server_initialization(self):
         """Test enterprise server initialization with default settings."""
         server = EnterpriseWorkflowServer(
+            require_auth=False,
             title="Enterprise Test Server",
             description="Test Enterprise Server",
             version="1.0.0",
@@ -38,6 +40,7 @@ class TestEnterpriseWorkflowServer:
     def test_enterprise_server_with_disabled_features(self):
         """Test enterprise server with some features disabled."""
         server = EnterpriseWorkflowServer(
+            require_auth=False,
             title="Disabled Features Server",
             enable_async_execution=False,
             enable_resource_management=False,
@@ -56,6 +59,7 @@ class TestEnterpriseWorkflowServer:
         custom_secret_manager = Mock(spec=SecretManager)
 
         server = EnterpriseWorkflowServer(
+            require_auth=False,
             title="Custom Components Server",
             resource_registry=custom_registry,
             secret_manager=custom_secret_manager,
@@ -66,7 +70,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_root_endpoint_enterprise_info(self):
         """Test that root endpoint includes enterprise information."""
-        server = EnterpriseWorkflowServer(title="Enterprise Root Test")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Enterprise Root Test"
+        )
         client = TestClient(server.app)
 
         response = client.get("/")
@@ -87,7 +93,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_enterprise_features_endpoint(self):
         """Test the enterprise features endpoint."""
-        server = EnterpriseWorkflowServer(title="Features Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Features Test Server"
+        )
         client = TestClient(server.app)
 
         response = client.get("/enterprise/features")
@@ -120,7 +128,9 @@ class TestEnterpriseWorkflowServer:
         mock_registry.list_resources.return_value = ["db_connection", "cache_client"]
         mock_registry_class.return_value = mock_registry
 
-        server = EnterpriseWorkflowServer(title="Resources Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Resources Test Server"
+        )
         # Replace with our mock
         server.resource_registry = mock_registry
 
@@ -135,7 +145,9 @@ class TestEnterpriseWorkflowServer:
     def test_enterprise_resources_endpoint_disabled(self):
         """Test resources endpoint when resource management is disabled."""
         server = EnterpriseWorkflowServer(
-            title="Disabled Resources Server", enable_resource_management=False
+            require_auth=False,
+            title="Disabled Resources Server",
+            enable_resource_management=False,
         )
         client = TestClient(server.app)
 
@@ -156,7 +168,9 @@ class TestEnterpriseWorkflowServer:
         mock_registry.check_health = AsyncMock(return_value={"status": "healthy"})
         mock_registry_class.return_value = mock_registry
 
-        server = EnterpriseWorkflowServer(title="Resource Info Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Resource Info Test Server"
+        )
         server.resource_registry = mock_registry
 
         client = TestClient(server.app)
@@ -171,7 +185,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_enterprise_resource_info_not_found(self):
         """Test resource info endpoint for non-existent resource."""
-        server = EnterpriseWorkflowServer(title="Not Found Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Not Found Test Server"
+        )
         client = TestClient(server.app)
 
         response = client.get("/enterprise/resources/nonexistent")
@@ -183,7 +199,9 @@ class TestEnterpriseWorkflowServer:
         # Mock datetime for consistent testing
         mock_datetime.now.return_value.isoformat.return_value = "2025-01-01T00:00:00"
 
-        server = EnterpriseWorkflowServer(title="Health Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Health Test Server"
+        )
         client = TestClient(server.app)
 
         response = client.get("/enterprise/health")
@@ -203,7 +221,9 @@ class TestEnterpriseWorkflowServer:
     def test_async_execution_endpoint_disabled(self):
         """Test async execution endpoint when async execution is disabled."""
         server = EnterpriseWorkflowServer(
-            title="Disabled Async Server", enable_async_execution=False
+            require_auth=False,
+            title="Disabled Async Server",
+            enable_async_execution=False,
         )
         client = TestClient(server.app)
 
@@ -215,7 +235,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_async_execution_workflow_not_found(self):
         """Test async execution with non-existent workflow."""
-        server = EnterpriseWorkflowServer(title="Not Found Async Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Not Found Async Server"
+        )
         client = TestClient(server.app)
 
         response = client.post(
@@ -226,7 +248,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_register_resource(self):
         """Test resource registration functionality."""
-        server = EnterpriseWorkflowServer(title="Resource Registration Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Resource Registration Server"
+        )
         mock_resource = Mock()
 
         # Should work when resource management is enabled
@@ -238,6 +262,7 @@ class TestEnterpriseWorkflowServer:
     def test_register_resource_disabled(self):
         """Test resource registration when resource management is disabled."""
         server = EnterpriseWorkflowServer(
+            require_auth=False,
             title="Disabled Resource Registration Server",
             enable_resource_management=False,
         )
@@ -248,7 +273,9 @@ class TestEnterpriseWorkflowServer:
 
     def test_enterprise_server_inheritance(self):
         """Test that enterprise server properly inherits from durable server."""
-        server = EnterpriseWorkflowServer(title="Inheritance Test Server")
+        server = EnterpriseWorkflowServer(
+            require_auth=False, title="Inheritance Test Server"
+        )
 
         # Should have workflow server methods
         assert hasattr(server, "register_workflow")
@@ -265,7 +292,7 @@ class TestEnterpriseWorkflowServer:
 
     def test_enterprise_server_max_workers_default(self):
         """Test that enterprise server has higher default max_workers."""
-        server = EnterpriseWorkflowServer(title="Max Workers Test")
+        server = EnterpriseWorkflowServer(require_auth=False, title="Max Workers Test")
 
         # Enterprise server should default to 20 workers vs 10 for basic
         assert server.executor._max_workers == 20
@@ -277,7 +304,7 @@ class TestEnterpriseWorkflowServer:
         mock_runtime_class.return_value = mock_runtime
 
         server = EnterpriseWorkflowServer(
-            title="Async Runtime Test", enable_async_execution=True
+            require_auth=False, title="Async Runtime Test", enable_async_execution=True
         )
 
         # Should have created async runtime
@@ -287,7 +314,9 @@ class TestEnterpriseWorkflowServer:
     def test_no_async_runtime_when_disabled(self):
         """Test that async runtime is not initialized when disabled."""
         server = EnterpriseWorkflowServer(
-            title="No Async Runtime Test", enable_async_execution=False
+            require_auth=False,
+            title="No Async Runtime Test",
+            enable_async_execution=False,
         )
 
         # Should not have async runtime

@@ -24,6 +24,7 @@ from typing import Dict
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
 from src.kailash.servers import WorkflowServer
 
@@ -96,7 +97,9 @@ class TestNoHistogramTypeWithQuantileSeries:
         """Same structural invariant, walked through the real server
         /metrics endpoint — the unified path a Prometheus scraper actually
         hits in production (#1708 W1b)."""
-        server = WorkflowServer(title="Type Mislabel Regression Test Server")
+        server = WorkflowServer(
+            require_auth=False, title="Type Mislabel Regression Test Server"
+        )
         client = TestClient(server.app)
         body = client.get("/metrics").text
 

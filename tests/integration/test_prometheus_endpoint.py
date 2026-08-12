@@ -6,6 +6,7 @@ valid Prometheus text format with registered metrics.
 
 import pytest
 from fastapi.testclient import TestClient
+
 from src.kailash.servers import EnterpriseWorkflowServer, WorkflowServer
 from src.kailash.servers.durable_workflow_server import DurableWorkflowServer
 
@@ -16,7 +17,7 @@ class TestPrometheusEndpointWorkflowServer:
     """Test /metrics on the base WorkflowServer."""
 
     def setup_method(self):
-        self.server = WorkflowServer(title="Prometheus Test Server")
+        self.server = WorkflowServer(require_auth=False, title="Prometheus Test Server")
         self.client = TestClient(self.server.app)
 
     def test_metrics_returns_200(self):
@@ -92,7 +93,9 @@ class TestPrometheusEndpointDurableServer:
     """Test /metrics on DurableWorkflowServer (inherits from WorkflowServer)."""
 
     def setup_method(self):
-        self.server = DurableWorkflowServer(title="Durable Prometheus Test Server")
+        self.server = DurableWorkflowServer(
+            require_auth=False, title="Durable Prometheus Test Server"
+        )
         self.client = TestClient(self.server.app)
 
     def test_metrics_returns_200(self):
@@ -116,7 +119,7 @@ class TestPrometheusEndpointEnterpriseServer:
 
     def setup_method(self):
         self.server = EnterpriseWorkflowServer(
-            title="Enterprise Prometheus Test Server"
+            require_auth=False, title="Enterprise Prometheus Test Server"
         )
         self.client = TestClient(self.server.app)
 
@@ -148,7 +151,9 @@ class TestPrometheusMetricsWithRecordedData:
     """Test that /metrics reflects data recorded via the metrics API."""
 
     def setup_method(self):
-        self.server = WorkflowServer(title="Metrics Data Test Server")
+        self.server = WorkflowServer(
+            require_auth=False, title="Metrics Data Test Server"
+        )
         self.client = TestClient(self.server.app)
 
     def test_metrics_reflects_recorded_counter(self):

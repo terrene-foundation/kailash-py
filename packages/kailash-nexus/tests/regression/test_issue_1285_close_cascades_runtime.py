@@ -129,7 +129,7 @@ class TestWorkflowServerClosesWorkflowApiRuntimes:
         from kailash.servers.workflow_server import WorkflowServer
         from kailash.workflow.builder import WorkflowBuilder
 
-        server = WorkflowServer(title="test")
+        server = WorkflowServer(require_auth=False, title="test")
 
         wf = WorkflowBuilder()
         wf.add_node("PythonCodeNode", "n", {"code": "result = 1"})
@@ -153,7 +153,7 @@ class TestWorkflowServerClosesWorkflowApiRuntimes:
         from kailash.api.gateway import WorkflowAPIGateway
         from kailash.workflow.builder import WorkflowBuilder
 
-        gateway = WorkflowAPIGateway(title="test")
+        gateway = WorkflowAPIGateway(require_auth=False, title="test")
 
         wf = WorkflowBuilder()
         wf.add_node("PythonCodeNode", "n", {"code": "result = 1"})

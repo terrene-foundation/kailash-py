@@ -60,6 +60,7 @@ def _build_sse_server() -> DurableWorkflowServer:
     awaited the body iterator before forwarding the response.
     """
     server = DurableWorkflowServer(
+        require_auth=False,
         title="issue-767-regression",
         version="test",
         enable_durability=True,
@@ -176,6 +177,7 @@ async def test_durability_middleware_detects_text_event_stream_content_type():
 async def test_durability_middleware_still_buffers_json_responses():
     """Non-streaming responses MUST keep the original drain+cache behaviour."""
     server = DurableWorkflowServer(
+        require_auth=False,
         title="issue-767-regression-json",
         version="test",
         enable_durability=True,

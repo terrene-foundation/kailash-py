@@ -160,6 +160,11 @@ class WorkflowAPI:
         version: str = "1.0.0",
         description: str = "API wrapper for Kailash workflow execution",
         runtime=None,
+        # Server-wide authentication (#2072). NAMED, never **kwargs.
+        require_auth: bool = True,
+        auth_config: Any = None,
+        external_auth_reason: str | None = None,
+        auth_exempt_paths: list[str] | None = None,
     ):
         """
         Initialize the API wrapper.
@@ -172,7 +177,38 @@ class WorkflowAPI:
             runtime: Optional runtime instance. If None, defaults to AsyncLocalRuntime
                     for optimal Docker/FastAPI performance. Pass LocalRuntime() for
                     backward compatibility or CLI contexts.
+            require_auth: Whether every request must be authenticated.
+                **Defaults to ``True`` (fail-closed); BREAKING.** This class
+                exposes ``POST /execute``, which runs the wrapped workflow, and
+                :meth:`run` serves it directly under uvicorn -- so a standalone
+                ``WorkflowAPI(wf).run()`` was anonymous arbitrary workflow
+                execution, the same defect as #2072 on the server surface.
+                Construction raises
+                :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError`
+                when no credential source is configured.
+            auth_config: Explicit ``JWTConfig`` (or field ``dict``).
+            external_auth_reason: Non-empty string declaring that an ASGI
+                middleware outside this app authenticates every request. This
+                is how ``WorkflowServer`` and ``WorkflowAPIGateway`` mount this
+                app without a second gate -- see
+                :func:`~kailash.utils.server_auth.mounted_subapp_auth_kwargs`.
+            auth_exempt_paths: Extra paths exempt from authentication.
         """
+        from ..utils.server_auth import (
+            install_server_auth_middleware,
+            resolve_server_auth,
+        )
+
+        # Resolve auth FIRST, before the runtime below is allocated: a raise
+        # afterwards would leak an AsyncLocalRuntime that no caller can close,
+        # because __init__ never returns.
+        self._auth_config = resolve_server_auth(
+            require_auth=require_auth,
+            auth_config=auth_config,
+            external_auth_reason=external_auth_reason,
+            extra_exempt_paths=auth_exempt_paths,
+            server_label=f"{type(self).__name__}(app_name={app_name!r})",
+        )
         if isinstance(workflow, WorkflowBuilder) or hasattr(workflow, "build"):
             self.workflow = workflow
             self.workflow_graph = workflow.build()
@@ -219,6 +255,16 @@ class WorkflowAPI:
             description=description,
             lifespan=self._lifespan,
         )
+
+        # Install authentication (#2072). Middleware, not a route dependency,
+        # for the same reason the servers use middleware: this app is itself
+        # mounted by WorkflowServer and WorkflowAPIGateway, and when it runs
+        # standalone under `run()` the middleware is what sees `/execute`
+        # before routing. `_auth_config` is None when a parent declared that
+        # it owns the gate, so a mounted sub-app installs nothing and never
+        # demands a second credential for one request.
+        if self._auth_config is not None:
+            install_server_auth_middleware(self.app, self._auth_config)
 
         # Setup routes
         self._setup_routes()

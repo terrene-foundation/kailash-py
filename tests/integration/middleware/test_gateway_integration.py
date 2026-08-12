@@ -135,7 +135,7 @@ result = {
         """Test complete end-to-end workflow execution through middleware stack."""
         # Create middleware stack
         agent_ui = AgentUIMiddleware(max_sessions=10, session_timeout_minutes=5)
-        gateway = create_gateway(title="E2E Test Gateway")
+        gateway = create_gateway(require_auth=False, title="E2E Test Gateway")
         gateway.agent_ui = agent_ui
 
         # Create session
@@ -394,7 +394,9 @@ result = {
         # Create complete middleware stack
         agent_ui = AgentUIMiddleware(max_sessions=100, session_timeout_minutes=30)
         gateway = create_gateway(
-            title="Health Monitor Test", description="Testing health monitoring"
+            require_auth=False,
+            title="Health Monitor Test",
+            description="Testing health monitoring",
         )
         gateway.agent_ui = agent_ui
 

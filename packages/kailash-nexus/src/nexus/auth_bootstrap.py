@@ -63,6 +63,7 @@ __all__ = [
     "MIN_SECRET_BYTES",
     "build_auth_config",
     "collect_api_keys",
+    "core_gateway_auth_kwargs",
     "install_auth_middleware",
 ]
 
@@ -102,6 +103,51 @@ class InvalidAuthSecretError(ValueError):
     unrelated ``ValueError``s raised during gateway construction -- ``Nexus``
     re-raises this type unwrapped so the operator sees the actionable message.
     """
+
+
+def core_gateway_auth_kwargs(enable_auth: bool) -> Dict[str, Any]:
+    """Authentication arguments for the core ``create_gateway()`` call.
+
+    Nexus builds its HTTP surface on ``kailash.servers``' gateway, which since
+    #2072 defaults to ``require_auth=True`` and REFUSES to construct without a
+    credential source. Nexus must therefore say which of the two things is
+    true, and it must say the one that IS true:
+
+    * ``enable_auth=True``  -> Nexus installs :func:`install_auth_middleware`
+      (``nexus.auth.jwt.JWTMiddleware``) onto this same app, so the core
+      gateway must NOT install a second, independently-configured layer with
+      its own exempt-path set. Declared with ``external_auth_reason``.
+    * ``enable_auth=False`` -> nothing authenticates this app. The honest
+      mapping is the core gateway's explicit opt-out, which logs a WARN naming
+      the exposure (``security.md`` § Secure-Default).
+
+    Declaring ``external_auth_reason`` unconditionally would be WORSE than the
+    silent no-op it replaces: on a development ``Nexus()`` (``enable_auth``
+    defaults to False) it puts "an external middleware authenticates every
+    request" on the record while nothing does, so the opt-out WARN never fires
+    and the operator reads a false assurance. That is the #2013 shape --- a
+    security control that reports success and installs nothing --- re-entering
+    through the declaration instead of through a ``hasattr`` guard.
+
+    This does NOT change the ``Nexus(enable_auth=...)`` contract: whether the
+    Nexus surface authenticates is still decided there, including the
+    production auto-enable. It only makes the core gateway's record match it.
+
+    Args:
+        enable_auth: Whether Nexus installs its own auth middleware on this
+            app, i.e. the resolved ``Nexus._enable_auth``.
+
+    Returns:
+        Keyword arguments to splat into ``create_gateway(...)``.
+    """
+    if enable_auth:
+        return {
+            "external_auth_reason": (
+                "nexus installs nexus.auth.jwt.JWTMiddleware on this app "
+                "via Nexus(enable_auth=True) (#2013)"
+            )
+        }
+    return {"require_auth": False}
 
 
 def collect_api_keys(env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
