@@ -38,10 +38,7 @@ from ...utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
-from ...utils.server_auth import (
-    install_server_auth_middleware,
-    resolve_server_auth,
-)
+from ...utils.server_auth import install_server_auth_middleware, resolve_server_auth
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
 from ..core.agent_ui import AgentUIMiddleware

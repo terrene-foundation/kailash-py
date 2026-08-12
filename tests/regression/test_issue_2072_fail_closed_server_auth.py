@@ -1496,15 +1496,15 @@ def test_lone_surrogate_does_not_destroy_the_log_record():
 @pytest.mark.parametrize(
     "raw,forbidden",
     [
-        ("a\rb", "\r"),                    # Cc  CARRIAGE RETURN
-        ("a\nb", "\n"),                    # Cc  LINE FEED
-        ("a\x1bb", "\x1b"),                # Cc  ESC (ANSI sequences)
-        ("a\x00b", "\x00"),                # Cc  NUL
-        ("a\x85b", "\x85"),                # Cc  NEXT LINE
-        ("a\u2028b", "\u2028"),            # Zl  LINE SEPARATOR
-        ("a\u2029b", "\u2029"),            # Zp  PARAGRAPH SEPARATOR
-        ("a\u202eb", "\u202e"),            # Cf  RIGHT-TO-LEFT OVERRIDE
-        ("a\ud800b", "\ud800"),            # Cs  lone surrogate
+        ("a\rb", "\r"),  # Cc  CARRIAGE RETURN
+        ("a\nb", "\n"),  # Cc  LINE FEED
+        ("a\x1bb", "\x1b"),  # Cc  ESC (ANSI sequences)
+        ("a\x00b", "\x00"),  # Cc  NUL
+        ("a\x85b", "\x85"),  # Cc  NEXT LINE
+        ("a\u2028b", "\u2028"),  # Zl  LINE SEPARATOR
+        ("a\u2029b", "\u2029"),  # Zp  PARAGRAPH SEPARATOR
+        ("a\u202eb", "\u202e"),  # Cf  RIGHT-TO-LEFT OVERRIDE
+        ("a\ud800b", "\ud800"),  # Cs  lone surrogate
     ],
 )
 def test_record_forging_characters_are_swept(raw, forbidden):

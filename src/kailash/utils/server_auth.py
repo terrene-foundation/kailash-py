@@ -257,8 +257,7 @@ def _narrow_caller_config(
         extra={
             "caller_paths": len(caller_paths),
             "resolved_paths": len(resolved),
-            "narrowed_from_default": caller_paths
-            == _jwtconfig_default_exempt_paths(),
+            "narrowed_from_default": caller_paths == _jwtconfig_default_exempt_paths(),
         },
     )
     return dataclasses.replace(config, exempt_paths=resolved)
