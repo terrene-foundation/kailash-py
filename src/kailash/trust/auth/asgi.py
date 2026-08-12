@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "JWTAuthMiddleware",
+    "JWTWebSocketAuthMiddleware",
 ]
 
 #: Sent on every 401 so a compliant client knows which scheme to retry with.
@@ -97,7 +98,24 @@ _ALGORITHM_LABELS = {
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
-    """Reject unauthenticated requests with 401 before they reach any route.
+    """Reject unauthenticated **HTTP** requests with 401 before any route.
+
+    HTTP ONLY, and the word is load-bearing. This extends
+    ``BaseHTTPMiddleware``, whose ``__call__`` begins::
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+    so :meth:`dispatch` never runs for a ``websocket`` scope and every
+    ``@app.websocket(...)`` route is served straight through. An earlier
+    revision of this line said "before they reach any route", which was false
+    for websocket routes and inherited by
+    ``install_server_auth_middleware``'s own docstring.
+
+    :class:`JWTWebSocketAuthMiddleware` is the sibling that covers the
+    ``websocket`` scope. :func:`kailash.utils.server_auth.install_server_auth_middleware`
+    installs BOTH; install this one alone and websocket routes stay open.
 
     Args:
         app: The ASGI application to wrap.
@@ -337,5 +355,218 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             token = request.query_params.get(self.config.token_query_param)
             if token:
                 return token
+
+        return None
+
+
+class JWTWebSocketAuthMiddleware:
+    """Authenticate the WebSocket HANDSHAKE, or refuse to open the connection.
+
+    The sibling of :class:`JWTAuthMiddleware` for the one scope that class
+    cannot see. ``BaseHTTPMiddleware.__call__`` returns early for any scope
+    whose type is not ``"http"``, so an ``@app.websocket("/ws")`` route was
+    reachable with no credential on a server constructed with
+    ``require_auth=True`` (issue #2072). Measured on ``WorkflowServer`` before
+    this class existed: the handshake completed and the echo loop ran.
+
+    Written as a PURE ASGI callable rather than a ``BaseHTTPMiddleware``
+    subclass for exactly the reason above -- inheriting from that base is what
+    causes the blind spot.
+
+    **Rejection happens at the handshake, before ``accept``.** Accepting and
+    then closing would still have allocated the connection and run the route's
+    ``accept()`` path. Sending ``websocket.close`` while the handshake is still
+    pending makes the server refuse it outright (uvicorn answers HTTP 403), so
+    an unauthenticated caller never reaches the route's loop.
+
+    **What this closes on the core echo route.** The in-tree handler is an echo,
+    so immediate data exposure is low -- but ``await websocket.accept()``
+    followed by ``while True`` is unauthenticated resource consumption per
+    connection, the handler's own docstring invites subclasses to override it
+    with something stateful, and ``register_mcp_server`` mounts third-party MCP
+    applications that are told not to install their own gate.
+
+    **Credential sources differ from HTTP by necessity.** A browser cannot set
+    ``Authorization`` on a WebSocket handshake, so this also reads the cookie
+    and query-parameter sources when the config enables them. It never invents
+    a source the config did not enable.
+
+    Args:
+        app: The ASGI application to wrap.
+        config: JWT configuration. Required, for the same reason
+            :class:`JWTAuthMiddleware` requires one.
+    """
+
+    def __init__(self, app: Any, config: JWTConfig) -> None:
+        if config is None:
+            raise ValueError(
+                "JWTWebSocketAuthMiddleware requires a JWTConfig. Passing None "
+                "would install a middleware with no credential to verify "
+                "against, which authenticates nothing while appearing to "
+                "(#2072)."
+            )
+        self.app = app
+        self.config = config
+        self._validator = JWTValidator(config)
+
+    async def __call__(self, scope: Dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "websocket":
+            await self.app(scope, receive, send)
+            return
+
+        if self._validator.is_path_exempt(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+
+        token = self._extract_token_from_scope(scope)
+        if not token:
+            await self._deny(scope, receive, send, "missing_token")
+            return
+
+        if token.startswith("__apikey__") and self.config.api_key_enabled:
+            if not await self._api_key_ok(token[len("__apikey__") :]):
+                await self._deny(scope, receive, send, "invalid_api_key")
+                return
+            await self.app(scope, receive, send)
+            return
+
+        try:
+            payload = self._validator.verify_token(token)
+            if self._validator.check_token_age(payload):
+                await self._deny(scope, receive, send, "invalid_token")
+                return
+        except (ExpiredTokenError, InvalidTokenError) as exc:
+            # Logged, never sent: the validator's text can name the configured
+            # algorithm and issuer, which fingerprints the server for an
+            # unauthenticated caller.
+            logger.warning(
+                "jwt_ws_auth_middleware.invalid_token",
+                extra={"path": scope.get("path", ""), "reason": str(exc)},
+            )
+            await self._deny(scope, receive, send, "invalid_token")
+            return
+        except Exception:
+            # Not a swallow -- logged with a stack trace and still failing
+            # CLOSED. An unexpected verification error must never fall through
+            # into an open socket.
+            logger.exception(
+                "jwt_ws_auth_middleware.verification_failed",
+                extra={"path": scope.get("path", "")},
+            )
+            await self._deny(scope, receive, send, "auth_error")
+            return
+
+        # Starlette exposes `scope["state"]` to the endpoint as
+        # `websocket.state`, which is how a route reads who connected.
+        scope.setdefault("state", {})
+        try:
+            scope["state"]["user"] = self._validator.create_user_from_payload(payload)
+            scope["state"]["token_payload"] = payload
+        except Exception:
+            logger.exception(
+                "jwt_ws_auth_middleware.user_construction_failed",
+                extra={"path": scope.get("path", "")},
+            )
+            await self._deny(scope, receive, send, "auth_error")
+            return
+
+        await self.app(scope, receive, send)
+
+    async def _api_key_ok(self, api_key: str) -> bool:
+        validator = self.config.api_key_validator
+        if validator is None:
+            logger.error(
+                "jwt_ws_auth_middleware.api_key_enabled_without_validator",
+            )
+            return False
+        try:
+            result = validator(api_key)
+            if inspect.isawaitable(result):
+                result = await result
+        except Exception:
+            logger.exception("jwt_ws_auth_middleware.api_key_validator_failed")
+            return False
+        return bool(result)
+
+    async def _deny(
+        self, scope: Dict[str, Any], receive: Any, send: Any, error: str
+    ) -> None:
+        """Refuse the handshake without ever calling ``accept``.
+
+        The ``websocket.connect`` event is consumed first because the ASGI spec
+        has the server send it before the application may reply. Uvicorn
+        tolerates a ``close`` sent without it; other servers (hypercorn, daphne,
+        the wsproto implementation) are stricter, and a gate that only fails
+        closed on one server is not a gate.
+
+        The close carries 1008 (POLICY VIOLATION) and no reason text, matching
+        :meth:`JWTAuthMiddleware._unauthorized`: an unauthenticated caller
+        learns only that it was refused.
+        """
+        logger.warning(
+            "jwt_ws_auth_middleware.rejected",
+            extra={"path": scope.get("path", ""), "error": error},
+        )
+        try:
+            await receive()
+        except Exception:
+            # The peer can vanish between the server queuing `connect` and this
+            # read. Reported at debug rather than raised: the connection is
+            # already gone, and the close below is then a no-op. Failing here
+            # would turn a disconnect into a 500 on the server's error path.
+            logger.debug(
+                "jwt_ws_auth_middleware.connect_event_unavailable", exc_info=True
+            )
+        await send({"type": "websocket.close", "code": 1008})
+
+    def _extract_token_from_scope(self, scope: Dict[str, Any]) -> Optional[str]:
+        """Extract an API key or bearer token from a raw websocket scope.
+
+        Same priority order as :meth:`JWTAuthMiddleware._extract_token`, read
+        from ``scope`` directly because there is no ``Request`` for a websocket
+        handshake. Header names are compared lowercased: HTTP/2 requires
+        lowercase and ASGI does not normalize case for the application.
+        """
+        headers = {
+            key.decode("latin-1").lower(): value.decode("latin-1")
+            for key, value in scope.get("headers", [])
+        }
+
+        if self.config.api_key_enabled:
+            api_key = headers.get(self.config.api_key_header.lower(), "")
+            if api_key:
+                return f"__apikey__{api_key}"
+
+        auth_header = headers.get(self.config.token_header.lower(), "")
+        # Scheme names are case-insensitive per RFC 7235 §2.1.
+        if auth_header[:7].lower() == "bearer ":
+            return auth_header[7:].strip() or None
+
+        if self.config.token_cookie:
+            from http.cookies import SimpleCookie
+
+            try:
+                jar = SimpleCookie()
+                jar.load(headers.get("cookie", ""))
+                morsel = jar.get(self.config.token_cookie)
+            except Exception:
+                # A malformed Cookie header is attacker-supplied input, not a
+                # server fault. Reported at debug and treated as "no cookie",
+                # which falls through to the query param and ultimately to a
+                # denial -- never to an open socket.
+                logger.debug(
+                    "jwt_ws_auth_middleware.cookie_parse_failed", exc_info=True
+                )
+                morsel = None
+            if morsel is not None and morsel.value:
+                return morsel.value
+
+        if self.config.token_query_param:
+            from urllib.parse import parse_qs
+
+            query = parse_qs(scope.get("query_string", b"").decode("latin-1"))
+            values = query.get(self.config.token_query_param) or []
+            if values and values[0]:
+                return values[0]
 
         return None

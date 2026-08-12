@@ -546,7 +546,23 @@ def mounted_subapp_auth_kwargs(
 
 
 def install_server_auth_middleware(app: Any, config: "JWTConfig") -> None:
-    """Install :class:`~kailash.trust.auth.asgi.JWTAuthMiddleware` onto ``app``.
+    """Install the authentication layers onto ``app``.
+
+    Installs TWO middlewares, and both are required for the claim "every
+    request is authenticated" to be true:
+
+    * :class:`~kailash.trust.auth.asgi.JWTAuthMiddleware` -- every **HTTP**
+      request.
+    * :class:`~kailash.trust.auth.asgi.JWTWebSocketAuthMiddleware` -- every
+      **WebSocket handshake**.
+
+    The split is not a design preference, it is forced. ``JWTAuthMiddleware``
+    extends Starlette's ``BaseHTTPMiddleware``, whose ``__call__`` returns
+    early for any scope that is not ``"http"``, so its ``dispatch`` never runs
+    for a websocket. An earlier revision of this function installed only the
+    HTTP layer while this docstring claimed route-universal coverage, leaving
+    ``@app.websocket("/ws")`` on ``WorkflowServer`` and
+    ``EnterpriseWorkflowServer`` open on a ``require_auth=True`` server.
 
     Args:
         app: The FastAPI/Starlette application to protect.
@@ -562,9 +578,12 @@ def install_server_auth_middleware(app: Any, config: "JWTConfig") -> None:
         one; auth added after CORS ends up inside it and rejects cross-origin
         preflight ``OPTIONS`` with 401 before CORS can answer.
     """
-    from kailash.trust.auth.asgi import JWTAuthMiddleware
+    from kailash.trust.auth.asgi import JWTAuthMiddleware, JWTWebSocketAuthMiddleware
 
     try:
+        # Relative order of these two does not matter -- each passes any scope
+        # it does not own straight through -- but both MUST land before CORS.
+        app.add_middleware(JWTWebSocketAuthMiddleware, config=config)
         app.add_middleware(JWTAuthMiddleware, config=config)
     except RuntimeError as exc:
         # Swallowing this would hand back an app that reports auth as enabled
@@ -578,5 +597,5 @@ def install_server_auth_middleware(app: Any, config: "JWTConfig") -> None:
 
     logger.info(
         "server_auth.middleware_installed",
-        extra={"exempt_paths": len(config.exempt_paths)},
+        extra={"exempt_paths": len(config.exempt_paths), "scopes": "http+websocket"},
     )
