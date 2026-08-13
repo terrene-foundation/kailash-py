@@ -27,10 +27,10 @@ Use the 11 automatically generated workflow nodes for Create, Read, Update, Dele
 
 ### Pattern Comparison
 
-| Node Type | Pattern | Example |
-|-----------|---------|---------|
-| **CreateNode** | **FLAT** individual fields | `{"name": "Alice", "email": "alice@example.com"}` |
-| **UpdateNode** | **NESTED** filter + fields | `{"filter": {"id": 1}, "fields": {"name": "Alice Updated"}}` |
+| Node Type          | Pattern                    | Example                                                          |
+| ------------------ | -------------------------- | ---------------------------------------------------------------- |
+| **CreateNode**     | **FLAT** individual fields | `{"name": "Alice", "email": "alice@example.com"}`                |
+| **UpdateNode**     | **NESTED** filter + fields | `{"filter": {"id": 1}, "fields": {"name": "Alice Updated"}}`     |
 | **BulkUpdateNode** | **NESTED** filter + fields | `{"filter": {"active": True}, "fields": {"status": "verified"}}` |
 
 ### CreateNode: FLAT Individual Fields
@@ -81,11 +81,12 @@ workflow.add_node("UserUpdateNode", "update", {
 - **UpdateNode**: You need to specify:
   1. **WHICH** records to update (`filter`)
   2. **WHAT** to change (`fields`)
-  → Nested structure separates concerns
+     → Nested structure separates concerns
 
 ### Auto-Managed Fields
 
 ⚠️ **IMPORTANT**: DataFlow automatically manages these fields:
+
 - `created_at` - Set automatically on create
 - `updated_at` - Updated automatically on update
 
@@ -171,22 +172,22 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Basic CRUD Nodes (5)
 
-| Node | Purpose | Performance | Parameters |
-|------|---------|-------------|------------|
-| `{Model}CreateNode` | Insert single record | <1ms | All model fields |
-| `{Model}ReadNode` | Select by ID | <1ms | `id` or `conditions` |
-| `{Model}UpdateNode` | Update single record | <1ms | `id`, `updates` |
-| `{Model}DeleteNode` | Delete single record | <1ms | `id`, `soft_delete` |
-| `{Model}ListNode` | Query with filters | <10ms | `filter`, `limit`, `order_by` |
+| Node                | Purpose              | Performance | Parameters                    |
+| ------------------- | -------------------- | ----------- | ----------------------------- |
+| `{Model}CreateNode` | Insert single record | <1ms        | All model fields              |
+| `{Model}ReadNode`   | Select by ID         | <1ms        | `id` or `conditions`          |
+| `{Model}UpdateNode` | Update single record | <1ms        | `id`, `updates`               |
+| `{Model}DeleteNode` | Delete single record | <1ms        | `id`, `soft_delete`           |
+| `{Model}ListNode`   | Query with filters   | <10ms       | `filter`, `limit`, `order_by` |
 
 ### Bulk Operation Nodes (4)
 
-| Node | Purpose | Performance | Parameters |
-|------|---------|-------------|------------|
-| `{Model}BulkCreateNode` | Insert multiple records | 1000+/sec | `data`, `batch_size` |
-| `{Model}BulkUpdateNode` | Update multiple records | 5000+/sec | `filter`, `updates` |
-| `{Model}BulkDeleteNode` | Delete multiple records | 10000+/sec | `filter`, `soft_delete` |
-| `{Model}BulkUpsertNode` | Insert or update | 3000+/sec | `data`, `unique_fields` |
+| Node                    | Purpose                 | Performance | Parameters              |
+| ----------------------- | ----------------------- | ----------- | ----------------------- |
+| `{Model}BulkCreateNode` | Insert multiple records | 1000+/sec   | `data`, `batch_size`    |
+| `{Model}BulkUpdateNode` | Update multiple records | 5000+/sec   | `filter`, `updates`     |
+| `{Model}BulkDeleteNode` | Delete multiple records | 10000+/sec  | `filter`, `soft_delete` |
+| `{Model}BulkUpsertNode` | Insert or update        | 3000+/sec   | `data`, `unique_fields` |
 
 ## Key Parameters / Options
 
@@ -507,6 +508,7 @@ workflow.add_node("UserCreateNode", "create_from_string", {
 ### Applies To All CRUD Nodes
 
 Datetime auto-conversion works on:
+
 - ✅ `UserCreateNode` - Single record creation
 - ✅ `UserUpdateNode` - Single record updates
 - ✅ `UserBulkCreateNode` - Bulk record creation
@@ -516,6 +518,7 @@ Datetime auto-conversion works on:
 ### Common Use Cases
 
 **External API Integration:**
+
 ```python
 # API returns ISO 8601 strings
 workflow.add_node("PythonCodeNode", "fetch_api_data", {
@@ -533,6 +536,7 @@ workflow.add_node("UserBulkCreateNode", "import_api_users", {
 ```
 
 **CSV Import:**
+
 ```python
 # CSV contains date strings
 workflow.add_node("PythonCodeNode", "parse_csv", {
@@ -569,6 +573,7 @@ workflow.add_node("UserBulkCreateNode", "import_csv", {
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` subagent when:
+
 - Designing complex multi-step CRUD workflows
 - Implementing custom validation logic
 - Troubleshooting node execution errors
@@ -583,7 +588,8 @@ Use `dataflow-specialist` subagent when:
 ### Related Documentation
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L211-L224)
+
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Examples
 
@@ -708,13 +714,13 @@ workflow.add_node("CustomerListNode", "all_customers", {
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| `Node 'UserCreateNode' not found` | Model not defined with @db.model | Add @db.model decorator to class |
-| `KeyError: 'id'` in results | Wrong result access pattern | Use `results["node"]["result"]["id"]` |
-| `ValidationError: Missing required field` | Field without default | Provide value or add default to model |
-| `IntegrityError: duplicate key` | Unique constraint violation | Check for existing record before creating |
-| `NotFoundError: Record not found` | Invalid ID or deleted record | Verify ID exists and isn't soft-deleted |
+| Issue                                     | Cause                            | Solution                                  |
+| ----------------------------------------- | -------------------------------- | ----------------------------------------- |
+| `Node 'UserCreateNode' not found`         | Model not defined with @db.model | Add @db.model decorator to class          |
+| `KeyError: 'id'` in results               | Wrong result access pattern      | Use `results["node"]["result"]["id"]`     |
+| `ValidationError: Missing required field` | Field without default            | Provide value or add default to model     |
+| `IntegrityError: duplicate key`           | Unique constraint violation      | Check for existing record before creating |
+| `NotFoundError: Record not found`         | Invalid ID or deleted record     | Verify ID exists and isn't soft-deleted   |
 
 ## Quick Tips
 
@@ -726,7 +732,6 @@ workflow.add_node("CustomerListNode", "all_customers", {
 - Use `count_only=True` for pagination counts
 - ReadNode can use ID or conditions
 - UpdateNode returns updated record if `return_updated=True`
-
 
 ## Keywords for Auto-Trigger
 

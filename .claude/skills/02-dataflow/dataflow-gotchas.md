@@ -210,12 +210,12 @@ db = DataFlow(":memory:", auto_migrate=True)  # Tables created on first access
 
 #### When to Use Each Pattern
 
-| Context                 | Pattern                       | Notes                      |
-| ----------------------- | ----------------------------- | -------------------------- |
-| **Docker/FastAPI**      | `auto_migrate=True` (default) | ✅ Works in current version      |
-| **In-Memory SQLite**    | `auto_migrate=True`           | Uses lazy creation (works) |
-| **CLI Scripts**         | `auto_migrate=True` (default) | Works                      |
-| **pytest (sync/async)** | `auto_migrate=True` (default) | Works via sync DDL         |
+| Context                 | Pattern                       | Notes                       |
+| ----------------------- | ----------------------------- | --------------------------- |
+| **Docker/FastAPI**      | `auto_migrate=True` (default) | ✅ Works in current version |
+| **In-Memory SQLite**    | `auto_migrate=True`           | Uses lazy creation (works)  |
+| **CLI Scripts**         | `auto_migrate=True` (default) | Works                       |
+| **pytest (sync/async)** | `auto_migrate=True` (default) | Works via sync DDL          |
 
 #### Alternative: Manual Control
 
@@ -496,7 +496,7 @@ count = results["count"]["count"]  # ✅ CountNode returns "count"
 record = results["read"]  # ✅ ReadNode returns dict directly
 ```
 
-### 4.1 soft_delete Auto-Filters Queries  ✅ FIXED
+### 4.1 soft_delete Auto-Filters Queries ✅ FIXED
 
 **DataFlow introduced auto-filtering for soft_delete models!**
 
@@ -530,11 +530,12 @@ workflow.add_node("PatientCountNode", "count_active", {
 ```
 
 **Behavior by Node Type**:
-| Node | Default | include_deleted=True |
-|------|---------|---------------------|
-| ListNode | Excludes deleted | Includes all |
-| CountNode | Counts non-deleted | Counts all |
-| ReadNode | Returns 404 if deleted | Returns record |
+
+| Node      | Default                | include_deleted=True |
+| --------- | ---------------------- | -------------------- |
+| ListNode  | Excludes deleted       | Includes all         |
+| CountNode | Counts non-deleted     | Counts all           |
+| ReadNode  | Returns 404 if deleted | Returns record       |
 
 **Note**: This matches industry standards (Django, Rails, Laravel) where soft_delete auto-filters by default.
 
@@ -662,10 +663,9 @@ class DevModel:
 
 ### Primary Sources
 
-- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L28-L72)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ### Related Documentation
-
 
 ## Related Patterns
 

@@ -126,7 +126,7 @@ let REPO_ROOT_ACTIVE = REPO_ROOT;
 // thousands of non-actionable lines.
 //
 // R3 disclosure FIX (#263): `variants/` is NO LONGER blanket-excluded.
-// `.claude/variants/{py,rs,rb,prism}/**` are the language overlays that
+// `.claude/variants/{py,rs,prism}/**` are the language overlays that
 // COMPOSE INTO the USE-template synced surface at emit time (per
 // .claude/bin/emit.mjs::composeRule / variant-authoring.md) — they ARE
 // downstream-shipped. A real operator token in a committed variant
@@ -300,25 +300,46 @@ function isExcluded(relPath) {
   // (`<date>-<slug>.md`). By construction each embeds the target `<owner>/<repo>` slug —
   // the WHO-authorized-WHAT-against-WHICH-repo forensic payload `repo-scope-discipline.md`
   // § Affordance mandates — and the ceremony (`commands/cross-repo-authorize.md` Step 5)
-  // directs COMMITTING them for durable team audit. They are never distributed to any
-  // consumer — containment is THREE distribution fences: sync-tier-aware `no_tier_match`,
-  // edition-emit `CLIENT_TEMPLATE_REMOVE`, community-membership `EXCLUDE_WITHIN`. THIS
-  // scanner is a DETECTOR, not a fourth fence (at a destination scan it flags a receipt
-  // that ALREADY shipped past every distribution fence — it detects, it does not contain).
-  // The exclusion is SOURCE-ONLY (mirrors `ecosystem.json` above, the same org-slug-bearing
-  // never-synced class): at loom-source (REPO_ROOT_ACTIVE === REPO_ROOT) it self-excludes
-  // so a legitimately-committed receipt does not block the operator's commit (#1324); at a
-  // DESTINATION scan (`--root <consumer>`) the guard does not fire → the receipt is SCANNED,
-  // so a leaked receipt MAY fail loud WHEN its org matches a disclosure shape — best-effort
-  // detection bounded by content-shape coverage (an arbitrary client `<org>/<repo>` matching
-  // no shape would NOT flag; the receipt payload has no dedicated content shape). Matches
-  // whether the scan root is the repo (`.claude/cross-repo-authz/…`) or `.claude/` itself.
-  if (
-    (segs[0] === "cross-repo-authz" ||
-      (segs[0] === ".claude" && segs[1] === "cross-repo-authz")) &&
-    REPO_ROOT_ACTIVE === REPO_ROOT
-  )
-    return true;
+  // directs COMMITTING them for durable team audit AT LOOM ONLY (`type: coc-source`);
+  // every other repo class keeps them local, fenced by `sync-manifest.yaml::target_owned`
+  // `publish: local_only`. They are never DISTRIBUTED to any consumer — containment is
+  // THREE distribution fences: sync-tier-aware `no_tier_match`, edition-emit
+  // `CLIENT_TEMPLATE_REMOVE`, community-membership `EXCLUDE_WITHIN`. All three govern
+  // content flowing OUT OF LOOM and cover nothing written INTO another repo, which is why
+  // the fence, not this scanner, is the fix. THIS scanner is a DETECTOR, not a fourth fence
+  // (at a destination scan it flags a receipt that ALREADY shipped past every distribution
+  // fence — it detects, it does not contain), and a leaked receipt fails loud only WHEN its
+  // org matches a disclosure shape: best-effort detection bounded by content-shape coverage
+  // (an arbitrary client `<org>/<repo>` matching no shape would NOT flag; the receipt
+  // payload has no dedicated content shape). Matches whether the scan root is the repo
+  // (`.claude/cross-repo-authz/…`) or `.claude/` itself.
+  //
+  // 2026-08-03 — TRACKED-KEYED, generalizing the `*.operator.local.md` precedent
+  // below. This scanner walks the FILESYSTEM (`collectFiles`/`readdirSync`), so it
+  // equated PRESENT ON DISK with ON THE SYNCED SURFACE. Measured counter-example:
+  // kailash-coc-rs holds 4 receipts, 0 of them git-TRACKED (its operator had
+  // already gitignored them), and the scanner still reported 12 findings on them.
+  // Those findings are not disclosures — nothing untracked ships to any consumer —
+  // and an instrument that cries wolf on a closed hole gets allowlisted, which is
+  // how the NEXT real finding gets missed. So: a receipt git confirms is UNTRACKED
+  // is skipped at EVERY root, source or destination. TRACKED WINS over the name
+  // pattern, via the same fail-closed `isGitTracked` helper (git unavailable /
+  // not-a-work-tree / inconclusive ⇒ treated as tracked ⇒ SCANNED).
+  //
+  // Deliberately NOT a universal untracked-skip: an untracked-but-STAGED
+  // disclosure elsewhere would then evade the scrub. Scoped to this one class,
+  // mirroring the operator-local precedent.
+  //
+  // A TRACKED receipt keeps the prior source-only disposition: at loom-source it
+  // is skipped (committing is correct there and must not block the operator's
+  // commit, #1324); at a DESTINATION scan it is SCANNED — a committed receipt at a
+  // consumer IS the disclosure event, and it is exactly what the `target_owned`
+  // `publish: local_only` fence now prevents going forward.
+  const isCrossRepoAuthz =
+    segs[0] === "cross-repo-authz" ||
+    (segs[0] === ".claude" && segs[1] === "cross-repo-authz");
+  if (isCrossRepoAuthz && !isGitTracked(REPO_ROOT_ACTIVE, relPath)) return true;
+  if (isCrossRepoAuthz && REPO_ROOT_ACTIVE === REPO_ROOT) return true;
 
   // This scanner's OWN audit fixtures intentionally embed SYNTHETIC
   // disclosure shapes (invented `acme-*` / `Fakename-*` / `fakeuser`
@@ -520,6 +541,17 @@ const ALLOWLIST = [
   // a *different* operator's home path (`/Users/<other>/`) carries a
   // different username, fails this anchored prefix, and is still flagged
   // by the operator-home-path shape.
+  //
+  // SURFACE SCOPE (GAP D, ratified 2026-07-26): the Option-1 own-coordinate
+  // ruling covers the INSTANTIATION surface as well as the SYNC surface. A
+  // client-template edition or a fresh clone generated FROM this checkout is a
+  // publish event in the same sense a sync is (`artifact-flow.md` § "The source
+  // of instantiation MUST be clean at rest"), so the same own-coordinate
+  // reasoning applies there and needs no separate ruling. What that does NOT
+  // license: the allowance stays scoped to the maintainer's OWN dev-home
+  // prefix on both surfaces — an instantiation carrying a DIFFERENT operator's
+  // home path is flagged on the instantiation surface exactly as on the sync
+  // surface.
   /\/Users\/esperie\//,
   /\/home\/esperie\//,
   // R2 detection-completeness FIX (#263): each SDK-repo-name allowlist
@@ -550,7 +582,20 @@ const ALLOWLIST = [
   /BP-\d+\b/, // bug-pattern refs
   // framework + standard names
   /\b(DataFlow|Nexus|Kaizen|PACT|ML|Align|MCP|EATP|CARE|CO|COC|CC)\b/,
-  /\bAegis\b/i, // public PACT product
+  // ALLOWLIST-NOTE (GAP B, 2026-08-10): the product-name entry that sat here was
+  // annotated "public PACT product" and that annotation was FALSE — co-owner
+  // correction 2026-07-26: the named product is NOT public; the public one is the
+  // PACT *reference platform*. Because a positive-allowlist entry suppresses the
+  // token on EVERY scanned surface in EVERY repo shipping this scanner, the false
+  // annotation made the fence structurally blind to it — a disclosure hole, not a
+  // cosmetic error. Entry REMOVED rather than re-pointed: naming the reference
+  // platform here would require a name this change cannot verify, and inventing
+  // one to fill the slot is exactly the fabrication that produced the original
+  // defect. The frameworks entry above still covers the bare `PACT` token, so the
+  // legitimate framework reference is unaffected. Removal fails SAFE — the token
+  // now flags and a human adjudicates, rather than passing silently.
+  // Paired fixture: `clean-foundation-placeholder/.claude/rules/clean.md` line 9
+  // carried the same false assertion and is corrected in this change.
   // ALLOWLIST-NOTE (R3 #263): `your-registry` is the documentation
   // placeholder container-registry host in the rs deployment-patterns
   // skill (`image: your-registry/kailash-service:latest`) — the
@@ -1268,6 +1313,49 @@ if (args.help) {
 }
 
 const root = args.root ? path.resolve(args.root) : REPO_ROOT;
+
+// A NON-DISCRIMINATING RUN MUST NOT EXIT 0.
+//
+// `artifact-flow.md` § Intake Disclosure Scrub makes `--check --root <inbound-repo>`
+// exiting 0 the Gate-1 intake gate, and `/ecosystem-init` invariant 1 makes it the
+// pre-config-write gate. MEASURED 2026-08-10: a `--root` at a NONEXISTENT path
+// produced exit 0 with ZERO bytes of output — byte-identical to a genuinely clean
+// scan of a real root — so a mistyped, unresolved, or wrongly-relative path passed
+// both gates silently. An outcome consistent with both branches of the hypothesis
+// is not evidence (`instrument-discipline.md` MUST-1); the scan had not run.
+//
+// Both guards below exit 2, the code an unknown argument and a malformed denylist
+// already use for "did not run". Exit 2 is the ABSENCE of a result, never a clean
+// one — a caller that treats non-zero as "findings" must not collapse 1 and 2.
+if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+  console.error(
+    `scan-synced-disclosure: --root does not exist or is not a directory: ${root}`,
+  );
+  console.error(
+    `  The scan DID NOT RUN. Exit 2 is the absence of a result, not a clean result.`,
+  );
+  process.exit(2);
+}
+// The second guard keys on a STRUCTURAL fact about the root — does it carry any
+// synced surface at all — NOT on `files.length === 0` after filtering. That
+// distinction is load-bearing: `sync-preserve-local-skipped` and
+// `excluded-accepted-history` legitimately enumerate to ZERO files because the
+// exclusion rules they exist to test skip their only content, and a naive
+// post-filter zero-check reds both (measured: it did). A root with no `.claude/`
+// and no top-level synced path is a DIFFERENT thing — a wrong root, where a
+// "clean" verdict describes nothing.
+if (
+  !fs.existsSync(path.join(root, ".claude")) &&
+  !TOP_LEVEL_SYNCED.some((t) => fs.existsSync(path.join(root, t)))
+) {
+  console.error(
+    `scan-synced-disclosure: no synced surface under ${root} — no .claude/ and no top-level synced path`,
+  );
+  console.error(
+    `  The scan DID NOT RUN against a repo checkout. Exit 2 is the absence of a result, not a clean result.`,
+  );
+  process.exit(2);
+}
 const files = collectFiles(root); // sets REPO_ROOT_ACTIVE
 // Build the loom-only customer-identity shape from the tenant denylist at
 // the SCANNED root (inert when absent; throws loud on a malformed file so
@@ -1301,6 +1389,10 @@ if (args.mode === "check") {
     }
     process.exit(1);
   }
+  // The clean receipt is DISCRIMINATING: it names how many files were examined,
+  // so a caller reading a 0 exit can tell a real clean scan from a scan of
+  // nothing. Before this line, check-mode's clean path printed nothing at all.
+  console.log(`Scanned: ${files.length} files on the synced surface — 0 findings`);
   process.exit(0);
 }
 

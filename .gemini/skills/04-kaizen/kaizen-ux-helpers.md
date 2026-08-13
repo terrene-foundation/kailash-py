@@ -399,4 +399,4 @@ self.write_to_memory(content="data", tags=["test"])  # No-op, no error
 ## References
 
 - **Source**: `kaizen/core/base_agent.py`
-- **Specialist**: `.gemini/agents/frameworks/kaizen-specialist.md` lines 249-298
+- **Specialist**: `.gemini/agents/kaizen-specialist.md` lines 249-298

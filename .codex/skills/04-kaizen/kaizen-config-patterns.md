@@ -647,4 +647,4 @@ def test_config_auto_extraction():
 
 - **Source**: `kaizen/core/config.py`
 - **Examples**: All agents in the Kaizen examples/`
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 249-267
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 249-267

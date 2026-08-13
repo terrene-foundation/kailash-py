@@ -647,4 +647,4 @@ def test_config_auto_extraction():
 
 - **Source**: `kaizen/core/config.py`
 - **Examples**: All agents in the Kaizen examples/`
-- **Specialist**: `.gemini/agents/frameworks/kaizen-specialist.md` lines 249-267
+- **Specialist**: `.gemini/agents/kaizen-specialist.md` lines 249-267

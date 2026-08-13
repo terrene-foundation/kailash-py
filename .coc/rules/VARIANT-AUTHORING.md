@@ -5,7 +5,7 @@ paths: ["**/.claude/variants/**"]
 
 # Variant Authoring Meta-Rule
 
-Loom's variant system has two axes: **language** (`py`/`rs`/`rb`/`prism`) and **CLI** (`cc`/`codex`/`gemini`). Variant files overlay global artifacts at sync time. This rule defines how overlays MUST be authored so the composed output stays correct across all target matrix cells.
+Loom's variant system has two axes: **language** (`py`/`rs`/`prism`) and **CLI** (`cc`/`codex`/`gemini`). Variant files overlay global artifacts at sync time. This rule defines how overlays MUST be authored so the composed output stays correct across all target matrix cells.
 
 Authoring a variant wrong doesn't fail at author time — it fails at emit time across every downstream USE template. One bad overlay desynchronises N × M targets.
 
@@ -90,7 +90,7 @@ Variant overlay files live under one of three tree shapes. Pick the narrowest tr
 
 | Tree                           | Axis           | When to use                                                                                                                        |
 | ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `variants/<lang>/rules/`       | language-only  | Rule body differs by language (py vs rs vs rb). Examples: Python/Rust-specific Why lines, FFI semantics, runtime lifecycle quirks. |
+| `variants/<lang>/rules/`       | language-only  | Rule body differs by language (py vs rs). Examples: Python/Rust-specific Why lines, FFI semantics, runtime lifecycle quirks. |
 | `variants/<cli>/rules/`        | CLI-only       | Rule body is language-invariant but the CLI native primitive differs (Agent vs codex_agent vs @specialist). Examples slot only.    |
 | `variants/<lang>-<cli>/rules/` | ternary (both) | Divergence is both language AND CLI (e.g., rs-codex worktree-isolation that couples Rust paths with Codex delegation syntax).      |
 

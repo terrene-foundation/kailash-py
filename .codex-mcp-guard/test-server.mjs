@@ -41,6 +41,74 @@ const COC_ROOT = resolveCocRoot(__dirname);
 const FIXTURE_DIR = path.join(COC_ROOT, "audit-fixtures", "codex-mcp-guard");
 
 const require = createRequire(import.meta.url);
+
+// ────────────────────────────────────────────────────────────────
+// Trust-posture ISOLATION — pin before server.js is required
+// ────────────────────────────────────────────────────────────────
+// The suite calls evaluatePolicies({… cwd: process.cwd()}), and posture-gate.js
+// resolves `readPosture(data.cwd)` from that cwd — i.e. from the LIVE, gitignored
+// `.claude/learning/posture.json` of whatever clone the suite happens to run in.
+// That made the suite's verdict a function of AMBIENT OPERATOR STATE rather than
+// of the code under test: measured on an L3_SHARED_PLANNING clone, posture-gate's
+// mutation-verb fence hard-DENIES `git push` / `git commit`, so Fixtures 3, 3b and
+// 8a failed — while the SAME code is green on an L4/L5 clone. A suite whose result
+// flips with the operator's posture cannot be cited as evidence about server.js
+// (`instrument-discipline.md` MUST-1: a check that cannot discriminate is not
+// evidence), and it cannot be cited AT ALL below L4.
+//
+// The fix mirrors the signing-guard's existing test override
+// (COC_SIGNING_MUTATION_GUARD_FORCE_DEGRADED, used at Fixtures 6b/8): pin the ONE
+// ambient variable rather than read it. CLAUDE_TRUST_STATE_DIR is the documented
+// in-use trust-state test seam (`hooks/lib/state-resolver.js::resolveStateDirDetailed`
+// honours it as `env-override`; ~20 sibling suites under `.claude/test-harness/tests/`
+// already drive it). It redirects ONLY the trust-state read — `cwd` stays the real
+// repo, so validate-bash-command, signing-mutation-guard identity resolution,
+// genesis-anchor-guard, operator-gate and worktree-forest-guard are untouched.
+//
+// The pin is L5_DELEGATED, which is what the fixtures were authored against —
+// Fixture 6a's own comment reads "Clean repo (L5 + signing key present) → allow".
+// The assumption was always there; it was simply never enforced.
+//
+// This writes ONLY to a fresh mkdtemp sandbox. It NEVER touches the live
+// `.claude/learning/posture.json` (`multi-operator-coordination.md` § MUST NOT —
+// the canonical helpers are that file's only legitimate writers).
+//
+// The L3 composed outcome is NOT lost by pinning: Fixture 3c below re-pins to
+// L3_SHARED_PLANNING and asserts the deny, so both halves are locked.
+const POSTURE_SANDBOX = fs.mkdtempSync(
+  path.join(require("node:os").tmpdir(), "codex-guard-posture-"),
+);
+const POSTURE_STATE_DIR = path.join(POSTURE_SANDBOX, ".claude", "learning");
+fs.mkdirSync(POSTURE_STATE_DIR, { recursive: true });
+
+/** Write `posture` into the sandbox state dir and point the hooks at it. */
+function pinPosture(posture) {
+  fs.writeFileSync(
+    path.join(POSTURE_STATE_DIR, "posture.json"),
+    JSON.stringify({
+      posture,
+      since: "2026-01-01T00:00:00.000Z",
+      transition_history: [],
+    }) + "\n",
+  );
+  process.env.CLAUDE_TRUST_STATE_DIR = POSTURE_STATE_DIR;
+}
+
+/** Run `fn` with posture pinned to `posture`, then restore the suite default. */
+function withPosture(posture, fn) {
+  pinPosture(posture);
+  try {
+    return fn();
+  } finally {
+    pinPosture("L5_DELEGATED");
+  }
+}
+
+pinPosture("L5_DELEGATED");
+process.on("exit", () => {
+  fs.rmSync(POSTURE_SANDBOX, { recursive: true, force: true });
+});
+
 const server = require("./server.js");
 
 const failures = [];
@@ -197,6 +265,52 @@ function loadFixture(name) {
   } else {
     passes.push(
       `force-push parity: MCP allow-response surfaces halt-and-report validation (CC continue:true + surfaced-message parity)`,
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Fixture 3c — the COMPOSED L3 outcome, pinned (not ambient)
+// ────────────────────────────────────────────────────────────────
+// Fixtures 3/3b assert validate-bash-command's forward+warn contract, and pin
+// L5 so that contract is what they actually measure. That pin would otherwise
+// DELETE coverage of the composition: at L3_SHARED_PLANNING, posture-gate's
+// mutation-verb fence DENIES `git push`, and the guard MUST deny with it —
+// which is exact parity with CC, where the same posture-gate hook denies the
+// same command. So the two are not in tension and neither fixture is "wrong":
+// forward+warn is validate-bash-command's verdict, deny is the COMPOSED verdict,
+// and posture is what selects between them. This case locks the L3 half so a
+// regression that silently forwarded a fenced mutation verb at L3 reds here.
+{
+  const fx = loadFixture("flag-shell-force-push-main.json");
+  const r = withPosture("L3_SHARED_PLANNING", () =>
+    server.evaluatePolicies({
+      tool: fx.tool,
+      input: fx.tool_input,
+      cwd: process.cwd(),
+    }),
+  );
+  const denier = (r.decisions || []).find((d) => d.verdict === "deny");
+  const surfacer = (r.decisions || []).find(
+    (d) => d.source_file === "validate-bash-command.js" && d.verdict === "surface",
+  );
+  if (r.allow !== false) {
+    failures.push(
+      `L3 force-push composition: expected DENY at L3_SHARED_PLANNING, got allow=${r.allow}`,
+    );
+  } else if (denier?.source_file !== "posture-gate.js") {
+    failures.push(
+      `L3 force-push composition: expected the deny from posture-gate.js, got ${denier?.source_file || "(none)"}`,
+    );
+  } else if (!surfacer) {
+    // The posture deny MUST NOT mask validate-bash-command's own verdict — the
+    // per-hook decision is what makes the composition auditable.
+    failures.push(
+      "L3 force-push composition: validate-bash-command.js MUST still record its 'surface' decision under the posture deny, did not",
+    );
+  } else {
+    passes.push(
+      "L3 force-push composition: posture-gate DENIES at L3 (CC parity) while validate-bash-command still records 'surface' — composition locked, posture pinned not ambient",
     );
   }
 }

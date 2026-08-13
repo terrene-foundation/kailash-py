@@ -38,4 +38,4 @@ print(result['response'])  # Key is 'response', NOT 'answer'
 - **GPT-4V**: API, 1-2s, 95%+ accuracy, ~$0.01/img
 
 ## References
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 167-214
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 167-214

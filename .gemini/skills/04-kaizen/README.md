@@ -134,7 +134,7 @@ Production patterns, enterprise features, tool calling, observability, memory sy
 
 
 ### Quick References
-- **Specialist Agent**: `.gemini/agents/frameworks/kaizen-specialist.md` (comprehensive reference table)
+- **Specialist Agent**: `.gemini/agents/kaizen-specialist.md` (comprehensive reference table)
 - **Examples**: the Kaizen examples (35+ working examples)
 
 ### Key Content Sources

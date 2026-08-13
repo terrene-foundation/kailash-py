@@ -222,7 +222,7 @@ Use `dataflow-specialist` subagent when:
 ### Related Documentation
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.gemini/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
+- **DataFlow Specialist**: [`.gemini/agents/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Examples
 

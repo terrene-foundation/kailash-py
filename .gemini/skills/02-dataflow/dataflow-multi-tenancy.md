@@ -87,7 +87,8 @@ async with TenantContextSwitch(db, tenant_id="tenant_abc"):
 ### Primary Sources
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.gemini/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L296-L303)
+
+- **DataFlow Specialist**: [`.gemini/agents/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Quick Tips
 

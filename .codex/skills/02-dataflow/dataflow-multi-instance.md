@@ -92,10 +92,9 @@ class Model1:
 
 ### Primary Sources
 
-
 ### Specialist Reference
 
-- **DataFlow Specialist**: [`.codex/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L86-L116)
+- **DataFlow Specialist**: [`.codex/prompts/specialist-dataflow.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Quick Tips
 

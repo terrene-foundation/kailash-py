@@ -128,7 +128,7 @@ Complete set of 21 Nexus skills covering all aspects from quickstart to advanced
 
 All skills created from verified sources:
 
-- .gemini/agents/frameworks/nexus-specialist.md
+- .gemini/agents/nexus-specialist.md
 
 ## Skill Dependencies
 

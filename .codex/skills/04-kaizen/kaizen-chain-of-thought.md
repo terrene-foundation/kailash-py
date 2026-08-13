@@ -22,5 +22,5 @@ class CoTAgent(BaseAgent):
 ```
 
 ## References
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 215-227
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 215-227
 - **Examples**: `examples/1-single-agent/chain-of-thought/`

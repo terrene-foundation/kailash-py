@@ -17,6 +17,7 @@ Fix the most common Kailash SDK error - forgetting to call `.build()` before exe
 ## The Error
 
 ### Common Error Messages
+
 ```
 AttributeError: 'WorkflowBuilder' object has no attribute 'execute'
 TypeError: execute() got an unexpected keyword argument 'runtime'
@@ -24,11 +25,13 @@ TypeError: execute() takes 1 positional argument but 2 were given
 ```
 
 ### Root Cause
+
 The workflow is not a built artifact yet - it's still in builder mode. Workflows must be built before execution.
 
 ## Quick Fix
 
 ### ❌ **WRONG** - Missing .build()
+
 ```python
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
@@ -38,6 +41,7 @@ results, run_id = runtime.execute(workflow)  # ❌ ERROR!
 ```
 
 ### ✅ **CORRECT** - Always Call .build()
+
 ```python
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
@@ -49,6 +53,7 @@ results, run_id = runtime.execute(workflow.build())  # ✅ CORRECT
 ## Common Variations of This Error
 
 ### Variation 1: Backwards Execution
+
 ```python
 # ❌ WRONG - workflow doesn't have execute() method
 workflow.execute(runtime)  # ERROR!
@@ -58,6 +63,7 @@ runtime.execute(workflow.build())
 ```
 
 ### Variation 2: Extra Runtime Parameter
+
 ```python
 # ❌ WRONG - passing runtime twice
 runtime.execute(workflow.build(), runtime)  # ERROR!
@@ -67,6 +73,7 @@ runtime.execute(workflow.build())
 ```
 
 ### Variation 3: Missing .build() with Parameters
+
 ```python
 # ❌ WRONG - parameters without .build()
 runtime.execute(workflow, parameters={"node": {"param": "value"}})  # ERROR!
@@ -76,6 +83,7 @@ runtime.execute(workflow.build(), parameters={"node": {"param": "value"}})
 ```
 
 ### Variation 4: Storing Workflow Without .build()
+
 ```python
 # ❌ WRONG - storing unbuild workflow
 my_workflow = workflow  # Still a WorkflowBuilder instance
@@ -90,15 +98,16 @@ runtime.execute(my_workflow)
 
 ### WorkflowBuilder vs Workflow
 
-| WorkflowBuilder | Workflow (after .build()) |
-|-----------------|---------------------------|
-| Construction phase | Ready for execution |
-| Mutable (can add nodes) | Immutable (finalized) |
-| No .execute() method | Executable by runtime |
-| Validation not yet run | Fully validated |
-| Graph not finalized | DAG compiled |
+| WorkflowBuilder         | Workflow (after .build()) |
+| ----------------------- | ------------------------- |
+| Construction phase      | Ready for execution       |
+| Mutable (can add nodes) | Immutable (finalized)     |
+| No .execute() method    | Executable by runtime     |
+| Validation not yet run  | Fully validated           |
+| Graph not finalized     | DAG compiled              |
 
 ### What .build() Does
+
 1. **Validates** the workflow structure
 2. **Compiles** the directed acyclic graph (DAG)
 3. **Checks** for cycles (non-cyclic workflows)
@@ -108,6 +117,7 @@ runtime.execute(my_workflow)
 ## Complete Example
 
 ### The Wrong Way (All Common Mistakes)
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -126,6 +136,7 @@ results = workflow.run()  # No .run() method
 ```
 
 ### The Right Way
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -152,6 +163,7 @@ results, run_id = runtime.execute(workflow.build())
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Error persists after applying this fix
 - Complex workflow with multiple execution patterns
 - Need to debug advanced parameter passing
@@ -160,8 +172,9 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Pattern Expert**: [`.claude/agents/implementation/pattern-expert.md` (lines 257-264)](../../agents/implementation/pattern-expert.md#L257-L264)
-- **Essential Pattern**: [`CLAUDE.md` (lines 139-141)](../../../CLAUDE.md#L139-L141)
+
+- **Pattern Expert**: [`.claude/agents/implementation/pattern-expert.md`](../../agents/implementation/pattern-expert.md)
+- **Essential Pattern**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ### Related Documentation
 

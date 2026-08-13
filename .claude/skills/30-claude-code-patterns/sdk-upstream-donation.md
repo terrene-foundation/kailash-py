@@ -85,7 +85,7 @@ Ship attribution as a blocker PR BEFORE any adapter PR lands. A PR body that cla
 - 3 parallel LOW-risk adapters across 3 different sub-packages = 1 session (fan-out)
 - HIGH-risk PRs (governance absorption, cross-SDK fingerprint reconciliation) stay sequential — they pin invariants that the parallel adapters rely on
 
-Apply `rules/agents.md` § "Parallel-Worktree Package Ownership Coordination": when two parallel agents touch the same sub-package, the orchestrator designates ONE version-owner agent and tells the sibling explicitly not to touch `pyproject.toml` / `Cargo.toml` / `CHANGELOG.md`.
+Apply `rules/agents.md` § "MUST: Worktree Orchestration" (Rule 5 in `skills/30-claude-code-patterns/worktree-orchestration.md`): when two parallel agents touch the same sub-package, the orchestrator designates ONE version-owner agent and tells the sibling explicitly not to touch `pyproject.toml` / `Cargo.toml` / `CHANGELOG.md`.
 
 ## Anti-Patterns
 

@@ -24,7 +24,7 @@ See `.claude/guides/rule-extracts/sync-completeness.md` for full incident detail
 
 ### 1. Every `/sync-to-*` Invocation MUST Enumerate Templates From The Manifest
 
-Every `/sync-to-use` (per-language: `/sync-to-use py`, `/sync-to-use rs`, `/sync-to-use rb`) AND every `/sync-to-build` invocation MUST start by enumerating `sync_targets[<lang>].templates[].repo` from `.claude/sync-manifest.yaml` and binding the resulting list to a variable for use in subsequent steps. Hand-typed lists, "the usual templates", "all 4 templates", or any count that is not produced by parsing the manifest at invocation time are BLOCKED.
+Every `/sync-to-use` (per-language: `/sync-to-use py`, `/sync-to-use rs`, `/sync-to-use base`) AND every `/sync-to-build` invocation MUST start by enumerating `sync_targets[<lang>].templates[].repo` from `.claude/sync-manifest.yaml` and binding the resulting list to a variable for use in subsequent steps. Hand-typed lists, "the usual templates", "all 4 templates", or any count that is not produced by parsing the manifest at invocation time are BLOCKED.
 
 ```bash
 # DO — parse manifest, bind to variable, iterate
@@ -65,9 +65,9 @@ After distribution, `/sync-to-use` MUST emit a verification table to the user wi
 | template                | pre  | post | loom_sha | synced_at            | hr% (codex/gemini) | ✓ |
 | ----------------------- | ---- | ---- | -------- | -------------------- | ------------------ | - |
 | kailash-coc-claude-py   | 2.19 | 2.20 | b4d2933  | 2026-05-06T14:22:00Z | 16.93 / 16.87      | ✓ |
-| kailash-coc-claude-rb   | 2.18 | 2.18 | b4d2933  | (skipped)            | n/a                | ✗ |
+| coc-base                | 2.18 | 2.18 | b4d2933  | (skipped)            | n/a                | ✗ |
 | kailash-coc-rs          | 2.21 | 2.21 | def4567  | (emit-blocked)       | 9.81 / 9.85        | ✗ |
-ERROR: ✗ rows halt sync — version-stale (rb) OR headroom-floor breach (rs, v6.2 Shard 2 — see (loom-internal reference)).
+ERROR: ✗ rows halt sync — version-stale (base) OR headroom-floor breach (rs, v6.2 Shard 2 — see (loom-internal reference)).
 
 # DO NOT — single-line completion claim, OR table missing landed/hr% column
 ✓ /sync-to-use py complete (kailash-coc-claude-py at 2.20.0)
@@ -176,7 +176,7 @@ node .claude/bin/sync-tier-aware.mjs --build py --verify   # swallowed rows = OU
 #   sync-tier-aware.mjs throws `Cannot find module './lib/loom-links.mjs'` on import
 ```
 
-**Why:** loom#676 — a consumer carrying the conventional Python build-artifact block (`lib/`) silently untracked the entire `.claude/bin/lib/` directory, including `loom-links.mjs` (the canonical NAME→location resolver per `cross-repo.md` MUST-1) + `slot-parser.mjs` + `strip-build-internal.mjs` that the tracked `sync-tier-aware.mjs` imports. It "worked" only because the files were present from the local sync; a fresh clone throws on import. The negation closes the known instance; the post-sync `git check-ignore` gate closes the CLASS for any future `.claude/**` subtree whose basename collides with a root ignore.
+**Why:** loom#676 — a consumer carrying the conventional Python build-artifact block (`lib/`) silently untracked the entire `.claude/bin/lib/` directory, including `loom-links.mjs` (the canonical NAME→location resolver — `repo-scope-discipline.md` § MUST NOT; the module itself is loom/BUILD-side) + `slot-parser.mjs` + `strip-build-internal.mjs` that the tracked `sync-tier-aware.mjs` imports. It "worked" only because the files were present from the local sync; a fresh clone throws on import. The negation closes the known instance; the post-sync `git check-ignore` gate closes the CLASS for any future `.claude/**` subtree whose basename collides with a root ignore.
 
 ### 7. Every Enumerated Target's Gate-2 Distribution MUST Capture The Exact Per-File Manifest Receipt
 
@@ -286,7 +286,7 @@ MUST Rules 1–4 above carry three independent Trust Posture Wiring profiles, pa
 - **Grace period:** 7 days from rule landing (2026-05-06 → 2026-05-13, expired).
 - **Regression-within-grace:** any new `/sync-to-*` invocation OR any `sync-manifest.yaml` edit that adds a template without canonical-schema VERSION field triggers emergency downgrade L5 → L4 per `trust-posture.md` MUST Rule 4.
 - **Receipt:** SessionStart requires `[ack: sync-completeness]` if prior journal references `/sync-to-*` AND `posture.json::pending_verification` includes this rule_id.
-- **Detection:** `cc-architect` mechanical sweep at `/codify`: (1) `grep -rn 'yq\|templates\[\]\.repo' .claude/commands/sync-to-*.md` — every `/sync-to-*` command body MUST enumerate from manifest; (2) AST sweep on `sync.md` / `sync-to-build.md` — every distribution loop MUST be preceded by manifest-enumeration.
+- **Detection:** `cc-architect` mechanical sweep at `/codify`: (1) `grep -rn 'yq\|templates\[\]\.repo' .claude/commands/sync-to-*.md` — every `/sync-to-*` command body MUST enumerate from manifest; (2) AST sweep on `sync.md` / `sync-to-build.md` — every distribution loop MUST be preceded by manifest-enumeration. Probes `.claude/test-harness/probes/sync-completeness.probes.json` — NOT YET AUTHORED, declared in `phase2-deferrals.json::probe_authorship_deferrals`.
 
 ### Rule 3 — VERSION schema mismatch (structural)
 

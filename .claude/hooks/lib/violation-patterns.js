@@ -245,10 +245,34 @@ function hasCrossRepoAuthorizationReceipt(targetSlug, cwd, requiredMode) {
 // stricter tier), so a novel `gh` verb never silently gets the lighter read
 // ceremony — an unrecognized→write default is the conservative disposition,
 // mirroring the enforcement-surface-parity "unrecognized ranks tightest".
+// `watch` and `download` are READ subcommands (`gh run watch`, `gh run
+// download`, `gh release download`). Their absence here was the second half of
+// loom#1665: with no read verb to match, they fell through to the fail-closed
+// WRITE default, so a read receipt could not authorize them either.
 const GH_READ_VERBS =
-  /\bgh\s+(?:issue|pr|repo|run|release|workflow|cache|label|gist|search|api)?\s*(?:view|list|status|diff|checks|ls)\b|\bgh\s+search\b|\bgh\s+repo\s+view\b/;
+  /\bgh\s+(?:issue|pr|repo|run|release|workflow|cache|label|gist|search|api)?\s*(?:view|list|status|diff|checks|ls|watch|download)\b|\bgh\s+search\b|\bgh\s+repo\s+view\b/;
+// `gh workflow run` is ANCHORED to its prefix as its own alternative, and `run`
+// is deliberately NOT in the bare verb list below (loom#1665).
+//
+// The prefix group is OPTIONAL, so a bare verb also matches with an EMPTY
+// prefix. While `run` sat in that list, `gh run list` matched as
+// empty-prefix + verb `run` — the match was the literal string "gh run" — and
+// because GH_WRITE_VERBS is tested BEFORE GH_READ_VERBS, the read pattern
+// (which correctly matches "gh run list") was never reached. Every `gh run *`
+// command classified WRITE, so the read-tier ceremony could not authorize a CI
+// audit at all.
+//
+// The test ORDER is deliberate and unchanged: GH_WRITE_VERBS keeps first
+// refusal on genuine ambiguity, because fail-closed is the correct default for
+// an authorization tier. The bug was never the ordering — it was a verb that
+// did not belong in an optional-prefix alternation.
+//
+// `gh run cancel|rerun|delete` remain WRITE via the fail-closed default at the
+// end of classifyCrossRepoIntent (they match no read verb), which is the right
+// answer by the right mechanism; fixtures pin all three so a later edit to the
+// read verbs cannot silently promote them.
 const GH_WRITE_VERBS =
-  /\bgh\s+(?:issue|pr|repo|release|secret|workflow|label|gist|api)?\s*(?:create|edit|close|comment|reopen|delete|transfer|pin|lock|merge|review|ready|set|run|upload|fork|rename|sync|clone)\b/;
+  /\bgh\s+workflow\s+run\b|\bgh\s+(?:issue|pr|repo|release|secret|workflow|label|gist|api)?\s*(?:create|edit|close|comment|reopen|delete|transfer|pin|lock|merge|review|ready|set|upload|fork|rename|sync|clone)\b/;
 // `gh api` with an explicit mutating method or a data field is a WRITE.
 // Matches all method-flag forms — `-X POST`, `-XPOST`, `--method POST`,
 // `--method=POST` — via `(?:-X|--method)[\s=]*`, AND a body field
@@ -1243,6 +1267,25 @@ const STATE_INTERP_WRITE_SOURCES = [
 const STATE_INTERP_WRITE_RX = new RegExp(
   STATE_INTERP_WRITE_SOURCES.join("|"),
 );
+// Global twin of the above, used ONLY to COUNT how many write/mutation verbs a
+// body contains. The target resolver (`resolveInterpreterWriteTargets`) can only
+// resolve the open/write family — it has no grammar for `os.remove`,
+// `os.rename`, `shutil.move`, `File.delete`, `truncate`, … — so without a count
+// check a single benign `open()` was enough to declare "all targets resolved,
+// all benign" while an UNENUMERATED delete/rename of a protected path rode along
+// in the same body (loom#1534, MEASURED). Counting the FULL verb set and
+// requiring `verbs <= targets` is what makes an unenumerated verb fail closed.
+// `matchAll` clones the regex, so the shared `lastIndex` is never observed.
+const STATE_INTERP_WRITE_RX_G = new RegExp(
+  STATE_INTERP_WRITE_SOURCES.join("|"),
+  "g",
+);
+function countInterpreterWriteVerbs(text) {
+  if (!text) return 0;
+  let n = 0;
+  for (const _m of text.matchAll(STATE_INTERP_WRITE_RX_G)) n++;
+  return n;
+}
 
 // STATE_INTERP_INPLACE_RX — the perl/ruby `-i` IN-PLACE EDIT flag (#1337).
 // This is the one write vector that lives in the interpreter's ARGV rather than
@@ -1308,6 +1351,197 @@ function hasInterpreterWriteSignal(text) {
   }
   const folded = foldConcatenatedLiterals(text);
   return folded !== text && STATE_INTERP_WRITE_RX.test(folded);
+}
+
+// ── Write-TARGET resolution (loom#1534) ─────────────────────────────────────
+// The WIDE Layer-3 branch flags on `interpreter-led && write-signal-anywhere`,
+// with the protected-path test applied to the SAME whole-command scope. The two
+// are never required to be RELATED, so a body that WRITES an ordinary file while
+// merely MENTIONING a protected path in prose is read as a state mutation.
+//
+// MEASURED false positive (2026-08-02, twice in one session, both `severity:
+// block`): a `python3 - <<PY` heredoc whose write target was a `.md` skill file
+// and whose body quoted protected path names inside the prose it was inserting.
+// The upstream doc-carrier mask does not reach it — that mask recognizes
+// `gh --body` / `git commit -m` / `echo` / `printf`, and an interpreter heredoc
+// writing a markdown file is none of those.
+//
+// This resolver answers the narrower question the branch should have asked:
+// WHICH path is being written? It reads the first argument of each write call,
+// resolving a bare identifier through simple `NAME = "literal"` bindings in the
+// same body.
+//
+// FAIL-CLOSED, BUT ONLY BECAUSE OF THE VERB-COUNT GATE — not "by construction".
+// It returns benign ONLY when (a) it resolved at least one target, (b) every
+// resolved target is a non-protected path, AND (c) the number of mutation verbs
+// in the body does not EXCEED the number of targets resolved. Any unresolved
+// target (a computed path, an f-string, a join, a variable bound to anything but
+// a plain literal) sets `unresolved` and the caller keeps the existing flag.
+//
+// Clause (c) is load-bearing and was ABSENT in the first cut, where this comment
+// claimed the resolver "cannot admit an obfuscated write". It could, and did:
+// the argument-capturing grammar below (`WRITE_CALL_ARG_RX`) enumerates only the
+// open/write family, while `hasInterpreterWriteSignal` — the predicate whose
+// finding this suppresses — also fires on delete / rename / move / truncate /
+// chmod / shell-out / dynamic dispatch. So ONE benign `open()` resolved one
+// benign target, `unresolved` stayed false, and an `os.remove(<ledger>)` in the
+// same body was suppressed along with it (MEASURED 2026-08-02, loom#1534).
+//
+// The real bound, stated exactly: this suppressor is sound for the verbs
+// `WRITE_CALL_ARG_RX` + `RECEIVER_WRITE_TARGET_RX` can resolve. For every OTHER
+// verb in `STATE_INTERP_WRITE_SOURCES` it does not analyze the target at all —
+// it only COUNTS, and any surplus count forces `unresolved`. Adding a verb to
+// `STATE_INTERP_WRITE_SOURCES` is therefore always safe (it can only over-block);
+// adding one to `WRITE_CALL_ARG_RX` without a correct first-arg-is-the-path
+// grammar is NOT (see the `write_text` note below).
+// FIRST-ARG-IS-THE-PATH writers only. `write_text` / `write_bytes` are
+// deliberately ABSENT: they are RECEIVER-style (`Path(<path>).write_text(<data>)`)
+// so their first argument is the CONTENT. Capturing it resolves a "target" of
+// `{}` and would clear a REAL state write as benign. That exact mistake regressed
+// the committed `flag-heredoc-write-text-body` fixture while this was being
+// written — the fixture caught it, which is precisely why it exists.
+const WRITE_CALL_ARG_RX =
+  /(?:io\.open|open|writeFileSync|writeFile|appendFileSync|createWriteStream|File\.write|File\.open|IO\.write)\s*\(\s*([^,)]+)/g;
+// Receiver-style: the path is the `Path(...)` receiver, not the first argument.
+const RECEIVER_WRITE_TARGET_RX =
+  /(?:pathlib\.)?Path\s*\(\s*(['"])((?:\\.|(?!\1)[^\\])*)\1\s*\)\s*\.\s*write_(?:text|bytes)\s*\(/g;
+// Every receiver-style write, resolvable or not — the count difference is what
+// makes an unresolvable receiver (a variable, a join, an f-string) fail closed.
+const RECEIVER_WRITE_ANY_RX = /\.\s*write_(?:text|bytes)\s*\(/g;
+const STRING_BINDING_RX =
+  /(?:^|[;\n{(\s])([A-Za-z_$][\w$]*)\s*=\s*(['"])((?:\\.|(?!\2)[^\\])*)\2/g;
+
+function resolveInterpreterWriteTargets(text) {
+  const out = { targets: [], unresolved: false };
+  if (!text) return out;
+  // A name bound MORE THAN ONCE is UNRESOLVABLE, not "the last one wins". Taking
+  // the last binding was a MEASURED bypass: `p="<state>"; write(p); p="/tmp/x"`
+  // resolved to the benign trailing value while the runtime write used the state
+  // path. Static order is not execution order, so any rebinding poisons the name.
+  const bindings = new Map();
+  const rebound = new Set();
+  for (const m of text.matchAll(STRING_BINDING_RX)) {
+    if (bindings.has(m[1])) rebound.add(m[1]);
+    bindings.set(m[1], m[3]);
+  }
+  for (const n of rebound) bindings.delete(n);
+  let sawCall = false;
+  for (const m of text.matchAll(WRITE_CALL_ARG_RX)) {
+    sawCall = true;
+    const arg = m[1].trim();
+    const lit = arg.match(/^(['"])((?:\\.|(?!\1)[^\\])*)\1$/);
+    if (lit) {
+      out.targets.push(lit[2]);
+      continue;
+    }
+    if (/^[A-Za-z_$][\w$]*$/.test(arg) && bindings.has(arg)) {
+      out.targets.push(bindings.get(arg));
+      continue;
+    }
+    out.unresolved = true;
+  }
+  // Receiver-style writers, handled separately because their PATH is the
+  // receiver. Any receiver-style write we cannot resolve to a literal path is
+  // unresolved — never silently benign.
+  const recvResolved = [...text.matchAll(RECEIVER_WRITE_TARGET_RX)];
+  const recvAll = [...text.matchAll(RECEIVER_WRITE_ANY_RX)];
+  for (const m of recvResolved) out.targets.push(m[2]);
+  if (recvAll.length > recvResolved.length) out.unresolved = true;
+  if (recvAll.length > 0) sawCall = true;
+  if (!sawCall) out.unresolved = true;
+  // ── VERB-vs-TARGET COVERAGE (loom#1534 fail-open) ────────────────────────
+  // Same count-difference shape as the receiver-style guard immediately above,
+  // applied to the NON-receiver verbs it never covered. The two regexes above
+  // enumerate only the open/write family; `STATE_INTERP_WRITE_RX` additionally
+  // fires on delete / rename / move / truncate / chmod / shell-out / dynamic
+  // dispatch. A body carrying MORE mutation verbs than we resolved targets for
+  // has at least one mutation whose target we never inspected — so it is
+  // unresolved, not benign.
+  //
+  // MEASURED before this gate: `python3 - <<PY` with one benign
+  // `io.open("x.md","w")` plus `os.remove("<ledger>")` was ALLOWED (baseline
+  // FLAGged it); removing the benign decoy restored the flag, so the decoy was
+  // the mechanism. Same for `os.rename` and `shutil.move`.
+  //
+  // Counted on the concat-FOLDED text too, and maxed: `hasInterpreterWriteSignal`
+  // itself flags on the folded spelling, so a verb that only exists post-folding
+  // (`fs['write'+'FileSync']` moved into a variable) must not read as zero here.
+  const folded = foldConcatenatedLiterals(text);
+  const verbCount = Math.max(
+    countInterpreterWriteVerbs(text),
+    folded === text ? 0 : countInterpreterWriteVerbs(folded),
+  );
+  if (verbCount > out.targets.length) out.unresolved = true;
+  // The ARGV-side in-place-edit flag (`perl -i -pe …`) is a write with NO call
+  // and NO body token, so it contributes ZERO to `verbCount` and no target at
+  // all. It can never be shown benign by target resolution — fail closed.
+  if (STATE_INTERP_INPLACE_RX.test(text)) out.unresolved = true;
+  return out;
+}
+
+// True only when every write target in the body RESOLVED and none is protected.
+// Used to suppress the WIDE-branch finding; never used to CREATE one.
+function interpreterWritesOnlyBenignTargets(text, pathRx) {
+  const { targets, unresolved } = resolveInterpreterWriteTargets(text);
+  if (unresolved || targets.length === 0) return false;
+  return targets.every((t) => !pathRx.test(t));
+}
+
+// ── Heredoc body: DATA or CODE? (loom#1534, second half) ────────────────────
+// `detectHeredocWriteRunBundle` already encodes the right discriminator for this
+// class — a heredoc body is dangerous when it is WRITTEN **and then EXECUTED**.
+// The WIDE Layer-3 branch never asks, so authoring a FIXTURE whose CONTENT is an
+// attack sample flags on the sample's own text. The corpus anticipated exactly
+// this: the bundle detector's redesign note records that a lexical predecessor
+// "false-blocked writing a doc that merely QUOTED writeFileSync('.claude/…') —
+// loom authors exactly such fixtures". This applies that discriminator here.
+//
+// A heredoc whose body is piped to an interpreter (`python3 - <<PY`) has NO
+// redirect target, so it is never inert — it is code, and still flags.
+//
+// FAIL-CLOSED: inert only when EVERY heredoc has an identifiable, literal,
+// non-protected target that no later interpreter-led segment executes. A
+// variable/expansion target, a protected target, or any execution of the target
+// returns false and the caller flags exactly as before.
+const HEREDOC_REDIRECT_TARGET_RX =
+  /(?:^|[;&|]\s*)(?:cat|tee)\b(?:\s+-a)?[^\n<]*?(?:>>?\s*|\s+)([^\s<>|;&]+)[^\n<]*<<-?\s*['"]?[A-Za-z_]\w*/gm;
+
+// Any token that could EXECUTE something. Deliberately over-broad: this decides
+// whether to SUPPRESS, so over-matching only costs a retained (correct) flag.
+// A per-target basename search was the first attempt and it leaked on every
+// documented token-divergence residual — `T=s.py; python3 "$T"`, `env python3
+// s.py`, `chmod +x s && ./s` — because the exec line need not name the file.
+const ANY_EXEC_TOKEN_RX =
+  /(?:^|[\s;&|(])(?:\.\/|source\b|\.\s+\S|env\b|chmod\b|exec\b|eval\b|xargs\b|python3?|node|nodejs|ruby|perl|bash|sh|zsh|deno|bun|tsx|ts-node|Rscript|lua|php|osascript)\b/;
+
+function heredocBodiesAreInertData(command, pathRx) {
+  if (!command) return false;
+  const targets = [...command.matchAll(HEREDOC_REDIRECT_TARGET_RX)].map((m) => m[1]);
+  if (targets.length === 0) return false; // stdin-fed heredoc = code, not data
+  for (const t of targets) {
+    if (/[$`]/.test(t)) return false; // unresolved expansion — fail closed
+    if (pathRx.test(t)) return false; // writing protected state itself
+  }
+  // The command must be a PURE WRITE: strip every heredoc BODY, then require the
+  // remaining shell text to contain no execution token at all. Checking whether
+  // the written file is named on a later interpreter line is not enough — the
+  // exec token and the write token need not match.
+  // `[ \t]*` BEFORE the terminator is load-bearing, not tidiness. `<<-` tells
+  // bash to STRIP LEADING TABS from the terminator line, so a TAB-indented
+  // `EOF` genuinely CLOSES a `<<-EOF` heredoc. Anchoring the terminator hard at
+  // `^` did not model that: the lazy body then ran PAST the real terminator and
+  // bridged into the NEXT heredoc, swallowing every line between them — an exec
+  // line included. MEASURED as a live patched-allows/baseline-flags divergence:
+  // `cat > p.py <<-EOF … <TAB>EOF / python3 p.py / cat > q.txt <<EOF … EOF`
+  // returned null here while bash ran the python3 (baseline: layer 3).
+  // Allowing the indent UNCONDITIONALLY (rather than only for `<<-`) is the
+  // fail-CLOSED direction and is deliberate: for a plain `<<EOF`, bash requires
+  // the terminator flush-left, so an indented `EOF` is still body text and this
+  // stripper now closes EARLIER than bash — it strips LESS, leaving more text in
+  // the skeleton, which can only ADD exec-token matches and RETAIN a flag. Same
+  // doctrine as ANY_EXEC_TOKEN_RX's own deliberate over-breadth above.
+  const skeleton = command.replace(/<<-?\s*(['"]?)([A-Za-z_]\w*)\1[\s\S]*?^[ \t]*\2\s*$/gm, " <<HEREDOC ");
+  return !ANY_EXEC_TOKEN_RX.test(skeleton);
 }
 
 /**
@@ -1601,6 +1835,17 @@ function detectStateFileMutation(command, pathRx) {
   const segments = command.split(/\||&&|;|\n/);
   const ledSeg = segments.find((s) => leadingInterpreter.test(s));
   if (ledSeg && hasInterpreterWriteSignal(command)) {
+    // loom#1534 — the whole-command coarseness above never requires the write
+    // signal and the protected-path hit to be RELATED. Before flagging, ask the
+    // narrower question: which path does this body actually write? Suppress ONLY
+    // when every write target RESOLVED and none is protected; any unresolved
+    // target falls through and flags exactly as before (fail-closed).
+    if (interpreterWritesOnlyBenignTargets(command, pathRx)) return null;
+    // …and the sibling half: a heredoc body being WRITTEN to an ordinary file and
+    // never executed is DATA (a committed fixture, a doc, a test sample), not
+    // code. `detectHeredocWriteRunBundle` owns the write→EXEC case and still runs
+    // as the whole-command fallback, so suppressing here cannot hide a bundle.
+    if (heredocBodiesAreInertData(command, pathRx)) return null;
     const im = ledSeg.match(leadingInterpreter);
     return { layer: 3, kind: `${im[1]} (interpreter)` };
   }
@@ -2781,6 +3026,18 @@ function parseHeredocSpans(command) {
   return { heredocs, structural: structuralLines.join("\n") };
 }
 
+// OUT_REDIRECT_TOKEN_RX — an argv token that OPENS an OUTPUT redirection: `>`,
+// `>>`, `>|` (force-clobber), `&>`, `&>>`, and the fd-prefixed `N>` / `N>>` /
+// `N>|`. Capture 1 is whatever the token carries AFTER the operator, which is
+// what distinguishes the three forms:
+//   ""      SEPARATED — `> out.json`; the operand is the NEXT token.
+//   "&1"    fd DUPLICATION — `2>&1`, `>&2`; the target is a DESCRIPTOR, not a
+//           file, so there is no operand to consume in either position.
+//   "out.j" ATTACHED — `>out.json`; the operand came with the operator token.
+// INPUT redirection (`<`, `N<`, `<<`, `<<<`) is deliberately NOT matched — see
+// computeExecutedTokenSet.
+const OUT_REDIRECT_TOKEN_RX = /^(?:\d+|&)?>>?\|?([\s\S]*)$/;
+
 // computeExecutedTokenSet — the set of normalized script tokens `structural`
 // EXECUTES via an interpreter: for every segment (split on `\n` then top-level
 // shell operators) that is interpreter-LED (after stripping a leading `VAR=val`
@@ -2789,7 +3046,37 @@ function parseHeredocSpans(command) {
 // are O(1) — the previous per-heredoc re-scan was O(heredocs × structural) = O(H²),
 // a pure availability DoS on H committed protected-body heredocs (the parse budget
 // does not cover it because parsing itself stays cheap). A target is "executed"
-// iff it is in this set — semantically identical to the old per-target scan.
+// iff it is in this set.
+//
+// OUTPUT-REDIRECT OPERANDS ARE NOT EXECUTED TOKENS (loom#1426, residual (m)).
+// The token walk used to admit EVERY token after the interpreter, including the
+// redirect operator and its operand — so `node probe.mjs > /tmp/out.json` put
+// `/tmp/out.json` into the EXECUTED set even though it is the one file this
+// command provably WRITES rather than runs. Since `extractRedirectTargets` reads
+// that very same `>` operand into `structuralTargets`, the backstop's
+// `anyTargetExecuted` overlap was satisfied by the redirect matching ITSELF, and
+// the whole conjunction collapsed to "a protected path is mentioned ANYWHERE and
+// SOME interpreter-led command redirects SOMEWHERE" — the near-100%-false-positive
+// class #1426 records, which blocked five actors, every one of them while
+// verifying or documenting this guard. Measured on the pre-fix code with
+// `pathRx = STATE_PATH_RX`:
+//     cat <posture> && node /tmp/a/other.js > /tmp/b/out.json
+//       structuralTargets ["/tmp/b/out.json"]
+//       execSet           ["/tmp/a/other.js", ">", "/tmp/b/out.json"]  ← the write target
+//       overlap           ["/tmp/b/out.json"]                          → FLAG
+//
+// This narrows FALSE positives only, and the argument is structural, not
+// statistical: a file in OUTPUT-redirect position is being written BY this
+// interpreter, so it is never the script the interpreter runs. Where such a
+// target is genuinely executed, the execution appears as an ARGUMENT in some
+// segment (`node gen.js > s.cjs; node s.cjs`) and that occurrence still admits
+// it here — the write→exec dataflow the detector exists for is untouched. Where
+// the redirect target IS itself the protected path (`node gen.js > <posture>`),
+// Layer 1 owns it on the redirect operator and blocks independently of this pass.
+//
+// INPUT redirection is deliberately left in the set: `node < f.js` EXECUTES `f.js`
+// (the interpreter reads its script from stdin), so dropping `<` operands would
+// open a real hole — the one direction this change must not take.
 function computeExecutedTokenSet(structural) {
   const set = new Set();
   const segs = structural.split("\n").flatMap((ln) => splitShellSegments(ln));
@@ -2798,6 +3085,16 @@ function computeExecutedTokenSet(structural) {
     if (!RUN_INTERPRETER_RX.test(stripped)) continue;
     const toks = tokenizeShellArgs(stripped);
     for (let k = 1; k < toks.length; k++) {
+      const red = OUT_REDIRECT_TOKEN_RX.exec(toks[k]);
+      if (red) {
+        // Consume the operand ONLY in the separated form. An fd-dup carries no
+        // file operand, and an attached operand was consumed with its operator.
+        // Anything else (`>&` followed by a word — the csh-style both-streams
+        // form) leaves the next token in the set, which is the fail-CLOSED
+        // direction: an extra executed-token candidate can only ADD flags.
+        if (red[1] === "") k++;
+        continue;
+      }
       const np = normPath(toks[k]);
       if (np) set.add(np);
     }
@@ -2867,31 +3164,38 @@ function detectHeredocWriteRunBundle(command, pathRx) {
   // so no target is in the executed-token set). It IS whole-command, NOT heredoc-scoped:
   // `structuralTargets` collects from a plain `>` redirect too, so the backstop
   // fires on a protected-mention + write+run bundle even with no heredoc at all.
-  // It DOES fail-closed over-block the shape "a protected-path mention on a
-  // command line (INCLUDING an allowed `cat <state>` read, or an `&&`-chained
-  // build+inspect) AND a script write+run in ONE command" — this over-block is
-  // wider than a purely contrived case; remediation is to split the command,
-  // consistent with the separate-invocation ceremony contract.
+  // It DOES still fail-closed over-block the shape "a protected-path mention on a
+  // command line (INCLUDING an allowed `cat <state>` read) AND a genuine
+  // write-a-script-then-RUN-THAT-SCRIPT bundle in ONE command" — remediation is to
+  // split the command, consistent with the separate-invocation ceremony contract.
   //
-  // ACCURACY CORRECTION (#1363, measured — the prior claim here was too narrow).
-  // This comment used to read: "Never fires when the executed file is NOT written
-  // in-command (`cat <state> && node other.js` stays clean — `other.js` is not a
-  // structural write target)." That holds ONLY when the command carries NO
-  // redirect at all. The conjunction below is protected-path-mention AND
-  // ANY structural redirect target AND ANY structurally-executed script — the
-  // written target and the executed token are NOT required to be the SAME file.
-  // Executed evidence (`pathRx = /\.claude\/settings\.json\b/`):
-  //   `cat <state> && node other.js`                        → clean  (no redirect)
-  //   `cat <state> && node /tmp/a/other.js > /tmp/b/out.json` → FLAG (different files!)
-  //   `cat <state> && wc -l x > /tmp/b/out.json`            → clean  (no interpreter)
-  // So a READ-ONLY inspection that merely redirects unrelated output and runs an
-  // unrelated interpreter flags — e.g. hashing a state file before/after running a
-  // probe (`shasum <state>; node probe.mjs > out.json; shasum <state>`), which is
-  // how a guard's own test fixtures get built. Kept AS-IS deliberately: this is the
-  // fail-CLOSED backstop against bash-parse divergence, and narrowing the
-  // target↔exec correlation is a security change owing its own analysis, NOT part
-  // of #1363's operand-vs-prose class. Tracked as residual (m) in
-  // `rules/state-file-write-guard.md`; remediation today is to split the command.
+  // RESIDUAL (m) — CLOSED (loom#1426). #1363 recorded, correctly, that the
+  // conjunction here was protected-path-mention AND ANY structural redirect AND
+  // ANY executed script, with the written target and the executed token NOT
+  // required to be the same file — so a READ-ONLY inspection that redirected
+  // unrelated output while running an unrelated interpreter flagged. It left the
+  // width in place as the fail-CLOSED defence against bash-parse divergence, on
+  // the reading that narrowing the target↔exec correlation was a security change
+  // owing its own analysis. That analysis is #1426, and it found the width was
+  // never load-bearing: `anyTargetExecuted` was satisfied by the redirect matching
+  // ITSELF, because `computeExecutedTokenSet` admitted the `>` operand as an
+  // "executed" token (see its header). The correlation is now REAL, and the
+  // divergence defence is untouched — a spilled body still carries its own
+  // write target and its own interpreter-led exec ARGUMENT.
+  // Executed evidence, same `pathRx`, before → after:
+  //   `cat <state> && node other.js`                          clean  → clean
+  //   `cat <state> && node /tmp/a/other.js > /tmp/b/out.json`  FLAG  → clean  ← (m)
+  //   `shasum <state>; node probe.mjs > out.json; shasum <state>`  FLAG → clean  ← (m)
+  //   `cat <state> && wc -l x > /tmp/b/out.json`              clean  → clean
+  //   `node gen.js > s.cjs && node s.cjs && cat <state>`       FLAG  → FLAG   ← real bundle
+  //   `cat > f.js <<E …<state>… E; node < f.js`                FLAG  → FLAG   ← stdin script
+  //   `node gen.js > <state> && node other.js`                 FLAG  → Layer 1 owns it
+  // The last row is the only flag-side verdict this pass gives up, and it gives it
+  // up to a TIGHTER layer: the redirect target IS the protected path, so Layer 1
+  // blocks it on the redirect operator with no reliance on the backstop at all.
+  // Fixtures: `audit-fixtures/violation-patterns/detectHeredocWriteRunBundle/
+  // {clean,flag}-1426-*` + `…SegmentAware/clean-1426-m-readonly-inspection-*` and
+  // `…SegmentAware/flag-1426-redirect-target-is-protected-layer1`.
   const structuralTargets = structural
     .split("\n")
     .flatMap((ln) => extractRedirectTargets(ln));

@@ -286,8 +286,8 @@ Use `pattern-expert` subagent when:
 
 ### Related Documentation
 
-- **Pattern Expert**: [`.gemini/agents/pattern-expert.md`](../../../../.claude/agents/pattern-expert.md)
-- **Essential Pattern**: [`CLAUDE.md` (lines 139-145)](../../../../CLAUDE.md#L139-L145)
+- **Pattern Expert**: [`.gemini/agents/pattern-expert.md`](../../agents/implementation/pattern-expert.md)
+- **Essential Pattern**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ## Quick Tips
 

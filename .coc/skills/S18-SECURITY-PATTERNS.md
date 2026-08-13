@@ -63,22 +63,38 @@ workflow.add_node("HTTPRequestNode", "api", {
 
 ## Reference Documentation
 
-### Core Security
+Each entry below is a depth file that ships alongside this skill. Regenerated
+from the directory contents — the previous index listed eight `security-*.md`
+files that exist nowhere in the corpus, so every lookup dead-ended.
 
-- **[security-secrets](security-secrets.md)** - Secret management patterns
-- **[security-input-validation](security-input-validation.md)** - Input validation
-- **[security-injection-prevention](security-injection-prevention.md)** - SQL/code injection prevention
+### Credentials & Secrets
 
-### Authentication & Authorization
+- **[credential-decode-helpers](credential-decode-helpers.md)** - One shared userinfo decoder; null-byte rejection after percent-decoding
+- **[credential-url-handling](credential-url-handling.md)** - Canonical connection-string credential pipeline (py)
 
-- **[security-auth-patterns](security-auth-patterns.md)** - Auth best practices
-- **[security-api-keys](security-api-keys.md)** - API key management
-- **[security-tokens](security-tokens.md)** - Token handling
+### Input Handling & Injection
 
-### OWASP Compliance
+- **[sanitizer-contract](sanitizer-contract.md)** - Display hygiene: token-replace sentinels, type-confusion raises
+- **[path-containment](path-containment.md)** - Resolve and normalize both candidate and root before the trust decision
 
-- **[security-owasp-top10](security-owasp-top10.md)** - OWASP Top 10 prevention
-- **[security-audit-checklist](security-audit-checklist.md)** - Security audit checklist
+### Authorization & Defaults
+
+- **[secure-defaults-and-approver-identity](secure-defaults-and-approver-identity.md)** - Fail-closed defaults; server-derived, immutably-pinned approver identity
+- **[multi-site-kwarg-plumbing](multi-site-kwarg-plumbing.md)** - Every call site learns a security-relevant kwarg in the same PR
+- **[frontmatter-directive-trust-surface](frontmatter-directive-trust-surface.md)** - Frontmatter is the directive trust surface, never a body scan
+
+### Database (DataFlow / RLS)
+
+- **[dataflow-rls-posture](dataflow-rls-posture.md)** - RLS as a runtime predicate, not DDL
+- **[rls-security-definer-preauth-carveout](rls-security-definer-preauth-carveout.md)** - The SECURITY DEFINER pre-auth carveout
+
+### Build & Distribution
+
+- **[docker-disclosure-scrub](docker-disclosure-scrub.md)** - Build-time public-surface disclosure gate
+
+### Chained Exploits (cross-cutting)
+
+- **[security-attack-chains](security-attack-chains.md)** - Multi-step chains from the v2.1.0 red team: Redis-URL injection + `pickle.loads` RCE, `eval`/`__import__` code injection, auth degradation + timing, PACT governance bypass (py)
 
 ## Security Checklist
 

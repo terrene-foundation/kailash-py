@@ -49,6 +49,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 **This means:**
+
 - ❌ No automatic rollback across multiple nodes
 - ❌ No ACID guarantees between UserCreateNode → OrderCreateNode
 - ❌ Partial data commits if workflow fails midway
@@ -142,6 +143,7 @@ async def async_run(self, **kwargs):
 ### Connection Lifecycle
 
 **Without Transaction:**
+
 ```
 UserCreateNode:
   1. Get connection from pool
@@ -157,6 +159,7 @@ OrderCreateNode:
 ```
 
 **With Transaction:**
+
 ```
 TransactionScopeNode:
   1. Get connection from pool
@@ -180,12 +183,13 @@ TransactionCommitNode:
 
 **IMPORTANT**: This behavior is **IDENTICAL** in both runtimes.
 
-| Runtime | Connection Behavior | Transaction Context |
-|---------|---------------------|---------------------|
-| **LocalRuntime** | Each node gets pool connection | ❌ No shared context |
+| Runtime               | Connection Behavior            | Transaction Context  |
+| --------------------- | ------------------------------ | -------------------- |
+| **LocalRuntime**      | Each node gets pool connection | ❌ No shared context |
 | **AsyncLocalRuntime** | Each node gets pool connection | ❌ No shared context |
 
 **AsyncLocalRuntime does NOT change connection isolation:**
+
 - ❌ Does NOT automatically share connections
 - ❌ Does NOT provide implicit transaction context
 - ✅ Executes nodes concurrently (level-based parallelism)
@@ -349,9 +353,11 @@ results, run_id = await runtime.execute_workflow_async(workflow.build())
 ## Documentation References
 
 ### Primary Sources
-- **AsyncLocalRuntime**: [`kailash/runtime/async_local.py`](../../../../kailash/runtime/async_local.py)
+
+- **AsyncLocalRuntime**: [`kailash/runtime/async_local.py`](../../../kailash/runtime/async_local.py)
 
 ### Related Documentation
+
 - **DataFlow CRUD**: [`dataflow-crud-operations`](dataflow-crud-operations.md)
 - **DataFlow Transactions**: [`dataflow-transactions`](dataflow-transactions.md)
 

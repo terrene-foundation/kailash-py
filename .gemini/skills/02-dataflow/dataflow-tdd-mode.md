@@ -131,7 +131,8 @@ def db():
 ### Primary Sources
 
 ### Related Documentation
-- **DataFlow Specialist**: [`.gemini/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L893-L940)
+
+- **DataFlow Specialist**: [`.gemini/agents/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 - **Test Strategy**: [`test-3tier-strategy`](#)
 
 ## Quick Tips
