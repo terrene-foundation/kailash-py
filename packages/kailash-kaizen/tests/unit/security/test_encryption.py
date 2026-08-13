@@ -64,8 +64,17 @@ class TestEncryptionProvider:
         original = "important_data"
         encrypted = provider.encrypt(original)
 
-        # Tamper with encrypted data
-        tampered = encrypted[:-1] + b"X"
+        # Tamper with encrypted data.
+        #
+        # Flip a bit rather than ASSIGNING a constant byte. `encrypted[:-1] + b"X"`
+        # is a no-op whenever the final byte is already 0x58 -- and the nonce is
+        # random per encryption (`os.urandom(12)`), so the ciphertext differs every
+        # run and that happened roughly 1 time in 256. On those runs `decrypt`
+        # legitimately succeeded and the test failed with "DID NOT RAISE"; on the
+        # other 255 it passed while asserting nothing about a value it had not
+        # actually changed. XOR always changes the byte, so this now tests
+        # tampering detection on every run.
+        tampered = encrypted[:-1] + bytes([encrypted[-1] ^ 0x01])
 
         # Attempt to decrypt tampered data should raise error
         with pytest.raises(Exception) as exc_info:
