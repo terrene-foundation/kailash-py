@@ -148,6 +148,34 @@ import { reconcileDenyArray } from "./reconcile-settings-deny.mjs";
 // loom#1501 (L4) — the emission axes, declared once (see the SSOT note at
 // VARIANT_LANGS below).
 import { EMIT_LANGS, EMIT_CLIS } from "./lib/emit-axes.mjs";
+// `target-owned-integrity` reuses the ENGINE's own manifest readers + real plan
+// rather than standing up a second parser (security.md § Enforcement-Surface
+// Parity — a re-derived reader is the shape that silently drifts). Those readers
+// live in `sync-tier-aware.mjs`, which is NOT statically imported here.
+//
+// WHY NOT (the premise this comment previously got WRONG): an earlier revision
+// claimed "both this tool and sync-tier-aware.mjs ride ALWAYS_INCLUDE, so the
+// import ships coherently". BOTH halves are false, and the error was conflating
+// TWO DISTINCT DISTRIBUTION SURFACES:
+//   - ALWAYS_INCLUDE (`sync-tier-aware.mjs`) governs what reaches SYNC TARGETS.
+//     `validate-emit.mjs` IS on that allowlist; `sync-tier-aware.mjs` is NOT
+//     (verified: ALWAYS_INCLUDE.includes(".claude/bin/sync-tier-aware.mjs")===false).
+//   - The COMMUNITY EDITION is a different projection entirely —
+//     `edition-emit.mjs::projectEdition` / `lib/in-community-edition.mjs`, where
+//     `community = published ∖ loom_only`. `sync-tier-aware.mjs` is `loom_only`
+//     (`sync-manifest.yaml` under `loom_only:` — "loom's Gate-2 tier-aware
+//     distribution engine … Runs ONLY at loom"), so it is SUBTRACTED
+//     (verified: inCommunityEdition(".claude/bin/sync-tier-aware.mjs")===false,
+//     while inCommunityEdition(".claude/bin/validate-emit.mjs")===true).
+// A static import is HOISTED, so it made this shipped tool ERR_MODULE_NOT_FOUND on
+// LOAD for every community consumer — the F1030d fail-closed class. Caught by
+// `test-harness/tests/community-import-closure.test.mjs` (R2-HIGH-7).
+//
+// It is therefore lazy-loaded inside `checkTargetOwnedIntegrity`, degrading to an
+// explicit LOUD SKIP where the engine is absent, exactly as the
+// `reconcile-settings-hooks.mjs` seam below does — and discriminating on WHICH
+// specifier is missing so a nested-dependency failure re-throws instead of
+// silently disarming a blocking gate.
 // NOTE — `reconcile-settings-hooks.mjs` is the SSOT for "what does this
 // settings.json command GENUINELY register, at which event, under which
 // normalized matcher", and `hook-event-declaration` shares it rather than
@@ -201,7 +229,8 @@ const CANONICAL_CC_TOOLS = new Set([
 // specialist with `Edit` AND `Bash`; "read-only" means it cannot MUTATE files
 // (no Edit/Write). Bash is NOT forbidden — reviewer/security-reviewer run
 // read-only mechanical sweeps (`grep -c`, `pytest --collect-only`) that need
-// Bash (agents.md § "Reviewer Mechanical Sweeps"). Task is sub-delegation, not
+// Bash (agents.md § "MUST: Reviewer Prompts Include Mechanical AST/Grep
+// Sweep"). Task is sub-delegation, not
 // file mutation. So the prohibition is exactly the two mutation tools.
 const READONLY_FORBIDDEN_TOOLS = new Set(["Edit", "Write"]);
 
@@ -263,6 +292,7 @@ const CHECK_IDS = [
   "codex-guard-root-parity",
   "variant-orphan",
   "allowlist-paths-coverage",
+  "target-owned-integrity",
   "surface-role-membership",
   "claude-md-surface-role-parity",
   "gitignore-learning-parity",
@@ -271,6 +301,7 @@ const CHECK_IDS = [
   "operator-ref-credential-separation",
   "signing-model-key-separation",
   "settings-deny-rule-form",
+  "variant-hook-output-discipline",
 ];
 
 const STATUS = {
@@ -1166,6 +1197,111 @@ function checkConsumerEfficacy(root, opts) {
           results.push({ artifact: tag, status: STATUS.PASS, detail: `${citations.length} cited rules all resolve` });
         }
       }
+    }
+
+    // ── E. RS-86: the CANONICAL source + the INSTALLED trees, not just the emit.
+    // Sections A–D all read `emitDir` — a tree generated from the CURRENT
+    // template in this run. That proves the emitter's output is parse-loadable;
+    // it proves nothing about the two trees a consumer actually loads from.
+    // The gap is not hypothetical: `skills/project/**` is PRESERVED across pulls
+    // (`sync-from-template` never overwrites consumer-owned paths), so a
+    // historical project-owned SKILL.md with broken or missing frontmatter is
+    // structurally invisible to a fresh emit — it is never regenerated, so it is
+    // never inspected. Same for an installed tree that has drifted from what the
+    // current template would emit.
+    //
+    // Measured at authoring time: canonical 49 SKILL.md / 0 fail, `.codex` 42 / 0,
+    // `.gemini` 42 / 0 — so this section is GREEN on landing and functions as a
+    // forward tripwire, not a backlog. Its discrimination is pinned by a planted
+    // broken fixture in the paired regression suite; a check never shown to fire
+    // is not evidence (`instrument-discipline.md` MUST-3).
+    //
+    // Absent tree ⇒ SKIP, never PASS: a consumer that has not installed a given
+    // CLI has nothing to assert, and a printed PASS there would be a verdict over
+    // an empty set (the loom#1386 ruling that made V15 report SKIP).
+    for (const [label, treeRoot] of [
+      ["source:.claude/skills", join(root, ".claude", "skills")],
+      ["installed:.codex/skills", join(root, ".codex", "skills")],
+      ["installed:.gemini/skills", join(root, ".gemini", "skills")],
+    ]) {
+      if (!existsSync(treeRoot)) {
+        results.push({
+          artifact: label,
+          status: STATUS.SKIP,
+          detail: "tree not present in this repo — nothing to assert",
+        });
+        continue;
+      }
+      const manifests = findSkillManifests(treeRoot);
+      if (manifests.length === 0) {
+        results.push({ artifact: label, status: STATUS.SKIP, detail: "no SKILL.md in tree" });
+        continue;
+      }
+      let checked = 0;
+      for (const rel of manifests) {
+        const tag = `${label}/${rel}`;
+        const text = readOrFail(join(treeRoot, rel), tag, "SKILL.md");
+        if (text === null) continue;
+        checked++;
+        const fmParsed = parseFrontmatter(text);
+        if (!fmParsed.hasFrontmatter || fmParsed.unterminated) {
+          results.push({
+            artifact: tag,
+            status: STATUS.FAIL,
+            detail: "missing/unterminated frontmatter — will not parse-load",
+          });
+          continue;
+        }
+        if (!nonEmpty(fmParsed.fields.description)) {
+          results.push({
+            artifact: tag,
+            status: STATUS.FAIL,
+            detail: "frontmatter missing `description` (load-bearing for no-path-loader CLIs)",
+          });
+          continue;
+        }
+        // Semantic `name` match, per RS-86: accept the skill-directory name OR
+        // that name with a leading numeric ordering prefix stripped
+        // (`01-core-sdk` → `core-sdk`). Checked only when `name` is PRESENT:
+        // both emitters derive the handle from the directory when it is absent,
+        // so absence is a supported authoring form, and failing it would invent
+        // a failure class this section was never measured against.
+        //
+        // TOP-LEVEL SKILLS ONLY — the nested case is deliberately NOT asserted.
+        // RS-86's clause says "the immediate skill-directory name", which for
+        // `40-stack-onboarding/go/SKILL.md` is `go`; that file declares
+        // `name: stack-onboarding-go`, i.e. <container-minus-prefix>-<leaf>.
+        // Applying the clause literally flags all four nested stack-onboarding
+        // skills (MEASURED: 4 in source + 4 in .codex + 4 in .gemini = 12 rows,
+        // which took `validate-emit` from exit 0 to exit 1). Those names are
+        // evidently deliberate, and whether a nested handle resolves as the leaf
+        // dir or as the composed form is a property of the CLI's skill loader
+        // that this session did NOT establish. Asserting either way would be a
+        // guess, and the fail-direction guess reds the /sync gate over working
+        // artifacts — so the nested case is recorded UNKNOWN in the lane report
+        // and left un-asserted here. The frontmatter and description checks above
+        // DO cover nested skills; only this name sub-check is scoped out.
+        const isNested = rel.split("/").length > 2;
+        const dirName = rel.includes("/") ? rel.split("/").slice(-2)[0] : "";
+        const stripped = dirName.replace(/^[0-9]+-/, "");
+        const nm = fmParsed.fields.name;
+        if (!isNested && nonEmpty(nm) && dirName && nm !== dirName && nm !== stripped) {
+          results.push({
+            artifact: tag,
+            status: STATUS.FAIL,
+            detail: `frontmatter name="${nm}" matches neither dir "${dirName}" nor "${stripped}" — consumer handle will not resolve`,
+          });
+          continue;
+        }
+        results.push({ artifact: tag, status: STATUS.PASS });
+      }
+      // Non-vacuity marker: record the denominator, so a zero-manifest or
+      // all-unreadable run is distinguishable from a genuinely clean one.
+      results.push({
+        artifact: `${label} (coverage)`,
+        status: STATUS.PASS,
+        detail: `${checked} of ${manifests.length} SKILL.md parsed and asserted`,
+      });
     }
   } finally {
     if (ownEmit && ownEmit.dir) {
@@ -4127,8 +4263,16 @@ function parseManifestGitignoreLearning(root) {
       continue;
     }
     if (!inBlock) continue;
-    // A new top-level key (no indent, `key:`) ends the block.
-    if (/^[A-Za-z0-9_]+:/.test(raw)) break;
+    // A new top-level key (no indent, `key:`) ends the block. The class MUST
+    // include `-`: YAML permits a hyphen in a key, and a terminator that omits it
+    // does not stop at `visibility-gitignore-additions:` — the walk runs past the
+    // key boundary and re-admits THAT key's nested entries as though they were
+    // declared here. That direction is the dangerous one: it reports an
+    // unconditional mirror for a fence reaching only `visibility: public`
+    // consumers, i.e. a false PASS on a disclosure gate. (Mirrored, with the same
+    // reasoning, in tests/integration/multi-operator/state-dir-artifact-fence.test.js;
+    // its `no-drift` row pins the two implementations equivalent.)
+    if (/^[A-Za-z0-9_-]+:/.test(raw)) break;
     const item = raw.match(/^\s+-\s+(.*)$/);
     if (!item) continue;
     const val = item[1].trim().replace(/^["']|["']$/g, "");
@@ -4225,6 +4369,279 @@ function checkGitignoreLearningParity(root) {
       detail: present
         ? `present in gitignore_additions`
         : `MISSING from sync-manifest.yaml::gitignore_additions — loom's own .gitignore ignores it as per-clone state but the distributable block does not, so a consumer can git-commit it (the journal/0368 disclosure class). Add it to gitignore_additions, OR (if loom-only) add its basename to LOOM_ONLY_LEARNING_EXCLUSIONS with rationale. FULL required set (loom learning/** minus exclusions [${[...LOOM_ONLY_LEARNING_EXCLUSIONS].join(", ")}]): ${requiredList}`,
+    });
+  }
+  return { id, source_rule, results };
+}
+
+// ────────────────────────────────────────────────────────────────
+// Check — `target_owned:` integrity (2026-08-03).
+//
+// The key declares paths that exist at a target and belong to the TARGET, not to
+// loom. That declaration is only meaningful if loom actually behaves as if it
+// does not own them, and THREE structural properties make it checkable — none of
+// which was expressible before, because no prior manifest key could name the
+// subject ("a path at the target that loom does not ship"):
+//
+//   (a) absent from every TIER — a target-owned path loom also ships is a
+//       contradiction: loom would overwrite the target's file with its own.
+//   (b) absent from every OBSOLETED list — an explicit purge entry and a deletion
+//       veto on the same path are directly contradictory instructions, and which
+//       one wins would depend on the order the engine happens to consult them.
+//   (c) `publish: local_only` ⇒ present in the emitted managed gitignore block on
+//       BOTH lanes. The fence is the whole point of the attribute; a declaration
+//       that silently fails to emit is the failure mode this check exists for.
+//
+// (c) reads the REAL plan from sync-tier-aware rather than re-deriving the list,
+// so a wiring regression (e.g. the list dropped from one lane's apply branch) is
+// caught here and not only in that engine's own suite.
+//
+// FAIL-CLOSED on an unreadable manifest: a disclosure-and-deletion gate that
+// cannot run must BLOCK, never SKIP (the `gitignore-learning-parity` precedent).
+function checkTargetOwnedIntegrity(root, opts = {}) {
+  const id = "target-owned-integrity";
+  const source_rule =
+    "sync-manifest.yaml target_owned (2026-08-03) — loom NEVER deletes a target-owned path; publish: local_only MUST reach the managed gitignore block on both lanes";
+
+  // Lazy-load the ENGINE's own manifest readers (see the import-site note).
+  // `sync-tier-aware.mjs` is `loom_only`, so it is SUBTRACTED from the community
+  // edition while this tool ships — a static import would ERR_MODULE_NOT_FOUND the
+  // whole tool at load for every community consumer.
+  //
+  // ABSENCE ⇒ EXPLICIT SKIP, never a silent pass. Where the distribution engine is
+  // absent there is no Gate-2 distribution at all, so the deletion-veto/local_only
+  // coherence this check proves is not a property that surface HAS. But a check that
+  // quietly passes when its dependency is missing is a gate that cannot fail, so the
+  // SKIP is loud and names the reason rather than degrading into a green.
+  //
+  // A present-but-broken load RE-THROWS. `isMissingOwnSpecifier` discriminates on
+  // WHICH specifier Node could not find: `sync-tier-aware.mjs` itself statically
+  // imports `./lib/{loom-links,slot-parser,strip-build-internal,local-rules}.mjs`,
+  // and if any of those is deleted or renamed the NESTED failure raises the SAME
+  // MODULE_NOT_FOUND. A code-only check would swallow that, return SKIP, and assert
+  // the engine "is not present" when it is — silently disarming a blocking gate AT
+  // LOOM, which is exactly where it is supposed to bite (evidence-first MUST-3).
+  // None of those four specifiers contains the substring "sync-tier-aware", so the
+  // predicate's documented substring caveat is not live here. Injectable for tests.
+  let parseTargetOwned = opts.parseTargetOwned;
+  let rejectUnsafeTargetOwned = opts.rejectUnsafeTargetOwned;
+  let buildPlan = opts.buildPlan;
+  let composeManagedGitignoreEntries = opts.composeManagedGitignoreEntries;
+  let parseList = opts.parseList;
+  let sliceBlock = opts.sliceBlock;
+  if (
+    !parseTargetOwned ||
+    !rejectUnsafeTargetOwned ||
+    !buildPlan ||
+    !composeManagedGitignoreEntries ||
+    !parseList ||
+    !sliceBlock
+  ) {
+    try {
+      const mod = _require("./sync-tier-aware.mjs");
+      parseTargetOwned = parseTargetOwned || mod.parseTargetOwned;
+      rejectUnsafeTargetOwned = rejectUnsafeTargetOwned || mod.rejectUnsafeTargetOwned;
+      buildPlan = buildPlan || mod.buildPlan;
+      composeManagedGitignoreEntries =
+        composeManagedGitignoreEntries || mod.composeManagedGitignoreEntries;
+      parseList = parseList || mod.parseList;
+      sliceBlock = sliceBlock || mod.sliceBlock;
+    } catch (e) {
+      if (isMissingOwnSpecifier(e, "sync-tier-aware")) {
+        return {
+          id,
+          source_rule,
+          results: [
+            {
+              artifact: ".claude/bin/sync-tier-aware.mjs",
+              status: STATUS.SKIP,
+              detail:
+                "SKIPPED (not a pass): the Gate-2 distribution engine (sync-tier-aware.mjs) is loom_only and not present here, so target_owned integrity cannot be checked. This surface never distributes — without the engine there is no Gate-2 lane whose deletion-veto and local_only gitignore fence could disagree — so the check is INAPPLICABLE, not satisfied. It remains blocking AT LOOM, where the engine is present.",
+            },
+          ],
+        };
+      }
+      // Present-but-broken, OR a nested dependency of the engine missing —
+      // surface, never silently skip (evidence-first MUST-3).
+      throw e;
+    }
+  }
+
+  const manifestText = safeRead(join(root, ".claude", "sync-manifest.yaml"));
+  if (manifestText === null) {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: ".claude/sync-manifest.yaml",
+          status: STATUS.FAIL,
+          detail:
+            "target_owned integrity gate cannot run — sync-manifest.yaml unreadable or absent. Fail-closed: a missing input cannot prove the deletion veto and the local_only fence are coherent, so this BLOCKS rather than silently passing.",
+        },
+      ],
+    };
+  }
+
+  const records = parseTargetOwned(manifestText);
+  if (records.length === 0) {
+    return {
+      id,
+      source_rule,
+      results: [
+        {
+          artifact: "target_owned",
+          status: STATUS.SKIP,
+          detail: "no target_owned entries declared",
+        },
+      ],
+    };
+  }
+
+  const tiers = parseTiers(root);
+  const tierEntries = [];
+  for (const [tier, globs] of Object.entries(tiers)) {
+    for (const g of globs) tierEntries.push({ tier, glob: g });
+  }
+  const purgeLists = {
+    obsoleted: parseList(sliceBlock(manifestText, "obsoleted")),
+    use_obsoleted: parseList(sliceBlock(manifestText, "use_obsoleted")),
+    build_obsoleted: parseList(sliceBlock(manifestText, "build_obsoleted")),
+  };
+
+  // PER-RECORD SHAPE FIRST — this pass MUST precede the lane composition below,
+  // and the ordering is the whole point of it.
+  //
+  // `buildPlan` runs the SAME `rejectUnsafeTargetOwned` gate and answers a defect
+  // with `fail(1, …)` → `process.exit(1)` (sync-tier-aware.mjs:2530-2539). That is
+  // right for the DISTRIBUTOR — refuse to apply a declaration it cannot read — and
+  // fatal for this VALIDATOR: `process.exit` is not an exception, so the `try`
+  // below never catches it, `laneError` is never set, and the process dies mid-run.
+  // With the composition ordered first, the malformed-record FAIL row further down
+  // was UNREACHABLE FOR EVERY INPUT, and `validate-emit --json` emitted ZERO bytes
+  // of report — all ~30 checks lost — on a manifest carrying one bare-scalar
+  // target_owned entry. A row no input can reach is not a gate, and a validator
+  // that exits instead of reporting cannot say what it found.
+  //
+  // Computing the defects up front also lets the composition be SKIPPED when any
+  // record is malformed: calling it anyway would re-enter the same exit.
+  const defects = new Map();
+  for (const rec of records) defects.set(rec, rejectUnsafeTargetOwned(rec));
+  const malformedCount = [...defects.values()].filter((d) => d !== null).length;
+
+  // (c) inputs — the ACTUAL managed-block entries each lane would write, via the
+  // SAME `composeManagedGitignoreEntries` the writer calls. Reading the plan
+  // FIELD instead would not discriminate: a mutation removing the list from the
+  // BUILD apply branch left the plan field intact and this check PASSED (found by
+  // mutation, which is why the composition was extracted into one function).
+  //
+  // `rs` is the representative target (broadest tier subscription, and the repo
+  // carrying the live eval-manifest). The USE lane is composed under a
+  // fail-safe-public marker, matching `readConsumerVisibility`'s default — the
+  // widest entry set, so a path missing THERE is missing everywhere.
+  let laneEntries = null;
+  let laneError = null;
+  if (malformedCount > 0) {
+    // NOT an error of the composition — a refusal to invoke it. Any well-formed
+    // record still gets its (a)/(b) verdicts; its (c) verdict fails closed with
+    // this reason rather than taking the whole report down with it.
+    laneError =
+      `lane composition NOT ATTEMPTED — ${malformedCount} malformed target_owned ` +
+      `record(s) below would make buildPlan refuse the manifest (exit 1). Fix those ` +
+      `records and re-run; the local_only fence cannot be verified until they parse.`;
+  } else {
+    try {
+      laneEntries = {
+        use: composeManagedGitignoreEntries(buildPlan(manifestText, "rs", null, "use"), {
+          visibility: "public",
+          optOut: [],
+        }),
+        build: composeManagedGitignoreEntries(
+          buildPlan(manifestText, "rs", null, "build"),
+          null,
+        ),
+      };
+    } catch (e) {
+      laneError = e && e.message ? e.message : String(e);
+    }
+  }
+
+  const results = [];
+  for (const rec of records) {
+    const defect = defects.get(rec);
+    if (defect !== null) {
+      results.push({
+        artifact: rec.path || "(malformed entry)",
+        status: STATUS.FAIL,
+        detail: `malformed target_owned record: ${defect}`,
+      });
+      continue;
+    }
+    const bare = rec.path.replace(/^\.claude\//, "").replace(/\/$/, "");
+
+    // (a) absent from every tier.
+    const inTier = tierEntries.filter(
+      (t) =>
+        t.glob === rec.path ||
+        t.glob === bare ||
+        loomGlobMatch(t.glob, bare) ||
+        loomGlobMatch(bare, t.glob),
+    );
+    if (inTier.length > 0) {
+      results.push({
+        artifact: rec.path,
+        status: STATUS.FAIL,
+        detail: `target_owned path is ALSO in synced tier(s) ${inTier.map((c) => `${c.tier}:${c.glob}`).join(", ")} — loom cannot both ship a path and disclaim ownership of it (shipping overwrites the target's own file).`,
+      });
+      continue;
+    }
+
+    // (b) absent from every obsoleted list. EXACT-path match only: an ANCESTOR
+    // prefix entry is exactly the case the veto exists to handle, so it is
+    // legitimate and MUST NOT fail here.
+    const inPurge = Object.entries(purgeLists)
+      .filter(([, list]) => list.includes(rec.path))
+      .map(([k]) => k);
+    if (inPurge.length > 0) {
+      results.push({
+        artifact: rec.path,
+        status: STATUS.FAIL,
+        detail: `target_owned path is ALSO listed in ${inPurge.join(", ")} — an explicit purge and a deletion veto on the same path are contradictory instructions. Remove the purge entry; the veto already spares it from any ANCESTOR-prefix purge (which is legitimate and NOT flagged here).`,
+      });
+      continue;
+    }
+
+    // (c) local_only reaches the managed block on BOTH lanes.
+    if (rec.publish === "local_only") {
+      if (laneError !== null) {
+        results.push({
+          artifact: rec.path,
+          status: STATUS.FAIL,
+          detail: `cannot verify the local_only fence reaches both lanes — plan/compose threw: ${laneError}. Fail-closed.`,
+        });
+        continue;
+      }
+      const missingLanes = ["use", "build"].filter(
+        (lane) => !laneEntries[lane].includes(rec.path),
+      );
+      if (missingLanes.length > 0) {
+        results.push({
+          artifact: rec.path,
+          status: STATUS.FAIL,
+          detail: `declared publish: local_only but ABSENT from the emitted managed-gitignore list on lane(s) ${missingLanes.join(", ")} — the fence would not reach that lane's targets. The BUILD lane is the one that matters most here (its consumer-only gitignore_additions list is deliberately empty).`,
+        });
+        continue;
+      }
+    }
+
+    results.push({
+      artifact: rec.path,
+      status: STATUS.PASS,
+      detail:
+        `publish: ${rec.publish} — not in any tier, not in any obsoleted list` +
+        (rec.publish === "local_only"
+          ? ", and present in the composed managed-gitignore block on BOTH lanes"
+          : " (scanned normally; the target commits it)"),
     });
   }
   return { id, source_rule, results };
@@ -5132,6 +5549,106 @@ function checkCodexGuardRootParity(root) {
   return { id, source_rule, results };
 }
 
+// =======================================================================
+//  CHECK 29 — variant-overlay hook output discipline
+// =======================================================================
+// hook-output-discipline.md scopes MUST-1 to `**/.claude/variants/**/hooks/**`,
+// but NO check covered that glob: `hook-delivery` scopes to the GLOBAL hook tree
+// only (sync-manifest.yaml says so explicitly), and validate-variant-drift.mjs
+// classifies overlay EXISTENCE/STALENESS, never overlay CONTENT. A `variants:`
+// overlay REPLACES its base file downstream, so a stale overlay ships the exact
+// defect the base already fixed — invisible to every existing gate.
+//
+// Enumeration is a positive allowlist over the FILE SHAPE (cc-artifacts.md
+// Rule 10): every `variants/<lang>/hooks/*.js` on disk is scanned, so a NEWLY
+// added overlay hook is covered automatically and cannot be omitted by silence.
+//
+// Two structural signals only — both unevadable by surface rewrite, per
+// hook-output-discipline.md MUST-2 (and its closing MUST NOT: a detector whose
+// false-positive rate exceeds its true-positive rate is the worse failure mode):
+//   (a) a LITERAL `process.exit(2)` — the compliant mechanism exits via
+//       `out.exitCode` from instructAndWait(), never a literal 2;
+//   (b) a `continue: false` emission with NO `lib/instruct-and-wait` require —
+//       the REQUIRED-POSITIVE: a halting overlay hook must carry the mechanism.
+// `process.exit(1)` is deliberately OUT of scope: it halts at no hook event, and
+// both its legitimate uses here (the cc-artifacts.md Rule 7 timeout fallback that
+// emits `{continue:true}` first — the carve-out MUST NOT names — and a standalone
+// `--sweep` CLI entrypoint) would false-positive.
+function enumerateVariantHooks(root) {
+  const base = join(root, ".claude", "variants");
+  const out = [];
+  let langs;
+  try {
+    langs = readdirSync(base, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const lang of langs) {
+    if (!lang.isDirectory()) continue;
+    const dir = join(base, lang.name, "hooks");
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue; // this variant declares no hook overlays
+    }
+    for (const e of entries) {
+      if (e.isFile() && e.name.endsWith(".js")) {
+        out.push({ rel: `variants/${lang.name}/hooks/${e.name}`, abs: join(dir, e.name) });
+      }
+    }
+  }
+  return out;
+}
+
+function checkVariantHookOutputDiscipline(root) {
+  const id = "variant-hook-output-discipline";
+  const source_rule = "hook-output-discipline.md MUST-1";
+  const hooks = enumerateVariantHooks(root);
+  if (hooks === null) {
+    return { id, source_rule, results: [{ artifact: "variants/", status: STATUS.SKIP, detail: "no variants/ tree" }] };
+  }
+  const results = [];
+  for (const h of hooks.sort((a, b) => a.rel.localeCompare(b.rel))) {
+    const src = safeRead(h.abs);
+    if (src === null) {
+      results.push({ artifact: h.rel, status: STATUS.SKIP, detail: "unreadable" });
+      continue;
+    }
+    const lines = src.split("\n");
+    const rawExit2 = [];
+    lines.forEach((l, i) => {
+      if (/process\s*\.\s*exit\s*\(\s*2\s*\)/.test(l)) rawExit2.push(i + 1);
+    });
+    const emitsContinueFalse = /["']?continue["']?\s*:\s*false/.test(src);
+    const hasMechanism = /require\([^)]*instruct-and-wait/.test(src);
+
+    if (rawExit2.length) {
+      results.push({
+        artifact: h.rel,
+        status: STATUS.FAIL,
+        detail: `raw process.exit(2) at line(s) ${rawExit2.join(", ")} — a halting hook MUST emit via lib/instruct-and-wait (compliant code exits with out.exitCode, never a literal 2)`,
+      });
+    } else if (emitsContinueFalse && !hasMechanism) {
+      results.push({
+        artifact: h.rel,
+        status: STATUS.FAIL,
+        detail: "emits `continue: false` without requiring lib/instruct-and-wait — halting hooks MUST carry the canonical six-field shape",
+      });
+    } else {
+      results.push({
+        artifact: h.rel,
+        status: STATUS.PASS,
+        detail: hasMechanism ? "halting sites emit via instruct-and-wait" : "no halting branch",
+      });
+    }
+  }
+  if (!results.length) {
+    results.push({ artifact: "variants/*/hooks/", status: STATUS.SKIP, detail: "no variant hook overlays on disk" });
+  }
+  return { id, source_rule, results };
+}
+
 const CHECK_FNS = {
   "command-frontmatter": checkCommandFrontmatter,
   "settings-hook-registration": checkSettingsRegistration,
@@ -5154,6 +5671,7 @@ const CHECK_FNS = {
   "codex-guard-root-parity": checkCodexGuardRootParity,
   "variant-orphan": checkVariantOrphan,
   "allowlist-paths-coverage": checkAllowlistPathsCoverage,
+  "target-owned-integrity": checkTargetOwnedIntegrity,
   "surface-role-membership": checkSurfaceRoleMembership,
   "claude-md-surface-role-parity": checkClaudeMdSurfaceRoleParity,
   "gitignore-learning-parity": checkGitignoreLearningParity,
@@ -5162,6 +5680,7 @@ const CHECK_FNS = {
   "operator-ref-credential-separation": checkOperatorRefCredentialSeparation,
   "signing-model-key-separation": checkSigningModelKeySeparation,
   "settings-deny-rule-form": checkSettingsDenyRuleForm,
+  "variant-hook-output-discipline": checkVariantHookOutputDiscipline,
 };
 
 function runChecks(root, only, opts) {
@@ -5378,6 +5897,8 @@ export {
   parseSubagentInternalCapture,
   checkHookDelivery,
   parseHookDelivery,
+  checkVariantHookOutputDiscipline,
+  enumerateVariantHooks,
   checkConsumerEfficacy,
   validateGeminiCommandToml,
   extractRulesIndexCitations,
@@ -5395,6 +5916,7 @@ export {
   classifyVariantFile,
   listTrackedVariants,
   checkAllowlistPathsCoverage,
+  checkTargetOwnedIntegrity,
   checkSurfaceRoleMembership,
   parseSurfaceRoles,
   parseReposRoles,

@@ -230,6 +230,28 @@ import {
 // a `--manifest` override or a temp path).
 const MANIFEST_REL_LABEL = ".claude/test-harness/eval-manifest.json";
 
+/**
+ * The PATH-BEARING fields of an eval-manifest ENTRY — the fields check (a)
+ * below resolves on disk, and the ONE notion of "this manifest value names a
+ * file/directory".
+ *
+ * EXPORTED because loom#1549 ask 3's delivery-side gate
+ * (`sync-tier-aware.mjs::declaredReferentBreaks`) must adjudicate exactly the
+ * references THIS checker will later demand resolve at the target. Two
+ * hand-maintained field lists would drift, and the drift is silent in the worst
+ * direction: a new path-bearing field would be enforced HERE (at the target,
+ * after delivery) while the delivery gate never looked at it — which is the
+ * #1549 shape one field over. Importing the constant makes the delivery gate
+ * learn any new field by construction.
+ *
+ * `fixturesDir` is the one DIRECTORY member; the other two name files. The
+ * split matters to the consumer (a directory survives while it still holds an
+ * unpurged file), so it is recorded here beside the list rather than
+ * re-derived there.
+ */
+export const MANIFEST_PATH_FIELDS = Object.freeze(["scanner", "fixturesDir", "probes"]);
+export const MANIFEST_DIR_FIELDS = Object.freeze(["fixturesDir"]);
+
 // Positive allowlist (`cc-artifacts.md` Rule 10): repo class -> the pin sets
 // loom declares IN CODE. A class ABSENT from this table is NOT bucketed into
 // "empty" — it routes to the manifest-declared branch, which WARNS loudly when
@@ -633,7 +655,7 @@ export function checkManifestIntegrity({ manifestPath, repoRoot }) {
       errors.push(`entry '${key}' is not an object`);
       continue;
     }
-    for (const field of ["scanner", "fixturesDir", "probes"]) {
+    for (const field of MANIFEST_PATH_FIELDS) {
       const val = spec[field];
       if (val == null) continue;
       const p = rel(val);
@@ -645,7 +667,9 @@ export function checkManifestIntegrity({ manifestPath, repoRoot }) {
         errors.push(`entry '${key}'.${field} resolves outside the .claude/ tree: ${val} (a scanner/fixtures/probes path MUST be contained within .claude/ — an out-of-tree path is an execution/containment escape)`);
         continue;
       }
-      const ok = field === "fixturesDir" ? existsSync(p) && statSync(p).isDirectory() : existsSync(p);
+      const ok = MANIFEST_DIR_FIELDS.includes(field)
+        ? existsSync(p) && statSync(p).isDirectory()
+        : existsSync(p);
       if (!ok) {
         errors.push(`entry '${key}'.${field} does not resolve on disk: ${val} (declared-but-missing = FAIL, never SKIP)`);
         continue;

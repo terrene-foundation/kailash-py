@@ -22,7 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 
 // Symlink-safe write. Node's fs.writeFileSync follows symlinks by
@@ -69,7 +69,8 @@ import { resolveOverlay } from "./lib/variant-overlay.mjs";
 // loom#1501 (L4) — the two emission axes, declared ONCE. Previously three
 // literals apiece across emit.mjs / validate-emit.mjs / validate-proximity-band.mjs,
 // kept aligned by prose; the proximity-band copy had already drifted to a
-// 3-lane set that rejected `--lang rb` and `--lang prism`. Rationale, the
+// 3-lane set that rejected `--lang prism` (and `--lang rb`, then still a
+// declared lane; rb was retired as a lane 2026-08-11). Rationale, the
 // measured drift, and why the set is a DECLARATION rather than a disk probe:
 // see the module header.
 import { EMIT_LANGS, EMIT_CLIS } from "./lib/emit-axes.mjs";
@@ -78,7 +79,15 @@ import { EMIT_LANGS, EMIT_CLIS } from "./lib/emit-axes.mjs";
 // LOADS alongside canon; the loader enforces the add-only-no-override invariant
 // (a collision with a canon rule is a LOUD throw that BLOCKS the emit).
 import { loadLocalRules } from "./lib/local-rules.mjs";
-import { extractPolicies } from "../codex-mcp-guard/extract-policies.mjs";
+// loom#1538 — the codex policy extractor is loaded LAZILY (see
+// `loadExtractPolicies` below), NOT statically. `../codex-mcp-guard/` is a
+// CODEX-lane artifact; a cc-only template (`clis: [claude]`) correctly ships
+// no codex surface, so a top-level import of it made emit.mjs — and therefore
+// validate-emit.mjs, which imports emit.mjs — fail at MODULE LOAD with
+// ERR_MODULE_NOT_FOUND on those repos, unusable as a gate. It stayed invisible
+// at loom because `.claude/codex-mcp-guard` resolves there via the repo-root
+// `.codex-mcp-guard/` tree. The dependency is real but it belongs to two
+// codex-only functions, so it is paid at CALL time by those two.
 // Validator 18 (#408 AC#5-a) shares the EMITTER's canonical manifest parser +
 // glob matcher so the validator's cc-only certification provably matches what
 // emit-cli-artifacts actually excludes (no divergent hand-rolled second parser).
@@ -115,6 +124,52 @@ export { CLI_DELIVERY_VALUES, parseExcludeFrom, deriveCliDelivery, checkRuleCliD
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, "..", "..");
+
+// ────────────────────────────────────────────────────────────────
+// Codex surface — lazy + optional (loom#1538)
+// ────────────────────────────────────────────────────────────────
+// Resolved relative to THIS file (`.claude/bin/`), matching what the old
+// static specifier `../codex-mcp-guard/extract-policies.mjs` resolved to, so
+// the loom symlink path is unchanged.
+const CODEX_GUARD_DIR = path.resolve(__dirname, "..", "codex-mcp-guard");
+const CODEX_EXTRACTOR = path.join(CODEX_GUARD_DIR, "extract-policies.mjs");
+
+/**
+ * Is a codex-mcp-guard surface present in this repo?
+ *
+ * Absence is EXPECTED and CORRECT on a cc-only template — it is not an error
+ * condition to be repaired by shipping the codex tree there. Callers that need
+ * the extractor branch on this; they do not assume it.
+ */
+export function hasCodexGuardSurface() {
+  return fs.existsSync(CODEX_EXTRACTOR);
+}
+
+let extractPoliciesCache = null;
+
+/**
+ * Load `extractPolicies` on demand. Throws a NAMED error — identifying the
+ * missing codex surface and the path probed — rather than the opaque
+ * ERR_MODULE_NOT_FOUND that a static import raised at module load. A consumer
+ * that genuinely needs the extractor still fails, but it fails AT THE POINT OF
+ * USE with a message that says what is missing and why it might legitimately
+ * be absent.
+ */
+async function loadExtractPolicies() {
+  if (extractPoliciesCache) return extractPoliciesCache;
+  if (!hasCodexGuardSurface()) {
+    throw new Error(
+      `codex surface absent: ${CODEX_EXTRACTOR} does not exist. ` +
+        `The MCP policy extractor is a CODEX-lane artifact; a cc-only template ` +
+        `(clis: [claude]) correctly ships no codex-mcp-guard tree. Do not add ` +
+        `the scaffold to satisfy this import — skip the codex-only path instead ` +
+        `(see hasCodexGuardSurface()).`,
+    );
+  }
+  const mod = await import(pathToFileURL(CODEX_EXTRACTOR).href);
+  extractPoliciesCache = mod.extractPolicies;
+  return extractPoliciesCache;
+}
 
 // ────────────────────────────────────────────────────────────────
 // v6 abridgement protocol (extends v5 with M-1: "BLOCKED responses:")
@@ -1407,7 +1462,19 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
   const allCaps = loadCliCaps();
   const caps = allCaps[cli] || {
     warn_cap_bytes: 32768,
-    block_cap_bytes: 61440,
+    // 65536 mirrors sync-manifest.yaml's co-owner-approved 61440 → 65536 raise
+    // (2026-08-12, plan §3.2 option (b)). PARITY IS THE CONTRACT, enforced by
+    // emit-class-blind-manifest-reads.test.mjs::F1394-C: a manifest-less
+    // consumer reading a stale fallback would be gated at a cap loom's own gate
+    // no longer applies, and would ship a baseline loom would reject.
+    //
+    // NOTE the asymmetry this creates, recorded rather than left to be found:
+    // the manifest grant carries a 2027-02-12 EXPIRY; this constant carries no
+    // expiry mechanism. When the grant lapses the manifest reverts and F1394-C
+    // reds again, which is the intended signal — but it fires at the NEXT edit,
+    // not on the expiry date. Do not read this constant as an independent
+    // authorization for 65536; it is a mirror, and the manifest is the source.
+    block_cap_bytes: 65536,
     headroom_floor_pct: 10,
   };
   const WARN_CAP = caps.warn_cap_bytes;
@@ -1503,6 +1570,29 @@ export function emitBaseline(cli, outDir, { lang = null, verbose = false, dryRun
     BLOCK_CAP > 0
       ? Number(((headroomBytesForReport / BLOCK_CAP) * 100).toFixed(2))
       : 0;
+
+  // loom#1539 (B) — UNCONDITIONAL per-lane headroom line.
+  //
+  // Until now the ADVISORY line above was the ONLY carrier of headroom on
+  // stdout, and it prints ONLY when the lane is inside the proximity band.
+  // `validate-proximity-band.mjs` therefore had to read "no ADVISORY line"
+  // as "lane is above the band" — an inference, not a measurement, and one
+  // that is indistinguishable from "the ADVISORY line drifted and no longer
+  // parses". Measured: renaming `headroom ` to `headroom of ` in the
+  // ADVISORY line above made that gate report both 13.46% lanes as
+  // `headroom=(above band)`, `near-breach lanes: 0`, `verdict: clean`,
+  // exit 0 — a FALSE CLEAN produced by a one-token edit in a sibling file.
+  //
+  // A measurement that is printed only when it is interesting cannot
+  // distinguish "not interesting" from "not taken"
+  // (`instrument-discipline.md` MUST-1). So the number is now printed on
+  // EVERY lane, every run, and the gate requires it: a parsed lane with no
+  // headroom line is UNRUN, not clean. This line is additive — the
+  // ADVISORY / tier / headroom-floor lines are untouched.
+  console.log(
+    `[${cli}${lang ? " " + lang : ""}] headroom: ${headroomPctForReport}% ` +
+      `(band ${proximityBandPct}%, floor ${EFFECTIVE_HEADROOM_FLOOR_PCT}%, cap ${BLOCK_CAP}B)`,
+  );
 
   if (dryRun) {
     // Dry-run: return metadata but don't write files; caller reports
@@ -1631,7 +1721,19 @@ export function validateSlotRoundTrip(cli, lang = null) {
 // Extract predicates from .claude/hooks/ → bijection against acceptance
 // fixture expectations. When bijection holds, write policies.json and
 // flip POLICIES_POPULATED=true in server.js.
-export function validateMcpBijectionAgainstFixtures() {
+// Async since loom#1538 — the extractor is a lazy `await import`. On a repo
+// with no codex surface this returns `skipped: true`, which callers MUST NOT
+// print as a pass: nothing was checked (same UNRUN-is-not-PASS contract as
+// coc-eval-all.mjs's `coverage_asserted`).
+export async function validateMcpBijectionAgainstFixtures() {
+  if (!hasCodexGuardSurface()) {
+    return {
+      pass: true,
+      skipped: true,
+      reason: `no codex surface at ${path.relative(REPO, CODEX_GUARD_DIR)}/ — Validator 13 is not applicable to a cc-only repo (nothing was verified)`,
+    };
+  }
+  const extractPolicies = await loadExtractPolicies();
   // Fixture moved from workspaces/multi-cli-coc/fixtures/ (gitignored)
   // to .claude/fixtures/ (committed) on 2026-04-22 so emit.mjs works
   // from a fresh clone. USE-template repos vendor the fixture when
@@ -2642,8 +2744,12 @@ export function validateRosterSchemaCoupling() {
 // Shape A orchestrator functions (`main`, top-level entry points) are
 // filtered as non-policy. Policies must be Shape B/C/D — Shape A's
 // `main` is the script entry, not a guard predicate.
-export function wireMcpPolicies(outDir) {
+// Async since loom#1538 — see loadExtractPolicies. Unlike Validator 13 this
+// one does NOT degrade to a skip: writing the policy table is the caller's
+// explicit request, so an absent codex surface throws the named error.
+export async function wireMcpPolicies(outDir) {
   const hooksDir = path.join(REPO, ".claude", "hooks");
+  const extractPolicies = await loadExtractPolicies();
   const extracted = extractPolicies(hooksDir);
 
   const filteredPredicates = extracted.predicates.filter((p) => {
@@ -2698,13 +2804,15 @@ const EMIT_USAGE =
 // matrix and V17's target loop consumes the same list, so the emission axes and
 // the distribution axes cannot drift apart.
 //
-// ONE BOUND, stated rather than implied. Because `rb` has no overlay directory,
-// `--lang rb` composes to the same bytes as a no-`--lang` run today. That is a
-// property of the DECLARATION (a lane whose overrides are all inherited), not a
-// defect of the check below — but it is NOT left silent either: `noteAbsentOverlay`
-// prints the fact, because a byte count an operator cannot attribute to a lane is
-// the same non-discriminating reading this whole check exists to prevent. See
-// there for why the disposition is loud-succeed rather than fail-closed.
+// ONE BOUND, stated rather than implied. A lane with no overlay directory
+// composes to the same bytes as a no-`--lang` run. That is a property of the
+// DECLARATION (a lane whose overrides are all inherited), not a defect of the
+// check below — but it is NOT left silent either: `noteAbsentOverlay` prints the
+// fact, because a byte count an operator cannot attribute to a lane is the same
+// non-discriminating reading this whole check exists to prevent. See there for
+// why the disposition is loud-succeed rather than fail-closed. NO declared lane
+// is in that state today: `rb` was the only one, and it was removed as a lane on
+// 2026-08-11 (Ruby ships as a binding of the rs all-bindings template).
 
 /**
  * loom#1501 (L4). `--lang <declared-lane-with-no-overlay-dir>` is LEGAL and
@@ -2712,11 +2820,11 @@ const EMIT_USAGE =
  * invalid by a disk probe). But succeeding SILENTLY is its own instrument
  * failure, one layer in. Measured, on the codex CLI:
  *
- *   emit.mjs --cli codex --lang rb --dry-run  →  "[codex rb] WARN: 11 rules, 53168B"
- *   emit.mjs --cli codex --lang py --dry-run  →  "[codex py] WARN: 11 rules, 53168B"
+ *   emit.mjs --cli codex --lang <no-overlay-lane> --dry-run  →  "WARN: 11 rules, 53168B"
+ *   emit.mjs --cli codex --lang py             --dry-run  →  "[codex py] WARN: 11 rules, 53168B"
  *
- * Byte-identical. Nothing in that line lets the operator distinguish "`rb`
- * genuinely has no lane-specific overrides, so this IS `rb`'s composition" from
+ * Byte-identical. Nothing in that line lets the operator distinguish "this lane
+ * genuinely has no lane-specific overrides, so this IS its composition" from
  * "my `--lang` never took effect and I am reading some other lane" — the reading
  * `instrument-discipline.md` MUST-1 forbids citing, and the exact shape that made
  * the empty-`$L` trap costly (a plausible number for the wrong lane).
@@ -2879,8 +2987,8 @@ export function parseArgs(argv) {
       return `${JSON.stringify(v)}, which is not a well-formed lane name`;
     }
     // Against the DECLARATION, never against `.claude/variants/` on disk — see
-    // EMIT_LANGS. A disk probe rejects `rb` (declared, no overlay dir) and
-    // accepts `codex` (an overlay dir that is not a lang lane); an `existsSync`
+    // EMIT_LANGS. A disk probe rejects a declared lane that has no overlay dir
+    // and accepts `codex` (an overlay dir that is not a lang lane); an `existsSync`
     // disk probe additionally accepts any FILE, so `--lang README.md` passed and
     // emitted base output byte-identical to a no-lang run — exactly the silent
     // lane-shift this check's own error string claims to prevent.
@@ -2910,7 +3018,8 @@ export function parseArgs(argv) {
   return args;
 }
 
-function main() {
+// Async since loom#1538 — Validator 13's extractor is a lazy `await import`.
+async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   // loom#1501 (L4) — fail LOUD and EARLY on any value-taking flag that did not
@@ -3148,15 +3257,32 @@ function main() {
     }
     if (result.tier === "BLOCK") {
       overallPass = false;
+      // Read the LIVE per-CLI caps rather than restating literals. The prior
+      // form hardcoded 61440 here while emitBaseline gated on the manifest
+      // value, so after the 2026-08-12 raise to 65536 this message would have
+      // reported a cap that no longer existed — and reported an "over by"
+      // arithmetic computed against it, understating the real overage by
+      // 4096 B. A remediation message that misstates the ceiling it is telling
+      // you to fit under is worse than no message.
+      const _caps = loadCliCaps()[cli] || {
+        warn_cap_bytes: 32768,
+        block_cap_bytes: 65536,
+      };
       process.stderr.write(
-        `[${cli}] HARD BLOCK: ${result.emission_bytes}B >= block_cap 61440 (over by ${result.emission_bytes - 61440}B)\n`,
+        `[${cli}] HARD BLOCK: ${result.emission_bytes}B >= block_cap ${_caps.block_cap_bytes} (over by ${result.emission_bytes - _caps.block_cap_bytes}B)\n`,
       );
       process.stderr.write(
         `[${cli}] remediation: per spec v6 §A.2, demote a CRIT rule to path-scoped, tighten a per-rule budget, or trim the ruleset. See ${subdir}/emit-report-${cli}.json for per-rule sizes.\n`,
       );
     } else if (result.tier === "WARN") {
+      // Same defect, same fix: the WARN band's upper bound IS the block cap, so
+      // a literal here drifts from the manifest exactly as the BLOCK line did.
+      const _caps = loadCliCaps()[cli] || {
+        warn_cap_bytes: 32768,
+        block_cap_bytes: 65536,
+      };
       process.stderr.write(
-        `[${cli}] WARN: ${result.emission_bytes}B in [${32768}, ${61440}) — refactoring-signal tier (steady state per v6 §2.2).\n`,
+        `[${cli}] WARN: ${result.emission_bytes}B in [${_caps.warn_cap_bytes}, ${_caps.block_cap_bytes}) — refactoring-signal tier (steady state per v6 §2.2).\n`,
       );
     }
     // v6.2 Shard 1 — per-lang headroom floor enforcement. Surfaces with
@@ -3214,17 +3340,22 @@ function main() {
     }
   }
 
-  // Validator 13 + POLICIES wiring — always runs; not CLI-scoped.
-  const v13 = validateMcpBijectionAgainstFixtures();
+  // Validator 13 + POLICIES wiring — runs wherever a codex surface exists;
+  // not CLI-scoped. On a cc-only repo there is no codex surface, so it SKIPS
+  // (loom#1538) and says so: a skip is not a pass, and the log line must not
+  // let a reader take one for the other.
+  const v13 = await validateMcpBijectionAgainstFixtures();
   if (!v13.pass) {
     overallPass = false;
     const detail = v13.reason || JSON.stringify(v13.failures);
     process.stderr.write(`VALIDATOR 13 FAIL: ${detail}\n`);
+  } else if (v13.skipped) {
+    console.log(`[validator-13] SKIP (NOT a pass) — ${v13.reason}`);
   } else if (args.dryRun) {
     console.log(`[validator-13] PASS (dry-run; policies.json not written)`);
   } else {
     const policiesDir = path.join(args.out, "codex-mcp-guard");
-    const policiesPath = wireMcpPolicies(policiesDir);
+    const policiesPath = await wireMcpPolicies(policiesDir);
     console.log(`[validator-13] PASS + wrote ${policiesPath}`);
   }
 
@@ -3232,5 +3363,12 @@ function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+  // Explicit rejection handler: main is async as of loom#1538, and a bare
+  // `main()` would surface a throw as an unhandled rejection whose exit code
+  // is a runtime-flag detail rather than this script's contract. Keep the
+  // pre-async behaviour — print the failure, exit 1.
+  main().catch((err) => {
+    process.stderr.write(`emit: ${err?.stack || err}\n`);
+    process.exit(1);
+  });
 }

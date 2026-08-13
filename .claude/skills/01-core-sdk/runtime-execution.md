@@ -242,10 +242,9 @@ See `STATE_OWNERSHIP_CONVENTION.md` for mixin development guidelines.
 
 ### Primary Sources
 
-- [`CLAUDE.md#L111-177`](../../../CLAUDE.md)
+- [`CLAUDE.md`](../../../CLAUDE.md)
 
 ### Advanced References
-
 
 ## Performance Configuration
 

@@ -34,7 +34,6 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
-
 ## Common Use Cases
 
 - **Async-Workflow-Patterns Workflows**: Pre-built patterns for common use cases with best practices built-in
@@ -52,6 +51,7 @@ results, run_id = runtime.execute(workflow.build())
 ## When to Escalate to Subagent
 
 Use specialized subagents when:
+
 - Complex implementation needed
 - Production deployment required
 - Deep analysis necessary
@@ -60,7 +60,8 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`CLAUDE.md#L117-132`](../../{doc})
+
+- [`CLAUDE.md`](../../../CLAUDE.md)
 
 ## Quick Tips
 
