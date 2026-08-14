@@ -1,10 +1,51 @@
-# ═══ cont-17 FINAL — main `a7feacb31` · **9 PRs MERGED · ALL LANE PRs CLOSED** ═══
+# ═══ cont-17 FINAL — main `7f94ad324` · **11 PRs MERGED · ALL LANE PRs CLOSED** ═══
 
 **#2103 MERGED** — the last lane PR. Closes **#2047** (MFA had no actor: every action
 authorized on a caller-supplied `user_id`), **#2088**, **#2089**, **#2040**.
-**38 issues open** (from 35 at session start — that is discovery, each carrying a measurement).
+**#2125 MERGED** (`b7d8cf533`) — the two `ci-runners.operator.local*` files had NO frontmatter,
+so they loaded as project instructions in EVERY session; now `priority:10 path-scoped`.
+**#2126 MERGED** (`7f94ad324`) — cont-17 notes.
+**39 issues open** (from 35 at session start — that is discovery, each carrying a measurement).
 
-**Open PRs: #2124 #2125 #2126 (mine, awaiting CI) + #2123 (loom's Gate-2 sync, NOT ours).**
+**Open PRs: #2124 (BLOCKED, read below) + #2123 (loom's Gate-2 sync, NOT ours).**
+
+## ⛔ START HERE — #2124 IS RED, AND THAT IS THE FINDING (#2129)
+
+**#2124 removes `continue-on-error: true` from Tier 2 — the last step of #2038.** Its own CI
+is the first blocking Tier-2 run this repo has ever had, and it **fails on all four
+interpreters**. Do NOT read that as "#2124 broke something":
+
+```
+$ gh pr view 2124 --json files
+  25+/39-  .github/workflows/unified-ci.yml     # THE ONLY FILE
+```
+
+The diff removes comments, the flag, and the paired annotation step. **No source, no tests, no
+pytest invocation — it cannot introduce a test failure, only stop hiding one.** The 23
+failures are on `main` RIGHT NOW.
+
+```
+13 failed, 2559 passed, 47 skipped, 4 deselected, 1 xfailed, 10 errors in 55.37s
+```
+
+Cause: **`kailash.utils.server_auth.ServerAuthNotConfiguredError`**. PR #2100's fail-closed
+auth default (correct — it fixes CRITICAL #2072) broke Tier-2 suites that build servers with
+no credentials. #2100 fixed the suites it could **see** (Tier 1); Tier 2 ran under
+`continue-on-error`, so its author got no signal.
+
+Affected (Py 3.12; identical 3.11/3.13/3.14):
+
+- `tests/tier2_integration/api/test_workflow_api_async_runtime.py` — 7
+- `tests/tier2_integration/runtime/test_core_runtime_injection.py` — 4
+- `tests/tier2_integration/mcp_server/test_oauth.py` — 10 setup ERRORs (`TestAuthorizationServer`)
+- `tests/tier2_integration/middleware/test_circular_imports.py::test_create_gateway_with_auth`
+- `tests/tier2_integration/servers/test_workflow_server.py::…::test_workflow_registration` —
+  `expected call not found`, **NOT** an auth error; diagnose separately, do not fold it in
+
+**Tracked as #2129, which blocks #2124.** Fix order is #2129 → then #2124. Do not merge #2124
+first: it would red every PR in the repo on failures none of them introduced, which is the
+exact reason the flag existed. When fixing, check each test's INTENT — `test_create_gateway_with_auth`
+presumably wants auth ON with a real secret, not `require_auth=False`.
 
 ## ⚠ A CO-OWNER OVERRIDE IS ON THE RECORD — #2103 merged with CodeQL RED
 
