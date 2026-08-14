@@ -155,7 +155,7 @@ def test_mfa_orphan_send_sms_method_is_deleted():
     """
     from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-    node = MultiFactorAuthNode()
+    node = MultiFactorAuthNode(require_actor=False)
     bound = getattr(node, "_send_sms", None)
     # Module-level _send_sms is NOT a method on the instance.
     # If the instance method comes back, ``bound`` becomes a bound method.

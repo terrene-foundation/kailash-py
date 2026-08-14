@@ -290,7 +290,7 @@ def test_session_security_events_are_not_swallowed_by_a_severity_error():
 def test_mfa_audit_sink_is_wired():
     """The sink stood at None from this file's first commit behind a deadlock
     claim for which no evidence exists in the repository's history."""
-    node = MultiFactorAuthNode(name="mfa_2060")
+    node = MultiFactorAuthNode(name="mfa_2060", require_actor=False)
     assert node.audit_log_node is not None, "MFA audit sink is not wired"
     assert node.security_event_node is not None, "MFA security event sink is not wired"
 
@@ -299,7 +299,7 @@ def test_mfa_audit_sink_is_wired():
 def test_admin_gated_destructive_mfa_actions_write_an_audit_record(action):
     """revoke/disable/reset completed with no record: the sink was None AND the
     sync dispatcher's audit call was commented out."""
-    node = MultiFactorAuthNode(name=f"mfa_{action}_2060")
+    node = MultiFactorAuthNode(name=f"mfa_{action}_2060", require_actor=False)
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
@@ -319,9 +319,20 @@ def test_admin_gated_destructive_mfa_actions_write_an_audit_record(action):
 
 
 def test_mfa_audit_records_declare_the_missing_actor():
-    """#2047: this node has no caller identity. The record must not imply that
-    user_id is the actor — an auditor reading it sees the subject only."""
-    node = MultiFactorAuthNode(name="mfa_actor_2060")
+    """#2047 UPDATED, not deleted.
+
+    This shipped as a deliberate tripwire: the record carried ``actor: None``
+    and this test asserted it, so the trail would not imply an attribution it
+    could not support, and so that whoever closed #2047 would be made to come
+    back here. #2047 is closed, so the expectation moves rather than
+    disappears -- the ONE case where the node still genuinely does not know
+    the caller is the explicit ``require_actor=False`` opt-out, and there an
+    absent actor is the honest record.
+
+    The positive half -- a resolved actor lands in the record -- is pinned in
+    test_issue_2047_mfa_actor.py.
+    """
+    node = MultiFactorAuthNode(name="mfa_actor_2060", require_actor=False)
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
@@ -330,8 +341,8 @@ def test_mfa_audit_records_declare_the_missing_actor():
     assert written, "revoke wrote no audit record"
     assert "actor" in written[0]["event_data"], written[0]
     assert written[0]["event_data"]["actor"] is None, (
-        "the node grew a caller identity; #2047 may be closed and this "
-        "expectation should be revisited"
+        "under require_actor=False the node has no caller identity, so "
+        "recording one would be a fabricated attribution"
     )
 
 
@@ -355,7 +366,7 @@ def test_no_auth_node_calls_a_collaborator_method_that_does_not_exist():
     instances = {
         "directory_integration.py": DirectoryIntegrationNode(name="d_sweep"),
         "enterprise_auth_provider.py": EnterpriseAuthProviderNode(name="e_sweep"),
-        "mfa.py": MultiFactorAuthNode(name="m_sweep"),
+        "mfa.py": MultiFactorAuthNode(name="m_sweep", require_actor=False),
         "session_management.py": SessionManagementNode(name="s_sweep"),
         "sso.py": SSOAuthenticationNode(name="o_sweep"),
     }
@@ -495,7 +506,7 @@ def test_audit_records_never_carry_credential_material(action, kwargs, caplog):
     the unwired sink it replaced.
     """
     logger_name = f"audit.mfa_secret_{action}_audit_log"
-    node = MultiFactorAuthNode(name=f"mfa_secret_{action}")
+    node = MultiFactorAuthNode(name=f"mfa_secret_{action}", require_actor=False)
 
     # Enrol first. Without this, generate_backup_codes returns
     # {"success": False, "error": "MFA not setup for user"} and every
@@ -543,7 +554,7 @@ def test_audit_records_never_carry_credential_material(action, kwargs, caplog):
 def test_audit_record_declares_what_it_withheld():
     """Redaction must be visible, not silent: a partial result presented as a
     whole one is its own kind of false record."""
-    node = MultiFactorAuthNode(name="mfa_omit")
+    node = MultiFactorAuthNode(name="mfa_omit", require_actor=False)
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
@@ -567,7 +578,7 @@ def test_audit_sink_never_runs_while_the_mfa_data_lock_is_held():
     """
     import logging as _logging
 
-    node = MultiFactorAuthNode(name="mfa_lockprobe")
+    node = MultiFactorAuthNode(name="mfa_lockprobe", require_actor=False)
     under_lock = []
 
     class _LockProbe(_logging.Handler):
@@ -601,7 +612,9 @@ def test_rate_limited_verify_is_audited():
     The rate-limit early return skipped the audit call at the end of the
     dispatcher, so records stopped at the threshold.
     """
-    node = MultiFactorAuthNode(name="mfa_rl", rate_limit_attempts=1)
+    node = MultiFactorAuthNode(
+        name="mfa_rl", rate_limit_attempts=1, require_actor=False
+    )
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
@@ -803,7 +816,7 @@ def test_mfa_revocation_emits_the_high_severity_security_event():
     sync operation" because the only surface was async and they run under
     _data_lock. So mfa_revoked -- the event that pages someone when a second
     factor is destroyed -- had never fired."""
-    node = MultiFactorAuthNode(name="mfa_sec_evt")
+    node = MultiFactorAuthNode(name="mfa_sec_evt", require_actor=False)
     seen = []
     node.security_event_node.execute = lambda **kw: seen.append(kw) or {"ok": True}
 
@@ -825,7 +838,7 @@ def test_queued_records_are_flushed_even_when_the_operation_fails():
     """The flush sits in a finally. A record queued under _data_lock and never
     flushed would linger until some later dispatch happened to drain it, or
     fall off the end of the bounded queue."""
-    node = MultiFactorAuthNode(name="mfa_flush")
+    node = MultiFactorAuthNode(name="mfa_flush", require_actor=False)
     written = []
     node.audit_log_node.execute = lambda **kw: written.append(kw) or {"logged": True}
 
@@ -841,7 +854,7 @@ def test_queued_records_are_flushed_even_when_the_operation_fails():
 def test_bounded_in_process_event_history():
     """audit_events sat next to a bounded deque as an UNBOUNDED list, retaining
     every event for the node's lifetime and defeating the cap beside it."""
-    node = MultiFactorAuthNode(name="mfa_bounded")
+    node = MultiFactorAuthNode(name="mfa_bounded", require_actor=False)
     assert hasattr(
         node.audit_events, "maxlen"
     ), "audit_events is unbounded; it grows without limit"
@@ -1097,7 +1110,7 @@ def test_mfa_audit_redaction_reaches_nested_values():
     """_audit_safe_result's allowlist is flat -- it admits a KEY, not the shape
     under it. If a producer ever returns a nested credential under an
     allowlisted key, the allowlist alone would copy it straight to the sink."""
-    node = MultiFactorAuthNode(name="mfa_nested")
+    node = MultiFactorAuthNode(name="mfa_nested", require_actor=False)
     projected = node._audit_safe_result(
         {
             "success": True,
@@ -1129,7 +1142,7 @@ def test_audit_sink_messages_are_single_line_too():
     sso.audit_logger.execute = lambda **kw: sso_seen.append(kw) or {"logged": True}
     asyncio.run(sso._handle_logout(payload, "oauth2"))
 
-    mfa = MultiFactorAuthNode(name="mfa_audit_line")
+    mfa = MultiFactorAuthNode(name="mfa_audit_line", require_actor=False)
     mfa_seen = []
     mfa.audit_log_node.execute = lambda **kw: mfa_seen.append(kw) or {"logged": True}
     mfa.run(action="status", user_id=payload)

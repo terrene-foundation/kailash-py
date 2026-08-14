@@ -142,7 +142,7 @@ class TestMultiFactorAuthNodeConfiguration:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
             # Create with defaults
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Verify default configuration
             # # assert mfa_  # node.methods == - Node attribute not accessible ["totp", "sms", "email", "push", "backup_codes"]  # Node attributes not accessible directly  # Node attributes not accessible directly
@@ -167,7 +167,7 @@ class TestMultiFactorAuthNodeConfiguration:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
             # Create with custom settings
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
             # Custom settings would be passed as parameters during execute()
 
             # Verify custom configuration
@@ -191,7 +191,7 @@ class TestMultiFactorAuthNodeConfiguration:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
             params = mfa_node.get_parameters()
 
             # Verify required parameters exist
@@ -239,7 +239,7 @@ class TestMFASetupFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup TOTP for user
             result = mfa_node.execute(
@@ -278,7 +278,7 @@ class TestMFASetupFunctionality:
                 assert "user123" in uri
 
             # Verify backup codes — production default is 10 codes per
-            # MultiFactorAuthNode(backup_codes_count: int = 10) (issue #803).
+            # MultiFactorAuthNode(backup_codes_count: int = 10, require_actor=False) (issue #803).
             assert "backup_codes" in result or "recovery_codes" in result
             backup_codes = result.get("backup_codes", result.get("recovery_codes", []))
             assert isinstance(backup_codes, list)
@@ -295,7 +295,7 @@ class TestMFASetupFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Mock SMS sending
             with patch("kailash.nodes.auth.mfa._send_sms") as mock_sms:
@@ -331,7 +331,7 @@ class TestMFASetupFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Mock email sending
             with patch.object(mfa_node, "_send_email") as mock_email:
@@ -363,7 +363,7 @@ class TestMFASetupFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Generate backup codes through setup
             result = mfa_node.execute(
@@ -410,7 +410,7 @@ class TestMFAVerificationFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode, TOTPGenerator
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
@@ -448,7 +448,7 @@ class TestMFAVerificationFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
@@ -483,7 +483,7 @@ class TestMFAVerificationFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Mock SMS sending and code storage
             stored_codes = {}
@@ -554,7 +554,7 @@ class TestMFAVerificationFunctionality:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA first to get backup codes
             setup_result = mfa_node.execute(
@@ -627,7 +627,7 @@ class TestMFARateLimitingAndSecurity:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode(rate_limit_attempts=3)
+            mfa_node = MultiFactorAuthNode(rate_limit_attempts=3, require_actor=False)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
@@ -665,7 +665,9 @@ class TestMFARateLimitingAndSecurity:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()  # Very short timeout for testing
+            mfa_node = MultiFactorAuthNode(
+                require_actor=False
+            )  # Very short timeout for testing
 
             # Setup and verify MFA
             setup_result = mfa_node.execute(
@@ -709,7 +711,7 @@ class TestMFARateLimitingAndSecurity:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             device_info = {
                 "device_id": "device123",
@@ -768,7 +770,7 @@ class TestMFARecoveryAndManagement:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
@@ -798,7 +800,7 @@ class TestMFARecoveryAndManagement:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA first
             setup_result = mfa_node.execute(
@@ -838,7 +840,7 @@ class TestMFARecoveryAndManagement:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Check status before setup
             status_before = mfa_node.execute(action="status", user_id="user123")
@@ -876,7 +878,7 @@ class TestMFAIntegrationAndEdgeCases:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup TOTP
             totp_result = mfa_node.execute(
@@ -911,7 +913,7 @@ class TestMFAIntegrationAndEdgeCases:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Try invalid action
             result = mfa_node.execute(action="invalid_action", user_id="user123")
@@ -928,7 +930,7 @@ class TestMFAIntegrationAndEdgeCases:
         try:
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Try with empty user ID
             result = mfa_node.execute(
@@ -952,7 +954,7 @@ class TestMFAIntegrationAndEdgeCases:
 
             from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
-            mfa_node = MultiFactorAuthNode()
+            mfa_node = MultiFactorAuthNode(require_actor=False)
 
             # Setup MFA
             setup_result = mfa_node.execute(

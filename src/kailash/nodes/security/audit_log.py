@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.utils.secure_logging import sanitize_log_structure, sanitize_log_value
 
 
 @register_node()
@@ -67,10 +68,26 @@ class AuditLogNode(Node):
 
     def execute(self, **inputs) -> Dict[str, Any]:
         """Execute audit logging."""
-        event_data = inputs.get("event_data", {})
-        event_type = inputs.get("event_type", "info")
-        user_id = inputs.get("user_id")
-        message = inputs.get("message", "")
+        # SINK-LEVEL SANITIZING (issue #2088). See the companion comment in
+        # ``SecurityEventNode.execute`` for why this lives here rather than at
+        # each of the ~30 call sites.
+        #
+        # This node's exposure is LATENT rather than live: ``output_format``
+        # defaults to ``"json"``, and ``json.dumps`` escapes a newline to
+        # ``\n``. It goes LIVE the moment a deployment constructs the node
+        # with any other format -- the ``else`` branch below interpolates
+        # every field into an f-string with no escaping at all, including
+        # ``event_data``, whose NESTED strings are rendered by ``str(dict)``.
+        # Covering the non-json path is what promotes this from latent to
+        # fixed, so ``event_data`` is sanitized recursively rather than only
+        # at its top level.
+        event_data = sanitize_log_structure(inputs.get("event_data", {}))
+        event_type = sanitize_log_value(inputs.get("event_type", "info"), 128)
+        raw_user_id = inputs.get("user_id")
+        # Preserve the None/absent distinction rather than recording the
+        # string "None" as a user id.
+        user_id = None if raw_user_id is None else sanitize_log_value(raw_user_id, 128)
+        message = sanitize_log_value(inputs.get("message", ""), 512)
 
         # Create audit entry
         audit_entry = {

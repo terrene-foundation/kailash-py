@@ -18,6 +18,7 @@ import base64
 import hashlib
 import json
 import secrets
+import threading
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -35,6 +36,16 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+
+# One-time-per-process latch for the "JWT issuer is not pinned" warning
+# (issue #2089). Module-level, not per-instance: a provider constructed per
+# request would warn per request, which is the per-operation shape that got
+# the original signal filtered out.
+#
+# A mutated SET rather than a rebound bool, so no function needs a `global`
+# statement; a test re-arms it with `_WARNED_ONCE.clear()`.
+_WARNED_ONCE: set = set()
+_ISSUER_WARN_LOCK = threading.Lock()
 
 
 @register_node()
@@ -132,14 +143,100 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # Initialize authentication nodes
         self._setup_auth_nodes()
 
+    def _warn_if_issuer_unpinned(self) -> None:
+        """Say ONCE, at WARN, that no issuer is pinned for JWT auth.
+
+        An unset ``jwt_config['issuer']`` means every token signed with the
+        configured key is accepted regardless of who minted it. The code
+        already detected that and said so -- at ``INFO``, once per validated
+        token. Both halves of that were the defect (issue #2089):
+
+        * ``INFO`` is below every default alert threshold and below most
+          production log-shipping filters, so in practice the operator was
+          never told. ``rules/security.md`` § "Secure-Default For A New
+          Security Feature" requires a protection that is OFF to fail closed
+          or emit a LOUD signal naming the unprotected state and its exact
+          wiring. This one cannot fail closed without breaking every
+          deployment that legitimately accepts multi-issuer tokens, so it
+          takes the loud-WARN branch.
+        * Per-token, it read as transient and got filtered -- the same
+          mistake this repo already made and corrected in #2035. Once per
+          process is what an operator can actually act on.
+
+        The flag is module-level rather than per-instance because a provider
+        constructed per request would otherwise warn per request, which is
+        the per-operation shape all over again.
+        """
+        if self.jwt_config.get("issuer"):
+            return
+        with _ISSUER_WARN_LOCK:
+            if "issuer_unpinned" in _WARNED_ONCE:
+                return
+            _WARNED_ONCE.add("issuer_unpinned")
+        self.log_warning(
+            "JWT issuer is NOT pinned: jwt_config['issuer'] is unset, so ANY "
+            "token signed with the configured key is accepted, whoever minted "
+            "it. Pin it with "
+            "EnterpriseAuthProviderNode(jwt_config={..., 'issuer': "
+            "'https://issuer.example.com'}). This warning is emitted once per "
+            "process."
+        )
+
     def _setup_auth_nodes(self):
         """Initialize all authentication-related nodes."""
+        # Say it at construction, not only on the first token that happens to
+        # arrive: an operator reads startup output, and a deployment that
+        # never validates a token before the incident never saw the signal.
+        if "jwt" in self.enabled_methods:
+            self._warn_if_issuer_unpinned()
+
         # Core authentication nodes
         self.sso_node = SSOAuthenticationNode(
             name=f"{self.name}_sso", **self.sso_config
         )
 
-        self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **self.mfa_config)
+        # This provider is the authorizing host for its own MFA node, so it
+        # takes the explicit require_actor=False opt-out rather than a fake
+        # actor (issue #2047).
+        #
+        # WHAT ENTITLES IT, stated precisely. An earlier version of this
+        # comment claimed "every call it makes passes a SERVER-DERIVED
+        # subject". That was FALSE and was measured false: there are four
+        # call sites into `mfa_node`, and only the two reached via
+        # `_authenticate` were qualified. `get_methods` and `challenge_mfa`
+        # dispatched from `async_run` with the raw caller-supplied `user_id`,
+        # so an unauthenticated caller could enumerate any account's MFA
+        # state (#2047 F1). Both now resolve their subject from the session
+        # through `_resolve_session_subject`, which is what makes the claim
+        # true rather than asserted.
+        #
+        # So: every path into the MFA node now derives its subject from
+        # server-side state -- from the credential's asserted principal
+        # (`_authenticate` refuses a credential asserting no principal and
+        # overrides a mismatched caller-supplied user_id, #2035) or from a
+        # validated session. The provider also cannot pass an actor session
+        # on the authenticate path: MFA verification happens BEFORE a session
+        # exists, which is what it is gating the creation of.
+        #
+        # An operator wanting enforcement here supplies it explicitly, e.g.
+        # mfa_config={"require_actor": True, "actor_resolver": ...}; the
+        # setdefault below means their value wins.
+        mfa_config = dict(self.mfa_config)
+        mfa_config.setdefault("require_actor", False)
+        # `name` is supplied explicitly below, so one arriving in `mfa_config`
+        # is a duplicate keyword argument: the constructor would raise
+        # `TypeError: got multiple values for keyword argument 'name'` from
+        # inside provider construction, naming neither the operator's config
+        # key nor this provider. Rejected here instead, where the message can
+        # say which knob is wrong. Popping and proceeding would be worse -- it
+        # would silently discard a name the operator deliberately set.
+        if "name" in mfa_config:
+            raise ValueError(
+                "mfa_config may not carry 'name': the MFA node's name is "
+                f"derived from this provider's own name as "
+                f"'{self.name}_mfa'. Remove the 'name' key."
+            )
+        self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **mfa_config)
 
         self.directory_node = DirectoryIntegrationNode(
             name=f"{self.name}_directory", **self.directory_config
@@ -280,10 +377,32 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 result = await self._validate_session(session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "assess_risk":
                 result = await self._assess_risk(user_id, risk_context, **kwargs)  # type: ignore[arg-type]
-            elif action == "get_methods":
-                result = await self._get_available_methods(user_id, **kwargs)  # type: ignore[arg-type]
-            elif action == "challenge_mfa":
-                result = await self._challenge_mfa(user_id, auth_method, **kwargs)  # type: ignore[arg-type]
+            elif action in ("get_methods", "challenge_mfa"):
+                # SUBJECT FROM THE SESSION, never from the request (#2047 F1).
+                #
+                # These two dispatched straight from here with the raw
+                # caller-supplied `user_id`: unauthenticated, unrate-limited
+                # (the guard above is `action == "authenticate"` only), and --
+                # because this provider constructs its MFA node with
+                # require_actor=False -- ungated at the node too. An
+                # unauthenticated caller could send
+                # `action="get_methods", user_id="<victim>"` and learn whether
+                # that account has MFA configured: an enumeration oracle over
+                # the whole user base, ideal for finding un-enrolled accounts.
+                # `challenge_mfa` reached the MFA node for an arbitrary
+                # subject the same way.
+                #
+                # `security.md` § Multi-Site Kwarg Plumbing: a sibling left
+                # unqualified ships the EXACT failure mode the fix addresses.
+                # `_authenticate` and `_authorize` were qualified; these two
+                # were the siblings.
+                subject, denial = await self._resolve_session_subject(session_id)  # type: ignore[arg-type]
+                if denial is not None:
+                    result = denial
+                elif action == "get_methods":
+                    result = await self._get_available_methods(subject, **kwargs)  # type: ignore[arg-type]
+                else:
+                    result = await self._challenge_mfa(subject, auth_method, **kwargs)  # type: ignore[arg-type]
             else:
                 raise ValueError(f"Unsupported authentication action: {action}")
 
@@ -863,11 +982,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             self.log_info("JWT validation failed: missing or non-string sub")
             return {"authenticated": False, "error": "Invalid JWT token"}
 
-        if not self.jwt_config.get("issuer"):
-            self.log_info(
-                "JWT accepted without an issuer check: jwt_config['issuer'] is "
-                "unset, so any token signed with this key is accepted."
-            )
+        self._warn_if_issuer_unpinned()
 
         return {
             "authenticated": True,
@@ -1391,6 +1506,50 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             "location": kwargs.get("location", ""),
             "timestamp": kwargs.get("timestamp", datetime.now(UTC).isoformat()),
         }
+
+    async def _resolve_session_subject(
+        self, session_id: Optional[str]
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Derive the subject from a session, or return a refusal.
+
+        Returns ``(user_id, None)`` when the session proves an identity, or
+        ``(None, refusal)`` when it does not. Fail-closed at every exit.
+
+        A session is proof of authentication; without one, ``user_id`` is just
+        a string the caller typed. ``_authorize`` established this shape for
+        issue #2026 and carried it alone -- ``get_methods`` and
+        ``challenge_mfa`` dispatched on the caller's claim (#2047 F1). Sharing
+        one resolver is what stops the next action being added on the
+        unqualified path.
+        """
+        if not session_id:
+            return None, {
+                "success": False,
+                "error": "Session required",
+                "reason": "session_required",
+            }
+
+        validation = await self.session_node.async_run(
+            action="validate", session_id=session_id
+        )
+        if not validation.get("valid"):
+            return None, {
+                "success": False,
+                "error": "Invalid session",
+                "reason": "session_invalid",
+            }
+
+        # The subject is NESTED under "session_data"; reading a top-level
+        # "user_id" always missed and fell back to the caller's claim.
+        session_data = validation.get("session_data") or {}
+        subject = session_data.get("user_id") or validation.get("user_id")
+        if not isinstance(subject, str) or not subject:
+            return None, {
+                "success": False,
+                "error": "Session has no subject",
+                "reason": "session_subject_missing",
+            }
+        return subject, None
 
     async def _authorize(
         self,

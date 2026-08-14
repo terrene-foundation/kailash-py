@@ -8,10 +8,18 @@
 # every parsed field on `self` and flags structured log calls that
 # never actually emit credentials.
 #
-# Origin: workspaces/arbor-upstream-fixes/.session-notes (2026-04-12)
+# 2026-08-12 (#2088 / #2040): an attempt to extend this pack with
+# `kailash.utils.secure_logging.sanitize_log_value` / `sanitize_log_structure`
+# / the `nodes/auth` alias `log_safe` as `py/log-injection` barriers was
+# MEASURED not to work and has been reverted. A model row cannot declare a
+# barrier for a function whose body is IN SOURCE -- CodeQL analyses the real
+# body. The `py/log-injection` barrier for those three lives in the code, as
+# the trailing `.replace("\r", " ").replace("\n", " ")` that
+# `sanitize_log_value` returns. See sanitizers.model.yml for both refuted
+# attempts and the evidence.
 
 name: terrene-foundation/kailash-py-sanitizers
-version: 1.0.0
+version: 1.0.1
 library: true
 extensionTargets:
   codeql/python-queries: "*"

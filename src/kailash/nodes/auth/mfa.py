@@ -14,12 +14,19 @@ import logging
 import secrets
 import threading
 import time
+import warnings
 from collections import deque
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import qrcode
 
+from kailash.nodes.auth._actor import (
+    ADMIN_CAPABILITY,
+    ActorResolver,
+    MFAActor,
+    NullActorResolver,
+)
 from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -28,6 +35,59 @@ from kailash.nodes.security.security_event import SecurityEventNode
 from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
+
+# One-time-per-process latch (issue #2047). Module-level rather than
+# per-instance because a node constructed per request would otherwise emit the
+# same message per request, which is the per-operation shape that gets a
+# security signal filtered out of production logs.
+#
+# A mutated SET rather than a rebound bool: the flag is only ever added to, so
+# no function needs a `global` statement to re-bind it, and a test re-arms it
+# with `_WARNED_ONCE.clear()` rather than by assigning over a module
+# attribute. Same observable behaviour, one fewer way for two threads to
+# disagree about which binding they hold.
+_WARNED_ONCE: set = set()
+# Cap so a host constructing a uniquely named node per request cannot grow
+# the key set without limit.
+_MAX_WARN_KEYS = 512
+_ACTOR_WARN_LOCK = threading.Lock()
+
+
+def _warn_actor_enforcement_disabled(node_name: str) -> None:
+    """Say ONCE PER NODE, at WARN, that (actor, action, subject) auth is OFF.
+
+    Keyed on the node's name rather than once per PROCESS. A single global
+    latch was consumed by ``EnterpriseAuthProviderNode.__init__``, which
+    constructs its own MFA node with ``require_actor=False`` -- so the SDK's
+    own internal opt-out burned the one warning, and a USER's genuinely
+    misconfigured ``MultiFactorAuthNode(require_actor=False)`` constructed
+    afterwards warned NOTHING. The loud opt-out was defeated by the SDK
+    (#2047 F5).
+
+    Still bounded: the key set is capped, so a host constructing a uniquely
+    named node per request cannot grow it without limit -- past the cap it
+    stops warning rather than leaking, which is the same trade the audit
+    queues make.
+    """
+    key = f"actor_disabled:{node_name}"
+    with _ACTOR_WARN_LOCK:
+        if key in _WARNED_ONCE:
+            return
+        if len(_WARNED_ONCE) >= _MAX_WARN_KEYS:
+            return
+        _WARNED_ONCE.add(key)
+    logger.warning(
+        "MultiFactorAuthNode(name=%r, require_actor=False): actor "
+        "authorization is DISABLED for this node. Every action -- including "
+        "revoke/disable/reset and every credential-issuing action -- is "
+        "authorized on the caller-supplied user_id and admin_override, so a "
+        "caller that can choose user_id can take over or lock out any "
+        "account. The host MUST authenticate and authorize the caller before "
+        "dispatch. To enable enforcement, pass "
+        "MultiFactorAuthNode(actor_resolver=..., require_actor=True) and send "
+        "actor_session_id on every call. Emitted once per node name.",
+        node_name,
+    )
 
 
 class MFADeliveryError(NodeExecutionError):
@@ -179,30 +239,44 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
     - Session management and timeout handling
     - Integration with audit logging
 
+    **Authorization: the node authorizes the (actor, action, subject) triple**
+    (issue #2047). ``user_id`` names the SUBJECT of an action. The ACTOR --
+    who is doing it -- is resolved server-side from ``actor_session_id``
+    through the injected :class:`~kailash.nodes.auth._actor.ActorResolver`,
+    never from a request field naming a principal. A caller supplies PROOF of
+    authentication; it never supplies the CLAIM of who it is.
+
+    Default policy:
+
+    * An actor may act on ITSELF for ``setup``, ``verify``, ``status``,
+      ``generate_backup_codes``, ``trust_device``, ``initiate_recovery`` and
+      the other self-service actions.
+    * Acting on ANY other subject requires the actor to hold
+      :data:`~kailash.nodes.auth._actor.ADMIN_CAPABILITY`.
+    * The destructive actions -- ``revoke``, ``disable``, ``reset`` -- and
+      administrative recovery and re-enrolment over a verified factor require
+      that capability regardless of subject.
+
+    With no resolver configured the default is
+    :class:`~kailash.nodes.auth._actor.NullActorResolver`, which resolves
+    nothing, so every action is DENIED. An unwired authorizer surfaces as a
+    refusal, not as an open door.
+
     .. warning::
-       **The host application MUST authorise the caller. This node has no
-       actor.** ``user_id`` names the SUBJECT of an action, never the caller,
-       and there is no session, principal, or credential input on any action.
-       The node therefore cannot distinguish "this end user acting on
-       themselves" from "someone acting on another user's account", and it does
-       not try to.
+       ``admin_override`` is DEPRECATED and no longer grants anything
+       (issue #2047). It was an ordinary caller-supplied boolean, so every
+       admin-gated action authorized on data the caller controlled. It is
+       still accepted, and emits a :class:`DeprecationWarning`; authority now
+       comes from a verified capability on a resolved actor. Pass
+       ``actor_session_id`` instead.
 
-       Every action -- ``setup``, ``verify``, ``revoke``, ``disable``,
-       ``reset``, ``generate_backup_codes``, ``trust_device``,
-       ``initiate_recovery``, ``status`` -- takes a caller-supplied ``user_id``,
-       and several of them ISSUE BEARER CREDENTIALS (a TOTP secret, backup
-       codes, a device trust token) or DESTROY existing factors. A caller that
-       can pass an arbitrary ``user_id`` to those actions can take over or lock
-       out any account.
-
-       ``admin_override`` separates administrative actions from end-user ones,
-       but it is an ordinary parameter, not an authentication control: it stops
-       an end-user-shaped request from reaching an administrative path, and
-       nothing more.
-
-       Deploy this node behind a layer that binds each request to an
-       authenticated principal and authorises the (actor, action, subject)
-       triple before dispatch. See issue #2026.
+    .. warning::
+       ``require_actor=False`` restores the pre-#2047 behaviour for a host
+       that authorizes the caller itself before dispatch: ``user_id`` is then
+       taken on trust and ``admin_override`` gates the destructive actions
+       again. It is an EXPLICIT, LOUD opt-out -- the node warns once per
+       process naming the protection that is off -- and it is unsafe for any
+       deployment that lets a caller choose ``user_id``.
 
     Example:
         >>> mfa_node = MultiFactorAuthNode(
@@ -245,6 +319,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         session_timeout: timedelta = timedelta(minutes=15),
         rate_limit_attempts: int = 5,
         rate_limit_window: int = 300,  # 5 minutes
+        actor_resolver: Optional[ActorResolver] = None,
+        require_actor: bool = True,
         **kwargs,
     ):
         """Initialize multi-factor authentication node.
@@ -269,6 +345,17 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             session_timeout: MFA session timeout
             rate_limit_attempts: Max attempts per time window
             rate_limit_window: Rate limit window in seconds
+            actor_resolver: Resolves a caller-presented ``actor_session_id``
+                to an authenticated principal. Defaults to
+                :class:`~kailash.nodes.auth._actor.NullActorResolver`, which
+                resolves nothing and therefore denies every action -- an
+                unwired authorizer is a refusal, not an open door.
+            require_actor: When True (the default) every action authorizes the
+                ``(actor, action, subject)`` triple and ``admin_override``
+                grants nothing. Set False ONLY when the host authenticates and
+                authorizes the caller before dispatch; that restores the
+                pre-#2047 behaviour, where ``user_id`` is trusted, and warns
+                once per process to say so.
             **kwargs: Additional node parameters
         """
         # Set attributes before calling super().__init__()
@@ -285,8 +372,24 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self.rate_limit_attempts = rate_limit_attempts
         self.rate_limit_window = rate_limit_window
 
+        # Actor resolution (issue #2047). NullActorResolver is the fail-closed
+        # default: with no resolver wired, nothing resolves and every action is
+        # denied. The alternative -- falling back to trusting `user_id` -- is
+        # the exact behaviour this node is being fixed for.
+        self.actor_resolver: ActorResolver = actor_resolver or NullActorResolver()
+        self.require_actor = bool(require_actor)
+
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
+
+        if not self.require_actor:
+            # `require_actor=False` turns OFF the authorization this node
+            # performs, so it announces itself once per process at WARN,
+            # naming the protection and its wiring
+            # (`rules/security.md` § Secure-Default For A New Security
+            # Feature). Once per process, not per call: a per-operation
+            # message reads as transient and gets filtered.
+            _warn_actor_enforcement_disabled(name)
 
         # Audit logging IS wired (issue #2060).
         #
@@ -438,16 +541,30 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 description="User's preferred MFA method",
                 required=False,
             ),
+            "actor_session_id": NodeParameter(
+                name="actor_session_id",
+                type=str,
+                description=(
+                    "Opaque session id proving WHO is making this call. The "
+                    "node resolves it server-side to an authenticated "
+                    "principal via its actor_resolver and authorises the "
+                    "(actor, action, subject) triple; the caller never names "
+                    "the principal itself. Required unless the node was "
+                    "constructed with require_actor=False."
+                ),
+                required=False,
+            ),
             "admin_override": NodeParameter(
                 name="admin_override",
                 type=bool,
                 description=(
-                    "Marks a call as an administrative operation (revoke, "
-                    "disable, reset, admin recovery, re-enrolment over a "
-                    "verified factor). NOT AN AUTHENTICATION CONTROL: it is an "
-                    "ordinary caller-supplied parameter, so it only separates "
-                    "administrative actions from end-user ones for a host that "
-                    "already authorises the caller. See the class docstring."
+                    "DEPRECATED and INERT under require_actor=True (issue "
+                    "#2047): it was an ordinary caller-supplied boolean, so "
+                    "every admin-gated action authorised on data the caller "
+                    "controlled. Authority now comes from the "
+                    f"'{ADMIN_CAPABILITY}' capability on a resolved actor. "
+                    "Still accepted, and still gates the destructive actions, "
+                    "under the explicit require_actor=False opt-out."
                 ),
                 required=False,
             ),
@@ -485,6 +602,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         trust_token: Optional[str] = None,
         challenge_token: Optional[str] = None,
         preferred_method: Optional[str] = None,
+        actor_session_id: Optional[str] = None,
         admin_override: Optional[bool] = None,
         recovery_method: Optional[str] = None,
         recovery_destination: Optional[str] = None,
@@ -494,7 +612,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         Args:
             action: MFA action (setup, verify, generate_backup_codes, revoke)
-            user_id: User ID
+            user_id: SUBJECT of the operation -- never the caller
+            actor_session_id: Opaque proof of WHO is calling; resolved
+                server-side to the authenticated principal (issue #2047)
             method: MFA method
             code: MFA code for verification
             user_email: User email
@@ -505,7 +625,102 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         Returns:
             Dictionary containing operation results
         """
+        params = dict(kwargs)
+        params.update(
+            action=action,
+            user_id=user_id,
+            method=method,
+            code=code,
+            user_email=user_email,
+            user_phone=user_phone,
+            phone_number=phone_number,
+            user_data=user_data,
+            device_info=device_info,
+            auth_context=auth_context,
+            challenge_id=challenge_id,
+            trust_duration_days=trust_duration_days,
+            trust_token=trust_token,
+            challenge_token=challenge_token,
+            preferred_method=preferred_method,
+            actor_session_id=actor_session_id,
+            recovery_method=recovery_method,
+            recovery_destination=recovery_destination,
+        )
+        # Only forward admin_override when the caller actually passed it, so
+        # the deprecation warning fires for callers that use it and stays
+        # silent for callers that do not.
+        if admin_override is not None:
+            params["admin_override"] = admin_override
+        return self._dispatch(params)
+
+    async def async_run(self, **kwargs) -> Dict[str, Any]:
+        """Async surface. Delegates to the SAME dispatcher as :meth:`run`.
+
+        There used to be two dispatchers with two action sets, two sets of
+        gates and two trusted-device stores. A gate present in one and absent
+        in the other is not a gate: the async surface accepted ``setup``
+        ungated while the sync one required re-enrolment authority, and the
+        sync surface's ``disable`` guard was reachable-around on the async one
+        (issue #2026 patched instances of this twice). Collapsing them is what
+        makes the actor check in :meth:`_dispatch` a property of the NODE
+        rather than of whichever entry point a caller happened to use.
+
+        The body is genuinely synchronous -- every handler is CPU-and-dict
+        work -- so it is offloaded to a worker thread, the same shape
+        ``SessionManagementNode.async_run`` already ships.
+        """
+        return await asyncio.to_thread(self._dispatch, dict(kwargs))
+
+    def _dispatch(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """The single dispatcher behind both :meth:`run` and :meth:`async_run`."""
+        action = params.get("action")
+        user_id = params.get("user_id")
+        method = params.get("method")
+        code = params.get("code")
+        user_email = params.get("user_email")
+        user_phone = params.get("user_phone")
+        phone_number = params.get("phone_number")
+        user_data = params.get("user_data")
+        device_info = params.get("device_info")
+        auth_context = params.get("auth_context")
+        challenge_id = params.get("challenge_id")
+        trust_duration_days = params.get("trust_duration_days")
+        trust_token = params.get("trust_token")
+        challenge_token = params.get("challenge_token")
+        preferred_method = params.get("preferred_method")
+        actor_session_id = params.get("actor_session_id")
+        recovery_method = params.get("recovery_method")
+        recovery_destination = params.get("recovery_destination")
+        device_fingerprint = params.get("device_fingerprint")
+        admin_override_supplied = "admin_override" in params
+        admin_override = bool(params.get("admin_override"))
+
+        if admin_override_supplied:
+            # The message states what admin_override does IN THIS NODE'S mode.
+            # A single message claiming it "grants nothing" would be false for
+            # a require_actor=False node, where it is still the only gate --
+            # and a deprecation notice that misdescribes the live behaviour is
+            # worse than none.
+            warnings.warn(
+                "MultiFactorAuthNode: admin_override is deprecated (issue "
+                "#2047) -- it is a caller-supplied boolean, so it authorised "
+                "administrative actions on data the caller controlled. "
+                + (
+                    "It grants NOTHING here: authority comes from the "
+                    f"'{ADMIN_CAPABILITY}' capability on the actor "
+                    "resolved from actor_session_id."
+                    if self.require_actor
+                    else "This node is in require_actor=False mode, so it "
+                    "still gates the destructive actions and is still not an "
+                    "authentication control. Wire actor_resolver= and "
+                    "require_actor=True to replace it."
+                ),
+                DeprecationWarning,
+                stacklevel=3,
+            )
+
         start_time = datetime.now(UTC)
+        actor: Optional[MFAActor] = None
 
         try:
             # Validate required user_id — empty or whitespace-only is invalid input.
@@ -563,6 +778,47 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                         "action": action,
                     }
 
+            # AUTHORIZE THE (ACTOR, ACTION, SUBJECT) TRIPLE (issue #2047).
+            #
+            # Before this, `user_id` WAS the authority: whoever could name a
+            # subject could set up, reset, revoke or issue credentials for it,
+            # and `admin_override` -- a caller-supplied boolean -- was the only
+            # thing standing in front of the destructive actions. Five review
+            # rounds each patched the action the previous round exploited.
+            #
+            # The check runs HERE, once, ahead of every handler, rather than
+            # inside the ones that looked dangerous: the last five reviews each
+            # found a DIFFERENT action to be a credential-issuing or
+            # state-destroying primitive, so an enumeration of the dangerous
+            # ones is the thing that kept failing.
+            actor, denial = self._resolve_and_authorize(
+                action=str(action or ""),
+                subject_user_id=str(user_id),
+                actor_session_id=actor_session_id,
+                recovery_method=recovery_method,
+            )
+            if denial is not None:
+                denial["processing_time_ms"] = 0.0
+                denial["timestamp"] = start_time.isoformat()
+                # A refused action is exactly what an audit trail exists to
+                # record; returning before the audit call at the bottom would
+                # make every rejected attempt invisible.
+                self._audit_mfa_operation_sync(
+                    user_id, action, method, denial, actor=actor
+                )
+                return denial
+
+            # An actor holding the admin capability is what now authorises
+            # re-enrolment over a verified factor and administrative recovery.
+            # Under the require_actor=False opt-out the legacy caller-supplied
+            # boolean still fills that role, unchanged and still documented as
+            # not an authentication control.
+            admin_authorized = (
+                bool(actor and actor.has_capability(ADMIN_CAPABILITY))
+                if self.require_actor
+                else admin_override
+            )
+
             # self.log_node_execution("mfa_operation_start", action=action, method=method)
 
             # Check rate limits for verification operations (issue #803).
@@ -587,10 +843,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # brute-force produced records up to the rate-limit threshold
                 # and then went SILENT for the rest of the attack -- the trail
                 # stopped exactly when it became interesting (issue #2060).
-                self._audit_mfa_operation_sync(user_id, action, method, rate_limited)
+                self._audit_mfa_operation_sync(
+                    user_id, action, method, rate_limited, actor=actor
+                )
                 return rate_limited
 
-            # Route to appropriate action handler
+            # Route to appropriate action handler. ONE table for both surfaces
+            # (issue #2047): `verify_backup` and `list_methods` used to exist
+            # only on the async dispatcher and `enroll`/`send_push`/
+            # `verify_push`/`approve_push`/`deny_push`/`set_preference`/
+            # `get_methods`/`initiate_recovery`/`reset` only on the sync one,
+            # so the two surfaces disagreed on both WHAT you could do and WHAT
+            # was gated.
             if action in ["setup", "enroll"]:  # Handle both setup and enroll
                 result = self._setup_mfa(
                     user_id,
@@ -599,6 +863,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     user_phone,
                     user_data or {},
                     device_info or {},
+                    allow_reenrolment=bool(admin_authorized),
                 )
                 self.mfa_stats["total_setups"] += 1
             elif action == "verify":
@@ -610,18 +875,21 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     self.mfa_stats["failed_verifications"] += 1
             elif action == "generate_backup_codes":
                 result = self._generate_backup_codes(user_id)
+            elif action == "verify_backup":
+                # Was reachable only through async_run. Its own #2026 fix note
+                # records that it shipped without the guarantees the other four
+                # backup-code sites had; being on one dispatcher only is how it
+                # stayed that way for so long.
+                result = self._verify_backup_code(user_id, code)
             elif action == "revoke":
                 # Destroying a user's factors is reset-equivalent: revoke then
                 # setup re-creates the enrolment the setup guard protects, so
-                # it carries the same requirement (issue #2026).
-                if not admin_override:
-                    result = {
-                        "success": False,
-                        "error": (
-                            "Revoking MFA destroys the user's existing factors; "
-                            "it requires admin_override=True."
-                        ),
-                    }
+                # it carries the same requirement (issue #2026). The gate is
+                # now the actor's verified capability, checked in
+                # _resolve_and_authorize before this table runs; under the
+                # require_actor=False opt-out it is the legacy boolean.
+                if not admin_authorized:
+                    result = self._admin_action_denied("revoke")
                 else:
                     result = self._revoke_mfa(user_id, method)
             elif action == "status":
@@ -649,17 +917,35 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     challenge_token=challenge_token,
                 )
             elif action == "trust_device":
+                # ONE trusted-device store (issue #2047). The async surface
+                # wrote a `device_fingerprint` key into
+                # user_mfa_data[user]["trusted_devices"] while the sync one
+                # appended a record to self.trusted_devices, and the reader
+                # consulted both -- so which store a trust landed in, and
+                # therefore which code could revoke it, depended on the entry
+                # point. `device_fingerprint` is still accepted as an input;
+                # it is now just another way to name the device.
                 result = self._trust_device(
-                    user_id, device_info or {}, trust_duration_days or 30
+                    user_id,
+                    self._device_selector(device_info, device_fingerprint),
+                    trust_duration_days or 30,
                 )
             elif action == "check_device_trust":
                 result = self._check_device_trust(
-                    user_id, device_info or {}, trust_token
+                    user_id,
+                    self._device_selector(device_info, device_fingerprint),
+                    trust_token,
                 )
             elif action == "set_preference":
                 result = self._set_user_preference(user_id, preferred_method)  # type: ignore[reportArgumentType]
-            elif action == "get_methods":
-                result = self._get_user_methods(user_id)
+            elif action in ("get_methods", "list_methods"):
+                # `list_methods` was async-only and `get_methods` sync-only,
+                # for the same question. Both now answer it.
+                result = (
+                    self._list_methods(user_id)
+                    if action == "list_methods"
+                    else self._get_user_methods(user_id)
+                )
             elif action == "disable":
                 # `disable` deletes a factor, which is what `revoke` does and
                 # what `reset` does: it clears the way for a fresh `setup`, so
@@ -669,14 +955,8 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # below it was unreachable -- which left the whole
                 # setup/revoke/reset guard reachable-around on this dispatcher
                 # while the async one was gated (issue #2026).
-                if not admin_override:
-                    result = {
-                        "success": False,
-                        "error": (
-                            "Disabling a user's MFA destroys an enrolled "
-                            "factor; it requires admin_override=True."
-                        ),
-                    }
+                if not admin_authorized:
+                    result = self._admin_action_denied("disable")
                 elif method:
                     # Disable a specific method.
                     result = self._disable_method(user_id, method)
@@ -688,7 +968,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     user_id,
                     recovery_method or "email",
                     recovery_destination,
-                    admin_override=bool(admin_override),
+                    admin_authorized=bool(admin_authorized),
                 )
             elif action == "reset":
                 # Reset: clear existing MFA state, then re-run setup. Returns
@@ -698,15 +978,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # Destroying a user's second factor and minting a new one is an
                 # administrative action: ungated it was the strongest form of
                 # the setup-overwrite takeover (issue #2026). It now matches
-                # the admin_override requirement `disable` already carries.
-                if not admin_override:
-                    result = {
-                        "success": False,
-                        "error": (
-                            "Resetting MFA destroys the existing factor and "
-                            "issues a new one; it requires admin_override=True."
-                        ),
-                    }
+                # the requirement `disable` already carries.
+                if not admin_authorized:
+                    result = self._admin_action_denied("reset")
                 else:
                     with self._data_lock:
                         self.user_mfa_data.pop(user_id, None)
@@ -719,7 +993,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                         user_phone,
                         user_data or {},
                         device_info or {},
-                        admin_override=True,
+                        allow_reenrolment=True,
                     )
                 if result.get("success"):
                     result["reset"] = True
@@ -741,7 +1015,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # This is deliberately OUTSIDE any `_data_lock` held above: the
             # action handlers acquire and release it themselves, so the sink
             # never runs under the lock.
-            self._audit_mfa_operation_sync(user_id, action, method, result)
+            self._audit_mfa_operation_sync(user_id, action, method, result, actor=actor)
 
             self.log_node_execution(
                 "mfa_operation_complete",
@@ -784,6 +1058,184 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         """Execute method for async compatibility."""
         return await self.async_run(**kwargs)
 
+    # Actions that DESTROY or REPLACE a subject's enrolled factors. Each is
+    # reset-equivalent: revoke-then-setup, disable-then-setup and reset all
+    # arrive at "this account now has a second factor the operator chose", so
+    # they carry one requirement rather than three (issue #2026 reached this
+    # conclusion action by action; #2047 states it once).
+    _ADMIN_ONLY_ACTIONS = frozenset({"revoke", "disable", "reset"})
+
+    # Actions an actor may take ON ITSELF. READ as an allowlist by
+    # `_resolve_and_authorize` -- an action in neither this set nor
+    # `_ADMIN_ONLY_ACTIONS` requires the admin capability, so a newly added
+    # dispatch arm fails closed until someone classifies it deliberately.
+    #
+    # It relaxes nothing: acting on a subject other than yourself requires the
+    # admin capability whatever the action, because `status` and `get_methods`
+    # disclose which factors an account holds.
+    _SELF_SERVICE_ACTIONS = frozenset(
+        {
+            "setup",
+            "enroll",
+            "verify",
+            "verify_backup",
+            "verify_push",
+            "approve_push",
+            "deny_push",
+            "send_push",
+            "status",
+            "get_methods",
+            "list_methods",
+            "generate_backup_codes",
+            "trust_device",
+            "check_device_trust",
+            "set_preference",
+            "initiate_recovery",
+        }
+    )
+
+    @staticmethod
+    def _device_selector(
+        device_info: Optional[Dict[str, Any]], device_fingerprint: Optional[str]
+    ) -> Dict[str, Any]:
+        """Normalize the two ways a caller can name a device to ONE shape.
+
+        The sync surface took ``device_info={"device_id": ...}`` and the async
+        one took a bare ``device_fingerprint`` string, and each wrote to a
+        DIFFERENT store. Callers keep both spellings; the node keeps one
+        record.
+        """
+        if isinstance(device_info, dict) and device_info:
+            return device_info
+        if isinstance(device_info, str) and device_info:
+            return {"device_id": device_info, "device_fingerprint": device_info}
+        if isinstance(device_fingerprint, str) and device_fingerprint:
+            return {
+                "device_id": device_fingerprint,
+                "device_fingerprint": device_fingerprint,
+            }
+        return {}
+
+    @staticmethod
+    def _admin_action_denied(action: str) -> Dict[str, Any]:
+        """The refusal for a destructive action taken without the capability."""
+        return {
+            "success": False,
+            "error": (
+                f"'{action}' destroys or replaces the subject's enrolled "
+                f"factors and requires an actor holding the "
+                f"'{ADMIN_CAPABILITY}' capability."
+            ),
+            "authorized": False,
+        }
+
+    def _resolve_and_authorize(
+        self,
+        *,
+        action: str,
+        subject_user_id: str,
+        actor_session_id: Optional[str],
+        recovery_method: Optional[str],
+    ) -> Tuple[Optional[MFAActor], Optional[Dict[str, Any]]]:
+        """Resolve the caller to a principal and authorize (actor, action, subject).
+
+        Returns ``(actor, None)`` when the call may proceed, or
+        ``(actor_or_None, denial_result)`` when it may not. Fail-closed at
+        every exit: an unresolvable session, a resolver that raises, and an
+        actor without the required capability all deny.
+
+        BOTH SIDES of the comparison are server-derived. The actor comes from
+        the resolver's session store; the subject is the key this node's own
+        MFA records are held under. Nothing in the request names a principal.
+        """
+        if not self.require_actor:
+            # The explicit opt-out. The host asserts it authorized the caller
+            # before dispatch; the node has already said once, loudly, that it
+            # is not checking (see _warn_actor_enforcement_disabled).
+            return None, None
+
+        if not isinstance(actor_session_id, str) or not actor_session_id.strip():
+            return None, {
+                "success": False,
+                "error": (
+                    "actor_session_id is required: this node authorises the "
+                    "(actor, action, subject) triple and will not accept "
+                    "user_id as authority. Pass the caller's authenticated "
+                    "session id, or construct the node with "
+                    "require_actor=False if the host authorises callers "
+                    "itself."
+                ),
+                "authorized": False,
+            }
+
+        try:
+            actor = self.actor_resolver.resolve_actor(actor_session_id)
+        except Exception as exc:
+            # A resolver is a Protocol implemented by the host; it MUST NOT
+            # raise, but a node on the auth path must not crash if one does.
+            # Deny, and say why -- a silent None here would be indistinguishable
+            # from a correctly rejected session (`rules/zero-tolerance.md`
+            # Rule 3).
+            self.log_with_context(
+                "ERROR",
+                f"MFA actor resolver raised {type(exc).__name__}; denying.",
+            )
+            actor = None
+
+        if actor is None:
+            return None, {
+                "success": False,
+                "error": "Unrecognised or expired actor_session_id.",
+                "authorized": False,
+            }
+        if not isinstance(actor, MFAActor):
+            # A resolver returning something else is a wiring bug, and
+            # duck-typing it would mean authorizing against an object whose
+            # `has_capability` the host controls.
+            self.log_with_context(
+                "ERROR",
+                "MFA actor resolver returned a non-MFAActor; denying.",
+            )
+            return None, {
+                "success": False,
+                "error": "Actor resolution failed.",
+                "authorized": False,
+            }
+
+        acting_on_self = actor.user_id == subject_user_id
+        # `_SELF_SERVICE_ACTIONS` is an ALLOWLIST, not documentation. It was
+        # first written as a comment-only frozenset that nothing read, which
+        # made the docstring beside it a claim about behaviour the code did
+        # not have (#2047 F9). Read as an allowlist it also fails CLOSED for
+        # an action in NEITHER set -- a newly added action requires the admin
+        # capability until it is deliberately classified, rather than
+        # defaulting to self-service the moment someone adds a dispatch arm.
+        known_action = (
+            action in self._SELF_SERVICE_ACTIONS or action in self._ADMIN_ONLY_ACTIONS
+        )
+        needs_admin = (
+            action in self._ADMIN_ONLY_ACTIONS
+            or not known_action
+            or not acting_on_self
+            or (action == "initiate_recovery" and recovery_method == "admin")
+        )
+        if needs_admin and not actor.has_capability(ADMIN_CAPABILITY):
+            if not acting_on_self:
+                reason = (
+                    "Acting on another subject requires an actor holding the "
+                    f"'{ADMIN_CAPABILITY}' capability."
+                )
+            elif action == "initiate_recovery":
+                reason = (
+                    "Administrative recovery requires an actor holding the "
+                    f"'{ADMIN_CAPABILITY}' capability."
+                )
+            else:
+                return actor, self._admin_action_denied(action)
+            return actor, {"success": False, "error": reason, "authorized": False}
+
+        return actor, None
+
     def _setup_mfa(
         self,
         user_id: str,
@@ -792,7 +1244,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_phone: str,
         user_data: Optional[Dict[str, Any]] = None,
         device_info: Optional[Dict[str, Any]] = None,
-        admin_override: bool = False,
+        allow_reenrolment: bool = False,
     ) -> Dict[str, Any]:
         """Setup MFA for user.
 
@@ -801,6 +1253,11 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             method: MFA method to setup
             user_email: User email
             user_phone: User phone
+            allow_reenrolment: Whether replacing an already-VERIFIED factor is
+                permitted. Set by the dispatcher from the ACTOR's verified
+                capability (issue #2047); it was previously named
+                ``admin_override`` and set from the caller-supplied boolean of
+                the same name, which is the defect.
 
         Returns:
             Setup result
@@ -819,14 +1276,18 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # route that defeated every downstream enrolment guard
             # (issue #2026).
             existing = self.user_mfa_data.get(user_id, {}).get("methods", {})
-            if any(m.get("verified") for m in existing.values()) and not admin_override:
+            if (
+                any(m.get("verified") for m in existing.values())
+                and not allow_reenrolment
+            ):
                 return {
                     "success": False,
                     "method": method,
                     "error": (
                         "MFA is already set up and verified for this user. "
-                        "Re-enrolment requires admin_override=True or a "
-                        "completed recovery."
+                        "Re-enrolment requires an actor holding the "
+                        f"'{ADMIN_CAPABILITY}' capability, or a completed "
+                        "recovery."
                     ),
                 }
 
@@ -966,7 +1427,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # Log the detail; do NOT return it. Provider exceptions routinely
             # carry the recipient address/number, which would disclose the
             # enrolled destination to the caller (issue #2026).
-            self.log_with_context("ERROR", f"SMS setup failed for user {user_id}: {e}")
+            self.log_with_context(
+                "ERROR",
+                f"SMS setup failed for user {log_safe(user_id, 64)}: {e}",
+            )
             # Roll back the half-enrolment, as the email path does: leaving it
             # in place let a failed setup permanently replace a victim's
             # verified destination with an attacker-chosen number. The temp
@@ -1462,14 +1926,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         if not device_id:
             return {"success": False, "error": "Device ID required"}
 
-        # Check if user has trusted devices (check both storage locations)
-        has_trusted_devices = user_id in self.trusted_devices or (
-            user_id in self.user_mfa_data
-            and "trusted_devices" in self.user_mfa_data[user_id]
-            and self.user_mfa_data[user_id]["trusted_devices"]
-        )
-
-        if not has_trusted_devices:
+        # ONE store (issue #2047). This used to consult `self.trusted_devices`
+        # AND `user_mfa_data[user]["trusted_devices"]`, synthesising a record
+        # shape for the second and tagging each with `_store` so expiry
+        # cleanup could delete from whichever one it came from. Two stores for
+        # one fact is why that tagging was needed at all, and why removing a
+        # synthesised dict from the wrong store raised out of execute()
+        # (issue #2026 patched the symptom). Both writers now land in
+        # `self.trusted_devices`, so there is one place to read, one place to
+        # expire, and one place `revoke`/`reset`/`_disable_all_mfa` clear.
+        if user_id not in self.trusted_devices or not self.trusted_devices[user_id]:
             return {
                 "success": True,
                 "trusted": False,
@@ -1477,33 +1943,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "reason": "No trusted devices found",
             }
 
-        # Find matching trusted device in both storage locations
-        devices_to_check = []
-
-        # Add devices from old storage format
-        if user_id in self.trusted_devices:
-            devices_to_check.extend(self.trusted_devices[user_id])
-
-        # Add devices from new storage format
-        if (
-            user_id in self.user_mfa_data
-            and "trusted_devices" in self.user_mfa_data[user_id]
-        ):
-            for fingerprint, device_data in self.user_mfa_data[user_id][
-                "trusted_devices"
-            ].items():
-                device_obj = {
-                    "device_id": fingerprint,
-                    "trust_token": device_data.get("trust_token"),
-                    "expires_at": device_data.get("expires_at"),
-                    # Tag the origin so expiry cleanup deletes from the store
-                    # the entry actually came from: removing a synthesised dict
-                    # from the OTHER store raised KeyError/ValueError out of
-                    # execute() (issue #2026).
-                    "_store": "user_mfa_data",
-                    "_fingerprint": fingerprint,
-                }
-                devices_to_check.append(device_obj)
+        devices_to_check = list(self.trusted_devices[user_id])
 
         # A device_id is an identifier, not a secret -- it is echoed back by
         # setup_push and trust_device. Without a token requirement, anyone
@@ -1532,12 +1972,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     expires_at = datetime.now(UTC) - timedelta(seconds=1)
 
                 if expires_at <= datetime.now(UTC):
-                    # Remove expired trust from the store it came from.
-                    if device.get("_store") == "user_mfa_data":
-                        self.user_mfa_data.get(user_id, {}).get(
-                            "trusted_devices", {}
-                        ).pop(device.get("_fingerprint"), None)
-                    elif user_id in self.trusted_devices:
+                    # Remove expired trust. One store, so no origin tag and no
+                    # branch on which store to delete from.
+                    if user_id in self.trusted_devices:
                         try:
                             self.trusted_devices[user_id].remove(device)
                         except ValueError:
@@ -1771,164 +2208,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "method": method,
                     "message": "Invalid code",
                     "error": "Invalid code",
-                }
-
-    async def _verify_mfa_async(
-        self, user_id: str, code: str, method: str
-    ) -> Dict[str, Any]:
-        """Async version of verify MFA code.
-
-        Args:
-            user_id: User ID
-            code: MFA code to verify
-            method: MFA method to verify
-
-        Returns:
-            Verification result
-        """
-        if not code:
-            return {
-                "success": False,
-                "verified": False,
-                "error": "Verification code required",
-            }
-
-        with self._data_lock:
-            if user_id not in self.user_mfa_data:
-                # A user with no MFA enrolled cannot satisfy a second factor.
-                # This previously auto-enrolled ANY user who presented the
-                # literal code "123456" against a hardcoded shared secret and
-                # handed back a fully verified MFA session (issue #2026):
-                # verification is never a path to enrolment.
-                return {
-                    "success": False,
-                    "verified": False,
-                    "error": "MFA not setup for user",
-                }
-
-            user_data = self.user_mfa_data[user_id]
-
-            # Check if it's a backup code first
-            # A backup code only substitutes for a factor that EXISTS and has
-            # been verified. Codes are minted at setup time, so accepting them
-            # against an unverified enrolment made `setup -> verify` a
-            # complete second factor with nothing proven (issue #2026).
-            if (
-                self.backup_codes
-                and any(
-                    m.get("verified") for m in user_data.get("methods", {}).values()
-                )
-                and code in user_data.get("backup_codes", [])
-            ):
-                # Remove used backup code
-                user_data["backup_codes"].remove(code)
-                self.mfa_stats["backup_codes_used"] += 1
-
-                # Create MFA session (internal, lock-free)
-                session_id = self._create_mfa_session_internal(user_id)
-
-                # Log security event
-                # Log security event (sync version - no security event logging)
-
-                return {
-                    "success": True,
-                    "verified": True,
-                    "user_id": user_id,
-                    "method": "backup_code",
-                    "session_id": session_id,
-                    "codes_remaining": len(user_data.get("backup_codes", [])),
-                    "warning": "Backup code used. Consider regenerating backup codes.",
-                }
-
-            # Handle backup_code method specially
-            if method == "backup_code":
-                # A backup code only substitutes for a factor that EXISTS and
-                # has been verified (issue #2026).
-                if (
-                    self.backup_codes
-                    and any(
-                        m.get("verified") for m in user_data.get("methods", {}).values()
-                    )
-                    and code in user_data.get("backup_codes", [])
-                ):
-                    # Remove used backup code
-                    user_data["backup_codes"].remove(code)
-                    self.mfa_stats["backup_codes_used"] += 1
-
-                    # Create MFA session (internal, lock-free)
-                    session_id = self._create_mfa_session_internal(user_id)
-
-                    return {
-                        "success": True,
-                        "verified": True,
-                        "user_id": user_id,
-                        "method": "backup_code",
-                        "session_id": session_id,
-                        "codes_remaining": len(user_data.get("backup_codes", [])),
-                    }
-                else:
-                    # Failed verification — return success=False for consistency
-                    # with `verified=False` (issue #803).
-                    return {
-                        "success": False,
-                        "verified": False,
-                        "user_id": user_id,
-                        "method": "backup_code",
-                        "message": "Backup code already used or invalid",
-                        "error": "Backup code already used or invalid",
-                    }
-
-            # Verify using specified method
-            if method not in user_data["methods"]:
-                return {
-                    "success": False,
-                    "verified": False,
-                    "error": f"Method {method} not setup for user",
-                }
-
-            method_data = user_data["methods"][method]
-
-            if method == "totp":
-                verified = self._verify_totp_code(method_data["secret"], code)
-            elif method == "sms":
-                verified = self._verify_sms_code(user_id, code)
-            elif method == "email":
-                verified = self._verify_email_code(user_id, code)
-            else:
-                return {
-                    "success": False,
-                    "verified": False,
-                    "error": f"Verification not implemented for method: {method}",
-                }
-
-            if verified:
-                # Mark method as verified if it's the first time
-                if not method_data.get("verified", False):
-                    method_data["verified"] = True
-                    method_data["verified_at"] = datetime.now(UTC).isoformat()
-
-                # Create MFA session (internal, lock-free)
-                session_id = self._create_mfa_session_internal(user_id)
-
-                # Log security event
-                # Log security event (sync version - no security event logging)
-
-                return {
-                    "success": True,
-                    "verified": True,
-                    "method": method,
-                    "session_id": session_id,
-                }
-            else:
-                # Log failed verification
-                # Return success=False for consistency with `verified=False`
-                # (issue #803).
-                return {
-                    "success": False,
-                    "verified": False,
-                    "user_id": user_id,
-                    "method": method,
-                    "error": "Invalid verification code",
                 }
 
     def _verify_totp_code(self, secret: str, code: str) -> bool:
@@ -2571,6 +2850,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "too_many_attempts",
             "locked",
             "admin_override",
+            # Whether the (actor, action, subject) check permitted the call.
+            # A refused attempt is the record an auditor most wants.
+            "authorized",
             "codes_remaining",
             "backup_codes_remaining",
             "attempts_remaining",
@@ -2609,7 +2891,12 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         return redact_mapping(safe)
 
     def _audit_mfa_operation_sync(
-        self, user_id: str, action: str, method: str, result: Dict[str, Any]
+        self,
+        user_id: str,
+        action: str,
+        method: str,
+        result: Dict[str, Any],
+        actor: Optional[MFAActor] = None,
     ) -> None:
         """Audit an MFA operation from a synchronous caller.
 
@@ -2638,13 +2925,20 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     result.get("success", False) if isinstance(result, dict) else False
                 ),
                 "result": self._audit_safe_result(result),
-                # user_id above is the SUBJECT of the operation, never the
-                # actor: this node has no caller identity to record, and
-                # admin_override is a caller-supplied boolean rather than an
-                # authenticated principal. An auditor reading these records
-                # can see WHAT happened and TO WHOM, but not BY WHOM. That
-                # gap is #2047 and is not closed here.
-                "actor": None,
+                # user_id above is the SUBJECT; this is the ACTOR -- who did
+                # it. #2066 shipped this key as a hard-coded None with a test
+                # asserting it, DELIBERATELY as a tripwire: the trail was
+                # honest about attribution it could not support, and the test
+                # was a marker to revisit when an actor landed. It has landed
+                # (#2047), so the field now carries the server-derived
+                # principal and the tripwire test is updated rather than
+                # deleted.
+                #
+                # Still None under the explicit require_actor=False opt-out,
+                # where the node genuinely does not know the caller: recording
+                # the subject as the actor there would be a fabricated
+                # attribution, which is worse than an absent one.
+                "actor": actor.user_id if actor is not None else None,
                 "ip_address": "unknown",
             },
         }
@@ -2701,186 +2995,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "active_sessions": len(self.user_sessions),
         }
 
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
-        """Async execution method for enterprise integration."""
-        # Extract parameters
-        action = kwargs.get("action")
-        user_id = kwargs.get("user_id")
-        method = kwargs.get("method", "totp")
-        code = kwargs.get("code", "")
-        user_email = kwargs.get("user_email", "")
-        user_phone = kwargs.get("user_phone", "")
-        phone_number = kwargs.get("phone_number", "")
-        admin_override = bool(kwargs.get("admin_override"))
-
-        # Handle phone_number parameter alias
-        final_user_phone = user_phone or phone_number
-
-        start_time = datetime.now(UTC)
-
-        try:
-            # Validate required user_id — empty or whitespace-only is invalid
-            # input. Mirrors the sync `run()` validation (issue #803).
-            if not user_id or not str(user_id).strip():
-                return {
-                    "success": False,
-                    "error": "user_id is required and must be non-empty",
-                    "user_id": user_id,
-                    "processing_time_ms": 0.0,
-                    "timestamp": start_time.isoformat(),
-                }
-
-            # Validate and sanitize inputs (disabled for debugging - causing deadlock)
-            # safe_params = self.validate_and_sanitize_inputs({
-            #     "action": action,
-            #     "user_id": user_id,
-            #     "method": method,
-            #     "code": code,
-            #     "user_email": user_email,
-            #     "user_phone": user_phone
-            # })
-
-            # action = safe_params["action"]
-            # user_id = safe_params["user_id"]
-            # method = safe_params["method"]
-            # code = safe_params["code"]
-            # user_email = safe_params["user_email"]
-            # user_phone = safe_params["user_phone"]
-
-            # Use direct parameters for now
-            action = action
-            user_id = user_id
-            method = method or "totp"
-            code = code or ""
-            user_email = user_email or ""
-            user_phone = final_user_phone or ""
-
-            # self.log_node_execution("mfa_operation_start", action=action, method=method)
-
-            # Check rate limits for verification operations (issue #803).
-            # Mirrors the sync run() rate-limit dispatch.
-            if action == "verify" and not self._check_rate_limit(user_id):
-                self.mfa_stats["rate_limited_attempts"] += 1
-                rate_limited = {
-                    "success": False,
-                    "verified": False,
-                    "user_id": user_id,
-                    "error": "Rate limit exceeded. Please try again later.",
-                    "rate_limited": True,
-                    "too_many_attempts": True,
-                    "processing_time_ms": 0.0,
-                    "timestamp": start_time.isoformat(),
-                }
-                # Audit before returning. This early return used to skip the
-                # audit call at the end of the dispatcher, so a sustained
-                # brute-force produced records up to the rate-limit threshold
-                # and then went SILENT for the rest of the attack -- the trail
-                # stopped exactly when it became interesting (issue #2060).
-                await self._audit_mfa_operation(user_id, action, method, rate_limited)
-                return rate_limited
-
-            # Route to appropriate action handler
-            if action == "setup":
-                result = self._setup_mfa(user_id, method, user_email, user_phone)  # type: ignore[reportArgumentType]
-                self.mfa_stats["total_setups"] += 1
-            elif action == "verify":
-                result = await self._verify_mfa_async(user_id, code, method)  # type: ignore[reportArgumentType]
-                self.mfa_stats["total_verifications"] += 1
-                if result.get("verified", False):
-                    self.mfa_stats["successful_verifications"] += 1
-                else:
-                    self.mfa_stats["failed_verifications"] += 1
-            elif action == "generate_backup_codes":
-                result = self._generate_backup_codes(user_id)  # type: ignore[reportArgumentType]
-            elif action == "revoke":
-                # Destroying a user's factors is reset-equivalent: revoke then
-                # setup re-creates the enrolment the setup guard protects, so
-                # it carries the same requirement (issue #2026).
-                if not admin_override:
-                    result = {
-                        "success": False,
-                        "error": (
-                            "Revoking MFA destroys the user's existing factors; "
-                            "it requires admin_override=True."
-                        ),
-                    }
-                else:
-                    result = self._revoke_mfa(user_id, method)  # type: ignore[reportArgumentType]
-            elif action == "status":
-                result = self._get_mfa_status(user_id)  # type: ignore[reportArgumentType]
-            elif action == "verify_backup":
-                result = self._verify_backup_code(user_id, code)  # type: ignore[reportArgumentType]
-            elif action == "trust_device":
-                result = self._trust_device_by_fingerprint(
-                    user_id, kwargs.get("device_fingerprint")  # type: ignore[reportArgumentType]
-                )
-            elif action == "check_device_trust":
-                result = self._check_device_trust(
-                    user_id,  # type: ignore[reportArgumentType]
-                    kwargs.get("device_fingerprint") or {},
-                    kwargs.get("trust_token"),
-                )
-            elif action == "list_methods":
-                result = self._list_methods(user_id)  # type: ignore[reportArgumentType]
-            elif action == "disable":
-                # Match the sync surface: a gate present in one dispatcher and
-                # absent in the other is not a gate (issue #2026).
-                if admin_override:
-                    result = self._disable_all_mfa(user_id)  # type: ignore[reportArgumentType]
-                else:
-                    result = {
-                        "success": False,
-                        "error": (
-                            "Disabling a user's MFA method requires "
-                            "admin_override=True."
-                        ),
-                    }
-            else:
-                result = {"success": False, "error": f"Unknown action: {action}"}
-
-            # Add timing information
-            processing_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
-            result["processing_time_ms"] = processing_time
-            result["timestamp"] = start_time.isoformat()
-
-            # Audit log the operation
-            await self._audit_mfa_operation(user_id, action, method, result)  # type: ignore[reportArgumentType]
-
-            # self.log_node_execution(
-            #     "mfa_operation_complete",
-            #     action=action,
-            #     success=result.get("success", False),
-            #     processing_time_ms=processing_time
-            # )
-
-            return result
-
-        except MFADeliveryError:
-            # Delivery failures are already converted to result dicts at their
-            # dispatch sites; anything reaching here is a genuine bug.
-            raise
-        except (TypeError, ValueError, AttributeError, KeyError) as e:
-            # Malformed input (a non-string user_phone/user_email, a non-dict
-            # device_info) used to raise out of execute(), contradicting the
-            # node's own result-dict contract that every other failure honours
-            # (issue #2026). The detail is logged, not returned.
-            self.log_with_context(
-                "ERROR", f"MFA operation {action} failed on invalid input: {e!r}"
-            )
-            return {
-                "success": False,
-                "error": "Invalid input for MFA operation",
-                "action": action,
-            }
-        except Exception as e:
-            # self.log_error_with_traceback(e, "mfa_operation")
-            raise
-        finally:
-            # See the sync dispatcher: in a finally so early returns and the
-            # exception paths still drain the queue. Offloaded because this one
-            # runs on the caller's event loop.
-            await asyncio.to_thread(self._flush_audit_records)
-
     def _verify_backup_code(self, user_id: str, code: str) -> Dict[str, Any]:
         """Verify backup code for user.
 
@@ -2929,35 +3043,28 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
     def _trust_device_by_fingerprint(
         self, user_id: str, device_fingerprint: str
     ) -> Dict[str, Any]:
-        """Trust a device for user by fingerprint."""
+        """Trust a device named by fingerprint. ONE store (issue #2047).
+
+        This wrote into ``user_mfa_data[user]["trusted_devices"]`` while the
+        sync path wrote into ``self.trusted_devices``. Two stores for one fact
+        meant which one a trust landed in -- and therefore whether `revoke`,
+        `reset` or `_disable_all_mfa` could clear it -- depended on which
+        dispatcher the caller happened to reach. It also CREATED an MFA record
+        for any subject as a side effect, so trusting a device enrolled a user
+        who had never enrolled.
+
+        It is now the fingerprint spelling of :meth:`_trust_device`.
+        """
         if not device_fingerprint:
             return {"success": False, "error": "Device fingerprint required"}
-
-        trust_token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(UTC) + timedelta(days=30)
-
-        with self._data_lock:
-            if user_id not in self.user_mfa_data:
-                self.user_mfa_data[user_id] = {
-                    "methods": {},
-                    "backup_codes": [],
-                    "trusted_devices": {},
-                }
-
-            if "trusted_devices" not in self.user_mfa_data[user_id]:
-                self.user_mfa_data[user_id]["trusted_devices"] = {}
-
-            self.user_mfa_data[user_id]["trusted_devices"][device_fingerprint] = {
-                "trust_token": trust_token,
-                "trusted_at": datetime.now(UTC).isoformat(),
-                "expires_at": expires_at.isoformat(),
-            }
-
-        return {
-            "success": True,
-            "trust_token": trust_token,
-            "expires_at": expires_at.isoformat(),
-        }
+        return self._trust_device(
+            user_id,
+            {
+                "device_id": device_fingerprint,
+                "device_fingerprint": device_fingerprint,
+            },
+            30,
+        )
 
     def _set_user_preference(
         self, user_id: str, preferred_method: str
@@ -3109,7 +3216,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         user_id: str,
         recovery_method: str,
         recovery_destination: Optional[str] = None,
-        admin_override: bool = False,
+        admin_authorized: bool = False,
     ) -> Dict[str, Any]:
         """Initiate MFA recovery for user.
 
@@ -3135,6 +3242,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             recovery_method: ``email``, ``sms``, or ``admin``.
             recovery_destination: Ignored for delivery. When supplied it must
                 match the enrolled destination, and is rejected otherwise.
+            admin_authorized: Whether the resolved ACTOR holds the admin
+                capability (issue #2047). Was ``admin_override``, set from the
+                caller-supplied boolean of the same name.
 
         Returns:
             Result describing that a token was issued and delivered. The token
@@ -3149,10 +3259,14 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # "admin" bypasses the enrolled-destination checks entirely and always
         # reports delivered, so ungated it minted a recovery_requests entry for
         # any caller-chosen user_id (issue #2026).
-        if recovery_method == "admin" and not admin_override:
+        if recovery_method == "admin" and not admin_authorized:
             return {
                 "success": False,
-                "error": "Admin recovery requires admin_override=True.",
+                "error": (
+                    "Admin recovery requires an actor holding the "
+                    f"'{ADMIN_CAPABILITY}' capability."
+                ),
+                "authorized": False,
             }
 
         # Resolve the destination under the lock, then RELEASE it before the

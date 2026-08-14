@@ -337,6 +337,11 @@ def test_send_sms_does_not_log_full_phone_number(caplog):
 def _mfa_node(**kwargs):
     from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
+    # These tests pin the #2026 contract, which predates the actor model, so
+    # they take the explicit require_actor=False opt-out (issue #2047). The
+    # actor gate itself is pinned in test_issue_2047_mfa_actor.py. setdefault
+    # so a test can opt back IN.
+    kwargs.setdefault("require_actor", False)
     return MultiFactorAuthNode(name="mfa_test", **kwargs)
 
 
@@ -488,10 +493,22 @@ def test_verify_does_not_auto_enrol_an_unconfigured_user_with_123456():
 
 
 def test_verify_async_does_not_auto_enrol_an_unconfigured_user_with_123456():
-    """Same bypass existed on the async verify path."""
+    """Same bypass existed on the async verify path.
+
+    Driven through the PUBLIC surface. This called ``_verify_mfa_async``
+    directly, which is exactly the pattern that let correct-but-unreachable
+    code ship: the private helper was fixed while the dispatcher that reached
+    it was not. ``_verify_mfa_async`` no longer exists -- both surfaces share
+    one dispatcher (issue #2047) -- and driving ``async_run`` proves the
+    guard is on the path a caller actually takes.
+    """
     node = _mfa_node()
 
-    result = asyncio.run(node._verify_mfa_async("attacker", "123456", "totp"))
+    result = asyncio.run(
+        node.async_run(
+            action="verify", user_id="attacker", code="123456", method="totp"
+        )
+    )
 
     assert (
         result.get("verified") is not True

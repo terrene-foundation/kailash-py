@@ -38,6 +38,7 @@ from ...utils.lifespan import (
     drive_router_lifespan_shutdown,
     drive_router_lifespan_startup,
 )
+from ...utils.secure_logging import sanitize_log_value
 from ...utils.server_auth import install_server_auth_middleware, resolve_server_auth
 from ...workflow import Workflow
 from ...workflow.builder import WorkflowBuilder
@@ -552,16 +553,68 @@ class APIGateway:
         """Setup session management routes."""
 
         # Create auth dependency
-        async def get_optional_current_user():
-            """Optional auth dependency - returns None if auth is disabled."""
-            if self.enable_auth and self.auth_manager:
-                # Use auth manager's dependency if available
+        async def get_optional_current_user(request: Request):
+            """Resolve the authenticated principal, or None when there is none.
+
+            This returned None unconditionally -- "For now, return None to
+            avoid complex auth setup" -- on EVERY path, including with auth
+            enabled and a valid bearer token presented. `enable_auth` defaults
+            to True, so on the default path the session identity was always
+            the caller-supplied `request.user_id` body field and the
+            server-derived principal never won (`zero-tolerance.md` Rule 2;
+            same bug class as #2047 at the HTTP surface). The auth manager's
+            `verify_token` / `verify_api_key` existed the whole time and were
+            simply not called.
+
+            Deliberately still OPTIONAL: a request with no credential resolves
+            to None rather than 401, which preserves this route's contract.
+            Whether an auth-enabled gateway should REFUSE a session create
+            that carries no credential is a separate, breaking decision and is
+            tracked as its own issue rather than smuggled in here.
+            """
+            if not (self.enable_auth and self.auth_manager):
+                return None
+
+            scheme, _, token = (request.headers.get("Authorization") or "").partition(
+                " "
+            )
+            if scheme.lower() == "bearer" and token:
                 try:
-                    # This would normally use the auth manager's get_current_user_dependency
-                    # For now, return None to avoid complex auth setup
+                    payload = await self.auth_manager.verify_token(token)
+                except HTTPException:
+                    # An invalid/expired token is a REJECTED credential, not
+                    # an absent one. Logged rather than swallowed silently
+                    # (`zero-tolerance.md` Rule 3); the request continues
+                    # unauthenticated, which this route already permits.
+                    logger.warning("Session-route bearer token was rejected")
                     return None
-                except Exception:
+                except Exception as exc:
+                    logger.warning(
+                        "Session-route token verification failed: %s",
+                        type(exc).__name__,
+                    )
                     return None
+                return {
+                    "user_id": payload.get("user_id"),
+                    "permissions": payload.get("permissions", []),
+                    "metadata": payload.get("metadata", {}),
+                }
+
+            # NO `X-API-Key` BRANCH HERE, deliberately.
+            #
+            # A first draft of this added one, calling
+            # `auth_manager.verify_api_key`. That method CANNOT SUCCEED, which
+            # was measured rather than assumed: it calls
+            # `credential_manager.execute(operation=..., credential_name=...)`,
+            # but `CredentialManagerNode.run()` takes `**inputs` and ignores
+            # BOTH -- it reads `self.credential_name`, fixed at construction --
+            # and its return dict has no `"success"` key at all. So
+            # `result.get("success", False)` is always False and the call
+            # always raises 401. An auth path that can only ever reject is a
+            # non-functional feature presented as a working one
+            # (`zero-tolerance.md` Rule 2), so it is not shipped. The
+            # underlying `verify_api_key` defect is pre-existing and tracked
+            # separately.
             return None
 
         @self.app.post("/api/sessions", response_model=SessionResponse)
@@ -571,10 +624,28 @@ class APIGateway:
         ):
             """Create a new session for a frontend client."""
             try:
-                # Use authenticated user ID if available
+                # A resolved principal WINS -- and an UNUSABLE one REFUSES.
+                #
+                # `.get("user_id", user_id)` fell back to the body value only
+                # when the key was ABSENT, so a principal resolving to a None
+                # user_id silently produced a session with no owner. The first
+                # fix for that skipped the assignment instead, which is just
+                # as wrong in the other direction: it reverted to the
+                # caller-supplied body field. A credential that verified but
+                # carries no usable subject is a BROKEN credential, not an
+                # absent one, and falling back to the caller's claim there is
+                # fail-open at an identity-resolution site.
                 user_id = request.user_id
                 if self.enable_auth and current_user:
-                    user_id = current_user.get("user_id", user_id)
+                    principal = current_user.get("user_id")
+                    if not isinstance(principal, str) or not principal:
+                        raise HTTPException(
+                            status_code=401,
+                            detail=(
+                                "Authenticated credential carries no usable " "subject"
+                            ),
+                        )
+                    user_id = principal
 
                 session_id = await self.agent_ui.create_session(
                     user_id=user_id or "", metadata=request.metadata
@@ -583,8 +654,16 @@ class APIGateway:
                 session = await self.agent_ui.get_session(session_id)
                 self.requests_processed += 1
 
-                # Log session creation
-                logger.info(f"Session created: {session_id} for user {user_id}")
+                # Log session creation. ``user_id`` is caller-controlled: it
+                # comes from the POST body and is only overridden when auth is
+                # enabled AND a principal resolved, so on the default path it
+                # is the raw request value. Interpolated, an embedded newline
+                # forges a second well-formed log record (issue #2040).
+                logger.info(
+                    "Session created: %s for user %s",
+                    sanitize_log_value(session_id, 128),
+                    sanitize_log_value(user_id, 128),
+                )
 
                 # Transform response using SDK node
                 response_data = {
@@ -600,6 +679,13 @@ class APIGateway:
                 )
 
                 return SessionResponse(**transformed["result"])
+            except HTTPException:
+                # A deliberate status -- the 401 raised above for a credential
+                # with no usable subject -- must reach the client as itself.
+                # The `except Exception` below would otherwise relabel every
+                # auth refusal on this route as a 500, hiding the refusal and
+                # reporting a server fault for a client error.
+                raise
             except Exception as e:
                 # The security event and the client response share one
                 # reference id, so the failed-session record can be tied to
@@ -611,10 +697,14 @@ class APIGateway:
                     e, logger=logger, context="create session", reference=reference
                 )
 
-                # Log security event for failed session creation
+                # Log security event for failed session creation. `user_id` is
+                # the raw POST body value here -- a site the first #2040 sweep
+                # missed even though it sits nine lines below one it fixed,
+                # which is the drift argument in #2088 happening inside this
+                # very change.
                 logger.warning(
                     "Session creation failed for user %s [reference=%s]",
-                    request.user_id,
+                    sanitize_log_value(request.user_id, 128),
                     reference,
                 )
 

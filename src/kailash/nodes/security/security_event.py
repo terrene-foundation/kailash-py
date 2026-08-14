@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.utils.secure_logging import sanitize_log_structure, sanitize_log_value
 
 
 class SeverityLevel(str, Enum):
@@ -89,13 +90,64 @@ class SecurityEventNode(Node):
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
 
+    @staticmethod
+    def _coerce_severity(raw: Any) -> SeverityLevel:
+        """Resolve a caller-supplied severity, failing CLOSED on an unknown one.
+
+        ``SeverityLevel(raw)`` raised ``ValueError`` for anything that was not
+        an exact member name, and that exception propagated out of a SECURITY
+        sink: the event was never recorded, and the caller saw a crash instead
+        of a log line. A sink that drops the record on a malformed severity is
+        the worst of both outcomes.
+
+        Case is normalized first, because callers in this repo pass ``"info"``
+        and ``"warning"`` (``middleware/core/workflows.py``). A value that is
+        still unrecognized ranks TIGHTEST -- CRITICAL, not INFO -- so a typo
+        makes an event LOUDER rather than silently downgrading a real
+        CRITICAL to below every alert threshold (``rules/security.md``
+        § Enforcement-Surface Parity: unrecognized values rank tightest).
+        """
+        if isinstance(raw, SeverityLevel):
+            return raw
+        try:
+            return SeverityLevel(str(raw).strip().upper())
+        except (ValueError, TypeError, AttributeError):
+            logging.getLogger(__name__).warning(
+                "Unrecognized security severity %r; treating as CRITICAL",
+                sanitize_log_value(raw, 64),
+            )
+            return SeverityLevel.CRITICAL
+
     def execute(self, **inputs) -> Dict[str, Any]:
         """Execute security event processing."""
-        event_type = inputs.get("event_type", "security_check")
-        severity = SeverityLevel(inputs.get("severity", "INFO"))
-        message = inputs.get("message", "")
-        user_id = inputs.get("user_id")
-        metadata = inputs.get("metadata", {})
+        # SINK-LEVEL SANITIZING (issue #2088).
+        #
+        # Every caller-controlled field is flattened and bounded HERE, at the
+        # choke point every caller passes through, rather than at each of the
+        # ~30 call sites. The per-call-site approach was measured to drift: a
+        # sweep during #2066's own review found two raw ``user_id`` sites the
+        # author's manual enumeration had missed, within a single branch,
+        # under active review, by the person who had just written the helper.
+        # Nothing structurally prevented call site N+1 from omitting it.
+        #
+        # ``message`` is sanitized too, not just the identifier fields. The
+        # #2066 sweep caught the ``message=`` f-string carrying the same raw
+        # value that the ``user_id=`` kwarg beside it had already sanitized --
+        # so a fix scoped to identifier fields would reproduce the original
+        # defect on the field that actually drifted.
+        #
+        # ``metadata`` is sanitized recursively because this node returns it
+        # and downstream consumers render it; a nested string is a record
+        # field exactly as a top-level one is.
+        event_type = sanitize_log_value(inputs.get("event_type", "security_check"), 128)
+        severity = self._coerce_severity(inputs.get("severity", "INFO"))
+        message = sanitize_log_value(inputs.get("message", ""), 512)
+        raw_user_id = inputs.get("user_id")
+        # Preserve the None/absent distinction: a sanitized ``None`` would be
+        # the string "None" and would render "(User: None)" on every anonymous
+        # event, and would make the `if user_id:` branch below always true.
+        user_id = None if raw_user_id is None else sanitize_log_value(raw_user_id, 128)
+        metadata = sanitize_log_structure(inputs.get("metadata", {}))
 
         # Create security event
         security_event = SecurityEvent(

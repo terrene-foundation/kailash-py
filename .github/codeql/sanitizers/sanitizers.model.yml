@@ -54,3 +54,39 @@ extensions:
           "value",
           "manual",
         ]
+      # ---------------------------------------------------------------
+      # Issue #2088 / #2040 — NO ROW HERE, AND THAT IS THE FINDING.
+      #
+      # Two model-based attempts to declare
+      # `kailash.utils.secure_logging.sanitize_log_value` (and
+      # `sanitize_log_structure`, and the `nodes/auth` alias `log_safe`)
+      # as a `py/log-injection` barrier were made on this branch and BOTH
+      # were MEASURED not to work. They are recorded rather than left in
+      # place, because a model row that does nothing looks exactly like a
+      # fix and stops the next person from looking for the real one.
+      #
+      #   1. `summaryModel` kind `value` — states the return value carries
+      #      the argument's VALUE. Value flow is a SUBSET of taint flow,
+      #      so this tells CodeQL the taint PROPAGATES: the opposite of
+      #      the intent. (The two `dataflow.utils.masking` rows above rest
+      #      on that same mistaken reading, which is why they never
+      #      cleared the findings they were added for. Correcting them
+      #      changes the disposition of alerts this branch does not touch,
+      #      so it is left alone and recorded here.)
+      #
+      #   2. `neutralModel` kind `summary` — states the function has no
+      #      flow summary. It has no effect on a function that is IN
+      #      SOURCE, because CodeQL analyses the real body instead.
+      #      Measured: with these rows in place, the analysis of PR #2103
+      #      at 2026-08-12T04:56Z still reported all four
+      #      `py/log-injection` alerts, each pointing AT the
+      #      `sanitize_log_value(...)` call — api_gateway.py:474,516 and
+      #      agent_ui.py:455,470.
+      #
+      # THE MECHANISM THAT DOES WORK IS IN THE CODE, NOT IN THIS FILE.
+      # `LogInjection::ReplaceLineBreaksSanitizer` matches a `.replace`
+      # attribute call whose first argument is a string literal in
+      # ["\r\n", "\n"], so `sanitize_log_value` ends with
+      # `.replace("\r", " ").replace("\n", " ")` as its final, returned
+      # expression. See the comment at that line for the full reasoning.
+      # ---------------------------------------------------------------
