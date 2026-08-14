@@ -474,9 +474,20 @@ class TestAuthorizationServer:
             mock_jwt_instance = MagicMock()
             mock_jwt.return_value = mock_jwt_instance
 
+            # `allow_ephemeral_key=True`, NOT a `private_key_path`.
+            #
+            # `private_key_path="test_key.pem"` named a file that has never
+            # existed in this repo. AuthorizationServer OPENS that path itself
+            # (it does not delegate the read to JWTManager), so the `mock_jwt`
+            # patch above never intercepted it and construction raised
+            # JWTKeyNotConfiguredError -- erroring every test in this class at
+            # setup. The SDK's own message prescribes this remedy: opt in to a
+            # process-local generated key pair for self-signed test tokens.
+            # These tests mock JWTManager anyway, so no real signing happens;
+            # what is needed is a constructor that does not demand a key file.
             self.server = AuthorizationServer(
                 issuer="https://auth.example.com",
-                private_key_path="test_key.pem",
+                allow_ephemeral_key=True,
                 client_store=InMemoryClientStore(),
                 token_store=InMemoryTokenStore(),
             )

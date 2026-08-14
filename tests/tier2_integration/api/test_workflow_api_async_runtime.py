@@ -4,6 +4,14 @@ Test suite for WorkflowAPI async runtime selection.
 This test validates the Docker threading fix where WorkflowAPI now uses
 AsyncLocalRuntime by default instead of LocalRuntime to avoid double-threading
 deadlocks in Docker/FastAPI deployments.
+
+Every ``WorkflowAPI`` below passes ``require_auth=False`` explicitly. These
+tests exercise RUNTIME SELECTION, not the authentication gate: ``require_auth``
+defaults to True (#2072 -- a default server executed arbitrary registered
+workflows for anonymous callers), so construction now refuses when no credential
+source is configured. Nothing here binds a socket, so the opt-out is stated
+rather than inherited -- a reader can see these servers are deliberately
+ungated instead of guessing whether the omission was an oversight.
 """
 
 import pytest
@@ -28,7 +36,7 @@ class TestWorkflowAPIRuntimeSelection:
         )
 
         # Create API without specifying runtime
-        api = WorkflowAPI(workflow)
+        api = WorkflowAPI(workflow, require_auth=False)
 
         # Verify AsyncLocalRuntime was selected by default
         assert isinstance(
@@ -47,7 +55,7 @@ class TestWorkflowAPIRuntimeSelection:
 
         # Create API with explicit LocalRuntime
         sync_runtime = LocalRuntime()
-        api = WorkflowAPI(workflow, runtime=sync_runtime)
+        api = WorkflowAPI(workflow, require_auth=False, runtime=sync_runtime)
 
         # Verify LocalRuntime was used
         assert isinstance(
@@ -71,7 +79,7 @@ class TestWorkflowAPIRuntimeSelection:
 
         # Create API with explicit AsyncLocalRuntime with custom config
         async_runtime = AsyncLocalRuntime(max_concurrent_nodes=20)
-        api = WorkflowAPI(workflow, runtime=async_runtime)
+        api = WorkflowAPI(workflow, require_auth=False, runtime=async_runtime)
 
         # Verify AsyncLocalRuntime was used
         assert isinstance(api.runtime, AsyncLocalRuntime)
@@ -107,7 +115,7 @@ class TestWorkflowAPIRuntimeSelection:
         )
 
         # Create API with default AsyncLocalRuntime
-        api = WorkflowAPI(workflow)
+        api = WorkflowAPI(workflow, require_auth=False)
 
         # Verify AsyncLocalRuntime was selected
         from kailash.runtime.async_local import AsyncLocalRuntime
@@ -219,14 +227,14 @@ class TestRuntimeValidation:
 
         # Try to pass invalid runtime (string instead of runtime object)
         with pytest.raises(TypeError, match="Runtime must have 'execute' method"):
-            WorkflowAPI(workflow, runtime="invalid_runtime")
+            WorkflowAPI(workflow, require_auth=False, runtime="invalid_runtime")
 
         # Try to pass object without execute method
         class InvalidRuntime:
             pass
 
         with pytest.raises(TypeError, match="Runtime must have 'execute' method"):
-            WorkflowAPI(workflow, runtime=InvalidRuntime())
+            WorkflowAPI(workflow, require_auth=False, runtime=InvalidRuntime())
 
     def test_valid_runtime_accepted(self):
         """Test that valid runtimes are accepted."""
@@ -238,11 +246,11 @@ class TestRuntimeValidation:
         )
 
         # LocalRuntime should work
-        api1 = WorkflowAPI(workflow, runtime=LocalRuntime())
+        api1 = WorkflowAPI(workflow, require_auth=False, runtime=LocalRuntime())
         assert api1.runtime is not None
 
         # AsyncLocalRuntime should work
-        api2 = WorkflowAPI(workflow, runtime=AsyncLocalRuntime())
+        api2 = WorkflowAPI(workflow, require_auth=False, runtime=AsyncLocalRuntime())
         assert api2.runtime is not None
 
         # Custom runtime with execute method should work
@@ -250,7 +258,7 @@ class TestRuntimeValidation:
             def execute(self, workflow, **kwargs):
                 return {}, "run_id"
 
-        api3 = WorkflowAPI(workflow, runtime=CustomRuntime())
+        api3 = WorkflowAPI(workflow, require_auth=False, runtime=CustomRuntime())
         assert api3.runtime is not None
 
 
@@ -268,7 +276,7 @@ class TestBackwardCompatibility:
         )
 
         # This should work and default to AsyncLocalRuntime
-        api = WorkflowAPI(workflow)
+        api = WorkflowAPI(workflow, require_auth=False)
 
         # Should create FastAPI app successfully
         assert api.app is not None
@@ -284,7 +292,7 @@ class TestBackwardCompatibility:
         )
 
         # Explicitly use LocalRuntime for CLI context
-        api = WorkflowAPI(workflow, runtime=LocalRuntime())
+        api = WorkflowAPI(workflow, require_auth=False, runtime=LocalRuntime())
 
         # Should work correctly
         assert isinstance(api.runtime, LocalRuntime)
