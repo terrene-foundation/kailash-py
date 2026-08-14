@@ -20,7 +20,7 @@ import warnings
 import pytest
 
 from kailash.nodes.auth._actor import (
-    MFA_ADMIN_CAPABILITY,
+    ADMIN_CAPABILITY,
     MFAActor,
     NullActorResolver,
     SessionActorResolver,
@@ -38,7 +38,7 @@ def _node(**kwargs):
         {
             ALICE_SESSION: MFAActor(user_id="alice"),
             ADMIN_SESSION: MFAActor(
-                user_id="root", capabilities={MFA_ADMIN_CAPABILITY}
+                user_id="root", capabilities={ADMIN_CAPABILITY}
             ),
         }
     )
@@ -150,7 +150,7 @@ class TestCallerSuppliedAdminOverrideIsNotAuthority:
             str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
         ]
         assert any("admin_override is deprecated" in m for m in messages), messages
-        assert any(MFA_ADMIN_CAPABILITY in m for m in messages), messages
+        assert any(ADMIN_CAPABILITY in m for m in messages), messages
 
     def test_not_passing_admin_override_raises_nothing(self):
         """No-false-positive: the warning fires for callers that use it only."""
@@ -534,18 +534,18 @@ class TestActorAndResolvers:
     def test_capabilities_are_matched_exactly_with_no_wildcard(self):
         actor = MFAActor(user_id="u", capabilities={"*", "mfa:read"})
         assert actor.has_capability("mfa:read") is True
-        assert actor.has_capability(MFA_ADMIN_CAPABILITY) is False
+        assert actor.has_capability(ADMIN_CAPABILITY) is False
 
     def test_an_actor_cannot_be_widened_after_resolution(self):
         actor = MFAActor(user_id="u")
         with pytest.raises((AttributeError, TypeError)):
-            actor.capabilities = frozenset({MFA_ADMIN_CAPABILITY})
+            actor.capabilities = frozenset({ADMIN_CAPABILITY})
 
     def test_a_mutable_capability_set_is_copied_not_aliased(self):
         granted = {"mfa:read"}
         actor = MFAActor(user_id="u", capabilities=granted)
-        granted.add(MFA_ADMIN_CAPABILITY)
-        assert actor.has_capability(MFA_ADMIN_CAPABILITY) is False
+        granted.add(ADMIN_CAPABILITY)
+        assert actor.has_capability(ADMIN_CAPABILITY) is False
 
     @pytest.mark.parametrize("bad", ["", "   ", None, 7])
     def test_an_actor_needs_a_real_user_id(self, bad):
@@ -568,7 +568,7 @@ class TestActorAndResolvers:
         assert actor.user_id == "alice"
         # With no capability provider an actor holds nothing: it can act on
         # itself and on nobody else.
-        assert actor.has_capability(MFA_ADMIN_CAPABILITY) is False
+        assert actor.has_capability(ADMIN_CAPABILITY) is False
 
     def test_session_actor_resolver_rejects_an_unknown_session(self):
         from kailash.nodes.auth.session_management import SessionManagementNode
@@ -589,12 +589,12 @@ class TestActorAndResolvers:
 
         def caps(user_id):
             seen.append(user_id)
-            return {MFA_ADMIN_CAPABILITY} if user_id == "root" else set()
+            return {ADMIN_CAPABILITY} if user_id == "root" else set()
 
         actor = SessionActorResolver(sessions, caps).resolve_actor(
             created["session_id"]
         )
-        assert actor.has_capability(MFA_ADMIN_CAPABILITY) is True
+        assert actor.has_capability(ADMIN_CAPABILITY) is True
         # The provider is asked about the SERVER-DERIVED id, never a request field.
         assert seen == ["root"]
 
@@ -613,7 +613,7 @@ class TestActorAndResolvers:
             created["session_id"]
         )
         assert actor is not None
-        assert actor.has_capability(MFA_ADMIN_CAPABILITY) is False
+        assert actor.has_capability(ADMIN_CAPABILITY) is False
 
     def test_static_resolver_only_knows_issued_sessions(self):
         resolver = StaticActorResolver()

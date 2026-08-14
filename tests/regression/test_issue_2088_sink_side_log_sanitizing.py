@@ -388,3 +388,119 @@ class TestPublicValueSanitizer:
         assert "sanitize_log_value" in agent_ui
         assert 'f"Session created: {session_id} for user {user_id}"' not in agent_ui
         assert 'f"Created session {session_id} for user {user_id}"' not in agent_ui
+
+
+class TestTheScannerRecognizableBarrierShape:
+    """`sanitize_log_value` must END in the one shape CodeQL recognizes.
+
+    `LogInjection::ReplaceLineBreaksSanitizer` matches a `.replace` attribute
+    call whose first argument is a string literal in ``["\\r\\n", "\\n"]``, and
+    only the node actually RETURNED is the one taint flows out of. The trailing
+    `.replace` pair is a runtime no-op -- the join above it has already turned
+    every non-printable character, `\\r` and `\\n` included, into a space -- so
+    nothing about the OUTPUT would change if someone deleted it as dead code.
+    That is exactly why it needs a test: the behavioural assertions in
+    `TestPublicValueSanitizer` stay green either way.
+
+    MEASURED, which is what makes this a regression test rather than a
+    preference: with a generator-expression join as the returned node, all four
+    `py/log-injection` alerts on PR #2103 pointed AT the `sanitize_log_value(...)`
+    call itself (api_gateway.py:474,516 and agent_ui.py:455,470), and a
+    `neutralModel` row naming the function did not clear them.
+    """
+
+    def _returned_expression(self):
+        source = (REPO_ROOT / "src/kailash/utils/secure_logging.py").read_text()
+        tree = ast.parse(source)
+        function = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "sanitize_log_value"
+        )
+        returns = [n for n in ast.walk(function) if isinstance(n, ast.Return)]
+        # By SOURCE POSITION, not `ast.walk` order -- walk is breadth-first, so
+        # a `return` nested inside the `except` handler comes back after the
+        # top-level one. The success path is the textually last return; the
+        # earlier ones are the `<unrepresentable>` / clamp degradations, which
+        # carry no caller value.
+        return max(returns, key=lambda n: (n.lineno, n.col_offset)).value
+
+    def test_the_success_path_returns_a_replace_call_on_a_newline_literal(self):
+        returned = self._returned_expression()
+        assert isinstance(returned, ast.Call), ast.dump(returned)
+        assert isinstance(returned.func, ast.Attribute), ast.dump(returned.func)
+        assert returned.func.attr == "replace", ast.dump(returned.func)
+        first_arg = returned.args[0]
+        assert isinstance(first_arg, ast.Constant), ast.dump(first_arg)
+        # Bare "\r" does NOT satisfy the query -- only "\n" and "\r\n" do -- so
+        # the "\n" call must be the outermost, returned one.
+        assert first_arg.value in ("\n", "\r\n"), repr(first_arg.value)
+
+    def test_the_pair_is_a_no_op_so_behaviour_is_unchanged(self):
+        """Discrimination for the test above: it pins a SHAPE, and this pins
+        that the shape costs nothing behaviourally, so a future reader can see
+        the two are not in tension."""
+        payload = "a\rb\nc\r\nd"
+        flattened = "".join(ch if ch.isprintable() else " " for ch in payload)
+        assert sanitize_log_value(payload) == flattened
+        assert sanitize_log_value(payload) == flattened.replace("\r", " ").replace(
+            "\n", " "
+        )
+
+
+class TestSensitiveNameHeuristicSource:
+    """The admin capability constant keeps its VALUE and loses its acronym.
+
+    Under the name `MFA_ADMIN_CAPABILITY` this constant was the taint SOURCE
+    for six of the seven high-severity alerts on PR #2103, reported as
+    "sensitive data (password)" -- `py/clear-text-logging-sensitive-data`
+    classifies from the binding's NAME, and reads an `mfa`-containing
+    identifier as credential material. It reached six sinks because it is
+    interpolated into refusal messages that leave through `result["error"]`,
+    which unrelated nodes then log.
+
+    The wire value is the contract and must not drift with the rename.
+    """
+
+    def test_the_capability_value_is_unchanged(self):
+        from kailash.nodes.auth._actor import ADMIN_CAPABILITY
+
+        assert ADMIN_CAPABILITY == "mfa:admin"
+
+    def test_the_old_name_is_gone_from_the_sdk(self):
+        """A leftover alias would re-open every one of the six alerts, since
+        the classification is on the NAME and an alias is another binding."""
+        for path in (REPO_ROOT / "src/kailash/nodes/auth").rglob("*.py"):
+            assert "MFA_ADMIN_CAPABILITY" not in path.read_text(), path
+
+
+class TestProviderRejectsANameInMfaConfig:
+    """`mfa_config={"name": ...}` is a duplicate keyword argument.
+
+    `EnterpriseAuthProviderNode` passes `name=` explicitly and splats
+    `**mfa_config`, so a `name` key raised `TypeError: got multiple values for
+    keyword argument 'name'` from inside provider construction, naming neither
+    the config key nor the provider. It now refuses with a message that does.
+    """
+
+    def test_a_name_key_is_refused_by_name(self):
+        from kailash.nodes.auth.enterprise_auth_provider import (
+            EnterpriseAuthProviderNode,
+        )
+
+        with pytest.raises(ValueError) as excinfo:
+            EnterpriseAuthProviderNode(name="p", mfa_config={"name": "hijack"})
+        message = str(excinfo.value)
+        assert "mfa_config" in message and "'name'" in message, message
+        assert "p_mfa" in message, message
+
+    def test_a_provider_without_that_key_still_constructs(self):
+        """Discrimination: without this the test above would pass against a
+        constructor that refused everything."""
+        from kailash.nodes.auth.enterprise_auth_provider import (
+            EnterpriseAuthProviderNode,
+        )
+
+        provider = EnterpriseAuthProviderNode(name="p", mfa_config={})
+        assert provider.mfa_node is not None
+        assert provider.name == "p"

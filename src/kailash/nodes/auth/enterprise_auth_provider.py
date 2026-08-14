@@ -223,6 +223,19 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         # setdefault below means their value wins.
         mfa_config = dict(self.mfa_config)
         mfa_config.setdefault("require_actor", False)
+        # `name` is supplied explicitly below, so one arriving in `mfa_config`
+        # is a duplicate keyword argument: the constructor would raise
+        # `TypeError: got multiple values for keyword argument 'name'` from
+        # inside provider construction, naming neither the operator's config
+        # key nor this provider. Rejected here instead, where the message can
+        # say which knob is wrong. Popping and proceeding would be worse -- it
+        # would silently discard a name the operator deliberately set.
+        if "name" in mfa_config:
+            raise ValueError(
+                "mfa_config may not carry 'name': the MFA node's name is "
+                f"derived from this provider's own name as "
+                f"'{self.name}_mfa'. Remove the 'name' key."
+            )
         self.mfa_node = MultiFactorAuthNode(name=f"{self.name}_mfa", **mfa_config)
 
         self.directory_node = DirectoryIntegrationNode(

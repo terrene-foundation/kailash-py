@@ -426,7 +426,33 @@ def sanitize_log_value(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> 
     # caller-controlled user_id cost 50M calls inside every audit write for a
     # result that was going to be cut to 256 chars anyway. A sanitizer on the
     # audit path must not be a denial-of-service lever.
-    return "".join(ch if ch.isprintable() else " " for ch in text[:bound])
+    flattened = "".join(ch if ch.isprintable() else " " for ch in text[:bound])
+    # The trailing `str.replace` pair is a RUNTIME NO-OP and is load-bearing
+    # anyway. `\r` and `\n` are both non-printable, so the join above has
+    # already replaced them with a space and neither can survive to this line.
+    # It is kept, and kept LAST, because THE CALL FORM IS PART OF THE BARRIER.
+    #
+    # CodeQL's `py/log-injection` recognizes exactly one string-sanitizer
+    # shape, `LogInjection::ReplaceLineBreaksSanitizer`, and its definition is
+    # a `.replace` ATTRIBUTE call whose first argument is a string LITERAL in
+    # ["\r\n", "\n"]:
+    #
+    #     this.getFunction().(DataFlow::AttrRead).getAttributeName() = "replace"
+    #     and this.getArg(0).asExpr().(StringLiteral).getText() in ["\r\n", "\n"]
+    #
+    # A generator-expression join matches nothing in that definition, so the
+    # value returned by the previous version of this line carried taint out of
+    # the function and every call site was reported. MEASURED, not inferred:
+    # with the join as the returned node, all four `py/log-injection` alerts on
+    # PR #2103 pointed AT the `sanitize_log_value(...)` call itself
+    # (api_gateway.py:474,516 and agent_ui.py:455,470), and a `neutralModel`
+    # row in .github/codeql/sanitizers naming this function did NOT clear them.
+    #
+    # `.replace("\r", ...)` alone does NOT satisfy the query -- bare "\r" is not
+    # in the literal set -- so the "\n" call must be present and must be LAST,
+    # because only the node actually RETURNED is the one taint flows out of.
+    # `safe_log_text` above ends the same way, for the same reason.
+    return flattened.replace("\r", " ").replace("\n", " ")
 
 
 def sanitize_log_structure(

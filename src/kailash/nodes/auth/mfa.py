@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import qrcode
 
 from kailash.nodes.auth._actor import (
-    MFA_ADMIN_CAPABILITY,
+    ADMIN_CAPABILITY,
     ActorResolver,
     MFAActor,
     NullActorResolver,
@@ -252,7 +252,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
       ``generate_backup_codes``, ``trust_device``, ``initiate_recovery`` and
       the other self-service actions.
     * Acting on ANY other subject requires the actor to hold
-      :data:`~kailash.nodes.auth._actor.MFA_ADMIN_CAPABILITY`.
+      :data:`~kailash.nodes.auth._actor.ADMIN_CAPABILITY`.
     * The destructive actions -- ``revoke``, ``disable``, ``reset`` -- and
       administrative recovery and re-enrolment over a verified factor require
       that capability regardless of subject.
@@ -562,7 +562,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "#2047): it was an ordinary caller-supplied boolean, so "
                     "every admin-gated action authorised on data the caller "
                     "controlled. Authority now comes from the "
-                    f"'{MFA_ADMIN_CAPABILITY}' capability on a resolved actor. "
+                    f"'{ADMIN_CAPABILITY}' capability on a resolved actor. "
                     "Still accepted, and still gates the destructive actions, "
                     "under the explicit require_actor=False opt-out."
                 ),
@@ -707,7 +707,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "administrative actions on data the caller controlled. "
                 + (
                     "It grants NOTHING here: authority comes from the "
-                    f"'{MFA_ADMIN_CAPABILITY}' capability on the actor "
+                    f"'{ADMIN_CAPABILITY}' capability on the actor "
                     "resolved from actor_session_id."
                     if self.require_actor
                     else "This node is in require_actor=False mode, so it "
@@ -814,7 +814,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             # boolean still fills that role, unchanged and still documented as
             # not an authentication control.
             admin_authorized = (
-                bool(actor and actor.has_capability(MFA_ADMIN_CAPABILITY))
+                bool(actor and actor.has_capability(ADMIN_CAPABILITY))
                 if self.require_actor
                 else admin_override
             )
@@ -1124,7 +1124,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "error": (
                 f"'{action}' destroys or replaces the subject's enrolled "
                 f"factors and requires an actor holding the "
-                f"'{MFA_ADMIN_CAPABILITY}' capability."
+                f"'{ADMIN_CAPABILITY}' capability."
             ),
             "authorized": False,
         }
@@ -1219,16 +1219,16 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             or not acting_on_self
             or (action == "initiate_recovery" and recovery_method == "admin")
         )
-        if needs_admin and not actor.has_capability(MFA_ADMIN_CAPABILITY):
+        if needs_admin and not actor.has_capability(ADMIN_CAPABILITY):
             if not acting_on_self:
                 reason = (
                     "Acting on another subject requires an actor holding the "
-                    f"'{MFA_ADMIN_CAPABILITY}' capability."
+                    f"'{ADMIN_CAPABILITY}' capability."
                 )
             elif action == "initiate_recovery":
                 reason = (
                     "Administrative recovery requires an actor holding the "
-                    f"'{MFA_ADMIN_CAPABILITY}' capability."
+                    f"'{ADMIN_CAPABILITY}' capability."
                 )
             else:
                 return actor, self._admin_action_denied(action)
@@ -1286,7 +1286,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "error": (
                         "MFA is already set up and verified for this user. "
                         "Re-enrolment requires an actor holding the "
-                        f"'{MFA_ADMIN_CAPABILITY}' capability, or a completed "
+                        f"'{ADMIN_CAPABILITY}' capability, or a completed "
                         "recovery."
                     ),
                 }
@@ -3264,7 +3264,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 "success": False,
                 "error": (
                     "Admin recovery requires an actor holding the "
-                    f"'{MFA_ADMIN_CAPABILITY}' capability."
+                    f"'{ADMIN_CAPABILITY}' capability."
                 ),
                 "authorized": False,
             }

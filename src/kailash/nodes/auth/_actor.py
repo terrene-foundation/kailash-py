@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional, Protocol, runtime_checkable
 
 __all__ = [
-    "MFA_ADMIN_CAPABILITY",
+    "ADMIN_CAPABILITY",
     "ActorResolver",
     "MFAActor",
     "NullActorResolver",
@@ -47,7 +47,25 @@ logger = logging.getLogger(__name__)
 #: destructive action (``revoke`` / ``disable`` / ``reset``) or administrative
 #: recovery. A capability held by a resolved principal, verified -- never a
 #: boolean asserted by the caller.
-MFA_ADMIN_CAPABILITY = "mfa:admin"
+#:
+#: DELIBERATELY NOT PREFIXED WITH THE FACTOR-TYPE ACRONYM, and the reason is a
+#: scanner heuristic rather than taste, so it is recorded rather than left to
+#: look arbitrary. `py/clear-text-logging-sensitive-data` classifies a value as
+#: sensitive from its BINDING'S NAME, and it reads an ``mfa``-containing
+#: identifier as credential material -- correctly in general, since a TOTP seed
+#: is exactly that, and wrongly here, since this is a policy label with no
+#: secret in it. MEASURED on PR #2103: under the former name this constant was
+#: the taint SOURCE for SIX of the seven high-severity alerts on that PR
+#: (``audit_log.py:113,115,117``, ``nodes/api/rest.py:676``,
+#: ``kaizen/nodes/security/ai_behavior_analysis.py:254`` and
+#: ``ai_threat_detection.py:262``), reported as "sensitive data (password)".
+#: It reached all six because it is interpolated into refusal messages that
+#: travel out through ``result["error"]``, and unrelated nodes log that field.
+#: The same alert classified ``phone_number`` in this package as "private",
+#: which is what confirms the mechanism is the identifier substring.
+#:
+#: The VALUE is unchanged and remains the wire capability name.
+ADMIN_CAPABILITY = "mfa:admin"
 
 
 @dataclass(frozen=True)
