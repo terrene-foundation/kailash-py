@@ -1,3 +1,12 @@
+---
+priority: 10
+scope: path-scoped
+paths:
+  - ".github/workflows/**"
+  - "**/ci/**"
+  - "**/.github/**"
+---
+
 # ci-runners Operator-Local Values — Schema / Template
 
 Operator-local concrete values for the kailash-py self-hosted CI runbook
