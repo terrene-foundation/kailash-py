@@ -262,7 +262,10 @@ class APIGateway:
                     raise ValueError(
                         "KAILASH_API_GATEWAY_SECRET must be at least 32 bytes "
                         f"(got {len(secret_key.encode('utf-8'))}). See RFC 7518 §3.2 "
-                        "and JWTConfig.MIN_SECRET_LENGTH."
+                        "and kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH. "
+                        "(The middleware JWTConfig carries no such constant; "
+                        "naming it there sent readers looking for an attribute "
+                        "that does not exist.)"
                     )
                 from ..auth import JWTAuthManager
 

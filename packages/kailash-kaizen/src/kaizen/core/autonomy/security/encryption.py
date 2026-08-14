@@ -10,6 +10,8 @@ import logging
 import os
 from typing import Literal
 
+from kaizen.security.encryption import MIN_PASSPHRASE_LENGTH
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -79,14 +81,57 @@ class CheckpointEncryptor:
         if encryption_key is None:
             # Try environment variable
             encryption_key = os.getenv(key_env_var)
-            if not encryption_key:
-                raise EncryptionError(
-                    f"No encryption key provided. "
-                    f"Set {key_env_var} environment variable or pass encryption_key parameter."
-                )
+
+        # An EMPTY or whitespace-only value counts as UNSET, never as a
+        # passphrase. ``export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET`` and
+        # ``encryption_key=os.environ.get("K", "")`` both produce it, and
+        # stretching it derives a FIXED key — stable across every deployment
+        # and reproducible from this module's constants. Normalized to ``None``
+        # after the environment read so an explicitly-passed blank gets the same
+        # treatment as a blank export, and so the refusal names the wiring
+        # rather than a character count. Same semantics as the sibling consumer
+        # of this variable in ``kaizen.security.encryption``.
+        if isinstance(encryption_key, str) and not encryption_key.strip():
+            encryption_key = None
+
+        if encryption_key is None:
+            raise EncryptionError(
+                f"No encryption key provided. "
+                f"Set {key_env_var} environment variable or pass encryption_key parameter."
+            )
 
         # Derive 32-byte key from passphrase if needed
         if isinstance(encryption_key, str):
+            # The SAME floor the other consumer of KAIZEN_ENCRYPTION_KEY
+            # enforces. ``key_env_var`` defaults to that variable, so without
+            # this an operator setting a four-character value got a hard
+            # refusal from ``EncryptionProvider`` and silent acceptance here —
+            # one variable, one documented floor, two opposite outcomes
+            # (`security.md` § Enforcement-Surface Parity).
+            #
+            # Imported rather than re-declared: two copies of a security
+            # parameter drift, and this one is asserted as a property of the
+            # variable in `.env.example`. The dependency is one-directional —
+            # ``kaizen.security.encryption`` is a leaf that imports nothing
+            # kaizen-internal, so there is no cycle.
+            #
+            # Measured stripped, derived VERBATIM: trimming would change the
+            # key for anyone whose passphrase legitimately ends in whitespace,
+            # and re-deriving a different key from the same configured value is
+            # the exact failure this module's siblings were fixed for (#2092).
+            if len(encryption_key.strip()) < MIN_PASSPHRASE_LENGTH:
+                # Names the length, never the passphrase: this message reaches
+                # logs and crash reports (`security.md`).
+                raise EncryptionError(
+                    f"The passphrase from {key_env_var} carries "
+                    f"{len(encryption_key.strip())} non-whitespace characters; "
+                    f"at least {MIN_PASSPHRASE_LENGTH} are required. A "
+                    f"passphrase that brief is brute-forceable regardless of "
+                    f"the KDF's iteration count, and whitespace padding adds "
+                    f"length without adding entropy. Pass 32 raw bytes instead "
+                    f"if you are supplying a generated key rather than a "
+                    f"passphrase."
+                )
             self.key = self._derive_key(encryption_key)
         elif isinstance(encryption_key, bytes) and len(encryption_key) == 32:
             self.key = encryption_key

@@ -64,7 +64,7 @@ def test_resource_server_bare_audience_no_resource_raises():
         ResourceServer(
             issuer=_ISSUER,
             audience="mcp-api",
-            jwt_manager=JWTManager(issuer=_ISSUER),
+            jwt_manager=JWTManager(issuer=_ISSUER, allow_ephemeral_key=True),
         )
     msg = str(exc_info.value)
     assert "mcp-api" in msg
@@ -80,7 +80,7 @@ def test_resource_server_non_url_resource_raises(bad_resource):
             issuer=_ISSUER,
             audience="mcp-api",
             resource=bad_resource,
-            jwt_manager=JWTManager(issuer=_ISSUER),
+            jwt_manager=JWTManager(issuer=_ISSUER, allow_ephemeral_key=True),
         )
 
 
@@ -92,7 +92,7 @@ def test_resource_server_url_resource_bare_audience_is_valid():
         issuer=_ISSUER,
         audience="mcp-api",  # bare token — used for the RFC 8707 aud check
         resource="https://mcp.example.com/mcp",  # URL — used for PRM derivation
-        jwt_manager=JWTManager(issuer=_ISSUER),
+        jwt_manager=JWTManager(issuer=_ISSUER, allow_ephemeral_key=True),
         required_scopes=["mcp:read"],
     )
     # audience and resource stay independent
@@ -166,7 +166,7 @@ def _s256_pair():
 
 
 def test_create_authorization_url_rejects_plain():
-    server = AuthorizationServer(issuer=_ISSUER)
+    server = AuthorizationServer(issuer=_ISSUER, allow_ephemeral_key=True)
     redirect_uri = "https://client.example.com/cb"
     client = _registered_client(server, redirect_uri)
     with pytest.raises(AuthorizationError) as exc_info:
@@ -183,7 +183,7 @@ def test_create_authorization_url_rejects_plain():
 
 
 def test_generate_authorization_code_rejects_plain():
-    server = AuthorizationServer(issuer=_ISSUER)
+    server = AuthorizationServer(issuer=_ISSUER, allow_ephemeral_key=True)
     redirect_uri = "https://client.example.com/cb"
     client = _registered_client(server, redirect_uri)
     with pytest.raises(AuthorizationError) as exc_info:
@@ -216,7 +216,7 @@ def test_validate_pkce_plain_challenge_never_validates():
 def test_s256_flow_succeeds_end_to_end():
     """S256 stays fully working: issue an S256 code, exchange it with the
     matching verifier, receive a token."""
-    server = AuthorizationServer(issuer=_ISSUER)
+    server = AuthorizationServer(issuer=_ISSUER, allow_ephemeral_key=True)
     redirect_uri = "https://client.example.com/cb"
     client = _registered_client(server, redirect_uri)
     verifier, challenge = _s256_pair()
@@ -248,7 +248,7 @@ def test_s256_flow_succeeds_end_to_end():
 
 def test_s256_flow_rejects_wrong_verifier():
     """S256 still rejects a mismatched verifier (fail-closed unchanged)."""
-    server = AuthorizationServer(issuer=_ISSUER)
+    server = AuthorizationServer(issuer=_ISSUER, allow_ephemeral_key=True)
     redirect_uri = "https://client.example.com/cb"
     client = _registered_client(server, redirect_uri)
     _, challenge = _s256_pair()

@@ -19,7 +19,12 @@ from kaizen.security.compliance import (
     GDPRValidator,
     SOC2Validator,
 )
-from kaizen.security.encryption import EncryptionProvider, FieldEncryptor, KeyManager
+from kaizen.security.encryption import (
+    EncryptionKeyNotConfiguredError,
+    EncryptionProvider,
+    FieldEncryptor,
+    KeyManager,
+)
 from kaizen.security.policy import SecurityPolicy
 
 __all__ = [
@@ -28,6 +33,7 @@ __all__ = [
     "AuthorizationProvider",
     "SecurityPolicy",
     "AuditTrailProvider",
+    "EncryptionKeyNotConfiguredError",
     "EncryptionProvider",
     "KeyManager",
     "FieldEncryptor",

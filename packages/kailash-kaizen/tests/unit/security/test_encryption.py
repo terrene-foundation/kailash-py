@@ -4,13 +4,25 @@ import pytest
 
 from kaizen.security.encryption import EncryptionProvider
 
+# These primitives no longer generate a key when none is configured (#2092): a
+# generated key lived only inside the process, so anything encrypted under it was
+# unrecoverable after a restart and unreadable by any other replica. Tests now
+# configure a key explicitly, which is also what a deployment must do.
+_TEST_KEY = b"kaizen-unit-test-key-32-bytes!!!"
+_OTHER_KEY = b"a-different-key-of-32-bytes!!!!!"
+
+# Was "strong_password_123" (19 characters) until ``from_password`` learned the
+# same 32-character floor its sibling constructor enforces. That this passed is
+# what proved the floor was bypassable by switching constructors.
+_TEST_PASSWORD = "strong_password_123_now_meets_the_floor"
+
 
 class TestEncryptionProvider:
     """Test suite for EncryptionProvider (AES-256-GCM)."""
 
     def test_encrypt_decrypt_string(self):
         """Test 3.1a: Encrypt and decrypt string data."""
-        provider = EncryptionProvider()
+        provider = EncryptionProvider(key=_TEST_KEY)
 
         # Encrypt sensitive string
         original = "sensitive_api_key_12345"
@@ -26,7 +38,7 @@ class TestEncryptionProvider:
 
     def test_encrypt_decrypt_dict(self):
         """Test 3.1b: Encrypt and decrypt dictionary data."""
-        provider = EncryptionProvider()
+        provider = EncryptionProvider(key=_TEST_KEY)
 
         # Encrypt sensitive dictionary
         original = {
@@ -46,14 +58,23 @@ class TestEncryptionProvider:
 
     def test_tampering_detection(self):
         """Test 3.1c: Detect data tampering (integrity check)."""
-        provider = EncryptionProvider()
+        provider = EncryptionProvider(key=_TEST_KEY)
 
         # Encrypt data
         original = "important_data"
         encrypted = provider.encrypt(original)
 
-        # Tamper with encrypted data
-        tampered = encrypted[:-1] + b"X"
+        # Tamper with encrypted data.
+        #
+        # Flip a bit rather than ASSIGNING a constant byte. `encrypted[:-1] + b"X"`
+        # is a no-op whenever the final byte is already 0x58 -- and the nonce is
+        # random per encryption (`os.urandom(12)`), so the ciphertext differs every
+        # run and that happened roughly 1 time in 256. On those runs `decrypt`
+        # legitimately succeeded and the test failed with "DID NOT RAISE"; on the
+        # other 255 it passed while asserting nothing about a value it had not
+        # actually changed. XOR always changes the byte, so this now tests
+        # tampering detection on every run.
+        tampered = encrypted[:-1] + bytes([encrypted[-1] ^ 0x01])
 
         # Attempt to decrypt tampered data should raise error
         with pytest.raises(Exception) as exc_info:
@@ -68,10 +89,16 @@ class TestEncryptionProvider:
         )
 
     def test_key_generation(self):
-        """Test 3.1d: Secure key generation."""
-        # Generate two providers with different keys
-        provider1 = EncryptionProvider()
-        provider2 = EncryptionProvider()
+        """Test 3.1d: Key isolation — a different key cannot read the ciphertext.
+
+        This used to construct both providers bare and rely on each one
+        generating its own key, which is precisely the defect #2092 describes.
+        The property it was actually checking — data sealed under one key is not
+        readable under another — is preserved by configuring two distinct keys.
+        """
+        # Two providers configured with DIFFERENT keys
+        provider1 = EncryptionProvider(key=_TEST_KEY)
+        provider2 = EncryptionProvider(key=_OTHER_KEY)
 
         # Encrypt with provider1
         original = "test_data"
@@ -86,7 +113,7 @@ class TestEncryptionProvider:
 
     def test_multiple_encryptions_different_outputs(self):
         """Test 3.1e: Multiple encryptions produce different ciphertexts (nonce randomness)."""
-        provider = EncryptionProvider()
+        provider = EncryptionProvider(key=_TEST_KEY)
 
         original = "same_data"
 
@@ -102,9 +129,15 @@ class TestEncryptionProvider:
         assert provider.decrypt(encrypted2) == original
 
     def test_key_derivation_from_password(self):
-        """Test 3.2a: Derive encryption key from password."""
+        """Test 3.2a: Derive encryption key from password.
+
+        The password was ``"strong_password_123"`` (19 characters) until
+        ``from_password`` learned the same 32-character floor its sibling
+        constructor enforces. That it passed is what proved the floor was
+        bypassable by switching constructors.
+        """
         # Derive key from password
-        provider = EncryptionProvider.from_password("strong_password_123")
+        provider = EncryptionProvider.from_password(_TEST_PASSWORD)
 
         # Should be able to encrypt/decrypt
         original = "sensitive_data"
@@ -113,9 +146,10 @@ class TestEncryptionProvider:
 
         assert decrypted == original
 
-        # Same password should derive same key
+        # Same password should derive same key. Both calls MUST use the same
+        # constant -- the assertion below is meaningless if they diverge.
         provider2 = EncryptionProvider.from_password(
-            "strong_password_123", salt=provider.get_salt()
+            _TEST_PASSWORD, salt=provider.get_salt()
         )
         assert provider2.decrypt(encrypted) == original
 
@@ -123,7 +157,7 @@ class TestEncryptionProvider:
         """Test 3.2b: Rotate encryption keys."""
         from kaizen.security.encryption import KeyManager
 
-        manager = KeyManager()
+        manager = KeyManager(key=_TEST_KEY)
 
         # Encrypt with key version 1
         original = {"secret": "data"}
@@ -147,7 +181,7 @@ class TestEncryptionProvider:
         """Test 3.2c: Track key metadata (creation time, usage count)."""
         from kaizen.security.encryption import KeyManager
 
-        manager = KeyManager()
+        manager = KeyManager(key=_TEST_KEY)
 
         # Get metadata for current key
         metadata = manager.get_key_metadata(version=1)
@@ -170,7 +204,7 @@ class TestEncryptionProvider:
         """Test 3.2d: Re-encrypt data with new key version."""
         from kaizen.security.encryption import KeyManager
 
-        manager = KeyManager()
+        manager = KeyManager(key=_TEST_KEY)
 
         # Encrypt with version 1
         original = {"confidential": "information"}
@@ -193,7 +227,9 @@ class TestEncryptionProvider:
         """Test 3.3a: Encrypt specific fields in dictionary."""
         from kaizen.security.encryption import FieldEncryptor
 
-        encryptor = FieldEncryptor(sensitive_fields=["api_key", "password"])
+        encryptor = FieldEncryptor(
+            sensitive_fields=["api_key", "password"], key=_TEST_KEY
+        )
 
         # Data with sensitive fields
         data = {
@@ -228,7 +264,8 @@ class TestEncryptionProvider:
         from kaizen.security.encryption import FieldEncryptor
 
         encryptor = FieldEncryptor(
-            sensitive_fields=["credentials.password", "api.secret_key"]
+            sensitive_fields=["credentials.password", "api.secret_key"],
+            key=_TEST_KEY,
         )
 
         data = {
@@ -255,7 +292,9 @@ class TestEncryptionProvider:
         """Test 3.3c: Mask sensitive data for display."""
         from kaizen.security.encryption import FieldEncryptor
 
-        encryptor = FieldEncryptor(sensitive_fields=["credit_card", "ssn"])
+        encryptor = FieldEncryptor(
+            sensitive_fields=["credit_card", "ssn"], key=_TEST_KEY
+        )
 
         data = {
             "name": "Bob Smith",
@@ -281,7 +320,8 @@ class TestEncryptionProvider:
         from kaizen.security.encryption import FieldEncryptor
 
         encryptor = FieldEncryptor(
-            sensitive_fields=["secret_number", "secret_bool", "secret_list"]
+            sensitive_fields=["secret_number", "secret_bool", "secret_list"],
+            key=_TEST_KEY,
         )
 
         data = {

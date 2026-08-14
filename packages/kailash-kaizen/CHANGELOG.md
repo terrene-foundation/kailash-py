@@ -13,6 +13,32 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — the encryption classes no longer invent their own key (#2092)
+
+**Read the migration note below before upgrading. Any code that constructed `EncryptionProvider`, `KeyManager`, `FieldEncryptor` or `CheckpointEncryptor` without a key will stop constructing.** That is the intended behaviour, and the reason is in the first bullet.
+
+- **`EncryptionProvider` generated an AES-256-GCM key in complete silence (HIGH).** No error, no warning, **not even an INFO line** — in a class whose stated purpose is protecting sensitive data. Anything encrypted became unrecoverable once the process exited, and the first symptom was unreadable data with nothing in the logs pointing at why. In a multi-replica deployment each replica minted its own key, so no replica could read another's ciphertext.
+- **`FieldEncryptor` is how this stayed hidden.** `FieldEncryptor(sensitive_fields=["ssn"])` reads as fully configured, and its `key=None` default forwarded straight into the silent generator — so PII was encrypted under material that died with the process. A sweep scoped to the generator call site could not see it.
+- **`KeyManager` rotation destroyed the data it was migrating.** It took no key parameter at all and called `EncryptionProvider()` bare for **every** version, so each version's key was throwaway and `re_encrypt` — the documented migration path — made both the pre- and post-rotation data unreadable. Every version's key is now derived from one configured master key via HKDF-SHA256 with the version number as `info`, so versions stay cryptographically distinct (rotation is real) **and** reproducible (rotation is durable).
+- **All three now resolve key material through one shared chokepoint**, `kaizen.security.encryption.resolve_key_material`, so the floor and the wiring message cannot drift between the three classes in this module that all mint AES keys. `KAIZEN_ENCRYPTION_KEY` is read when no `key=` is passed; it was already mapped to `KaizenConfig.encryption_key`.
+- **`CheckpointEncryptor` (`kaizen.core.autonomy.security.encryption`) reads that SAME variable and enforced no floor.** Its `key_env_var` defaults to `KAIZEN_ENCRYPTION_KEY` and it stretches the value with the same PBKDF2-HMAC-SHA256 at the same iteration count — so one variable with one documented floor produced a hard refusal from `EncryptionProvider` and silent acceptance here. It now imports the same `MIN_PASSPHRASE_LENGTH` rather than re-declaring it. **The two modules' PBKDF2 salts remain deliberately different and are unchanged** — checkpoint storage and field encryption are not meant to interoperate, and that is the mechanism which keeps them from doing so.
+- **`EncryptionProvider.from_password` was a route around the floor.** It derives its own 32 bytes and hands them to a constructor that accepts any correctly-sized raw key, so `from_password("x")` succeeded on the same public class whose sibling constructor refuses 31 characters. It now enforces the same floor.
+- **Empty and whitespace-only values count as NOT CONFIGURED, never as a passphrase.** `EncryptionProvider(key=os.environ.get("K", ""))` is the ordinary way a caller spells "unset", and `export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET` produces the same thing. Stretching `""` derives a **fixed** key — stable across every deployment and reproducible by anyone reading this module's constants, which is *worse* than the per-process key this release removes, because it looks configured and survives a restart. Blank values now take the same fail-closed branch as `None`, and the refusal names the wiring rather than a character count.
+- **The floor is 32 characters, and it is a LENGTH floor, not an entropy floor.** It matches `kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH` (RFC 7518 §3.2 requires 256 bits for HMAC-SHA256). `"a" * 32` and a hyphenated UUID both pass. Material is measured **stripped** but stretched **verbatim**, so a passphrase that legitimately ends in whitespace keeps deriving the key it always did.
+- **No signal ever carries key material.** Every refusal names the environment variable and the length floor, never a value or any fingerprint that reconstructs one. Regression tests assert the generated material never reaches the log.
+
+#### Migration (#2092)
+
+Set `KAIZEN_ENCRYPTION_KEY` to a passphrase of at least 32 characters, or pass `key=` (32 raw bytes, or a passphrase):
+
+```bash
+export KAIZEN_ENCRYPTION_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"
+```
+
+For local development, `allow_ephemeral_key=True` restores generation on `EncryptionProvider`, `KeyManager` and `FieldEncryptor` — and now announces itself **once per process at ERROR**.
+
+**Data encrypted under a previously-generated key is not recoverable.** It never was, which is the defect; there is nothing to migrate, only to re-encrypt from source. There is deliberately no compatibility shim: a shim would have to keep generating the key.
+
 ### Fixed — the four observability flags now install the hooks they advertise (#2084)
 
 `AgentConfig.enable_tracing` / `enable_metrics` / `enable_logging` / `enable_audit`

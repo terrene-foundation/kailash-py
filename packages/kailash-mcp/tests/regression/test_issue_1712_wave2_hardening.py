@@ -97,7 +97,9 @@ async def test_f1_correctly_scoped_token_allowed_through_server():
     pytest.importorskip("cryptography", reason="oauth path requires [auth-oauth]")
     from kailash_mcp.auth.oauth import ResourceServer
 
-    rs = ResourceServer(issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE)
+    rs = ResourceServer(
+        issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE, allow_ephemeral_key=True
+    )
     server = _make_server(auth_provider=rs)
     wrapper = _async_secure_tool(server)
 
@@ -118,7 +120,9 @@ async def test_f1_foreign_audience_token_denied_through_server():
     pytest.importorskip("cryptography", reason="oauth path requires [auth-oauth]")
     from kailash_mcp.auth.oauth import ResourceServer
 
-    rs = ResourceServer(issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE)
+    rs = ResourceServer(
+        issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE, allow_ephemeral_key=True
+    )
     server = _make_server(auth_provider=rs)
     wrapper = _async_secure_tool(server)
 
@@ -144,7 +148,9 @@ async def test_f1_audience_absent_token_denied_through_server():
     pytest.importorskip("cryptography", reason="oauth path requires [auth-oauth]")
     from kailash_mcp.auth.oauth import ResourceServer
 
-    rs = ResourceServer(issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE)
+    rs = ResourceServer(
+        issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE, allow_ephemeral_key=True
+    )
     server = _make_server(auth_provider=rs)
     wrapper = _async_secure_tool(server)
 
@@ -170,7 +176,9 @@ async def test_f1_sync_path_rejects_async_provider_cleanly():
     from kailash_mcp.auth.oauth import ResourceServer
     from kailash_mcp.auth.providers import AuthenticationError, AuthManager
 
-    rs = ResourceServer(issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE)
+    rs = ResourceServer(
+        issuer=ISSUER, audience=AUDIENCE, resource=RESOURCE, allow_ephemeral_key=True
+    )
     mgr = AuthManager(provider=rs)
 
     with pytest.raises(AuthenticationError) as excinfo:
