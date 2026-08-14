@@ -37,9 +37,7 @@ def _node(**kwargs):
     resolver = StaticActorResolver(
         {
             ALICE_SESSION: MFAActor(user_id="alice"),
-            ADMIN_SESSION: MFAActor(
-                user_id="root", capabilities={ADMIN_CAPABILITY}
-            ),
+            ADMIN_SESSION: MFAActor(user_id="root", capabilities={ADMIN_CAPABILITY}),
         }
     )
     kwargs.setdefault("actor_resolver", resolver)
