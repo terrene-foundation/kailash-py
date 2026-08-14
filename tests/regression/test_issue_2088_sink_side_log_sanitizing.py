@@ -504,3 +504,46 @@ class TestProviderRejectsANameInMfaConfig:
         provider = EnterpriseAuthProviderNode(name="p", mfa_config={})
         assert provider.mfa_node is not None
         assert provider.name == "p"
+
+
+class TestTheOptOutWarnCannotCarryMfaConfigContent:
+    """CodeQL alert #11530 (`mfa.py:89`) is a false positive, and this is why.
+
+    The alert traces `mfa_config` -- classified "sensitive data (password)"
+    from the parameter's NAME -- into the opt-out WARN's node name. The edge it
+    uses is `MultiFactorAuthNode(name=..., **mfa_config)`: a splat can
+    statically supply any keyword, so the analyzer cannot rule out `name`
+    coming from the dict. At runtime it never can, because `name=` is passed
+    explicitly and a `name` key in `mfa_config` is now refused outright.
+
+    Rather than assert that in prose, this drives the real construction with a
+    marked value in `mfa_config` and reads the emitted record. It is the
+    artifact backing a false-positive disposition, so it names the payload and
+    would FAIL if any config key or value reached the message.
+    """
+
+    MARKER = "SEKRIT-hunter2-VALUE"
+
+    def test_the_warn_carries_the_node_name_and_nothing_from_the_config(self, caplog):
+        from kailash.nodes.auth.enterprise_auth_provider import (
+            EnterpriseAuthProviderNode,
+        )
+
+        with caplog.at_level(logging.WARNING, logger="kailash.nodes.auth.mfa"):
+            EnterpriseAuthProviderNode(
+                name="p2103",
+                mfa_config={
+                    "require_actor": False,
+                    "totp_issuer": self.MARKER,
+                },
+            )
+
+        warnings = [m for m in _records(caplog) if "require_actor=False" in m]
+        assert warnings, "the opt-out WARN did not fire; this proves nothing"
+        for message in warnings:
+            # Positive control: the record DOES carry the derived node name, so
+            # a message that carried nothing at all would not pass this.
+            assert "p2103_mfa" in message, message
+            # The property under test.
+            assert self.MARKER not in message, message
+            assert "totp_issuer" not in message, message

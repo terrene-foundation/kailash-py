@@ -54,15 +54,27 @@ logger = logging.getLogger(__name__)
 #: sensitive from its BINDING'S NAME, and it reads an ``mfa``-containing
 #: identifier as credential material -- correctly in general, since a TOTP seed
 #: is exactly that, and wrongly here, since this is a policy label with no
-#: secret in it. MEASURED on PR #2103: under the former name this constant was
-#: the taint SOURCE for SIX of the seven high-severity alerts on that PR
-#: (``audit_log.py:113,115,117``, ``nodes/api/rest.py:676``,
-#: ``kaizen/nodes/security/ai_behavior_analysis.py:254`` and
-#: ``ai_threat_detection.py:262``), reported as "sensitive data (password)".
-#: It reached all six because it is interpolated into refusal messages that
-#: travel out through ``result["error"]``, and unrelated nodes log that field.
-#: The same alert classified ``phone_number`` in this package as "private",
-#: which is what confirms the mechanism is the identifier substring.
+#: secret in it. MEASURED on PR #2103, by renaming and re-scanning rather than
+#: by reasoning about the query: under the former name this constant was the
+#: taint source for THREE high-severity alerts that the rename CLEARED --
+#: ``nodes/api/rest.py:676``, ``kaizen/.../ai_behavior_analysis.py:254`` and
+#: ``ai_threat_detection.py:262``, all reported as "sensitive data
+#: (password)". It reached them because it is interpolated into refusal
+#: messages that travel out through ``result["error"]``, and unrelated nodes
+#: log that field. The same alert classified ``phone_number`` in this package
+#: as "private", which is what identifies the mechanism as the identifier
+#: substring rather than the value.
+#:
+#: CORRECTION, recorded rather than quietly fixed. An earlier version of this
+#: comment also claimed the three ``audit_log.py:113,115,117`` alerts. It did
+#: NOT cause them, and the rename did not clear them: they are GitHub alerts
+#: ``#11503``/``#11504``/``#11505``, which carry those same numbers on
+#: ``refs/heads/main`` at lines ``96``/``98``/``100`` with
+#: ``created_at`` 2026-08-11T15:23:12Z -- the same alerts, line-shifted, from
+#: the ``mfa.py`` ``phone_number``/``trusted_devices`` sources. The mistake was
+#: reading the FIRST code flow in a multi-flow SARIF result as though it were
+#: the only one. Alert identity across refs, not flow inspection, is the
+#: instrument that settles "did this branch cause it".
 #:
 #: The VALUE is unchanged and remains the wire capability name.
 ADMIN_CAPABILITY = "mfa:admin"
