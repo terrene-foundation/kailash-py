@@ -181,32 +181,34 @@ jobs:
         # never been observed to COMPLETE on this repo's CI on two of the four
         # interpreters. With `--maxfail` lifted it completes in under 3 minutes.
         timeout-minutes: 25
-        # HOLDING STATE — see #2078, and read the block below before touching.
+        # Issue #2038 COMPLETE: `continue-on-error: true` is REMOVED and Tier 2
+        # now gates the merge exactly as Tier 1 does.
         #
-        # This is NOT the original `continue-on-error: true`, whose comment
-        # claimed "thread/I/O tests that may fail on CI runners" and which
-        # silently swallowed everything including a 10-minute timeout. The
-        # difference is the annotation step immediately below: a Tier-2 failure
-        # now produces a `::error::` annotation and a job-summary line naming
-        # the count, so the state is VISIBLE in the PR check surface. That is
-        # #2038 AC#1's "annotation, or a posted summary" branch, satisfied
-        # explicitly rather than by accident.
+        # This flag came off ONCE BEFORE (d1f5ea3fb, the block below) and had to
+        # be put BACK (1f6a95ba8) when a SECOND, unrelated cause surfaced: the
+        # tier then reported 174 failed / 58 errors on the runner from thread and
+        # file-descriptor exhaustion — 130 `RuntimeError: can't start new thread`
+        # plus 90 `sqlite3.OperationalError: disk I/O error` — which reproduced
+        # against unmodified code and so belonged to no PR that saw it.
         #
-        # Why it is not blocking yet: with the truncation lifted, the tier
-        # reports 174 failed / 58 errors on the runner, from ONE cause — 130
-        # `RuntimeError: can't start new thread` plus 90 `sqlite3.
-        # OperationalError: disk I/O error`, the paired signature of thread and
-        # file-descriptor exhaustion. It is pre-existing (the same errors appear
-        # in run 31478307416 against unmodified code) and it does not reproduce
-        # on macOS, where the suite is 2604 passed / 0 failed. Making the step
-        # blocking today would red every PR in the repo on a leak none of them
-        # introduced; quarantining 232 tests would gut the tier and would be
-        # quarantining symptoms of a single cause.
+        # That second cause is #2078, fixed in PR #2097 (merged 590983dc9):
+        # `PythonCodeNode` set an address-space rlimit (`RLIMIT_AS`) PROCESS-WIDE
+        # and never restored it, so once any node executed, every later thread
+        # stack and file descriptor in the same pytest process drew on a capped
+        # address space. One cause, both symptom families.
         #
-        # TO COMPLETE #2038: fix the leak (#2078), confirm a complete green run
-        # on all four interpreters, then delete this flag AND the annotation
-        # step below. Do not delete the flag without doing that first.
-        continue-on-error: true
+        # Both preconditions this block used to demand are now met, MEASURED from
+        # the step summaries rather than the job conclusion (a green JOB proved
+        # nothing while this flag was set):
+        #   Python 3.11  2582 passed, 47 skipped, 4 deselected, 1 xpassed
+        #   Python 3.12  2582 passed, 47 skipped, 4 deselected, 1 xpassed
+        #   Python 3.13  2582 passed, 47 skipped, 4 deselected, 1 xpassed
+        #   Python 3.14  2582 passed, 47 skipped, 4 deselected, 1 xpassed
+        # Zero failed, zero errors, all four interpreters.
+        #
+        # The paired annotation step below is DELETED with the flag, as that
+        # block instructed: it existed only to make a non-blocking failure
+        # visible. A blocking step needs no annotation to be seen.
         # Issue #2038: `continue-on-error: true` REMOVED. Tier 2 now gates the
         # merge exactly as Tier 1 does, and `gh pr checks` is once again a
         # discriminating instrument for integration behaviour.
@@ -243,22 +245,6 @@ jobs:
             -m 'not (requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
             --maxfail=400 -q -p no:xdist --timeout=60 -rf
 
-      # Makes the holding state above LOUD. Without this the check surface
-      # reports the same green whether Tier 2 passed or failed entirely, which
-      # is precisely the non-discriminating instrument #2038 was filed about.
-      - name: Tier 2 — surface the result (issue #2078)
-        if: always() && steps.tier2.outcome == 'failure'
-        run: |
-          echo "::error title=Tier 2 FAILED (non-blocking, see #2078)::Tier-2 integration tests failed on Python ${{ matrix.python-version }}. This step is non-blocking ONLY until the thread/fd exhaustion in #2078 is fixed. Read the step log before assuming your change is unaffected."
-          {
-            echo "### Tier 2 FAILED - non-blocking (issue #2078)"
-            echo ""
-            echo "Python ${{ matrix.python-version }}. This step does not gate the merge yet,"
-            echo "because the tier reports ~232 failures on the runner from a single"
-            echo "pre-existing thread/file-descriptor exhaustion cause (#2078)."
-            echo ""
-            echo "**A green PR check does NOT mean Tier 2 passed.** Open the step log."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   # ISSUE #2002 — the `test-root-regression` job lived HERE and is NOT SHIPPED,
   # pending #2081. Root tests/regression/ cannot run to completion on this
