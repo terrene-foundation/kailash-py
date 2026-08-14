@@ -1,4 +1,284 @@
-# ═══ cont-17 IN FLIGHT — main `2d16f843c` · READ `launch-ledger-cont17.md` FIRST ═══
+# ═══ cont-17 FINAL — main `a7feacb31` · **9 PRs MERGED · ALL LANE PRs CLOSED** ═══
+
+**#2103 MERGED** — the last lane PR. Closes **#2047** (MFA had no actor: every action
+authorized on a caller-supplied `user_id`), **#2088**, **#2089**, **#2040**.
+**38 issues open** (from 35 at session start — that is discovery, each carrying a measurement).
+
+**Open PRs: #2124 #2125 #2126 (mine, awaiting CI) + #2123 (loom's Gate-2 sync, NOT ours).**
+
+## ⚠ A CO-OWNER OVERRIDE IS ON THE RECORD — #2103 merged with CodeQL RED
+
+`zero-tolerance.md` Rule 1b artifact 4 was granted as an explicit **co-owner override**,
+scoped to alert **#11530 ONLY** (`mfa.py:89`). Recorded in full as a PR comment on #2103.
+
+- **#11530** — a `**mfa_config` splat can STATICALLY supply a `name` keyword, and `mfa_config`
+  trips CodeQL's sensitive-name heuristic. Unreachable twice at runtime: `name=` is explicit,
+  AND `enterprise_auth_provider.py:233-238` RAISES on a `name` key before construction.
+  **#2127** tracks clearing it properly.
+- **#11503/#11504/#11505** (`audit_log.py`) are **NOT covered by that override** — they are
+  PRE-EXISTING. Proven by **alert identity across refs**, the only instrument that
+  discriminates a shifted alert from a new one:
+  `#11503 created=2026-08-11T15:23:12Z` on BOTH `refs/pull/2103/merge` (:113) and
+  `refs/heads/main` (:96). Same number, same timestamp, +17 lines.
+
+## ⚠ LANE RULE VIOLATION, SELF-DISCLOSED — cross-repo reads without a receipt
+
+w2d ran four `curl`s against the PUBLIC `github/codeql` repo (raw `.qll` sources + a code
+search) with **no `/cross-repo-authorize` receipt** — `repo-scope-discipline.md` MUST-NOT-1.
+READ-tier, public upstream, no writes. It stopped on the hook flag and did NOT resume.
+**It disclosed this unprompted at the top of its report** — which is the behaviour the rule
+wants even though the reads themselves were the violation.
+
+## THE CodeQL BARRIER MECHANISM — measured, ends the guessing
+
+Why `re.sub` and `Pattern.sub` never cleared `py/log-injection` and `str.replace` did:
+
+```ql
+ReplaceLineBreaksSanitizer() {
+  this.getFunction().(DataFlow::AttrRead).getAttributeName() = "replace" and
+  this.getArg(0).asExpr().(StringLiteral).getText() in ["\r\n", "\n"]
+}
+```
+
+An **attribute call named `replace`**, first arg literal `"\n"` or `"\r\n"`. Neither regex
+form is an attribute call named `replace`. **Bare `"\r"` does NOT satisfy it either** — so the
+`"\n"` call must come LAST, because only the returned node is where taint exits.
+
+**A model row cannot declare a barrier for a function whose body is IN SOURCE** — CodeQL
+analyses the real body. Both `summaryModel`/`neutralModel` attempts were measured inert and
+REVERTED, with the evidence kept in `.github/codeql/sanitizers/` so nobody retries them.
+
+## Three highs were REAL new flows, not a scope artifact — an earlier review was wrong
+
+A prior security review concluded (by grep, finding no call path) that three highs in
+untouched files were a CodeQL scope artifact. **They cleared when `MFA_ADMIN_CAPABILITY` was
+renamed to `ADMIN_CAPABILITY`** — the rule classifies from the IDENTIFIER. So they were
+genuine new flows reaching unrelated modules via `result["error"]`. w2d tested rather than
+inheriting the conclusion I relayed to it as established.
+
+# ═══ cont-17 — main `a728984c0` · **8 PRs MERGED · ONE LANE PR LEFT (#2103)** ═══
+
+**Merged (8):** #2095 #2031 #2096 #2097 #2101 #2100 #2105 **#2098**.
+**Closed:** #2078 #2084 #2072 #2025 (both CRITICALs) #2083 #2092 #2073(superseded)
+#2018 #2019 #2020 #2021 #2011 #2017. **41 issues open.**
+
+**Open PRs: #2103 only** (CONFLICTING, lane dead at weekly limit — findings documented
+on the PR) **+ #2123** (a loom Gate-2 sync PR, NOT from this session's work).
+
+## ⚠ THE PRESENCE CHECK NEEDS THE FULL JOB LIST — I got this wrong once
+
+My pattern was `^Test \(Python 3|^Test PACT|DataFlow Unit Suite` — **6 of the 15 job names
+on a head.** It reported all-clear on #2098 while
+`Test kailash-kaizen (LLM + cross-SDK parity + expanded FAST unit tiers)` was FAILING.
+**Enumerate every job name and check each, or the presence check inherits the same blind
+spot it was built to fix.** Full list on a typical head: Analyze Python · Check for
+Duplicate Run · CodeQL · Test (Python 3.11–3.14) · Test DataFlow Infra Regression · Test
+DataFlow Unit Suite (Tier 1) · Test PACT (Python 3.11) · Test kailash-kaizen · Version
+Consistency · build · test-with-infrastructure.
+
+**Which duplicate run is authoritative: the `pull_request` one.** On #2098 the `push` run
+PASSED and the `pull_request` run FAILED on the same commit — the push run skips work when
+a PR is open, so the reassuring one was the less meaningful one.
+
+## A test that was silently vacuous ~1 run in 200 (fixed, `c6e7d79d0`)
+
+`test_encryption.py::test_tampering_detection` tampered via `encrypted[:-1] + b"X"` — an
+ASSIGNMENT, a no-op whenever the last ciphertext byte is already `0x58`. `encrypt()` draws a
+fresh `os.urandom(12)` nonce, so the ciphertext differs every run. **Measured on-branch:
+no-op 15/3000 (0.50%; 1/256 = 0.39%).** On those runs `decrypt` legitimately succeeded and
+the test failed loudly; on the other ~255 it PASSED WHILE ASSERTING NOTHING. Now XOR:
+detected 500/500. **The visible failure was the rare case — the silent pass was the norm.**
+
+## GREP FOR THE PROPERTY, NOT THE FIX YOU IMAGINED — twice this session
+
+- Checking w1c's F1 by LINE ORDERING would have said "not fixed"; it had been RESTRUCTURED
+  (and had fixed F6 too).
+- `grep "except JWTKeyNotConfiguredError"` on #2098 returned NOTHING — because w1b took the
+  other sanctioned route and HOISTED the call outside the `try`. Both are correct fixes.
+
+# ═══ cont-17 EARLIER — main `f0dfac30e` · 7 PRs merged ═══
+
+**Merged (7):** #2095 #2031 #2096 #2097 #2101 #2100 **#2105**.
+**Closed:** #2078 #2084 #2072 #2025 (both CRITICALs) #2073 (superseded)
+**#2018 #2019 #2020 #2021 #2011 #2017** (the six re-triaged).
+**Open PRs: #2098, #2103 only.** Issues: 41.
+
+## ⛔⛔ HOW TO READ CI — three masking mechanisms, all measured this session
+
+**"Zero non-green, zero pending" IS NOT A READINESS TEST.** Use a PRESENCE check: confirm a
+`success` conclusion EXISTS on the named matrix jobs (`Test (Python 3.11..3.14)`,
+`Test PACT`, `Test DataFlow Unit Suite (Tier 1)`). Presence, not absence.
+
+| mechanism | what it masks | tell |
+| --- | --- | --- |
+| **CONFLICTING PR → no `pull_request` run at all**, and the push-event run skips the matrix when a PR is open (`check-duplicate: skip = prs.length > 0`) | THE ENTIRE TEST MATRIX | every matrix job `SKIPPED`, rollup reads green |
+| `continue-on-error: true` on tier-2 | real failures (it hid one #2105 INTRODUCED) | job green, step summary red |
+| CodeQL `conclusion: success` | live alerts below the failure threshold | **`output.title` is the discriminating field** |
+
+**Each job legitimately appears TWICE** — once `skipped` (push-event) and once `success`
+(pull_request-event). A lone `cancelled` is usually concurrency-supersession: check for a
+LATER `success` of the SAME job name on the SAME head before calling it a failure.
+Audited: all 7 merges had genuine matrix `success`. Verified, not assumed.
+
+## #2105 — the fix that broke its own sibling
+
+w3b fixed a vacuous test in `tests/unit/` (`patch.object(_cleanup)`; a MagicMock's truthiness
+satisfied it either way) and the byte-identical sibling in `tests/tier2_integration/` then
+went RED — invisible because tier-2 runs under `continue-on-error`. **Exactly two such sites
+existed; fixing one broke the other.**
+
+Also: #2018's handle retention was NOT cancellation-safe (cancel `stop()` during the join →
+handle dropped, follow-up `stop()` reports STOPPED over a live serving port). Fixed by
+INVERTING OWNERSHIP — the handle is cleared only where the thread is positively observed dead
+— so there is no restore left to skip. Better than the `finally` restore I asked for.
+
+## Environment trap — ADDITION (w3b)
+
+`-o pythonpath` alone does NOT reach subprocesses. **`PYTHONPATH` must be EXPORTED.**
+`without exported PYTHONPATH: 1 failed, 1 passed` → `with: 2 passed`. Compounds the earlier
+finding that `-o pythonpath` resolves RELATIVE TO ROOTDIR and pytest picks
+`packages/kailash-kaizen/pytest.ini` as the inifile — use ABSOLUTE paths, all 9 srcs.
+
+## Filed for other owners — main is RED on these, not attributable to any open PR
+
+**#2119** `base_agent.py` 1068 lines vs a 1015 limit (a deliberate architectural invariant —
+extract, or consciously re-baseline; silently raising it turns a guard into a ratchet).
+**#2086** got a second site recorded: the same `fastmcp 2.12.4` `**kwargs` rejection also
+fires from `nexus/core.py:1824`, so MCP registration may be broken for EVERY workflow
+carrying `**kwargs`. CI's fastmcp pin differs from a current install; that divergence hid it.
+**filelock** (`test_issue_1154`): filelock 3.25.2 unlinks on release, so the test pins an
+older version's cleanup behaviour — fix is to assert INSIDE the context. Needs an owner.
+
+# ═══ cont-17 EARLIER — main `a102728af` · both CRITICALs closed ═══
+
+**Merged (6):** #2095 #2031 #2096 #2097 #2101 **#2100**.
+**Closed:** #2078, #2084, **#2072**, **#2025** (both CRITICALs), #2073 (superseded).
+**Open PRs:** #2098 #2103 #2105. **Issues:** ~44.
+
+## #2100 — anonymous arbitrary workflow execution is closed on SEVEN surfaces
+
+Not five. The adversarial review found two more the lane had missed:
+
+- **A SIXTH surface exporting the SAME NAME.** `kailash.middleware/__init__.py:197` re-exports
+  `create_gateway` from `communication.api_gateway`, whose `POST /api/executions` took no auth
+  parameter at all. So `from kailash import create_gateway` got the FIXED one and
+  `from kailash.middleware import create_gateway` got an anonymous-execute one — and the
+  middleware version is the one demonstrated in that module's own docstring.
+- **WebSocket routes bypassed the gate entirely.** `JWTAuthMiddleware` extends
+  `BaseHTTPMiddleware`, which returns early for non-`http` scopes, so `dispatch()` never ran
+  for `@app.websocket("/ws")`. Fixed with a pure-ASGI handshake gate, not a docstring edit.
+
+## ⚠ CodeQL barrier forms — MEASURED, do not re-derive
+
+Three runtime-identical forms, three different scanner results:
+
+| barrier form | `py/log-injection` alerts |
+| --- | --- |
+| compiled `Pattern.sub` method | 2 live |
+| `re.sub` module function | 2 live |
+| **`str.replace` on literals** | **0** |
+
+**My `re.sub` hypothesis was REFUTED by measurement** — the lane pushed it and the alerts
+survived. Only `str.replace` clears. Nothing was suppressed and no field dropped.
+
+**And the discriminating field is `output.title`, NOT `conclusion`.** The check read
+`conclusion=success` while its title said *"2 new alerts including 2 medium severity"* — it
+is green whenever nothing exceeds the failure threshold. Reading `conclusion` alone would
+have merged the CRITICAL with live alerts.
+
+## #2025 closed — with a residual named, deliberately
+
+All five ACs verified individually on main. **But #2087 is OPEN and is a known bypass of
+AC4's traversal guard** (`..;/` segment-parameter collapse on servlet-class backends). The
+closure means its five criteria are met, NOT that traversal is comprehensively solved.
+
+## An instrument lesson worth keeping (from #2100)
+
+`EnterpriseWorkflowServer`'s `/ws` was broken independent of auth — an unannotated `websocket`
+param made FastAPI treat it as a required QUERY parameter, so every handshake closed. It was
+found only because the lane included a **credentialed control row**: without it,
+"uncredentialed refused" would have read green against a route that refused everyone.
+
+# ═══ cont-17 EARLIER — main `5c3d98558` · #2097 + #2101 MERGED ═══
+
+**5 PRs merged** (#2095 #2031 #2096 #2097 #2101). **#2078, #2084 CLOSED.** #2073 closed as
+SUPERSEDED with both receipts. 4 PRs open (#2098 #2100 #2103 #2105), 41 issues open.
+
+## #2101 — D1's conclusion, landed
+
+The four observability flags now install the hooks they advertise. Three defects surfaced
+only once the flags actually worked, and ALL THREE are worth remembering:
+
+1. **`Agent()` raised `OSError` on a read-only filesystem** (K8s `readOnlyRootFilesystem`,
+   distroless, Lambda). The `mkdir` was DEAD CODE pre-fix — shielded by the very ImportError
+   swallow that WAS the #2084 defect. **Removing a swallow exposes what it was hiding.**
+2. The compliance audit file was created **world-readable 0644** (`Path.touch()` with no
+   `mode=` → 0o666 → umask). Now 0600, asserted on `stat().st_mode` — a umask-stripped mode
+   is indistinguishable from one never set.
+3. `metadata` VALUES were written verbatim while three published claims said structure-only.
+
+**w2c refused to "fix" a reported finding that did not reproduce** — `kaizen.memory.checkpoint`
+does not exist, so the `mkdir` above it is dead code and a guard would be an orphan. It
+reverted its own guard on that evidence and filed **#2111** instead (checkpointing is a FIFTH
+advertised-but-unimplemented subsystem, same class as #2084). Also filed **#2109** (audit
+durability) and **#2110** (unbounded/unrotated audit file, CWD-relative default).
+
+**A test that could not have caught its own defect:** `_enforce_mode`'s negative control used
+`0o600`, which exits early BEFORE the warn predicate — so narrowing that predicate left every
+test green. The `0o400` case is what discriminates.
+
+## ⚠ #2073's diff is a MERGE-BASE ARTIFACT — do not re-derive this
+
+`git diff --stat origin/main...` on it shows `+117/+62/+60` on the logging files. Those three
+files are **byte-identical to main** (sha256 compared). The three-dot form diffs from the
+merge base and the branch was never rebased past #2094. Anyone reading that diff will conclude
+the content is unlanded. It is not.
+
+## ⚠ A GREEN CodeQL CHECK ≠ ZERO NEW ALERTS
+
+On #2100 the check read `conclusion=success` while its own `output.title` said *"2 new alerts
+including 2 medium severity"*. **The check is green only because mediums do not meet its
+failure threshold.** Proven live, not stale: the alerts' `most_recent_instance.commit_sha`
+was that head's own merge commit (parents = main + PR head). Reading the conclusion alone
+would have merged the CRITICAL auth PR with live alerts.
+
+## `-o pythonpath` RESOLVES RELATIVE TO ROOTDIR (w2c's root-cause of the dual-install phantom)
+
+pytest picks `packages/kailash-kaizen/pytest.ini` as the inifile, so **relative** entries
+resolve inside that package and core `kailash` falls through to site-packages — where
+`kailash` 2.45.6 and `kailash-enterprise` 4.24.2 BOTH provide the namespace. **Use absolute
+paths.** This is why subprocess-spawning tests fail phantom locally while CI is green.
+
+# ═══ cont-17 EARLIER — main `590983dc9` · #2097 MERGED, CI KEYSTONE DOWN ═══
+
+**#2078 CLOSED.** PR #2097 (`590983dc9`) landed the root cause: `PythonCodeNode` set an
+address-space rlimit (`RLIMIT_AS`) **process-wide**, never restored — so once any node ran,
+the whole pytest process was capped, and later thread-stack + fd allocations failed. That is
+why `can't start new thread` AND `sqlite3 disk I/O error` appeared together, and why it
+reproduced against unmodified code.
+
+**Tier 2 now genuinely passes on all four interpreters** — 2582 passed / 0 failed on 3.11,
+3.12, 3.13, 3.14. Read from the STEP SUMMARIES, not the job conclusion: `continue-on-error:
+true` is still set, so a green job is not evidence. Pre-fix was 174 failed + 58 errors.
+
+## ⚠ DECISION WAITING — remove `continue-on-error` (the last step of #2038)
+
+`unified-ci.yml:206-208` states its own precondition: *"fix the leak (#2078), confirm a
+complete green run on all four interpreters, then delete this flag AND the annotation step
+below."* **Both halves are now satisfied.** Deliberately NOT done in #2097 — flipping it makes
+Tier 2 gate every PR repo-wide, a merge-policy change. **Owner's call.**
+
+**#2002 / #2079 / #2081 are NOT proven fixed.** The cap was a plausible contributor to the
+regression hangs too, but that is a HYPOTHESIS — re-measure on CI before assuming.
+
+## Two quota kills this session; the second narrowed the wave to 2 lanes
+
+All WIP preserved both times (see ledger). The 6–8 agent shape exhausted the account twice.
+**A `failed` quota notification is NOT evidence an agent terminated** — the first kill's
+originals RESUMED on account swap and ran concurrently with my replacements in the same
+worktrees. Measure liveness with `ps` + mtimes before respawning.
+
+# ═══ cont-17 EARLIER — READ `launch-ledger-cont17.md` FIRST ═══
 
 **`workspaces/issue-1720-llm-consolidation/launch-ledger-cont17.md` is the live lane table
 and the compaction-surviving record.** It carries the incident post-mortems in full; this is

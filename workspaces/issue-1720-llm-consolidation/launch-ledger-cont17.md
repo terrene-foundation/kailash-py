@@ -282,3 +282,44 @@ This is a second contributor to the 78,152-file sweep walk recorded in cont-16.
 - **D3 — PR #2031: RESOLVE both gating questions and land** (co-owner approved),
   not close. Lane w2e.
 - **D1 — #2073 remains HELD** pending w2c's wiring-feasibility verdict.
+
+## MERGE ORDER — six contended files. Do NOT merge out of this order.
+
+Measured by intersecting every open PR's file list (not guessed):
+
+| contended file | PRs |
+| --- | --- |
+| `CHANGELOG.md` | #2098 #2100 #2103 |
+| `packages/kailash-kaizen/CHANGELOG.md` | #2073 #2101 |
+| `packages/kailash-kaizen/src/kaizen/agent_config.py` | #2073 #2101 |
+| `packages/kailash-kaizen/src/kaizen/smart_defaults.py` | #2073 #2101 |
+| `src/kailash/middleware/communication/api_gateway.py` | #2098 #2103 |
+| `src/kailash/utils/secure_logging.py` | #2100 #2103 |
+
+**Order, least-contended first so each later PR rebases once at most:**
+
+1. **#2097** (rlimit / #2078) — contends with NOTHING. Merge as soon as F2 + F7 clear.
+   Unblocks #2038 / #2002 / #2079 / #2081.
+2. **#2101** (#2084 observability) — contends only with #2073, which it SUPERSEDES.
+   Merge, then **close #2073** citing #2094 (logging half) + #2101 (observability half).
+3. **#2098** (key class) — after its 4 must-fix (H1, M2, M3, M4).
+4. **#2100** (#2072 auth) — after CodeQL clears.
+5. **#2103** (MFA actor) — **LAST**: it is the only PR contending on TWO files
+   (`api_gateway.py` with #2098, `secure_logging.py` with #2100). It rebases onto both.
+
+`CHANGELOG.md` collisions are append-only and trivial to resolve, but they are real —
+whoever merges second rebases.
+
+**Note:** `src/kailash/utils/secure_logging.py` ALREADY EXISTS on main. #2100 imports
+`safe_log_text` from it and #2103 adds to it (+115/−0). #2100 is NOT blocked on #2103.
+Verified — do not infer a cross-PR dependency from the shared import.
+
+## Reviewer-delivery reality this session (brief every future orchestrator)
+
+**6 of 7 reviewer completions arrived as CONTENT-FREE idle notifications.** Pattern, now
+twice-confirmed: the FIRST ping recovers the full analysis verbatim (delivery failed, not
+the analysis); a SECOND ping on the same agent recovers nothing → stop and re-dispatch.
+
+**Treating an empty idle as "clean" would by now have merged:** a silently-permanent
+sandbox-disable (#2097 F1), a split-brain data-loss fail-open (#2097 F7), and a
+key-material floor with ZERO tests (#2098 H1). An empty idle is not a verdict.
