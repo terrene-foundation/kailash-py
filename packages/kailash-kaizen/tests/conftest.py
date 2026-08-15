@@ -9,6 +9,11 @@ Provides shared fixtures and configuration for comprehensive 3-tier testing stra
 
 import os
 
+# `re` backs the whole-token keyword match in pytest_collection_modifyitems
+# (#2152) -- bare-substring matching on 2-letter fragments marked ~15% of the
+# suite as needing infrastructure it does not need.
+import re
+
 # CRITICAL: Patch MockProvider BEFORE any other imports
 # This must happen at module level to catch all provider instantiations
 import sys
@@ -865,16 +870,45 @@ def pytest_collection_modifyitems(config, items):
         # `item.name` (the test's display name string) is deterministic and
         # matches the function's docstring intent ("based on their location
         # and name") -- switching to it removes the non-determinism.
+        # SECOND BUG FIX (#2152, found when the determinism fix above made this
+        # one reproducible): the switch to `item.name` was correct, but the
+        # keyword list kept BARE SUBSTRING matching, and two of the keywords
+        # are 2-letter fragments that occur inside ordinary English words:
+        #
+        #   'ai' in 'kaizen'  -> True      'ai' in 'raises'    -> True
+        #   'ai' in 'openai'  -> True      'ai' in 'available' -> True
+        #   'db' in 'feedback' -> True     'db' in 'sandbox'   -> True
+        #
+        # Measured on 14,773 collected kaizen items: 'ai' alone marked 1,980
+        # items `requires_ollama` (13.4%) of which only 353 actually mention
+        # ollama/llm -- so ~1,627 infra-free tests were EXCLUDED from every
+        # infra-free CI step. The 342->425 deselection jump after the
+        # determinism fix WAS this: a random ~3% hole became a deterministic
+        # ~15% one. It deselected `test_azure_ai_foundry_routes_through_four_
+        # axis_path` -- the #2067 test that #2143 had just made hermetic and
+        # offline SPECIFICALLY so it needs no infrastructure.
+        #
+        # Fix, per keyword length:
+        #   * 'ai' is REMOVED outright. It is not a reliable ollama signal in
+        #     any form -- not even as a whole token, because "Azure AI Foundry"
+        #     legitimately tokenizes to 'ai' while needing no Ollama. A test
+        #     that needs Ollama says so ('ollama'/'llm') or carries an explicit
+        #     marker.
+        #   * 'db' is kept but matched as a WHOLE TOKEN, so `test_db_pool`
+        #     still marks while `feedback`/`sandbox`/`mongodb` no longer do.
+        # Long keywords keep substring matching ('cache' SHOULD match 'cached').
         if hasattr(item, "function") and item.function:
+            name = item.name.lower()
+            tokens = set(re.findall(r"[a-z0-9]+", name))
+
             # Check for database usage in test parameters or names
-            if any(
-                keyword in item.name.lower()
-                for keyword in ["postgres", "database", "db"]
+            if any(keyword in name for keyword in ["postgres", "database"]) or (
+                "db" in tokens
             ):
                 item.add_marker(pytest.mark.requires_postgres)
-            if any(keyword in item.name.lower() for keyword in ["redis", "cache"]):
+            if any(keyword in name for keyword in ["redis", "cache"]):
                 item.add_marker(pytest.mark.requires_redis)
-            if any(keyword in item.name.lower() for keyword in ["docker"]):
+            if "docker" in name:
                 item.add_marker(pytest.mark.requires_docker)
-            if any(keyword in item.name.lower() for keyword in ["ollama", "llm", "ai"]):
+            if any(keyword in name for keyword in ["ollama", "llm"]):
                 item.add_marker(pytest.mark.requires_ollama)
