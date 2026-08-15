@@ -42,6 +42,7 @@ from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
 from .config import BaseAgentConfig
 from .mcp_mixin import MCPMixin
+from .output_extraction_mixin import OutputExtractionMixin
 
 __all__ = ["BaseAgent", "BaseAgentConfig"]
 
@@ -55,10 +56,11 @@ logger = logging.getLogger(__name__)
 # correctness-relevant predicate drift.
 
 
-class BaseAgent(MCPMixin, A2AMixin, Node):
+class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, Node):
     """Universal base agent class with strategy-based execution and mixin composition.
 
-    Inherits MCP integration from MCPMixin and A2A protocol support from A2AMixin.
+    Inherits MCP integration from MCPMixin, A2A protocol support from A2AMixin,
+    and the typed ``extract_*`` result accessors from OutputExtractionMixin.
     Execution is delegated to AgentLoop for both sync and async paths.
     """
 
@@ -516,72 +518,6 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         }
 
         self.shared_memory.write_insight(insight)
-
-    def extract_list(
-        self, result: Dict[str, Any], field_name: str, default: Optional[List] = None
-    ) -> List:
-        """Extract a list field from result with type safety."""
-        if default is None:
-            default = []
-
-        field_value = result.get(field_name, default)
-
-        if isinstance(field_value, list):
-            return field_value
-
-        if isinstance(field_value, str):
-            try:
-                parsed = json.loads(field_value) if field_value else default
-                return parsed if isinstance(parsed, list) else default
-            except Exception:
-                return default
-
-        return default
-
-    def extract_dict(
-        self, result: Dict[str, Any], field_name: str, default: Optional[Dict] = None
-    ) -> Dict:
-        """Extract a dict field from result with type safety."""
-        if default is None:
-            default = {}
-
-        field_value = result.get(field_name, default)
-
-        if isinstance(field_value, dict):
-            return field_value
-
-        if isinstance(field_value, str):
-            try:
-                parsed = json.loads(field_value) if field_value else default
-                return parsed if isinstance(parsed, dict) else default
-            except Exception:
-                return default
-
-        return default
-
-    def extract_float(
-        self, result: Dict[str, Any], field_name: str, default: float = 0.0
-    ) -> float:
-        """Extract a float field from result with type safety."""
-        field_value = result.get(field_name, default)
-
-        if isinstance(field_value, (int, float)):
-            return float(field_value)
-
-        if isinstance(field_value, str):
-            try:
-                return float(field_value)
-            except Exception:
-                return default
-
-        return default
-
-    def extract_str(
-        self, result: Dict[str, Any], field_name: str, default: str = ""
-    ) -> str:
-        """Extract a string field from result with type safety."""
-        field_value = result.get(field_name, default)
-        return str(field_value) if field_value is not None else default
 
     # =========================================================================
     # Workflow generation
