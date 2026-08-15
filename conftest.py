@@ -36,6 +36,8 @@ model rather than an expensive default.
 """
 
 import os
+import signal
+import warnings
 from pathlib import Path
 
 import pytest
@@ -56,8 +58,30 @@ def pytest_configure(config):
 
     Runs before collection, so the ``dotenv.load_dotenv`` monkeypatch is active
     before any nested conftest / test module imports and re-injects a secret.
+
+    Also degrades ``pytest.ini``'s ``timeout_method = signal`` back to
+    ``thread`` where SIGALRM does not exist (Windows). Signal is the correct
+    default everywhere it works — a thread-method timeout cannot kill a test
+    blocked in a C call, which is what made two #2081 CI runs unreadable — but
+    setting it in the ini unconditionally would hard-break a Windows
+    contributor, and pytest-timeout does not support a platform conditional.
+    An explicit ``--timeout-method=`` on the command line still wins, because
+    this only ever tightens the unsupported case.
     """
     install_cost_guard(Path(__file__).parent / ".env")
+
+    if not hasattr(signal, "SIGALRM") and (
+        getattr(config.option, "timeout_method", None) == "signal"
+    ):
+        config.option.timeout_method = "thread"
+        warnings.warn(
+            "pytest-timeout: SIGALRM is unavailable on this platform, so the "
+            "configured `timeout_method = signal` has been degraded to "
+            "`thread`. A thread-method timeout can REPORT a hung test but "
+            "cannot kill one blocked in a C call (issue #2081).",
+            RuntimeWarning,
+            stacklevel=1,
+        )
 
 
 def pytest_collection_finish(session):

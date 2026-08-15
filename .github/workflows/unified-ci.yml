@@ -267,30 +267,113 @@ jobs:
             --maxfail=400 -q -p no:xdist --timeout=60 -rf
 
 
-  # ISSUE #2002 — the `test-root-regression` job lived HERE and is NOT SHIPPED,
-  # pending #2081. Root tests/regression/ cannot run to completion on this
-  # repo's ubuntu-latest runner: three CI runs, each with a sharper instrument,
-  # ended in a timeout or a truncated `--maxfail`. The last one
-  # (--timeout-method=signal, --timeout=60, --maxfail=30) enumerated 30 hangs
-  # across 8 files having executed 757 of 1916 tests in 23m40s — so 30 is a
-  # floor, not a count. The identical selection is 1916 passed / 0 failed in
-  # 217s on macOS.
+  # ISSUE #2002 / #2081 — RESTORED. This job was removed in PR #2077 because
+  # root tests/regression/ could not run to completion on this runner: three
+  # CI runs ended in a timeout or a truncated `--maxfail`, the last one
+  # enumerating 30 hangs across 8 files having executed 757 of 1916 tests.
   #
-  # A 40-minute job that cannot complete is pure cost on every PR, and making
-  # it non-blocking would only make that cost silent. So it is removed rather
-  # than shipped degraded, and #2002 stays open with #2081 as its blocker.
+  # Two causes, both now closed. The environment-level one was #2078: a
+  # PythonCodeNode set a process-wide, irreversible RLIMIT_AS cap, so every
+  # later mmap in the process failed — including the stack pthread_create
+  # needs. That is why it never reproduced on macOS, whose kernel rejects the
+  # setrlimit outright and so is not a discriminating instrument. Fixed in
+  # #2097. The disposal-level one was #2079, fixed in this PR.
   #
-  # The complete job — the extras set (note `shamir`, without which five EATP
-  # vault tests fail), the five editable sibling installs the suite needs to
-  # COLLECT at all, and the marker filter mirroring the DataFlow regression
-  # step — is preserved in PR #2077's history and referenced from #2081.
-  # Restore it from there once the hangs are fixed; do not re-derive it.
-  #
-  # One finding from that work is worth acting on independently of #2002: the
-  # root pytest.ini sets `timeout_method = thread`, and a thread-method timeout
-  # CANNOT kill a test blocked in a C call. Two of the three runs above were
-  # unreadable for exactly that reason — pytest-timeout printed its banner and
-  # the process carried on. `signal` is the enforceable method on Linux/macOS.
+  # Re-measured before restoring, in a Linux container with Postgres 16, on
+  # this branch: `2336 passed, 4 skipped, 22 deselected in 219.36s` with ZERO
+  # pytest-timeout hits, and every one of the 30 previously-enumerated hangs
+  # passing. The 40-minute budget is kept because a runner is slower than that
+  # container, not because the suite is expected to need it.
+  test-root-regression:
+    name: Test Root Regression Suite (Python 3.12)
+    needs: check-duplicate
+    # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8.
+    if: needs.check-duplicate.outputs.should-skip != 'true' && !startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    # Must exceed the 40-minute test step plus install time.
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-py3.12-rootregr-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py3.12-rootregr-
+
+      - name: Install dependencies
+        # Extras are the `test` job's set PLUS `shamir`. The shamir extra is
+        # REQUIRED, not optional garnish: without shamir-mnemonic, five tests
+        # (test_eatp12_vault_3way_discrimination.py x3,
+        # test_eatp12_vault_quickstart.py x2) fail with
+        # `RuntimeError: SLIP-0039 Shamir secret-sharing requires the 'shamir'
+        # optional extra` raised from src/kailash/trust/vault/shamir.py. Those
+        # are real assertions on a real code path, not env noise — the fix is to
+        # provision the dependency, not to skip the tests.
+        #
+        # Root kailash editable BEFORE the sub-packages, per
+        # rules/deployment.md § "Sibling-Package CI Installs Root SDK Editable".
+        #
+        # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
+        # Selection: tests/regression/ minus the infra markers.
+        # Determined by grepping module-level sibling imports across the
+        # directory, then confirmed by building this exact venv from scratch and
+        # running the suite in it:
+        #   dataflow      -> EXERCISED (17 files) -> editable below
+        #   nexus         -> EXERCISED  (7 files) -> editable below
+        #   kaizen        -> EXERCISED  (4 files) -> editable below
+        #   kailash_mcp   -> EXERCISED  (3 files) -> editable below
+        #   kaizen_agents -> EXERCISED  (1 file)  -> editable below
+        #   kailash_ml / kailash_align / kailash_pact -> 0 files, NOT installed
+        # Several of these imports are UNGUARDED at module scope
+        # (`from nexus import Nexus`, `from kaizen.providers.registry import ...`),
+        # so a missing sibling is a COLLECTION error, not a skip.
+        run: |
+          uv venv .venv
+          uv pip install -e ".[dev,server,http-client,db-postgres,db-mysql,db-sqlite,redis,monitoring,auth,auth-azure,trust,mcp,scheduler,telemetry,data,shamir]" --python .venv/bin/python
+          uv pip install -e packages/kailash-mcp --python .venv/bin/python
+          uv pip install -e packages/kailash-dataflow --python .venv/bin/python
+          uv pip install -e packages/kailash-kaizen --python .venv/bin/python
+          uv pip install -e packages/kailash-nexus --python .venv/bin/python
+          # test_issue_443_kaizen_mcp_dependency.py does `from kaizen_agents
+          # import Delegate` — without this the test fails ModuleNotFoundError.
+          uv pip install -e packages/kaizen-agents --python .venv/bin/python
+
+      - name: Test root regression suite (infra-free)
+        timeout-minutes: 40
+        # tests/regression/ is a MIXED dir — the same shape as the DataFlow
+        # regression dir handled below. The explicit `-m` filter mirrors that
+        # step's, and is REQUIRED for the same reason: the root pytest.ini
+        # `addopts` carries NO marker filter at all, so nothing else deselects
+        # the infra-requiring tests. Keep this expression and the infra-marked
+        # step's in sync — they are exact complements, so between the two every
+        # test in root tests/regression/ runs on every PR and none runs twice.
+        #
+        # `--maxfail=30` is deliberately KEPT rather than lifted. It cost
+        # nothing on the verification run (0 failures) and it bounds the damage
+        # if a future change reintroduces a hang class: 30 named failures is a
+        # list you can act on, where an unbounded run is another 40-minute job
+        # with no output.
+        #
+        # `--timeout-method=signal` is no longer passed here — pytest.ini now
+        # sets it globally (platform-guarded in the root conftest.py), because
+        # a thread-method timeout cannot kill a test blocked in a C call and
+        # that is what made two of the three #2081 runs unreadable.
+        run: |
+          .venv/bin/python -m pytest tests/regression/ \
+            -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
+            --maxfail=30 -v -p no:xdist --durations=25 \
+            --timeout=60
 
   test-pact:
     name: Test PACT (Python 3.11)
@@ -520,21 +603,68 @@ jobs:
             -m "requires_postgres or requires_redis" \
             --maxfail=10 -q --timeout=120
 
-      # ISSUE #2002 AC#2 — the infra-marked root regression step lived HERE and
-      # is REMOVED pending #2079. It hangs on this runner: given a 30-minute
-      # budget it executed 3 of 22 tests and consumed the rest, with
-      # pytest-timeout's stack dump naming a `dataflow_async__0` thread at
-      # cross-event-loop pool disposal. The identical selection completes in
-      # 244s against a real Postgres on macOS, so it is Linux/container
-      # specific. A step that holds a runner for 30 minutes on every PR is a
-      # real cost even when non-blocking, and a hang yields no signal in
-      # exchange — so it is removed rather than made continue-on-error.
+      # ISSUE #2002 AC#2 / #2079 — RESTORED. This step was removed in PR #2077
+      # because it hung: given a 30-minute budget it executed 3 of 22 tests and
+      # consumed the rest, with pytest-timeout's stack dump naming a
+      # `dataflow_async__0` thread at cross-event-loop pool disposal.
       #
-      # The removed block, including the `env:` wiring for the FOUR different
-      # DSN env var names those files read (TEST_DATABASE_URL,
-      # DATAFLOW_TEST_POSTGRES_URL, TEST_POSTGRES_DSN, TEST_PG_URL — each
-      # falling back to :5434, not this job's :5432), is preserved in PR #2077's
-      # history and quoted in #2079. Restore it there once the hang is fixed.
+      # Root cause, reproduced in a Linux container and fixed in this PR: every
+      # `disconnect()`/`close()` in async_sql.py read its pool handle, awaited
+      # the driver close, and nulled the handle AFTERWARDS — so N concurrent
+      # callers on a shared adapter all entered `asyncpg.Pool.close()` at once
+      # while queries were still in flight, corrupting the protocol state and
+      # stranding `PoolConnectionHolder.close()` forever. See #2079.
       #
-      # The infra-FREE gate in `test-root-regression` — the substance of #2002 —
-      # is unaffected: its marker filter excludes exactly this set.
+      # It lands HERE rather than in a new job because this job already has
+      # Postgres + Redis service containers up — a dedicated job would pay for a
+      # second pair for 22 tests. (test-with-infrastructure.yml was the other
+      # candidate and is NOT suitable: it invokes no pytest at all, it is a
+      # config validator.)
+      #
+      # The selector is the exact COMPLEMENT of the infra-free step in
+      # `test-root-regression`, so between the two, every test in root
+      # tests/regression/ runs on every PR and none runs twice. Keep the two
+      # marker expressions in sync — if one gains a marker, so must the other.
+      #
+      # The env block below is LOAD-BEARING, not decoration, and it grew in this
+      # PR. These files read FOUR DIFFERENT env var names for the same DSN, each
+      # falling back to `localhost:5434` — the port the repo's local
+      # `./test-env up` compose stack uses, NOT the 5432 this job's service
+      # container publishes:
+      #   TEST_DATABASE_URL           test_issue_713_module_import_then_async_ddl.py
+      #   DATAFLOW_TEST_POSTGRES_URL  test_issue_713_subsystems_follow_runtime_swap.py
+      #   TEST_POSTGRES_DSN           test_issue_1248_localruntime_cross_loop_pool_disposal.py
+      #   TEST_PG_URL                 test_w3_security_fixes.py
+      #
+      # REDIS_HOST / REDIS_PORT are NEW and are why this step now runs 18 tests
+      # where it used to run 7. tests/utils/docker_config.py defaults Redis to
+      # :6380 (the compose stack's port), so `ensure_docker_services()` returned
+      # False against this job's :6379 and eleven pool tests self-skipped. The
+      # step reported a green built almost entirely out of skips — a check that
+      # could not come out the other way. Two of those eleven were genuinely
+      # broken, and both are fixed in this PR.
+      #
+      # `-rs` keeps every skip visible in the log for the same reason.
+      #
+      # Measured on this branch, Linux + Postgres 16 + Redis 7:
+      # `2 failed, 18 passed, 3 skipped in 11.40s` before the two test fixes,
+      # green after — against 131.54s WITH a 120-second hang beforehand.
+      - name: Run ROOT regression infra-marked tests (issue #2002 AC#2)
+        timeout-minutes: 15
+        env:
+          TEST_DATABASE_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+          DATAFLOW_TEST_POSTGRES_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+          TEST_POSTGRES_DSN: postgresql://test_user:test_password@localhost:5432/kailash_test
+          TEST_PG_URL: postgresql://test_user:test_password@localhost:5432/kailash_test
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: kailash_test
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          .venv/bin/python -m pytest tests/regression/ \
+            -m "requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e" \
+            --maxfail=10 -v -p no:xdist --timeout=300 -rs --durations=25
