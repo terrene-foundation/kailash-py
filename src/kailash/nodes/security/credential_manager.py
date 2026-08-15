@@ -115,19 +115,29 @@ class CredentialManagerNode(Node):
                 return value[:4] + "*" * (len(value) - 8) + value[-4:]
         return value
 
-    def _fetch_from_env(self, credential_name: str) -> Optional[Dict[str, Any]]:
-        """Fetch credentials from environment variables."""
+    def _fetch_from_env(
+        self, credential_name: str, credential_type: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch credentials from environment variables.
+
+        Args:
+            credential_name: Credential to look for.
+            credential_type: Type deciding which variables are probed. Defaults
+                to the construction-time type when omitted, so existing callers
+                are unaffected.
+        """
         # Try common patterns
         prefixes = [credential_name.upper(), f"{credential_name.upper()}_", ""]
+        credential_type = credential_type or self.credential_type
 
-        if self.credential_type == "api_key":
+        if credential_type == "api_key":
             for prefix in prefixes:
                 key_names = [f"{prefix}API_KEY", f"{prefix}KEY", f"{prefix}TOKEN"]
                 for key_name in key_names:
                     if key_name in os.environ:
                         return {"api_key": os.environ[key_name]}
 
-        elif self.credential_type == "oauth2":
+        elif credential_type == "oauth2":
             for prefix in prefixes:
                 client_id = os.environ.get(f"{prefix}CLIENT_ID")
                 client_secret = os.environ.get(f"{prefix}CLIENT_SECRET")
@@ -138,7 +148,7 @@ class CredentialManagerNode(Node):
                         "token_url": os.environ.get(f"{prefix}TOKEN_URL", ""),
                     }
 
-        elif self.credential_type == "database":
+        elif credential_type == "database":
             for prefix in prefixes:
                 host = os.environ.get(f"{prefix}DB_HOST") or os.environ.get(
                     f"{prefix}HOST"
@@ -155,7 +165,7 @@ class CredentialManagerNode(Node):
                         or os.environ.get(f"{prefix}DATABASE"),
                     }
 
-        elif self.credential_type == "basic_auth":
+        elif credential_type == "basic_auth":
             for prefix in prefixes:
                 username = os.environ.get(f"{prefix}USERNAME") or os.environ.get(
                     f"{prefix}USER"
@@ -344,18 +354,34 @@ class CredentialManagerNode(Node):
 
         return None
 
-    def _validate_credential(self, credential: Dict[str, Any]) -> bool:
-        """Validate credential format based on type."""
-        if not self.validate_on_fetch:
+    def _validate_credential(
+        self,
+        credential: Dict[str, Any],
+        credential_type: Optional[str] = None,
+        validate_on_fetch: Optional[bool] = None,
+    ) -> bool:
+        """Validate credential format based on type.
+
+        Args:
+            credential: The fetched credential data.
+            credential_type: Type whose patterns are applied. Defaults to the
+                construction-time type.
+            validate_on_fetch: Whether to validate at all. Defaults to the
+                construction-time setting.
+        """
+        if validate_on_fetch is None:
+            validate_on_fetch = self.validate_on_fetch
+        if not validate_on_fetch:
             return True
 
-        patterns = self._validation_patterns.get(self.credential_type)
+        credential_type = credential_type or self.credential_type
+        patterns = self._validation_patterns.get(credential_type)
         if not patterns:
             return True  # No validation for custom type
 
         if isinstance(patterns, str):
             # Single pattern (e.g., api_key)
-            value = credential.get(self.credential_type) or credential.get("value")
+            value = credential.get(credential_type) or credential.get("value")
             if value and re.match(patterns, value):
                 return True
         elif isinstance(patterns, dict):
@@ -385,6 +411,23 @@ class CredentialManagerNode(Node):
         """
         Fetch and validate credentials from configured sources.
 
+        Every argument below may be supplied per execution to override the value
+        fixed at construction, which is what makes them real parameters rather
+        than decoration. Before issue #2108 this method took ``**inputs`` and
+        read NONE of it -- it used ``self.credential_name`` unconditionally, so
+        ``execute(credential_name=...)`` silently fetched a different credential
+        than the caller named (``zero-tolerance.md`` Rule 3c: a documented kwarg
+        consumed by no branch). They are declared in :meth:`get_parameters` too,
+        because the base class drops any keyword it does not find there --
+        honouring them without declaring them would leave them just as inert.
+
+        Args:
+            credential_name: Name of the credential to fetch. Defaults to the
+                construction-time value.
+            credential_type: Type used for validation and env-var probing.
+            credential_sources: Ordered sources to try.
+            validate_on_fetch: Whether to validate the fetched credential.
+
         Returns:
             Dict containing:
             - credentials: The fetched credential data
@@ -392,10 +435,30 @@ class CredentialManagerNode(Node):
             - validated: Whether credentials passed validation
             - masked_display: Masked version for logging
             - metadata: Additional information about the credentials
+
+        Raises:
+            ValueError: The credential was not found in any configured source.
         """
-        # Check cache first
-        if self._is_cache_valid(self.credential_name):
-            cached = self._cache[self.credential_name]
+        # Per-execution overrides. `is not None` rather than `or`, so an
+        # explicit falsy value is honoured instead of silently falling back.
+        credential_name = inputs.get("credential_name")
+        if credential_name is None:
+            credential_name = self.credential_name
+        credential_type = inputs.get("credential_type")
+        if credential_type is None:
+            credential_type = self.credential_type
+        credential_sources = inputs.get("credential_sources")
+        if credential_sources is None:
+            credential_sources = self.credential_sources
+        validate_on_fetch = inputs.get("validate_on_fetch")
+        if validate_on_fetch is None:
+            validate_on_fetch = self.validate_on_fetch
+
+        # Check cache first. Keyed on the EFFECTIVE name: keying on the
+        # construction-time one would serve worker A's credential to a call that
+        # asked for worker B's.
+        if self._is_cache_valid(credential_name):
+            cached = self._cache[credential_name]
             return {
                 "credentials": cached["credentials"],
                 "source": cached["source"],
@@ -416,10 +479,15 @@ class CredentialManagerNode(Node):
             "azure_keyvault": self._fetch_from_azure_keyvault,
         }
 
-        for src in self.credential_sources:
+        for src in credential_sources:
             if src in source_methods:
                 try:
-                    result = source_methods[src](self.credential_name)
+                    if src == "env":
+                        result = self._fetch_from_env(
+                            credential_name, credential_type=credential_type
+                        )
+                    else:
+                        result = source_methods[src](credential_name)
                     if result:
                         credentials = result
                         source = src
@@ -430,17 +498,21 @@ class CredentialManagerNode(Node):
                 except Exception as e:
                     logger.debug(
                         f"Credential source '{src}' failed for "
-                        f"'{self.credential_name}': {e}"
+                        f"'{credential_name}': {e}"
                     )
                     continue
 
         if not credentials:
             raise ValueError(
-                f"Credential '{self.credential_name}' not found in any configured source"
+                f"Credential '{credential_name}' not found in any configured source"
             )
 
         # Validate credentials
-        validated = self._validate_credential(credentials)
+        validated = self._validate_credential(
+            credentials,
+            credential_type=credential_type,
+            validate_on_fetch=validate_on_fetch,
+        )
 
         # Create masked display version
         masked_display = {}
@@ -464,7 +536,7 @@ class CredentialManagerNode(Node):
             "validated": validated,
             "masked_display": masked_display,
             "metadata": {
-                "credential_type": self.credential_type,
+                "credential_type": credential_type,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
                 "rotation_detected": False,
             },
@@ -472,14 +544,58 @@ class CredentialManagerNode(Node):
 
         # Cache if enabled
         if self.cache_duration_seconds:
-            self._cache[self.credential_name] = result
-            self._cache_timestamps[self.credential_name] = datetime.now(timezone.utc)
+            self._cache[credential_name] = result
+            self._cache_timestamps[credential_name] = datetime.now(timezone.utc)
 
         return result
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
-        """No input parameters required."""
-        return {}
+        """Per-execution overrides for the construction-time configuration.
+
+        These MUST be declared here to have any effect. ``Node.execute`` drops
+        every keyword it cannot find in this mapping -- when it returned ``{}``,
+        ``execute(credential_name="x")`` was stripped before ``run`` was called
+        and the node quietly fetched whatever it was constructed with. That is
+        the ``zero-tolerance.md`` Rule 3c half of issue #2108.
+
+        All are optional: omitting one keeps the construction-time value, so
+        ``execute()`` with no arguments behaves exactly as before.
+        """
+        return {
+            "credential_name": NodeParameter(
+                name="credential_name",
+                type=str,
+                required=False,
+                description=(
+                    "Credential to fetch for this execution. Defaults to the "
+                    "name given at construction."
+                ),
+            ),
+            "credential_type": NodeParameter(
+                name="credential_type",
+                type=str,
+                required=False,
+                description=(
+                    "Credential type deciding which environment variables are "
+                    "probed and which validation patterns apply."
+                ),
+            ),
+            "credential_sources": NodeParameter(
+                name="credential_sources",
+                type=list,
+                required=False,
+                description=(
+                    "Ordered sources to try: env, file, vault, aws_secrets, "
+                    "azure_keyvault."
+                ),
+            ),
+            "validate_on_fetch": NodeParameter(
+                name="validate_on_fetch",
+                type=bool,
+                required=False,
+                description="Whether to validate the credential after fetching.",
+            ),
+        }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define output parameters."""

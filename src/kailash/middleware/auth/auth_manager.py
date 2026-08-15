@@ -42,6 +42,7 @@ from ...nodes.security import (
 )
 from ...nodes.transform import DataTransformer
 from ...utils.http_errors import safe_http_detail
+from .api_keys import APIKeyRecord, APIKeyStore, InMemoryAPIKeyStore, hash_api_key
 from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 
 logger = logging.getLogger(__name__)
@@ -62,14 +63,22 @@ class MiddlewareAuthManager:
     Authentication manager using SDK security nodes.
 
     Provides:
-    - JWT token management with CredentialManagerNode
-    - API key rotation with RotatingCredentialNode
+    - JWT token management with revocation via ``TokenRevocationStore``
+    - API key issue/verify/revoke via ``APIKeyStore`` (keys stored hashed)
     - Permission checking with PermissionCheckNode
     - Security event logging with SecurityEventNode
     - Audit trail with AuditLogNode
 
     This replaces manual JWT handling with SDK components for better
     security, performance, and consistency.
+
+    Note:
+        The API-key methods do NOT go through ``CredentialManagerNode``, and
+        the earlier claim that they did was the defect in issue #2108: that node
+        **fetches** credentials from the environment, a file, or a vault, and has
+        no write path -- so no key could be issued, and its return dict has no
+        ``success`` key, so no key could verify either. Issued keys live in an
+        :class:`~kailash.middleware.auth.api_keys.APIKeyStore`.
     """
 
     def __init__(
@@ -81,6 +90,7 @@ class MiddlewareAuthManager:
         database_url: Optional[str] = None,
         enable_blacklist: bool = True,
         revocation_store: Optional[TokenRevocationStore] = None,
+        api_key_store: Optional[APIKeyStore] = None,
     ):
         """
         Initialize SDK Auth Manager.
@@ -103,6 +113,15 @@ class MiddlewareAuthManager:
                 distributed cache) implementing :class:`TokenRevocationStore` so
                 revocation propagates to every worker. Ignored when
                 ``enable_blacklist`` is False.
+            api_key_store: Backend holding issued API keys (issue #2108). When
+                ``enable_api_keys`` is True and this is omitted, a process-local
+                :class:`~kailash.middleware.auth.api_keys.InMemoryAPIKeyStore`
+                is used -- keys issued through one worker are unknown to the
+                others, which REFUSES them (fail-closed) rather than granting
+                anything. Supply a shared
+                :class:`~kailash.middleware.auth.api_keys.APIKeyStore` (Redis,
+                database, distributed cache) to issue keys usable across every
+                worker. Ignored when ``enable_api_keys`` is False.
         """
         self.token_expiry_hours = token_expiry_hours
         self.enable_api_keys = enable_api_keys
@@ -117,6 +136,14 @@ class MiddlewareAuthManager:
         self._revocation_store: Optional[TokenRevocationStore] = None
         if enable_blacklist:
             self._revocation_store = revocation_store or InMemoryTokenRevocationStore()
+
+        # Issued API keys (issue #2108). Held only when the feature is enabled,
+        # so `enable_api_keys=False` cannot leave a store that nothing writes to
+        # and nothing reads from. Process-local by default; see the constructor
+        # docstring for why that direction is fail-CLOSED.
+        self._api_key_store: Optional[APIKeyStore] = None
+        if enable_api_keys:
+            self._api_key_store = api_key_store or InMemoryAPIKeyStore()
 
         # Initialize SDK security nodes
         self._initialize_security_nodes(secret_key or "", database_url or "")
@@ -358,40 +385,62 @@ class MiddlewareAuthManager:
             )
 
     async def create_api_key(
-        self, user_id: str, key_name: str, permissions: Optional[List[str]] = None
+        self,
+        user_id: str,
+        key_name: str,
+        permissions: Optional[List[str]] = None,
+        expires_at: Optional[datetime] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
-        Create API key using RotatingCredentialNode.
+        Issue an API key and record it in the API key store.
+
+        The plaintext key is returned HERE AND ONLY HERE. Only its SHA-256
+        digest is stored, so it cannot be recovered from the store, a log, or a
+        backup -- a lost key is reissued, never looked up.
 
         Args:
-            user_id: User identifier
-            key_name: Name for the API key
-            permissions: List of permissions
+            user_id: User identifier the key authenticates as
+            key_name: Human-readable name for the API key
+            permissions: List of permissions granted to bearers of this key
+            expires_at: Optional expiry; after it the key fails verification
+            metadata: Free-form data carried through verification
 
         Returns:
-            API key string
+            The plaintext API key string.
+
+        Raises:
+            HTTPException: API keys are disabled (400), or the store rejected
+                the write (500).
         """
-        if not self.enable_api_keys:
+        if not self.enable_api_keys or self._api_key_store is None:
             raise HTTPException(status_code=400, detail="API keys are disabled")
 
-        # Generate a secure API key
+        # Generate a secure API key. `token_urlsafe` is ASCII, which keeps the
+        # key presentable through the header path that rejects non-ASCII (#2114).
         api_key = f"sk_{secrets.token_urlsafe(32)}"
 
-        # Store API key metadata using credential manager
-        result = self.credential_manager.execute(
-            operation="store_credential",
-            credential_name=api_key,
-            credential_data={
-                "user_id": user_id,
-                "key_name": key_name,
-                "permissions": permissions or [],
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "api_key": api_key,
-            },
+        record = APIKeyRecord(
+            user_id=user_id,
+            key_name=key_name,
+            permissions=list(permissions or []),
+            expires_at=expires_at,
+            metadata=dict(metadata or {}),
         )
 
-        if not result.get("success", False):
-            raise HTTPException(status_code=500, detail="Failed to create API key")
+        try:
+            self._api_key_store.store(key_hash=hash_api_key(api_key), record=record)
+        except Exception as e:
+            # A store that refused the write has NOT issued a key. Returning the
+            # plaintext anyway would hand the caller a credential that can never
+            # authenticate -- the shape this whole change exists to remove.
+            self._emit_security_event(
+                "api_key_creation_failed", "HIGH", {"error": type(e).__name__}
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=safe_http_detail(e, logger=logger, context="create API key"),
+            ) from e
 
         # Audit log
         if self.enable_audit:
@@ -407,40 +456,82 @@ class MiddlewareAuthManager:
 
     async def verify_api_key(self, api_key: str) -> Dict[str, Any]:
         """
-        Verify API key using SDK nodes.
+        Verify an API key against the issued-key store.
 
         Args:
-            api_key: API key string
+            api_key: API key string as presented by the caller
 
         Returns:
-            API key metadata including user_id and permissions
+            The key's record as a dict, with ``user_id`` and ``permissions`` at
+            the top level -- which is what
+            :meth:`get_current_user_dependency` reads to build the principal.
 
         Raises:
-            HTTPException: If API key is invalid
+            HTTPException: API keys are disabled (400), or the key is unknown,
+                revoked, or expired (401).
         """
-        if not self.enable_api_keys:
+        if not self.enable_api_keys or self._api_key_store is None:
             raise HTTPException(status_code=400, detail="API keys are disabled")
 
         try:
-            # Verify using credential manager since rotating credential node doesn't have verify
-            result = self.credential_manager.execute(
-                operation="get_credential", credential_name=api_key
-            )
-
-            if not result.get("success", False):
-                raise HTTPException(status_code=401, detail="Invalid API key")
-
-            credential_data = result.get("credential", {})
-            return credential_data.get("metadata", {})
-
-        except HTTPException:
-            raise
+            record = self._api_key_store.lookup(key_hash=hash_api_key(api_key))
         except Exception as e:
-            # Log security event (best-effort — never lets logging break the 401).
+            # A store failure is not an authentication. Fail CLOSED and record
+            # it: a backend outage must never widen access.
             self._emit_security_event(
-                "api_key_verification_failed", "MEDIUM", {"error": str(e)}
+                "api_key_verification_failed", "MEDIUM", {"error": type(e).__name__}
+            )
+            raise HTTPException(status_code=401, detail="Invalid API key") from e
+
+        # An unknown key, a revoked one (dropped from the store), and an expired
+        # one are the same answer to the caller: no principal. Distinguishing
+        # them in the response would tell an anonymous prober which of its
+        # guesses had once been a real key.
+        if record is None or record.is_expired():
+            self._emit_security_event(
+                "api_key_verification_failed",
+                "MEDIUM",
+                {"reason": "unknown, revoked, or expired key"},
             )
             raise HTTPException(status_code=401, detail="Invalid API key")
+
+        return record.to_dict()
+
+    async def revoke_api_key(self, api_key: str) -> bool:
+        """
+        Revoke an issued API key so subsequent verification rejects it.
+
+        With a shared :class:`~kailash.middleware.auth.api_keys.APIKeyStore`
+        this propagates to every worker sharing it; with the default in-memory
+        store it is process-local.
+
+        Args:
+            api_key: The plaintext key to revoke.
+
+        Returns:
+            True if a key was present and is now revoked; False if the key was
+            already unknown (which is not an error -- the end state is the same).
+
+        Raises:
+            HTTPException: API keys are disabled (400).
+        """
+        if not self.enable_api_keys or self._api_key_store is None:
+            raise HTTPException(status_code=400, detail="API keys are disabled")
+
+        key_hash = hash_api_key(api_key)
+        record = self._api_key_store.lookup(key_hash=key_hash)
+        revoked = self._api_key_store.revoke(key_hash=key_hash)
+
+        if revoked and self.enable_audit:
+            self.audit_logger.execute(
+                user_id=record.user_id if record else "unknown",
+                action="revoke_api_key",
+                resource_type="api_key",
+                resource_id=record.key_name if record else "unknown",
+                details={"revoked": True},
+            )
+
+        return revoked
 
     async def check_permission(
         self, user_id: str, permission: str, resource: Optional[Dict[str, Any]] = None  # type: ignore[assignment]

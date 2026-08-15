@@ -15,6 +15,8 @@ Features:
 - Audit logging
 """
 
+# Import without circular dependencies
+from .api_keys import APIKeyRecord, APIKeyStore, InMemoryAPIKeyStore, hash_api_key
 from .exceptions import (
     AuthenticationError,
     InvalidTokenError,
@@ -22,8 +24,6 @@ from .exceptions import (
     TokenBlacklistedError,
     TokenExpiredError,
 )
-
-# Import without circular dependencies
 from .jwt_auth import JWTAuthManager
 from .models import AuthenticationResult, JWTConfig, TokenPair, TokenPayload, UserClaims
 from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
@@ -56,6 +56,11 @@ __all__ = [
     # Token revocation
     "TokenRevocationStore",
     "InMemoryTokenRevocationStore",
+    # API keys (issue #2108)
+    "APIKeyRecord",
+    "APIKeyStore",
+    "InMemoryAPIKeyStore",
+    "hash_api_key",
     # Exceptions
     "AuthenticationError",
     "TokenExpiredError",

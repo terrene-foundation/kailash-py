@@ -77,12 +77,26 @@ def reset_failure_memo():
     assertion would go green for the wrong reason as soon as any earlier test in
     the same process had already spent that one traceback -- the assertion would
     stop discriminating between a fixed validator and an unfixed one.
-    """
-    from kailash.trust.auth.asgi import _reset_bounded_failures
 
-    _reset_bounded_failures()
+    The symbol is resolved defensively ON PURPOSE. It does not exist before the
+    fix, and an autouse fixture that raised on it would turn every test in this
+    file into a setup ERROR against the pre-fix tree -- destroying the
+    behavioural RED (a traceback per request) these tests exist to measure and
+    replacing it with an import failure, which proves nothing. Absent the
+    symbol there is no memo to reset, so skipping the reset is exactly right.
+    """
+    try:
+        from kailash.trust.auth.asgi import _reset_bounded_failures
+    except ImportError:
+        reset = None
+    else:
+        reset = _reset_bounded_failures
+
+    if reset:
+        reset()
     yield
-    _reset_bounded_failures()
+    if reset:
+        reset()
 
 
 @pytest.fixture
