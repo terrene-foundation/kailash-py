@@ -692,7 +692,12 @@ result = {
         differences = []
 
         def compare_recursive(base_obj, curr_obj, path=""):
-            if type(base_obj) != type(curr_obj):
+            # `is not` rather than `!=`: `type()` returns the exact class
+            # object, and classes are singletons, so identity is what this
+            # always meant -- `!=` only differs for a metaclass overriding
+            # `__eq__`, which would make a "type changed" report meaningless
+            # anyway (ruff E721).
+            if type(base_obj) is not type(curr_obj):
                 differences.append(
                     {
                         "path": path,
