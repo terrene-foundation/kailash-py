@@ -221,16 +221,23 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
 
     assert asyncio.get_running_loop() is not None  # precondition for the bridge
 
+    # The sleep is kept SHORT on purpose. PythonCodeNode executes inside
+    # ``kailash.security.memory_limit_guard``, which applies a PROCESS-WIDE
+    # RLIMIT_AS ceiling for the duration of the guarded block. An abandoned
+    # bridge thread therefore holds that ceiling over every test that runs
+    # while it is still sleeping — which is #2078's failure mode, re-created
+    # by this test's own fixture. A 5s sleep against a 1s bound proves the
+    # abandonment with a window this test can then drain.
     builder = WorkflowBuilder()
     builder.add_node(
         "PythonCodeNode",
         "blocker",
-        {"code": "import time\ntime.sleep(25)\nresult = {'done': True}"},
+        {"code": "import time\ntime.sleep(5)\nresult = {'done': True}"},
     )
     workflow = builder.build()
     workflow.name = "issue_2081_blocking_workflow"
 
-    runtime = LocalRuntime(sync_bridge_timeout=2)
+    runtime = LocalRuntime(sync_bridge_timeout=1)
 
     started = time.monotonic()
     with pytest.raises(RuntimeExecutionError, match="issue_2081_blocking_workflow"):
@@ -238,13 +245,12 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
     elapsed = time.monotonic() - started
 
     assert elapsed < 20, (
-        f"execute() took {elapsed:.1f}s against a 2s sync_bridge_timeout — the "
+        f"execute() took {elapsed:.1f}s against a 1s sync_bridge_timeout — the "
         "bridge join is still unbounded (#2081)"
     )
     # The abandoned bridge thread is a daemon, so it cannot wedge interpreter
-    # shutdown once we have given up on it. If it were not, this test would
-    # pass and then hang the whole pytest process at exit for the remaining
-    # ~23s of the node's sleep.
+    # shutdown once we have given up on it. If it were not, the whole pytest
+    # process would block at exit for the remainder of the node's sleep.
     bridges = [
         t
         for t in threading.enumerate()
@@ -256,6 +262,12 @@ async def test_execute_from_inside_a_running_loop_does_not_hang_forever():
         "joined by threading._shutdown at interpreter exit, which re-creates "
         "the unbounded wait at process teardown"
     )
+    # Drain before returning. The daemon assertion above is what pins the
+    # product behaviour; leaving the thread running would additionally leak
+    # this test's process-wide memory ceiling into whatever runs next.
+    for bridge in bridges:
+        bridge.join(timeout=30)
+        assert not bridge.is_alive(), "abandoned bridge thread failed to drain"
 
 
 def test_sync_bridge_timeout_rejects_a_non_positive_bound():
