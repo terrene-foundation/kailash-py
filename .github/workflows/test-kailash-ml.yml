@@ -235,7 +235,12 @@ jobs:
         run: |
           uv venv .venv
           # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-ml/tests/ -m 'dl or deep_learning'
+          # Selection: packages/kailash-ml/tests/ -m 'dl'  (updated by #2076;
+          # was 'dl or deep_learning', which selected zero tests — see the
+          # Test DL step below. The module-import-count measurement below is
+          # UNCHANGED by that rename: naming the whole tests/ dir imports
+          # every module at collection time regardless of the -m expression's
+          # text, so the sibling counts still hold.)
           #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
           #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
           #   kailash_ml    -> 139          (package under test, editable)
@@ -399,7 +404,11 @@ jobs:
           uv venv .venv
           # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
           # Selection: packages/kailash-ml/tests/unit/ + tests/integration/
-          #            -m 'cuda or gpu'
+          #            -m 'cuda'  (updated by #2076; was 'cuda or gpu', which
+          #            selected zero tests — see the Test step below. The
+          #            module-import-count measurement is UNCHANGED: naming
+          #            the same two directories imports the same modules at
+          #            collection time regardless of the -m expression.)
           #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
           #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
           #   kailash_ml    -> 139          (package under test, editable)
@@ -497,8 +506,11 @@ jobs:
         run: |
           uv venv .venv
           # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-ml/tests/
-          #            -m '(dl or deep_learning) and (cuda or gpu)'
+          # Selection: packages/kailash-ml/tests/ -m 'dl'  (updated by #2076;
+          # was '(dl or deep_learning) and (cuda or gpu)', which selected
+          # zero tests — see the Test step below. The module-import-count
+          # measurement is UNCHANGED: naming the whole tests/ dir imports the
+          # same modules at collection time regardless of the -m expression.)
           #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
           #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
           #   kailash_ml    -> 139          (package under test, editable)

@@ -25,9 +25,11 @@ name: Test kailash-kaizen
 #      NO invocation above, so every regression test written for kaizen
 #      since the package existed had never been collected in CI. Issue
 #      #2074 cited a naive `grep -c "^def test_"` estimate of 107 files /
-#      855 tests; the real pytest count, measured, is 109 files / 1654 tests
-#      collected (the grep pattern undercounts parametrized cases and
-#      nested-class methods — do not re-cite the issue's estimate).
+#      855 tests; the real pytest count, measured, is 1654 tests collected
+#      from 109 *.py files (107 test_*.py + __init__.py + one non-test
+#      helper module, _issue_2014_isolation_hooks.py — the grep pattern
+#      undercounts parametrized cases and nested-class methods regardless;
+#      do not re-cite the issue's 855 estimate).
 #      Uses the SAME broad exclusion set as invocation 2 (regression/ mixes
 #      infra-free and infra-requiring tests, same shape as tests/unit/<tier>).
 #      Baseline established BEFORE gating, per the issue's own instruction
@@ -355,8 +357,8 @@ jobs:
             --timeout=30 --maxfail=50 -q
 
       - name: Test (regression suite, infra-free)
-        # Issue #2074: tests/regression/ (109 files / 1654 tests collected,
-        # measured — see header comment) appeared in NEITHER invocation
+        # Issue #2074: tests/regression/ (1654 tests collected, measured —
+        # see header comment) appeared in NEITHER invocation
         # above and had therefore never run in CI. Same broad exclusion set
         # as the expanded-tiers step above — this directory mixes infra-free
         # gates with integration/e2e/provider-credentialed tests, same shape
