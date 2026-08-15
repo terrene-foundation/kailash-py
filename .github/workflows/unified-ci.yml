@@ -55,7 +55,11 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  # Security review (this PR): downgraded from `write`. The only
+  # pull-requests API call in this file is `github.rest.pulls.list` in
+  # check-duplicate (read-only); nothing here creates/updates a PR,
+  # comment, or review, so `write` was unused scope.
+  pull-requests: read
 
 concurrency:
   # Improved concurrency: Group by PR number for PR events, unique run_id for push events
