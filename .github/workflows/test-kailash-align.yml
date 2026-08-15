@@ -12,12 +12,6 @@ on:
       - "packages/kailash-align/**"
       - ".github/workflows/test-kailash-align.yml"
   workflow_dispatch:
-    inputs:
-      run-gpu:
-        description: "Include GPU tests (requires GPU runner)"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -149,55 +143,26 @@ jobs:
             --cov-fail-under=50 \
             -q --timeout=30
 
-  test-gpu:
-    name: GPU Tests (optional)
-    needs: version-check
-    # workflow_dispatch + run-gpu opt-in only; release/v* exclusion is
-    # implicit (release branches don't carry workflow_dispatch inputs)
-    # but kept explicit per ci-runners.md MUST Rule 8.
-    if: >-
-      github.event_name == 'workflow_dispatch' && inputs.run-gpu == true && !startsWith(github.head_ref, 'release/')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Install kailash-align[dev,rlhf]
-        run: |
-          uv venv .venv
-          uv pip install -e "." --python .venv/bin/python
-          # See unit-test install step — kailash_ml.rl.align_adapter is
-          # unreleased; install editable from the source tree.
-          #
-          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-align/tests/ -m 'gpu'
-          #   kailash_ml    -> 95 modules  EXERCISED -> installed editable below
-          #   dataflow      -> 0  modules  NOT exercised -> not installed
-          #   kailash_align -> 23          (package under test, editable)
-          #   kailash       -> 213         editable, this tree
-          # CAVEAT recorded at the same time: `-m 'gpu'` currently selects ZERO
-          # tests (485 deselected) because no test in packages/kailash-align/
-          # carries a `gpu` marker, so pytest exits 5 (no tests collected) and
-          # this job FAILS whenever it is dispatched. Tracked in #2076. The
-          # sibling determination above is independent of it.
-          uv pip install -e "packages/kailash-ml" --python .venv/bin/python
-          uv pip install -e "packages/kailash-align[dev,rlhf]" --python .venv/bin/python
-
-      - name: Test GPU
-        timeout-minutes: 25
-        run: |
-          .venv/bin/python -m pytest \
-            packages/kailash-align/tests/ \
-            -m 'gpu' \
-            --maxfail=5 -q --timeout=300
+  # ISSUE #2076 — the `test-gpu` job lived HERE and is REMOVED, tracked by
+  # #2135. `-m 'gpu'` selected ZERO tests (485 collected, 485 deselected,
+  # pytest exit 5) because no test in packages/kailash-align/ ever carried
+  # the `gpu` marker — it is registered in pyproject.toml's
+  # [tool.pytest.ini_options] markers ("gpu: Tests requiring GPU (slow,
+  # skipped by default)") but was declared aspirationally and never applied.
+  # `grep -rn "cuda.is_available\|skipif.*cuda\|skipif.*gpu" packages/
+  # kailash-align/tests/` returns nothing; every torch-touching test in the
+  # package is explicitly documented CPU-only (tests/test_pipeline.py:3
+  # "unit tests -- no GPU, no model loading"). A job whose selector can
+  # only ever match nothing is a stub gate — removed rather than shipped
+  # degraded, same disposition as `test-root-regression` in
+  # unified-ci.yml (#2081/#2002). Restore it, along with the `run-gpu`
+  # workflow_dispatch input, once #2135 lands real GPU-hardware tests
+  # (LoRA/DPO training step, bf16 mixed precision, device placement) —
+  # follow kailash-ml's `test-cuda` pattern (`@pytest.mark.skipif(not
+  # torch.cuda.is_available(), ...)` alongside the already-registered
+  # `@pytest.mark.gpu`) in `.github/workflows/test-kailash-ml.yml`. Do not
+  # re-derive; restore the removed job body from this file's git history
+  # (the PR that closed #2076) once tests exist to select.
 
   inter-package:
     name: Inter-Package (align + dev ML)

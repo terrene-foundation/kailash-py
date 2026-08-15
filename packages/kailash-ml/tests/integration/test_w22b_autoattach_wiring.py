@@ -53,6 +53,10 @@ from kailash_ml.engines.model_registry import ModelRegistry
 from kailash_ml.engines.training_pipeline import ModelSpec, TrainingPipeline
 from kailash_ml.tracking.runner import _current_run
 
+# Issue #2076: Lightning auto-attach wiring is a deep-learning test —
+# tags it into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
+
 # ----------------------------------------------------------------------
 # Tiny Lightning module wired into kailash_ml._w22b_tiny via sys.modules
 # ----------------------------------------------------------------------

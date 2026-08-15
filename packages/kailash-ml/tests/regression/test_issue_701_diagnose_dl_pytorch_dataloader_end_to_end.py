@@ -37,6 +37,7 @@ import pytest
 
 @pytest.mark.regression
 @pytest.mark.integration
+@pytest.mark.dl  # Issue #2076: tags into the `test-dl` CI job's selection.
 def test_diagnose_dl_pytorch_dataloader_end_to_end() -> None:
     """DOCS-EXACT: diagnose(model, kind='dl', data=loader) consumes the loader.
 
@@ -47,8 +48,9 @@ def test_diagnose_dl_pytorch_dataloader_end_to_end() -> None:
     (``n_batches > 0``, ``n_samples == 64``).
     """
     torch = pytest.importorskip("torch")
-    from kailash_ml import diagnose
     from torch.utils.data import DataLoader, TensorDataset
+
+    from kailash_ml import diagnose
 
     # Deterministic seed — rules/testing.md § Rules: no random data
     # without seeds. The DataLoader's `shuffle=False` default plus a

@@ -28,10 +28,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from kailash_ml.autolog import _distribution, autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
 
-pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio, pytest.mark.dl]
 
 
 @pytest.fixture

@@ -20,6 +20,10 @@ import pytest
 pytest.importorskip("torch")
 pytest.importorskip("onnxruntime")
 
+# Issue #2076: torch ONNX round-trip is a deep-learning test — tags it
+# into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
+
 
 class _TinyMLP:
     """Placeholder to satisfy naming rules — real class defined in test body."""
@@ -31,6 +35,7 @@ def test_torch_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     import onnxruntime as ort
     import torch
     import torch.nn as nn
+
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)
@@ -114,6 +119,7 @@ def test_torch_onnx_roundtrip_dynamic_batch_size(tmp_path: Path) -> None:
     import onnxruntime as ort
     import torch
     import torch.nn as nn
+
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)

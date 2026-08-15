@@ -21,10 +21,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from kailash_ml.autolog import autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
 
-pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio, pytest.mark.dl]
 
 
 @pytest.fixture

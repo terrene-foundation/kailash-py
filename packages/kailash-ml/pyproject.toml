@@ -98,6 +98,11 @@ dl = [
     "torchaudio>=2.2",
     "timm>=1.0",
     "transformers>=4.40",
+    # transformers.Trainer hard-requires accelerate>=1.1.0 for its PyTorch
+    # backend (raises ImportError at _setup_devices otherwise) — surfaced
+    # by wiring the test-dl CI selector in for the first time (issue
+    # #2076); transformers itself does not declare it as a hard dep.
+    "accelerate>=1.1.0",
     # Plotly is ALSO pinned here so the kailash_ml.diagnostics.DLDiagnostics
     # plot_*() methods install cleanly under `pip install kailash-ml[dl]`
     # regardless of any future decision to demote plotly from base deps.
@@ -248,6 +253,8 @@ markers = [
     "regression: Permanent regression tests (never delete; see rules/testing.md)",
     "invariant: Numeric/structural invariant guards (per rules/refactor-invariants.md)",
     "online_store: Online feature-store (Redis) tests — live path needs REDIS_URL (FM2 Wave-3 Shard C)",
+    "dl: Deep-learning tests (torch/lightning/transformers) — selected by the test-dl CI job (issue #2076)",
+    "cuda: Tests that hard-require real CUDA hardware (skipped when unavailable) — selected by the test-cuda CI job (issue #2076)",
 ]
 # Scoped warning filters — each entry has a documented origin + disposition
 # per rules/observability.md MUST Rule 5. Unfiltered suite emits ~240

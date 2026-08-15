@@ -252,17 +252,25 @@ jobs:
 
       - name: Test DL
         timeout-minutes: 15
-        # CAVEAT (measured 2026-08-11): `-m 'dl or deep_learning'` currently
-        # selects ZERO tests — 2602 collected, 2602 deselected — because no
-        # test under packages/kailash-ml/ carries a `dl` or `deep_learning`
-        # marker, and neither name is registered in that package's
-        # [tool.pytest.ini_options] markers list. pytest then exits 5 (no tests
-        # collected), so this workflow_dispatch-only job FAILS whenever it is
-        # dispatched. Tracked in #2076.
+        # Issue #2076 FIX: `-m 'dl or deep_learning'` selected ZERO tests
+        # (2602 collected, 2602 deselected, pytest exit 5) because neither
+        # marker existed anywhere in the package or its
+        # [tool.pytest.ini_options] markers list — this dispatch-only job
+        # failed on every dispatch. Disposition: MARK the tests (not
+        # path-based — DL-relevant files are scattered across tests/unit/,
+        # tests/integration/, tests/integration/autolog/, and
+        # tests/regression/, not grouped under one directory). `dl` is now
+        # registered in packages/kailash-ml/pyproject.toml and applied to
+        # every torch/lightning/transformers test module (11 files).
+        # Verified: `-m dl` over packages/kailash-ml/tests/ collects
+        # 79/2606 (was 0/2602); `accelerate>=1.1.0` was ALSO added to the
+        # [dl] extra — wiring this selector in for the first time surfaced
+        # a real ImportError in transformers.Trainer's PyTorch backend,
+        # which requires accelerate but had it undeclared.
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \
-            -m 'dl or deep_learning' \
+            -m 'dl' \
             --maxfail=5 -q --timeout=120
 
   test-rl:
@@ -291,32 +299,43 @@ jobs:
         run: |
           uv venv .venv
           # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-ml/tests/ -m 'rl or reinforcement_learning'
-          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
-          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
-          #                    (tests/integration/rl/test_rl_align_cross_sdk_wiring.py
-          #                     imports kailash_align at module scope — this is
-          #                     the RL job, so that import is squarely on-path)
-          #   kailash_ml    -> 139          (package under test, editable)
-          #   kailash       -> 251          editable, this tree
-          # Both installed editable below: naming the whole tests/ dir imports
-          # every module before -m deselects, so a PyPI-resolved sibling breaks
-          # collection.
+          # Selection (updated by issue #2076 — was a whole-tests/-tree
+          # marker selection matching zero tests; now path-based, scoped to
+          # the two directories that actually hold the RL suite):
+          #   packages/kailash-ml/tests/unit/rl/ packages/kailash-ml/tests/integration/rl/
+          #   -m 'not (slow or gpu or bench)'  (31 tests collected)
+          #   dataflow      -> 0  modules  NOT exercised (no rl/ file imports it,
+          #                    even at whole-tree collection — this narrowed
+          #                    selection makes that legible; NOT installed)
+          #   kailash_align -> EXERCISED, but only via `importlib` INSIDE test
+          #                    bodies (test_rl_align_cross_sdk_wiring.py), not
+          #                    at module-scope import time — installing it
+          #                    editable still changes real pass/skip outcomes
+          #                    (measured: 29 passed/2 skipped absent vs.
+          #                    30 passed/1 skipped installed), so it stays.
+          #   kailash_ml    -> package under test, editable
+          #   kailash       -> editable, this tree
           uv pip install -e "." --python .venv/bin/python
           uv pip install -e "packages/kailash-ml[rl,dev]" --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
           uv pip install -e "packages/kailash-align" --python .venv/bin/python
 
       - name: Test RL
         timeout-minutes: 15
-        # CAVEAT (measured 2026-08-11): `-m 'rl or reinforcement_learning'`
-        # selects ZERO tests (2602 deselected) — no such marker exists in the
-        # package. pytest exits 5, so this dispatch-only job fails on dispatch.
-        # Tracked in #2076.
+        # Issue #2076 FIX: `-m 'rl or reinforcement_learning'` over the whole
+        # tests/ tree selected ZERO tests (2602 deselected, pytest exit 5) —
+        # neither marker exists anywhere in the package, so this
+        # dispatch-only job failed on every dispatch. Disposition: PATH-BASED
+        # selection, not marking — the RL suite already lives entirely under
+        # two dedicated directories (tests/unit/rl/, tests/integration/rl/),
+        # so naming them directly is more precise than inventing an `rl`
+        # marker no other file needs. Verified: 31 tests collected (was 0);
+        # 30 passed, 1 skipped (an opt-in KAILASH_ML_RUN_TRL_E2E=1 test that
+        # downloads a real model — intentionally not force-enabled here).
         run: |
           .venv/bin/python -m pytest \
-            packages/kailash-ml/tests/ \
-            -m 'rl or reinforcement_learning' \
+            packages/kailash-ml/tests/unit/rl/ \
+            packages/kailash-ml/tests/integration/rl/ \
+            -m 'not (slow or gpu or bench)' \
             --maxfail=5 -q --timeout=120
 
   # ---------------------------------------------------------------------------
@@ -412,11 +431,23 @@ jobs:
 
       - name: Test CUDA-gated unit + integration tests
         timeout-minutes: 20
+        # Issue #2076 FIX: `-m 'cuda or gpu'` selected ZERO tests (2493
+        # collected, 2493 deselected, pytest exit 5) — neither marker was
+        # registered nor applied anywhere. Disposition: MARK the one test
+        # that genuinely hard-requires real CUDA hardware to exercise
+        # anything new — test_xgboost_cuda_fits_and_reports_cuda (already
+        # skipif'd on `not torch.cuda.is_available()`; every other
+        # cuda/gpu-string-matching test in the package tests CPU-only
+        # fallback/eviction LOGIC, not real hardware, so marking those would
+        # misrepresent what needs a GPU to mean anything). `cuda` is now
+        # registered in packages/kailash-ml/pyproject.toml; `gpu` dropped
+        # from the selector — no test in this package will ever carry it.
+        # Verified: `-m cuda` here collects 1/2493 (was 0/2493).
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/unit/ \
             packages/kailash-ml/tests/integration/ \
-            -m 'cuda or gpu' \
+            -m 'cuda' \
             --maxfail=5 -q --timeout=120
 
       - name: Post-run cleanup
@@ -480,15 +511,29 @@ jobs:
 
       - name: Test DL on CUDA (torch + GPU-backed tests)
         timeout-minutes: 35
-        # CAVEAT (measured 2026-08-11): this conjunction selects ZERO tests —
-        # neither operand's markers exist in the package. Tracked in #2076.
+        # Issue #2076 FIX: `(dl or deep_learning) and (cuda or gpu)` selected
+        # ZERO tests — neither operand existed as a marker, AND (measured
+        # after registering `dl`/`cuda`, see test-dl / test-cuda above) no
+        # single test in the package is tagged BOTH `dl` and `cuda`: the one
+        # genuinely hardware-gated test is XGBoost (gradient-boosted, not a
+        # neural net), not a torch/lightning test. A conjunction of the two
+        # correct markers would therefore still select nothing — same stub-
+        # gate defect, one layer deeper than the missing-marker case.
+        #
+        # Disposition: CHANGE the selector rather than delete the job. This
+        # job's stated purpose is "torch training on GPU" — that is
+        # meaningfully served by running the full `dl` suite (same 79 tests
+        # as test-dl) on a runner where `torch.cuda.is_available()` is
+        # actually True, which is DIFFERENT information than test-dl's
+        # CPU-only run: any DL code path that auto-detects/branches on real
+        # GPU presence (backend resolution, device placement) is only
+        # exercised here. Verified: `-m dl` collects 79/2606 (was 0/2606).
         # Masked today by `continue-on-error: true` (IT-1, runner not yet
-        # provisioned); it becomes a hard failure the moment that flag is
-        # removed, so fix #2076 BEFORE flipping.
+        # provisioned).
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \
-            -m '(dl or deep_learning) and (cuda or gpu)' \
+            -m 'dl' \
             --maxfail=5 -q --timeout=300
 
       - name: Post-run cleanup

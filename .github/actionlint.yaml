@@ -1,0 +1,9 @@
+# actionlint config — declares custom self-hosted runner labels so
+# `runs-on: [self-hosted, cuda, gpu]` (test-kailash-ml.yml test-cuda /
+# test-cuda-dl, gpu-smoke.yml) does not fire actionlint's runner-label
+# false positive. See docs/ci/self-hosted-runner.md for the runner
+# registration command that assigns exactly these labels.
+self-hosted-runner:
+  labels:
+    - cuda
+    - gpu
