@@ -461,8 +461,10 @@ jobs:
         # as the expanded-tiers step above — this directory mixes infra-free
         # gates with integration/e2e/provider-credentialed tests, same shape
         # as tests/unit/<tier>. Baseline established before wiring this in
-        # (per the issue's own instruction not to assume clean): 1288
-        # passed, 342 deselected, 24 xfailed, 0 failed.
+        # (per the issue's own instruction not to assume clean; see header
+        # comment for the determinism-fix history behind this number —
+        # earlier measurements here are stale, do not re-cite): 1221
+        # passed, 425 deselected, 8 xfailed, 0 failed.
         timeout-minutes: 10
         working-directory: packages/kailash-kaizen
         run: |
