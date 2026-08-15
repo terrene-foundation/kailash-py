@@ -263,9 +263,14 @@ class ConfigurationValidator:
             if param_name in self.valid_parameters:
                 param_def = self.valid_parameters[param_name]
 
-                # Type validation
+                # Type validation. `is not` rather than `!=`: every value in
+                # `valid_parameters[*]["type"]` is a builtin type object
+                # (`bool`, `int`, `str`, `dict`, `object`), and those are
+                # singletons, so identity is what this comparison always meant
+                # -- `!=` only differs for a metaclass overriding `__eq__`,
+                # which cannot reach this dict (ruff E721).
                 expected_type = param_def["type"]
-                if expected_type != object and not isinstance(
+                if expected_type is not object and not isinstance(
                     param_value, expected_type
                 ):
                     result.issues.append(
@@ -280,7 +285,7 @@ class ConfigurationValidator:
                     )
 
                 # Range validation for integers
-                if expected_type == int and isinstance(param_value, int):
+                if expected_type is int and isinstance(param_value, int):
                     if "min" in param_def and param_value < param_def["min"]:
                         result.issues.append(
                             ValidationIssue(
