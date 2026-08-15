@@ -50,7 +50,13 @@ class _StubTaskManager:
 
 
 def _server():
-    server = DashboardAPIServer(task_manager=_StubTaskManager())
+    # require_auth=False: this suite exercises the BROADCAST-TASK lifecycle,
+    # not the authentication gate #2112 added. The handlers below are invoked
+    # directly rather than over HTTP, so the middleware is not on the path
+    # anyway; the flag is what keeps construction from demanding a credential
+    # source. The gate itself is covered by
+    # tests/regression/test_issue_2112_dashboard_api_auth.py.
+    server = DashboardAPIServer(task_manager=_StubTaskManager(), require_auth=False)
     # Pre-set so ``dashboard.start_monitoring`` short-circuits instead of
     # spawning its real background THREAD -- the thread is not under test and
     # would outlive the test's event loop.

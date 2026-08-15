@@ -2,8 +2,17 @@
 
 A driver/transport error reaching a request handler carries a DSN, a token, or
 an internal path. Rendering it into the response body hands that to the CALLER
--- and on ``DashboardAPIServer`` the routes carry no auth dependency at all, so
-the caller is anyone who can reach the port.
+-- and on ``DashboardAPIServer`` the routes carried no authentication at all,
+so the caller was anyone who could reach the port.
+
+That last clause is no longer unconditionally true: #2112 gave
+``DashboardAPIServer`` the same fail-closed gate as the six surfaces of #2072
+(``src/kailash/visualization/api.py:141-266``, ``require_auth: bool = True``).
+The leak still matters and is still tested, because the gate is opt-OUT-able
+and because an authenticated low-privilege caller must not receive a DSN
+either. ``_client`` below therefore constructs with ``require_auth=False`` --
+the explicit opt-out, which is precisely the deployment where the original
+"anyone who can reach the port" threat model still holds.
 
 These are behavioral tests: they drive a real FastAPI app through a real
 ``TestClient`` and read the actual response body. A source grep asserting the
@@ -78,7 +87,14 @@ class _ExplodingTaskManager:
 
 
 def _client(exc: Exception) -> TestClient:
-    server = DashboardAPIServer(task_manager=_ExplodingTaskManager(exc))
+    # require_auth=False: this suite exercises ERROR-BODY SANITIZATION, not
+    # the authentication gate #2112 added, and it must reach the handler to
+    # read the 500 body. The opt-out is also the honest reproduction of the
+    # threat model below -- a deployment that declined the gate is exactly the
+    # one where "the caller is anyone who can reach the port" still holds.
+    server = DashboardAPIServer(
+        task_manager=_ExplodingTaskManager(exc), require_auth=False
+    )
     # raise_server_exceptions=False so a 500 comes back as a response to
     # inspect rather than re-raising into the test.
     return TestClient(server.app, raise_server_exceptions=False)

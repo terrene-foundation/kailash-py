@@ -50,7 +50,13 @@ class _StubTaskManager:
 
 
 def _server():
-    server = DashboardAPIServer(task_manager=_StubTaskManager())
+    # require_auth=False: this suite exercises the STOP handler's establishment
+    # that the broadcast task actually stopped, not the authentication gate
+    # #2112 added. The handler is invoked directly rather than over HTTP, so
+    # the middleware is not on the path; the flag is what keeps construction
+    # from demanding a credential source. The gate itself is covered by
+    # tests/regression/test_issue_2112_dashboard_api_auth.py.
+    server = DashboardAPIServer(task_manager=_StubTaskManager(), require_auth=False)
     server.dashboard._monitoring = True
     return server
 
