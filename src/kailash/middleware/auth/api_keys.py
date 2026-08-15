@@ -166,17 +166,38 @@ def derive_secret_digest(secret: str, salt: str) -> str:
         raise TypeError(f"secret must be a str, got {type(secret).__name__}")
     if not isinstance(salt, str):
         raise TypeError(f"salt must be a str, got {type(salt).__name__}")
-    # codeql[py/weak-sensitive-data-hashing] -- `secret` is a 256-bit CSPRNG
-    # token from `generate_api_key`, never a user-chosen password, so the
-    # offline guessing attack a password-safe KDF defends against does not
-    # apply. Adopting one would be a REGRESSION: this runs on every request
-    # including unauthenticated ones, so a ~10^2 ms KDF is a CPU-burn
-    # amplifier for an anonymous caller. Full proof and the two
-    # measured-refuted alternatives (keyed HMAC, sanitizer model): #2146.
-    digest = hmac.new(  # codeql[py/weak-sensitive-data-hashing]
+    # CodeQL reports `py/weak-sensitive-data-hashing` (security-severity high)
+    # on the call below, and the report is a FALSE POSITIVE that has no
+    # available suppression. Recorded here because the next reader will meet
+    # the red check before they meet #2146.
+    #
+    # Why the rule does not apply: `secret` is a 256-bit CSPRNG token from
+    # `generate_api_key`, never a user-chosen password, so the offline guessing
+    # attack a password-safe KDF defends against has nothing to work against.
+    # Adopting a KDF would be a REGRESSION, not a fix: this runs on every
+    # request including unauthenticated ones, so a ~10^2 ms KDF hands an
+    # anonymous caller a CPU-burn amplifier.
+    #
+    # THREE suppressions were tried and MEASURED not to work; none is left in
+    # place, because a marker that does nothing looks exactly like a fix and
+    # stops the next person from looking for the real one (the lesson
+    # `.github/codeql/sanitizers/sanitizers.model.yml` records about itself):
+    #   1. sanitizer-pack model -- `neutralModel` has no effect on an in-source
+    #      function and `summaryModel` kind `value` propagates taint. Refuted in
+    #      this repo already, on PR #2103.
+    #   2. keyed HMAC instead of a bare digest -- the alert simply moved from
+    #      `hashlib.sha256` to `hmac.new` (api_keys.py:117 -> :170).
+    #   3. an inline `# codeql[py/weak-sensitive-data-hashing]` comment -- the
+    #      alert persisted (:170 -> :177, shifted only by these comment lines).
+    #
+    # Renaming `secret` would likely clear it, since the rule keys on
+    # name-driven classification, and is deliberately NOT done: it changes no
+    # behaviour, makes this line less honest, and games a check that must keep
+    # firing for genuine password hashing elsewhere in this tree. Disposition
+    # and Rule 1b proof: #2146.
+    return hmac.new(
         salt.encode("utf-8"), secret.encode("utf-8"), hashlib.sha256
     ).hexdigest()
-    return digest
 
 
 def generate_salt() -> str:
