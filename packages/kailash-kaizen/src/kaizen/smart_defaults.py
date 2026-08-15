@@ -12,6 +12,7 @@ Part of ADR-020: Unified Agent API Architecture (Layer 1: Zero-Config)
 """
 
 import logging
+import sys
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
@@ -58,6 +59,27 @@ def _warn_observability_unavailable(subsystem: str, flag: str, detail: str) -> N
         flag,
         detail,
         flag,
+    )
+
+
+@lru_cache(maxsize=None)
+def _warn_checkpointing_unwritable(path: str, detail: str) -> None:
+    """Warn once that the checkpoint directory could not be created.
+
+    Reachable for the first time in #2111: the directory creation used to sit
+    below an import that always failed, so no filesystem error could ever
+    surface from it. A read-only or unwritable location must degrade to no
+    checkpointing rather than break agent construction, which is the same
+    disposition #2101 chose for the audit trail.
+    """
+    logger.warning(
+        "Checkpointing is enabled (enable_checkpointing=True) but the "
+        "checkpoint directory %r could not be created, so NO state will be "
+        "saved and no run will be resumable: %s. Point checkpoint_path at a "
+        "writable location, or set enable_checkpointing=False to disable it "
+        "deliberately and silence this warning.",
+        path,
+        detail,
     )
 
 
@@ -483,7 +505,23 @@ class SmartDefaultsManager:
         Logic:
         - If custom_checkpoint_manager provided → use it
         - If enable_checkpointing is False → no checkpointing
-        - Otherwise → FilesystemStorage with configured path
+        - Otherwise → StateManager over FilesystemStorage at the configured path
+
+        #2111 — this used to import ``kaizen.memory.checkpoint``, a module
+        that exists nowhere in the source tree, so the ``except ImportError``
+        fired on EVERY construction and ``enable_checkpointing=True`` silently
+        installed nothing.
+
+        The parts were mislocated rather than missing, so they are wired here
+        rather than the flag being made honest by raising — the disposition
+        #2084 reached for the sibling observability flags.
+        ``kaizen.core.autonomy.state`` provides both, and ``StateManager`` is
+        the right counterpart: it takes a ``StorageBackend`` (which
+        ``FilesystemStorage`` implements) and owns agent checkpoint / resume /
+        fork. The similarly-named ``CheckpointManager`` in
+        ``kailash.middleware.gateway`` is NOT interchangeable — it is a tiered
+        gateway cache whose ``storage`` argument is a ``DiskStorage``, so
+        ``FilesystemStorage`` does not even type-match it.
         """
         # Layer 3: Custom checkpoint manager override
         if config.has_custom_checkpointing():
@@ -496,35 +534,47 @@ class SmartDefaultsManager:
             return None
 
         # Layer 1: Smart defaults (filesystem storage)
+        from kaizen.core.autonomy.state import FilesystemStorage, StateManager
+
+        # `AgentConfig.checkpoint_interval` is documented in ITERATIONS, while
+        # `StateManager.checkpoint_interval` is in SECONDS -- same name,
+        # different unit. It therefore maps to `checkpoint_frequency`, and
+        # wiring it name-to-name would silently reinterpret "every 5
+        # iterations" as "every 5 seconds".
+        #
+        # The time-based cadence is switched OFF in both cases: `AgentConfig`
+        # exposes no seconds knob, so leaving StateManager's 60s default in
+        # place would checkpoint on a schedule the caller never asked for.
+        # `None` is documented as "checkpoint on demand only", which is both
+        # cadences disabled.
+        never = float("inf")
+        frequency = (
+            config.checkpoint_interval
+            if config.checkpoint_interval is not None
+            else sys.maxsize
+        )
+
         try:
-            from kaizen.memory.checkpoint import CheckpointManager, FilesystemStorage
-
-            # Ensure checkpoint directory exists
-            checkpoint_path = Path(config.checkpoint_path)
-            checkpoint_path.mkdir(parents=True, exist_ok=True)
-
+            # FilesystemStorage creates the directory itself; this is the
+            # first release in which that call is reachable, so it is also the
+            # first in which it can fail (read-only mount, no permission).
+            # Agent construction must degrade, not abort.
             storage = FilesystemStorage(config.checkpoint_path)
-            checkpoint_manager = CheckpointManager(storage)
-
-            self.logger.info(
-                f"Created checkpointing (filesystem: {config.checkpoint_path})"
-            )
-
-            return checkpoint_manager
-
-        except ImportError:
-            # NOTE (#2111): `kaizen.memory.checkpoint` does not exist anywhere
-            # in the source tree, so this except ALWAYS fires and
-            # `enable_checkpointing=True` installs nothing -- the same
-            # advertised-but-unimplemented defect as #2084, one subsystem
-            # over. That also makes the `mkdir` above unreachable, which is
-            # why it carries no OSError guard here: adding one would ship a
-            # branch nothing can enter (`rules/orphan-detection.md` §1). The
-            # guard belongs with the implementation, and #2111 says so.
-            self.logger.warning(
-                "Checkpoint module not available, disabling checkpointing"
-            )
+        except OSError as exc:
+            _warn_checkpointing_unwritable(config.checkpoint_path, str(exc))
             return None
+
+        checkpoint_manager = StateManager(
+            storage=storage,
+            checkpoint_frequency=frequency,
+            checkpoint_interval=never,
+        )
+
+        self.logger.info(
+            f"Created checkpointing (filesystem: {config.checkpoint_path})"
+        )
+
+        return checkpoint_manager
 
     # =========================================================================
     # Control Protocol Creation
