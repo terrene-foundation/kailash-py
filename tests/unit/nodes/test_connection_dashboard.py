@@ -144,12 +144,16 @@ class TestConnectionDashboardNode:
     @pytest.fixture
     def dashboard(self, mock_runtime):
         """Create test dashboard node."""
+        # require_auth=False: this suite exercises METRICS, ALERTS and the
+        # update loop, not the authentication gate #2112 added. The gate is
+        # covered by tests/regression/test_issue_2112_connection_dashboard_auth.py.
         dashboard = ConnectionDashboardNode(
             name="test_dashboard",
             port=8888,
             host="localhost",
             update_interval=10.0,  # Longer interval for tests
             enable_alerts=True,
+            require_auth=False,
         )
 
         dashboard.runtime = mock_runtime
@@ -158,7 +162,7 @@ class TestConnectionDashboardNode:
 
     def test_get_parameters(self):
         """Test parameter definitions."""
-        dashboard = ConnectionDashboardNode(name="test")
+        dashboard = ConnectionDashboardNode(name="test", require_auth=False)
         params = dashboard.get_parameters()
 
         assert "port" in params
@@ -376,10 +380,13 @@ class TestConnectionDashboardNode:
 @pytest.mark.asyncio
 async def test_dashboard_integration():
     """Test dashboard integration with real web server."""
+    # require_auth=False: this test exercises the web server LIFECYCLE
+    # (start/stop, app and site construction), not the authentication gate.
     dashboard = ConnectionDashboardNode(
         name="integration_test",
         port=0,  # Random port
         update_interval=60.0,  # Don't update during test
+        require_auth=False,
     )
 
     try:
