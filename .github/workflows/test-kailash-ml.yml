@@ -6,6 +6,24 @@ name: Test kailash-ml
 # the `continue-on-error: true  # IT-1: non-blocking until runner live`
 # line from each CUDA job.  Grep pattern for the flip:
 #   grep -n 'continue-on-error: true.*IT-1' .github/workflows/test-kailash-ml.yml
+#
+# MEASURED (2026-08-15, issue #2155): "non-blocking until runner live"
+# currently describes a runner that has never been live. Two independent
+# instruments agree:
+#   $ gh api repos/terrene-foundation/kailash-py/actions/runners --jq '.total_count'
+#   0
+#   $ gh api orgs/terrene-foundation/actions/runners --jq '.total_count'
+#   0
+#   $ gh run list --workflow gpu-smoke.yml --limit 5 --json status,conclusion,createdAt
+#   [cancelled 2026-06-17, cancelled 2026-06-13 x2, cancelled 2026-06-12,
+#    cancelled 2026-06-07]  <- every run queues until cancelled, none dispatch
+# So `test-cuda` / `test-cuda-dl` below cannot execute at all right now (they
+# don't fail into continue-on-error, GitHub Actions never assigns them a
+# runner in the first place). Their `-m cuda` / `-m dl` selector fixes
+# (issue #2076) are correct but currently unexercised. #2155 tracks the
+# decision: provision the runner, or retire these two jobs the way #2135
+# retired kailash-align's test-gpu (which had the same "selector matches
+# nothing" defect AND, unlike these two, no runner story to begin with).
 
 on:
   push:
@@ -347,7 +365,14 @@ jobs:
   # CUDA jobs — runs on [self-hosted, cuda, gpu] runner (IT-1)
   #
   # These jobs are currently NON-BLOCKING (continue-on-error: true) because
-  # the self-hosted GPU runner has not been provisioned yet.
+  # the self-hosted GPU runner has not been provisioned yet — and, MEASURED
+  # 2026-08-15 (issue #2155), currently cannot even be DISPATCHED: 0
+  # self-hosted runners registered at the repo or org level, and every one
+  # of gpu-smoke.yml's last 5 runs (back to 2026-06-07) queued until
+  # cancelled rather than running. continue-on-error never gets exercised
+  # because the job never gets a runner in the first place. See the top-of-
+  # file header comment for the full measurement and #2155 for the
+  # provision-vs-retire decision this is filed under.
   #
   # To flip CUDA from non-blocking to blocking once the runner is live:
   #   1. Run gpu-smoke.yml manually and confirm it passes green.
@@ -533,15 +558,23 @@ jobs:
         # gate defect, one layer deeper than the missing-marker case.
         #
         # Disposition: CHANGE the selector rather than delete the job. This
-        # job's stated purpose is "torch training on GPU" — that is
+        # job's stated purpose is "torch training on GPU" — that WOULD be
         # meaningfully served by running the full `dl` suite (same 79 tests
         # as test-dl) on a runner where `torch.cuda.is_available()` is
-        # actually True, which is DIFFERENT information than test-dl's
-        # CPU-only run: any DL code path that auto-detects/branches on real
-        # GPU presence (backend resolution, device placement) is only
-        # exercised here. Verified: `-m dl` collects 79/2606 (was 0/2606).
-        # Masked today by `continue-on-error: true` (IT-1, runner not yet
-        # provisioned).
+        # actually True (DIFFERENT information than test-dl's CPU-only run:
+        # any DL code path that auto-detects/branches on real GPU presence
+        # would only be exercised here). Verified: `-m dl` collects 79/2606
+        # (was 0/2606) — the selector itself is correct and is a prerequisite
+        # either way.
+        #
+        # BUT (measured 2026-08-15, issue #2155): this job currently yields
+        # ZERO information regardless of the selector fix, because it cannot
+        # be DISPATCHED at all — 0 self-hosted runners exist (repo + org),
+        # and gpu-smoke.yml's last 5 runs all queued until cancelled, never
+        # ran. `continue-on-error: true` never even gets exercised; the job
+        # just never gets assigned a runner. See the top-of-file header and
+        # #2155 for the full measurement and the provision-vs-retire
+        # decision this is filed under.
         run: |
           .venv/bin/python -m pytest \
             packages/kailash-ml/tests/ \
