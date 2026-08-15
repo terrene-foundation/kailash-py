@@ -9,11 +9,6 @@ Provides shared fixtures and configuration for comprehensive 3-tier testing stra
 
 import os
 
-# `re` backs the whole-token keyword match in pytest_collection_modifyitems
-# (#2152) -- bare-substring matching on 2-letter fragments marked ~15% of the
-# suite as needing infrastructure it does not need.
-import re
-
 # CRITICAL: Patch MockProvider BEFORE any other imports
 # This must happen at module level to catch all provider instantiations
 import sys
@@ -105,6 +100,49 @@ except ImportError:
 
 # Test logging configuration
 logging.basicConfig(level=logging.DEBUG)
+
+
+#: Which fixtures PROVIDE which piece of infrastructure.
+#:
+#: This map is the whole basis on which `pytest_collection_modifyitems` decides
+#: that a test needs infrastructure: a test is marked `requires_<x>` IFF its
+#: resolved fixture closure (`item.fixturenames`, which pytest expands
+#: transitively) contains one of these. See the long comment at that hook for
+#: why the previous name-keyword inference was removed outright (#2152) rather
+#: than corrected again -- measured, it disagreed with this graph on 2,248 of
+#: 14,773 items, in BOTH directions.
+#:
+#: Adding an infrastructure fixture WITHOUT adding it here is the one way this
+#: map can rot, so `tests/unit/test_infra_marker_mapping.py` fails when a new
+#: infra-shaped fixture appears in this conftest unmapped. Add the entry in the
+#: same commit as the fixture.
+#:
+#: A test that reaches infrastructure WITHOUT going through a fixture (a direct
+#: socket or subprocess call) declares `@pytest.mark.requires_<x>` on itself --
+#: the hook only ADDS markers, so an explicit declaration always survives.
+_INFRA_FIXTURES: Dict[str, frozenset] = {
+    "requires_postgres": frozenset(
+        {
+            "postgres_connection_string",
+            "postgres_connection_config",
+            # Opens a real psycopg2 connection; skips when PG is unavailable.
+            "integration_database_connection",
+            # Depends on the above (so the closure already catches it) -- listed
+            # explicitly so the mapping reads as a complete inventory.
+            "e2e_database_setup",
+        }
+    ),
+    "requires_redis": frozenset(
+        {
+            "redis_connection_config",
+            "redis_connection_params",
+            "integration_redis_connection",
+        }
+    ),
+    "requires_docker": frozenset({"docker_services"}),
+    "requires_ollama": frozenset({"ollama_connection_config"}),
+    "requires_mysql": frozenset({"mysql_connection_config"}),
+}
 
 
 @pytest.fixture
@@ -814,6 +852,14 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: Slow running tests (timeout > 5s)")
     config.addinivalue_line("markers", "requires_postgres: Tests requiring PostgreSQL")
     config.addinivalue_line("markers", "requires_redis: Tests requiring Redis")
+    # Registered because `_INFRA_FIXTURES` maps `mysql_connection_config` to it
+    # (#2152). An unregistered marker raises PytestUnknownMarkWarning, which
+    # this repo treats as an error. NOTE: unlike its siblings this marker is
+    # not currently in unified-ci's infra-free deselect expression, so it does
+    # not yet gate CI selection -- the fixture's own `pytest.skip` when MySQL
+    # is unavailable is what keeps those tests from failing. Add it to the
+    # expression when a MySQL-backed test lands that must be deselected.
+    config.addinivalue_line("markers", "requires_mysql: Tests requiring MySQL")
     config.addinivalue_line(
         "markers", "requires_docker: Tests requiring Docker services"
     )
@@ -896,19 +942,44 @@ def pytest_collection_modifyitems(config, items):
         #     marker.
         #   * 'db' is kept but matched as a WHOLE TOKEN, so `test_db_pool`
         #     still marks while `feedback`/`sandbox`/`mongodb` no longer do.
-        # Long keywords keep substring matching ('cache' SHOULD match 'cached').
+        #
+        # ROOT-CAUSE FIX (#2152, supersedes both fixes above): the keyword list
+        # was never the defect. INFERRING A DEPENDENCY FROM A TEST'S NAME is.
+        # A name is prose; it is not a declaration, nothing keeps it in sync
+        # with what the test actually does, and the inference is wrong in BOTH
+        # directions. Measured against the real fixture graph over the same
+        # 14,773 collected items:
+        #
+        #   name-matcher agrees with the fixture graph : 12544 (84.9%)
+        #   FALSE POSITIVES (name says infra, requests no infra fixture): 2246
+        #   FALSE NEGATIVES (requests an infra fixture, name misses it)  :    2
+        #
+        # The false NEGATIVES are the sharper half and no word-list edit can
+        # ever fix them: `test_integration_multi_service` (redis) and
+        # `test_audit_hook_includes_trace_id` (postgres) genuinely request
+        # infra fixtures, went UNMARKED, and therefore RAN in infra-free CI
+        # steps where they can only fail or flake.
+        #
+        # So the name is not consulted at all any more. A test needs
+        # infrastructure IFF it REQUESTS a fixture that provides it --
+        # `item.fixturenames` is pytest's resolved TRANSITIVE fixture closure,
+        # so a test reaching infra through an intermediate fixture is caught
+        # too. This is a structural fact about the dependency graph, not a
+        # guess about English: no word can false-positive it, and a genuinely
+        # infra-bound test cannot slip through by being named tersely.
+        #
+        # An EXPLICIT marker on the test still wins on its own terms -- this
+        # block only ADDS markers, never removes them -- so a test that reaches
+        # infrastructure WITHOUT a fixture (a direct socket/subprocess call)
+        # declares `@pytest.mark.requires_<x>` itself. That is the intended
+        # escape hatch and it is a declaration, not an inference.
+        #
+        # `_INFRA_FIXTURES` is a closed, greppable map, and
+        # tests/unit/test_infra_marker_mapping.py FAILS if a new infra-shaped
+        # fixture is added to this conftest without a mapping entry -- so the
+        # map cannot silently rot the way the keyword list did.
         if hasattr(item, "function") and item.function:
-            name = item.name.lower()
-            tokens = set(re.findall(r"[a-z0-9]+", name))
-
-            # Check for database usage in test parameters or names
-            if any(keyword in name for keyword in ["postgres", "database"]) or (
-                "db" in tokens
-            ):
-                item.add_marker(pytest.mark.requires_postgres)
-            if any(keyword in name for keyword in ["redis", "cache"]):
-                item.add_marker(pytest.mark.requires_redis)
-            if "docker" in name:
-                item.add_marker(pytest.mark.requires_docker)
-            if any(keyword in name for keyword in ["ollama", "llm"]):
-                item.add_marker(pytest.mark.requires_ollama)
+            requested = set(getattr(item, "fixturenames", ()) or ())
+            for marker_name, providing_fixtures in _INFRA_FIXTURES.items():
+                if requested & providing_fixtures:
+                    item.add_marker(getattr(pytest.mark, marker_name))
