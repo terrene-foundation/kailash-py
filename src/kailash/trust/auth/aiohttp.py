@@ -245,7 +245,9 @@ def build_jwt_auth_middleware(config: "JWTConfig") -> Callable:
         except Exception:
             # Not `except: pass` -- logged with a stack trace and still failing
             # CLOSED with 401.
-            logger.exception("aiohttp_jwt_auth.verification_failed", extra={"path": path})
+            logger.exception(
+                "aiohttp_jwt_auth.verification_failed", extra={"path": path}
+            )
             return _unauthorized("auth_error")
 
         # aiohttp's request is a MutableMapping; this is the idiomatic place a

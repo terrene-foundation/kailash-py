@@ -199,8 +199,7 @@ async def test_forged_token_is_rejected(authed_env):
     try:
         response = await client.get("/api/metrics", headers=_bearer(_WRONG_SECRET))
         assert response.status == 401, (
-            "a token signed with a different secret was accepted: "
-            f"{response.status}"
+            "a token signed with a different secret was accepted: " f"{response.status}"
         )
     finally:
         await client.close()
@@ -225,10 +224,14 @@ async def test_websocket_handshake_is_gated(authed_env):
                 "Sec-WebSocket-Version": "13",
             },
         )
-        assert anon.status == 401, f"anonymous websocket handshake accepted: {anon.status}"
+        assert (
+            anon.status == 401
+        ), f"anonymous websocket handshake accepted: {anon.status}"
 
         async with client.ws_connect("/ws", headers=_bearer()) as ws:
-            assert not ws.closed, "credentialed websocket refused -- gate or broken route?"
+            assert (
+                not ws.closed
+            ), "credentialed websocket refused -- gate or broken route?"
     finally:
         await client.close()
 
@@ -314,6 +317,8 @@ async def test_cors_preflight_survives_but_the_real_request_is_still_gated(authe
         real = await client.get(
             "/api/metrics", headers={"Origin": "https://dash.example"}
         )
-        assert real.status == 401, "CORS exemption smuggled an anonymous request through"
+        assert (
+            real.status == 401
+        ), "CORS exemption smuggled an anonymous request through"
     finally:
         await client.close()

@@ -393,7 +393,11 @@ def _ws_handshake_ok(client: TestClient, path: str, headers=None) -> bool:
     except WebSocketDisconnect:
         return False
     except Exception as exc:  # denial response / status error
-        if "403" in str(exc) or "401" in str(exc) or "denial" in type(exc).__name__.lower():
+        if (
+            "403" in str(exc)
+            or "401" in str(exc)
+            or "denial" in type(exc).__name__.lower()
+        ):
             return False
         raise
 
@@ -484,9 +488,9 @@ def test_require_auth_false_serves_openly_and_warns_loudly(clean_auth_env, caplo
 
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert warnings, "auth was disabled with nothing on the record"
-    assert any(
-        "server_auth.disabled" in r.getMessage() for r in warnings
-    ), [r.getMessage() for r in warnings]
+    assert any("server_auth.disabled" in r.getMessage() for r in warnings), [
+        r.getMessage() for r in warnings
+    ]
 
 
 def test_external_auth_reason_installs_nothing(clean_auth_env):
@@ -518,8 +522,12 @@ def test_auth_controls_are_named_parameters_not_kwargs():
     import inspect
 
     params = inspect.signature(DashboardAPIServer.__init__).parameters
-    for name in ("require_auth", "auth_config", "external_auth_reason",
-                 "auth_exempt_paths"):
+    for name in (
+        "require_auth",
+        "auth_config",
+        "external_auth_reason",
+        "auth_exempt_paths",
+    ):
         assert name in params, f"{name} is not a named parameter"
     assert params["require_auth"].default is True, "the gate does not fail closed"
     assert not any(
@@ -547,7 +555,9 @@ def test_cors_preflight_survives_but_the_real_request_is_still_gated(authed_env)
     assert preflight.status_code == 200, preflight.text
 
     real = client.get("/api/v1/runs", headers={"Origin": "https://dash.example"})
-    assert real.status_code == 401, "CORS ordering smuggled an anonymous request through"
+    assert (
+        real.status_code == 401
+    ), "CORS ordering smuggled an anonymous request through"
 
 
 # ---------------------------------------------------------------------------
