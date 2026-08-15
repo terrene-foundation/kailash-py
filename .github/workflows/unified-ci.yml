@@ -365,15 +365,26 @@ jobs:
         # list you can act on, where an unbounded run is another 40-minute job
         # with no output.
         #
-        # `--timeout-method=signal` is no longer passed here — pytest.ini now
-        # sets it globally (platform-guarded in the root conftest.py), because
-        # a thread-method timeout cannot kill a test blocked in a C call and
-        # that is what made two of the three #2081 runs unreadable.
+        # `--timeout-method=signal` is passed EXPLICITLY and must stay that
+        # way. A thread-method timeout CANNOT kill a test blocked in a C call
+        # — it only observes and reports, which is why two of the three #2081
+        # runs printed the banner repeatedly and carried on to the job cap
+        # with no per-test output. SIGALRM interrupts the blocked call, so a
+        # hung test fails and names itself.
+        #
+        # It is NOT set in pytest.ini, and an attempt to set it there was
+        # reverted after measurement: root `pytest.ini` carries `timeout` and
+        # `timeout_method` inside a `[pytest:local]` section, and pytest reads
+        # ONLY `[pytest]`. `config.getini("timeout")` returns `''` on main and
+        # on this branch alike, so BOTH of those settings are dead letters and
+        # editing them changes nothing. Tracked separately — activating the
+        # global 10s timeout is a large, unmeasured blast radius (several
+        # tests in this very selection exceed 10s) and does not belong here.
         run: |
           .venv/bin/python -m pytest tests/regression/ \
             -m "not (requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e)" \
             --maxfail=30 -v -p no:xdist --durations=25 \
-            --timeout=60
+            --timeout=60 --timeout-method=signal
 
   test-pact:
     name: Test PACT (Python 3.11)
@@ -667,4 +678,5 @@ jobs:
         run: |
           .venv/bin/python -m pytest tests/regression/ \
             -m "requires_postgres or requires_mysql or requires_redis or requires_docker or integration or e2e" \
-            --maxfail=10 -v -p no:xdist --timeout=300 -rs --durations=25
+            --maxfail=10 -v -p no:xdist --timeout=300 --timeout-method=signal \
+            -rs --durations=25

@@ -59,14 +59,27 @@ def pytest_configure(config):
     Runs before collection, so the ``dotenv.load_dotenv`` monkeypatch is active
     before any nested conftest / test module imports and re-injects a secret.
 
-    Also degrades ``pytest.ini``'s ``timeout_method = signal`` back to
-    ``thread`` where SIGALRM does not exist (Windows). Signal is the correct
-    default everywhere it works — a thread-method timeout cannot kill a test
-    blocked in a C call, which is what made two #2081 CI runs unreadable — but
-    setting it in the ini unconditionally would hard-break a Windows
-    contributor, and pytest-timeout does not support a platform conditional.
-    An explicit ``--timeout-method=`` on the command line still wins, because
-    this only ever tightens the unsupported case.
+    Also degrades a requested ``timeout_method = signal`` back to ``thread``
+    where SIGALRM does not exist (Windows).
+
+    This guard is DEFENSIVE, and its trigger is the command line, not the ini
+    (issue #2081). Verified with ``config.getini("timeout")``: root
+    ``pytest.ini`` carries ``timeout`` and ``timeout_method`` inside a
+    ``[pytest:local]`` section, and pytest reads ONLY ``[pytest]`` — so both
+    are dead letters and neither reaches pytest-timeout. What DOES reach it is
+    ``--timeout-method=signal``, which the two root-regression CI steps pass
+    explicitly.
+
+    Why it has to exist at all: pytest-timeout has NO fallback for a missing
+    SIGALRM. Its only coercion is signal -> thread off the main thread; with
+    ``method="signal"`` and any active timeout on a platform without SIGALRM,
+    ``pytest_timeout_set_timer`` reaches ``signal.signal(signal.SIGALRM, ...)``
+    and the run dies with ``INTERNALERROR ... AttributeError: module 'signal'
+    has no attribute 'SIGALRM'`` before a single test executes. Reproduced
+    directly, not inferred.
+
+    An explicit ``--timeout-method=thread`` still wins, because this only ever
+    tightens the unsupported case.
     """
     install_cost_guard(Path(__file__).parent / ".env")
 
