@@ -317,26 +317,53 @@ class AgentConfig:
     )
 
     def __post_init__(self):
-        """Post-initialization validation and auto-configuration."""
-        # Validate llm_provider if explicitly set
-        if self.llm_provider is not None:
-            # Reject empty string
-            if self.llm_provider == "":
-                raise ValueError(
-                    "llm_provider cannot be empty string. "
-                    "Use None for auto-detection or specify a valid provider: "
-                    f"{sorted(self.VALID_PROVIDERS)}"
-                )
-            # Validate against known providers
-            if self.llm_provider.lower() not in self.VALID_PROVIDERS:
-                raise ValueError(
-                    f"Invalid llm_provider: '{self.llm_provider}'. "
-                    f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
-                )
+        """Post-initialization validation and auto-configuration.
 
-        # Auto-detect LLM provider if not specified
-        if self.llm_provider is None:
+        #2069 — ORDER MATTERS HERE. The allowlist gate used to run only when
+        ``llm_provider`` arrived non-None, which put it strictly ABOVE the
+        auto-detect assignment and left the auto-detected path structurally
+        un-validatable: whatever detection returned was adopted unchecked. It
+        never bit only because every literal detection could return happened
+        to sit in ``VALID_PROVIDERS``.
+
+        So detection now runs FIRST and the gate sits BELOW it, where both
+        paths pass through exactly one check. Moving the gate down is a
+        prerequisite for delegating detection to a shared resolver — a
+        resolver can legitimately return a provider this class does not list
+        (``deepseek`` was the live example), and adopting that unchecked would
+        be worse than the fail-open it replaced: inconsistent rather than
+        merely wrong.
+        """
+        # Reject empty string. Only meaningful for an explicitly-supplied
+        # value; auto-detection never produces one.
+        if self.llm_provider == "":
+            raise ValueError(
+                "llm_provider cannot be empty string. "
+                "Use None for auto-detection or specify a valid provider: "
+                f"{sorted(self.VALID_PROVIDERS)}"
+            )
+
+        # Auto-detect LLM provider if not specified.
+        auto_detected = self.llm_provider is None
+        if auto_detected:
             self.llm_provider = self._detect_provider_from_model(self.model)
+
+        # ONE gate, reached by BOTH paths.
+        if self.llm_provider.lower() not in self.VALID_PROVIDERS:
+            if auto_detected:
+                # Not user error — the resolver emitted something this class
+                # cannot validate, so say that rather than blaming the caller.
+                raise ValueError(
+                    f"Auto-detected llm_provider '{self.llm_provider}' for model "
+                    f"'{self.model}' is not in VALID_PROVIDERS: "
+                    f"{sorted(self.VALID_PROVIDERS)}. The provider resolver and "
+                    f"this allowlist have drifted apart; add the provider to "
+                    f"VALID_PROVIDERS or pass llm_provider explicitly."
+                )
+            raise ValueError(
+                f"Invalid llm_provider: '{self.llm_provider}'. "
+                f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
+            )
 
     def _detect_provider_from_model(self, model: str) -> str:
         """
