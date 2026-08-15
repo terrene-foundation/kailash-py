@@ -40,7 +40,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -70,8 +70,35 @@ except ImportError:
 # Re-export names for use in function signatures and bodies
 FastAPI: Any = getattr(_fastapi, "FastAPI", None)
 HTTPException: Any = getattr(_fastapi, "HTTPException", None)
-WebSocket: Any = getattr(_fastapi, "WebSocket", None)
-WebSocketDisconnect: Any = getattr(_fastapi, "WebSocketDisconnect", None)
+
+# `WebSocket` is the one re-export used in ANNOTATION position (the two
+# `@self.app.websocket(...)` endpoints), and that makes the plain
+# `WebSocket: Any = getattr(...)` form wrong in two directions at once:
+#
+#   * To a TYPE CHECKER a module-level variable is not a type expression, so
+#     `websocket: WebSocket` is `reportInvalidTypeForm` -- measured, pyright
+#     1.1.413 reported it at both endpoint definitions.
+#   * To FASTAPI the annotation is load-bearing at RUNTIME. This module sets
+#     `from __future__ import annotations`, so annotations are strings that
+#     FastAPI resolves with `get_type_hints` against these module globals. A
+#     bare `if TYPE_CHECKING: from fastapi import WebSocket` would therefore
+#     leave the name UNDEFINED at runtime and raise `NameError` during route
+#     registration -- and annotating it `Any` instead is what caused the
+#     handshake defect this PR fixes (the socket is never bound and
+#     `websocket` becomes a required QUERY PARAMETER; see the endpoint
+#     docstrings).
+#
+# The split below satisfies both: the checker reads the real class from the
+# `TYPE_CHECKING` import, and the runtime binds the same name via `getattr`,
+# so `get_type_hints` resolves it exactly as before. `WebSocketDisconnect` is
+# carried along as the paired name -- it is only used in `except` clauses
+# today, but a real class there is checkable where `Any` is not.
+if TYPE_CHECKING:  # pragma: no cover -- typing only
+    from fastapi import WebSocket, WebSocketDisconnect
+else:
+    WebSocket = getattr(_fastapi, "WebSocket", None)
+    WebSocketDisconnect = getattr(_fastapi, "WebSocketDisconnect", None)
+
 BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
 CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
 FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
