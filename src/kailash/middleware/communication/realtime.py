@@ -794,14 +794,26 @@ class RealtimeMiddleware:
         event_types: Optional[List[str]] = None,
         session_id: Optional[str] = None,
         headers: Optional[Dict[str, str]] = None,
+        user_id: Optional[str] = None,
     ):
-        """Register webhook endpoint."""
+        """Register webhook endpoint.
+
+        ``user_id`` scopes the delivery filter to one subscriber. Without it
+        the filter is built with EVERY criterion unset, and
+        ``EventFilter.matches`` SKIPS each unset criterion
+        (``if self.user_id and ...``) -- so an all-unset filter matches
+        unconditionally and the webhook receives every event from every user.
+        That is the THIRD subscription surface of the same class as `/ws` and
+        `/events` (issues #2151 / #2145), and it bypassed both of their fixes
+        because delivery here never consults a connection registry.
+        """
         if not self.enable_webhooks or not self.webhook_manager:
             raise ValueError("Webhooks not enabled")
 
         event_filter = EventFilter(
             event_types=[EventType(t) for t in event_types] if event_types else None,
             session_id=session_id,
+            user_id=user_id,
         )
 
         self.webhook_manager.register_webhook(

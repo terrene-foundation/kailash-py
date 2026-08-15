@@ -388,6 +388,86 @@ class TestRealtimeRoutesAreSessionScoped:
         assert status == [200], f"the owner's own stream was refused: {status!r}"
 
 
+class TestWebhookSubscriptionIsScopedToTheCaller:
+    """`POST /api/webhooks` — the THIRD subscription surface.
+
+    `/ws` and `/events` were scoped to the principal by #2151 and this issue,
+    but a webhook consults no connection registry: it is registered once and
+    delivered to forever after, so neither fix reaches it. Registered with an
+    all-unset ``EventFilter`` it matched every event from every user, because
+    ``EventFilter.matches`` SKIPS each unset criterion
+    (``events.py``: ``if self.user_id and event.user_id != self.user_id``).
+
+    Measured before the fix::
+
+        EventFilter().matches(<an event owned by bob>) = True
+    """
+
+    def test_registration_scopes_the_filter_to_the_principal(self, gated):
+        gateway, client, alice, _, _ = gated
+
+        response = client.post(
+            "/api/webhooks",
+            json={"url": "https://alice.example/hook", "event_types": []},
+            headers=alice,
+        )
+        assert response.status_code == 200, response.text
+
+        webhook_id = response.json()["webhook_id"]
+        registered = gateway.realtime.webhook_manager.webhooks[webhook_id]
+        event_filter = registered["event_filter"]
+
+        assert event_filter.user_id == "alice", (
+            "the webhook filter was left unscoped, so it matches every user's "
+            f"events: user_id={event_filter.user_id!r}"
+        )
+
+    def test_the_scoped_filter_actually_rejects_another_users_event(self, gated):
+        """The filter is only worth anything if it REJECTS — assert on matches()."""
+        gateway, client, alice, _, _ = gated
+
+        webhook_id = client.post(
+            "/api/webhooks",
+            json={"url": "https://alice.example/hook", "event_types": []},
+            headers=alice,
+        ).json()["webhook_id"]
+        event_filter = gateway.realtime.webhook_manager.webhooks[webhook_id][
+            "event_filter"
+        ]
+
+        class _Event:
+            type = None
+            priority = None
+            source = None
+            target = None
+            session_id = "bob-session"
+            user_id = "bob"
+
+        class _OwnEvent(_Event):
+            session_id = "alice-session"
+            user_id = "alice"
+
+        assert (
+            event_filter.matches(_Event()) is False
+        ), "the webhook still matches another user's event"
+        # THE CONTROL: it must still match the subscriber's OWN events, or a
+        # filter that rejects everything would look identical to a correct one.
+        assert event_filter.matches(_OwnEvent()) is True
+
+    def test_open_deployment_keeps_the_unscoped_filter(self):
+        gateway = APIGateway(title="open-webhook", enable_auth=False)
+        client = TestClient(gateway.app)
+
+        webhook_id = client.post(
+            "/api/webhooks", json={"url": "https://x.example/h", "event_types": []}
+        ).json()["webhook_id"]
+        event_filter = gateway.realtime.webhook_manager.webhooks[webhook_id][
+            "event_filter"
+        ]
+
+        assert event_filter.user_id is None
+
+
 class TestRecentEventsAreScopedToTheCaller:
     """`/api/events/recent` without a `session_id` returned everyone's events."""
 

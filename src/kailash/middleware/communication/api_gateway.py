@@ -1401,9 +1401,34 @@ class APIGateway:
             )
 
         @self.app.post("/api/webhooks")
-        async def register_webhook(request: WebhookRegisterRequest):
-            """Register a webhook endpoint."""
+        async def register_webhook(
+            request: WebhookRegisterRequest, http_request: Request
+        ):
+            """Register a webhook endpoint.
+
+            THE THIRD SUBSCRIPTION SURFACE, and the one both prior fixes
+            missed. `/ws` and `/events` were scoped to the caller's principal
+            (#2151, #2145), but a webhook is registered once and delivered to
+            by the server forever after -- it consults no connection registry,
+            so neither fix reaches it. Registered with an all-unset
+            `EventFilter`, it matched EVERY event from EVERY user, because
+            `EventFilter.matches` skips each unset criterion.
+
+            The deferral criterion the earlier sweep used -- "does this route
+            take an identity field?" -- is exactly what let this through: this
+            route takes none. For a subscription route the question is instead
+            "does it CREATE or SERVE a subscription to other users' events."
+            """
             webhook_id = str(uuid.uuid4())
+
+            # `None` ONLY on an open deployment, where there is no principal to
+            # scope by and the unscoped filter is that configuration's
+            # documented contract.
+            principal = (
+                await self._resolve_identity(http_request, None)
+                if self._require_auth
+                else None
+            )
 
             self.realtime.register_webhook(
                 webhook_id=webhook_id,
@@ -1411,6 +1436,7 @@ class APIGateway:
                 secret=request.secret,
                 event_types=request.event_types,
                 headers=request.headers,
+                user_id=principal,
             )
 
             return {
