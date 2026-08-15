@@ -322,3 +322,84 @@ async def test_cors_preflight_survives_but_the_real_request_is_still_gated(authe
         ), "CORS exemption smuggled an anonymous request through"
     finally:
         await client.close()
+
+
+# ---------------------------------------------------------------------------
+# The OPTIONS exemption must be decided by the RESOLVED HANDLER, not by
+# attacker-supplied headers. Adversarial /redteam finding on PR #2137.
+# ---------------------------------------------------------------------------
+
+
+async def test_options_exemption_does_not_cover_a_consumer_handler(authed_env):
+    """A wildcard route must NOT be reachable by claiming to be a preflight.
+
+    THE regression for the redteam HIGH. The exemption used to test
+    ``request.method == "OPTIONS"`` plus the presence of ``Origin`` and
+    ``Access-Control-Request-Method`` -- three properties the caller sets
+    freely -- and never checked that the resolved handler was the preflight
+    handler. On `ConnectionDashboardNode` every route is method-specific so
+    OPTIONS resolves only to the preflight route, but this middleware is
+    EXPORTED, and a consumer with ``add_route("*", ...)`` got an
+    unauthenticated invocation of their own handler from::
+
+        curl -X OPTIONS -H 'Origin: x' -H 'Access-Control-Request-Method: GET' ...
+
+    Built on a bare app so it measures the MIDDLEWARE, not the node.
+    """
+    from aiohttp import web
+
+    from kailash.trust.auth.aiohttp import install_aiohttp_auth_middleware
+    from kailash.utils.server_auth import resolve_server_auth
+
+    reached = []
+
+    async def wildcard_handler(request):
+        reached.append(request.method)
+        return web.json_response({"user": str(request.get("user", "<MISSING>"))})
+
+    app = web.Application()
+    install_aiohttp_auth_middleware(app, resolve_server_auth(require_auth=True))
+    app.router.add_route("*", "/thing", wildcard_handler)
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        forged = await client.options(
+            "/thing",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert forged.status == 401, (
+            "forged-preflight OPTIONS reached a consumer handler: "
+            f"{forged.status} {(await forged.text())[:200]!r}"
+        )
+        assert not reached, f"handler RAN unauthenticated for {reached}"
+
+        # CONTROL: with a credential the same route works, so the 401 is the
+        # gate and not a broken route.
+        ok = await client.options("/thing", headers=_bearer())
+        assert ok.status == 200, await ok.text()
+    finally:
+        await client.close()
+
+
+async def test_real_cors_preflight_is_still_exempt(authed_env):
+    """CONTROL for the test above: the genuine preflight must still pass.
+
+    Tightening the exemption to the resolved handler must not re-break
+    cross-origin browser clients -- which is what the exemption exists for.
+    """
+    client = await _client(_node())
+    try:
+        preflight = await client.options(
+            "/api/metrics",
+            headers={
+                "Origin": "https://dash.example",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert preflight.status == 200, await preflight.text()
+    finally:
+        await client.close()

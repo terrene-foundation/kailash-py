@@ -377,7 +377,31 @@ class ConnectionDashboardNode(Node):
 
             install_aiohttp_auth_middleware(self.app, self._auth_config)
 
-        # Setup CORS
+        # Setup CORS.
+        #
+        # KNOWN AND UNCHANGED BY #2112: this is wildcard (`"*"`) CORS with
+        # `allow_credentials=True`, the combination the CORS spec forbids. It
+        # predates this change and is left as-is deliberately, but it now
+        # interacts with the gate installed above and that interaction is
+        # worth naming:
+        #
+        #   * With the DEFAULT credential source (an `Authorization: Bearer`
+        #     header) there is no new exposure. A cross-origin page must
+        #     attach that header explicitly; it is not ambient, so a wildcard
+        #     ACAO does not let another origin borrow the operator's identity.
+        #   * If an operator configures a COOKIE credential
+        #     (`JWTConfig(token_cookie=...)`) to make this dashboard reachable
+        #     from a browser, the credential BECOMES ambient, and wildcard
+        #     CORS then lets a page on any origin issue credentialed requests
+        #     and read the responses.
+        #
+        # So: do not configure `token_cookie` on this node without also
+        # narrowing CORS to explicit origins. Tracked as a follow-up rather
+        # than fixed here, because changing the CORS default is a separate
+        # breaking change from the authentication gate and belongs in its own
+        # PR with its own migration note. The sibling FastAPI surface
+        # (`kailash/visualization/api.py`) DOES guard this, by forcing
+        # `allow_credentials=False` when `"*"` is present.
         cors = aiohttp_cors.setup(
             self.app,
             defaults={

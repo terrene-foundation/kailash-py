@@ -306,11 +306,47 @@ class DashboardAPIServer:
         if self._auth_config is not None:
             install_server_auth_middleware(self.app, self._auth_config)
 
-        # Add CORS middleware
+        # Add CORS middleware.
+        #
+        # `allow_origins=["*"]` together with `allow_credentials=True` is the
+        # combination the CORS spec forbids, and Starlette does not refuse it
+        # -- it ECHOES the requesting origin, which recreates the very hole the
+        # spec's prohibition exists to prevent. Measured:
+        #
+        #   allow_origins=['*']                 evil Origin
+        #       -> ACAO='https://evil.example'  ACAC='true'
+        #   allow_origins=['https://ok.example'] evil Origin
+        #       -> ACAO=None                    ACAC='true'
+        #
+        # So a page on any origin could read authenticated responses using the
+        # victim's ambient credentials. `["*"]` is the obvious value an
+        # operator writes, so this is a foreseeable configuration rather than
+        # an exotic one, and `security.md` § Secure-Default forbids resolving
+        # it silently. Credentials are dropped and the downgrade is named.
+        resolved_origins = list(cors_origins or [])
+        allow_credentials = True
+        if "*" in resolved_origins:
+            allow_credentials = False
+            logger.warning(
+                "dashboard_api.cors_wildcard_credentials_disabled",
+                extra={
+                    "exposure": (
+                        "allow_origins=['*'] with allow_credentials=True makes "
+                        "Starlette echo the requesting origin, so a page on ANY "
+                        "origin could read authenticated responses using the "
+                        "caller's ambient credentials"
+                    ),
+                    "action": "allow_credentials forced to False for this server",
+                    "wiring": (
+                        "list the exact origins in cors_origins=[...] to keep "
+                        "credentialed cross-origin requests working"
+                    ),
+                },
+            )
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=list(cors_origins or []),
-            allow_credentials=True,
+            allow_origins=resolved_origins,
+            allow_credentials=allow_credentials,
             allow_methods=["*"],
             allow_headers=["*"],
         )
@@ -822,6 +858,17 @@ class DashboardAPIServer:
             ``/api/v1/metrics/stream`` above -- see that docstring. The live
             dashboard HTML page consumes THIS route, so the page's metrics
             never updated.
+
+            BROWSER CLIENTS STILL NEED WIRING, so fixing the binding does not
+            by itself make the page work on an authenticated server. A browser
+            cannot set an ``Authorization`` header on a WebSocket handshake,
+            and this route is NOT exempt, so the handshake is refused unless a
+            browser-reachable credential source is configured -- pass
+            ``auth_config=JWTConfig(token_query_param="access_token")`` or
+            ``token_cookie="..."``, or add this path to
+            ``auth_exempt_paths``. Same caveat as the one recorded for
+            ``WS /ws`` in the #2072 CHANGELOG entry; it is restated here
+            because this is the route the shipped HTML page actually opens.
             """
             await websocket.accept()
             self._websocket_connections.append(websocket)

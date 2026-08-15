@@ -28,6 +28,7 @@ because "it should follow from the architecture" is not a measurement.
 
 from __future__ import annotations
 
+import importlib
 import inspect
 import logging
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -99,6 +100,94 @@ def _extract_token(request: Any, config: "JWTConfig") -> Optional[str]:
             return token
 
     return None
+
+
+def _cors_preflight_function() -> Optional[Any]:
+    """The underlying function of ``aiohttp_cors``'s preflight handler, if any.
+
+    Resolved ONCE at import. Returns ``None`` when ``aiohttp_cors`` is absent
+    or has renamed the symbol -- in which case there is no preflight handler
+    to exempt and :func:`_is_cors_preflight` denies every OPTIONS request,
+    which is the fail-CLOSED direction.
+    """
+    # `aiohttp_cors.preflight_handler` is the DEFINING module; `cors_config`
+    # re-exports the same object (verified: `A is B` and
+    # `A._preflight_handler is B._preflight_handler`). The defining module is
+    # tried first because importing the re-export is what pyright reports as
+    # `reportPrivateImportUsage`. The name is private either way, which is why
+    # every step here is guarded and an unresolvable symbol fails CLOSED.
+    handler = None
+    for module_name in (
+        "aiohttp_cors.preflight_handler",
+        "aiohttp_cors.cors_config",
+    ):
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        preflight_cls = getattr(module, "_PreflightHandler", None)
+        handler = getattr(preflight_cls, "_preflight_handler", None)
+        if handler is not None:
+            break
+    # On a class the attribute is already a plain function; `__func__` covers
+    # the bound-method form defensively.
+    return getattr(handler, "__func__", handler)
+
+
+_CORS_PREFLIGHT_FUNC = _cors_preflight_function()
+
+if _CORS_PREFLIGHT_FUNC is None:  # pragma: no cover -- depends on installed extras
+    logger.warning(
+        "aiohttp_jwt_auth.preflight_handler_unresolved",
+        extra={
+            "effect": (
+                "CORS preflight OPTIONS requests will be authenticated like any "
+                "other request and will therefore be rejected with 401"
+            ),
+            "wiring": (
+                "install aiohttp-cors, or add the preflight path to "
+                "auth_exempt_paths"
+            ),
+        },
+    )
+
+
+def _is_cors_preflight(request: Any) -> bool:
+    """True only when this request RESOLVED to ``aiohttp_cors``'s own handler.
+
+    The OPTIONS exemption must be decided by WHAT WILL RUN, never by what the
+    caller claims. An earlier revision gated on ``request.method == "OPTIONS"``
+    plus the presence of the ``Origin`` and ``Access-Control-Request-Method``
+    headers -- three properties an attacker sets freely -- and never checked
+    that ``handler`` was the preflight handler at all. On an application whose
+    routes are all method-specific that is unreachable, because OPTIONS
+    resolves only to the preflight route. But this module is EXPORTED, and a
+    consumer with ``router.add_route("*", ...)``, a ``web.View`` implementing
+    ``options()``, or an explicit ``add_options(...)`` made it an
+    unauthenticated invocation of their own handler::
+
+        curl -X OPTIONS -H 'Origin: x' -H 'Access-Control-Request-Method: GET' \\
+             https://host/api/thing
+
+    Measured on aiohttp 3.13.3 / aiohttp_cors 0.8.1, the resolved handler
+    discriminates the two cases exactly::
+
+        OPTIONS /g     -> _PreflightHandler._preflight_handler   (real preflight)
+        OPTIONS /star  -> star_h                                 (consumer handler)
+
+    ``request.match_info`` is populated by ``UrlDispatcher.resolve()`` BEFORE
+    the middleware chain runs, so the resolved handler is available here --
+    also measured, not assumed.
+
+    Fails CLOSED: an unresolvable preflight symbol returns ``None`` above and
+    every OPTIONS request is then authenticated normally.
+    """
+    if _CORS_PREFLIGHT_FUNC is None:
+        return False
+    handler = getattr(getattr(request, "match_info", None), "handler", None)
+    if handler is None:
+        return False
+    return getattr(handler, "__func__", None) is _CORS_PREFLIGHT_FUNC
 
 
 def build_jwt_auth_middleware(config: "JWTConfig") -> Callable:
@@ -188,17 +277,16 @@ def build_jwt_auth_middleware(config: "JWTConfig") -> Callable:
         # aiohttp form of the ordering constraint the ASGI installer states as
         # "MUST be called BEFORE CORSMiddleware" (#2054).
         #
-        # Exempting it is safe rather than a hole: a browser never attaches
-        # credentials to a preflight, the response carries only CORS policy
-        # headers and no protected data, and the ACTUAL request that follows
-        # is a separate trip through this middleware with no exemption. The
-        # test asserting the real cross-origin GET is still 401'd is what
-        # stops this branch from being widened into one.
-        if (
-            request.method == "OPTIONS"
-            and "Origin" in request.headers
-            and "Access-Control-Request-Method" in request.headers
-        ):
+        # The exemption is decided by the RESOLVED HANDLER, never by the
+        # request's own headers -- see `_is_cors_preflight`, which documents
+        # the header-gated version this replaced and why it was unsafe to
+        # export. Exempting the real preflight handler is safe: it reads no
+        # application state, its response carries only CORS policy headers,
+        # and the ACTUAL request that follows is a separate trip through this
+        # middleware with no exemption. The test asserting the real
+        # cross-origin GET is still 401'd is what stops this branch from being
+        # widened into a hole.
+        if request.method == "OPTIONS" and _is_cors_preflight(request):
             return await handler(request)
 
         if validator.is_path_exempt(path):

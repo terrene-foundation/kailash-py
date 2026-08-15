@@ -603,3 +603,65 @@ def test_real_uvicorn_socket_rejects_anonymous_disclosure(authed_env):
     finally:
         uv.should_exit = True
         thread.join(timeout=20)
+
+
+# ---------------------------------------------------------------------------
+# Wildcard CORS must not ship with credentials. Adversarial /redteam finding.
+# ---------------------------------------------------------------------------
+
+
+def test_wildcard_cors_does_not_echo_an_arbitrary_origin_with_credentials(
+    authed_env, caplog
+):
+    """``cors_origins=["*"]`` must not yield any-origin CREDENTIALED CORS.
+
+    The CORS spec forbids ``Access-Control-Allow-Origin: *`` together with
+    ``Access-Control-Allow-Credentials: true``. Starlette does not refuse the
+    combination -- it ECHOES the requesting origin, which recreates exactly
+    the hole the prohibition exists to prevent. Measured on the raw
+    middleware::
+
+        allow_origins=['*']  evil Origin -> ACAO='https://evil.example' ACAC='true'
+
+    A page on ANY origin could then read authenticated responses using the
+    caller's ambient credentials. ``["*"]`` is the obvious value an operator
+    writes, so `security.md` § Secure-Default forbids resolving it silently.
+    """
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="kailash.visualization.api"):
+        client = _client(cors_origins=["*"])
+
+    response = client.get(
+        "/api/v1/runs",
+        headers={"Origin": "https://evil.example", **_bearer()},
+    )
+
+    assert response.headers.get("access-control-allow-credentials") != "true", (
+        "wildcard CORS shipped with credentials: ACAO="
+        f"{response.headers.get('access-control-allow-origin')!r}"
+    )
+
+    # And the downgrade is never silent.
+    assert any(
+        "cors_wildcard_credentials_disabled" in r.getMessage() for r in caplog.records
+    ), [r.getMessage() for r in caplog.records]
+
+
+def test_explicit_cors_origin_keeps_credentials(authed_env):
+    """DISCRIMINATION CONTROL: naming origins explicitly is unaffected.
+
+    Without this row the assertion above would also pass if credentials had
+    been disabled for every configuration, which would break legitimate
+    credentialed cross-origin clients.
+    """
+    client = _client(cors_origins=["https://dash.example"])
+
+    response = client.get(
+        "/api/v1/runs",
+        headers={"Origin": "https://dash.example", **_bearer()},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-credentials") == "true"
+    assert response.headers.get("access-control-allow-origin") == "https://dash.example"
