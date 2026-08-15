@@ -186,16 +186,28 @@ def pytest_collection_modifyitems(config, items):
 
 
 async def check_postgres_connection():
-    """Check if PostgreSQL is available."""
+    """Check if PostgreSQL is available.
+
+    Reads the SAME environment variables as ``tests/utils/docker_config.py``
+    (``DB_HOST`` / ``DB_PORT`` / ``DB_USER`` / ``DB_PASSWORD`` / ``DB_NAME``),
+    falling back to the ``./test-env up`` compose stack's :5434.
+
+    Issue #2079: this probe used to hardcode :5434, and it gates the
+    collection-time skip for EVERY ``requires_postgres`` test. A CI job that
+    publishes Postgres on :5432 — which is what a GitHub Actions service
+    container does — therefore had every one of those tests skipped no matter
+    what it set in ``env:``, and the step reported green built entirely out of
+    skips. That is a check that cannot come out the other way.
+    """
     try:
         import asyncpg
 
         conn = await asyncpg.connect(
-            host="localhost",
-            port=5434,
-            user="test_user",
-            password="test_password",
-            database="kailash_test",
+            host=os.getenv("DB_HOST", "localhost"),
+            port=int(os.getenv("DB_PORT", "5434")),
+            user=os.getenv("DB_USER", "test_user"),
+            password=os.getenv("DB_PASSWORD", "test_password"),
+            database=os.getenv("DB_NAME", "kailash_test"),
             timeout=5,
         )
         await conn.close()

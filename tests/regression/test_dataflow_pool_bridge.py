@@ -38,8 +38,23 @@ pytestmark = [
 
 @pytest.fixture(autouse=True)
 def _verify_docker_services():
-    """Ensure PostgreSQL Docker service is running before each test."""
-    asyncio.run(ensure_docker_services())
+    """Skip the test if the required services aren't running.
+
+    Issue #2079: this fixture used to call ``ensure_docker_services()`` and
+    DISCARD the result. That helper does not raise — it prints and returns
+    False — so the fixture named "verify" verified nothing, and the tests ran
+    against whatever partial environment happened to be up. On CI that made
+    ``test_failed_ddl_with_warn_mode_still_bounded`` report FAILED, which read
+    as a fixture-phase error but was actually ``[XPASS(strict)]``: the test
+    passed because its #2075 pool leak never fired without the full stack.
+
+    Both sibling files (``test_issue_697_pool_leak.py``,
+    ``test_issue_953_async_sql_pool_tracking.py``) already check the return
+    value; this brings the third into line.
+    """
+    services_ok = asyncio.run(ensure_docker_services())
+    if not services_ok:
+        pytest.skip("Required Docker services not available. Run './test-env up'")
 
 
 @pytest.fixture
@@ -142,15 +157,26 @@ async def test_failed_ddl_does_not_leak_pools_under_saturation(pg_dsn):
 
 @pytest.mark.asyncio
 @pytest.mark.xfail(
-    strict=True,
+    strict=False,
     reason=(
         "#2075: real pool leak on the auto_migrate='warn' DDL-failure path. "
         "Observed pool_count()=9 against a cap of 5, deterministically, in 3 of "
-        "3 consecutive runs against a real Postgres. This test has never run in "
-        "CI (it is one of the files #2002 covers), so the leak shipped "
-        "unnoticed. xfail(strict=True) — NOT skip — so it self-clears LOUDLY "
-        "(XPASS becomes a failure) the moment #2075 is fixed. The assertion is "
-        "unchanged: the bound is correct, the code is wrong."
+        "3 consecutive runs against a real Postgres on macOS via './test-env "
+        "up'. The assertion is DELIBERATELY UNCHANGED: the bound is correct "
+        "and the code is what is wrong.\n\n"
+        "strict=True -> strict=False (#2079). The leak is ENVIRONMENT-"
+        "DEPENDENT, and strict=True therefore turned the environments where it "
+        "does NOT fire into hard CI failures. Measured on Linux against a "
+        "postgres:16 service container: pool_count()=1 with a pre-existing "
+        "table and 0 against a clean database, both against a cap of 5 — i.e. "
+        "the test PASSES there, and strict=True reported that pass as FAILED. "
+        "That is the '#2079 xfail-reported-as-FAILED' discrepancy; it was "
+        "never a fixture-phase error.\n\n"
+        "This trades the loud self-clearing signal for a correct one. The "
+        "signal was not actually working: it can only self-clear in the one "
+        "environment where the premise holds, and it made every other "
+        "environment red. #2075 remains open and is the tracking issue for "
+        "the leak itself."
     ),
 )
 async def test_failed_ddl_with_warn_mode_still_bounded(pg_dsn):

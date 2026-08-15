@@ -36,6 +36,8 @@ model rather than an expensive default.
 """
 
 import os
+import signal
+import warnings
 from pathlib import Path
 
 import pytest
@@ -56,8 +58,43 @@ def pytest_configure(config):
 
     Runs before collection, so the ``dotenv.load_dotenv`` monkeypatch is active
     before any nested conftest / test module imports and re-injects a secret.
+
+    Also degrades a requested ``timeout_method = signal`` back to ``thread``
+    where SIGALRM does not exist (Windows).
+
+    This guard is DEFENSIVE, and its trigger is the command line, not the ini
+    (issue #2081). Verified with ``config.getini("timeout")``: root
+    ``pytest.ini`` carries ``timeout`` and ``timeout_method`` inside a
+    ``[pytest:local]`` section, and pytest reads ONLY ``[pytest]`` — so both
+    are dead letters and neither reaches pytest-timeout. What DOES reach it is
+    ``--timeout-method=signal``, which the two root-regression CI steps pass
+    explicitly.
+
+    Why it has to exist at all: pytest-timeout has NO fallback for a missing
+    SIGALRM. Its only coercion is signal -> thread off the main thread; with
+    ``method="signal"`` and any active timeout on a platform without SIGALRM,
+    ``pytest_timeout_set_timer`` reaches ``signal.signal(signal.SIGALRM, ...)``
+    and the run dies with ``INTERNALERROR ... AttributeError: module 'signal'
+    has no attribute 'SIGALRM'`` before a single test executes. Reproduced
+    directly, not inferred.
+
+    An explicit ``--timeout-method=thread`` still wins, because this only ever
+    tightens the unsupported case.
     """
     install_cost_guard(Path(__file__).parent / ".env")
+
+    if not hasattr(signal, "SIGALRM") and (
+        getattr(config.option, "timeout_method", None) == "signal"
+    ):
+        config.option.timeout_method = "thread"
+        warnings.warn(
+            "pytest-timeout: SIGALRM is unavailable on this platform, so the "
+            "configured `timeout_method = signal` has been degraded to "
+            "`thread`. A thread-method timeout can REPORT a hung test but "
+            "cannot kill one blocked in a C call (issue #2081).",
+            RuntimeWarning,
+            stacklevel=1,
+        )
 
 
 def pytest_collection_finish(session):

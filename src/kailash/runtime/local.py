@@ -127,6 +127,97 @@ logger = logging.getLogger(__name__)
 # Stores) of ``rules/infrastructure-sql.md`` mandates the bound.
 MAX_CHECKPOINT_LOCKS = 10_000
 
+# Interval, in seconds, between progress WARNINGs while the sync->async bridge
+# thread is still running (issue #2081). This is NOT a deadline: the join keeps
+# waiting, so a legitimately long workflow is never truncated. It only makes a
+# bridge that has stopped making progress SAY SO instead of looking identical
+# to a fast one.
+SYNC_BRIDGE_WATCHDOG_INTERVAL = 60.0
+
+
+def _join_sync_bridge(
+    thread: "threading.Thread",
+    workflow: Any,
+    *,
+    timeout: Optional[float] = None,
+) -> None:
+    """Join the sync->async bridge thread, loudly and (optionally) boundedly.
+
+    ``LocalRuntime.execute()`` called from inside a running event loop routes
+    through ``_execute_sync``, which bridges to async on a worker thread and
+    joins it. That join used to be ``thread.join()`` — no timeout, no output.
+    Exceptions raised inside the thread are captured and re-raised after the
+    join, so a RAISE can never hang the caller; only a BLOCK can, and when it
+    blocked the wait was permanent and completely silent. Three CI runs on
+    issue #2081 produced 15 and 40 minutes of wall clock and zero actionable
+    output because of it.
+
+    Default behaviour is deliberately NOT a deadline. A workflow may
+    legitimately run for hours, and silently truncating one would trade a
+    visible hang for invisible data loss. Instead the join is performed in
+    ``SYNC_BRIDGE_WATCHDOG_INTERVAL`` slices and each expiry logs a WARNING
+    naming the workflow and dumping the bridge thread's stack — which is the
+    difference between an unreadable CI job and a diagnosable one.
+
+    Deployments that DO want a hard bound opt in via
+    ``LocalRuntime(sync_bridge_timeout=...)``; on expiry that raises
+    ``RuntimeExecutionError`` naming the workflow and the bound.
+
+    Args:
+        thread: The started bridge thread.
+        workflow: The workflow being executed (for the log/error message).
+        timeout: Optional hard bound in seconds. ``None`` waits indefinitely
+            while still emitting the periodic WARNING.
+
+    Raises:
+        RuntimeExecutionError: If ``timeout`` is set and elapses.
+    """
+    label = getattr(workflow, "name", None) or f"<workflow {id(workflow)}>"
+    waited = 0.0
+    while True:
+        remaining = (
+            SYNC_BRIDGE_WATCHDOG_INTERVAL
+            if timeout is None
+            else min(SYNC_BRIDGE_WATCHDOG_INTERVAL, max(0.0, timeout - waited))
+        )
+        thread.join(timeout=remaining)
+        if not thread.is_alive():
+            return
+        waited += remaining
+
+        if timeout is not None and waited >= timeout:
+            raise RuntimeExecutionError(
+                f"Workflow '{label}' did not complete within the "
+                f"sync_bridge_timeout of {timeout}s. LocalRuntime.execute() "
+                "was called from inside a running event loop, so execution "
+                "was bridged to a worker thread; that thread is still alive "
+                "and has been abandoned. Its stack is in the WARNING above. "
+                "Raise sync_bridge_timeout, or call the async API "
+                "(execute_workflow_async) to avoid the bridge entirely."
+            )
+
+        logger.warning(
+            "runtime.sync_bridge_slow: workflow %r has been running on the "
+            "sync->async bridge thread %r for %.0fs. The join is NOT bounded "
+            "by default, so this will keep waiting; the stack below says what "
+            "it is waiting on (issue #2081).\n%s",
+            label,
+            thread.name,
+            waited,
+            _format_thread_stack(thread),
+        )
+
+
+def _format_thread_stack(thread: "threading.Thread") -> str:
+    """Render ``thread``'s current stack, or say why it could not be read."""
+    frame = sys._current_frames().get(thread.ident or -1)
+    if frame is None:
+        return "  <stack unavailable: thread has no frame in sys._current_frames()>"
+    import traceback
+
+    return "".join(traceback.format_stack(frame))
+
+
 # Allowlist of exception classes that can be referenced by name in retry config.
 # This replaces the unsafe eval() that was previously used to resolve exception names.
 _EXCEPTION_ALLOWLIST: Dict[str, type] = {
@@ -374,6 +465,8 @@ class LocalRuntime(
         checkpoint_store: Optional[Any] = None,
         checkpoint_after_each_node: bool = False,
         history_store: Optional[Any] = None,
+        # Issue #2081: opt-in hard bound on the sync->async bridge join
+        sync_bridge_timeout: Optional[float] = None,
     ):
         """Initialize the unified runtime.
 
@@ -402,6 +495,20 @@ class LocalRuntime(
             enable_connection_sharing: Whether to enable connection pool sharing across runtime instances.
             max_concurrent_workflows: Maximum number of concurrent workflows in persistent mode.
             connection_pool_size: Default size for connection pools.
+            sync_bridge_timeout: Optional hard bound, in seconds, on the
+                sync->async bridge join (issue #2081). ``execute()`` called
+                from inside a running event loop runs the workflow on a worker
+                thread and waits for it. Default ``None`` waits indefinitely —
+                a workflow may legitimately run for hours, and truncating one
+                would trade a visible hang for silent data loss — but the wait
+                is sliced, so a bridge that has stopped progressing logs a
+                WARNING with its stack every
+                ``SYNC_BRIDGE_WATCHDOG_INTERVAL`` seconds instead of hanging
+                mutely. Set a value to convert that into a
+                ``RuntimeExecutionError`` naming the workflow.
+
+        Raises:
+            ValueError: If ``sync_bridge_timeout`` is set and not positive.
         """
         # Initialize parent classes (BaseRuntime + CycleExecutionMixin)
         # Pass ALL configuration to BaseRuntime for unified initialization
@@ -841,6 +948,15 @@ class LocalRuntime(
         self._checkpoint_store = checkpoint_store
         self._checkpoint_after_each_node = bool(checkpoint_after_each_node)
         self._history_store = history_store
+        # Issue #2081: None keeps the historical wait-forever semantics, but
+        # the join is now sliced so a stuck bridge emits a stack every
+        # SYNC_BRIDGE_WATCHDOG_INTERVAL instead of failing silently.
+        if sync_bridge_timeout is not None and sync_bridge_timeout <= 0:
+            raise ValueError(
+                "sync_bridge_timeout must be a positive number of seconds or "
+                f"None (got {sync_bridge_timeout!r})"
+            )
+        self._sync_bridge_timeout = sync_bridge_timeout
         self._hook_registry = NodeCompletionHookRegistry()
         # W2 auto-subscribe: when a history store is provided, register
         # its record_event coroutine as a hook subscriber so the runtime
@@ -2331,9 +2447,21 @@ class LocalRuntime(
                 if loop:
                     loop.close()
 
-        thread = threading.Thread(target=lambda: _caller_ctx.run(run_in_thread))
+        thread = threading.Thread(
+            target=lambda: _caller_ctx.run(run_in_thread),
+            name=f"kailash-sync-bridge-{getattr(workflow, 'name', None) or id(workflow)}",
+            # daemon=True is required BY the sync_bridge_timeout path, not an
+            # aside (issue #2081). Once that bound expires we abandon a thread
+            # that is still alive; a non-daemon one would then be joined by
+            # ``threading._shutdown`` at interpreter exit, re-creating the
+            # exact unbounded wait the bound exists to remove — just moved to
+            # process teardown where it is even harder to attribute. During
+            # normal execution nothing changes: the join below keeps the
+            # caller (and the process) alive until the workflow finishes.
+            daemon=True,
+        )
         thread.start()
-        thread.join()
+        _join_sync_bridge(thread, workflow, timeout=self._sync_bridge_timeout)
 
         if exception_container:
             raise exception_container[0]
