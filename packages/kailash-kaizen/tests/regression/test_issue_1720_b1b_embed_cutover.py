@@ -102,6 +102,15 @@ class _CannedEmbedTransport:
 # Per-wire (provider, model, api_key, base_url, body-builder) matrix. api_key /
 # base_url are passed EXPLICITLY to resolve_deployment_for so no env var is read
 # (no env-mutation, no lock needed per rules/testing.md § env serialization).
+#
+# The parametrize argname is ``wire_base_url``, NOT ``base_url``. Do not rename
+# it back: ``pytest-base-url`` ships a SESSION-scoped ``base_url`` fixture plus a
+# session-scoped autouse ``_verify_url(request, base_url)`` that consumes it.
+# Parametrizing on ``base_url`` overrides that fixture with a FUNCTION-scoped
+# one, and the session-scoped consumer then fails every case in this file with
+# ``ScopeMismatch: You tried to access the function scoped fixture base_url with
+# a session scoped request object``. The name is ours and local, so renaming it
+# is the fix; widening or narrowing a third-party plugin's fixture is not.
 _WIRES = [
     ("openai", _OPENAI_MODEL, "sk-fixture", None, _openai_body),
     ("ollama", _OLLAMA_MODEL, None, "http://localhost:11434", _ollama_body),
@@ -127,13 +136,13 @@ def _client_for(provider: str, api_key, base_url, model: str) -> LlmClient:
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider,model,api_key,base_url,body_fn", _WIRES)
+@pytest.mark.parametrize("provider,model,api_key,wire_base_url,body_fn", _WIRES)
 async def test_embed_normalize_true_unit_vectors_every_wire(
-    provider, model, api_key, base_url, body_fn
+    provider, model, api_key, wire_base_url, body_fn
 ):
     """``EmbedOptions(normalize=True)`` L2-unit-normalizes the returned vector
     for EVERY wire (uniform client-side, not HF-only). [3, 4] -> [0.6, 0.8]."""
-    client = _client_for(provider, api_key, base_url, model)
+    client = _client_for(provider, api_key, wire_base_url, model)
     transport = _CannedEmbedTransport(body_fn([3.0, 4.0]))
 
     vectors = await client.embed(
@@ -153,13 +162,13 @@ async def test_embed_normalize_true_unit_vectors_every_wire(
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider,model,api_key,base_url,body_fn", _WIRES)
+@pytest.mark.parametrize("provider,model,api_key,wire_base_url,body_fn", _WIRES)
 async def test_embed_normalize_none_byte_identical_raw(
-    provider, model, api_key, base_url, body_fn
+    provider, model, api_key, wire_base_url, body_fn
 ):
     """No options AND ``EmbedOptions(normalize=None)`` both leave the raw wire
     vector untouched (additive-neutrality)."""
-    client = _client_for(provider, api_key, base_url, model)
+    client = _client_for(provider, api_key, wire_base_url, model)
 
     no_opts = await client.embed(
         ["x"], model=model, http_client=_CannedEmbedTransport(body_fn([3.0, 4.0]))
