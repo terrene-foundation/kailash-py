@@ -559,7 +559,10 @@ def resolve_server_auth(
 
 
 def mounted_subapp_auth_kwargs(
-    *, parent_label: str, parent_is_authenticated: bool
+    *,
+    parent_label: str,
+    parent_is_authenticated: bool,
+    parent_external_auth_reason: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Authentication arguments for a sub-application mounted on a parent.
 
@@ -569,23 +572,47 @@ def mounted_subapp_auth_kwargs(
     therefore install nothing -- a second layer would demand a second
     credential on a request the parent already authenticated.
 
-    The parent owns the decision in BOTH directions, which is what makes this
-    an honest ``external_auth_reason`` even when the parent is unauthenticated:
-    the declaration names WHO decides, and the parent has already logged the
-    exposure WARN exactly once at its own construction. Emitting
-    ``require_auth=False`` here instead would re-log that same WARN once per
-    registered workflow, and a warning that repeats per registration is a
-    warning operators filter out.
+    The parent owns the decision in every direction, which is what makes this
+    an honest ``external_auth_reason`` regardless of which branch the parent's
+    own :func:`resolve_server_auth` took. But ``parent_is_authenticated=False``
+    is not one state, it is two, and they render differently (issue #2113):
+
+    * The parent called ``resolve_server_auth(require_auth=False, ...)`` -- an
+      explicit opt-out. The parent already logged a loud ``server_auth.disabled``
+      WARN naming the exposure, exactly once at its own construction. Emitting
+      ``require_auth=False`` here instead would re-log that same WARN once per
+      registered workflow, and a warning that repeats per registration is a
+      warning operators filter out.
+    * The parent called ``resolve_server_auth(external_auth_reason=..., ...)``
+      -- authentication is installed by something OUTSIDE this server (Nexus's
+      own ``nexus.auth.jwt.JWTMiddleware``, an authenticating proxy). The
+      parent logged an INFO ``server_auth.external``, never a WARN, and
+      authentication is not disabled -- it is provided elsewhere. Rendering
+      the disabled-case text here would assert a WARN that never fired and
+      describe active authentication as an exposure.
+
+    Callers that resolved via ``external_auth_reason`` MUST pass it through as
+    ``parent_external_auth_reason`` so this function can render the case that
+    actually happened, rather than collapsing both into "disabled" the way a
+    caller checking only ``self._auth_config is not None`` would.
 
     Args:
         parent_label: Human-readable identity of the mounting server.
-        parent_is_authenticated: Whether the parent installed a gate.
+        parent_is_authenticated: Whether the parent installed its own gate.
+        parent_external_auth_reason: The parent's own ``external_auth_reason``
+            when THAT is why the parent installed no gate of its own (i.e.
+            ``parent_is_authenticated`` is False for this reason, not because
+            of ``require_auth=False``). ``None`` when not applicable.
 
     Returns:
         Keyword arguments to splat into the sub-application's constructor.
     """
     if parent_is_authenticated:
         state = "which authenticates every request before routing to this mount"
+    elif parent_external_auth_reason:
+        state = (
+            f"which installs no gate of its own because {parent_external_auth_reason}"
+        )
     else:
         state = (
             "which has authentication explicitly disabled; it logged that "
