@@ -789,9 +789,7 @@ class WorkflowAPIGateway:
         path_allowlist = compile_path_allowlist(allowed_paths, name=name)
         methods = normalize_allowed_methods(allowed_methods, name=name)
 
-        max_response_bytes = normalize_max_response_bytes(
-            max_response_bytes, name=name
-        )
+        max_response_bytes = normalize_max_response_bytes(max_response_bytes, name=name)
 
         # Support multiple backends via comma-separated URLs
         backends = [u.strip() for u in proxy_url.split(",") if u.strip()]

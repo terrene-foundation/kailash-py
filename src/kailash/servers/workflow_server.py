@@ -744,7 +744,11 @@ class WorkflowServer:
         # several loops each get a live one instead of a corpse.
         loop = asyncio.get_running_loop()
         session = self._proxy_session
-        if session is not None and not session.closed and self._proxy_session_loop is loop:
+        if (
+            session is not None
+            and not session.closed
+            and self._proxy_session_loop is loop
+        ):
             return session
 
         if session is not None and not session.closed:
@@ -1095,9 +1099,7 @@ class WorkflowServer:
             name=name,
             supported=("GET", "POST", "PUT", "DELETE", "PATCH"),
         )
-        max_response_bytes = normalize_max_response_bytes(
-            max_response_bytes, name=name
-        )
+        max_response_bytes = normalize_max_response_bytes(max_response_bytes, name=name)
         # The DESTINATION control (#2091). The four above constrain what a
         # caller can do; this one constrains what the deployment can point at.
         reject_unsafe_proxy_destination(

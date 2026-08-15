@@ -64,24 +64,16 @@ import httpx
 from kailash.utils.network_guard import (
     DEFAULT_BLOCKED_NETWORKS as _DEFAULT_BLOCKED_NETWORKS,
 )
-from kailash.utils.network_guard import (
-    METADATA_HOSTNAMES as _METADATA_HOSTNAMES,
-)
+from kailash.utils.network_guard import METADATA_HOSTNAMES as _METADATA_HOSTNAMES
 from kailash.utils.network_guard import METADATA_IPS as _METADATA_IPS
 from kailash.utils.network_guard import REASON_ALLOWLIST
 from kailash.utils.network_guard import check_url as _core_check_url
 from kailash.utils.network_guard import (
     detect_encoded_ip_bypass as _detect_encoded_ip_bypass,
 )
-from kailash.utils.network_guard import (
-    is_private_ipv4 as _is_private_ipv4,
-)
-from kailash.utils.network_guard import (
-    is_private_ipv6 as _is_private_ipv6,
-)
-from kailash.utils.network_guard import (
-    iter_resolved_ips as _iter_resolved_ips,
-)
+from kailash.utils.network_guard import is_private_ipv4 as _is_private_ipv4
+from kailash.utils.network_guard import is_private_ipv6 as _is_private_ipv6
+from kailash.utils.network_guard import iter_resolved_ips as _iter_resolved_ips
 from kailash.utils.network_guard import url_fingerprint as _url_fingerprint
 
 logger = logging.getLogger(__name__)
@@ -144,6 +136,7 @@ class InvalidEndpointError(HttpClientError):
 # injects nexus's exception type through the shared implementation's
 # `error_factory` hook.
 
+
 def check_url(
     url: str,
     *,
@@ -187,6 +180,7 @@ def check_url(
         allow_metadata=False,
         error_factory=InvalidEndpointError,
     )
+
 
 # ---------------------------------------------------------------------------
 # SafeDnsTransport — connect-time SSRF re-check
@@ -277,8 +271,6 @@ class HttpClientConfig:
                 "blocked_networks",
                 _DEFAULT_BLOCKED_NETWORKS,
             )
-
-
 
 
 # ---------------------------------------------------------------------------

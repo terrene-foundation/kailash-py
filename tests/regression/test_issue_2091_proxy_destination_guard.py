@@ -52,7 +52,10 @@ async def _allow(request: Request):
 #: Destinations with NO legitimate proxy use. Blocked by default.
 BLOCKED_DESTINATIONS = [
     ("http://169.254.169.254/", "metadata_service"),
-    ("http://169.254.169.254/latest/meta-data/iam/security-credentials/", "metadata_service"),
+    (
+        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+        "metadata_service",
+    ),
     ("http://metadata.google.internal/", "metadata_host"),
     ("http://metadata.azure.com/", "metadata_host"),
     ("http://169.254.1.5/", "link_local"),
@@ -274,7 +277,6 @@ def test_core_and_nexus_share_one_implementation():
     today are exactly the thing that drifts.
     """
     import nexus.http_client as nh
-
     from kailash.utils import network_guard
 
     assert nh._core_check_url is network_guard.check_url
@@ -298,9 +300,7 @@ def test_nexus_keeps_its_strict_posture_through_the_shared_guard():
     assert exc.value.reason == "private_ipv4"
 
     # ...while the core proxy posture accepts exactly that destination.
-    reject_unsafe_proxy_destination(
-        "http://10.1.2.3:8080/", name="n", surface="test"
-    )
+    reject_unsafe_proxy_destination("http://10.1.2.3:8080/", name="n", surface="test")
 
 
 def test_unresolvable_destination_is_permitted_but_loud(caplog):
