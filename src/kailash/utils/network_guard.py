@@ -66,6 +66,9 @@ __all__ = [
     "BlockedDestinationError",
     "check_url",
     "detect_encoded_ip_bypass",
+    "IPV4_TRANSLATED_NETWORK",
+    "NAT64_WELLKNOWN_NETWORK",
+    "embedded_ipv4",
     "is_private_ipv4",
     "is_private_ipv6",
     "iter_resolved_ips",
@@ -134,8 +137,12 @@ def url_fingerprint(raw: Optional[str]) -> str:
 # these forms to bypass a guard that only checks ``is_private`` on the IPv6
 # wrapper. Reject both ranges unconditionally -- no legitimate external
 # service lives inside a translation-prefix range.
-_IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765 SIIT
-_NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052
+IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765 SIIT
+NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052
+
+#: Private aliases retained so existing internal references keep resolving.
+_IPV4_TRANSLATED_NETWORK = IPV4_TRANSLATED_NETWORK
+_NAT64_WELLKNOWN_NETWORK = NAT64_WELLKNOWN_NETWORK
 
 #: Cloud metadata IPs -- the most common SSRF exfiltration targets on
 #: AWS / GCP / Azure. Blocked on EVERY posture, including ``allow_private``.
@@ -195,6 +202,44 @@ def is_private_ipv6(ip: ipaddress.IPv6Address) -> bool:
     if ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK:
         return True
     return False
+
+
+def embedded_ipv4(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> Optional[ipaddress.IPv4Address]:
+    """Return the IPv4 address an IPv6 wrapper embeds, or ``None``.
+
+    Covers the three forms that carry an IPv4 in their low 32 bits:
+
+    * ``::ffff:a.b.c.d`` -- the strict IPv4-mapped form ``ipaddress`` models
+      directly via ``.ipv4_mapped``;
+    * ``::ffff:0:a.b.c.d`` -- RFC 2765 SIIT IPv4-translated, which
+      ``.ipv4_mapped`` does NOT recognise;
+    * ``64:ff9b::a.b.c.d`` -- the RFC 6052 NAT64 well-known prefix.
+
+    The last two are why this helper exists: an attacker wrapping
+    169.254.169.254 in either prefix produces an address whose STRING form
+    matches no metadata entry and whose ``.is_link_local`` is False, so a
+    guard testing only the wrapper waves it through.
+    """
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return None
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    if ip in IPV4_TRANSLATED_NETWORK or ip in NAT64_WELLKNOWN_NETWORK:
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
+def _metadata_candidates(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> "list[ipaddress.IPv4Address | ipaddress.IPv6Address]":
+    """The address plus any IPv4 it embeds -- both must clear the metadata gate."""
+    candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
+    inner = embedded_ipv4(ip)
+    if inner is not None:
+        candidates.append(inner)
+    return candidates
 
 
 def _ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
@@ -457,11 +502,26 @@ def _validate_ip(
     # ``_ip_reason`` returns the same "link_local" / "metadata_service"
     # string -- while making them un-widenable by the relaxed one. They are
     # also never loopback, so hoisting above the carve-out changes nothing.
+    #
+    # The check runs over the address AND any IPv4 it EMBEDS. An IPv6 wrapper
+    # is a real bypass, not a theoretical one -- measured on the default proxy
+    # posture (allow_private=True) before this loop existed:
+    #
+    #     http://[64:ff9b::169.254.169.254]/  -> ACCEPTED  <== IMDS REACHABLE
+    #     http://[::ffff:0:a9fe:a9fe]/        -> ACCEPTED  <== IMDS REACHABLE
+    #
+    # The translation-range constants existed and were documented
+    # "unconditional", but were only consulted from ``is_private_ipv6``, which
+    # runs ONLY under ``if not allow_private:`` -- so on the posture the proxy
+    # actually ships they never executed. Matching on ``str(ip)`` alone was
+    # the other half: the wrapper's string form is never equal to the bare
+    # metadata address, so the equality test could not see through it.
     if not allow_metadata:
-        if str(ip) in METADATA_IPS:
-            raise error_factory("metadata_service", raw_url=url)
-        if ip.is_link_local:
-            raise error_factory("link_local", raw_url=url)
+        for candidate in _metadata_candidates(ip):
+            if str(candidate) in METADATA_IPS:
+                raise error_factory("metadata_service", raw_url=url)
+            if candidate.is_link_local:
+                raise error_factory("link_local", raw_url=url)
 
     if not allow_private:
         if isinstance(ip, ipaddress.IPv4Address) and is_private_ipv4(ip):

@@ -60,6 +60,27 @@ BLOCKED_DESTINATIONS = [
     ("http://metadata.azure.com/", "metadata_host"),
     ("http://169.254.1.5/", "link_local"),
     ("http://[fe80::1]/", "link_local"),
+    # IPv6 WRAPPERS around the metadata address. These reached IMDS on the
+    # DEFAULT posture until the metadata gate learned to look through the
+    # wrapper -- the translation-range constants existed and were documented
+    # "unconditional", but were consulted ONLY from `is_private_ipv6`, which
+    # runs only under `if not allow_private:`, and the proxy ships
+    # `require_public_destination=False` (i.e. allow_private=True). Absent
+    # IPv6 coverage here is why it shipped.
+    ("http://[64:ff9b::169.254.169.254]/", "metadata_service"),
+    ("http://[64:ff9b::a9fe:a9fe]/", "metadata_service"),
+    ("http://[::ffff:0:a9fe:a9fe]/", "metadata_service"),
+    ("http://[::ffff:0:169.254.169.254]/", "metadata_service"),
+    ("http://[::ffff:169.254.169.254]/", "link_local"),
+]
+
+#: Public addresses wrapped in the SAME IPv6 translation prefixes. The
+#: metadata gate must see THROUGH the wrapper without refusing every address
+#: that merely uses one -- the no-false-positive polarity for the fix above.
+WRAPPED_PUBLIC_DESTINATIONS = [
+    "http://[::ffff:8.8.8.8]/",
+    "http://[64:ff9b::8.8.8.8]/",
+    "https://[2606:4700:4700::1111]/",
 ]
 
 #: Destinations a reverse proxy is LEGITIMATELY pointed at. A blanket RFC1918
@@ -129,6 +150,45 @@ def test_legitimate_internal_destination_still_registers(surface_name, make, url
         assert "internal" in surface.workflows
     finally:
         surface.close()
+
+
+@pytest.mark.parametrize("surface_name,make", SURFACES)
+@pytest.mark.parametrize("url", WRAPPED_PUBLIC_DESTINATIONS)
+def test_ipv6_wrapped_public_addresses_still_register(surface_name, make, url):
+    """No-false-positive polarity for the wrapper-aware metadata gate.
+
+    Looking through the wrapper must not degrade into refusing every address
+    that uses one — a guard that blocks all of `::ffff:`/`64:ff9b::` would
+    pass the bypass tests while breaking legitimate NAT64 deployments.
+    """
+    surface = make()
+    try:
+        surface.proxy_workflow(
+            name="internal",
+            proxy_url=url,
+            allowed_paths=["*"],
+            auth_dependency=_allow,
+        )
+        assert "internal" in surface.workflows
+    finally:
+        surface.close()
+
+
+def test_embedded_ipv4_extracts_the_wrapped_address():
+    """Unit-level pin on the helper the metadata gate depends on."""
+    from kailash.utils.network_guard import embedded_ipv4
+
+    cases = {
+        "::ffff:169.254.169.254": "169.254.169.254",
+        "::ffff:0:a9fe:a9fe": "169.254.169.254",
+        "64:ff9b::a9fe:a9fe": "169.254.169.254",
+        "::ffff:8.8.8.8": "8.8.8.8",
+    }
+    for wrapper, expected in cases.items():
+        assert str(embedded_ipv4(ipaddress.ip_address(wrapper))) == expected
+    # A plain IPv4 and an unrelated IPv6 embed nothing.
+    assert embedded_ipv4(ipaddress.ip_address("8.8.8.8")) is None
+    assert embedded_ipv4(ipaddress.ip_address("2606:4700:4700::1111")) is None
 
 
 @pytest.mark.parametrize("surface_name,make", SURFACES)
