@@ -843,22 +843,38 @@ def pytest_collection_modifyitems(config, items):
         if "e2e" in str(item.fspath) or "slow" in item.name:
             item.add_marker(pytest.mark.slow)
 
-        # Add infrastructure requirement markers based on test content
+        # Add infrastructure requirement markers based on test content.
+        #
+        # BUG FIX (found while wiring tests/regression/ into CI, #2074):
+        # this block used to keyword-match against `str(item.function)`,
+        # which for a plain function is CPython's default repr --
+        # `<function test_name at 0x7f8a2c1b3af0>` -- i.e. it includes the
+        # function OBJECT'S MEMORY ADDRESS, ASLR-randomized fresh on every
+        # process start. Of the keyword list below, "db" is the only
+        # substring made entirely of valid hex characters (0-9a-f), so
+        # roughly ~3% of ALL collected items got a SPURIOUS
+        # `requires_postgres` marker on any given run purely because their
+        # function object's address happened to contain "db" -- silently
+        # and non-reproducibly excluding a different random ~3% of the
+        # suite from every infra-free CI step (this one and the pre-existing
+        # "expanded FAST unit tiers" step both use the SAME conftest.py)
+        # every time it ran. Measured: three consecutive
+        # `--collect-only -m 'not (... requires_postgres ...)'` runs against
+        # this same code produced 351/353/330 deselected out of the same
+        # 1654 collected -- three different numbers for the same command.
+        # `item.name` (the test's display name string) is deterministic and
+        # matches the function's docstring intent ("based on their location
+        # and name") -- switching to it removes the non-determinism.
         if hasattr(item, "function") and item.function:
             # Check for database usage in test parameters or names
             if any(
-                keyword in str(item.function).lower()
+                keyword in item.name.lower()
                 for keyword in ["postgres", "database", "db"]
             ):
                 item.add_marker(pytest.mark.requires_postgres)
-            if any(
-                keyword in str(item.function).lower() for keyword in ["redis", "cache"]
-            ):
+            if any(keyword in item.name.lower() for keyword in ["redis", "cache"]):
                 item.add_marker(pytest.mark.requires_redis)
-            if any(keyword in str(item.function).lower() for keyword in ["docker"]):
+            if any(keyword in item.name.lower() for keyword in ["docker"]):
                 item.add_marker(pytest.mark.requires_docker)
-            if any(
-                keyword in str(item.function).lower()
-                for keyword in ["ollama", "llm", "ai"]
-            ):
+            if any(keyword in item.name.lower() for keyword in ["ollama", "llm", "ai"]):
                 item.add_marker(pytest.mark.requires_ollama)

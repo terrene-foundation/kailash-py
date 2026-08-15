@@ -33,9 +33,75 @@ name: Test kailash-kaizen
 #      Uses the SAME broad exclusion set as invocation 2 (regression/ mixes
 #      infra-free and infra-requiring tests, same shape as tests/unit/<tier>).
 #      Baseline established BEFORE gating, per the issue's own instruction
-#      not to assume it would be clean: -m filter selects 1321/1654; actual
-#      run: 1288 passed, 342 deselected, 24 xfailed, 0 failed — genuinely
-#      clean, no fixes were required to land this step blocking.
+#      not to assume it would be clean: -m filter selects 1229/1654; actual
+#      run: 1221 passed, 425 deselected, 8 xfailed, 0 failed (1221+425+8=1654,
+#      reconciles). Confirmed reproducible across repeat runs — see the
+#      pytest_collection_modifyitems fix below; do not re-cite any other
+#      number pair, several were measured before that fix and none of them
+#      reconcile with each other or with this one.
+#
+#      MARKER-ASSIGNMENT DETERMINISM FIX (found while establishing the
+#      baseline above): `tests/conftest.py::pytest_collection_modifyitems`
+#      governs marker auto-tagging for the ENTIRE kaizen tests/ tree — every
+#      invocation in this file, not just this one. It used to keyword-match
+#      infra markers against `str(item.function)`, which for a plain
+#      function is CPython's default repr INCLUDING the function object's
+#      ASLR-randomized memory address (`<function test_x at 0x7f8a2c1b3af0>`).
+#      "db" is the only keyword in that list made entirely of valid hex
+#      characters, so ~3% of ALL collected items got a spurious
+#      `requires_postgres` marker on any given process run purely by address
+#      coincidence — three consecutive identical `--collect-only` runs
+#      against invocation 3 measured 351/353/330 deselected out of the same
+#      1654 collected before the fix. Changed to `item.name.lower()`
+#      (deterministic, matches the hook's own docstring intent "based on
+#      their location and name"); three consecutive runs now agree exactly.
+#
+#      RESIDUE (issue #2152): the exclusion set above is a real disposition,
+#      not an oversight — several markers in it (openai/anthropic/google,
+#      cost, requires_docker/postgres/redis) need paid API calls or real
+#      infrastructure this infra-free step correctly does not fake. But the
+#      425 tests/regression/ tests it deselects currently run in NO
+#      workflow (same is true of invocation 2's 1067 deselected — no other
+#      job in this repo runs tests/unit/<tier>/ with a narrower filter
+#      either). Per-marker breakdown for tests/regression/ (a test may carry
+#      more than one, so these do not sum to 425): requires_ollama 342,
+#      requires_postgres 41, requires_redis 32, requires_docker 12,
+#      integration 2, performance 3, all others (e2e/requires_azure/
+#      requires_google/benchmark/requires_llm/llm_execution/real_llm/cost/
+#      stress/endurance/memory_intensive/flaky/slow/load/migration/openai/
+#      anthropic/google/tier3/requires_db) 0. The requires_ollama count is
+#      dominated by a SEPARATE, pre-existing false-positive-keyword defect
+#      in the same hook (also #2152) — `item.name.lower()` still substring-
+#      matches "ai" against ordinary English words with no infra relevance
+#      (e.g. "raises", "failure", "chained", "contains" all contain "ai"):
+#      only ~125 of the 342 requires_ollama-tagged regression tests actually
+#      mention "ollama"/"llm" in their name. NOT fixed here — auditing which
+#      of ~425 (invocation 3) / ~1067 (invocation 2) deselections are
+#      false-positive keyword matches vs. genuine infra requirements is
+#      separate, larger work; #2152 tracks it. The exclusion set also
+#      includes `flaky` and `slow` — a test marked flaky that never runs is
+#      exactly how a real failure hides behind a marker (precedent: root SDK
+#      tests/tier2_integration/api/test_workflow_api_async_runtime.py::
+#      test_async_execution_no_threading carries `xfail(reason="Flaky: async
+#      event loop pollution", strict=False)` but was found, per the
+#      sweep-cont17 management report § D3, to have actually been catching
+#      ServerAuthNotConfiguredError — a different package's tests/, same
+#      failure shape as this residue).
+#
+#      ONE test is individually quarantined (issue #2149, found while
+#      re-verifying invocation 2 after the determinism fix above changed
+#      which tests it includes): tests/unit/providers/test_ollama_
+#      availability.py::TestOllamaSpecificModels::test_vision_models_not_found
+#      depends on a SIBLING test in the same file leaving kaizen.providers
+#      reloaded with OLLAMA_AVAILABLE=True via an incomplete
+#      patch.dict+importlib.reload cleanup — it fails deterministically when
+#      run standalone or as part of the full expanded-tiers selection, and
+#      only passes when that sibling happens to run first. Pre-existing,
+#      unrelated to markers (its own name matches no exclusion keyword);
+#      the determinism fix above made it visible by stabilizing which OTHER
+#      tests run around it. See the `pytest.mark.skip` at the test itself
+#      for the full reasoning — it is a skip, not an xfail, because it is
+#      order-dependent, not intermittent.
 #
 #      Two subdirectories are deliberately EXCLUDED by directory (a third —
 #      tests/unit/strategies/ — was RESOLVED and is no longer excluded; see
