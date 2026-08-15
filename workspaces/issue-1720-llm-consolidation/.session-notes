@@ -24,7 +24,56 @@ Independent: #2136 → #2150 (stacked); **#2137 MERGED (`2e3ddd9e7`)**; **#2148 
 **FIVE MERGED:** #2143, #2144, #2137, #2148, #2147. The CI lane is COMPLETE — root
 regression gates restored and running to completion on the real runner (2403 passed / 277s).
 
-## ⚠ START HERE — PR #2159 is open and MUST NOT merge until 2 test bugs are fixed
+## ROOT-CAUSE FIX — #2160 MERGED (`995d72bc4`), #2159 rebased green, awaiting CI
+
+The marker defect is fixed at the root, not patched again. **The name is no longer
+consulted at all.** A test needs infrastructure IFF its resolved fixture closure
+(`item.fixturenames`, transitive) contains a fixture that provides it — a structural fact
+about the dependency graph, not a guess about English.
+
+Why the two prior fixes were both symptom-level, measured over 14,773 items:
+```
+name-matcher agrees with the fixture graph        : 12544 (84.9%)
+FALSE POSITIVES (name says infra, no infra fixture): 2246
+FALSE NEGATIVES (uses infra fixture, name misses)  :    2
+```
+The FALSE NEGATIVES are the half no word-list edit reaches: `test_integration_multi_service`
+(redis) and `test_audit_hook_includes_trace_id` (postgres) requested infra fixtures, went
+UNMARKED, and RAN in infra-free CI where they can only fail or flake. Both correct now.
+
+`tests/unit/test_infra_marker_mapping.py` guards the three decay paths, **each
+mutation-verified to RED** (unmapped fixture / renamed fixture / name-inference
+reintroduced), conftest restored byte-identical after each.
+
+Progression on the suite CI runs (`tests/regression/`, full infra-free filter):
+```
+main (before)            : 1288 passed, 342 deselected   [342 was a random variable]
+keyword patch            : 1494 passed, 145 deselected, 3 failed, 4 errors
+fixture graph alone      : 1616 passed,   5 deselected, 3 failed, 6 errors
+fixture graph + #2160    : 1623 passed,   5 deselected, 0 failed, 0 errors
+```
+
+### What #2160 found (all three verified independently before merge)
+1. **A live product bug** — MCP auto-discovery aborted the ENTIRE server registration when
+   one method declared `**kwargs`, so auto-registration registered nothing. Fixed in
+   `mcp_mixin.py`: an explicit tool list is a demand (publish or raise); auto-discovery
+   warns past un-publishable methods.
+2. **The ScopeMismatch cause** — a fixture shadowing `pytest-base-url`'s `base_url`, not a
+   scope that needed widening.
+3. **The stale-wheel trap, second instance.** `test_issue_1973` failed because
+   `kaizen_agents` resolved to `site-packages` (old wheel) from kailash-kaizen's tree and to
+   branch source from kaizen-agents' tree. The product was fine; the test placement was wrong.
+4. **`packages/kaizen-agents/tests/` had NEVER run in CI — 812 tests.** The only
+   `packages/kaizen-agents` references were `paths:` TRIGGER filters (which workflow runs),
+   not pytest targets. Now wired into `test-kailash-kaizen.yml` with baseline
+   `812 passed, 2 deselected, 0 failed` established BEFORE wiring.
+
+**Four independent never-ran mechanisms found in one chain:** masked Tier 2 (#2038),
+unwired kaizen regression (#2074), memory-address markers (#2152), unreferenced package
+suite (#2160). Assume more exist; the pattern is "a control that reports success without
+doing its job."
+
+## (superseded) PR #2159 blocker notes
 
 `fix/2152-marker-substring-boundary` (`255b94031`) fixes the F1 regression below. It is
 CORRECT and verified both polarities, but it RELEASES ~1,627 previously-excluded tests
