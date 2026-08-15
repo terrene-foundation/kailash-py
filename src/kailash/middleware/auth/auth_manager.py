@@ -42,7 +42,15 @@ from ...nodes.security import (
 )
 from ...nodes.transform import DataTransformer
 from ...utils.http_errors import safe_http_detail
-from .api_keys import APIKeyRecord, APIKeyStore, InMemoryAPIKeyStore, hash_api_key
+from .api_keys import (
+    APIKeyRecord,
+    APIKeyStore,
+    InMemoryAPIKeyStore,
+    derive_secret_digest,
+    generate_api_key,
+    generate_salt,
+    split_api_key,
+)
 from .revocation import InMemoryTokenRevocationStore, TokenRevocationStore
 
 logger = logging.getLogger(__name__)
@@ -416,20 +424,25 @@ class MiddlewareAuthManager:
         if not self.enable_api_keys or self._api_key_store is None:
             raise HTTPException(status_code=400, detail="API keys are disabled")
 
-        # Generate a secure API key. `token_urlsafe` is ASCII, which keeps the
-        # key presentable through the header path that rejects non-ASCII (#2114).
-        api_key = f"sk_{secrets.token_urlsafe(32)}"
+        # `sk_<key_id>.<secret>`, both halves from `secrets.token_urlsafe` and
+        # therefore ASCII, which keeps the key presentable through the header
+        # path that rejects non-ASCII (#2114). Only the secret authorizes, and
+        # only its salted digest is stored.
+        api_key, key_id, secret = generate_api_key()
+        salt = generate_salt()
 
         record = APIKeyRecord(
             user_id=user_id,
             key_name=key_name,
+            secret_digest=derive_secret_digest(secret, salt),
+            salt=salt,
             permissions=list(permissions or []),
             expires_at=expires_at,
             metadata=dict(metadata or {}),
         )
 
         try:
-            self._api_key_store.store(key_hash=hash_api_key(api_key), record=record)
+            self._api_key_store.store(key_id=key_id, record=record)
         except Exception as e:
             # A store that refused the write has NOT issued a key. Returning the
             # plaintext anyway would hand the caller a credential that can never
@@ -473,28 +486,45 @@ class MiddlewareAuthManager:
         if not self.enable_api_keys or self._api_key_store is None:
             raise HTTPException(status_code=400, detail="API keys are disabled")
 
-        try:
-            record = self._api_key_store.lookup(key_hash=hash_api_key(api_key))
-        except Exception as e:
-            # A store failure is not an authentication. Fail CLOSED and record
-            # it: a backend outage must never widen access.
-            self._emit_security_event(
-                "api_key_verification_failed", "MEDIUM", {"error": type(e).__name__}
-            )
-            raise HTTPException(status_code=401, detail="Invalid API key") from e
+        parts = split_api_key(api_key)
+        record = None
+        if parts is not None:
+            key_id, secret = parts
+            try:
+                record = self._api_key_store.lookup(key_id=key_id)
+            except Exception as e:
+                # A store failure is not an authentication. Fail CLOSED and
+                # record it: a backend outage must never widen access.
+                self._emit_security_event(
+                    "api_key_verification_failed", "MEDIUM", {"error": type(e).__name__}
+                )
+                raise HTTPException(status_code=401, detail="Invalid API key") from e
 
-        # An unknown key, a revoked one (dropped from the store), and an expired
-        # one are the same answer to the caller: no principal. Distinguishing
-        # them in the response would tell an anonymous prober which of its
-        # guesses had once been a real key.
-        if record is None or record.is_expired():
+        # A malformed key, an unknown one, a revoked one (dropped from the
+        # store), an expired one, and a well-formed key_id presented with the
+        # WRONG secret are all the same answer to the caller: no principal.
+        # Distinguishing them in the response would tell an anonymous prober
+        # which of its guesses named a real key.
+        #
+        # `record.verify_secret` is the load-bearing check, and finding a record
+        # is NOT authentication: the key_id half is public, so a caller who
+        # learns one from a log could otherwise present it with any secret.
+        if (
+            parts is None
+            or record is None
+            or record.is_expired()
+            or not record.verify_secret(parts[1])
+        ):
             self._emit_security_event(
                 "api_key_verification_failed",
                 "MEDIUM",
-                {"reason": "unknown, revoked, or expired key"},
+                {"reason": "malformed, unknown, revoked, expired, or wrong secret"},
             )
             raise HTTPException(status_code=401, detail="Invalid API key")
 
+        # The digest and salt are deliberately NOT in the returned dict: this
+        # value flows to application code and into any log that records the
+        # principal, and a verifier has no use for verification material.
         return record.to_dict()
 
     async def revoke_api_key(self, api_key: str) -> bool:
@@ -518,9 +548,24 @@ class MiddlewareAuthManager:
         if not self.enable_api_keys or self._api_key_store is None:
             raise HTTPException(status_code=400, detail="API keys are disabled")
 
-        key_hash = hash_api_key(api_key)
-        record = self._api_key_store.lookup(key_hash=key_hash)
-        revoked = self._api_key_store.revoke(key_hash=key_hash)
+        parts = split_api_key(api_key)
+        if parts is None:
+            # A malformed key was never issued, so there is nothing to revoke.
+            # Reported as "no key removed" rather than raised: the end state the
+            # caller asked for already holds.
+            return False
+
+        key_id, secret = parts
+        record = self._api_key_store.lookup(key_id=key_id)
+
+        # Revocation requires proving possession of the SECRET, not merely
+        # naming a key_id. The id half is public and may appear in an audit log,
+        # so revoking on the id alone would let anyone who read that log revoke
+        # another principal's key -- a denial-of-service with no credential.
+        if record is None or not record.verify_secret(secret):
+            return False
+
+        revoked = self._api_key_store.revoke(key_id=key_id)
 
         if revoked and self.enable_audit:
             self.audit_logger.execute(

@@ -161,17 +161,30 @@ async def test_two_keys_do_not_authenticate_as_each_other(manager):
 
 
 async def test_plaintext_key_is_never_stored(manager):
-    """The store holds digests, so a dump leaks nothing presentable."""
+    """The store holds a salted digest, so a dump leaks nothing presentable."""
     api_key = await manager.create_api_key(user_id="u-5", key_name="k")
 
     store = manager._api_key_store
-    assert api_key not in repr(store.__dict__)
+    dump = repr(store.__dict__)
+    assert api_key not in dump
     assert store.count() == 1
 
-    from kailash.middleware.auth.api_keys import hash_api_key
+    from kailash.middleware.auth.api_keys import split_api_key
 
-    # The one entry is keyed by the digest, and the digest is not reversible.
-    assert store.lookup(key_hash=hash_api_key(api_key)) is not None
+    key_id, secret = split_api_key(api_key)
+
+    # The SECRET half is absent from the store in every form; only the public
+    # id and the salted digest are present.
+    assert secret not in dump
+    record = store.lookup(key_id=key_id)
+    assert record is not None
+    assert record.secret_digest and record.secret_digest != secret
+
+    # And the record the caller receives on a successful verification carries
+    # no verification material at all.
+    returned = await manager.verify_api_key(api_key)
+    assert "secret_digest" not in returned
+    assert "salt" not in returned
 
 
 async def test_api_keys_disabled_refuses_every_operation():
@@ -221,13 +234,13 @@ async def test_store_failure_fails_closed(manager):
     from kailash.middleware.auth.api_keys import APIKeyStore
 
     class BrokenStore(APIKeyStore):
-        def store(self, *, key_hash, record):
+        def store(self, *, key_id, record):
             raise RuntimeError("backend down")
 
-        def lookup(self, *, key_hash):
+        def lookup(self, *, key_id):
             raise RuntimeError("backend down")
 
-        def revoke(self, *, key_hash):
+        def revoke(self, *, key_id):
             raise RuntimeError("backend down")
 
     broken = MiddlewareAuthManager(
@@ -284,6 +297,92 @@ async def test_x_api_key_header_authenticates_through_the_dependency(manager):
     with pytest.raises(HTTPException) as excinfo:
         await verify_user(_request("sk_wrong"), credentials=None)
     assert excinfo.value.status_code == 401
+
+
+async def test_public_key_id_alone_does_not_authenticate(manager):
+    """The key_id half is PUBLIC -- it must authorize nothing on its own.
+
+    Splitting a key into a public id and a secret is what lets the store be
+    addressed by a non-credential and lets an audit log name a key. That is only
+    safe if presenting a real key_id with a wrong secret is refused, so this is
+    the test that makes the design sound rather than merely convenient.
+    """
+    from kailash.middleware.auth.api_keys import split_api_key
+
+    api_key = await manager.create_api_key(user_id="u-8", key_name="split")
+    key_id, secret = split_api_key(api_key)
+
+    for forged in (
+        f"sk_{key_id}.wrong-secret",
+        f"sk_{key_id}.",
+        f"sk_{key_id}",
+        f"sk_{key_id}.{secret[:-1]}",
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            await manager.verify_api_key(forged)
+        assert excinfo.value.status_code == 401, forged
+
+    # CONTROL: the intact key still works, so the refusals above are the secret
+    # check and not a broken parser.
+    assert (await manager.verify_api_key(api_key))["user_id"] == "u-8"
+
+
+async def test_malformed_keys_are_refused_without_raising(manager):
+    """A malformed key is a failed authentication, not a server fault."""
+    for malformed in ("", "not-a-key", "sk_", "sk_.", ".", "sk_no-separator"):
+        with pytest.raises(HTTPException) as excinfo:
+            await manager.verify_api_key(malformed)
+        assert excinfo.value.status_code == 401, malformed
+
+
+async def test_revocation_requires_the_secret_not_just_the_id(manager):
+    """Revoking on a public id alone would be credential-free denial of service.
+
+    The key_id may appear in an audit log by design. If revocation accepted it
+    without the secret, anyone who read that log could disable another
+    principal's key.
+    """
+    from kailash.middleware.auth.api_keys import split_api_key
+
+    api_key = await manager.create_api_key(user_id="u-9", key_name="revoke")
+    key_id, _ = split_api_key(api_key)
+
+    assert await manager.revoke_api_key(f"sk_{key_id}.wrong-secret") is False
+    # Still live: the forged revocation changed nothing.
+    assert (await manager.verify_api_key(api_key))["user_id"] == "u-9"
+
+    # CONTROL: with the real secret it revokes.
+    assert await manager.revoke_api_key(api_key) is True
+    with pytest.raises(HTTPException):
+        await manager.verify_api_key(api_key)
+
+
+def test_secret_digest_is_salted_per_record():
+    """Two records with the same secret must not share a digest."""
+    from kailash.middleware.auth.api_keys import derive_secret_digest, generate_salt
+
+    secret = "the-same-secret-value"
+    first = derive_secret_digest(secret, generate_salt())
+    second = derive_secret_digest(secret, generate_salt())
+
+    assert first != second
+    # Deterministic for a fixed salt, or verification could never succeed.
+    salt = generate_salt()
+    assert derive_secret_digest(secret, salt) == derive_secret_digest(secret, salt)
+
+
+def test_generated_keys_are_ascii_and_unique():
+    """ASCII keeps keys presentable through the header path that rejects
+    non-ASCII (#2114), and uniqueness is what makes key_id a usable address."""
+    from kailash.middleware.auth.api_keys import generate_api_key
+
+    seen = set()
+    for _ in range(50):
+        presented, key_id, secret = generate_api_key()
+        assert presented.isascii()
+        assert presented == f"sk_{key_id}.{secret}"
+        assert key_id not in seen
+        seen.add(key_id)
 
 
 # ---------------------------------------------------------------------------
@@ -624,3 +723,56 @@ def test_credential_manager_honours_validate_on_fetch_input(monkeypatch):
 
     assert node.execute()["validated"] is False
     assert node.execute(validate_on_fetch=False)["validated"] is True
+
+
+# ---------------------------------------------------------------------------
+# RotatingCredentialNode refuses rather than silently never rotating (#2138).
+# ---------------------------------------------------------------------------
+
+
+def test_rotation_refuses_instead_of_reporting_false_success():
+    """LOAD-BEARING. `start_rotation` returned success and rotated nothing.
+
+    It answered ``{"success": True, "message": "Rotation started..."}`` and
+    spawned a worker whose every tick could only conclude "no rotation needed",
+    because CredentialManagerNode implements none of get_credential /
+    store_credential / delete_credential. A caller reading that success has
+    every reason to believe its credentials are rotating, so a credential
+    advertised as rotating stayed valid forever with nothing saying otherwise.
+
+    The full rotation feature is #2138; this asserts the interim behaviour is
+    LOUD refusal rather than silent staleness.
+    """
+    from kailash.nodes.security.rotating_credentials import RotatingCredentialNode
+    from kailash.sdk_exceptions import NodeExecutionError
+
+    node = RotatingCredentialNode(name="rot")
+
+    for operation in ("start_rotation", "rotate_now"):
+        with pytest.raises(NodeExecutionError) as excinfo:
+            node.run(operation=operation, credential_name="api_token")
+        message = str(excinfo.value)
+        # The operator needs to know WHAT is missing and WHERE to look.
+        assert "#2138" in message, message
+        assert "store_credential" in message, message
+
+    # No worker was started: a refused rotation must not leave a thread behind
+    # that logs failures forever.
+    assert node._rotation_threads == {}
+
+
+def test_rotation_bookkeeping_operations_still_work():
+    """CONTROL: the refusal is scoped to the operations that cannot function.
+
+    stop_rotation / check_status / get_audit_log touch none of the missing
+    store operations, so refusing them too would be an over-broad break.
+    """
+    from kailash.nodes.security.rotating_credentials import RotatingCredentialNode
+
+    node = RotatingCredentialNode(name="rot")
+
+    # Asserted against each operation's ACTUAL return shape -- only
+    # stop_rotation reports `success`; the two readers return their payload.
+    assert node.run(operation="stop_rotation", credential_name="x")["success"] is True
+    assert node.run(operation="check_status")["active_threads"] == []
+    assert node.run(operation="get_audit_log")["total_entries"] == 0

@@ -16,7 +16,15 @@ Features:
 """
 
 # Import without circular dependencies
-from .api_keys import APIKeyRecord, APIKeyStore, InMemoryAPIKeyStore, hash_api_key
+from .api_keys import (
+    APIKeyRecord,
+    APIKeyStore,
+    InMemoryAPIKeyStore,
+    derive_secret_digest,
+    generate_api_key,
+    generate_salt,
+    split_api_key,
+)
 from .exceptions import (
     AuthenticationError,
     InvalidTokenError,
@@ -60,7 +68,10 @@ __all__ = [
     "APIKeyRecord",
     "APIKeyStore",
     "InMemoryAPIKeyStore",
-    "hash_api_key",
+    "derive_secret_digest",
+    "generate_api_key",
+    "generate_salt",
+    "split_api_key",
     # Exceptions
     "AuthenticationError",
     "TokenExpiredError",
