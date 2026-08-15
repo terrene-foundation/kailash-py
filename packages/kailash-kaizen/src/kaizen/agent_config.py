@@ -298,7 +298,24 @@ class AgentConfig:
     # Helper Methods
     # =========================================================================
 
-    # Valid provider names (lowercase)
+    # Valid provider names (lowercase).
+    #
+    # Hand-maintained ON PURPOSE, and NOT derived from
+    # ``LlmProvider._REGISTRY``. That registry is a model-PREFIX table — a
+    # provider earns a row only once it has a confirmed prefix mapping — so
+    # deriving from it was measured to drop nine dispatchable providers,
+    # including ``mock`` (which the whole test harness runs on) and ``ollama``
+    # (which detection itself used to return, so a derived allowlist would
+    # have contradicted its own detector on day one).
+    #
+    # What IS enforced is one-directional containment: this set may never be
+    # NARROWER than what the resolvers can emit, since a provider that can be
+    # resolved but not validated makes the class reject its own output. The
+    # reverse is left free, because a provider can be dispatchable without
+    # owning a prefix row. Pinned by
+    # ``tests/regression/test_issue_2069_provider_fail_closed.py``.
+    #
+    # ``deepseek`` was the live gap that invariant caught (#2069).
     VALID_PROVIDERS = frozenset(
         {
             "openai",
@@ -313,6 +330,7 @@ class AgentConfig:
             "perplexity",
             "pplx",
             "mock",
+            "deepseek",
         }
     )
 
