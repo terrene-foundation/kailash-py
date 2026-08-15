@@ -37,10 +37,20 @@ Differential evidence, 41 probes, pre- vs post-consolidation:
        'not-a-url'            reject:malformed_url -> reject:scheme
     WIDENING (reject->ALLOW, security regressions): 0
 
-All three are reason-code reclassification; every accept/reject verdict is
-unchanged and nothing was widened. The shared guard checks the scheme before
-the host deliberately, so `file://` attempts aggregate separately from
-genuinely malformed input — the more useful forensic split.
+Four FURTHER reason-code moves arrived with the IMDS-wrapper fix this branch
+rebased onto (#2136), measured the same way — all still REJECT, widening 0:
+
+    https://[64:ff9b::169.254.169.254]/  reject:ipv4_mapped -> reject:metadata_service
+    https://[::ffff:0:a9fe:a9fe]/        reject:ipv4_mapped -> reject:metadata_service
+    https://[64:ff9b::a9fe:a9fe]/        reject:ipv4_mapped -> reject:metadata_service
+    https://[::ffff:169.254.169.254]/    reject:ipv4_mapped -> reject:link_local
+
+All seven are reason-code reclassification; every accept/reject verdict is
+unchanged and nothing was widened. The scheme-before-host ordering makes
+`file://` attempts aggregate separately from genuinely malformed input, and
+the wrapper-aware metadata gate reports a metadata-wrapped address as
+`metadata_service` rather than the generic `ipv4_mapped` — both strictly
+more useful forensic buckets than what they replaced.
 """
 
 from __future__ import annotations
@@ -192,6 +202,27 @@ def test_deliberately_reclassified_inputs_still_reject(url):
 )
 def test_public_addresses_are_not_over_blocked(url):
     assert _verdict(url) == "ALLOW"
+
+
+@pytest.mark.parametrize(
+    "url,reason",
+    [
+        ("https://[64:ff9b::169.254.169.254]/", "metadata_service"),
+        ("https://[::ffff:0:a9fe:a9fe]/", "metadata_service"),
+        ("https://[64:ff9b::a9fe:a9fe]/", "metadata_service"),
+        ("https://[::ffff:169.254.169.254]/", "link_local"),
+    ],
+)
+def test_ipv6_wrapped_metadata_is_refused_with_the_precise_reason(url, reason):
+    """Inherited from the shared guard's #2136 IMDS-wrapper fix.
+
+    kaizen refused these BEFORE consolidation too (its own `_is_private_ipv6`
+    ran unconditionally), but under the generic `ipv4_mapped` bucket. Pinning
+    the sharper reason keeps the forensic split from silently regressing --
+    and demonstrates the consolidation's payoff: the fix landed once in core
+    and all three consumers got it.
+    """
+    assert _verdict(url) == f"reject:{reason}"
 
 
 # ---------------------------------------------------------------------------
