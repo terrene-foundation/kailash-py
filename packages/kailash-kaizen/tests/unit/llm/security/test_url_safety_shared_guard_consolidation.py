@@ -1,0 +1,272 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+"""#2091 follow-up — kaizen's SSRF guards consolidated onto the shared one.
+
+`kaizen.llm.url_safety` carried a full private copy of the SSRF address
+guard, and `kaizen.llm.http_client`'s `SafeDnsResolver` carried a SECOND copy
+inside the same package — so the repo shipped three implementations of one
+security control (core's proxy guard being the third). Two guards drift as
+readily inside a package as across packages, and here the two kaizen copies
+are the parse-time and connect-time halves of the SAME defence: a divergence
+would mean they disagreed about what "private" means.
+
+They now all import `kailash.utils.network_guard`.
+
+The risk a consolidation carries is not "does it still block" — it is
+**silently widening** what the narrower guard used to refuse. kaizen's guard
+is STRICTER than core's in two deliberate ways, and both are pinned here:
+
+1. **HTTPS-only except the `localhost` label.** Core permits `http://` to any
+   address-safe host, which is right for a reverse proxy on a trusted link and
+   wrong for an LLM call that carries a provider API key in its headers.
+   Measured on the shared guard directly: `http://api.openai.com/v1` is
+   ALLOW. If kaizen ever delegates that decision, this file goes red.
+
+2. **The loopback carve-out is LABEL-only.** `http://localhost:11434` is
+   permitted; a literal `http://127.0.0.1:11434` is REFUSED. Not incidental —
+   `deployment_resolver` documents choosing the `localhost` hostname over a
+   literal loopback IP for its Ollama / Docker-Model-Runner defaults because
+   "a literal-IP default would raise `InvalidEndpoint` before any request was
+   ever built".
+
+Differential evidence, 41 probes, pre- vs post-consolidation:
+
+    TOTAL PROBES: 41   DIFFERENCES: 3
+       'file:///etc/passwd'   reject:malformed_url -> reject:scheme
+       'javascript:alert(1)'  reject:malformed_url -> reject:scheme
+       'not-a-url'            reject:malformed_url -> reject:scheme
+    WIDENING (reject->ALLOW, security regressions): 0
+
+All three are reason-code reclassification; every accept/reject verdict is
+unchanged and nothing was widened. The shared guard checks the scheme before
+the host deliberately, so `file://` attempts aggregate separately from
+genuinely malformed input — the more useful forensic split.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+
+import pytest
+
+from kailash.utils import network_guard
+from kaizen.llm.errors import InvalidEndpoint
+from kaizen.llm.url_safety import check_url
+
+pytestmark = pytest.mark.unit
+
+
+def _verdict(url: str, *, resolve_dns: bool = False) -> str:
+    try:
+        check_url(url, resolve_dns=resolve_dns)
+        return "ALLOW"
+    except InvalidEndpoint as exc:
+        return f"reject:{exc.reason}"
+
+
+# ---------------------------------------------------------------------------
+# 1. HTTPS-only — the policy the shared guard does NOT have
+# ---------------------------------------------------------------------------
+
+
+def test_shared_guard_would_allow_plaintext_http_to_a_public_host():
+    """The instrument for the widening risk.
+
+    This asserts what the SHARED guard does, so the next assertion means
+    something: kaizen's refusal cannot be inherited, it has to be kaizen's own.
+    If this ever starts raising, the test below stops discriminating and this
+    file must be revisited.
+    """
+    network_guard.check_url("http://api.openai.com/v1", resolve_dns=False)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://api.openai.com/v1",
+        "http://example.com/",
+        "http://8.8.8.8/",
+        "http://metadata.google.internal/",
+    ],
+)
+def test_kaizen_still_refuses_plaintext_http_to_non_localhost(url):
+    """An LLM request carries a provider API key — plaintext is disclosure."""
+    assert _verdict(url) == "reject:scheme"
+
+
+@pytest.mark.parametrize(
+    "url", ["https://api.openai.com/v1", "https://8.8.8.8/", "https://1.1.1.1/"]
+)
+def test_https_to_a_public_host_is_still_allowed(url):
+    """No-false-positive polarity: the guard must not refuse legitimate use."""
+    assert _verdict(url) == "ALLOW"
+
+
+# ---------------------------------------------------------------------------
+# 2. Loopback carve-out is LABEL-only — deliberate, and depended upon
+# ---------------------------------------------------------------------------
+
+
+def test_localhost_label_is_permitted_over_http():
+    """`DEFAULT_OLLAMA_BASE_URL` is exactly this shape."""
+    assert _verdict("http://localhost:11434", resolve_dns=True) == "ALLOW"
+
+
+@pytest.mark.parametrize(
+    "url", ["http://127.0.0.1:11434", "https://127.0.0.1:8000/v1", "http://[::1]:8000/"]
+)
+def test_literal_loopback_ip_is_still_refused(url):
+    """The asymmetry `deployment_resolver` documents and relies on.
+
+    A naive consolidation passing `allow_loopback=True` with the shared
+    default host set would ALLOW these — that is the widening this pins shut.
+    """
+    assert _verdict(url, resolve_dns=True) == "reject:loopback"
+
+
+def test_shared_default_loopback_set_would_have_widened_this():
+    """Shows the mistake this avoided, so the narrowing is not accidental."""
+    # With core's DEFAULT loopback set, the literal IP is permitted...
+    network_guard.check_url(
+        "http://127.0.0.1:11434", allow_loopback=True, resolve_dns=False
+    )
+    # ...and with the label-only set kaizen passes, it is refused.
+    with pytest.raises(Exception):
+        network_guard.check_url(
+            "http://127.0.0.1:11434",
+            allow_loopback=True,
+            loopback_hosts={"localhost"},
+            resolve_dns=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# 3. Everything the guard blocked before, it still blocks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,reason",
+    [
+        ("https://10.1.2.3/v1", "private_ipv4"),
+        ("https://192.168.1.1/v1", "private_ipv4"),
+        ("https://172.16.0.1/v1", "private_ipv4"),
+        ("https://224.0.0.1/", "private_ipv4"),
+        ("https://0.0.0.0/", "private_ipv4"),
+        ("https://169.254.169.254/", "metadata_service"),
+        ("https://[fd00:ec2::254]/", "metadata_service"),
+        ("https://metadata.google.internal/", "metadata_host"),
+        ("https://metadata.azure.com/", "metadata_host"),
+        ("https://metadata.aws.internal/", "metadata_host"),
+        ("https://[fe80::1]/", "link_local"),
+        ("https://[fc00::1]/", "private_ipv6"),
+        ("https://[::ffff:127.0.0.1]/", "ipv4_mapped"),
+        ("https://[64:ff9b::7f00:1]/", "ipv4_mapped"),
+        ("https://2130706433/", "encoded_ip_bypass"),
+        ("https://0177.0.0.1/", "encoded_ip_bypass"),
+        ("https://0x7f.0.0.1/", "encoded_ip_bypass"),
+        ("https://127.1/", "encoded_ip_bypass"),
+        ("ftp://example.com/", "scheme"),
+        ("gopher://x/", "scheme"),
+        ("", "malformed_url"),
+        ("https://", "malformed_url"),
+    ],
+)
+def test_pre_existing_rejections_are_preserved_with_their_reason_codes(url, reason):
+    assert _verdict(url) == f"reject:{reason}"
+
+
+@pytest.mark.parametrize(
+    "url", ["file:///etc/passwd", "javascript:alert(1)", "not-a-url"]
+)
+def test_deliberately_reclassified_inputs_still_reject(url):
+    """The three measured differences. Still REFUSED; only the bucket moved.
+
+    Pinned so the reclassification is a recorded decision rather than drift.
+    """
+    assert _verdict(url) == "reject:scheme"
+
+
+@pytest.mark.parametrize(
+    "url", ["https://[::ffff:8.8.8.8]/", "https://[2606:4700:4700::1111]/"]
+)
+def test_public_addresses_are_not_over_blocked(url):
+    assert _verdict(url) == "ALLOW"
+
+
+# ---------------------------------------------------------------------------
+# 4. One implementation, not five
+# ---------------------------------------------------------------------------
+
+
+def test_both_kaizen_guards_use_the_shared_classifiers():
+    """Object identity, not behavioural agreement.
+
+    Two copies that agree today are exactly the thing that drifts, so this
+    asserts they are the SAME objects.
+    """
+    import kaizen.llm.http_client as hc
+
+    assert hc._is_private_ipv4 is network_guard.is_private_ipv4
+    assert hc._is_private_ipv6 is network_guard.is_private_ipv6
+    assert hc._METADATA_IPS is network_guard.METADATA_IPS
+    assert hc._IPV4_TRANSLATED_NETWORK is network_guard.IPV4_TRANSLATED_NETWORK
+    assert hc._NAT64_WELLKNOWN_NETWORK is network_guard.NAT64_WELLKNOWN_NETWORK
+
+
+def test_url_safety_holds_no_private_classifier_copy():
+    """The parse-time guard must not have grown its own copy back."""
+    import kaizen.llm.url_safety as us
+
+    for name in (
+        "_is_private_ipv4",
+        "_is_private_ipv6",
+        "_METADATA_IPS",
+        "_detect_encoded_ip_bypass",
+        "_iter_resolved_ips",
+        "_try_inet_aton_shortform",
+    ):
+        assert not hasattr(us, name), (
+            f"url_safety re-grew a private {name} — the divergence #2091's "
+            f"follow-up removed is back"
+        )
+
+
+def test_safednsresolver_still_blocks_at_connect_time():
+    """The connect-time half must keep working through the shared classifiers."""
+    from kaizen.llm.http_client import SafeDnsResolver
+
+    resolver = SafeDnsResolver()
+    for host, reason in [
+        ("169.254.169.254", "metadata_service"),
+        ("10.1.2.3", "private_ipv4"),
+        ("127.0.0.1", "private_ipv4"),
+    ]:
+        with pytest.raises(InvalidEndpoint) as exc:
+            resolver.check_host(host)
+        assert exc.value.reason == reason
+    # Public literal still accepted.
+    resolver.check_host("8.8.8.8")
+
+
+def test_parse_time_and_connect_time_agree_on_what_is_private():
+    """The reason the in-package duplicate mattered.
+
+    Both halves now share one classifier, so this cannot drift.
+    """
+    from kaizen.llm.http_client import SafeDnsResolver
+
+    resolver = SafeDnsResolver()
+    for addr in [
+        "10.0.0.1",
+        "172.16.0.1",
+        "192.168.1.1",
+        "127.0.0.1",
+        "169.254.169.254",
+    ]:
+        ip = ipaddress.ip_address(addr)
+        assert (
+            network_guard.is_private_ipv4(ip) or str(ip) in network_guard.METADATA_IPS
+        )
+        with pytest.raises(InvalidEndpoint):
+            resolver.check_host(addr)

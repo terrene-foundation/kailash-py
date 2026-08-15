@@ -60,6 +60,9 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_BLOCKED_NETWORKS",
+    "DEFAULT_LOOPBACK_HOSTS",
+    "IPV4_TRANSLATED_NETWORK",
+    "NAT64_WELLKNOWN_NETWORK",
     "METADATA_HOSTNAMES",
     "METADATA_IPS",
     "REASON_ALLOWLIST",
@@ -140,7 +143,9 @@ def url_fingerprint(raw: Optional[str]) -> str:
 IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765 SIIT
 NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052
 
-#: Private aliases retained so existing internal references keep resolving.
+#: Back-compat aliases for the private spellings used before these ranges
+#: became part of the shared surface; existing internal references keep
+#: resolving through them.
 _IPV4_TRANSLATED_NETWORK = IPV4_TRANSLATED_NETWORK
 _NAT64_WELLKNOWN_NETWORK = NAT64_WELLKNOWN_NETWORK
 
@@ -168,6 +173,12 @@ METADATA_HOSTNAMES: frozenset = frozenset(
 #: check so extra IPv4 + IPv6 CIDRs are rejected even when a libc helper
 #: somehow resolves them to look "public". RFC1918 + loopback + link-local +
 #: IMDS + CGNAT + ULA + link-local-v6.
+#: Host labels the ``allow_loopback`` carve-out applies to by default.
+#: Includes the literal loopback IPs, so ``allow_loopback=True`` permits both
+#: ``localhost`` and ``127.0.0.1``. Callers needing the LABEL-only posture
+#: pass ``loopback_hosts={"localhost"}`` -- see ``check_url``.
+DEFAULT_LOOPBACK_HOSTS: frozenset = frozenset({"localhost", "127.0.0.1", "::1"})
+
 DEFAULT_BLOCKED_NETWORKS: tuple[ipaddress._BaseNetwork, ...] = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -353,6 +364,7 @@ def check_url(
     resolve_dns: bool = True,
     allow_private: bool = False,
     allow_metadata: bool = False,
+    loopback_hosts: Optional[Sequence[str]] = None,
     error_factory: Callable[..., Exception] = BlockedDestinationError,
 ) -> None:
     """Validate ``url`` as an SSRF-safe destination.
@@ -382,6 +394,19 @@ def check_url(
         allow_metadata: Permit cloud-metadata and link-local destinations.
             The ONLY way past that block, deliberately separate from
             ``allow_private`` so widening RFC1918 never silently widens IMDS.
+        loopback_hosts: Host labels the ``allow_loopback`` carve-out applies
+            to. Defaults to ``{"localhost", "127.0.0.1", "::1"}``.
+
+            Narrowing this to ``{"localhost"}`` makes the carve-out apply to
+            the LABEL only, so a literal ``127.0.0.1`` / ``::1`` URL is still
+            refused while ``http://localhost:11434`` is permitted. That
+            asymmetry is not hypothetical: ``kaizen.llm.url_safety`` relies on
+            it, and ``kaizen.llm.deployment_resolver`` documents choosing the
+            ``localhost`` hostname over a literal loopback IP for its Ollama /
+            Docker-Model-Runner defaults precisely because a literal-IP
+            default would raise before any request was built (#2091 follow-up).
+            Parameterised rather than hard-coded so consolidating that guard
+            neither widens nor narrows what it accepts.
         error_factory: Exception constructor, called as
             ``error_factory(reason, raw_url=url)``. Lets ``nexus.http_client``
             keep raising its own ``InvalidEndpointError`` from this one
@@ -441,6 +466,7 @@ def check_url(
             allow_loopback,
             blocked_networks,
             host_lc,
+            set(loopback_hosts or DEFAULT_LOOPBACK_HOSTS),
             allow_private=allow_private,
             allow_metadata=allow_metadata,
             error_factory=error_factory,
@@ -457,7 +483,7 @@ def check_url(
         return
 
     any_resolved = False
-    loopback_hosts = {"localhost", "127.0.0.1", "::1"}
+    carve_out_hosts = set(loopback_hosts or DEFAULT_LOOPBACK_HOSTS)
     for ip in iter_resolved_ips(host):
         any_resolved = True
         _validate_ip(
@@ -466,13 +492,13 @@ def check_url(
             allow_loopback,
             blocked_networks,
             host_lc,
-            loopback_hosts,
+            carve_out_hosts,
             allow_private=allow_private,
             allow_metadata=allow_metadata,
             error_factory=error_factory,
         )
 
-    if not any_resolved and not (allow_loopback and host_lc in loopback_hosts):
+    if not any_resolved and not (allow_loopback and host_lc in carve_out_hosts):
         raise error_factory("resolution_failed", raw_url=url)
 
 
@@ -492,7 +518,7 @@ def _validate_ip(
 
     Central routine for both literal-IP URLs and DNS-resolved IPs.
     """
-    loopback_hosts = loopback_hosts or {"localhost", "127.0.0.1", "::1"}
+    loopback_hosts = loopback_hosts or set(DEFAULT_LOOPBACK_HOSTS)
     loopback_carveout = allow_loopback and ip.is_loopback and host_lc in loopback_hosts
 
     # Metadata and link-local are checked FIRST and are not relaxed by

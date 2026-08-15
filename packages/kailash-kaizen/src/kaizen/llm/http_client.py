@@ -86,38 +86,28 @@ logger = logging.getLogger(__name__)
 # resolve at the exact moment httpx is about to open a TCP connection.
 
 
-_IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")
-_NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")
-
-_METADATA_IPS = frozenset(
-    {
-        "169.254.169.254",
-        "fd00:ec2::254",
-    }
+# Address classification is the SHARED implementation (#2091 follow-up).
+# This module previously carried its own copy of `_is_private_ipv4` /
+# `_is_private_ipv6` / `_METADATA_IPS` / the RFC 2765 + RFC 6052 translation
+# ranges — a copy of the copy in `url_safety`, inside the SAME package. Two
+# guards in one package drift exactly as readily as two across packages, and
+# `SafeDnsResolver` is the connect-time half of the same defence, so a
+# divergence here would mean the parse-time and connect-time checks disagreed
+# about what "private" means. Verified identical on a 19-address sweep before
+# consolidating (`zero-tolerance.md` Rule 4).
+from kailash.utils.network_guard import (  # noqa: E402
+    IPV4_TRANSLATED_NETWORK as _IPV4_TRANSLATED_NETWORK,
 )
-
-
-def _is_private_ipv4(ip: ipaddress.IPv4Address) -> bool:
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    )
-
-
-def _is_private_ipv6(ip: ipaddress.IPv6Address) -> bool:
-    if ip.is_private or ip.is_loopback or ip.is_link_local:
-        return True
-    if ip.is_multicast or ip.is_reserved or ip.is_unspecified:
-        return True
-    if ip.ipv4_mapped is not None:
-        return _is_private_ipv4(ip.ipv4_mapped)
-    if ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK:
-        return True
-    return False
+from kailash.utils.network_guard import METADATA_IPS as _METADATA_IPS  # noqa: E402
+from kailash.utils.network_guard import (  # noqa: E402
+    NAT64_WELLKNOWN_NETWORK as _NAT64_WELLKNOWN_NETWORK,
+)
+from kailash.utils.network_guard import (  # noqa: E402
+    is_private_ipv4 as _is_private_ipv4,
+)
+from kailash.utils.network_guard import (  # noqa: E402
+    is_private_ipv6 as _is_private_ipv6,
+)
 
 
 class SafeDnsResolver:
