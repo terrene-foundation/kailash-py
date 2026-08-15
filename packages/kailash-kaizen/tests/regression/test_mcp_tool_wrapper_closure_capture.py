@@ -185,6 +185,54 @@ def test_each_wrapper_binds_its_own_method_across_a_loop():
     ], f"wrappers do not bind per-iteration methods: {results!r}"
 
 
+def _published_input_schema(server, tool_name):
+    """Return *tool_name*'s published JSON input schema, whichever backend won.
+
+    ``kailash_mcp`` prefers the standalone ``fastmcp`` distribution and falls
+    back to the official MCP SDK's FastMCP when it is absent. NEITHER package
+    declares standalone ``fastmcp`` as a dependency, so CI runs the OFFICIAL
+    fallback and a developer who happens to have ``fastmcp`` installed runs the
+    other -- the two disagree about what the server hands back:
+
+        standalone : registry entry is a FunctionTool (has ``.parameters``),
+                     listing via ``get_tools()``
+        official   : registry entry is a PLAIN FUNCTION (no ``.parameters``),
+                     listing via ``list_tools()``
+
+    Reading ``.parameters`` off the registry entry therefore only works on one
+    of them; doing so passed locally and raised ``AttributeError: 'function'
+    object has no attribute 'parameters'`` on the runner.
+
+    Raises rather than returning None when neither shape is present: a schema
+    lookup that silently yielded nothing would make every assertion built on it
+    vacuous, which is the failure this whole file exists to avoid.
+    """
+    mcp = server._mcp
+
+    if hasattr(mcp, "list_tools"):  # official MCP SDK FastMCP
+        for tool in asyncio.run(mcp.list_tools()):
+            if tool.name == tool_name:
+                return tool.inputSchema
+        raise AssertionError(
+            f"{tool_name!r} was not published by {type(mcp).__name__}; "
+            "registration did not reach the server's tool listing"
+        )
+
+    if hasattr(mcp, "get_tools"):  # standalone fastmcp
+        tool = asyncio.run(mcp.get_tools()).get(tool_name)
+        if tool is None:
+            raise AssertionError(
+                f"{tool_name!r} was not published by {type(mcp).__name__}; "
+                "registration did not reach the server's tool listing"
+            )
+        return tool.to_mcp_tool().inputSchema
+
+    raise AssertionError(
+        f"no known tool-listing API on {type(mcp).__name__}; this helper must be "
+        "taught the new backend rather than silently asserting nothing"
+    )
+
+
 @pytest.mark.regression
 def test_expose_as_mcp_server_publishes_the_agent_methods_own_schema():
     """The detector for the dead-feature defect: drives the REAL path.
@@ -221,7 +269,7 @@ def test_expose_as_mcp_server_publishes_the_agent_methods_own_schema():
         "auto-registration is dead"
     )
 
-    schema = entry["function"].parameters
+    schema = _published_input_schema(server, "greet")
     assert set(schema["properties"]) == {"name", "excited"}, (
         f"published tool schema is {schema['properties']!r}; it must carry the "
         "method's real parameters, otherwise no client can call the tool"
@@ -231,8 +279,19 @@ def test_expose_as_mcp_server_publishes_the_agent_methods_own_schema():
     ), "internal closure state is published to clients as a tool argument"
     assert schema["required"] == ["name"]
 
-    result = asyncio.run(entry["function"].run({"name": "bob", "excited": True}))
-    assert result.content[0].text == "hi bob!", "the registered tool did not dispatch"
+    # End-to-end dispatch through the server, on the backend that can be driven
+    # without a live MCP session. Standalone fastmcp's equivalent is private and
+    # raises "No active context found" outside a real session, so it is exercised
+    # at the wrapper level instead (test_normal_dispatch_and_await_still_work).
+    # The schema assertions above are unconditional, so this branch narrows what
+    # the test proves on one backend -- it never makes the test vacuous.
+    if hasattr(server._mcp, "call_tool"):
+        content, _ = asyncio.run(
+            server._mcp.call_tool("greet", {"name": "bob", "excited": True})
+        )
+        assert (
+            content[0].text == "hi bob!"
+        ), f"the registered tool did not dispatch; got {content!r}"
 
 
 @pytest.mark.regression
