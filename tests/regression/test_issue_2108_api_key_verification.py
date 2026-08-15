@@ -434,6 +434,109 @@ def test_session_route_resolves_a_sync_managers_bearer_token(caplog):
 
 
 # ---------------------------------------------------------------------------
+# The sibling call site the AC-4 sweep found: MiddlewareAuthenticationMiddleware.
+# ---------------------------------------------------------------------------
+
+
+def _authentication_middleware(**kwargs):
+    from kailash.middleware.auth.access_control import (
+        MiddlewareAccessControlManager,
+        MiddlewareAuthenticationMiddleware,
+    )
+
+    return MiddlewareAuthenticationMiddleware(
+        MiddlewareAccessControlManager(enable_audit=False), **kwargs
+    )
+
+
+async def test_authentication_middleware_accepts_a_valid_token(manager):
+    """LOAD-BEARING. This path refused EVERY request before the fix.
+
+    It asked ``credential_manager.execute(action=..., token=...)`` for a
+    ``"valid"`` key that node returns on no path, through kwargs
+    ``Node.execute`` strips -- the #2108 defect at a third call site.
+    """
+    middleware = _authentication_middleware(token_verifier=manager)
+    token = await manager.create_access_token(
+        user_id="ctx-user", permissions=["read"], metadata={"team": "platform"}
+    )
+
+    authenticated, context = await middleware.authenticate_request(
+        {"Authorization": f"Bearer {token}"}, session_id="s-1"
+    )
+
+    assert authenticated is True
+    assert context is not None
+    assert context.user_id == "ctx-user"
+    assert context.session_id == "s-1"
+
+
+async def test_authentication_middleware_rejects_a_bad_token(manager):
+    """CONTROL: acceptance above is not "accepts anything"."""
+    middleware = _authentication_middleware(token_verifier=manager)
+
+    authenticated, context = await middleware.authenticate_request(
+        {"Authorization": "Bearer not-a-real-token"}
+    )
+
+    assert authenticated is False
+    assert context is None
+
+
+async def test_authentication_middleware_rejects_a_missing_header(manager):
+    """No credential is refused without consulting the verifier at all."""
+    middleware = _authentication_middleware(token_verifier=manager)
+
+    assert await middleware.authenticate_request({}) == (False, None)
+    assert await middleware.authenticate_request({"Authorization": "Basic x"}) == (
+        False,
+        None,
+    )
+
+
+async def test_authentication_middleware_without_key_material_fails_closed(caplog):
+    """No verifier and no secret: refuse, and say so ONCE with the wiring."""
+    import logging
+
+    middleware = _authentication_middleware()
+
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(3):
+            assert await middleware.authenticate_request(
+                {"Authorization": "Bearer anything"}
+            ) == (False, None)
+
+    warnings = [
+        r
+        for r in caplog.records
+        if r.getMessage() == "middleware_auth.no_token_verifier"
+    ]
+    assert len(warnings) == 1
+    assert "token_verifier" in getattr(warnings[0], "wiring", "")
+
+
+async def test_authentication_middleware_accepts_a_sync_verifier():
+    """A SYNC verifier must work -- `JWTValidator.verify_token` is not async."""
+    from kailash.trust.auth.jwt import JWTConfig, JWTValidator
+
+    config = JWTConfig(secret=_SECRET)
+    validator = JWTValidator(config)
+    middleware = _authentication_middleware(token_verifier=validator)
+
+    # `user_id` becomes the RFC 7519 `sub` claim -- the spelling this manager
+    # uses and `MiddlewareAuthManager` does not, which is why the middleware
+    # reads both.
+    token = validator.create_access_token(user_id="sync-user", roles=["ops"])
+
+    authenticated, context = await middleware.authenticate_request(
+        {"Authorization": f"Bearer {token}"}
+    )
+
+    assert authenticated is True
+    assert context.user_id == "sync-user"
+
+
+# ---------------------------------------------------------------------------
 # CredentialManagerNode's parameter contract (AC 1 -- Rule 3c).
 # ---------------------------------------------------------------------------
 
