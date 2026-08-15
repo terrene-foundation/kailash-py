@@ -166,9 +166,17 @@ def derive_secret_digest(secret: str, salt: str) -> str:
         raise TypeError(f"secret must be a str, got {type(secret).__name__}")
     if not isinstance(salt, str):
         raise TypeError(f"salt must be a str, got {type(salt).__name__}")
-    return hmac.new(
+    # codeql[py/weak-sensitive-data-hashing] -- `secret` is a 256-bit CSPRNG
+    # token from `generate_api_key`, never a user-chosen password, so the
+    # offline guessing attack a password-safe KDF defends against does not
+    # apply. Adopting one would be a REGRESSION: this runs on every request
+    # including unauthenticated ones, so a ~10^2 ms KDF is a CPU-burn
+    # amplifier for an anonymous caller. Full proof and the two
+    # measured-refuted alternatives (keyed HMAC, sanitizer model): #2146.
+    digest = hmac.new(  # codeql[py/weak-sensitive-data-hashing]
         salt.encode("utf-8"), secret.encode("utf-8"), hashlib.sha256
     ).hexdigest()
+    return digest
 
 
 def generate_salt() -> str:
