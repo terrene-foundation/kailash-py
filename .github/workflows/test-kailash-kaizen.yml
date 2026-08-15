@@ -56,6 +56,38 @@ name: Test kailash-kaizen
 #      (deterministic, matches the hook's own docstring intent "based on
 #      their location and name"); three consecutive runs now agree exactly.
 #
+#      RETROACTIVE IMPLICATION: this hook has governed marker assignment for
+#      as long as it has existed, on every kaizen CI job that filters on
+#      these markers — including the pre-existing "expanded FAST unit
+#      tiers" step, not just this new one. For that entire history, each
+#      run excluded a DIFFERENT random ~3% slice of the suite. That does
+#      not mean any historical "kaizen CI is green" claim from those jobs
+#      was WRONG — but it was never REPRODUCIBLE evidence either, because
+#      the set of tests that actually ran was never the set anyone reading
+#      the green checkmark believed ran. This fix is what makes a green
+#      from these jobs, from this point forward, mean something stable.
+#
+#      SECOND-ORDER EFFECT (this is a real behavior change, not just noise
+#      removal — do not let "the number changed because I fixed a bug"
+#      hide a second cause): `str(item.function)` never contained
+#      parametrize-case text, only the base function's own name; `item.name`
+#      DOES (`test_foo[postgres-case]`). So the fix can now match a keyword
+#      that appears ONLY in a parametrize id, which was structurally
+#      impossible before. Measured directly (a standalone analysis plugin
+#      comparing item.name against the pre-parametrize base name for every
+#      collected tests/regression/ item): of 1654 total, 264 match via the
+#      BASE function name (a match the old code could equally have produced,
+#      independent of any address), and 157 match ONLY via the parametrize-id
+#      suffix — cases the old address-based code could never have tagged
+#      by construction, regardless of which run you looked at. The pre-fix
+#      "342" figure this PR originally cited is not a valid baseline to diff
+#      against — it was itself unstable (351/353/330 across three identical
+#      runs, see above) — so an exact "342 -> 425" delta split is not
+#      well-defined. What IS well-defined: at least 157 of the 425 deselected
+#      tests/regression/ items are deselected for a reason (their
+#      parametrize case, not their base name) that the old code was
+#      structurally incapable of ever detecting.
+#
 #      RESIDUE (issue #2152): the exclusion set above is a real disposition,
 #      not an oversight — several markers in it (openai/anthropic/google,
 #      cost, requires_docker/postgres/redis) need paid API calls or real
