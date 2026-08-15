@@ -536,6 +536,7 @@ class APIChannel(Channel):
         blocked_networks: Optional[Sequence[Any]] = None,
         allow_metadata_destination: bool = False,
         require_public_destination: bool = False,
+        max_response_bytes: Optional[int] = None,
     ) -> None:
         """Register a proxied workflow with this API channel.
 
@@ -570,6 +571,9 @@ class APIChannel(Channel):
                 destination. Defaults to False; logs a WARNING when set.
             require_public_destination: Also refuse RFC1918 and loopback
                 destinations. Defaults to False.
+            max_response_bytes: Largest backend response body this route will
+                buffer (issue #2085). Defaults to 64 MiB; larger responses are
+                refused with 502 rather than truncated.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control configured.
@@ -590,6 +594,7 @@ class APIChannel(Channel):
             blocked_networks=blocked_networks,
             allow_metadata_destination=allow_metadata_destination,
             require_public_destination=require_public_destination,
+            max_response_bytes=max_response_bytes,
         )
         logger.info(
             f"Registered proxied workflow '{name}' with API channel {self.name}"

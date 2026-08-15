@@ -110,7 +110,10 @@ from .network_guard import check_url as _check_destination_url
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFAULT_MAX_RESPONSE_BYTES",
     "BlockedDestinationError",
+    "ProxyResponseTooLargeError",
+    "normalize_max_response_bytes",
     "reject_unsafe_proxy_destination",
     "DEFAULT_ALLOWED_METHODS",
     "PROXY_CREDENTIAL_HEADERS",
@@ -242,6 +245,61 @@ PROXY_SAFE_RESPONSE_HEADERS: frozenset = frozenset(
         "last-modified",
     }
 )
+
+
+#: Bytes a proxied response body may occupy in this process before the proxy
+#: refuses it (#2085). Per-registration, so a backend that legitimately serves
+#: large exports can raise it without widening every other route.
+#:
+#: 64 MiB is chosen to be generous for API payloads while still bounding the
+#: damage: the pre-#2085 behaviour was UNBOUNDED, and concurrent requests
+#: multiply whatever the figure is. A finite documented default is the point;
+#: the exact number is a judgement call the registration can override.
+DEFAULT_MAX_RESPONSE_BYTES: int = 64 * 1024 * 1024
+
+
+class ProxyResponseTooLargeError(ValueError):
+    """A proxied backend response exceeded the registration's byte cap."""
+
+
+def normalize_max_response_bytes(
+    max_response_bytes: Optional[int],
+    *,
+    name: str,
+) -> int:
+    """Validate the per-registration response cap.
+
+    Args:
+        max_response_bytes: The cap. ``None`` selects
+            :data:`DEFAULT_MAX_RESPONSE_BYTES`.
+        name: Workflow identifier, for error messages.
+
+    Returns:
+        The cap in bytes.
+
+    Raises:
+        ValueError: The cap is not a positive integer. There is deliberately
+            no "unlimited" spelling: ``0`` or a negative value raises rather
+            than disabling the bound, because an unbounded proxy is the defect
+            #2085 exists to close and a magic disable value is how it would
+            quietly come back.
+    """
+    if max_response_bytes is None:
+        return DEFAULT_MAX_RESPONSE_BYTES
+    if isinstance(max_response_bytes, bool) or not isinstance(max_response_bytes, int):
+        raise ValueError(
+            f"max_response_bytes for proxied workflow '{name}' must be a "
+            f"positive integer, got {type(max_response_bytes).__name__} "
+            f"({max_response_bytes!r})."
+        )
+    if max_response_bytes <= 0:
+        raise ValueError(
+            f"max_response_bytes for proxied workflow '{name}' must be a "
+            f"POSITIVE integer, got {max_response_bytes}. There is no "
+            f"'unlimited' setting: unbounded buffering is the defect this cap "
+            f"exists to close (issue #2085). Raise the cap instead."
+        )
+    return max_response_bytes
 
 
 def reject_unsafe_proxy_destination(
