@@ -32,7 +32,20 @@ class RotatingCredentialNode(Node):
     refreshing from configured sources, and providing zero-downtime rotation
     for enterprise applications.
 
-    Key capabilities:
+    .. warning::
+        **Rotation does not currently fire — tracked as issue #2138.** This node
+        drives :class:`~kailash.nodes.security.credential_manager.CredentialManagerNode`
+        through four operations that node does not implement
+        (``get_credential``, ``store_credential``, ``validate_credential``,
+        ``delete_credential``) and checks a ``"success"`` key it returns on no
+        path, so every rotation check resolves to "no rotation needed". Closing
+        it requires a writable credential backend with atomic swap and rollback,
+        which is a feature rather than a correction; the capabilities listed
+        below describe the intended design, not current behaviour. Found by the
+        #2108 sweep, which fixed the sibling call sites in
+        ``MiddlewareAuthManager``.
+
+    Key capabilities (intended design — see the warning above):
     1. Automatic expiration detection
     2. Multi-source credential refresh
     3. Zero-downtime rotation
