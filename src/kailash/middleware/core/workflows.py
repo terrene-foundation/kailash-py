@@ -90,7 +90,13 @@ class MiddlewareWorkflows:
             config={
                 "name": "session_security_logger",
                 "event_type": "session_created",
-                "severity": "info",
+                # SeverityLevel members are upper-case; "info" reached
+                # SeverityLevel("info") and raised ValueError out of the sink,
+                # so this security event was never recorded. The sink now
+                # case-normalizes, but the literal is corrected here too --
+                # the sink's fallback exists for callers it cannot reach, not
+                # as a licence for in-tree callers to stay wrong.
+                "severity": "INFO",
             },
         )
 
@@ -293,7 +299,11 @@ result = {
             config={
                 "name": "error_security_logger",
                 "event_type": "execution_error",
-                "severity": "warning",
+                # "warning" is not a SeverityLevel member at all (the ladder is
+                # INFO/LOW/MEDIUM/HIGH/CRITICAL), so this raised out of the
+                # sink and the execution-error event was never recorded.
+                # MEDIUM is the member that routes to logger.warning.
+                "severity": "MEDIUM",
             },
         )
 

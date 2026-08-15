@@ -46,8 +46,17 @@ def test_create_gateway_with_auth():
         from kailash.middleware.auth import JWTAuthManager
         from kailash.middleware.communication.api_gateway import create_gateway
 
-        # Create auth manager
-        auth = JWTAuthManager(secret_key="test-secret", algorithm="HS256")
+        # Create auth manager.
+        #
+        # The secret is 32+ bytes deliberately, NOT padded to satisfy a linter:
+        # JWTAuthManager enforces the RFC 7518 §3.2 floor (an HS256 key must be
+        # at least as long as the hash output) and refuses a short one. The
+        # previous "test-secret" was 11 bytes and raised. This test asserts auth
+        # is WIRED, so it gets a real key rather than an opt-out -- swapping in
+        # require_auth=False here would delete the only thing it checks.
+        auth = JWTAuthManager(
+            secret_key="test-secret-key-minimum-32-bytes!", algorithm="HS256"
+        )
 
         # Create gateway with auth
         gateway = create_gateway(title="Test Gateway", auth_manager=auth)

@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.kailash.servers import WorkflowServer
+from src.kailash.utils.server_auth import mounted_subapp_auth_kwargs
 from src.kailash.workflow import Workflow
 from src.kailash.workflow.builder import WorkflowBuilder
 
@@ -116,8 +117,22 @@ class TestWorkflowServer:
         assert registration.description == "Test workflow description"
         assert registration.tags == ["test", "demo"]
 
-        # Check that WorkflowAPI was created
-        mock_workflow_api.assert_called_once_with(workflow)
+        # Check that WorkflowAPI was created, and that the parent's auth
+        # decision was propagated to it.
+        #
+        # The mounted sub-app MUST NOT install its own gate: it is served by the
+        # parent's ASGI stack, so the parent has already accepted or rejected the
+        # request before routing hands it over, and a second layer would demand a
+        # second credential. `external_auth_reason` is how that is declared, and
+        # asserting it here is what makes the propagation a tested contract
+        # rather than an implementation detail -- if a future change stops
+        # passing it, the sub-app starts refusing to construct (require_auth
+        # defaults True) and this assertion is the first thing to say why.
+        expected_kwargs = mounted_subapp_auth_kwargs(
+            parent_label="WorkflowServer(title='Workflow Registration Test')",
+            parent_is_authenticated=False,
+        )
+        mock_workflow_api.assert_called_once_with(workflow, **expected_kwargs)
 
     def test_duplicate_workflow_registration(self):
         """Test that registering duplicate workflow names raises error."""

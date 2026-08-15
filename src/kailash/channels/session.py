@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from kailash.utils.secure_logging import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -313,7 +315,17 @@ class SessionManager:
             session.expires_at = time.time() + sliding_ttl
 
         self._sessions[session_id] = session
-        logger.info(f"Created session {session_id} for user {user_id}")
+        # Byte-identical sibling of the `agent_ui.py` site fixed for #2040 --
+        # same format string, same caller-controlled `user_id`, missed by the
+        # first sweep because it lives outside `middleware/`. Sanitized at the
+        # call site because this is a direct `logger` call, not one routed
+        # through the SecurityEvent/AuditLog sinks: the sink-level fix covers
+        # callers of those two NODES, which is narrower than "every log call".
+        logger.info(
+            "Created session %s for user %s",
+            sanitize_log_value(session_id, 128),
+            sanitize_log_value(user_id, 128),
+        )
 
         return session
 
