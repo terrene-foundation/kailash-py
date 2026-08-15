@@ -41,10 +41,17 @@ These tests pin:
 (b) the three tier weights (1.0 / 0.7 / 0.4) survive and differentiate;
 (c) ``matches_requirement`` is NOT a coroutine function (shape pin — the
     ``24dcc4bb5`` regression re-lands the moment this flips);
-(d) the ``kaizen_agents`` sync/async bridges still propagate ``config`` and
-    ``correlation_id`` to the now-sync matcher (guards the fix's own blast
-    radius — the bridges dispatch on ``inspect.iscoroutinefunction``);
-(e) the summarization fallback emits a WARN record instead of swallowing.
+(d) the summarization fallback emits a WARN record instead of swallowing.
+
+Deliverable (d) of the original shard — the ``kaizen_agents`` sync/async bridges
+still propagating ``config`` / ``correlation_id`` to the now-sync matcher — now
+lives in ``packages/kaizen-agents/tests/regression/``
+``test_issue_1973_reasoning_bridge_config_propagation.py``, the package that
+ships the bridges. It was unrunnable here: ``kaizen-agents`` depends on
+``kailash-kaizen``, so importing it from this suite inverts the dependency, and
+this package's ``pytest.ini`` exposes only its own ``src`` — ``kaizen_agents``
+resolved to whatever wheel was INSTALLED rather than to the branch. See that
+file's docstring for the full rationale.
 
 Scoring is stubbed at ``kaizen.llm.reasoning.llm_capability_match`` so the
 arithmetic is deterministic. That is a STRUCTURAL assertion (tier-weight
@@ -220,93 +227,6 @@ class TestFindBestAgentsForTask:
         task = A2ATask(description="d", requirements=["python"])
         for _agent_id, score in node._find_best_agents_for_task(task):
             assert isinstance(score, float)
-
-
-class TestReasoningBridgesPreserveConfigPropagation:
-    """Deliverable (d): the sync flip must not silently drop judge config.
-
-    Both ``kaizen_agents`` bridges dispatch on
-    ``inspect.iscoroutinefunction(matcher)`` and previously passed ``config`` /
-    ``correlation_id`` on the async branch ONLY. With ``matches_requirement``
-    now sync, the sync branch MUST carry the same kwargs — otherwise the judge
-    silently falls back to ``.env`` defaults instead of the host agent's model.
-    """
-
-    def test_score_capability_sync_propagates_config_and_correlation_id(
-        self, monkeypatch
-    ):
-        pytest.importorskip("kaizen_agents")
-        import kaizen.llm.reasoning as reasoning
-        from kaizen_agents.patterns._reasoning_bridge import score_capability_sync
-
-        seen = {}
-
-        def judge(**kw):
-            seen.update(kw)
-            return 1.0
-
-        monkeypatch.setattr(reasoning, "llm_capability_match", judge)
-
-        from kaizen.core.base_agent import BaseAgentConfig
-
-        config = BaseAgentConfig(llm_provider="mock", model="mock-model")
-        score = score_capability_sync(
-            _cap("python"),
-            "write python",
-            reasoning_config=config,
-            correlation_id="cid-1973",
-        )
-
-        assert score == 1.0
-        assert seen.get("config") is config, (
-            "the reasoning config was dropped on the sync matcher branch; the "
-            "judge model silently falls back to .env defaults."
-        )
-        assert seen.get("correlation_id") == "cid-1973"
-
-    def test_runtime_score_capability_propagates_config_and_correlation_id(
-        self, monkeypatch
-    ):
-        pytest.importorskip("kaizen_agents")
-        import asyncio
-
-        import kaizen.llm.reasoning as reasoning
-        from kaizen_agents.patterns.runtime import OrchestrationRuntime
-
-        seen = {}
-
-        def judge(**kw):
-            seen.update(kw)
-            return 1.0
-
-        monkeypatch.setattr(reasoning, "llm_capability_match", judge)
-
-        from kaizen.core.base_agent import BaseAgentConfig
-
-        config = BaseAgentConfig(llm_provider="mock", model="mock-model")
-        runtime = OrchestrationRuntime()
-        score = asyncio.run(
-            runtime._score_capability(
-                _cap("python"), "write python", config, agent_id="a1"
-            )
-        )
-
-        assert score == 1.0
-        assert seen.get("config") is config
-        assert seen.get("correlation_id") == "route_a1"
-
-    def test_legacy_single_arg_sync_mocks_still_score(self, monkeypatch):
-        # The bridges' TypeError fallback exists for legacy mocks with a
-        # single-positional matcher. Passing kwargs on the sync branch must not
-        # break them.
-        pytest.importorskip("kaizen_agents")
-        from kaizen_agents.patterns._reasoning_bridge import score_capability_sync
-
-        class LegacyCap:
-            def matches_requirement(self, requirement: str) -> float:
-                return 0.42
-
-        assert score_capability_sync(LegacyCap(), "anything") == pytest.approx(0.42)
 
 
 class TestReasoningHelpersDoNotReportDegradedAsOk:

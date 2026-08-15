@@ -278,11 +278,17 @@ on:
     branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*, chore/*]
     paths:
       - "packages/kailash-kaizen/**"
+      # kaizen-agents is built and tested by this workflow (see the
+      # kaizen-agents regression step). Without this path a PR touching ONLY
+      # kaizen-agents would run none of its tests -- the same never-ran gap
+      # #2074 closed for kailash-kaizen's own regression suite.
+      - "packages/kaizen-agents/**"
       - ".github/workflows/test-kailash-kaizen.yml"
   pull_request:
     branches: [main]
     paths:
       - "packages/kailash-kaizen/**"
+      - "packages/kaizen-agents/**"
       - ".github/workflows/test-kailash-kaizen.yml"
   workflow_dispatch:
 
@@ -467,6 +473,31 @@ jobs:
         # passed, 425 deselected, 8 xfailed, 0 failed.
         timeout-minutes: 10
         working-directory: packages/kailash-kaizen
+        run: |
+          ../../.venv/bin/python -m pytest \
+            tests/regression/ \
+            -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
+            --timeout=30 --maxfail=50 -q
+
+      - name: Test (kaizen-agents regression suite, infra-free)
+        # packages/kaizen-agents/tests/ appeared in NO pytest invocation in ANY
+        # workflow -- the only `packages/kaizen-agents` matches were the
+        # `paths:` TRIGGER filters in unified-ci.yml, which decide which
+        # workflow runs, not what pytest collects. The whole suite had
+        # therefore never run in CI: the same never-ran gap as #2074 (this
+        # job's kailash-kaizen regression step above) and #2038.
+        #
+        # This job is where it belongs: it already installs kaizen-agents
+        # editable (see the install step), so `kaizen_agents` resolves to the
+        # branch rather than to whatever wheel is on the runner. That
+        # resolution is load-bearing -- against a stale INSTALLED wheel these
+        # tests red while the branch source is already correct.
+        #
+        # Same broad exclusion set as the steps above. Baseline established
+        # before wiring this in (per #2074's instruction not to assume clean):
+        # 812 passed, 2 deselected, 0 failed.
+        timeout-minutes: 10
+        working-directory: packages/kaizen-agents
         run: |
           ../../.venv/bin/python -m pytest \
             tests/regression/ \
