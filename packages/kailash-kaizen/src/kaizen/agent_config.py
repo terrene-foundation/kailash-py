@@ -362,9 +362,22 @@ class AgentConfig:
             )
 
         # Auto-detect LLM provider if not specified.
+        #
+        # #2069 — delegated to the shared resolver rather than kept as a local
+        # substring table. This class used to own one, ending in a terminal
+        # `else: return "openai"`, so a model it did not recognise was
+        # dispatched to OpenAI under whatever credential was configured, with
+        # the caller never told. `resolve_agent_provider` adds no mapping of
+        # its own: it composes the registry-DERIVED prefix table (which cannot
+        # drift from the provider registry) with the env fallback, and raises
+        # ConfigurationError naming the model when neither resolves.
         auto_detected = self.llm_provider is None
         if auto_detected:
-            self.llm_provider = self._detect_provider_from_model(self.model)
+            from kaizen.core import _provider_env
+
+            self.llm_provider = _provider_env.resolve_agent_provider(
+                self.model, component="AgentConfig"
+            )
 
         # ONE gate, reached by BOTH paths.
         if self.llm_provider.lower() not in self.VALID_PROVIDERS:
@@ -382,34 +395,6 @@ class AgentConfig:
                 f"Invalid llm_provider: '{self.llm_provider}'. "
                 f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
             )
-
-    def _detect_provider_from_model(self, model: str) -> str:
-        """
-        Auto-detect LLM provider from model name.
-
-        Args:
-            model: Model name
-
-        Returns:
-            Provider name
-        """
-        model_lower = model.lower()
-
-        if "gpt" in model_lower or "davinci" in model_lower:
-            return "openai"
-        elif "claude" in model_lower:
-            return "anthropic"
-        elif (
-            "llama" in model_lower
-            or "mistral" in model_lower
-            or "bakllava" in model_lower
-        ):
-            return "ollama"
-        elif "gemini" in model_lower:
-            return "google"
-        else:
-            # Default to openai for unknown models
-            return "openai"
 
     def has_custom_memory(self) -> bool:
         """Check if custom memory implementation is provided."""
