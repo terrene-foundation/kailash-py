@@ -30,21 +30,41 @@ that could not observe the rejection it needed to see. The tie to #2025 is a
 shared ROOT CAUSE (internal closure state in a framework-introspected signature),
 NOT shared exploitability.
 
-VERSION-DEPENDENT, and two observations disagree. A reviewer with the standalone
-`fastmcp` 2.12.4 importable saw BOTH shapes rejected, on a different rule
-(``Functions with **kwargs are not supported as tools``). Here, with the official
-FastMCP reached via `kailash_mcp.server` and the standalone module absent, only
-the pre-fix shape is rejected and the post-fix shape registers. The fix is right
-either way -- it strictly removes one rejection cause -- but under the stack that
-reviewer measured, ``**kwargs`` is a SECOND, independent reason auto-registration
-cannot work. That is tracked separately; this change does not claim to fix it.
+SECOND DEFECT, same root cause, fixed here. An earlier version of this file
+recorded that a reviewer with `fastmcp` 2.12.4 saw BOTH shapes rejected on a
+different rule (``Functions with **kwargs are not supported as tools``) and
+concluded it was "tracked separately; this change does not claim to fix it".
+That deferral is now closed, because the second rejection is not version-noise
+-- it is the SAME defect one layer down. Driving the real path against FastMCP
+2.12.4::
 
-These tests assert the internal name is gone from the signature AND that the two
-behaviours the default-arg idiom provided still hold -- correct dispatch and
-correct per-iteration binding. A fix dropping either would be worse than the bug.
+    a.expose_as_mcp_server("probe", tools=["greet"])
+    -> ValueError: Functions with **kwargs are not supported as tools
+
+Removing ``_bound_method`` from the signature was necessary but not sufficient:
+a bare ``**kwargs`` wrapper carries NO signature and NO annotations, and the
+server builds the tool's published schema from exactly those. FastMCP refuses to
+register a variadic function at all, so ``expose_as_mcp_server`` still raised for
+every auto-generated tool and the feature was still dead for every agent.
+
+The repair is ``functools.wraps(bound_method)`` on the wrapper: it copies the
+method's signature (via ``__wrapped__``) and its annotations onto the wrapper, so
+the tool registers AND advertises the method's REAL parameters. Without it the
+published schema would have been empty even where registration succeeded -- a
+tool no client could call correctly. Un-publishable methods (variadic, or an
+annotation the server cannot render as JSON schema) no longer abort the whole
+server: auto-discovered ones warn and are skipped, explicitly requested ones
+still raise.
+
+These tests assert the internal name is gone from the signature, that real
+registration now succeeds and publishes the method's own parameters, AND that
+the two behaviours the default-arg idiom provided still hold -- correct dispatch
+and correct per-iteration binding. A fix dropping either would be worse than the
+bug.
 """
 
 import asyncio
+import functools
 import inspect
 
 import pytest
@@ -58,6 +78,7 @@ def _make_tool_wrapper(bound_method):
     this against the real source, so the mirror cannot silently drift from it.
     """
 
+    @functools.wraps(bound_method)
     async def tool_wrapper(**kwargs):
         result = bound_method(**kwargs)
         if hasattr(result, "__await__"):
@@ -75,16 +96,31 @@ def test_wrapper_does_not_advertise_internal_state_as_a_tool_parameter():
     and is NOT a detector. It documents the intended shape and would catch a
     regression in the mirror itself. The discriminating tests are
     ``test_real_source_binds_via_enclosing_scope_not_a_default_argument`` and
-    ``test_pre_fix_wrapper_shape_is_rejected_by_real_registration``.
+    ``test_expose_as_mcp_server_publishes_the_agent_methods_own_schema``.
     """
-    wrapper = _make_tool_wrapper(lambda x=1: x)
-    params = list(inspect.signature(wrapper).parameters)
 
-    assert params == ["kwargs"], (
-        f"tool wrapper advertises {params!r}; anything beyond **kwargs is "
-        "published to MCP clients as a callable tool argument"
+    def method(x: int = 1) -> int:
+        return x
+
+    wrapper = _make_tool_wrapper(method)
+
+    # DECLARED parameters -- what the wrapper itself accepts. `follow_wrapped`
+    # is off because `functools.wraps` makes the default resolve to the wrapped
+    # method's signature, which is the *published* view asserted below.
+    declared = list(inspect.signature(wrapper, follow_wrapped=False).parameters)
+    assert declared == ["kwargs"], (
+        f"tool wrapper declares {declared!r}; internal state in the declared "
+        "signature is what the original defect published to clients"
     )
-    assert "_bound_method" not in params
+    assert "_bound_method" not in declared
+
+    # PUBLISHED parameters -- what the server derives the tool schema from. It
+    # must be the METHOD's own signature, not an empty one.
+    published = list(inspect.signature(wrapper).parameters)
+    assert published == ["x"], (
+        f"tool wrapper publishes {published!r}; the schema must carry the "
+        "method's real parameters or no client can call the tool correctly"
+    )
 
 
 @pytest.mark.regression
@@ -150,45 +186,92 @@ def test_each_wrapper_binds_its_own_method_across_a_loop():
 
 
 @pytest.mark.regression
-def test_pre_fix_wrapper_shape_is_rejected_by_real_registration():
-    """EVIDENCE for the harm claim -- NOT a source-regression detector.
+def test_expose_as_mcp_server_publishes_the_agent_methods_own_schema():
+    """The detector for the dead-feature defect: drives the REAL path.
 
-    Pins the FRAMEWORK's behaviour, using probe functions defined here, so it
-    passes against both broken and fixed source. It does not red if the source
-    regresses; ``test_real_source_binds_via_enclosing_scope_not_a_default_argument``
-    is the only test that does.
+    Reds against broken source rather than pinning framework behaviour with
+    local probes -- the weakness of the version this replaces, which asserted
+    that a bare ``**kwargs`` probe registers. It does not: FastMCP 2.12.4
+    refuses variadic functions outright, so that assertion described a shape the
+    server rejects, and the shipped wrapper it stood in for was equally
+    unregistrable. ``expose_as_mcp_server`` raised for every agent.
 
-    It earns its place by substantiating the claim the rest of the file makes.
-    The absence of exactly this check is what let the wrong story be told about
-    this bug: inspecting ``inspect.signature`` on a mirror shows ``_bound_method``
-    present and invites the conclusion that it is published to clients. Driving
-    real registration shows it is REJECTED before any schema exists -- a
-    different defect (dead feature) with a different severity (no exploitable
-    surface). A harm claim with no instrument behind it is how the first version
-    of this file overstated its own finding.
+    Asserting the PUBLISHED SCHEMA, not just that registration returned, is what
+    makes this discriminating twice over: a wrapper that registered but carried
+    no signature would advertise an empty schema, and a client would have no way
+    to call the tool. The old internal name must be absent from that schema.
     """
     pytest.importorskip("kailash_mcp", reason="MCP server package not installed")
-    from kailash_mcp.server import MCPServer
+    from kaizen.core.mcp_mixin import MCPMixin
 
-    server = MCPServer("regression-probe")
+    class _ProbeAgent(MCPMixin):
+        agent_id = "regression-probe"
 
-    async def post_fix(**kwargs):
-        return kwargs
+        def greet(self, name: str, excited: bool = False) -> str:
+            """Greet someone."""
+            return f"hi {name}{'!' if excited else ''}"
 
-    async def pre_fix(_bound_method=None, **kwargs):
-        return kwargs
-
-    # POSITIVE: the shipped shape must register.
-    server.tool()(post_fix)
-
-    # NEGATIVE: the pre-fix shape must be refused, and the error must name the
-    # offending parameter -- otherwise this passes on an unrelated failure.
-    with pytest.raises(Exception) as exc:
-        server.tool()(pre_fix)
-    assert "_bound_method" in str(exc.value), (
-        "registration failed for a reason unrelated to the internal parameter; "
-        f"this test would then be non-discriminating. Got: {exc.value!r}"
+    server = _ProbeAgent().expose_as_mcp_server(
+        "regression-probe", tools=["greet"], enable_auto_discovery=False
     )
+
+    entry = server.get_tool_by_name("greet")
+    assert entry is not None, (
+        "expose_as_mcp_server registered no tool for an ordinary agent method; "
+        "auto-registration is dead"
+    )
+
+    schema = entry["function"].parameters
+    assert set(schema["properties"]) == {"name", "excited"}, (
+        f"published tool schema is {schema['properties']!r}; it must carry the "
+        "method's real parameters, otherwise no client can call the tool"
+    )
+    assert (
+        "_bound_method" not in schema["properties"]
+    ), "internal closure state is published to clients as a tool argument"
+    assert schema["required"] == ["name"]
+
+    result = asyncio.run(entry["function"].run({"name": "bob", "excited": True}))
+    assert result.content[0].text == "hi bob!", "the registered tool did not dispatch"
+
+
+@pytest.mark.regression
+def test_unpublishable_method_does_not_abort_the_whole_server():
+    """One un-publishable method must not kill every other tool.
+
+    A variadic method cannot become an MCP tool. Before the fix ANY such method
+    on the agent raised out of ``expose_as_mcp_server``, so a single one took
+    down the entire server -- the failure mode that made this feature dead.
+    Auto-discovery sweeps every public attribute and so always meets one.
+    """
+    pytest.importorskip("kailash_mcp", reason="MCP server package not installed")
+    from kaizen.core.mcp_mixin import MCPMixin
+
+    class _ProbeAgent(MCPMixin):
+        agent_id = "regression-probe"
+
+        def greet(self, name: str) -> str:
+            """Greet someone."""
+            return f"hi {name}"
+
+        def variadic(self, **kwargs):
+            """Cannot be expressed as an MCP tool."""
+            return kwargs
+
+    agent = _ProbeAgent()
+
+    server = agent.expose_as_mcp_server("regression-probe", enable_auto_discovery=False)
+    assert (
+        server.get_tool_by_name("greet") is not None
+    ), "a publishable method was dropped because a sibling was un-publishable"
+    assert server.get_tool_by_name("variadic") is None
+
+    # An EXPLICIT request is a demand, not a sweep: it must fail loudly rather
+    # than hand back a server silently missing the tool the caller named.
+    with pytest.raises(ValueError, match="variadic"):
+        agent.expose_as_mcp_server(
+            "regression-probe", tools=["variadic"], enable_auto_discovery=False
+        )
 
 
 @pytest.mark.regression

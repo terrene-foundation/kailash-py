@@ -22,6 +22,8 @@ Copyright 2025 Terrene Foundation (Singapore CLG)
 Licensed under Apache-2.0
 """
 
+import functools
+import inspect
 import json
 import logging
 import os
@@ -30,6 +32,30 @@ from typing import Any, Dict, List, Optional
 from kaizen.tools.types import DangerLevel, ToolCategory, ToolDefinition, ToolParameter
 
 logger = logging.getLogger(__name__)
+
+# Parameter kinds an auto-generated MCP tool cannot carry. The wrapper forwards
+# every argument by keyword, and the MCP server derives the tool's published
+# JSON schema from the signature -- neither is expressible for these kinds, so
+# a method declaring one cannot become a tool.
+_UNPUBLISHABLE_PARAM_KINDS = {
+    inspect.Parameter.VAR_POSITIONAL: "*args",
+    inspect.Parameter.VAR_KEYWORD: "**kwargs",
+    inspect.Parameter.POSITIONAL_ONLY: "positional-only parameters",
+}
+
+
+def _unpublishable_reason(method) -> Optional[str]:
+    """Return why ``method`` cannot be published as an MCP tool, else None."""
+    try:
+        signature = inspect.signature(method)
+    except (TypeError, ValueError) as exc:  # builtins / C-level callables
+        return f"its signature could not be inspected ({exc})"
+
+    for parameter in signature.parameters.values():
+        kind = _UNPUBLISHABLE_PARAM_KINDS.get(parameter.kind)
+        if kind is not None:
+            return f"it declares {kind}, which MCP tools cannot express"
+    return None
 
 
 class MCPMixin:
@@ -737,7 +763,11 @@ class MCPMixin:
             **server_kwargs,
         )
 
-        if tools is None:
+        # An explicit list is a demand: a method the caller named MUST either be
+        # published or raise. Auto-discovery sweeps every public attribute, so it
+        # unavoidably meets un-publishable ones and warns past them instead.
+        auto_discovered = tools is None
+        if auto_discovered:
             tools = [
                 m
                 for m in dir(self)
@@ -751,6 +781,17 @@ class MCPMixin:
 
             method = getattr(self, tool_name)
 
+            reason = _unpublishable_reason(method)
+            if reason is not None:
+                message = f"Tool {tool_name} cannot be exposed as an MCP tool: {reason}"
+                if not auto_discovered:
+                    raise ValueError(
+                        f"{message}. It was requested explicitly via `tools=`; "
+                        "give it a concrete signature or drop it from the list."
+                    )
+                logger.warning(f"{message}, skipping")
+                continue
+
             # Bind via an enclosing scope, NOT a default argument. The default-arg
             # idiom (`_bound_method=method`) is the usual way to dodge Python's
             # late-binding-in-a-loop trap, but it is wrong here: the wrapper is
@@ -761,9 +802,19 @@ class MCPMixin:
             # method (binding by name, never reaching **kwargs). A factory closure
             # solves the late-binding problem without putting internal state in the
             # public signature.
+            #
+            # `functools.wraps` is load-bearing, not cosmetic. The server builds
+            # the published schema from the wrapper's signature and annotations,
+            # and a bare `**kwargs` wrapper carries NEITHER: FastMCP refuses to
+            # register a variadic function at all ("Functions with **kwargs are
+            # not supported as tools"), so every auto-generated tool raised and
+            # the feature was dead for every agent. `wraps` copies the method's
+            # signature (via `__wrapped__`) and its annotations onto the wrapper,
+            # so the tool registers AND advertises the method's real parameters
+            # instead of an empty schema no client could call correctly.
             def _make_tool_wrapper(bound_method):
+                @functools.wraps(bound_method)
                 async def tool_wrapper(**kwargs):
-                    """Auto-generated MCP tool from agent method."""
                     result = bound_method(**kwargs)
                     if hasattr(result, "__await__"):
                         result = await result
@@ -773,7 +824,25 @@ class MCPMixin:
 
             tool_wrapper = _make_tool_wrapper(method)
             tool_wrapper.__name__ = tool_name
-            server.tool()(tool_wrapper)
+
+            # The server is the authority on publishability: beyond the variadic
+            # kinds rejected above it also refuses annotations it cannot render
+            # as JSON schema, and that set is not enumerable from here. One
+            # un-publishable method must not abort the whole server -- which is
+            # exactly how this feature died -- so an auto-discovered method warns
+            # and is skipped, while an explicitly requested one still raises.
+            try:
+                server.tool()(tool_wrapper)
+            except Exception as exc:
+                if not auto_discovered:
+                    raise ValueError(
+                        f"Tool {tool_name} was requested explicitly via `tools=` "
+                        f"but the MCP server refused to register it: {exc}"
+                    ) from exc
+                logger.warning(
+                    f"Tool {tool_name} could not be registered as an MCP tool "
+                    f"({exc}), skipping"
+                )
 
         self._mcp_server = server
 
