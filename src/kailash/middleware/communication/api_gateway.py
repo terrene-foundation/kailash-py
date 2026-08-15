@@ -7,6 +7,7 @@ frontend support capabilities.
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import time
@@ -319,6 +320,11 @@ class APIGateway:
         resolved_require_auth = (
             bool(enable_auth) if require_auth is None else bool(require_auth)
         )
+        # Kept, because it is also the IDENTITY policy and not only the gate
+        # policy: a deployment that authenticates its requests must never take
+        # a principal from a request field (issue #2102). Read by
+        # `_resolve_identity`.
+        self._require_auth = resolved_require_auth
         self._auth_config = resolve_server_auth(
             require_auth=resolved_require_auth,
             auth_config=(
@@ -436,6 +442,145 @@ class APIGateway:
             audience=getattr(config, "audience", None),
         )
 
+    async def _authenticated_user_id(self, connection: Any) -> Optional[str]:
+        """The SERVER-DERIVED principal for one HTTP request or WS handshake.
+
+        THE single place this gateway answers "who is calling". Every route
+        that has an identity to establish calls it -- ``POST /api/sessions``,
+        ``/ws`` and ``/events`` -- so there is one derivation and one policy
+        rather than three (``security.md`` § Credential Decode Helpers).
+
+        Two sources, in order, and NEITHER of them is a request field:
+
+        1. **The installed gate's answer.** When ``require_auth`` resolves True
+           this gateway installs
+           :class:`~kailash.trust.auth.asgi.JWTAuthMiddleware` (HTTP) and
+           :class:`~kailash.trust.auth.asgi.JWTWebSocketAuthMiddleware`
+           (websocket), each of which verifies the credential and leaves an
+           :class:`~kailash.trust.auth.models.AuthenticatedUser` on
+           ``scope["state"]["user"]``. Re-verifying it here would be a second
+           implementation of a decision already made.
+        2. **A direct verification**, for the deployments where NO gate is
+           installed -- ``require_auth=False``, or ``external_auth_reason``
+           naming an outside ASGI layer, or a path the operator exempted. A
+           presented bearer token is verified with this gateway's own auth
+           manager, which is the issuer of the tokens it accepts.
+
+        ``verify_token`` is called and its result awaited ONLY IF awaitable.
+        The two managers in this SDK disagree: ``JWTAuthManager.verify_token``
+        is SYNC and ``MiddlewareAuthManager.verify_token`` is ASYNC. The
+        previous revision awaited unconditionally, so with the manager this
+        class constructs by DEFAULT every verification raised
+        ``TypeError: object dict can't be used in 'await' expression``, was
+        caught by the handler below, and resolved to "no principal" -- which
+        is how a valid bearer token lost to a POST body field (issue #2102).
+
+        Returns:
+            The principal's id, or ``None`` when no credential could be
+            resolved. Never raises: the REFUSAL decision belongs to
+            :meth:`_resolve_identity`, which knows whether this deployment
+            authenticates at all.
+        """
+        state = getattr(connection, "state", None)
+        user = getattr(state, "user", None) if state is not None else None
+        if user is not None:
+            user_id = getattr(user, "user_id", None)
+            if isinstance(user_id, str) and user_id:
+                return user_id
+            # A gate-verified principal with no usable subject cannot happen
+            # through `create_user_from_payload` (it raises first), so this is
+            # a foreign middleware's object. Loud, and it falls through to the
+            # direct verification rather than being treated as an identity.
+            logger.warning(
+                "api_gateway.authenticated_user_without_subject",
+                extra={"user_type": type(user).__name__},
+            )
+
+        manager = getattr(self, "auth_manager", None)
+        if manager is None:
+            return None
+
+        scheme, _, token = (
+            (connection.headers.get("Authorization") or "").partition(" ")
+            if getattr(connection, "headers", None) is not None
+            else ("", "", "")
+        )
+        if scheme.lower() != "bearer" or not token:
+            return None
+
+        try:
+            payload = manager.verify_token(token)
+            if inspect.isawaitable(payload):
+                payload = await payload
+        except HTTPException:
+            # A REJECTED credential, not an absent one. Logged rather than
+            # swallowed silently (`zero-tolerance.md` Rule 3); the caller is
+            # then unauthenticated, and `_resolve_identity` decides what that
+            # means for this deployment.
+            logger.warning("api_gateway.presented_token_rejected")
+            return None
+        except Exception as exc:
+            logger.warning(
+                "api_gateway.token_verification_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+            return None
+
+        if not isinstance(payload, dict):
+            logger.warning(
+                "api_gateway.verify_token_returned_non_mapping",
+                extra={"payload_type": type(payload).__name__},
+            )
+            return None
+
+        from ...trust.auth.jwt import subject_from_claims
+
+        return subject_from_claims(payload)
+
+    async def _resolve_identity(
+        self, connection: Any, caller_supplied: Optional[str]
+    ) -> Optional[str]:
+        """Decide whose identity a request acts under, fail-closed.
+
+        The rule, one line: **a deployment that authenticates its requests
+        never takes a principal from a request field.**
+
+        * A server-derived principal ALWAYS wins, including over a body or
+          query value that disagrees with it.
+        * With no principal and ``require_auth`` resolved True, this RAISES
+          401. It does not fall back. Falling back is the whole defect: it let
+          an unauthenticated caller open a session under any name it chose, and
+          it let an authenticated one act as somebody else (issue #2102, the
+          same class as #2047).
+        * With no principal and authentication explicitly opted OUT
+          (``require_auth=False``, or ``enable_auth=False`` which is the older
+          spelling of the same statement), the caller-supplied value stands.
+          That is this route's documented contract for an open deployment, and
+          `resolve_server_auth` has already logged that exposure loudly at
+          construction.
+
+        Raises:
+            HTTPException: 401, when this deployment authenticates requests and
+                no principal could be derived for this one.
+        """
+        principal = await self._authenticated_user_id(connection)
+        if principal:
+            return principal
+
+        if self._require_auth:
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Authentication required: this gateway authenticates "
+                    "requests, so the identity for this operation must come "
+                    "from a verified credential and cannot be read from the "
+                    "request. Present a bearer token, or construct the "
+                    "gateway with require_auth=False to serve openly."
+                ),
+            )
+
+        return caller_supplied
+
     def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for gateway operations."""
 
@@ -552,100 +697,33 @@ class APIGateway:
     def _setup_session_routes(self):
         """Setup session management routes."""
 
-        # Create auth dependency
-        async def get_optional_current_user(request: Request):
-            """Resolve the authenticated principal, or None when there is none.
-
-            This returned None unconditionally -- "For now, return None to
-            avoid complex auth setup" -- on EVERY path, including with auth
-            enabled and a valid bearer token presented. `enable_auth` defaults
-            to True, so on the default path the session identity was always
-            the caller-supplied `request.user_id` body field and the
-            server-derived principal never won (`zero-tolerance.md` Rule 2;
-            same bug class as #2047 at the HTTP surface). The auth manager's
-            `verify_token` / `verify_api_key` existed the whole time and were
-            simply not called.
-
-            Deliberately still OPTIONAL: a request with no credential resolves
-            to None rather than 401, which preserves this route's contract.
-            Whether an auth-enabled gateway should REFUSE a session create
-            that carries no credential is a separate, breaking decision and is
-            tracked as its own issue rather than smuggled in here.
-            """
-            if not (self.enable_auth and self.auth_manager):
-                return None
-
-            scheme, _, token = (request.headers.get("Authorization") or "").partition(
-                " "
-            )
-            if scheme.lower() == "bearer" and token:
-                try:
-                    payload = await self.auth_manager.verify_token(token)
-                except HTTPException:
-                    # An invalid/expired token is a REJECTED credential, not
-                    # an absent one. Logged rather than swallowed silently
-                    # (`zero-tolerance.md` Rule 3); the request continues
-                    # unauthenticated, which this route already permits.
-                    logger.warning("Session-route bearer token was rejected")
-                    return None
-                except Exception as exc:
-                    logger.warning(
-                        "Session-route token verification failed: %s",
-                        type(exc).__name__,
-                    )
-                    return None
-                return {
-                    "user_id": payload.get("user_id"),
-                    "permissions": payload.get("permissions", []),
-                    "metadata": payload.get("metadata", {}),
-                }
-
-            # NO `X-API-Key` BRANCH HERE, deliberately.
-            #
-            # A first draft of this added one, calling
-            # `auth_manager.verify_api_key`. That method CANNOT SUCCEED, which
-            # was measured rather than assumed: it calls
-            # `credential_manager.execute(operation=..., credential_name=...)`,
-            # but `CredentialManagerNode.run()` takes `**inputs` and ignores
-            # BOTH -- it reads `self.credential_name`, fixed at construction --
-            # and its return dict has no `"success"` key at all. So
-            # `result.get("success", False)` is always False and the call
-            # always raises 401. An auth path that can only ever reject is a
-            # non-functional feature presented as a working one
-            # (`zero-tolerance.md` Rule 2), so it is not shipped. The
-            # underlying `verify_api_key` defect is pre-existing and tracked
-            # separately.
-            return None
+        # NO `X-API-Key` BRANCH ON THIS ROUTE, deliberately.
+        #
+        # A first draft added one, calling `auth_manager.verify_api_key`. That
+        # method CANNOT SUCCEED, which was measured rather than assumed: it
+        # calls `credential_manager.execute(operation=..., credential_name=...)`,
+        # but `CredentialManagerNode.run()` takes `**inputs` and ignores BOTH --
+        # it reads `self.credential_name`, fixed at construction -- and its
+        # return dict has no `"success"` key at all. So
+        # `result.get("success", False)` is always False and the call always
+        # raises 401. An auth path that can only ever reject is a non-functional
+        # feature presented as a working one (`zero-tolerance.md` Rule 2), so it
+        # is not shipped. API keys DO work on this gateway, through the
+        # installed gate's own `api_key_validator`, which is a real
+        # implementation; the `verify_api_key` defect is pre-existing and
+        # tracked separately.
 
         @self.app.post("/api/sessions", response_model=SessionResponse)
         async def create_session(
             request: SessionCreateRequest,
-            current_user: Dict[str, Any] = Depends(get_optional_current_user),
+            http_request: Request,
         ):
             """Create a new session for a frontend client."""
             try:
-                # A resolved principal WINS -- and an UNUSABLE one REFUSES.
-                #
-                # `.get("user_id", user_id)` fell back to the body value only
-                # when the key was ABSENT, so a principal resolving to a None
-                # user_id silently produced a session with no owner. The first
-                # fix for that skipped the assignment instead, which is just
-                # as wrong in the other direction: it reverted to the
-                # caller-supplied body field. A credential that verified but
-                # carries no usable subject is a BROKEN credential, not an
-                # absent one, and falling back to the caller's claim there is
-                # fail-open at an identity-resolution site.
-                user_id = request.user_id
-                if self.enable_auth and current_user:
-                    principal = current_user.get("user_id")
-                    if not isinstance(principal, str) or not principal:
-                        raise HTTPException(
-                            status_code=401,
-                            detail=(
-                                "Authenticated credential carries no usable " "subject"
-                            ),
-                        )
-                    user_id = principal
+                # The identity is SERVER-DERIVED or the request is REFUSED.
+                # `request.user_id` is a POST body field and survives only on a
+                # deployment that explicitly opted out of authentication.
+                user_id = await self._resolve_identity(http_request, request.user_id)
 
                 session_id = await self.agent_ui.create_session(
                     user_id=user_id or "", metadata=request.metadata
@@ -654,11 +732,11 @@ class APIGateway:
                 session = await self.agent_ui.get_session(session_id)
                 self.requests_processed += 1
 
-                # Log session creation. ``user_id`` is caller-controlled: it
-                # comes from the POST body and is only overridden when auth is
-                # enabled AND a principal resolved, so on the default path it
-                # is the raw request value. Interpolated, an embedded newline
-                # forges a second well-formed log record (issue #2040).
+                # Log session creation. ``user_id`` is caller-controlled on an
+                # open deployment: `_resolve_identity` returns the POST body
+                # value verbatim when authentication was explicitly opted out.
+                # Interpolated, an embedded newline forges a second well-formed
+                # log record (issue #2040).
                 logger.info(
                     "Session created: %s for user %s",
                     sanitize_log_value(session_id, 128),
@@ -680,11 +758,11 @@ class APIGateway:
 
                 return SessionResponse(**transformed["result"])
             except HTTPException:
-                # A deliberate status -- the 401 raised above for a credential
-                # with no usable subject -- must reach the client as itself.
-                # The `except Exception` below would otherwise relabel every
-                # auth refusal on this route as a 500, hiding the refusal and
-                # reporting a server fault for a client error.
+                # A deliberate status -- the 401 `_resolve_identity` raises
+                # when no principal could be derived -- must reach the client
+                # as itself. The `except Exception` below would otherwise
+                # relabel every auth refusal on this route as a 500, hiding the
+                # refusal and reporting a server fault for a client error.
                 raise
             except Exception as e:
                 # The security event and the client response share one
@@ -1008,12 +1086,30 @@ class APIGateway:
             user_id: Optional[str] = None,
             event_types: Optional[str] = None,
         ):
-            """WebSocket endpoint for real-time communication."""
+            """WebSocket endpoint for real-time communication.
+
+            ``user_id`` is a SUBSCRIPTION FILTER, not a label: it is handed to
+            ``EventFilter`` and decides which users' events this socket
+            receives. Taken from the query string it let any caller subscribe
+            to another user's event stream, so it is resolved the same way the
+            session route resolves its identity (issue #2102 sibling sweep).
+            """
             # Parse event types from query parameter
             event_type_list = event_types.split(",") if event_types else None
 
+            try:
+                resolved_user_id = await self._resolve_identity(websocket, user_id)
+            except HTTPException:
+                # A websocket cannot carry a 401. 1008 is POLICY VIOLATION, and
+                # it is sent WITHOUT `accept()` so the handshake is refused
+                # outright rather than accepted and then torn down -- the same
+                # shape `JWTWebSocketAuthMiddleware._deny` uses.
+                logger.warning("api_gateway.websocket_identity_unresolved")
+                await websocket.close(code=1008)
+                return
+
             await self.realtime.handle_websocket(
-                websocket, session_id, user_id, event_type_list
+                websocket, session_id, resolved_user_id, event_type_list
             )
 
         @self.app.get("/events")
@@ -1023,11 +1119,17 @@ class APIGateway:
             user_id: Optional[str] = None,
             event_types: Optional[str] = None,
         ):
-            """Server-Sent Events endpoint."""
+            """Server-Sent Events endpoint.
+
+            ``user_id`` is the same subscription filter as on ``/ws`` and is
+            resolved the same way: from the verified credential, never from the
+            query string (issue #2102 sibling sweep).
+            """
             event_type_list = event_types.split(",") if event_types else None
+            resolved_user_id = await self._resolve_identity(request, user_id)
 
             return self.realtime.create_sse_stream(
-                request, session_id, user_id, event_type_list
+                request, session_id, resolved_user_id, event_type_list
             )
 
         @self.app.post("/api/webhooks")
