@@ -298,6 +298,12 @@ class WorkflowConnectionPool(AsyncNode):
         # Monitoring dashboard integration
         self.enable_monitoring = config.get("enable_monitoring", False)
         self.monitoring_port = config.get("monitoring_port", 8080)
+        # Authentication for the dashboard this pool may start (#2112 parity
+        # sweep). Fail-closed by default, matching every other Kailash HTTP
+        # surface; `dashboard_require_auth=False` is the explicit opt-out and
+        # logs a loud WARN naming the exposure.
+        self.dashboard_require_auth = config.get("dashboard_require_auth", True)
+        self.dashboard_auth_config = config.get("dashboard_auth_config")
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define node parameters."""
@@ -1109,10 +1115,24 @@ class WorkflowConnectionPool(AsyncNode):
                     ConnectionDashboardNode,
                 )
 
+                # Authentication is threaded from THIS pool's config rather
+                # than hardcoded (#2112 parity sweep). The dashboard binds a
+                # real socket and serves pool metrics plus the mutating
+                # /api/alerts routes, so it fails CLOSED: with no credential
+                # source configured this raises ServerAuthNotConfiguredError
+                # instead of starting an open server.
+                #
+                # Threaded, not defaulted, so an operator can opt out through
+                # the pool's own config (`dashboard_require_auth=False`)
+                # without editing SDK source -- the alternative was leaving
+                # them no reachable control at all, which is how an
+                # unavoidable raise becomes a fork.
                 dashboard = ConnectionDashboardNode(
                     name="global_dashboard",
                     port=self.monitoring_port,
                     update_interval=1.0,
+                    require_auth=self.dashboard_require_auth,
+                    auth_config=self.dashboard_auth_config,
                 )
 
                 # Store dashboard in runtime for sharing

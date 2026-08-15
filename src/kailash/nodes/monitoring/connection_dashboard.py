@@ -11,7 +11,14 @@ Features:
 - Historical trend analysis with charts
 - Export capabilities for reports
 
+Authentication (#2112 parity sweep):
+This node binds a real socket and was the EIGHTH un-gated HTTP server -- the
+aiohttp one the #2072/#2100 ASGI work could not reach. ``require_auth``
+defaults to ``True`` and construction raises when no credential source is
+configured. See :mod:`kailash.trust.auth.aiohttp`.
+
 Example:
+    >>> # export KAILASH_JWT_SECRET=<at least 32 bytes>
     >>> dashboard = ConnectionDashboardNode(
     ...     name="pool_monitor",
     ...     port=8080,
@@ -22,7 +29,7 @@ Example:
     >>> # Start dashboard server
     >>> await dashboard.start()
     >>>
-    >>> # Access at http://localhost:8080
+    >>> # Access at http://localhost:8080 with an Authorization: Bearer header
 """
 
 import asyncio
@@ -47,7 +54,8 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
         "Install with: pip install 'kailash[server]'"
     ) from exc
 
-from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base import NodeParameter, register_node
+from kailash.nodes.base_async import AsyncNode
 
 logger = logging.getLogger(__name__)
 
@@ -145,11 +153,30 @@ class MetricsCache:
 
 
 @register_node()
-class ConnectionDashboardNode(Node):
+class ConnectionDashboardNode(AsyncNode):
     """Web-based monitoring dashboard for connection pools.
 
     Provides real-time visualization of connection pool metrics,
     health scores, and alerts through a web interface.
+
+    Authentication fails CLOSED (#2112 parity sweep). This node binds a real
+    socket and serves pool metrics, history and alert rules -- including the
+    MUTATING ``POST``/``DELETE /api/alerts`` routes -- so ``require_auth``
+    defaults to ``True`` and construction raises
+    :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError` unless a
+    credential source is configured. Pass ``require_auth=False`` for an
+    explicit opt-out that logs a loud WARN naming the exposure.
+
+    AUTHENTICATION IS FLAT: the gate establishes *that* a caller is an
+    operator, not *which* operator. Every route returns process-global state
+    (pool metrics, alert rules) with no per-caller scoping, and the mutating
+    ``/api/alerts`` routes accept any authenticated caller, so
+    ``request["user"]`` -- which the middleware does populate -- is
+    deliberately not consulted by any handler. That is coherent for a
+    single-tenant operator dashboard and is recorded here so it is not
+    mistaken for an oversight: introducing tenancy or per-role privilege
+    would require reading the principal in each handler, which is a
+    separate change with its own model.
     """
 
     def __init__(self, **config):
@@ -161,12 +188,71 @@ class ConnectionDashboardNode(Node):
             update_interval: Metric update interval in seconds (default: 1.0)
             retention_hours: How long to keep historical data (default: 24)
             enable_alerts: Enable alert system (default: True)
+            require_auth: Whether every request must be authenticated
+                (default: True, fail-closed -- BREAKING). See
+                :mod:`kailash.utils.server_auth`.
+            auth_config: Explicit ``JWTConfig`` (or field ``dict``), bypassing
+                environment lookup.
+            external_auth_reason: Non-empty string declaring that a proxy or
+                middleware outside this node authenticates every request, so
+                this node installs none.
+            auth_exempt_paths: Extra paths exempt from authentication, on top
+                of the health-probe defaults.
+
+        Raises:
+            TypeError: An unrecognized ``auth*`` option was supplied. Refusing
+                is deliberate -- see the allowlist check below.
+            ServerAuthNotConfiguredError: ``require_auth`` is True and no
+                credential source is configured.
         """
         self.port = config.get("port", 8080)
         self.host = config.get("host", "localhost")
         self.update_interval = config.get("update_interval", 1.0)
         self.retention_hours = config.get("retention_hours", 24)
         self.enable_alerts = config.get("enable_alerts", True)
+
+        # Server-wide authentication (#2112 parity sweep -- the EIGHTH un-gated
+        # HTTP server). Resolved HERE, at construction, so a misconfigured
+        # deployment fails before `start()` ever binds a socket.
+        #
+        # `Node.__init__` takes `**config`, so unlike the seven ASGI surfaces
+        # these controls cannot be made positionally named parameters without
+        # changing the Node contract. The mitigation for the swallowed-kwarg
+        # failure mode (#2025, #2013) is instead an explicit allowlist check
+        # below: an unrecognized `auth*` key RAISES rather than being silently
+        # discarded, so `enable_auth=True` -- the exact typo that shipped twice
+        # -- is a loud error here rather than an open server.
+        _known_auth_keys = {
+            "require_auth",
+            "auth_config",
+            "external_auth_reason",
+            "auth_exempt_paths",
+        }
+        _unknown_auth = sorted(
+            k
+            for k in config
+            if (k.startswith("auth") or k.endswith("_auth"))
+            and k not in _known_auth_keys
+        )
+        if _unknown_auth:
+            raise TypeError(
+                f"{type(self).__name__} received unrecognized authentication "
+                f"option(s) {_unknown_auth}. This server accepts only "
+                f"{sorted(_known_auth_keys)}. Refusing to start rather than "
+                "silently discarding a security control: a swallowed "
+                "`enable_auth=True` has shipped twice (#2025, #2013) and left "
+                "an open server reporting itself protected."
+            )
+
+        from kailash.utils.server_auth import resolve_server_auth
+
+        self._auth_config = resolve_server_auth(
+            require_auth=config.get("require_auth", True),
+            auth_config=config.get("auth_config"),
+            external_auth_reason=config.get("external_auth_reason"),
+            extra_exempt_paths=config.get("auth_exempt_paths"),
+            server_label=f"{type(self).__name__}(port={self.port})",
+        )
 
         super().__init__(**config)
 
@@ -222,6 +308,18 @@ class ConnectionDashboardNode(Node):
                 default=True,
                 description="Enable alert system",
             ),
+            "require_auth": NodeParameter(
+                name="require_auth",
+                type=bool,
+                default=True,
+                required=False,
+                description=(
+                    "Require authentication on every request (default: True, "
+                    "fail-closed). Construction raises when no credential "
+                    "source is configured; pass False for an explicit opt-out "
+                    "that logs a loud WARN."
+                ),
+            ),
             "action": NodeParameter(
                 name="action",
                 type=str,
@@ -231,19 +329,45 @@ class ConnectionDashboardNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> dict[str, Any]:
-        """Execute the node's logic (Node ABC contract)."""
-        return self.execute(**kwargs)
-
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[override]
+    async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Execute dashboard action.
 
         Actions:
         - start: Start the dashboard server
         - stop: Stop the dashboard server
         - status: Get dashboard status
+
+        This is the :class:`~kailash.nodes.base_async.AsyncNode` contract
+        method. Sync callers use :meth:`execute`, async callers
+        :meth:`execute_async`; both are supplied by ``AsyncNode`` and handle
+        the event-loop bridging.
+
+        REPLACES a pair of methods that could not be called at all. Before
+        this, the node subclassed the SYNC ``Node`` and declared::
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return self.execute(**kwargs)          # never awaited
+
+            async def execute(self, input_data: Dict[str, Any]) -> ...
+
+        which overrode ``Node.execute`` -- the SDK's validating sync entry
+        point -- with an async method taking a POSITIONAL ``input_data``. The
+        two signatures disagreed, so the mismatch raised before the missing
+        ``await`` was ever reached, and ``run()`` failed in BOTH forms::
+
+            run()               -> TypeError: execute() missing 1 required
+                                   positional argument: 'input_data'
+            run(action="status") -> TypeError: execute() got an unexpected
+                                   keyword argument 'action'
+
+        Verified no caller in ``src/``, ``packages/`` or ``tests/`` invoked
+        either method -- ``WorkflowConnectionPool`` drives this node through
+        :meth:`start` / :meth:`stop` directly -- so the broken path had no
+        users to preserve. ``AsyncNode`` is the same base
+        ``WorkflowConnectionPool`` itself uses, which is what makes this the
+        framework shape rather than a bespoke bridge.
         """
-        action = input_data.get("action", "status")
+        action = kwargs.get("action", "status")
 
         if action == "start":
             await self.start()
@@ -269,7 +393,53 @@ class ConnectionDashboardNode(Node):
         # Create web app
         self.app = web.Application()
 
-        # Setup CORS
+        # Install authentication BEFORE any route exists (#2112 parity sweep).
+        #
+        # This dashboard serves `/api/metrics`, `/api/pools`, `/api/history/*`
+        # and `/ws` -- operational state -- and, unlike the seventh surface,
+        # two MUTATING routes: `POST /api/alerts` creates an alert rule and
+        # `DELETE /api/alerts/{id}` removes one. An anonymous caller could
+        # therefore delete the rule that would have paged an operator, which
+        # is a control-plane write, not only disclosure.
+        #
+        # One middleware covers the websocket too: aiohttp performs the `/ws`
+        # upgrade inside an ordinary request handler, so the handshake arrives
+        # here as a normal HTTP request and is refused before `prepare()`.
+        # That is the one place aiohttp is simpler than ASGI, where
+        # `BaseHTTPMiddleware` cannot see a websocket scope at all (#2100).
+        #
+        # `_auth_config` is None when authentication was explicitly declined
+        # or declared external, in which case nothing is installed.
+        if self._auth_config is not None:
+            from kailash.trust.auth.aiohttp import install_aiohttp_auth_middleware
+
+            install_aiohttp_auth_middleware(self.app, self._auth_config)
+
+        # Setup CORS.
+        #
+        # KNOWN AND UNCHANGED BY #2112: this is wildcard (`"*"`) CORS with
+        # `allow_credentials=True`, the combination the CORS spec forbids. It
+        # predates this change and is left as-is deliberately, but it now
+        # interacts with the gate installed above and that interaction is
+        # worth naming:
+        #
+        #   * With the DEFAULT credential source (an `Authorization: Bearer`
+        #     header) there is no new exposure. A cross-origin page must
+        #     attach that header explicitly; it is not ambient, so a wildcard
+        #     ACAO does not let another origin borrow the operator's identity.
+        #   * If an operator configures a COOKIE credential
+        #     (`JWTConfig(token_cookie=...)`) to make this dashboard reachable
+        #     from a browser, the credential BECOMES ambient, and wildcard
+        #     CORS then lets a page on any origin issue credentialed requests
+        #     and read the responses.
+        #
+        # So: do not configure `token_cookie` on this node without also
+        # narrowing CORS to explicit origins. Tracked as a follow-up rather
+        # than fixed here, because changing the CORS default is a separate
+        # breaking change from the authentication gate and belongs in its own
+        # PR with its own migration note. The sibling FastAPI surface
+        # (`kailash/visualization/api.py`) DOES guard this, by forcing
+        # `allow_credentials=False` when `"*"` is present.
         cors = aiohttp_cors.setup(
             self.app,
             defaults={

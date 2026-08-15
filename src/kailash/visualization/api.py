@@ -9,6 +9,16 @@ Design Purpose:
 - Support WebSocket connections for streaming data
 - Integrate with web dashboard frameworks and monitoring tools
 
+Authentication (#2112):
+``DashboardAPIServer`` builds its own FastAPI application and serves it under
+its own uvicorn, so it is an HTTP server in its own right -- the SEVENTH
+surface of the anonymous-access defect #2072, and the one PR #2100 did not
+reach. It now resolves through :mod:`kailash.utils.server_auth` exactly as the
+other six do: ``require_auth`` defaults to ``True`` and construction RAISES
+:class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError` when no
+credential source is configured. ``SimpleDashboardAPI`` below is unaffected --
+it opens no socket.
+
 Upstream Dependencies:
 - RealTimeDashboard provides live monitoring capabilities
 - TaskManager provides workflow execution data
@@ -30,7 +40,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel
 
@@ -38,6 +48,10 @@ from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
 from kailash.utils.http_errors import safe_http_detail
 from kailash.utils.secure_logging import safe_exception_frames, safe_type_name
+from kailash.utils.server_auth import (
+    install_server_auth_middleware,
+    resolve_server_auth,
+)
 from kailash.visualization.dashboard import DashboardConfig, RealTimeDashboard
 from kailash.visualization.reports import ReportFormat, WorkflowPerformanceReporter
 
@@ -56,8 +70,35 @@ except ImportError:
 # Re-export names for use in function signatures and bodies
 FastAPI: Any = getattr(_fastapi, "FastAPI", None)
 HTTPException: Any = getattr(_fastapi, "HTTPException", None)
-WebSocket: Any = getattr(_fastapi, "WebSocket", None)
-WebSocketDisconnect: Any = getattr(_fastapi, "WebSocketDisconnect", None)
+
+# `WebSocket` is the one re-export used in ANNOTATION position (the two
+# `@self.app.websocket(...)` endpoints), and that makes the plain
+# `WebSocket: Any = getattr(...)` form wrong in two directions at once:
+#
+#   * To a TYPE CHECKER a module-level variable is not a type expression, so
+#     `websocket: WebSocket` is `reportInvalidTypeForm` -- measured, pyright
+#     1.1.413 reported it at both endpoint definitions.
+#   * To FASTAPI the annotation is load-bearing at RUNTIME. This module sets
+#     `from __future__ import annotations`, so annotations are strings that
+#     FastAPI resolves with `get_type_hints` against these module globals. A
+#     bare `if TYPE_CHECKING: from fastapi import WebSocket` would therefore
+#     leave the name UNDEFINED at runtime and raise `NameError` during route
+#     registration -- and annotating it `Any` instead is what caused the
+#     handshake defect this PR fixes (the socket is never bound and
+#     `websocket` becomes a required QUERY PARAMETER; see the endpoint
+#     docstrings).
+#
+# The split below satisfies both: the checker reads the real class from the
+# `TYPE_CHECKING` import, and the runtime binds the same name via `getattr`,
+# so `get_type_hints` resolves it exactly as before. `WebSocketDisconnect` is
+# carried along as the paired name -- it is only used in `except` clauses
+# today, but a real class there is checkable where `Any` is not.
+if TYPE_CHECKING:  # pragma: no cover -- typing only
+    from fastapi import WebSocket, WebSocketDisconnect
+else:
+    WebSocket = getattr(_fastapi, "WebSocket", None)
+    WebSocketDisconnect = getattr(_fastapi, "WebSocketDisconnect", None)
+
 BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
 CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
 FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
@@ -133,27 +174,100 @@ class DashboardAPIServer:
     This class provides a complete REST API server for accessing real-time
     workflow performance data and dashboard components.
 
+    Authentication fails CLOSED (#2112): ``require_auth`` defaults to ``True``
+    and construction raises
+    :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError` unless a
+    credential source is configured.
+
     Usage:
+        # export KAILASH_JWT_SECRET=<at least 32 bytes>
         api_server = DashboardAPIServer(task_manager)
         api_server.start_server(host="0.0.0.0", port=8000)
+
+        # Or, to run without authentication -- an explicit opt-out that logs a
+        # loud WARN naming the exposure:
+        api_server = DashboardAPIServer(task_manager, require_auth=False)
     """
 
     def __init__(
         self,
         task_manager: TaskManager,
         dashboard_config: DashboardConfig | None = None,
+        cors_origins: list[str] | None = None,
+        # Server-wide authentication (#2112, the seventh surface of #2072).
+        # NAMED parameters, never **kwargs -- `enable_auth=True` has shipped as
+        # a swallowed kwarg twice (#2025, #2013), so the documented security
+        # control did nothing. A named parameter makes that unexpressible: a
+        # typo is a TypeError, not a silently open server.
+        require_auth: bool = True,
+        auth_config: Any = None,
+        external_auth_reason: str | None = None,
+        auth_exempt_paths: list[str] | None = None,
     ):
         """Initialize API server.
 
         Args:
             task_manager: TaskManager instance for data access
             dashboard_config: Configuration for dashboard components
+            cors_origins: Allowed CORS origins. Defaults to ``[]`` (no
+                cross-origin browser access), which is what this server has
+                always used; supplying a list is what makes the CORS layer
+                actually usable from a dashboard front-end.
+            require_auth: Whether every request must be authenticated.
+                **Defaults to ``True`` (fail-closed) and this is a BREAKING
+                change** -- see :mod:`kailash.utils.server_auth`. This class
+                builds its own FastAPI application and ships its own
+                :meth:`start_server` under uvicorn, so it is a server in its
+                own right: reachable without ``WorkflowServer``, without
+                ``create_gateway()``, and untouched by the six surfaces PR
+                #2100 closed. Un-gated it served ``GET /api/v1/runs``,
+                ``GET /api/v1/runs/{id}/tasks``, report downloads and two
+                websocket streams to anonymous callers -- run history and
+                per-run task breakdowns describing what the system runs and
+                when. There is no execute route here, so this is anonymous
+                DISCLOSURE rather than anonymous code execution.
+
+                Construction RAISES
+                :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError`
+                when no credential source is configured, rather than serving
+                that surface openly. Set ``KAILASH_JWT_SECRET`` (or
+                ``KAILASH_API_KEY_<NAME>``, or pass ``auth_config=``) to
+                configure one. Pass ``require_auth=False`` to run without
+                authentication -- an explicit opt-out that logs a loud WARN.
+            auth_config: Explicit :class:`~kailash.trust.auth.jwt.JWTConfig`
+                (or a ``dict`` of its fields) to authenticate with, bypassing
+                environment lookup.
+            external_auth_reason: Non-empty string declaring that an ASGI
+                middleware OUTSIDE this server authenticates every request, so
+                this server installs none. A blank string is rejected -- a
+                reason that names nothing is an undocumented hole.
+            auth_exempt_paths: Extra paths exempt from authentication, on top
+                of the health-probe defaults. ``/docs``, ``/openapi.json`` and
+                the ``/api/v1/*`` routes are NOT exempt by default; each
+                describes or exposes the protected surface.
+
+        Raises:
+            ImportError: FastAPI is not installed.
+            ServerAuthNotConfiguredError: ``require_auth=True`` and no
+                credential source is configured.
         """
         if not FASTAPI_AVAILABLE:
             raise ImportError(
                 "FastAPI is required for API server functionality. "
                 "Install with: pip install fastapi uvicorn"
             )
+
+        # Resolve authentication FIRST (#2112), before RealTimeDashboard and
+        # WorkflowPerformanceReporter below are constructed. A raise afterwards
+        # would strand whatever they hold, because __init__ never returns and
+        # no caller ends up with a reference to release.
+        self._auth_config = resolve_server_auth(
+            require_auth=require_auth,
+            auth_config=auth_config,
+            external_auth_reason=external_auth_reason,
+            extra_exempt_paths=auth_exempt_paths,
+            server_label=f"{type(self).__name__}(title='Kailash Dashboard API')",
+        )
 
         self.task_manager = task_manager
         self.dashboard_config = dashboard_config or DashboardConfig()
@@ -173,11 +287,66 @@ class DashboardAPIServer:
             version="1.0.0",
         )
 
-        # Add CORS middleware
+        # Install authentication (#2112) -- middleware, and BEFORE CORS below.
+        #
+        # Starlette's `add_middleware` PREPENDS, so the LAST layer added is the
+        # OUTERMOST one. Auth added after CORS would sit inside it and reject
+        # cross-origin preflight OPTIONS with 401 before CORS could answer.
+        #
+        # Middleware rather than a route dependency, and specifically
+        # `install_server_auth_middleware`, because this server registers TWO
+        # `@app.websocket(...)` routes. `JWTAuthMiddleware` extends Starlette's
+        # `BaseHTTPMiddleware`, whose `__call__` returns early for any scope
+        # that is not "http", so its `dispatch` never runs for a websocket
+        # handshake; the shared installer adds the websocket layer alongside it
+        # so both routes are actually gated (#2100).
+        #
+        # `_auth_config` is None when authentication was explicitly declined or
+        # declared external, in which case nothing is installed.
+        if self._auth_config is not None:
+            install_server_auth_middleware(self.app, self._auth_config)
+
+        # Add CORS middleware.
+        #
+        # `allow_origins=["*"]` together with `allow_credentials=True` is the
+        # combination the CORS spec forbids, and Starlette does not refuse it
+        # -- it ECHOES the requesting origin, which recreates the very hole the
+        # spec's prohibition exists to prevent. Measured:
+        #
+        #   allow_origins=['*']                 evil Origin
+        #       -> ACAO='https://evil.example'  ACAC='true'
+        #   allow_origins=['https://ok.example'] evil Origin
+        #       -> ACAO=None                    ACAC='true'
+        #
+        # So a page on any origin could read authenticated responses using the
+        # victim's ambient credentials. `["*"]` is the obvious value an
+        # operator writes, so this is a foreseeable configuration rather than
+        # an exotic one, and `security.md` § Secure-Default forbids resolving
+        # it silently. Credentials are dropped and the downgrade is named.
+        resolved_origins = list(cors_origins or [])
+        allow_credentials = True
+        if "*" in resolved_origins:
+            allow_credentials = False
+            logger.warning(
+                "dashboard_api.cors_wildcard_credentials_disabled",
+                extra={
+                    "exposure": (
+                        "allow_origins=['*'] with allow_credentials=True makes "
+                        "Starlette echo the requesting origin, so a page on ANY "
+                        "origin could read authenticated responses using the "
+                        "caller's ambient credentials"
+                    ),
+                    "action": "allow_credentials forced to False for this server",
+                    "wiring": (
+                        "list the exact origins in cors_origins=[...] to keep "
+                        "credentialed cross-origin requests working"
+                    ),
+                },
+            )
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=[],
-            allow_credentials=True,
+            allow_origins=resolved_origins,
+            allow_credentials=allow_credentials,
             allow_methods=["*"],
             allow_headers=["*"],
         )
@@ -640,8 +809,27 @@ class DashboardAPIServer:
                 ) from e
 
         @self.app.websocket("/api/v1/metrics/stream")
-        async def websocket_metrics_stream(websocket: Any):
-            """WebSocket endpoint for real-time metrics streaming."""
+        async def websocket_metrics_stream(websocket: WebSocket):
+            """WebSocket endpoint for real-time metrics streaming.
+
+            The ``WebSocket`` annotation is load-bearing, not decoration.
+            FastAPI resolves a websocket endpoint's parameters the same way it
+            resolves a route's, and binds the socket ONLY to a parameter
+            annotated with ``WebSocket``. Under the previous ``websocket: Any``
+            the socket was never bound and ``websocket`` became a required
+            QUERY PARAMETER, so every handshake failed validation and closed --
+            measured on the route's own dependant::
+
+                query_params    : ['websocket']   <- required query param
+                websocket_param : None            <- socket never injected
+
+            This route was therefore refusing every client, credentialed or
+            not. Identical to the ``EnterpriseWorkflowServer`` ``/ws`` defect
+            found in #2100, and it is what the credentialed control row in
+            ``tests/regression/test_issue_2112_dashboard_api_auth.py`` exists
+            to catch: without it, "anonymous handshake refused" reads green
+            against a route that refuses everyone.
+            """
             await websocket.accept()
             self._websocket_connections.append(websocket)
 
@@ -658,13 +846,29 @@ class DashboardAPIServer:
                     self._websocket_connections.remove(websocket)
 
         @self.app.websocket("/api/v1/metrics/ws")
-        async def websocket_metrics_push(websocket: Any):
+        async def websocket_metrics_push(websocket: WebSocket):
             """WebSocket endpoint that pushes metrics at the dashboard update interval.
 
             Unlike ``/api/v1/metrics/stream`` which waits for client messages,
             this endpoint actively pushes the latest metrics snapshot to the
             client at the configured ``update_interval``.  This is the
             endpoint consumed by the live dashboard HTML page.
+
+            Carried the same ``websocket: Any`` binding defect as
+            ``/api/v1/metrics/stream`` above -- see that docstring. The live
+            dashboard HTML page consumes THIS route, so the page's metrics
+            never updated.
+
+            BROWSER CLIENTS STILL NEED WIRING, so fixing the binding does not
+            by itself make the page work on an authenticated server. A browser
+            cannot set an ``Authorization`` header on a WebSocket handshake,
+            and this route is NOT exempt, so the handshake is refused unless a
+            browser-reachable credential source is configured -- pass
+            ``auth_config=JWTConfig(token_query_param="access_token")`` or
+            ``token_cookie="..."``, or add this path to
+            ``auth_exempt_paths``. Same caveat as the one recorded for
+            ``WS /ws`` in the #2072 CHANGELOG entry; it is restated here
+            because this is the route the shipped HTML page actually opens.
             """
             await websocket.accept()
             self._websocket_connections.append(websocket)

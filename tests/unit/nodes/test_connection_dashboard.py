@@ -144,12 +144,16 @@ class TestConnectionDashboardNode:
     @pytest.fixture
     def dashboard(self, mock_runtime):
         """Create test dashboard node."""
+        # require_auth=False: this suite exercises METRICS, ALERTS and the
+        # update loop, not the authentication gate #2112 added. The gate is
+        # covered by tests/regression/test_issue_2112_connection_dashboard_auth.py.
         dashboard = ConnectionDashboardNode(
             name="test_dashboard",
             port=8888,
             host="localhost",
             update_interval=10.0,  # Longer interval for tests
             enable_alerts=True,
+            require_auth=False,
         )
 
         dashboard.runtime = mock_runtime
@@ -158,7 +162,7 @@ class TestConnectionDashboardNode:
 
     def test_get_parameters(self):
         """Test parameter definitions."""
-        dashboard = ConnectionDashboardNode(name="test")
+        dashboard = ConnectionDashboardNode(name="test", require_auth=False)
         params = dashboard.get_parameters()
 
         assert "port" in params
@@ -170,9 +174,19 @@ class TestConnectionDashboardNode:
 
     @pytest.mark.asyncio
     async def test_start_stop(self, dashboard):
-        """Test starting and stopping dashboard."""
+        """Test starting and stopping dashboard.
+
+        Uses ``execute_async(action=...)`` rather than the old
+        ``await execute({"action": ...})``. The node now subclasses
+        ``AsyncNode``, so ``execute()`` is the SDK's SYNC entry point and
+        ``execute_async()`` the async one, both taking ``**runtime_inputs``.
+        The old positional-dict form only existed because the node overrode
+        ``Node.execute`` with an async method -- the contract break fixed
+        alongside #2112; see
+        tests/regression/test_issue_2112_connection_dashboard_auth.py.
+        """
         # Start dashboard
-        result = await dashboard.execute({"action": "start"})
+        result = await dashboard.execute_async(action="start")
         assert result["status"] == "started"
         assert result["url"] == "http://localhost:8888"
         assert dashboard.app is not None
@@ -183,7 +197,7 @@ class TestConnectionDashboardNode:
         assert status["url"] == "http://localhost:8888"
 
         # Stop dashboard
-        result = await dashboard.execute({"action": "stop"})
+        result = await dashboard.execute_async(action="stop")
         assert result["status"] == "stopped"
         assert dashboard.app is None
 
@@ -376,10 +390,13 @@ class TestConnectionDashboardNode:
 @pytest.mark.asyncio
 async def test_dashboard_integration():
     """Test dashboard integration with real web server."""
+    # require_auth=False: this test exercises the web server LIFECYCLE
+    # (start/stop, app and site construction), not the authentication gate.
     dashboard = ConnectionDashboardNode(
         name="integration_test",
         port=0,  # Random port
         update_interval=60.0,  # Don't update during test
+        require_auth=False,
     )
 
     try:
