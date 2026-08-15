@@ -24,7 +24,7 @@ Independent: #2136 → #2150 (stacked); **#2137 MERGED (`2e3ddd9e7`)**; **#2148 
 **FIVE MERGED:** #2143, #2144, #2137, #2148, #2147. The CI lane is COMPLETE — root
 regression gates restored and running to completion on the real runner (2403 passed / 277s).
 
-## ROOT-CAUSE FIX — #2160 MERGED (`995d72bc4`), #2159 rebased green, awaiting CI
+## ROOT-CAUSE FIX — LANDED. #2160 (`995d72bc4`) + #2159 (`454f27acc`) both MERGED
 
 The marker defect is fixed at the root, not patched again. **The name is no longer
 consulted at all.** A test needs infrastructure IFF its resolved fixture closure
@@ -73,42 +73,7 @@ unwired kaizen regression (#2074), memory-address markers (#2152), unreferenced 
 suite (#2160). Assume more exist; the pattern is "a control that reports success without
 doing its job."
 
-## (superseded) PR #2159 blocker notes
-
-`fix/2152-marker-substring-boundary` (`255b94031`) fixes the F1 regression below. It is
-CORRECT and verified both polarities, but it RELEASES ~1,627 previously-excluded tests
-into the infra-free CI step, which surfaces **pre-existing** failures:
-
-```
-WITH the fix : 3 failed, 1494 passed, 145 deselected, 8 xfailed, 4 errors
-BASELINE     : 1 failed, 8 passed, 5 deselected, 2 errors   (main's own conftest, same 2 files)
-```
-
-Pre-existing, NOT caused by the fix — same failures reproduce against main's conftest.
-Two distinct test-infrastructure defects to fix before merging #2159:
-
-1. `test_mcp_tool_wrapper_closure_capture.py::test_pre_fix_wrapper_shape_is_rejected_by_real_registration`
-   → `ValueError: Functions with **kwargs are not supported as tools`
-2. `test_issue_1720_b1b_embed_cutover.py` → `ScopeMismatch` on a function-scoped fixture (4 params)
-
-Measured scope of the fix (14,773 items, past the `maxfail` that truncates a naive run to 3,760):
-any-infra marker **2229 (15.1%) → 576 (3.9%)**; `requires_ollama` **1980 → 353**.
-
-## ⚠ REGRESSION ON MAIN — fixed by #2159, not yet merged (F1)
-
-**#2143 × #2144 do not compose.** #2144's marker fix switched `str(item.function)` →
-`item.name.lower()` but kept the BARE SUBSTRING list, and `"ai"` is in it:
-`'ai' in 'kaizen'` is True. Measured on merged main (`2e3ddd9e7`):
-```
-test_issue_1720_b1a_live_cutover.py --co                     -> 5 collected
-same, -m "not requires_ollama"                               -> 2/5 (3 deselected)
-```
-**`test_azure_ai_foundry_routes_through_four_axis_path` — the #2067 test #2143 made
-hermetic — is deselected from every infra-free CI step.** #2143 fixed a test; #2144
-stopped running it. L4 is fixing (word-boundary match, or drop the 2-letter fragments).
-Scope number UNRECONCILED: reviewer measured 14.4% of 12,629 items; my own run over
-`packages/kailash-kaizen/tests/` collected 3,760 with 10 collection errors and the filter
-deselected NOTHING at that scope. Both cannot be complete — re-derive before citing.
+## Merge chain detail (all CI-lane items landed)
 
 - **#2144** (CI selectors) — MERGED `8a4dca737`. Carries the marker-determinism fix (#2152).
 - **#2147** (CI hang) — rebases onto #2144 after it merges. MUST confirm L4's `schedule:` block,
