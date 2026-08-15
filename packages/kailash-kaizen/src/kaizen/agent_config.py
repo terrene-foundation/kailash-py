@@ -175,7 +175,15 @@ class AgentConfig:
     # =========================================================================
 
     enable_checkpointing: bool = False
-    """Enable automatic checkpointing (disabled by default until checkpoint module is implemented)"""
+    """Enable automatic checkpointing.
+
+    #2111 — the stated reason for this default ("until checkpoint module is
+    implemented") no longer holds: checkpointing is wired to
+    ``StateManager`` over ``FilesystemStorage``. The default stays ``False``
+    here so that constructing an ``AgentConfig`` directly has no filesystem
+    side effect; ``Agent`` opts in for its own callers, and enabling it
+    creates ``checkpoint_path``.
+    """
 
     checkpoint_path: str = ".kaizen/checkpoints"
     """Checkpoint storage directory"""
