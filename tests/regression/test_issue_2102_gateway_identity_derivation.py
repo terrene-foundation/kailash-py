@@ -257,6 +257,130 @@ class TestSiblingSweepRealtimeRoutes:
         assert response.status_code == 401, response.text
 
 
+class TestRefreshTokensAreNotAccessCredentials:
+    """A refresh token MUST NOT open a session (#2139 adversarial review, H2).
+
+    ``JWTValidator.verify_token`` — the GATE's verifier — refuses
+    ``token_type == "refresh"``. Neither middleware manager does:
+    ``auth_manager.py`` never mentions ``token_type`` and ``jwt_auth.py``
+    reads it only in ``refresh_access_token``, checking the OPPOSITE
+    direction. So the two verification surfaces disagreed and the direct
+    path — the one this PR brought to life — was the permissive half.
+
+    Measured before the fix, presenting a refresh token as a bearer::
+
+        DEFAULT (gate installed)  -> 401   (the gate refused it)
+        external_auth_reason      -> 200   as the refresh token's subject
+        require_auth=False        -> 200   as the refresh token's subject
+
+    Both polarities per deployment: an ACCESS token must still be accepted
+    on the same route, or "refuses everything" would look identical to
+    "refuses refresh tokens".
+    """
+
+    @pytest.mark.parametrize(
+        "label,kwargs",
+        [
+            ("delegated gate", {"external_auth_reason": "fronted by istio"}),
+            ("open deployment", {"require_auth": False}),
+        ],
+    )
+    def test_refresh_token_is_refused_where_the_direct_path_is_the_source(
+        self, label, kwargs
+    ):
+        gateway = APIGateway(title="test", **kwargs)
+        refresh = gateway.auth_manager.create_refresh_token(user_id="alice")
+
+        response = _client(gateway).post(
+            "/api/sessions",
+            json={"user_id": "body-value"},
+            headers={"Authorization": f"Bearer {refresh}"},
+        )
+
+        assert response.json().get("user_id") != "alice", (
+            f"[{label}] a refresh token opened a session as its subject: "
+            f"{response.status_code} {response.text[:200]}"
+        )
+
+    @pytest.mark.parametrize(
+        "label,kwargs",
+        [
+            ("delegated gate", {"external_auth_reason": "fronted by istio"}),
+            ("open deployment", {"require_auth": False}),
+        ],
+    )
+    def test_access_token_still_works_on_the_same_route(self, label, kwargs):
+        """THE CONTROL — without it, refusing every token would look green."""
+        gateway = APIGateway(title="test", **kwargs)
+
+        response = _client(gateway).post(
+            "/api/sessions",
+            json={"user_id": "body-value"},
+            headers=_bearer(gateway, "alice"),
+        )
+
+        assert response.status_code == 200, response.text
+        assert (
+            response.json()["user_id"] == "alice"
+        ), f"[{label}] the access-token path regressed: {response.text[:200]}"
+
+    def test_the_gate_refuses_it_too_on_a_default_deployment(self):
+        """The surface that was already correct, pinned so parity cannot drift."""
+        gateway = APIGateway(title="test")
+        refresh = gateway.auth_manager.create_refresh_token(user_id="alice")
+
+        response = _client(gateway).post(
+            "/api/sessions",
+            json={},
+            headers={"Authorization": f"Bearer {refresh}"},
+        )
+
+        assert response.status_code == 401, response.text
+
+
+class TestApiKeyWebsocketResolvesAPrincipal:
+    """An API-key-authenticated handshake must carry a principal (M1).
+
+    ``JWTWebSocketAuthMiddleware`` accepted a valid API key and passed the
+    scope through with NO ``scope["state"]["user"]``, while its own bearer
+    branch and the HTTP sibling both populate it. A fail-closed route then
+    refused the credential the gate had just accepted.
+    """
+
+    def test_api_key_handshake_carries_a_principal(self):
+        import secrets
+
+        from starlette.websockets import WebSocketDisconnect
+
+        from kailash.trust.auth.jwt import JWTConfig as TrustJWTConfig
+
+        api_key = "k" * 40
+        config = TrustJWTConfig(
+            secret=GATEWAY_SECRET,
+            algorithm="HS256",
+            api_key_enabled=True,
+            api_key_validator=lambda k: (
+                {"sub": "apikey-alice", "roles": ["api"]}
+                if secrets.compare_digest(k, api_key)
+                else False
+            ),
+        )
+        gateway = APIGateway(title="test", auth_config=config)
+        client = _client(gateway)
+
+        with client.websocket_connect("/ws", headers={"X-API-Key": api_key}):
+            registry = gateway.realtime.connection_manager.user_connections
+            assert "apikey-alice" in registry, (
+                "the API-key handshake resolved no principal: " f"{registry!r}"
+            )
+
+        # THE CONTROL: a wrong key is still refused, so the assertion above
+        # cannot be satisfied by an unconditionally-accepting gate.
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect("/ws", headers={"X-API-Key": "wrong"}):
+                pass
+
+
 class TestSubjectClaimPrecedenceIsShared:
     """The identity comes from ``sub``, through ONE helper.
 
@@ -276,6 +400,24 @@ class TestSubjectClaimPrecedenceIsShared:
         from kailash.trust.auth.jwt import subject_from_claims
 
         assert subject_from_claims({"sub": 12345}) == "12345"
+
+    def test_a_present_but_malformed_sub_does_not_fall_through(self):
+        """M2 — a wrong-shape registered claim must not be overridden.
+
+        ``{"sub": "", "user_id": "mallory"}`` resolved to ``"mallory"``:
+        the RFC 7519 registered claim was present-but-malformed and the
+        accommodation spelling — which is NOT in the minter's reserved-claim
+        guard — won. Latent (no in-tree caller forwards untrusted kwargs into
+        the minter) and closed rather than left to become reachable.
+        """
+        from kailash.trust.auth.jwt import subject_from_claims
+
+        assert subject_from_claims({"sub": "", "user_id": "mallory"}) is None
+        assert subject_from_claims({"sub": {}, "uid": "mallory"}) is None
+        assert subject_from_claims({"sub": None, "user_id": "mallory"}) is None
+        # ABSENT (not present-but-malformed) still falls through — that is the
+        # accommodation the precedence exists for.
+        assert subject_from_claims({"user_id": "bob"}) == "bob"
 
     def test_structural_and_empty_claims_yield_no_principal(self):
         from kailash.trust.auth.jwt import subject_from_claims

@@ -214,6 +214,68 @@ class TestSiblingSitesInTheSameFile:
             manager.revoke_all_user_tokens(INJECTION)
         _assert_single_clean_line(probe, "kid-a")
 
+    def test_sinks_outside_jwt_auth_are_covered_too(self):
+        """The #2104 sweep was scoped to the CHANGED FILE, not to the taint.
+
+        An adversarial re-review of #2139 found five reachable sinks the
+        original sweep never reached, all OUTSIDE ``jwt_auth.py`` -- and one
+        of them (``agent_ui.py`` "Workflow built") sits ~110 lines BELOW two
+        sinks that sweep DID fix, which is the same-file drift its own
+        rationale warns about. Scope, not quality: the file it did sweep was
+        complete.
+        """
+        import asyncio
+
+        from kailash.middleware.communication.realtime import RealtimeMiddleware
+        from kailash.middleware.core.agent_ui import AgentUIMiddleware
+
+        agent_ui = AgentUIMiddleware(max_sessions=5)
+        realtime = RealtimeMiddleware(agent_ui)
+
+        # `url` is a caller-supplied field on WebhookRegisterRequest.
+        with _StreamProbe(
+            "kailash.middleware.communication.realtime", logging.INFO
+        ) as probe:
+            realtime.register_webhook(webhook_id="w1", url=INJECTION)
+        _assert_single_clean_line(probe, "kid-a")
+
+        # `name` is a caller-supplied field on WorkflowCreateRequest.
+        with _StreamProbe("kailash.middleware.core.agent_ui", logging.INFO) as probe:
+            asyncio.run(
+                agent_ui._build_workflow_from_config(
+                    {
+                        "name": INJECTION,
+                        "nodes": [
+                            {
+                                "id": "n",
+                                "type": "PythonCodeNode",
+                                "config": {"name": "n", "code": "result = {}"},
+                            }
+                        ],
+                        "connections": [],
+                    }
+                )
+            )
+        _assert_single_clean_line(probe, "kid-a")
+
+        # The build-FAILURE sink: the exception text is derived from the
+        # caller's own node graph, on the path a prober drives repeatedly.
+        with _StreamProbe("kailash.middleware.core.agent_ui", logging.ERROR) as probe:
+            with pytest.raises(ValueError):
+                asyncio.run(
+                    agent_ui._build_workflow_from_config(
+                        {
+                            "name": "x",
+                            "nodes": [{"id": INJECTION, "type": INJECTION}],
+                            "connections": [],
+                        }
+                    )
+                )
+        assert probe.lines, "the build failure must still be logged"
+        assert len(probe.lines) == 1, f"expected one line, got {probe.lines!r}"
+        for byte in CONTROL_BYTES:
+            assert byte not in probe.lines[0], f"{byte!r} survived: {probe.lines[0]!r}"
+
     def test_verification_error_text_cannot_forge_records(self):
         """The ``except Exception`` sink at ``verify_token`` renders foreign text.
 

@@ -533,6 +533,33 @@ class APIGateway:
             )
             return None
 
+        # A REFRESH token is NOT an access credential, and this path is the
+        # only place in the gateway that could have treated it as one.
+        # `JWTValidator.verify_token` — the gate's verifier — already refuses
+        # it (`trust/auth/jwt.py`, "Refresh tokens cannot be used for API
+        # authentication"), but NEITHER middleware manager does:
+        # `auth_manager.py` never mentions `token_type`, and `jwt_auth.py`
+        # only reads it in `refresh_access_token`, checking the OPPOSITE
+        # direction. So the two verification surfaces disagreed, and this one
+        # was the permissive half (`security.md` § Enforcement-Surface Parity).
+        #
+        # Reachable ONLY where this direct path IS the identity source — a
+        # deployment with no gate installed here (`external_auth_reason=`, an
+        # exempted path, `require_auth=False`). Measured before this fix:
+        #
+        #     DEFAULT (gate installed)      -> 401  (the gate refused it)
+        #     external_auth_reason          -> 200  as the refresh token's subject
+        #     require_auth=False            -> 200  as the refresh token's subject
+        #
+        # A refresh token lives for `refresh_token_expire_days` (7 by default)
+        # and is the credential most likely to sit in cookie storage or a
+        # client log, so accepting it here turns a long-lived exchange token
+        # into a session-opening one on exactly the deployments that cannot
+        # fall back on the gate.
+        if payload.get("token_type") == "refresh":
+            logger.warning("api_gateway.refresh_token_presented_as_access")
+            return None
+
         from ...trust.auth.jwt import subject_from_claims
 
         return subject_from_claims(payload)
@@ -549,9 +576,17 @@ class APIGateway:
           query value that disagrees with it.
         * With no principal and ``require_auth`` resolved True, this RAISES
           401. It does not fall back. Falling back is the whole defect: it let
-          an unauthenticated caller open a session under any name it chose, and
-          it let an authenticated one act as somebody else (issue #2102, the
-          same class as #2047).
+          an unauthenticated caller open a session under any name it chose
+          (issue #2102, the same class as #2047).
+
+          SCOPED CLAIM, deliberately. This closes identity DERIVATION — who a
+          request acts AS, at the routes that MINT or FILTER by an identity.
+          It does NOT close what an authenticated principal may act ON: every
+          route taking a caller-supplied ``session_id`` still acts on it
+          without checking who owns that session, so an authenticated caller
+          can still act as somebody else THERE. That is horizontal
+          authorization, a different class with a different fix, tracked as
+          issue #2145 — do not read this docstring as closing it.
         * With no principal and authentication explicitly opted OUT
           (``require_auth=False``, or ``enable_auth=False`` which is the older
           spelling of the same statement), the caller-supplied value stands.
@@ -1100,11 +1135,28 @@ class APIGateway:
             try:
                 resolved_user_id = await self._resolve_identity(websocket, user_id)
             except HTTPException:
-                # A websocket cannot carry a 401. 1008 is POLICY VIOLATION, and
-                # it is sent WITHOUT `accept()` so the handshake is refused
-                # outright rather than accepted and then torn down -- the same
-                # shape `JWTWebSocketAuthMiddleware._deny` uses.
+                # A websocket cannot carry a 401. 1008 is POLICY VIOLATION,
+                # sent WITHOUT `accept()` so the handshake is refused outright
+                # rather than accepted and then torn down.
+                #
+                # The `receive()` mirrors `JWTWebSocketAuthMiddleware._deny`
+                # and is not decoration: the ASGI spec has the server send
+                # `websocket.connect` before the application may reply, and
+                # while uvicorn tolerates a close without it, hypercorn,
+                # daphne and the wsproto implementation are stricter -- a
+                # refusal that only fails closed on one server is not a
+                # refusal. Wrapped because the peer can vanish between the
+                # server queuing `connect` and this read; the close below is
+                # then a no-op and turning that into a 500 would convert a
+                # disconnect into a server fault.
                 logger.warning("api_gateway.websocket_identity_unresolved")
+                try:
+                    await websocket.receive()
+                except Exception:
+                    logger.debug(
+                        "api_gateway.websocket_connect_event_unavailable",
+                        exc_info=True,
+                    )
                 await websocket.close(code=1008)
                 return
 

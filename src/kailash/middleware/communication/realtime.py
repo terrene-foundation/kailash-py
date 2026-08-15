@@ -30,6 +30,7 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
 from ...nodes.api import HTTPRequestNode
 from ...nodes.security import CredentialManagerNode
 from ...nodes.transform import DataTransformer
+from ...utils.secure_logging import sanitize_log_value
 from ..core.agent_ui import AgentUIMiddleware
 from .events import BaseEvent, EventFilter, EventPriority, EventStream, EventType
 
@@ -427,7 +428,15 @@ class WebhookManager:
             "failures": 0,
             "active": True,
         }
-        logger.info(f"Registered webhook {webhook_id} -> {url}")
+        # `url` is a caller-supplied field on `WebhookRegisterRequest`; the id
+        # is server-minted. Same class as #2104 -- an unsanitized caller value
+        # reaching a log record -- caught by a sweep whose scope was the
+        # CHANGED file rather than the taint (issue #2140 follow-up).
+        logger.info(
+            "Registered webhook %s -> %s",
+            sanitize_log_value(webhook_id, 128),
+            sanitize_log_value(url, 256),
+        )
 
     def unregister_webhook(self, webhook_id: str):
         """Unregister a webhook endpoint."""
@@ -477,9 +486,14 @@ class WebhookManager:
             "timestamp": time.time(),
         }
 
-        # Log delivery attempt
+        # Log delivery attempt. `url` is the caller-registered value again --
+        # it reaches this sink on EVERY delivery, so an injected value here
+        # forges a record per event rather than once at registration.
         logger.info(
-            f"Webhook delivery attempt: {webhook_id} -> {url} (event: {event.type.value})"
+            "Webhook delivery attempt: %s -> %s (event: %s)",
+            sanitize_log_value(webhook_id, 128),
+            sanitize_log_value(url, 256),
+            sanitize_log_value(event.type.value, 64),
         )
 
         self.delivery_stats["total_attempts"] += 1
@@ -681,7 +695,11 @@ class RealtimeMiddleware:
                         json.dumps({"error": "Invalid JSON format"})
                     )
                 except Exception as e:
-                    logger.error(f"WebSocket message error: {e}")
+                    # The exception text here is derived from the attacker's
+                    # own JSON payload (a decode / handler failure on bytes
+                    # they chose), so it is the #2104 class on a socket a
+                    # caller can drive repeatedly.
+                    logger.error("WebSocket message error: %s", sanitize_log_value(e))
                     await websocket.send_text(json.dumps({"error": str(e)}))
 
         finally:

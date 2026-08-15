@@ -87,11 +87,25 @@ def subject_from_claims(claims: Dict[str, Any]) -> Optional[str]:
         that never existed.
     """
     for claim in ("sub", "user_id", "uid"):
-        value = claims.get(claim)
+        if claim not in claims:
+            continue
+        value = claims[claim]
         if isinstance(value, str) and value:
             return value
         if isinstance(value, int) and not isinstance(value, bool):
             return str(value)
+        # PRESENT but wrong-shape -> hard None, never fall through.
+        #
+        # Falling through let a malformed registered claim be OVERRIDDEN by a
+        # lower-precedence one: `{"sub": "", "user_id": "mallory"}` resolved to
+        # `"mallory"`. `sub` is the RFC 7519 registered claim and the one an
+        # issuer controls; `user_id`/`uid` are the accommodation spellings and
+        # are NOT in the minter's reserved-claim guard, so a caller who can
+        # influence extra claims but not `sub` could be promoted by the
+        # fallback. Latent today (no in-tree caller forwards untrusted kwargs
+        # into the minter) and closed here rather than left to become
+        # reachable (`security.md` § Secure-Default: fail closed).
+        return None
     return None
 
 
