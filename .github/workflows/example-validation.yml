@@ -105,6 +105,17 @@ jobs:
 
       - name: Run example validation tests
         working-directory: packages/kaizen-agents
+        # #2038-class masking removed: continue-on-error swallowed this
+        # step's result unconditionally. Verified before removing it —
+        # tests/examples/ exists (packages/kaizen-agents/tests/examples/
+        # test_example_validation.py, 23 tests, structural/README/syntax
+        # checks only, no infra) and runs clean on the exact CI matrix
+        # (Python 3.11): 23 passed in 0.06s. The `if [ -d ... ]` branch
+        # below is dead in this repo's current state (the directory has
+        # existed since before this fix) but is left in place — its own
+        # else-branch warning, not a mask, is an honest "nothing to test
+        # yet" for a hypothetical future state where the directory is
+        # removed again, not a hidden failure.
         run: |
           # Run validation tests if they exist
           if [ -d "tests/examples" ]; then
@@ -113,7 +124,6 @@ jobs:
             echo "⚠️  Warning: tests/examples/ directory not found - skipping validation tests"
             echo "ℹ️  Note: Example validation tests will be created in Phase 10"
           fi
-        continue-on-error: true
 
       - name: Validate example gallery documentation
         working-directory: packages/kaizen-agents
