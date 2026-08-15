@@ -22,6 +22,7 @@ as the un-scrubbed-secret gap this file's cost-guard half already closes.
 import os
 import sys
 from pathlib import Path
+from typing import Iterator, Tuple
 
 import pytest
 
@@ -43,6 +44,65 @@ _REAL_LLM_MARKER = "requires_real_llm"
 def pytest_collection_finish(session):
     """Backstop: remove any provider secret re-injected during collection."""
     scrub_provider_secrets()
+
+
+def _shadowed_first_party_packages() -> Iterator[Tuple[str, Path, Path]]:
+    """Yield (module, imported_from, repo_source) for siblings resolved OUTSIDE
+    this checkout.
+
+    Only inspects modules ALREADY in ``sys.modules``, so it costs no imports and
+    reports exactly what the run actually used.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    packages_dir = repo_root / "packages"
+    if not packages_dir.is_dir():
+        return
+
+    for src_dir in sorted(packages_dir.glob("*/src")):
+        for candidate in sorted(src_dir.iterdir()):
+            if not (candidate / "__init__.py").is_file():
+                continue
+            module = sys.modules.get(candidate.name)
+            imported_from = getattr(module, "__file__", None)
+            if imported_from is None:
+                continue
+            imported_path = Path(imported_from).resolve()
+            if repo_root not in imported_path.parents:
+                yield candidate.name, imported_path, candidate
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Report first-party packages served from outside this checkout.
+
+    A sibling package installed as a NON-editable wheel shadows the repo source
+    silently, so the suite tests the wheel's code while reporting on the repo's.
+    Both failure directions are expensive and neither is self-evident from the
+    output: a stale wheel reds tests whose repo source is already correct (and
+    the fix gets misattributed to product or test code, which is how correct
+    code gets "fixed"), and a wheel NEWER than the branch greens a regression
+    the branch actually has.
+
+    Advisory rather than fatal: testing against a released wheel on purpose is
+    legitimate, and failing the run would red every suite on any machine with a
+    stale sibling. It is printed in the summary, where the reader is already
+    looking when results surprise them.
+    """
+    shadowed = sorted(_shadowed_first_party_packages())
+    if not shadowed:
+        return
+
+    terminalreporter.section("first-party packages NOT served from this checkout")
+    for module, imported_path, repo_source in shadowed:
+        package_dir = repo_source.parent.parent
+        terminalreporter.write_line(f"  {module}: imported from {imported_path}")
+        terminalreporter.write_line(f"  {' ' * len(module)}  repo source {repo_source}")
+        terminalreporter.write_line(
+            f"  {' ' * len(module)}  fix: uv pip install -e "
+            f"{package_dir.relative_to(package_dir.parent.parent)}"
+        )
+    terminalreporter.write_line(
+        "Results above describe the INSTALLED code, not this branch."
+    )
 
 
 def pytest_collection_modifyitems(config, items):
