@@ -44,12 +44,19 @@ class TestBaseAgentLineCount:
         # rules/refactor-invariants.md — a guard that only ever moves in the
         # direction of the code records what happened rather than what was
         # intended.
+        #
+        # The SAME ceiling is enforced from the monorepo root by
+        # tests/regression/test_loc_invariants.py. That test also asserts this
+        # number matches its own, so the two cannot silently drift again the
+        # way they did between 2026-07-24 and 2026-08-11. It reads the literal
+        # out of the `assert len(lines) <= <N>` form below — keep that shape,
+        # or update the pattern there with it.
         path = Path(__file__).parent.parent.parent.parent / (
             "src/kaizen/core/base_agent.py"
         )
         lines = path.read_text().splitlines()
-        assert len(lines) < 1015, (
-            f"base_agent.py has grown to {len(lines)} lines (budget: <1015). "
+        assert len(lines) <= 1015, (
+            f"base_agent.py has grown to {len(lines)} lines (budget: <=1015). "
             f"This likely indicates a merge regression that re-inlined mixin "
             f"code. MCP methods belong in MCPMixin, A2A in A2AMixin, the "
             f"extract_* accessors in OutputExtractionMixin, and the "
