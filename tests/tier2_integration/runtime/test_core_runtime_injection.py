@@ -350,7 +350,10 @@ class TestWorkflowAPIRuntimeInjection:
 
         builder = WorkflowBuilder()
         builder.add_node("PythonCodeNode", "test_node", {"code": "result = 'ok'"})
-        return WorkflowAPI(builder, runtime=runtime)
+        # require_auth=False: this exercises RUNTIME INJECTION, not the
+        # #2072 auth gate, which defaults to True and refuses to construct
+        # without a credential source. Stated, not inherited.
+        return WorkflowAPI(builder, require_auth=False, runtime=runtime)
 
     def test_constructor_accepts_runtime_parameter(self):
         runtime = AsyncLocalRuntime()
