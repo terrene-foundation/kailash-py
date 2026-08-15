@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, Dict, Optional
 
@@ -67,6 +68,69 @@ __all__ = [
 
 #: Sent on every 401 so a compliant client knows which scheme to retry with.
 _WWW_AUTHENTICATE = 'Bearer realm="api"'
+
+#: Guards :data:`_SEEN_FAILURES`. The middleware is shared by every worker
+#: thread/task in the process, so the first-occurrence decision must be atomic
+#: or a burst of concurrent requests each writes its own "first" traceback.
+_FAILURE_LOCK = threading.Lock()
+
+#: ``(event, exception type name) -> count``. Keyed on the exception TYPE, never
+#: on its message: the message can carry request-controlled bytes, and a key
+#: space an attacker can grow is a memory leak wearing a rate limiter's clothes.
+#: The type is decided by the code path, so this dict is bounded by
+#: call-sites x exception-types regardless of what is sent.
+_SEEN_FAILURES: Dict[tuple, int] = {}
+
+
+def _log_bounded_failure(event: str, exc: BaseException, **extra: Any) -> None:
+    """Log an auth-path failure with the traceback ONCE, then a bounded record.
+
+    Every ``logger.exception`` in this module sits on a path an unauthenticated
+    caller can drive at request rate, so an unbounded stack trace per attempt is
+    log-volume amplification an attacker controls (issue #2114: one non-ASCII
+    ``X-API-Key`` byte made ``secrets.compare_digest`` raise, buying a full
+    traceback per anonymous request).
+
+    Swallowing the failure silently would be the wrong correction, and is not
+    what this does.
+    The first occurrence of each ``(event, exception type)`` keeps its FULL
+    traceback -- the operator still gets the diagnostic that says what broke and
+    where. Repeats are still recorded, at WARNING with a running count and the
+    exception type, but without ``exc_info``: the second traceback of an
+    identical failure carries no information the first did not, while the
+    ten-thousandth costs real disk.
+
+    Args:
+        event: Stable event name, e.g. ``jwt_auth_middleware.api_key_failed``.
+        exc: The caught exception. Only its TYPE is used as a key or logged;
+            its ``str()`` can hold request-controlled bytes and is emitted only
+            inside the first record's traceback.
+        **extra: Additional structured fields for the log record.
+    """
+    key = (event, type(exc).__name__)
+    with _FAILURE_LOCK:
+        count = _SEEN_FAILURES.get(key, 0) + 1
+        _SEEN_FAILURES[key] = count
+
+    if count == 1:
+        logger.exception(event, extra=extra)
+    else:
+        logger.warning(
+            event,
+            extra={**extra, "error_type": type(exc).__name__, "occurrences": count},
+        )
+
+
+def _reset_bounded_failures() -> None:
+    """Clear the first-occurrence memo. For tests only.
+
+    Without this a test asserting "no traceback" would pass for the wrong
+    reason whenever an earlier test in the same process had already consumed
+    the one traceback that failure class is allowed.
+    """
+    with _FAILURE_LOCK:
+        _SEEN_FAILURES.clear()
+
 
 #: Maps a configured algorithm name to the label this module logs for it.
 #:
@@ -242,13 +306,16 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 extra={"path": request.url.path, "reason": str(exc)},
             )
             return self._unauthorized("invalid_token")
-        except Exception:
-            # Not `except: pass` -- this logs with a stack trace and still
+        except Exception as exc:
+            # Not a silent swallow -- this logs with a stack trace and still
             # fails CLOSED with 401. An unexpected verification error must
-            # never fall through into the protected route.
-            logger.exception(
+            # never fall through into the protected route. The trace is bounded
+            # per failure class because this path is anonymous and repeatable
+            # (#2114).
+            _log_bounded_failure(
                 "jwt_auth_middleware.verification_failed",
-                extra={"path": request.url.path},
+                exc,
+                path=request.url.path,
             )
             return self._unauthorized("auth_error")
 
@@ -260,11 +327,15 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 result = self.config.on_token_validated(payload)
                 if inspect.isawaitable(result):
                     await result
-            except Exception:
+            except Exception as exc:
                 # An audit/stale-detection hook is advisory. It is logged with
                 # a stack trace and never allowed to convert a valid token
-                # into a 500, but neither is it allowed to pass silently.
-                logger.exception("jwt_auth_middleware.on_token_validated_failed")
+                # into a 500, but neither is it allowed to pass silently. A
+                # hook that raises does so on EVERY request, so the trace is
+                # bounded per failure class (#2114).
+                _log_bounded_failure(
+                    "jwt_auth_middleware.on_token_validated_failed", exc
+                )
 
         async with self.request_context(payload):
             return await call_next(request)
@@ -288,8 +359,18 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             result = validator(api_key)
             if inspect.isawaitable(result):
                 result = await result
-        except Exception:
-            logger.exception("jwt_auth_middleware.api_key_validator_failed")
+        except Exception as exc:
+            # The SHIPPED validator no longer raises on a non-ASCII key
+            # (`server_auth._make_api_key_validator` rejects it before
+            # `compare_digest`), but `api_key_validator` is public config and a
+            # caller-supplied one can raise on anything. Bounded here so no
+            # validator can be turned into a traceback-per-request amplifier by
+            # an anonymous caller (#2114).
+            _log_bounded_failure(
+                "jwt_auth_middleware.api_key_validator_failed",
+                exc,
+                path=request.url.path,
+            )
             return self._unauthorized("invalid_api_key")
 
         if not result:
@@ -448,10 +529,15 @@ class JWTWebSocketAuthMiddleware:
                         user_id="apikey", roles=["api"]
                     )
                 scope["state"]["token_payload"] = {"type": "api_key"}
-            except Exception:
-                logger.exception(
+            except Exception as exc:
+                # Bounded like every other exception sink in this module: the
+                # claims come from the API key the caller presented, so a key
+                # shaped to make `create_user_from_payload` raise would
+                # otherwise buy a traceback per handshake (#2114).
+                _log_bounded_failure(
                     "jwt_ws_auth_middleware.api_key_user_construction_failed",
-                    extra={"path": scope.get("path", "")},
+                    exc,
+                    path=scope.get("path", ""),
                 )
                 await self._deny(scope, receive, send, "auth_error")
                 return
@@ -473,13 +559,15 @@ class JWTWebSocketAuthMiddleware:
             )
             await self._deny(scope, receive, send, "invalid_token")
             return
-        except Exception:
+        except Exception as exc:
             # Not a swallow -- logged with a stack trace and still failing
             # CLOSED. An unexpected verification error must never fall through
-            # into an open socket.
-            logger.exception(
+            # into an open socket. Bounded per failure class: a handshake is as
+            # anonymous and as repeatable as an HTTP request (#2114).
+            _log_bounded_failure(
                 "jwt_ws_auth_middleware.verification_failed",
-                extra={"path": scope.get("path", "")},
+                exc,
+                path=scope.get("path", ""),
             )
             await self._deny(scope, receive, send, "auth_error")
             return
@@ -490,10 +578,11 @@ class JWTWebSocketAuthMiddleware:
         try:
             scope["state"]["user"] = self._validator.create_user_from_payload(payload)
             scope["state"]["token_payload"] = payload
-        except Exception:
-            logger.exception(
+        except Exception as exc:
+            _log_bounded_failure(
                 "jwt_ws_auth_middleware.user_construction_failed",
-                extra={"path": scope.get("path", "")},
+                exc,
+                path=scope.get("path", ""),
             )
             await self._deny(scope, receive, send, "auth_error")
             return
@@ -521,10 +610,14 @@ class JWTWebSocketAuthMiddleware:
             result = validator(api_key)
             if inspect.isawaitable(result):
                 result = await result
-        except Exception:
-            # Logged with a stack trace and failing CLOSED (the caller denies
-            # on a falsy return) -- not a swallow.
-            logger.exception("jwt_ws_auth_middleware.api_key_validator_failed")
+        except Exception as exc:
+            # Failing CLOSED (the caller denies on a falsy return) -- not a
+            # swallow. The first occurrence keeps its full traceback; repeats
+            # are counted without one, because this is the same validator
+            # object the HTTP dispatcher calls and the same anonymous,
+            # repeatable path, so the amplification reached this surface too
+            # (#2114).
+            _log_bounded_failure("jwt_ws_auth_middleware.api_key_validator_failed", exc)
             return None
         return result
 

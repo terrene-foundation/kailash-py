@@ -146,10 +146,60 @@ def _make_api_key_validator(api_keys: Dict[str, str]):
     oracle. The loop compares against EVERY configured key rather than
     returning early, so the number of comparisons does not depend on which key
     matched.
+
+    ``compare_digest`` also **raises** ``TypeError`` for a ``str`` holding any
+    character outside ASCII, and for an argument that is not a ``str`` at all::
+
+        TypeError: comparing strings with non-ASCII characters is not supported
+
+    Both halves of that are closed here, because both were reachable (#2114):
+
+    * **The PRESENTED key** -- Starlette decodes request headers as latin-1, so
+      one header byte ``>= 0x80`` produced a non-ASCII ``str`` and a raise. The
+      request was still refused, but through an exception handler that wrote a
+      full stack trace, giving an unauthenticated caller a traceback per request
+      for the cost of a single byte. :func:`_validate` now rejects it before the
+      comparison. This is NOT a short-circuit of the constant-time property: no
+      CONFIGURED key can be non-ASCII (see below), so a non-ASCII presented key
+      cannot match any of them, and returning early reveals nothing about which
+      key it was compared against. The ASCII path still runs the full loop.
+
+    * **A CONFIGURED key** -- a non-ASCII ``KAILASH_API_KEY_*`` made every
+      comparison raise, including against the operator's own correct key. The
+      API-key path then authenticated NOBODY while logging a traceback on every
+      request: a silently dead deployment. That is refused at CONSTRUCTION
+      instead, the disposition this module already takes for an under-length
+      ``KAILASH_JWT_SECRET`` -- the failure becomes visible at deploy time
+      rather than as an unexplained 401 in production. API keys are opaque
+      bearer tokens by convention (``secrets.token_urlsafe`` emits ASCII), so
+      this rejects nothing an operator has a reason to configure.
+
+    Raises:
+        InvalidServerAuthSecretError: A configured key contains a non-ASCII
+            character.
     """
+    non_ascii = sorted(name for name, value in api_keys.items() if not value.isascii())
+    if non_ascii:
+        # Names only. The values ARE the credentials, and this message is
+        # routinely caught and logged by the caller's bootstrap.
+        raise InvalidServerAuthSecretError(
+            "API key(s) contain non-ASCII characters and cannot be used: "
+            f"{', '.join(non_ascii)}. secrets.compare_digest rejects non-ASCII "
+            "strings, so such a key can never authenticate anyone -- every "
+            "request, including one presenting the correct key, would be "
+            'refused. Use an ASCII key (e.g. `python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))"`).'
+        )
+
     expected = list(api_keys.values())
 
     def _validate(api_key: str) -> bool:
+        # Fail CLOSED on anything compare_digest would raise on, without
+        # entering the comparison. `isascii()` is checked on a confirmed `str`:
+        # bytes have an `isascii()` too, but a bytes credential is not this
+        # validator's contract and comparing one against a `str` raises.
+        if not isinstance(api_key, str) or not api_key.isascii():
+            return False
         matched = False
         for candidate in expected:
             if secrets.compare_digest(api_key, candidate):
