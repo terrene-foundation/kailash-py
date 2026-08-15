@@ -2,7 +2,8 @@
 Tests for SPEC-04: BaseAgent Slimming.
 
 Validates that:
-1. base_agent.py stays under 1,010 LOC (raised from 1,000 for #1779; see test)
+1. base_agent.py stays under 1,015 LOC (re-anchored to the architectural
+   invariant by #2119; see test for the budget history)
 2. Extracted modules exist and are importable
 3. AgentLoop produces identical results to the original inline code
 4. MCPMixin methods are accessible via BaseAgent
@@ -21,31 +22,38 @@ import pytest
 
 
 class TestBaseAgentLineCount:
-    """Enforce that base_agent.py stays under 1,000 lines."""
+    """Enforce that base_agent.py stays under 1,015 lines."""
 
-    def test_base_agent_under_1070_lines(self):
-        # Budget raised 1000 -> 1010 (2026-07-18, #1779: `ungoverned` opt-out
-        # threading) -> 1015 (2026-07-19, #1720 Wave-2b: cleanup() gained a lazy
-        # `sanitize_provider_error` import guarding a pre-existing NameError in
-        # its MCP-cleanup except-handlers — 3 lines of genuine bug-fix code, NOT
-        # re-inlined mixin code) -> 1070 (2026-08-11, #2030/#2022: the three
-        # extension points gained the I/O log-hygiene fix and the
-        # configuration-error re-raise).
+    def test_base_agent_under_1015_lines(self):
+        # Budget history: 1000 -> 1010 (2026-07-18, #1779) -> 1015 (2026-07-19,
+        # #1720 Wave-2b) -> 1070 (2026-08-11, #2030/#2022) -> back to 1015
+        # (2026-08-15, #2119).
         #
-        # The generic helpers from that fix were deliberately EXTRACTED to
-        # `kaizen/core/_log_hygiene.py` rather than inlined here, which is the
-        # behaviour this guard exists to enforce; what remains in base_agent.py
-        # is the extension-point logic itself, which must live where subclasses
-        # override it. The guard's purpose (catching a merge that re-inlines
-        # MCP/A2A mixins, which adds 200+ lines) is preserved at <1070.
+        # The first three raises each had a stated reason, but the cumulative
+        # effect was a guard that could no longer fail before the architectural
+        # invariant in tests/regression/test_loc_invariants.py (limit 1015) did
+        # — so it had stopped guarding anything. #2119 resolved the overshoot
+        # the way the invariant intended, by EXTRACTION rather than by another
+        # raise (extract_* -> OutputExtractionMixin, the Control Protocol trio
+        # -> ControlProtocolMixin), which brought the file to 922 and made this
+        # budget re-anchorable to the invariant it should never have drifted
+        # above.
+        #
+        # This number may be TIGHTENED freely. Raising it needs the same
+        # justification an extraction would have needed, per
+        # rules/refactor-invariants.md — a guard that only ever moves in the
+        # direction of the code records what happened rather than what was
+        # intended.
         path = Path(__file__).parent.parent.parent.parent / (
             "src/kaizen/core/base_agent.py"
         )
         lines = path.read_text().splitlines()
-        assert len(lines) < 1070, (
-            f"base_agent.py has grown to {len(lines)} lines (budget: <1070). "
+        assert len(lines) < 1015, (
+            f"base_agent.py has grown to {len(lines)} lines (budget: <1015). "
             f"This likely indicates a merge regression that re-inlined mixin "
-            f"code. MCP methods belong in MCPMixin, A2A in A2AMixin. "
+            f"code. MCP methods belong in MCPMixin, A2A in A2AMixin, the "
+            f"extract_* accessors in OutputExtractionMixin, and the "
+            f"ask/approve/report helpers in ControlProtocolMixin. "
             f"See journal/0003-RISK-spec04-silent-regression-via-parallel-merge.md"
         )
 
@@ -58,6 +66,15 @@ class TestBaseAgentLineCount:
         # #2030 — the log-hygiene helpers must stay extracted, not drift back
         # into base_agent.py where the line-count guard would mask them.
         assert (base / "_log_hygiene.py").exists(), "_log_hygiene.py not found"
+        # #2119 — same contract for the two units extracted to restore the
+        # 1015 invariant. A merge that re-inlines either one puts ~150 lines
+        # back into base_agent.py.
+        assert (
+            base / "output_extraction_mixin.py"
+        ).exists(), "output_extraction_mixin.py not found"
+        assert (
+            base / "control_protocol_mixin.py"
+        ).exists(), "control_protocol_mixin.py not found"
 
 
 # =========================================================================
@@ -118,11 +135,53 @@ class TestBaseAgentMRO:
 
         assert issubclass(BaseAgent, A2AMixin)
 
+    def test_output_extraction_mixin_in_mro(self):
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.output_extraction_mixin import OutputExtractionMixin
+
+        assert issubclass(BaseAgent, OutputExtractionMixin)
+
+    def test_control_protocol_mixin_in_mro(self):
+        from kaizen.core.base_agent import BaseAgent
+        from kaizen.core.control_protocol_mixin import ControlProtocolMixin
+
+        assert issubclass(BaseAgent, ControlProtocolMixin)
+
     def test_node_in_mro(self):
         from kailash.nodes.base import Node
         from kaizen.core.base_agent import BaseAgent
 
         assert issubclass(BaseAgent, Node)
+
+    def test_extracted_methods_still_resolve_on_baseagent(self):
+        """#2119 — the extractions must be invisible at the public API.
+
+        Existence alone would pass even if a method were left behind as a
+        stub, so this also drives each accessor and asserts the coercion the
+        inline versions performed.
+        """
+        from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+
+        agent = BaseAgent(config=BaseAgentConfig(), mcp_servers=[])
+
+        for name in (
+            "extract_list",
+            "extract_dict",
+            "extract_float",
+            "extract_str",
+            "ask_user_question",
+            "request_approval",
+            "report_progress",
+        ):
+            assert hasattr(agent, name), f"{name} no longer resolves on BaseAgent"
+
+        # A JSON-string payload must still be coerced to the declared type,
+        # and a malformed one must still fall back to the default.
+        assert agent.extract_list({"a": '["x"]'}, "a") == ["x"]
+        assert agent.extract_dict({"a": '{"k": 1}'}, "a") == {"k": 1}
+        assert agent.extract_float({"a": "0.5"}, "a") == 0.5
+        assert agent.extract_str({"a": None}, "a", "dflt") == "dflt"
+        assert agent.extract_list({"a": "not json"}, "a", default=["d"]) == ["d"]
 
     def test_mcp_methods_accessible(self):
         """All MCPMixin methods must be accessible on BaseAgent instances."""
