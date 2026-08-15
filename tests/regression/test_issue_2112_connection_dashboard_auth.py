@@ -403,3 +403,60 @@ async def test_real_cors_preflight_is_still_exempt(authed_env):
         assert preflight.status == 200, await preflight.text()
     finally:
         await client.close()
+
+
+# ---------------------------------------------------------------------------
+# The Node ABC contract. Pre-existing defect, fixed while the file was open.
+# ---------------------------------------------------------------------------
+
+
+def test_execute_returns_a_dict_not_a_coroutine(clean_auth_env):
+    """``execute()`` must honour the Node contract: sync in, ``dict`` out.
+
+    Before the fix this node subclassed the SYNC ``Node``, declared
+    ``def run(self, **kwargs): return self.execute(**kwargs)`` without an
+    ``await``, and overrode ``Node.execute`` -- the SDK's validating sync
+    entry point -- with an ``async def execute(self, input_data)`` taking a
+    POSITIONAL argument. The signatures disagreed, so the mismatch raised
+    before the missing ``await`` was ever reached and ``run()`` failed in
+    both forms::
+
+        run()                -> TypeError: execute() missing 1 required
+                                positional argument: 'input_data'
+        run(action="status") -> TypeError: execute() got an unexpected
+                                keyword argument 'action'
+
+    The node now subclasses ``AsyncNode`` -- the same base
+    ``WorkflowConnectionPool`` uses -- and implements ``async_run``.
+    """
+    node = _node(require_auth=False)
+
+    result = node.execute(action="status")
+
+    assert isinstance(result, dict), f"execute() returned {type(result).__name__}"
+    assert "running" in result, result
+
+
+async def test_execute_async_returns_a_dict(clean_auth_env):
+    """The async entry point supplied by ``AsyncNode`` works too."""
+    node = _node(require_auth=False)
+
+    result = await node.execute_async(action="status")
+
+    assert isinstance(result, dict), f"execute_async() -> {type(result).__name__}"
+    assert "running" in result, result
+
+
+def test_run_names_async_run_instead_of_failing_obscurely(clean_auth_env):
+    """``run()`` on an async node fails with an ACTIONABLE message.
+
+    Previously it raised ``TypeError: execute() missing 1 required positional
+    argument: 'input_data'`` -- which names neither the real problem nor the
+    fix. ``AsyncNode.run`` names the method to implement.
+    """
+    node = _node(require_auth=False)
+
+    with pytest.raises(NotImplementedError) as excinfo:
+        node.run(action="status")
+
+    assert "async_run" in str(excinfo.value), str(excinfo.value)

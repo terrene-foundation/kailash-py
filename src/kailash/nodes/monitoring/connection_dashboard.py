@@ -54,7 +54,8 @@ except ImportError as exc:  # pragma: no cover — covered by structural invaria
         "Install with: pip install 'kailash[server]'"
     ) from exc
 
-from kailash.nodes.base import Node, NodeParameter, register_node
+from kailash.nodes.base import NodeParameter, register_node
+from kailash.nodes.base_async import AsyncNode
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ class MetricsCache:
 
 
 @register_node()
-class ConnectionDashboardNode(Node):
+class ConnectionDashboardNode(AsyncNode):
     """Web-based monitoring dashboard for connection pools.
 
     Provides real-time visualization of connection pool metrics,
@@ -165,6 +166,17 @@ class ConnectionDashboardNode(Node):
     :class:`~kailash.utils.server_auth.ServerAuthNotConfiguredError` unless a
     credential source is configured. Pass ``require_auth=False`` for an
     explicit opt-out that logs a loud WARN naming the exposure.
+
+    AUTHENTICATION IS FLAT: the gate establishes *that* a caller is an
+    operator, not *which* operator. Every route returns process-global state
+    (pool metrics, alert rules) with no per-caller scoping, and the mutating
+    ``/api/alerts`` routes accept any authenticated caller, so
+    ``request["user"]`` -- which the middleware does populate -- is
+    deliberately not consulted by any handler. That is coherent for a
+    single-tenant operator dashboard and is recorded here so it is not
+    mistaken for an oversight: introducing tenancy or per-role privilege
+    would require reading the principal in each handler, which is a
+    separate change with its own model.
     """
 
     def __init__(self, **config):
@@ -317,19 +329,45 @@ class ConnectionDashboardNode(Node):
             ),
         }
 
-    def run(self, **kwargs) -> dict[str, Any]:
-        """Execute the node's logic (Node ABC contract)."""
-        return self.execute(**kwargs)
-
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[override]
+    async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Execute dashboard action.
 
         Actions:
         - start: Start the dashboard server
         - stop: Stop the dashboard server
         - status: Get dashboard status
+
+        This is the :class:`~kailash.nodes.base_async.AsyncNode` contract
+        method. Sync callers use :meth:`execute`, async callers
+        :meth:`execute_async`; both are supplied by ``AsyncNode`` and handle
+        the event-loop bridging.
+
+        REPLACES a pair of methods that could not be called at all. Before
+        this, the node subclassed the SYNC ``Node`` and declared::
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return self.execute(**kwargs)          # never awaited
+
+            async def execute(self, input_data: Dict[str, Any]) -> ...
+
+        which overrode ``Node.execute`` -- the SDK's validating sync entry
+        point -- with an async method taking a POSITIONAL ``input_data``. The
+        two signatures disagreed, so the mismatch raised before the missing
+        ``await`` was ever reached, and ``run()`` failed in BOTH forms::
+
+            run()               -> TypeError: execute() missing 1 required
+                                   positional argument: 'input_data'
+            run(action="status") -> TypeError: execute() got an unexpected
+                                   keyword argument 'action'
+
+        Verified no caller in ``src/``, ``packages/`` or ``tests/`` invoked
+        either method -- ``WorkflowConnectionPool`` drives this node through
+        :meth:`start` / :meth:`stop` directly -- so the broken path had no
+        users to preserve. ``AsyncNode`` is the same base
+        ``WorkflowConnectionPool`` itself uses, which is what makes this the
+        framework shape rather than a bespoke bridge.
         """
-        action = input_data.get("action", "status")
+        action = kwargs.get("action", "status")
 
         if action == "start":
             await self.start()

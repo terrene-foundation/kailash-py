@@ -174,9 +174,19 @@ class TestConnectionDashboardNode:
 
     @pytest.mark.asyncio
     async def test_start_stop(self, dashboard):
-        """Test starting and stopping dashboard."""
+        """Test starting and stopping dashboard.
+
+        Uses ``execute_async(action=...)`` rather than the old
+        ``await execute({"action": ...})``. The node now subclasses
+        ``AsyncNode``, so ``execute()`` is the SDK's SYNC entry point and
+        ``execute_async()`` the async one, both taking ``**runtime_inputs``.
+        The old positional-dict form only existed because the node overrode
+        ``Node.execute`` with an async method -- the contract break fixed
+        alongside #2112; see
+        tests/regression/test_issue_2112_connection_dashboard_auth.py.
+        """
         # Start dashboard
-        result = await dashboard.execute({"action": "start"})
+        result = await dashboard.execute_async(action="start")
         assert result["status"] == "started"
         assert result["url"] == "http://localhost:8888"
         assert dashboard.app is not None
@@ -187,7 +197,7 @@ class TestConnectionDashboardNode:
         assert status["url"] == "http://localhost:8888"
 
         # Stop dashboard
-        result = await dashboard.execute({"action": "stop"})
+        result = await dashboard.execute_async(action="stop")
         assert result["status"] == "stopped"
         assert dashboard.app is None
 
