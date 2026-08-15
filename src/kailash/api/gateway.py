@@ -60,7 +60,7 @@ import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 # `httpx`, `fastapi`, and `starlette` are OPTIONAL dependencies under the
 # `server` extra (pyproject.toml:55-67), not in slim-core dependencies. Per
@@ -102,6 +102,7 @@ from ..utils.proxy_guard import (
     compile_path_allowlist,
     normalize_allowed_methods,
     path_matches_allowlist,
+    reject_unsafe_proxy_destination,
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
@@ -703,6 +704,9 @@ class WorkflowAPIGateway:
         allowed_methods: list[str] | None = None,
         auth_dependency: Callable[..., Any] | None = None,
         forward_credentials: bool = False,
+        blocked_networks: Sequence[Any] | None = None,
+        allow_metadata_destination: bool = False,
+        require_public_destination: bool = False,
     ):
         """Register a proxied workflow with real request forwarding.
 
@@ -744,10 +748,21 @@ class WorkflowAPIGateway:
                 whichever round-robin backend was selected. Set True only when
                 the backend is trusted and genuinely needs to re-authorize the
                 original caller.
+            blocked_networks: Extra CIDR blocks no backend may resolve into,
+                on top of the always-blocked metadata and link-local ranges.
+            allow_metadata_destination: Permit a backend in the cloud
+                metadata / link-local set (issue #2091). Defaults to False and
+                logs a WARNING naming the disabled protection when set.
+            require_public_destination: Also refuse RFC1918 and loopback
+                backends, adopting the stricter ``nexus.http_client`` posture.
+                Defaults to False because proxying to an internal service is
+                this surface's common legitimate use.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control is
                 configured for the route.
+            BlockedDestinationError: A backend URL resolves into the blocked
+                destination set (issue #2091).
             ValueError: ``name`` is already registered, or ``allowed_paths`` /
                 ``allowed_methods`` is missing or invalid.
         """
@@ -770,6 +785,22 @@ class WorkflowAPIGateway:
         # Support multiple backends via comma-separated URLs
         backends = [u.strip() for u in proxy_url.split(",") if u.strip()]
         primary_url = backends[0]
+
+        # The DESTINATION control (#2091), applied to EVERY backend rather
+        # than just the primary. Round-robin means a caller cannot choose
+        # which one serves their request, so checking only `primary_url`
+        # would leave the second and later entries unconstrained -- the same
+        # partial-coverage shape the credential-forwarding defect had here
+        # before #2025.
+        for backend_url in backends:
+            reject_unsafe_proxy_destination(
+                backend_url,
+                name=name,
+                surface="WorkflowAPIGateway",
+                blocked_networks=blocked_networks,
+                allow_metadata_destination=allow_metadata_destination,
+                require_public_destination=require_public_destination,
+            )
 
         self.workflows[name] = WorkflowRegistration(
             name=name,

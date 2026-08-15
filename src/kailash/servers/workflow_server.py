@@ -10,7 +10,7 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 # `fastapi` and `starlette` are OPTIONAL dependencies under the `server` extra.
 # Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
@@ -44,6 +44,7 @@ from ..utils.proxy_guard import (
     compile_path_allowlist,
     normalize_allowed_methods,
     path_matches_allowlist,
+    reject_unsafe_proxy_destination,
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
@@ -924,6 +925,9 @@ class WorkflowServer:
         allowed_methods: list[str] | None = None,
         auth_dependency: Callable[..., Any] | None = None,
         forward_credentials: bool = False,
+        blocked_networks: Sequence[Any] | None = None,
+        allow_metadata_destination: bool = False,
+        require_public_destination: bool = False,
     ):
         """Register a proxied workflow running on another server.
 
@@ -963,10 +967,26 @@ class WorkflowServer:
                 re-authorize the original caller; #2025 noted that stripping
                 unconditionally left the backend unable to re-authorize, and
                 this is the documented way to allow it.
+            blocked_networks: Extra CIDR blocks the destination may not
+                resolve into, on top of the always-blocked metadata and
+                link-local ranges. See
+                :func:`kailash.utils.proxy_guard.reject_unsafe_proxy_destination`.
+            allow_metadata_destination: Permit a destination in the cloud
+                metadata / link-local set (issue #2091). Defaults to False and
+                logs a WARNING naming the disabled protection when set --
+                there is no legitimate reason to proxy to 169.254.169.254,
+                and on the usual providers it hands out IAM credentials.
+            require_public_destination: Also refuse RFC1918 and loopback
+                destinations, adopting the stricter posture
+                ``nexus.http_client`` uses for outbound calls. Defaults to
+                False because proxying to an internal service is this
+                surface's common legitimate use.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control is
                 configured for the route.
+            BlockedDestinationError: ``proxy_url`` resolves into the blocked
+                destination set (issue #2091).
             ValueError: ``name`` is already registered, or ``allowed_paths`` /
                 ``allowed_methods`` is missing or invalid.
         """
@@ -988,6 +1008,16 @@ class WorkflowServer:
             allowed_methods,
             name=name,
             supported=("GET", "POST", "PUT", "DELETE", "PATCH"),
+        )
+        # The DESTINATION control (#2091). The four above constrain what a
+        # caller can do; this one constrains what the deployment can point at.
+        reject_unsafe_proxy_destination(
+            proxy_url,
+            name=name,
+            surface="WorkflowServer",
+            blocked_networks=blocked_networks,
+            allow_metadata_destination=allow_metadata_destination,
+            require_public_destination=require_public_destination,
         )
 
         # Create proxied workflow registration

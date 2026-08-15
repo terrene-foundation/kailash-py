@@ -99,13 +99,19 @@ serve paths outside its own root.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
+from .network_guard import BlockedDestinationError
+from .network_guard import check_url as _check_destination_url
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "BlockedDestinationError",
+    "reject_unsafe_proxy_destination",
     "DEFAULT_ALLOWED_METHODS",
     "PROXY_CREDENTIAL_HEADERS",
     "PROXY_HOP_BY_HOP_HEADERS",
@@ -236,6 +242,118 @@ PROXY_SAFE_RESPONSE_HEADERS: frozenset = frozenset(
         "last-modified",
     }
 )
+
+
+def reject_unsafe_proxy_destination(
+    proxy_url: str,
+    *,
+    name: str,
+    surface: str,
+    blocked_networks: Optional[Sequence[ipaddress._BaseNetwork]] = None,
+    allow_metadata_destination: bool = False,
+    require_public_destination: bool = False,
+) -> None:
+    """Refuse a proxy registration whose DESTINATION is an unsafe address.
+
+    The fifth registration-time control (#2091). The four above constrain what
+    a CALLER can do; this one constrains what the DEPLOYMENT can point at.
+
+    ``proxy_url`` comes from a developer calling a Python API, not from
+    request data, so this is a deployment-misconfiguration surface rather
+    than a caller-driven one -- materially lower severity than the defects
+    #2064 closed, and worth stating rather than glossing. It still matters:
+    a registration pointing at ``http://169.254.169.254/`` publishes cloud
+    metadata -- including IAM credentials on the usual providers -- to every
+    authenticated caller, and a reader of the pre-#2091 code would reasonably
+    have concluded the destination was deliberately unconstrained.
+
+    The decision logic is :func:`kailash.utils.network_guard.check_url`,
+    which is the guard lifted out of ``nexus.http_client`` -- the reference
+    implementation the issue named. Both now run the same code.
+
+    Default posture, and why it is not simply nexus's
+    -------------------------------------------------
+
+    Nexus blocks RFC1918 + loopback + link-local + IMDS, which is right for
+    an outbound client talking to the public internet. A reverse proxy is
+    frequently pointed at an internal service ON PURPOSE -- that is the
+    common legitimate use -- so a blanket RFC1918 block here would break the
+    normal case, and a control that breaks the normal case gets switched off
+    wholesale, taking the IMDS protection with it.
+
+    So the default blocks the subset with NO legitimate proxy use at all:
+    cloud metadata addresses, the metadata hostnames, and link-local
+    (169.254.0.0/16, fe80::/10). RFC1918 and loopback are permitted by
+    default and can be blocked with ``require_public_destination=True``.
+
+    Per ``security.md`` § Secure-Default the metadata block is ON by default
+    with an EXPLICIT, LOUD opt-out: ``allow_metadata_destination=True`` logs
+    a WARNING naming the protection being disabled. It is deliberately a
+    separate argument from ``require_public_destination`` so that widening
+    the posture for internal backends never silently widens IMDS too.
+
+    Limits, stated rather than implied
+    ----------------------------------
+
+    * The check runs at REGISTRATION, against the address the destination
+      resolves to THEN. A hostname that resolves benign at registration and
+      to 169.254.169.254 later is NOT caught -- this is not a DNS-rebinding
+      defence. The metadata HOSTNAMES are additionally blocked by name, which
+      does not depend on resolution.
+    * A destination that cannot be resolved at registration is PERMITTED with
+      a WARNING rather than refused. Backends legitimately are not up yet
+      when the proxy is registered, and failing there would make the control
+      one that deployments route around. The warning names the destination as
+      unverified so the gap is visible rather than silent.
+
+    Raises:
+        BlockedDestinationError: The destination is in the blocked set.
+    """
+    if allow_metadata_destination:
+        logger.warning(
+            "proxy_guard.metadata_destination_allowed",
+            extra={"workflow": name, "surface": surface},
+        )
+        logger.warning(
+            "Proxied workflow '%s' on %s registered with "
+            "allow_metadata_destination=True: cloud-metadata and link-local "
+            "destinations are NOT blocked for this route. On the usual cloud "
+            "providers the metadata service hands out IAM credentials, so any "
+            "caller authorized to use this proxy can read them (issue #2091).",
+            name,
+            surface,
+        )
+
+    try:
+        _check_destination_url(
+            proxy_url,
+            blocked_networks=blocked_networks,
+            allow_private=not require_public_destination,
+            allow_metadata=allow_metadata_destination,
+            resolve_dns=True,
+        )
+    except BlockedDestinationError as exc:
+        if exc.reason != "resolution_failed":
+            raise
+        # Not fatal -- see "Limits" above. Loud, and it names what was not
+        # checked, so an unverified destination is visible rather than silent.
+        logger.warning(
+            "proxy_guard.destination_unresolved",
+            extra={
+                "workflow": name,
+                "surface": surface,
+                "url_fingerprint": exc.url_fingerprint,
+            },
+        )
+        logger.warning(
+            "Destination for proxied workflow '%s' on %s could not be "
+            "resolved at registration, so its address was NOT checked "
+            "against the blocked set (issue #2091). Registration proceeds "
+            "because a backend is legitimately not always up yet at "
+            "registration time.",
+            name,
+            surface,
+        )
 
 
 class ProxyAuthNotConfiguredError(RuntimeError):
