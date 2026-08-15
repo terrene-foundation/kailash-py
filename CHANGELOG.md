@@ -13,6 +13,56 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING) — session-scoped gateway routes now check ownership (#2145)
+
+**Read the migration note at the end.** If you drive `APIGateway` sessions from a caller other than the one that created them, those calls now return 404.
+
+- **An authenticated caller could execute code in another user's session (CRITICAL).** Every session-scoped route took a caller-supplied `session_id` and acted on it **without comparing the session's owner against the caller** — although `WorkflowSession.user_id` has always carried that owner, and the whole gateway module contained exactly one owner-ish token. **Measured on a default (gated) `APIGateway()`, both parties holding valid tokens the gateway itself minted**, `alice` creating a session and `bob` then driving it:
+
+  ```
+  GET  /api/sessions/{alice_sid}            -> 200 {"user_id":"alice",...}
+  POST /api/workflows?session_id=alice_sid  -> 200 {"workflow_id":"e9437e7d-..."}
+  POST /api/executions?session_id=alice_sid -> 200 {"status":"started"}
+  GET  /api/sessions                        -> 200 {"sessions":[{...,"user_id":"alice"}]}
+  DELETE /api/sessions/{alice_sid}          -> 200 {"message":"Session closed"}
+  ```
+
+  The third line is the severe one: the workflow body is caller-authored `PythonCodeNode` source, so `bob` did not merely read `alice`'s session — he **injected a workflow into it and executed it**, then closed it. This is the horizontal-authorization half of #2102: that issue fixed who a request acts *as*, and this one fixes what that principal may act *on*. It survived #2072's fail-closed gate, which authenticates these requests but does not authorize them.
+
+- **`GET /api/sessions` was the attacker's target directory, and is now scoped to the caller.** It enumerated every session on the gateway — id, owner `user_id`, creation time, workflow and execution counts — to any authenticated caller, which is how an attacker obtained the `session_id` the other routes require. It now returns only the caller's own sessions. On an open deployment it still returns everything, because there are no identities to scope by.
+
+- **One predicate, twelve call sites, found by AST sweep rather than by hand.** `APIGateway._require_session_owner` is the single ownership rule; every session-scoped route calls it. The route list was enumerated mechanically from the source, and that mattered: the hand-written list in the issue **missed `GET /api/executions` and `GET /api/schemas/workflows/{workflow_id}`**, either of which left unguarded would have shipped the exact failure mode the fix closes (`security.md` § Enforcement-Surface Parity).
+
+- **`/ws` and `/events` needed it too, and #2151's fix did not cover them.** Those routes take `session_id` as well as `user_id`. Pinning `user_id` to the verified principal (#2151) does **not** close the session selector, because `ConnectionManager.send_to_session` walks `session_connections[session_id]` and calls `send_to_connection` **directly, never evaluating the `EventFilter`**. Measured on a real socket before this fix — `alice`, authenticated as herself, on `?session_id=<bob's session>`:
+
+  ```
+  send_to_session(bob) delivered to 1 connection(s)
+  ALICE'S SOCKET RECEIVED: {"type":"private","body":"bob-session-only payload"}
+  ```
+
+  Both routes now check session ownership; the websocket refuses the handshake with 1008 before `accept()`.
+
+- **`GET /api/events/recent` without a `session_id` returned every user's recent events**, which is the #2151 confidentiality defect at the REST surface rather than the websocket one. The filter is now pinned to the caller's `user_id`. That also excludes events carrying no `user_id` at all, which is the intended direction: an event the gateway cannot attribute to the caller is not one to hand them.
+
+- **Refusals are 404, not 403, and that is deliberate.** A 403 would confirm that a session id exists, turning every one of these routes into a membership oracle over session ids. A regression test asserts the response for a real-but-unowned session is **byte-identical** to the one for an id that was never issued. The single exception is an **unclaimed** session (empty or `None` owner), which answers 403 with a named condition: that is an operator-facing fact about the server's own legacy state, and reaching it requires already holding a valid session id.
+
+- **An empty owner is not a wildcard.** Since #2102 every session created through the HTTP surface carries a server-derived owner, so an ownerless session predates that fix. On a gated deployment it is refused rather than matched against every caller — treating `""` as "matches anybody" is the silent-fallback shape (`zero-tolerance.md` Rule 3) and would have quietly re-opened exactly what this closes.
+
+- **Open deployments are an explicit branch, and say so once.** With `require_auth=False` or `enable_auth=False` there are no identities, so no ownership rule can apply; the check is skipped by an explicit branch a reader can find, not as a side effect of there being no principal to compare. Construction emits a one-time WARN (`api_gateway.session_ownership_unenforced`) naming the OFF protection — *any caller may read, drive and close any session, including `POST /api/executions` which runs workflows in it* — and its wiring, separate from `resolve_server_auth`'s own `server_auth.disabled` because it names a different protection (`security.md` § Secure-Default).
+
+**Migration.** On a gated gateway (`enable_auth` at its default), a caller may act only on sessions it owns:
+
+| Call | Before | After |
+| --- | --- | --- |
+| Own session, any session-scoped route | 200 | **200** (unchanged) |
+| Another user's session, any of the twelve routes | 200 | **404** |
+| `GET /api/sessions` | every session on the gateway | **only the caller's** |
+| Session with no recorded owner | 200 | **403**, naming the condition |
+| `WS /ws?session_id=<other user's>` | connected, received that session's traffic | **1008 at the handshake** |
+| Any of the above with `enable_auth=False` / `require_auth=False` | 200 | **200** (unchanged) |
+
+If you relied on one identity administering another's sessions, there is no supported path for that today — the gateway has no operator role, and inventing one silently is what this fix exists to prevent. Use `require_auth=False` for a deliberately open deployment, or mint a credential for the subject whose session you mean to drive.
+
 ### Changed (BREAKING) — the middleware gateway derives identity from the credential, never from the request (#2102)
 
 **Read the migration note at the end of this entry before upgrading.** If you call `POST /api/sessions`, `GET /events` or `WS /ws` on `kailash.middleware.communication.api_gateway.APIGateway` with `enable_auth` at its default, the identity those routes act under changes.
