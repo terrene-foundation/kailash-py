@@ -1,51 +1,68 @@
-# ═══ cont-17 FINAL — main `7f94ad324` · **11 PRs MERGED · ALL LANE PRs CLOSED** ═══
+# ═══ cont-17 FINAL — main `8b96e07a6` · **14 PRs MERGED · #2038 CLOSED · TIER 2 NOW GATES** ═══
 
 **#2103 MERGED** — the last lane PR. Closes **#2047** (MFA had no actor: every action
 authorized on a caller-supplied `user_id`), **#2088**, **#2089**, **#2040**.
 **#2125 MERGED** (`b7d8cf533`) — the two `ci-runners.operator.local*` files had NO frontmatter,
 so they loaded as project instructions in EVERY session; now `priority:10 path-scoped`.
-**#2126 MERGED** (`7f94ad324`) — cont-17 notes.
+**#2126 / #2130 MERGED** — cont-17 notes.
+**#2131 MERGED** (`46c738ad4`) — closes **#2129**; repairs the 23 Tier-2 tests (below).
+**#2124 MERGED** (`8b96e07a6`) — closes **#2038**. Tier 2 GATES THE MERGE.
 **39 issues open** (from 35 at session start — that is discovery, each carrying a measurement).
 
-**Open PRs: #2124 (BLOCKED, read below) + #2123 (loom's Gate-2 sync, NOT ours).**
+**Open PRs: #2123 ONLY (loom's Gate-2 sync, NOT ours). All lane PRs are closed.**
 
-## ⛔ START HERE — #2124 IS RED, AND THAT IS THE FINDING (#2129)
+## ✅ TIER 2 IS NOW A REAL GATE — what that changes for you
 
-**#2124 removes `continue-on-error: true` from Tier 2 — the last step of #2038.** Its own CI
-is the first blocking Tier-2 run this repo has ever had, and it **fails on all four
-interpreters**. Do NOT read that as "#2124 broke something":
+Verified on main `8b96e07a6`: the Tier-2 step carries NO `continue-on-error`. The only
+`continue-on-error: true` left in `unified-ci.yml` is **line 146 (pyright, #73)** — always out
+of scope. **A green `gh pr checks` now carries information about Tier 2 for the first time.**
 
-```
-$ gh pr view 2124 --json files
-  25+/39-  .github/workflows/unified-ci.yml     # THE ONLY FILE
-```
+**If Tier 2 reds your PR, it is a real integration regression — fix it, do NOT restore the
+flag.** The workflow comment at line 241 says exactly this: quarantine the individual test
+instead. Restoring the flag re-opens #2038 and re-hides everything below.
 
-The diff removes comments, the flag, and the paired annotation step. **No source, no tests, no
-pytest invocation — it cannot introduce a test failure, only stop hiding one.** The 23
-failures are on `main` RIGHT NOW.
+### What the masking was hiding (the finding of cont-17)
+
+Tier 2 ran under `continue-on-error` since #2038 was filed, so its result never reached the
+check surface. **THREE separate fail-closed security changes each broke tests in it, and each
+author's only feedback was a green job.** Baseline on main before #2131:
 
 ```
 13 failed, 2559 passed, 47 skipped, 4 deselected, 1 xfailed, 10 errors in 55.37s
 ```
 
-Cause: **`kailash.utils.server_auth.ServerAuthNotConfiguredError`**. PR #2100's fail-closed
-auth default (correct — it fixes CRITICAL #2072) broke Tier-2 suites that build servers with
-no credentials. #2100 fixed the suites it could **see** (Tier 1); Tier 2 ran under
-`continue-on-error`, so its author got no signal.
+FOUR causes, not one (the #2129 body's single-cause attribution was WRONG — corrected in a
+comment on the issue):
 
-Affected (Py 3.12; identical 3.11/3.13/3.14):
+| n   | cause                                                              | origin                    |
+| --- | ------------------------------------------------------------------ | ------------------------- |
+| 11  | `ServerAuthNotConfiguredError` — `WorkflowAPI` refuses w/o credential | #2100 / #2072             |
+| 1   | `JWT secret must be at least 32 characters for HS256 (got 11)`      | **#2083**, not #2100      |
+| 1   | `expected call not found` — `external_auth_reason` now propagates    | #2100, assertion drift    |
+| 10  | `JWTKeyNotConfiguredError: ... 'test_key.pem'`                       | **kailash-mcp**, not #2100 |
 
-- `tests/tier2_integration/api/test_workflow_api_async_runtime.py` — 7
-- `tests/tier2_integration/runtime/test_core_runtime_injection.py` — 4
-- `tests/tier2_integration/mcp_server/test_oauth.py` — 10 setup ERRORs (`TestAuthorizationServer`)
-- `tests/tier2_integration/middleware/test_circular_imports.py::test_create_gateway_with_auth`
-- `tests/tier2_integration/servers/test_workflow_server.py::…::test_workflow_registration` —
-  `expected call not found`, **NOT** an auth error; diagnose separately, do not fold it in
+**The oauth 10 were never auth-configuration.** `AuthorizationServer.__init__` opens
+`private_key_path` ITSELF instead of delegating to `JWTManager`, so the setup's
+`patch("kailash_mcp.auth.oauth.JWTManager")` never intercepted it — and **`test_key.pem` has
+never existed in this repo.** That class had been erroring at setup for as long as the file
+was referenced, invisibly. Fixed with `allow_ephemeral_key=True`, the remedy the SDK's own
+error message prescribes.
 
-**Tracked as #2129, which blocks #2124.** Fix order is #2129 → then #2124. Do not merge #2124
-first: it would red every PR in the repo on failures none of them introduced, which is the
-exact reason the flag existed. When fixing, check each test's INTENT — `test_create_gateway_with_auth`
-presumably wants auth ON with a real secret, not `require_auth=False`.
+Post-fix, full tier run exactly as CI runs it: **2603 passed, 0 failed, 0 errors.**
+
+### Two live traps recorded from this work
+
+1. **A stale installed wheel shadows the repo source.** Reproducing Tier 2 locally showed a
+   PHANTOM cause — `TypeError: ResourceServer.__init__() got an unexpected keyword argument
+   'resource'`. That is site-packages `kailash-mcp` 0.2.15 winning over
+   `packages/kailash-mcp/src`. CI installs it editable and never sees it. Prefix
+   `PYTHONPATH="$PWD/packages/kailash-mcp/src:$PYTHONPATH"` or you will chase a defect that
+   does not exist on the branch.
+2. **A mismarked `xfail` was swallowing a real error.**
+   `test_async_execution_no_threading` is marked xfail "Flaky: async event loop pollution" but
+   was actually catching the `ServerAuthNotConfiguredError`. It now genuinely passes (reports
+   XPASS, non-strict so it does not fail CI). The marker is now wrong. NOT removed — proving
+   stability across orderings needs repeated full-suite runs nobody has done. Worth a follow-up.
 
 ## ⚠ A CO-OWNER OVERRIDE IS ON THE RECORD — #2103 merged with CodeQL RED
 
