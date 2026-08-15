@@ -61,6 +61,40 @@ The four registration-time controls:
 4. **Traversal rejection** -- :func:`reject_unsafe_proxy_path` refuses ``..``
    segments and encoded separators before the target URL is built, rather
    than relying on the HTTP client's URL normalization.
+
+Segment-parameter collapse (#2087) and what this guard does NOT close
+---------------------------------------------------------------------
+
+The ``..`` segment check above is correct for the RFC 3986 shape and was
+BYPASSABLE for the servlet-class one. Tomcat, Jetty and others strip
+everything from ``;`` to the end of a path segment while resolving it, so a
+segment of ``..;`` is not equal to ``..`` at this proxy, passes the check,
+and is then normalised BY THE BACKEND to ``..`` -- restoring the traversal
+the guard exists to prevent. ``..;foo``, ``..%3B`` and the double-encoded
+``..%253B`` are the same defect under different spellings.
+
+The approach taken is deliberately the NARROW one of the three the issue
+weighed: :func:`_collapse_segment_parameters` models the servlet path-
+parameter rule for ONE purpose -- deciding whether a segment would BECOME a
+dot-segment -- and the refusal fires only when it would. A segment carrying a
+legitimate matrix parameter (``products;color=blue``, ``a;jsessionid=xyz``)
+is untouched, because a blanket ban on ``;`` would be a regression: ``;`` is
+an RFC 3986 sub-delimiter and valid in paths.
+
+**This closes one MEMBER of the family, not the class**, and that is stated
+here rather than implied. The guard models the ``;`` convention because it is
+the one with known backends behind it. A backend that collapses a DIFFERENT
+character, or that applies a different normalisation before path resolution,
+reintroduces the same class under a new spelling and would need its own
+clause here. The alternative -- carrying a full normalisation model of "the
+strictest plausible backend" in core -- was rejected: it is a maintenance
+surface whose divergence from what the real backend does is itself a source
+of bypasses, and it would claim a completeness this cannot deliver.
+
+Also NOT closed, and worth naming so it is not assumed: this is a check on
+the path THIS process forwards. It does not constrain how the backend
+resolves the result, and it is not a substitute for the backend refusing to
+serve paths outside its own root.
 """
 
 from __future__ import annotations
@@ -508,6 +542,29 @@ def path_matches_allowlist(path: str, allowlist: Sequence[PathPattern]) -> bool:
 #: process would forward verbatim for the backend to decode a second time.
 _ENCODED_TRAVERSAL_TOKENS: tuple[str, ...] = ("%2e", "%2f", "%5c")
 
+#: A still-encoded semicolon, in either case. Starlette decodes a path
+#: parameter ONCE, so ``..%3B/`` already arrives as ``..;/`` and is handled by
+#: the literal-``;`` truncation in :func:`_collapse_segment_parameters`. This
+#: catches the DOUBLE-encoded form (``..%253B/`` -> ``..%3B/`` after that
+#: decode), which this process would otherwise forward verbatim for the
+#: backend to decode a second time and then collapse.
+_ENCODED_SEMICOLON_RE: re.Pattern = re.compile(r"%3[bB]")
+
+
+def _collapse_segment_parameters(segment: str) -> str:
+    """Return ``segment`` as a servlet-class backend would resolve it.
+
+    Servlet-class backends (Tomcat, Jetty, and others following the same
+    convention) treat everything from ``;`` to the end of a path SEGMENT as a
+    path parameter -- ``jsessionid`` is the canonical one -- and strip it
+    while resolving the path. So the segment ``..;`` is not equal to ``..``
+    at this proxy but IS ``..`` at the backend.
+
+    The still-encoded ``%3B`` form is decoded first so the double-encoded
+    spelling collapses the same way.
+    """
+    return _ENCODED_SEMICOLON_RE.sub(";", segment).split(";", 1)[0]
+
 
 def reject_unsafe_proxy_path(path: str) -> Optional[str]:
     """Return a human-readable reason to refuse ``path``, or ``None``.
@@ -538,8 +595,19 @@ def reject_unsafe_proxy_path(path: str) -> Optional[str]:
     for token in _ENCODED_TRAVERSAL_TOKENS:
         if token in lowered:
             return f"path contains an encoded path separator or dot-segment ({token})"
-    if any(segment == ".." for segment in path.split("/")):
-        return "path contains a parent-directory segment (..)"
+    for segment in path.split("/"):
+        if segment == "..":
+            return "path contains a parent-directory segment (..)"
+        # #2087: the segment is not `..` HERE, but a servlet-class backend
+        # strips the path parameter and resolves it as `..`. Checked only
+        # when the collapse actually changes the segment, so legitimate
+        # matrix parameters (`products;color=blue`) are unaffected -- only a
+        # segment that BECOMES a dot-segment is refused.
+        if segment != ".." and _collapse_segment_parameters(segment) == "..":
+            return (
+                "path contains a parent-directory segment carrying a path "
+                "parameter (..;), which a servlet-class backend resolves to .."
+            )
     if "\u2028" in path or "\u2029" in path:
         return "path contains a Unicode line or paragraph separator"
     return None
