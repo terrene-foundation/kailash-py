@@ -130,11 +130,17 @@ def test_azure_ai_foundry_routes_through_four_axis_path(monkeypatch):
     (wrongly) taken, this would blow up loudly."""
     canned = load_fixture("openai_response")
 
+    # Foundry is the one provider whose endpoint is neither fixed nor derivable
+    # from the model, so BOTH axes must be supplied explicitly to keep this
+    # offline test hermetic. Bound once and reused for the re-resolution below,
+    # so the two call sites cannot drift apart.
+    foundry_base_url = "https://my-foundry-resource.services.ai.azure.com"
+
     deployment = resolve_deployment_for(
         "azure_ai_foundry",
         "gpt-5-nano",
         api_key="k-b1a-foundry-placeholder",
-        base_url="https://my-foundry-resource.services.ai.azure.com",
+        base_url=foundry_base_url,
     )
     assert deployment is not None
     real_client = LlmClient.from_deployment(deployment)
@@ -167,7 +173,16 @@ def test_azure_ai_foundry_routes_through_four_axis_path(monkeypatch):
         messages=_MSGS,
         tools=[],
         generation_config={},
+        # `_provider_llm_response` RE-RESOLVES the deployment internally, so the
+        # up-front `resolve_deployment_for` above does not carry over: both BYOK
+        # overrides must be repeated here. Unlike every other provider, Foundry's
+        # endpoint is caller-supplied, so omitting `base_url` sends the resolver
+        # to `$AZURE_AI_FOUNDRY_ENDPOINT` and this offline test fails on any
+        # machine that has not exported it. Passing it per-request (the four-axis
+        # BYOK surface `_provider_llm_response` already exposes) keeps the test
+        # hermetic — no secret, and never sent, since the transport is stubbed.
         api_key="k-b1a-foundry-placeholder",
+        base_url=foundry_base_url,
     )
 
     assert response["content"] == "The capital of France is Paris."
