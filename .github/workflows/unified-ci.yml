@@ -3,7 +3,19 @@ name: CI Pipeline
 # Runs on GitHub-hosted ubuntu-latest runners.
 # Push to feature branches runs Tier 1 unit tests (fast).
 # PRs to main run the same checks. Manual dispatch allows full test suite.
-
+#
+# Issue #2133 (Option 2 of the co-owner-ratified D1 disposition, Option 3
+# tracked separately as a branch-protection change requiring owner action —
+# see the PR body): `push:` intentionally does NOT include `main` — adding
+# it would cost one full 4-version matrix (~45 min) on every merge, and this
+# repo has an active CI-spend concern. Instead this `schedule:` trigger runs
+# the identical matrix against `main` nightly, so a main regression from two
+# independently-green PRs merging together (#2038's failure mode, one layer
+# over) is caught within a day instead of by the next unrelated PR that
+# happens to touch the same code. `schedule` events check out the DEFAULT
+# branch (main) with no `paths:` filtering — every job below runs in full
+# regardless of what changed, which is the point: it verifies what actually
+# ships, not what one PR's diff touched.
 on:
   push:
     branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
@@ -24,6 +36,11 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/unified-ci.yml"
+  schedule:
+    # 02:23 UTC nightly — off-the-hour to avoid GitHub Actions' top-of-hour
+    # scheduling congestion. Verifies main independent of any PR's path
+    # filters (issue #2133).
+    - cron: "23 2 * * *"
   workflow_dispatch:
     inputs:
       test-mode:
@@ -38,7 +55,11 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  # Security review (this PR): downgraded from `write`. The only
+  # pull-requests API call in this file is `github.rest.pulls.list` in
+  # check-duplicate (read-only); nothing here creates/updates a PR,
+  # comment, or review, so `write` was unused scope.
+  pull-requests: read
 
 concurrency:
   # Improved concurrency: Group by PR number for PR events, unique run_id for push events

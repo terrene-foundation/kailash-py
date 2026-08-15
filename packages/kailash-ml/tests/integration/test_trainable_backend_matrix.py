@@ -35,6 +35,7 @@ import numpy as np
 import polars as pl
 import pytest
 import torch
+
 from kailash_ml._device_report import DeviceReport
 from kailash_ml.trainable import (
     HDBSCANTrainable,
@@ -255,6 +256,7 @@ def test_xgboost_cpu_fits_and_reports_cpu(
 
 @requires_cuda
 @xgboost_stable_only
+@pytest.mark.cuda  # Issue #2076: selected by the test-cuda CI job (-m cuda).
 def test_xgboost_cuda_fits_and_reports_cuda(
     classification_frame: pl.DataFrame,
 ) -> None:

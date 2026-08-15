@@ -45,6 +45,10 @@ except ImportError:  # pragma: no cover — [dl] extra missing on CI
 
 from kailash_ml.diagnostics.dl import DLDiagnostics
 
+# Issue #2076: Lightning callback tests are deep-learning tests — tags
+# this module into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
+
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------

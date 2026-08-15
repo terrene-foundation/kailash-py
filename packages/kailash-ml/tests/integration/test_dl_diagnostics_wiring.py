@@ -21,12 +21,16 @@ import pytest
 torch = pytest.importorskip("torch")
 nn = pytest.importorskip("torch.nn")
 
+from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
+
 # Import through the facade — NOT `from kailash_ml.diagnostics.dl import ...`
 # per orphan-detection §1 (downstream consumers see the public attribute,
 # so the wiring test MUST exercise the same surface).
 from kailash_ml.diagnostics import DLDiagnostics  # noqa: E402
 
-from kailash.diagnostics.protocols import Diagnostic  # noqa: E402
+# Issue #2076: this file is the deep-learning diagnostics wiring test —
+# tags it into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
 
 
 @pytest.mark.integration

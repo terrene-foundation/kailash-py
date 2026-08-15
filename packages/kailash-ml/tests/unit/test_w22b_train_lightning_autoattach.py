@@ -49,6 +49,10 @@ from kailash_ml.engines.training_pipeline import (  # noqa: F401 — reserved fo
     TrainingPipeline,
 )
 
+# Issue #2076: Lightning auto-attach tests are deep-learning tests —
+# tags this module into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
+
 # ----------------------------------------------------------------------
 # Fixtures
 # ----------------------------------------------------------------------

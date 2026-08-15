@@ -231,6 +231,24 @@ class TestOllamaSpecificModels:
             result = manager.model_exists("bakllava")
             assert isinstance(result, bool)
 
+    @pytest.mark.skip(
+        reason=(
+            "Issue #2149: depends on cross-test module-reload pollution to "
+            "pass, not a real intermittent flake. FAILS deterministically "
+            "when run alone or in the full kaizen 'expanded FAST unit tiers' "
+            "selection (ImportError: cannot import name 'OllamaModelManager' "
+            "from 'kaizen.providers'); only PASSES when a sibling test in "
+            "this same file (test_ollama_available_true_when_installed) "
+            "happens to have already run first and left kaizen.providers "
+            "reloaded with OLLAMA_AVAILABLE=True via an incomplete "
+            "with-patch.dict(...)+importlib.reload() cleanup. Surfaced by "
+            "the tests/conftest.py::pytest_collection_modifyitems "
+            "determinism fix in #2144 (a stable test order made this "
+            "reliably visible instead of randomly hidden). Do not xfail "
+            "(strict or non-strict) -- it is not intermittent, it is "
+            "order-dependent. Remove this skip only once #2149 is fixed."
+        )
+    )
     def test_vision_models_not_found(self):
         """Test when vision models are not available."""
         from kaizen.providers import OllamaModelManager

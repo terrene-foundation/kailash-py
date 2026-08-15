@@ -4,7 +4,8 @@ name: Test kailash-kaizen
 # runs only core + mcp + pact + dataflow), so kaizen tests — including the
 # cross_sdk_parity gate — were never exercised on PRs. This job closes that gap.
 #
-# SCOPE: two infra-free pytest invocations, run sequentially in the same step.
+# SCOPE: three infra-free pytest invocations, run sequentially as separate
+# steps.
 #
 #   1. LLM deployment layer (tests/unit/llm) + cross-SDK parity
 #      (tests/cross_sdk_parity) — the ORIGINAL scope (where the #1721 parity
@@ -19,6 +20,120 @@ name: Test kailash-kaizen
 #      docker/ollama, tier3, performance, etc. on top of the original set) is
 #      applied ONLY to this invocation — it is NOT applied to invocation 1 so
 #      as to never narrow the original gate's selection.
+#   3. `tests/regression/` (issue #2074) — SAME bug class as #2038's
+#      continue-on-error masking, one layer over: this directory appeared in
+#      NO invocation above, so every regression test written for kaizen
+#      since the package existed had never been collected in CI. Issue
+#      #2074 cited a naive `grep -c "^def test_"` estimate of 107 files /
+#      855 tests; the real pytest count, measured, is 1654 tests collected
+#      from 109 *.py files (107 test_*.py + __init__.py + one non-test
+#      helper module, _issue_2014_isolation_hooks.py — the grep pattern
+#      undercounts parametrized cases and nested-class methods regardless;
+#      do not re-cite the issue's 855 estimate).
+#      Uses the SAME broad exclusion set as invocation 2 (regression/ mixes
+#      infra-free and infra-requiring tests, same shape as tests/unit/<tier>).
+#      Baseline established BEFORE gating, per the issue's own instruction
+#      not to assume it would be clean: -m filter selects 1229/1654; actual
+#      run: 1221 passed, 425 deselected, 8 xfailed, 0 failed (1221+425+8=1654,
+#      reconciles). Confirmed reproducible across repeat runs — see the
+#      pytest_collection_modifyitems fix below; do not re-cite any other
+#      number pair, several were measured before that fix and none of them
+#      reconcile with each other or with this one.
+#
+#      MARKER-ASSIGNMENT DETERMINISM FIX (found while establishing the
+#      baseline above): `tests/conftest.py::pytest_collection_modifyitems`
+#      governs marker auto-tagging for the ENTIRE kaizen tests/ tree — every
+#      invocation in this file, not just this one. It used to keyword-match
+#      infra markers against `str(item.function)`, which for a plain
+#      function is CPython's default repr INCLUDING the function object's
+#      ASLR-randomized memory address (`<function test_x at 0x7f8a2c1b3af0>`).
+#      "db" is the only keyword in that list made entirely of valid hex
+#      characters, so ~3% of ALL collected items got a spurious
+#      `requires_postgres` marker on any given process run purely by address
+#      coincidence — three consecutive identical `--collect-only` runs
+#      against invocation 3 measured 351/353/330 deselected out of the same
+#      1654 collected before the fix. Changed to `item.name.lower()`
+#      (deterministic, matches the hook's own docstring intent "based on
+#      their location and name"); three consecutive runs now agree exactly.
+#
+#      RETROACTIVE IMPLICATION: this hook has governed marker assignment for
+#      as long as it has existed, on every kaizen CI job that filters on
+#      these markers — including the pre-existing "expanded FAST unit
+#      tiers" step, not just this new one. For that entire history, each
+#      run excluded a DIFFERENT random ~3% slice of the suite. That does
+#      not mean any historical "kaizen CI is green" claim from those jobs
+#      was WRONG — but it was never REPRODUCIBLE evidence either, because
+#      the set of tests that actually ran was never the set anyone reading
+#      the green checkmark believed ran. This fix is what makes a green
+#      from these jobs, from this point forward, mean something stable.
+#
+#      SECOND-ORDER EFFECT (this is a real behavior change, not just noise
+#      removal — do not let "the number changed because I fixed a bug"
+#      hide a second cause): `str(item.function)` never contained
+#      parametrize-case text, only the base function's own name; `item.name`
+#      DOES (`test_foo[postgres-case]`). So the fix can now match a keyword
+#      that appears ONLY in a parametrize id, which was structurally
+#      impossible before. Measured directly (a standalone analysis plugin
+#      comparing item.name against the pre-parametrize base name for every
+#      collected tests/regression/ item): of 1654 total, 264 match via the
+#      BASE function name (a match the old code could equally have produced,
+#      independent of any address), and 157 match ONLY via the parametrize-id
+#      suffix — cases the old address-based code could never have tagged
+#      by construction, regardless of which run you looked at. The pre-fix
+#      "342" figure this PR originally cited is not a valid baseline to diff
+#      against — it was itself unstable (351/353/330 across three identical
+#      runs, see above) — so an exact "342 -> 425" delta split is not
+#      well-defined. What IS well-defined: at least 157 of the 425 deselected
+#      tests/regression/ items are deselected for a reason (their
+#      parametrize case, not their base name) that the old code was
+#      structurally incapable of ever detecting.
+#
+#      RESIDUE (issue #2152): the exclusion set above is a real disposition,
+#      not an oversight — several markers in it (openai/anthropic/google,
+#      cost, requires_docker/postgres/redis) need paid API calls or real
+#      infrastructure this infra-free step correctly does not fake. But the
+#      425 tests/regression/ tests it deselects currently run in NO
+#      workflow (same is true of invocation 2's 1067 deselected — no other
+#      job in this repo runs tests/unit/<tier>/ with a narrower filter
+#      either). Per-marker breakdown for tests/regression/ (a test may carry
+#      more than one, so these do not sum to 425): requires_ollama 342,
+#      requires_postgres 41, requires_redis 32, requires_docker 12,
+#      integration 2, performance 3, all others (e2e/requires_azure/
+#      requires_google/benchmark/requires_llm/llm_execution/real_llm/cost/
+#      stress/endurance/memory_intensive/flaky/slow/load/migration/openai/
+#      anthropic/google/tier3/requires_db) 0. The requires_ollama count is
+#      dominated by a SEPARATE, pre-existing false-positive-keyword defect
+#      in the same hook (also #2152) — `item.name.lower()` still substring-
+#      matches "ai" against ordinary English words with no infra relevance
+#      (e.g. "raises", "failure", "chained", "contains" all contain "ai"):
+#      only ~125 of the 342 requires_ollama-tagged regression tests actually
+#      mention "ollama"/"llm" in their name. NOT fixed here — auditing which
+#      of ~425 (invocation 3) / ~1067 (invocation 2) deselections are
+#      false-positive keyword matches vs. genuine infra requirements is
+#      separate, larger work; #2152 tracks it. The exclusion set also
+#      includes `flaky` and `slow` — a test marked flaky that never runs is
+#      exactly how a real failure hides behind a marker (precedent: root SDK
+#      tests/tier2_integration/api/test_workflow_api_async_runtime.py::
+#      test_async_execution_no_threading carries `xfail(reason="Flaky: async
+#      event loop pollution", strict=False)` but was found, per the
+#      sweep-cont17 management report § D3, to have actually been catching
+#      ServerAuthNotConfiguredError — a different package's tests/, same
+#      failure shape as this residue).
+#
+#      ONE test is individually quarantined (issue #2149, found while
+#      re-verifying invocation 2 after the determinism fix above changed
+#      which tests it includes): tests/unit/providers/test_ollama_
+#      availability.py::TestOllamaSpecificModels::test_vision_models_not_found
+#      depends on a SIBLING test in the same file leaving kaizen.providers
+#      reloaded with OLLAMA_AVAILABLE=True via an incomplete
+#      patch.dict+importlib.reload cleanup — it fails deterministically when
+#      run standalone or as part of the full expanded-tiers selection, and
+#      only passes when that sibling happens to run first. Pre-existing,
+#      unrelated to markers (its own name matches no exclusion keyword);
+#      the determinism fix above made it visible by stabilizing which OTHER
+#      tests run around it. See the `pytest.mark.skip` at the test itself
+#      for the full reasoning — it is a skip, not an xfail, because it is
+#      order-dependent, not intermittent.
 #
 #      Two subdirectories are deliberately EXCLUDED by directory (a third —
 #      tests/unit/strategies/ — was RESOLVED and is no longer excluded; see
@@ -214,13 +329,14 @@ jobs:
           fi
 
   test-kaizen:
-    name: Test kailash-kaizen (LLM + cross-SDK parity + expanded FAST unit tiers)
+    name: Test kailash-kaizen (LLM + cross-SDK parity + expanded FAST unit tiers + regression)
     # Skip release-prep PRs (release/v*) per ci-runners.md MUST Rule 8 — their
     # diff is metadata-only; version-check above still runs on the release cut.
     if: ${{ !startsWith(github.head_ref, 'release/') }}
     needs: version-check
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 -> 30: the third (regression) step's own budget adds 10 minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -336,4 +452,23 @@ jobs:
             -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
             --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_basic \
             --deselect tests/unit/memory/test_semantic_memory.py::TestSemanticMemorySimilaritySearch::test_find_similar_limit \
+            --timeout=30 --maxfail=50 -q
+
+      - name: Test (regression suite, infra-free)
+        # Issue #2074: tests/regression/ (1654 tests collected, measured —
+        # see header comment) appeared in NEITHER invocation
+        # above and had therefore never run in CI. Same broad exclusion set
+        # as the expanded-tiers step above — this directory mixes infra-free
+        # gates with integration/e2e/provider-credentialed tests, same shape
+        # as tests/unit/<tier>. Baseline established before wiring this in
+        # (per the issue's own instruction not to assume clean; see header
+        # comment for the determinism-fix history behind this number —
+        # earlier measurements here are stale, do not re-cite): 1221
+        # passed, 425 deselected, 8 xfailed, 0 failed.
+        timeout-minutes: 10
+        working-directory: packages/kailash-kaizen
+        run: |
+          ../../.venv/bin/python -m pytest \
+            tests/regression/ \
+            -m 'not (integration or e2e or requires_azure or requires_docker or requires_google or benchmark or requires_postgres or requires_redis or requires_ollama or requires_db or requires_llm or llm_execution or real_llm or ollama_validation or cost or landing_ai or stress or endurance or requires_infrastructure or requires_kafka or requires_mongodb or memory_intensive or requires_isolation or data_intensive or flaky or slow or load or migration or openai or anthropic or google or docker or ollama or integration_llm or tier3 or performance)' \
             --timeout=30 --maxfail=50 -q

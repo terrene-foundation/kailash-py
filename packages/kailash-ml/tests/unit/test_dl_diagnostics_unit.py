@@ -16,6 +16,10 @@ nn = pytest.importorskip("torch.nn")
 from kailash_ml.diagnostics import DLDiagnostics  # noqa: E402
 from kailash_ml.diagnostics import dl as dl_mod  # noqa: E402
 
+# Issue #2076: DLDiagnostics unit tests are deep-learning tests — tags
+# this module into the `test-dl` CI job's selection (`-m dl`).
+pytestmark = pytest.mark.dl
+
 # ---------------------------------------------------------------------------
 # __init__ validation
 # ---------------------------------------------------------------------------
