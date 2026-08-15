@@ -41,7 +41,27 @@ dependencies = [
     # import them, so an older kailash makes `import nexus` fail at startup
     # rather than degrade. ONE shared helper, not a per-package copy — a
     # security helper duplicated across packages is guaranteed to drift.
-    "kailash>=2.63.0",  # safe_callable_name/safe_exception_frames; WorkflowServer.deregister_workflow (#1959)
+    #
+    # 2.63.0 ALSO for `kailash.utils.network_guard` (#2091). The SSRF guard
+    # — private/loopback/link-local/metadata detection, encoded-IP bypass
+    # forms, the IPv4-in-IPv6 translation ranges — was worked out HERE in
+    # `nexus.http_client` and has been LIFTED to core so core's reverse-proxy
+    # surfaces enforce the same posture. `nexus.http_client` now IMPORTS it
+    # at module scope and keeps only its own error type, so an older kailash
+    # makes `import nexus.http_client` fail at IMPORT, not at first request.
+    # Same reasoning as the helpers above: one implementation, because two
+    # copies of one security control diverge and an attacker finds the
+    # divergence first (`zero-tolerance.md` Rule 4).
+    #
+    # RELEASE ORDERING, and it is load-bearing: `network_guard` exists in NO
+    # released kailash — PyPI's latest is 2.62.0 and 2.63.0 is unpublished at
+    # the time of writing. Core kailash 2.63.0 MUST be published BEFORE the
+    # nexus release that carries this, or `pip install kailash-nexus` resolves
+    # kailash 2.62.0 and `import nexus.http_client` raises ModuleNotFoundError
+    # on a clean install. This floor is what makes that a resolver error at
+    # install time instead of an ImportError in production — it is NOT
+    # optional, and it must be bumped in lockstep if the module ever moves.
+    "kailash>=2.63.0",  # safe_callable_name/safe_exception_frames; WorkflowServer.deregister_workflow (#1959); kailash.utils.network_guard (#2091)
     # Server middleware stack (matches kailash[server] contents).
     "fastapi>=0.104.0",
     "starlette>=0.36.0",
