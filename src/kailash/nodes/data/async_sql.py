@@ -425,6 +425,172 @@ class HealthCheckResult:
             self.checked_at = datetime.now()
 
 
+# =============================================================================
+# Single-flight pool disposal (issue #2079)
+# =============================================================================
+#
+# Every ``disconnect()`` / ``close()`` in this module used to read its backing
+# handle, await the driver's close, and null the handle AFTERWARDS:
+#
+#     if self._pool:                 # <- N concurrent callers all pass here
+#         await self._pool.close()
+#         self._pool = None
+#
+# With a SHARED adapter (``_shared_pools`` hands one adapter to every node on
+# the same DSN + loop) N tasks enter the driver close simultaneously while the
+# other N-1 still have queries in flight. For asyncpg that is unrecoverable:
+# ``Pool._check_init`` gates on ``_closed``, which ``Pool.close()`` only sets
+# in its ``finally``, so ``acquire()`` keeps succeeding for the whole duration
+# of a close. A holder released past ``wait_until_released()`` is re-acquired
+# by another task, then ``PoolConnectionHolder.close()`` runs against a
+# connection with a live query -> ``_request_cancel()`` -> protocol state 3
+# (PROTOCOL_CANCELLED) -> ``InternalClientError: got result for unknown
+# protocol state 3``. The stranded ``await self._con.close()`` inside
+# ``PoolConnectionHolder.close()`` is then waiting on a server acknowledgement
+# that can never arrive, and the whole event loop parks forever.
+#
+# The fix is two-part and both parts are load-bearing:
+#
+#   1. CLAIM-THEN-CLOSE. Bind the handle to a local and null the attribute
+#      BEFORE awaiting, so exactly one caller ever drives the driver close.
+#      Losers wait on the winner's completion instead of starting a second one.
+#   2. BOUND THE GRACEFUL CLOSE. asyncpg's own ``Pool.close()`` docstring says
+#      "it is advisable to use asyncio.wait_for() to set a timeout"; on expiry
+#      escalate to the driver's forced, non-blocking terminate. This is the
+#      backstop for a connection already wedged by some other cause.
+#
+# Losers await a SEPARATE future rather than the winner's task: in-tree callers
+# wrap ``disconnect()`` in their own ``asyncio.wait_for(..., timeout=1.0)``, and
+# cancelling a loser must never cancel the winner's in-flight close.
+
+# Attribute holding ``(loop, future)`` for a disposal currently in flight on an
+# adapter/pool object, or None. Set on the instance, never a class attribute.
+_DISPOSAL_IN_FLIGHT_ATTR = "_kailash_disposal_in_flight"
+
+
+@contextlib.asynccontextmanager
+async def _disposal_barrier(owner: Any) -> AsyncIterator[None]:
+    """Publish a completion future for the duration of ``owner``'s disposal.
+
+    The winning caller holds this scope while it drives the driver close.
+    Concurrent callers that find the handle already claimed use
+    :func:`_await_pending_disposal` to wait for the SAME close rather than
+    returning early — which preserves the drain-barrier contract the bridge
+    teardown in ``kailash.utils.loop_pool_registry`` depends on (issue #1572).
+
+    The future is resolved in ``finally``, so a disposal that RAISES still
+    releases every waiter instead of stranding them.
+    """
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future = loop.create_future()
+    setattr(owner, _DISPOSAL_IN_FLIGHT_ATTR, (loop, future))
+    try:
+        yield
+    finally:
+        if getattr(owner, _DISPOSAL_IN_FLIGHT_ATTR, None) == (loop, future):
+            setattr(owner, _DISPOSAL_IN_FLIGHT_ATTR, None)
+        if not future.done():
+            future.set_result(None)
+
+
+async def _await_pending_disposal(owner: Any) -> None:
+    """Wait for a disposal another task already started on ``owner``.
+
+    Returns immediately when there is nothing in flight, or when the in-flight
+    disposal belongs to a DIFFERENT event loop: a future is loop-bound, and a
+    pool owned by another live loop is not this loop's to drain (issue #1248).
+
+    ``asyncio.shield`` is required, not optional. In-tree callers bound
+    ``disconnect()`` with their own ``asyncio.wait_for(..., timeout=1.0)``;
+    without the shield, that timeout cancelling a WAITER would propagate into
+    the winner's completion future and abandon the real close half-done.
+    """
+    pending = getattr(owner, _DISPOSAL_IN_FLIGHT_ATTR, None)
+    if pending is None:
+        return
+    loop, future = pending
+    if future.done():
+        return
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    if running is not loop:
+        return
+    await asyncio.shield(future)
+
+
+def _force_close_pool(force: Optional[Callable[[], Any]], label: str) -> None:
+    """Invoke a driver's forced-close callable, never raising out of teardown.
+
+    Failure here is logged at WARNING with the reason — never swallowed. There
+    is no recovery beyond this point: the graceful close already failed and the
+    forced close is the last disposition available, so the correct action is to
+    surface it and let teardown continue rather than crash the caller's unwind.
+    """
+    if force is None:
+        return
+    try:
+        force()
+    except Exception as exc:  # noqa: BLE001 - last-resort teardown, see docstring
+        # ``Pool.terminate()`` calls ``_check_init()``, which raises
+        # ``InterfaceError('pool is not initialized')`` when ``create_pool``
+        # failed mid-init. That is a real state, not a bug — log and move on.
+        logger.warning(
+            "async_sql.pool_force_close_failed: could not terminate %s: %s",
+            label,
+            exc,
+        )
+
+
+async def _close_pool_bounded(
+    close_awaitable: Any,
+    *,
+    force: Optional[Callable[[], Any]] = None,
+    label: str,
+    timeout: Optional[float] = None,
+) -> None:
+    """Await a driver pool close under a bound, escalating to ``force``.
+
+    Args:
+        close_awaitable: The driver's graceful-close awaitable, already called.
+        force: The driver's forced, non-blocking close (``Pool.terminate``).
+        label: Human-readable pool identity for the log line. MUST NOT contain
+            a DSN or connection string (``rules/security.md`` § no secrets in
+            logs) — pass ``redact_pool_key(...)`` output or an ``id()``.
+        timeout: Seconds to allow the graceful close. Defaults to
+            ``_POOL_DEFAULTS["close_timeout"]``.
+    """
+    if timeout is None:
+        timeout = float(_POOL_DEFAULTS["close_timeout"])
+    try:
+        await asyncio.wait_for(close_awaitable, timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "async_sql.pool_close_timeout: graceful close of %s did not "
+            "complete within %.1fs; escalating to forced termination. A "
+            "connection whose protocol state was corrupted by a concurrent "
+            "close never acknowledges a graceful close (issue #2079).",
+            label,
+            timeout,
+        )
+        _force_close_pool(force, label)
+    except asyncio.CancelledError:
+        # A caller-side ``wait_for`` cancelled us. The pool handle is already
+        # claimed and unreachable, so terminating is the only disposition that
+        # does not leak the sockets. Re-raised — cancellation is never absorbed.
+        _force_close_pool(force, label)
+        raise
+    except Exception as exc:  # noqa: BLE001 - see _force_close_pool docstring
+        logger.warning(
+            "async_sql.pool_close_failed: graceful close of %s raised %s; "
+            "escalating to forced termination",
+            label,
+            exc,
+        )
+        _force_close_pool(force, label)
+
+
 class CircuitBreakerState(Enum):
     """Circuit breaker states for connection management."""
 
@@ -616,8 +782,27 @@ class EnterpriseConnectionPool:
         )
 
     async def initialize(self) -> None:
-        """Initialize the connection pool."""
+        """Initialize the connection pool.
+
+        Refuses once ``close()`` has been entered. Issue #2079: ``close()``
+        nulls ``_pool``/``_adapter`` before awaiting the driver close, and
+        ``get_connection()`` treats ``_pool is None`` as "not yet initialized"
+        — so without this gate a task racing teardown would build a BRAND NEW
+        adapter and pool during shutdown, resurrecting the very pool being
+        disposed. ``_shutdown`` was already set by ``close()`` and read by the
+        background loops; this makes it fail closed on the creation path too.
+        """
+        if self._shutdown:
+            raise ConnectionError(
+                f"Pool '{self.pool_id}' is shutting down and cannot be "
+                "re-initialized; construct a new pool instead"
+            )
         async with self._lock:
+            if self._shutdown:
+                raise ConnectionError(
+                    f"Pool '{self.pool_id}' is shutting down and cannot be "
+                    "re-initialized; construct a new pool instead"
+                )
             if self._adapter is None:
                 self._adapter = self.adapter_class(self.database_config)
                 await self._adapter.connect()
@@ -641,6 +826,14 @@ class EnterpriseConnectionPool:
         """Get a connection from the pool with circuit breaker protection."""
         if not self._circuit_breaker.can_execute():
             raise ConnectionError(f"Circuit breaker is open for pool '{self.pool_id}'")
+
+        # Fail closed once teardown has begun (issue #2079). Without this, the
+        # `_pool is None` branch below reads as "not yet initialized" during a
+        # close and silently builds a replacement pool mid-shutdown.
+        if self._shutdown:
+            raise ConnectionError(
+                f"Pool '{self.pool_id}' is shutting down; no new connections"
+            )
 
         try:
             if self._pool is None:
@@ -990,12 +1183,19 @@ class EnterpriseConnectionPool:
             except asyncio.CancelledError:
                 pass
 
-        # Close adapter and pool
-        if self._adapter:
-            await self._adapter.disconnect()
-            self._adapter = None
-
+        # Close adapter and pool. Claim BEFORE awaiting (issue #2079): this is
+        # the MIDDLE of three nested guards that all had the same
+        # check-await-null shape, and it is the one that admitted every
+        # concurrent caller into the adapter's own disconnect().
+        adapter = self._adapter
         self._pool = None
+        if adapter is None:
+            await _await_pending_disposal(self)
+            logger.info(f"Pool '{self.pool_id}' closed successfully")
+            return
+        self._adapter = None
+        async with _disposal_barrier(self):
+            await adapter.disconnect()
         logger.info(f"Pool '{self.pool_id}' closed successfully")
 
 
@@ -1328,12 +1528,32 @@ class PostgreSQLAdapter(DatabaseAdapter):
         register_pool_drain_on_current_loop(self.disconnect)
 
     async def disconnect(self) -> None:
-        """Close connection pool (idempotent)."""
-        if self._pool:
-            await self._pool.close()
-            # Null the pool so a later cleanup()/bridge-drain double-close is a
-            # guarded no-op (issue #1572).
-            self._pool = None
+        """Close connection pool (idempotent, single-flight).
+
+        Claims the pool BEFORE awaiting the driver close, so N concurrent
+        callers on a shared adapter drive exactly ONE ``asyncpg.Pool.close()``
+        instead of N overlapping ones. Overlapping closes corrupt the asyncpg
+        protocol state and strand ``PoolConnectionHolder.close()`` forever
+        (issue #2079); see § "Single-flight pool disposal" above.
+
+        Nulling BEFORE the await also keeps the double-close guard that
+        issue #1572 added — it just closes the window a concurrent caller can
+        slip through, rather than leaving it open for the whole close.
+        """
+        pool = self._pool
+        if pool is None:
+            # Either never connected, or another task is mid-disposal. Wait for
+            # that one so this call still returns a disposed pool (the bridge
+            # drain in issue #1572 relies on disconnect() being a barrier).
+            await _await_pending_disposal(self)
+            return
+        self._pool = None
+        async with _disposal_barrier(self):
+            await _close_pool_bounded(
+                pool.close(),
+                force=getattr(pool, "terminate", None),
+                label=f"postgresql pool {id(pool)}",
+            )
 
     async def execute(
         self,
@@ -1667,9 +1887,36 @@ class PostgreSQLAdapter(DatabaseAdapter):
         needs (e.g. the serialization failure it keys a retry on); asyncpg
         already terminates + reclaims the pool slot on a release error, so
         logging is the correct disposition (issue #1580 redteam LOW).
+
+        Issue #2079: the pool may already be GONE. ``disconnect()`` claims
+        ``self._pool`` before awaiting the driver close, so a task still
+        holding a connection when disposal starts finds ``self._pool is None``.
+        Reaching through it raised an opaque
+        ``AttributeError: 'NoneType' object has no attribute 'release'`` and
+        left the connection with no disposition at all. Terminate it instead:
+        the owning pool is being torn down, so returning the connection to it
+        is meaningless, and ``terminate()`` is sync and safe on an
+        already-dead connection.
         """
+        pool = self._pool
+        if pool is None:
+            logger.warning(
+                "async_sql.postgresql.pool_released_after_close: connection "
+                "returned after its pool was disposed; terminating it "
+                "directly (issue #2079)"
+            )
+            terminate = getattr(conn, "terminate", None)
+            if terminate is not None:
+                try:
+                    terminate()
+                except Exception:
+                    logger.warning(
+                        "async_sql.postgresql.orphan_terminate_failed",
+                        exc_info=True,
+                    )
+            return
         try:
-            await self._pool.release(conn)
+            await pool.release(conn)
         except Exception:
             logger.error("async_sql.postgresql.pool_release_failed", exc_info=True)
 
@@ -1759,13 +2006,26 @@ class MySQLAdapter(DatabaseAdapter):
         register_pool_drain_on_current_loop(self.disconnect)
 
     async def disconnect(self) -> None:
-        """Close connection pool (idempotent)."""
-        if self._pool:
-            self._pool.close()
-            await self._pool.wait_closed()
-            # Null the pool so a later cleanup()/bridge-drain double-close is a
-            # guarded no-op (issue #1572).
-            self._pool = None
+        """Close connection pool (idempotent, single-flight).
+
+        Same claim-then-close + bounded-graceful-close contract as
+        ``PostgreSQLAdapter.disconnect`` (issue #2079). aiomysql's
+        ``wait_closed()`` has the same unbounded-wait shape as asyncpg's
+        ``Pool.close()``, so it gets the same bound. aiomysql exposes the
+        forced variant as ``terminate()``.
+        """
+        pool = self._pool
+        if pool is None:
+            await _await_pending_disposal(self)
+            return
+        self._pool = None
+        async with _disposal_barrier(self):
+            pool.close()  # sync: marks the pool closing, does not wait
+            await _close_pool_bounded(
+                pool.wait_closed(),
+                force=getattr(pool, "terminate", None),
+                label=f"mysql pool {id(pool)}",
+            )
 
     async def execute(
         self,
@@ -2146,18 +2406,37 @@ class SQLiteAdapter(DatabaseAdapter):
         return conn
 
     async def disconnect(self) -> None:
-        """Close pool and connections."""
-        if self._pool is not None:
-            await self._pool.close()
+        """Close pool and connections (idempotent, single-flight).
+
+        Same claim-then-close + bounded-graceful-close contract as
+        ``PostgreSQLAdapter.disconnect`` (issue #2079). aiosqlite has no
+        forced-close primitive, so there is no ``force`` escalation here — the
+        bound alone converts an unbounded wait into a logged abandonment.
+        """
+        pool = self._pool
+        if pool is not None:
             self._pool = None
+            async with _disposal_barrier(self):
+                await _close_pool_bounded(
+                    pool.close(),
+                    label=f"sqlite pool {id(pool)}",
+                )
+        else:
+            await _await_pending_disposal(self)
         # Issue #1051: close the reused :memory: connection (untracked by the
         # pool path, which is None for :memory:). Without this it survives to
         # GC and aiosqlite.Connection.__del__ emits a ResourceWarning.
-        if self._connection is not None:
-            try:
-                await self._connection.close()
-            finally:
-                self._connection = None
+        connection = self._connection
+        if connection is not None:
+            # Claim before awaiting, for the same reason the pool is claimed:
+            # aiosqlite's Connection.close() joins its worker THREAD, and two
+            # concurrent joins on one connection is the same overlapping-close
+            # hazard one layer down (issue #2079).
+            self._connection = None
+            await _close_pool_bounded(
+                connection.close(),
+                label=f"sqlite connection {id(connection)}",
+            )
 
     async def execute(
         self,
@@ -2867,12 +3146,23 @@ class ProductionPostgreSQLAdapter(PostgreSQLAdapter):
         )
 
     async def disconnect(self) -> None:
-        """Disconnect enterprise pool."""
-        if self._enterprise_pool:
-            await self._enterprise_pool.close()
-            self._enterprise_pool = None
-        else:
+        """Disconnect enterprise pool (idempotent, single-flight).
+
+        This is the OUTERMOST of three nested guards that all shared the same
+        check-await-null shape, and the one that admitted every concurrent
+        caller in issue #2079's reproduction: ``_get_adapter`` hands one
+        ``ProductionPostgreSQLAdapter`` to every node on the same DSN + loop,
+        so 50 tasks calling ``disconnect()`` all saw a truthy
+        ``_enterprise_pool`` and all descended into the driver close together.
+        """
+        pool = self._enterprise_pool
+        if pool is None:
+            await _await_pending_disposal(self)
             await super().disconnect()
+            return
+        self._enterprise_pool = None
+        async with _disposal_barrier(self):
+            await pool.close()
 
 
 class ProductionMySQLAdapter(MySQLAdapter):
@@ -2949,12 +3239,21 @@ class ProductionMySQLAdapter(MySQLAdapter):
         )
 
     async def disconnect(self) -> None:
-        """Disconnect enterprise pool."""
-        if self._enterprise_pool:
-            await self._enterprise_pool.close()
-            self._enterprise_pool = None
-        else:
+        """Disconnect enterprise pool (idempotent, single-flight).
+
+        Same claim-then-close contract as
+        ``ProductionPostgreSQLAdapter.disconnect`` (issue #2079). Swept in the
+        same change because a fix applied to only the dialect that reproduced
+        leaves the identical defect shipping on every other dialect.
+        """
+        pool = self._enterprise_pool
+        if pool is None:
+            await _await_pending_disposal(self)
             await super().disconnect()
+            return
+        self._enterprise_pool = None
+        async with _disposal_barrier(self):
+            await pool.close()
 
 
 class ProductionSQLiteAdapter(SQLiteAdapter):
@@ -3051,11 +3350,19 @@ class ProductionSQLiteAdapter(SQLiteAdapter):
         )
 
     async def disconnect(self) -> None:
-        """Disconnect enterprise pool."""
+        """Disconnect enterprise pool (idempotent, single-flight).
+
+        Same claim-then-close contract as
+        ``ProductionPostgreSQLAdapter.disconnect`` (issue #2079).
+        """
         try:
-            if self._enterprise_pool:
-                await self._enterprise_pool.close()
+            pool = self._enterprise_pool
+            if pool is None:
+                await _await_pending_disposal(self)
+            else:
                 self._enterprise_pool = None
+                async with _disposal_barrier(self):
+                    await pool.close()
         finally:
             # Issue #1051: ProductionSQLiteAdapter inherits SQLiteAdapter's
             # _get_connection()/begin_transaction(), so the :memory:
@@ -3339,11 +3646,21 @@ _PROCESS_POOL_REGISTRY: "weakref.WeakValueDictionary[str, Any]" = (
 # Lifecycle defaults. ``idle_timeout`` is the seconds-of-no-activity a pool
 # may sit before the reaper closes it. ``max_pool_count_per_process`` is the
 # hard ceiling that turns the silent-fallback bug into a typed
-# ``PoolExhaustedError``. Both values are int-positive; the validator in
-# ``set_pool_defaults`` enforces this.
+# ``PoolExhaustedError``. ``close_timeout`` bounds the GRACEFUL driver close
+# in ``disconnect()`` before it escalates to a forced terminate (issue #2079).
+# All values are int-positive; the validator in ``set_pool_defaults``
+# enforces this.
+#
+# 5 s mirrors ``kailash.utils.loop_pool_registry._DRAIN_TIMEOUT_SECONDS``,
+# which bounds the same operation one layer out. It is a BACKSTOP: every
+# in-tree caller of ``disconnect()`` already wraps it in its own
+# ``asyncio.wait_for`` (1.0-2.0 s), so this bound only ever fires for the
+# UNBOUNDED callers — the bridge drain and direct user/DataFlow
+# ``adapter.disconnect()`` calls.
 _POOL_DEFAULTS: dict[str, int] = {
     "idle_timeout": 300,
     "max_pool_count_per_process": 100,
+    "close_timeout": 5,
 }
 
 # Reaper task registry — one task per event loop, keyed on
@@ -3364,6 +3681,7 @@ def set_pool_defaults(
     *,
     idle_timeout: Optional[int] = None,
     max_pool_count_per_process: Optional[int] = None,
+    close_timeout: Optional[int] = None,
 ) -> None:
     """Configure process-wide pool lifecycle defaults (DPI-B2 / issue #697).
 
@@ -3384,6 +3702,12 @@ def set_pool_defaults(
             ``_get_adapter`` fallback raises ``PoolExhaustedError``
             instead of silently creating yet another pool. Must be a
             positive int. Default 100.
+        close_timeout: Seconds ``disconnect()`` waits for the driver's
+            GRACEFUL pool close before escalating to a forced terminate
+            (issue #2079). Must be a positive int. Default 5 s. Raise it
+            for a deployment that legitimately holds connections open
+            across long-running statements; a raised value only delays the
+            escalation, it never removes the bound.
 
     Raises:
         TypeError: If an unknown keyword argument is supplied (the
@@ -3408,11 +3732,18 @@ def set_pool_defaults(
                 "max_pool_count_per_process must be a positive int "
                 f"(got {max_pool_count_per_process!r})"
             )
+    if close_timeout is not None:
+        if not isinstance(close_timeout, int) or close_timeout < 1:
+            raise ValueError(
+                f"close_timeout must be a positive int (got {close_timeout!r})"
+            )
     with _POOL_DEFAULTS_LOCK:
         if idle_timeout is not None:
             _POOL_DEFAULTS["idle_timeout"] = idle_timeout
         if max_pool_count_per_process is not None:
             _POOL_DEFAULTS["max_pool_count_per_process"] = max_pool_count_per_process
+        if close_timeout is not None:
+            _POOL_DEFAULTS["close_timeout"] = close_timeout
 
 
 def _reset_pool_defaults_for_tests() -> None:
@@ -3426,6 +3757,7 @@ def _reset_pool_defaults_for_tests() -> None:
     with _POOL_DEFAULTS_LOCK:
         _POOL_DEFAULTS["idle_timeout"] = 300
         _POOL_DEFAULTS["max_pool_count_per_process"] = 100
+        _POOL_DEFAULTS["close_timeout"] = 5
 
 
 # ============================================================================
@@ -3440,14 +3772,40 @@ def _reset_pool_defaults_for_tests() -> None:
 # ============================================================================
 
 
+def _idle_target(entry: Any) -> Any:
+    """Return the object carrying ``entry``'s idle clock, or None.
+
+    ``_PROCESS_POOL_REGISTRY`` stores ADAPTERS (``_PROCESS_POOL_REGISTRY[key]
+    = self._adapter`` at the three insertion sites), but ``is_idle()`` and the
+    ``_last_activity_at`` it reads are defined on ``EnterpriseConnectionPool``,
+    which the production adapters hold as ``_enterprise_pool``.
+
+    Issue #2079: the reaper used to test ``hasattr(entry, "is_idle")``
+    directly, which is False for EVERY adapter the registry can contain — so
+    the DPI-B3 idle-pool reaper walked the registry and skipped 100% of it.
+    It ran, logged nothing, and reaped nothing. ``test_idle_pools_reaped``
+    pins this and had never executed in CI (issue #2002).
+
+    Returns None when no idle clock is reachable — a bare fallback adapter
+    with no enterprise pool, which is genuinely not reapable on this path.
+    """
+    if callable(getattr(entry, "is_idle", None)):
+        return entry
+    enterprise = getattr(entry, "_enterprise_pool", None)
+    if enterprise is not None and callable(getattr(enterprise, "is_idle", None)):
+        return enterprise
+    return None
+
+
 async def _idle_pool_reaper_loop() -> None:
     """Background task that closes idle pools (DPI-B3).
 
     Runs forever (until cancelled). Each iteration:
         1. Sleeps for ``idle_timeout / 4`` seconds (max 75s default).
         2. Walks ``_PROCESS_POOL_REGISTRY`` keys (snapshot list).
-        3. For each pool whose ``is_idle()`` is True, calls
-           ``await pool.close()`` and pops it from the registry.
+        3. Resolves each entry's idle clock via :func:`_idle_target`, and for
+           every entry that reports idle, disposes it (``disconnect()`` where
+           available, else ``close()``) and pops it from the registry.
 
     Exits cleanly on ``CancelledError`` (event-loop shutdown). Logs
     every reap event at INFO with a structured log line per
@@ -3467,15 +3825,15 @@ async def _idle_pool_reaper_loop() -> None:
                 items = []
 
             now = time.monotonic()
-            for key, pool in items:
-                # Pools must expose is_idle()/close(); fallback adapter
-                # objects that wrap _shared_pools may not. Skip silently.
+            for key, entry in items:
+                # ``_PROCESS_POOL_REGISTRY`` stores ADAPTERS, and the idle
+                # clock lives on the adapter's EnterpriseConnectionPool —
+                # ``_idle_target`` resolves one to the other (issue #2079).
+                # A registry entry with no resolvable idle clock (a bare
+                # fallback adapter) is skipped, as before.
                 try:
-                    if not hasattr(pool, "is_idle") or not callable(
-                        getattr(pool, "is_idle", None)
-                    ):
-                        continue
-                    if not pool.is_idle(now):
+                    idle_target = _idle_target(entry)
+                    if idle_target is None or not idle_target.is_idle(now):
                         continue
                 except Exception:
                     # Defensive — never let a bad pool break the reaper.
@@ -3483,14 +3841,26 @@ async def _idle_pool_reaper_loop() -> None:
 
                 # Close + reap.
                 try:
-                    if hasattr(pool, "close") and asyncio.iscoroutinefunction(
-                        pool.close
+                    # Reap through ``disconnect()`` where the entry has one:
+                    # closing the EnterpriseConnectionPool directly leaves the
+                    # adapter holding a shut-down pool that every later
+                    # ``get_connection()`` refuses, whereas ``disconnect()``
+                    # nulls it so a subsequent ``connect()`` rebuilds cleanly.
+                    disconnect = getattr(entry, "disconnect", None)
+                    if disconnect is not None and asyncio.iscoroutinefunction(
+                        disconnect
                     ):
-                        await asyncio.wait_for(pool.close(), timeout=5.0)
-                    elif hasattr(pool, "close"):
-                        pool.close()
-                    if hasattr(pool, "_reaped_count"):
-                        pool._reaped_count += 1
+                        await asyncio.wait_for(disconnect(), timeout=5.0)
+                    elif hasattr(entry, "close") and asyncio.iscoroutinefunction(
+                        entry.close
+                    ):
+                        await asyncio.wait_for(entry.close(), timeout=5.0)
+                    elif hasattr(entry, "close"):
+                        entry.close()
+                    # ``_reaped_count`` is a test-visible counter; it lives on
+                    # whichever object carries the idle clock.
+                    if hasattr(idle_target, "_reaped_count"):
+                        idle_target._reaped_count += 1
                     # WeakValueDictionary.pop is safe on missing keys
                     # (raises KeyError; suppress).
                     try:
