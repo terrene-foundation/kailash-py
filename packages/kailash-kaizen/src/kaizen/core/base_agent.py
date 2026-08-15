@@ -57,9 +57,7 @@ logger = logging.getLogger(__name__)
 # correctness-relevant predicate drift.
 
 
-class BaseAgent(
-    MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin, Node
-):
+class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin, Node):
     """Universal base agent class with strategy-based execution and mixin composition.
 
     Inherits MCP integration from MCPMixin, A2A protocol support from A2AMixin,
