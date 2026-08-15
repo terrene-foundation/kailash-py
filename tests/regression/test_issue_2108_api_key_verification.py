@@ -287,6 +287,153 @@ async def test_x_api_key_header_authenticates_through_the_dependency(manager):
 
 
 # ---------------------------------------------------------------------------
+# The APIGateway session route -- the caller #2103 removed (AC 5).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def gateway_with_api_keys(manager):
+    """A gateway whose injected manager can actually verify API keys.
+
+    ``require_auth=False`` keeps the request-level gate out of the way so the
+    measurement is the SESSION ROUTE's principal resolution and nothing else;
+    the route is deliberately optional-auth either way.
+    """
+    from kailash.middleware.communication.api_gateway import APIGateway
+
+    return APIGateway(
+        title="issue-2108-gateway",
+        enable_auth=True,
+        auth_manager=manager,
+        require_auth=False,
+    )
+
+
+async def test_session_route_accepts_an_issued_api_key(manager, gateway_with_api_keys):
+    """LOAD-BEARING for AC 5: the restored X-API-Key branch resolves a principal.
+
+    The server-derived principal must WIN over the caller-supplied body field --
+    which is the whole point of resolving one (#2047 / #2103 bug class).
+    """
+    from fastapi.testclient import TestClient
+
+    api_key = await manager.create_api_key(user_id="key-owner", key_name="gw")
+    client = TestClient(gateway_with_api_keys.app)
+
+    response = client.post(
+        "/api/sessions",
+        json={"user_id": "attacker-supplied", "metadata": {}},
+        headers={"X-API-Key": api_key},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user_id"] == "key-owner"
+
+
+async def test_session_route_ignores_a_rejected_api_key(gateway_with_api_keys):
+    """CONTROL: a bad key resolves NO principal rather than a wrong one.
+
+    The route is optional-auth, so the request still succeeds -- but on the
+    body-supplied identity, exactly as it did before a credential was offered.
+    """
+    from fastapi.testclient import TestClient
+
+    client = TestClient(gateway_with_api_keys.app)
+    response = client.post(
+        "/api/sessions",
+        json={"user_id": "body-identity", "metadata": {}},
+        headers={"X-API-Key": "sk_not-a-real-key"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user_id"] == "body-identity"
+
+
+def test_session_route_survives_a_manager_without_api_key_support(caplog):
+    """A manager that cannot verify API keys warns ONCE, not once per request.
+
+    ``JWTAuthManager`` -- what ``APIGateway(enable_auth=True)`` builds by
+    default -- has no ``verify_api_key``. That is a wiring fact, identical for
+    every request, so repeating it per anonymous request would reintroduce the
+    #2114 amplification shape on a different route.
+    """
+    import logging
+
+    from fastapi.testclient import TestClient
+
+    from kailash.middleware.auth.jwt_auth import JWTAuthManager
+    from kailash.middleware.communication.api_gateway import APIGateway
+
+    gateway = APIGateway(
+        title="issue-2108-default-manager",
+        enable_auth=True,
+        auth_manager=JWTAuthManager(secret_key=_SECRET),
+        require_auth=False,
+    )
+    client = TestClient(gateway.app)
+
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(4):
+            response = client.post(
+                "/api/sessions",
+                json={"user_id": "body-identity", "metadata": {}},
+                headers={"X-API-Key": "sk_anything"},
+            )
+            assert response.status_code == 200, response.text
+
+    unsupported = [
+        r
+        for r in caplog.records
+        if r.getMessage() == "api_gateway.api_key_auth_unsupported"
+    ]
+    assert (
+        len(unsupported) == 1
+    ), f"expected exactly one warning, got {len(unsupported)}"
+
+
+def test_session_route_resolves_a_sync_managers_bearer_token(caplog):
+    """A SYNC verifier must work: `JWTAuthManager.verify_token` is not async.
+
+    Measured before the fix::
+
+        JWTAuthManager.verify_token is coroutine fn: False
+        await {'a': 1} -> TypeError: object dict can't be used in
+                          'await' expression
+
+    The unconditional ``await`` raised, the branch's own ``except Exception``
+    swallowed it, and every valid token on the DEFAULT gateway resolved to no
+    principal -- so the caller-supplied body identity won. This asserts the
+    server-derived subject wins instead, reading the RFC 7519 ``sub`` claim
+    that manager actually stamps.
+    """
+    from fastapi.testclient import TestClient
+
+    from kailash.middleware.auth.jwt_auth import JWTAuthManager
+    from kailash.middleware.communication.api_gateway import APIGateway
+
+    auth = JWTAuthManager(secret_key=_SECRET)
+    gateway = APIGateway(
+        title="issue-2108-sync-manager",
+        enable_auth=True,
+        auth_manager=auth,
+        require_auth=False,
+    )
+    token = auth.create_access_token(user_id="token-owner")
+    if not isinstance(token, str):  # some managers return a token pair
+        token = getattr(token, "access_token", token)
+
+    client = TestClient(gateway.app)
+    response = client.post(
+        "/api/sessions",
+        json={"user_id": "attacker-supplied", "metadata": {}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user_id"] == "token-owner"
+
+
+# ---------------------------------------------------------------------------
 # CredentialManagerNode's parameter contract (AC 1 -- Rule 3c).
 # ---------------------------------------------------------------------------
 

@@ -350,6 +350,12 @@ class APIGateway:
             allow_headers=["*"],
         )
 
+        # One-shot latch for the "this manager cannot verify API keys" warning.
+        # The condition is a property of the wiring, not of the request, so it
+        # is reported once rather than once per anonymous request that happens
+        # to carry an X-API-Key header.
+        self._api_key_unsupported_logged = False
+
         # Setup routes
         self._setup_routes()
 
@@ -465,8 +471,15 @@ class APIGateway:
         2. **A direct verification**, for the deployments where NO gate is
            installed -- ``require_auth=False``, or ``external_auth_reason``
            naming an outside ASGI layer, or a path the operator exempted. A
-           presented bearer token is verified with this gateway's own auth
-           manager, which is the issuer of the tokens it accepts.
+           presented ``X-API-Key`` or bearer token is verified with this
+           gateway's own auth manager, which is the issuer of the credentials
+           it accepts. The API key is tried first, matching the order the gate
+           itself uses in ``JWTAuthMiddleware._extract_token``.
+
+        Every credential's subject goes through
+        :func:`~kailash.trust.auth.jwt.subject_from_claims` -- ONE claim
+        precedence for this gateway, not one per arm (``security.md``
+        § Credential Decode Helpers).
 
         ``verify_token`` is called and its result awaited ONLY IF awaitable.
         The two managers in this SDK disagree: ``JWTAuthManager.verify_token``
@@ -502,9 +515,97 @@ class APIGateway:
         if manager is None:
             return None
 
+        # Imported once for BOTH arms below. Two call sites reading the subject
+        # their own way is exactly the drift this function exists to prevent.
+        from ...trust.auth.jwt import subject_from_claims
+
+        headers = getattr(connection, "headers", None)
+
+        # A presented `X-API-Key`, verified by this gateway's own manager
+        # (issue #2108).
+        #
+        # Reachable only where NO gate is installed for this request. With one
+        # in front, `JWTAuthMiddleware._dispatch_api_key` has already verified
+        # the key and left the principal on `state.user`, which the block above
+        # returned -- and the gate answers for the keys IT was configured with
+        # (`KAILASH_API_KEY_*`), while this arm answers for the keys the
+        # manager ISSUED. Both surfaces, one derivation point.
+        #
+        # NEVER RAISES, including on a key this manager rejects.
+        # `verify_api_key` signals rejection with a 401 `HTTPException`; letting
+        # it out of here would refuse the request from the identity layer,
+        # bypassing `_resolve_identity` -- which owns the `self._require_auth`
+        # fail-closed decision for every route at once, and which an
+        # `enable_auth=False` caller relies on to keep serving openly. A
+        # rejected key resolves to "no principal", the same as an absent one.
+        #
+        # The header NAME comes from this gateway's own auth config when it has
+        # one, so an operator who renamed it does not end up with two surfaces
+        # reading different headers for the same credential; `JWTConfig`'s
+        # default is `X-API-Key` and that is the fallback when no config was
+        # resolved (which is the common shape here -- no gate, no config).
+        api_key_header = (
+            getattr(self._auth_config, "api_key_header", None) or "X-API-Key"
+        )
+        api_key = headers.get(api_key_header) if headers is not None else None
+        if api_key:
+            verify_api_key = getattr(manager, "verify_api_key", None)
+            if verify_api_key is None:
+                # `JWTAuthManager` -- what this class builds when no manager is
+                # injected, i.e. the DEFAULT -- has no `verify_api_key` at all.
+                # That is a WIRING fact, identical for every request, so it is
+                # reported ONCE per gateway rather than once per anonymous
+                # request that carries the header: the log-amplification shape
+                # of #2114 reaching a second surface.
+                if not getattr(self, "_api_key_unsupported_logged", False):
+                    self._api_key_unsupported_logged = True
+                    logger.warning(
+                        "api_gateway.api_key_auth_unsupported",
+                        extra={
+                            "manager_type": type(manager).__name__,
+                            "wiring": (
+                                "pass auth_manager=MiddlewareAuthManager(...) "
+                                "to accept X-API-Key on this gateway"
+                            ),
+                        },
+                    )
+            else:
+                record: Any = None
+                try:
+                    record = verify_api_key(api_key)
+                    if inspect.isawaitable(record):
+                        record = await record
+                except HTTPException:
+                    # A REJECTED credential, not an absent one -- the same
+                    # disposition the bearer arm takes below.
+                    logger.warning("api_gateway.presented_api_key_rejected")
+                    record = None
+                except Exception as exc:
+                    logger.warning(
+                        "api_gateway.api_key_verification_failed",
+                        extra={"error_type": type(exc).__name__},
+                    )
+                    record = None
+
+                if isinstance(record, dict):
+                    # The SAME precedence function the bearer arm uses.
+                    # `verify_api_key` returns `APIKeyRecord.to_dict()`, whose
+                    # subject is spelled `user_id`; that dict's key set is
+                    # fixed and carries no `sub`/`uid`, so the precedence
+                    # resolves to it deterministically.
+                    principal = subject_from_claims(record)
+                    if principal:
+                        return principal
+                    logger.warning("api_gateway.verified_api_key_without_subject")
+                elif record is not None:
+                    logger.warning(
+                        "api_gateway.verify_api_key_returned_non_mapping",
+                        extra={"payload_type": type(record).__name__},
+                    )
+
         scheme, _, token = (
-            (connection.headers.get("Authorization") or "").partition(" ")
-            if getattr(connection, "headers", None) is not None
+            (headers.get("Authorization") or "").partition(" ")
+            if headers is not None
             else ("", "", "")
         )
         if scheme.lower() != "bearer" or not token:
@@ -561,8 +662,6 @@ class APIGateway:
         if payload.get("token_type") == "refresh":
             logger.warning("api_gateway.refresh_token_presented_as_access")
             return None
-
-        from ...trust.auth.jwt import subject_from_claims
 
         return subject_from_claims(payload)
 
@@ -861,21 +960,27 @@ class APIGateway:
     def _setup_session_routes(self):
         """Setup session management routes."""
 
-        # NO `X-API-Key` BRANCH ON THIS ROUTE, deliberately.
+        # NO `X-API-Key` BRANCH ON THIS ROUTE -- not because the gateway
+        # refuses API keys, but because it authenticates them in ONE place.
+        # `_authenticated_user_id` reads the gate's answer, then a presented
+        # API key, then a bearer token, so `/api/sessions`, `/ws` and
+        # `/events` accept the same credentials and derive the principal the
+        # same way. A per-route arm here would be the second implementation of
+        # a decision already made (`security.md` § Credential Decode Helpers).
         #
-        # A first draft added one, calling `auth_manager.verify_api_key`. That
-        # method CANNOT SUCCEED, which was measured rather than assumed: it
-        # calls `credential_manager.execute(operation=..., credential_name=...)`,
-        # but `CredentialManagerNode.run()` takes `**inputs` and ignores BOTH --
-        # it reads `self.credential_name`, fixed at construction -- and its
-        # return dict has no `"success"` key at all. So
-        # `result.get("success", False)` is always False and the call always
-        # raises 401. An auth path that can only ever reject is a non-functional
-        # feature presented as a working one (`zero-tolerance.md` Rule 2), so it
-        # is not shipped. API keys DO work on this gateway, through the
-        # installed gate's own `api_key_validator`, which is a real
-        # implementation; the `verify_api_key` defect is pre-existing and
-        # tracked separately.
+        # A first draft DID put one here, calling `auth_manager.verify_api_key`
+        # directly. That method could not succeed for any key, which was
+        # measured rather than assumed: it called
+        # `credential_manager.execute(operation=..., credential_name=...)`, but
+        # `CredentialManagerNode.run()` takes `**inputs` and ignored BOTH -- it
+        # read `self.credential_name`, fixed at construction -- and its return
+        # dict has no `"success"` key at all, so `result.get("success", False)`
+        # was always False and the call always raised 401. An auth path that
+        # can only ever reject is a non-functional feature presented as a
+        # working one (`zero-tolerance.md` Rule 2), so it was not shipped.
+        # Issue #2108 gave `verify_api_key` a real `APIKeyStore` to verify
+        # against, so the capability the comment was holding a place for now
+        # exists -- and it is wired at the single derivation point above.
 
         @self.app.post("/api/sessions", response_model=SessionResponse)
         async def create_session(
