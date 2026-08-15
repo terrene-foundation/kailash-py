@@ -41,6 +41,7 @@ from ._provider_env import detect_provider_from_env as _detect_provider
 from .a2a_mixin import A2AMixin
 from .agent_loop import AgentLoop
 from .config import BaseAgentConfig
+from .control_protocol_mixin import ControlProtocolMixin
 from .mcp_mixin import MCPMixin
 from .output_extraction_mixin import OutputExtractionMixin
 
@@ -56,11 +57,14 @@ logger = logging.getLogger(__name__)
 # correctness-relevant predicate drift.
 
 
-class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, Node):
+class BaseAgent(
+    MCPMixin, A2AMixin, OutputExtractionMixin, ControlProtocolMixin, Node
+):
     """Universal base agent class with strategy-based execution and mixin composition.
 
     Inherits MCP integration from MCPMixin, A2A protocol support from A2AMixin,
-    and the typed ``extract_*`` result accessors from OutputExtractionMixin.
+    the typed ``extract_*`` result accessors from OutputExtractionMixin, and the
+    ask/approve/report user-interaction helpers from ControlProtocolMixin.
     Execution is delegated to AgentLoop for both sync and async paths.
     """
 
@@ -731,94 +735,8 @@ class BaseAgent(MCPMixin, A2AMixin, OutputExtractionMixin, Node):
             raise error
 
     # =========================================================================
-    # Control Protocol helpers
-    # =========================================================================
-
-    async def ask_user_question(
-        self,
-        question: str,
-        options: Optional[List[str]] = None,
-        timeout: float = 60.0,
-    ) -> str:
-        """Ask user a question during agent execution via Control Protocol."""
-        if self.control_protocol is None:
-            raise RuntimeError(
-                "Control protocol not configured. "
-                "Pass control_protocol parameter to BaseAgent.__init__()"
-            )
-
-        from kaizen.core.autonomy.control.types import ControlRequest
-
-        data = {"question": question}
-        if options:
-            data["options"] = options
-
-        request = ControlRequest.create("question", data)
-        response = await self.control_protocol.send_request(request, timeout=timeout)
-
-        if response.is_error:
-            raise RuntimeError(f"Question error: {response.error}")
-
-        return response.data.get("answer", "")
-
-    async def request_approval(
-        self,
-        action: str,
-        details: Optional[Dict[str, Any]] = None,
-        timeout: float = 60.0,
-    ) -> bool:
-        """Request user approval for an action via Control Protocol."""
-        if self.control_protocol is None:
-            raise RuntimeError(
-                "Control protocol not configured. "
-                "Pass control_protocol parameter to BaseAgent.__init__()"
-            )
-
-        from kaizen.core.autonomy.control.types import ControlRequest
-
-        data = {"action": action}
-        if details:
-            data["details"] = details
-
-        request = ControlRequest.create("approval", data)
-        response = await self.control_protocol.send_request(request, timeout=timeout)
-
-        if response.is_error:
-            raise RuntimeError(f"Approval error: {response.error}")
-
-        return response.data.get("approved", False)
-
-    async def report_progress(
-        self,
-        message: str,
-        percentage: Optional[float] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """Report progress update to user via Control Protocol."""
-        if self.control_protocol is None:
-            raise RuntimeError(
-                "Control protocol not configured. "
-                "Pass control_protocol parameter to BaseAgent.__init__() "
-                "to enable report_progress()."
-            )
-
-        from kaizen.core.autonomy.control.types import ControlRequest
-
-        data = {"message": message}
-        if percentage is not None:
-            if not (0.0 <= percentage <= 100.0):
-                raise ValueError(
-                    f"Percentage must be between 0.0 and 100.0, got {percentage}"
-                )
-            data["percentage"] = percentage
-        if details:
-            data["details"] = details
-
-        request = ControlRequest.create("progress_update", data)
-        await self.control_protocol._transport.write(request.to_json())
-
-    # =========================================================================
     # Observability (MCP tool methods inherited from MCPMixin)
+    # Control Protocol helpers are inherited from ControlProtocolMixin.
     # =========================================================================
 
     def enable_observability(
