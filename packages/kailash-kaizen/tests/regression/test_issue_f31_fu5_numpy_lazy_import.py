@@ -168,18 +168,26 @@ def test_require_numpy_returns_module_when_present():
 
 @pytest.mark.regression
 @pytest.mark.asyncio
-async def test_hash_embedding_and_search_still_work_with_numpy_present():
+async def test_vector_search_still_works_with_numpy_present():
     """Behavioral: the lazy-import refactor must not change numeric behavior."""
     from datetime import UTC, datetime
 
-    from kaizen.nodes.ai.semantic_memory import (
-        InMemoryVectorStore,
-        SemanticMemoryItem,
-        SimpleEmbeddingProvider,
-    )
+    from kaizen.nodes._optional import require_numpy
+    from kaizen.nodes.ai.semantic_memory import InMemoryVectorStore, SemanticMemoryItem
 
-    provider = SimpleEmbeddingProvider()
-    emb = provider._hash_embedding("hello world")
+    # The numeric path under test is InMemoryVectorStore.search_similar, which
+    # resolves numpy through require_numpy("vector similarity search"). The
+    # embedding is only a vector factory here.
+    #
+    # It used to be SimpleEmbeddingProvider._hash_embedding, which #2174
+    # deleted: that method fabricated MD5-derived vectors and was reachable
+    # only as a SILENT fallback when the real embedding request failed, so it
+    # returned hash noise labelled with the real model's provenance. Building
+    # the probe vector directly keeps this regression pinned on the lazy
+    # import — which is what F31/FU5 is about — without depending on a
+    # fabricating code path to supply it.
+    np = require_numpy("regression probe vector")
+    emb = np.linspace(0.0, 1.0, num=384)
     assert emb.shape == (384,)
 
     store = InMemoryVectorStore()
