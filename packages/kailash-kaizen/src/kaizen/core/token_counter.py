@@ -283,10 +283,24 @@ class TokenCounter:
 
         # Fallback: character-based estimate
         if not self._tiktoken_warning_shown:
-            logger.warning(
-                "Using character-based token estimation. "
-                "Install tiktoken for accurate counting: pip install tiktoken"
-            )
+            if TIKTOKEN_AVAILABLE:
+                # tiktoken IS installed, so the encoder lookup itself failed --
+                # most often the one-time fetch of the BPE table from
+                # openaipublic.blob.core.windows.net. Telling the operator to
+                # install a package they already have sends them the wrong way;
+                # the preceding "Failed to get encoder" warning carries the
+                # real cause.
+                logger.warning(
+                    "Using character-based token estimation: tiktoken is "
+                    "installed but its encoding data could not be loaded "
+                    "(see the preceding 'Failed to get encoder' warning). "
+                    "Counts are approximate until the encoding is available."
+                )
+            else:
+                logger.warning(
+                    "Using character-based token estimation. "
+                    "Install tiktoken for accurate counting: pip install tiktoken"
+                )
             self._tiktoken_warning_shown = True
 
         return self._estimate_tokens(text)
