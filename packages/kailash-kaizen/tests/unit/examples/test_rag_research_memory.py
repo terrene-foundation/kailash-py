@@ -19,6 +19,8 @@ import pytest
 # Standardized example loading
 from example_import_helper import import_example_module
 
+from kaizen.memory.vector import hash_embedder_for_tests
+
 # Load rag-research example
 _rag_module = import_example_module("examples/1-single-agent/rag-research")
 RAGResearchAgent = _rag_module.RAGResearchAgent
@@ -108,7 +110,12 @@ class TestRAGResearchMemoryInitialization:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5, "similarity_threshold": 0.7},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+                "similarity_threshold": 0.7,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -163,7 +170,11 @@ class TestRAGResearchMemoryContextLoading:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -203,7 +214,11 @@ class TestRAGResearchMemoryContextLoading:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -245,7 +260,11 @@ class TestRAGResearchTurnSaving:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -277,7 +296,11 @@ class TestRAGResearchTurnSaving:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -328,7 +351,11 @@ class TestRAGResearchTurnSaving:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -358,7 +385,12 @@ class TestRAGResearchSemanticSearch:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 3, "similarity_threshold": 0.0},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 3,
+                "similarity_threshold": 0.0,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -405,6 +437,7 @@ class TestRAGResearchSemanticSearch:
             model="test",
             memory_config={
                 "enabled": True,
+                "embedder": hash_embedder_for_tests,
                 "top_k": 1,
                 "similarity_threshold": 0.9,
             },  # High threshold
@@ -438,7 +471,12 @@ class TestRAGResearchSemanticSearch:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5, "similarity_threshold": 0.95},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+                "similarity_threshold": 0.95,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -473,7 +511,11 @@ class TestRAGResearchMultiTurnWithMemory:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -518,7 +560,11 @@ class TestRAGResearchMultiTurnWithMemory:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 3},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 3,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -575,7 +621,11 @@ class TestRAGResearchSessionIsolation:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -620,7 +670,11 @@ class TestRAGResearchSessionIsolation:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -649,7 +703,12 @@ class TestRAGResearchMemoryIntegration:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 3, "similarity_threshold": 0.5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 3,
+                "similarity_threshold": 0.5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -704,7 +763,11 @@ class TestRAGResearchMemoryIntegration:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -749,7 +812,11 @@ class TestRAGResearchMemoryIntegration:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 3},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 3,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -792,7 +859,11 @@ class TestRAGResearchMemoryEdgeCases:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
         )
         agent = create_agent_with_config(config)
 
@@ -818,7 +889,11 @@ class TestRAGResearchMemoryEdgeCases:
         config = RAGConfig(
             llm_provider="mock",
             model="test",
-            memory_config={"enabled": True, "top_k": 5},
+            memory_config={
+                "enabled": True,
+                "embedder": hash_embedder_for_tests,
+                "top_k": 5,
+            },
             similarity_threshold=0.99,  # Very high threshold - no docs
         )
         agent = create_agent_with_config(config)
@@ -843,7 +918,9 @@ class TestRAGResearchMemoryEdgeCases:
         """Test that research() method accepts session_id parameter."""
         import inspect
 
-        config = RAGConfig(memory_config={"enabled": True})
+        config = RAGConfig(
+            memory_config={"enabled": True, "embedder": hash_embedder_for_tests}
+        )
         agent = create_agent_with_config(config)
 
         # Check method signature

@@ -175,7 +175,7 @@ class TestBaseAgentVectorMemoryIntegration:
     def test_agent_with_vector_memory(self):
         """Test agent with VectorMemory integration."""
         from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-        from kaizen.memory.vector import VectorMemory
+        from kaizen.memory.vector import VectorMemory, hash_embedder_for_tests
         from kaizen.signatures import InputField, OutputField, Signature
 
         class TestSignature(Signature):
@@ -186,7 +186,7 @@ class TestBaseAgentVectorMemoryIntegration:
             llm_provider="mock", model="mock-model", memory_enabled=True
         )
 
-        memory = VectorMemory(top_k=2)
+        memory = VectorMemory(top_k=2, embedding_fn=hash_embedder_for_tests)
         agent = BaseAgent(config=config, signature=TestSignature(), memory=memory)
 
         # Mock strategy

@@ -21,7 +21,7 @@ from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.buffer import BufferMemory
 from kaizen.memory.knowledge_graph import KnowledgeGraphMemory
 from kaizen.memory.summary import SummaryMemory
-from kaizen.memory.vector import VectorMemory
+from kaizen.memory.vector import VectorMemory, hash_embedder_for_tests
 from kaizen.signatures import InputField, OutputField, Signature
 
 # ============================================================================
@@ -200,8 +200,18 @@ def demo_vector_memory():
         "Perfect for: Large knowledge bases, RAG applications, finding related context"
     )
 
-    # Create agent with VectorMemory
-    memory = VectorMemory(top_k=2)
+    # Create agent with VectorMemory.
+    #
+    # NOTE: this demo wires the explicitly-named test stand-in so it runs with
+    # no embedding service. That function hashes text, so the retrieval below
+    # is NOT semantically meaningful — it demonstrates the STORAGE and
+    # RETRIEVAL mechanics only. Swap in a real embedder to see actual semantic
+    # matching:
+    #
+    #     from sentence_transformers import SentenceTransformer
+    #     encoder = SentenceTransformer("all-MiniLM-L6-v2")
+    #     memory = VectorMemory(top_k=2, embedding_fn=lambda t: encoder.encode(t).tolist())
+    memory = VectorMemory(top_k=2, embedding_fn=hash_embedder_for_tests)
     agent = DemoAgent(DemoConfig(), memory=memory)
 
     # Conversation with semantically related and unrelated questions
@@ -231,6 +241,10 @@ def demo_vector_memory():
 
     print(
         "\n  Key Feature: Semantic search - finds related conversations, not just recent"
+    )
+    print(
+        "  (This run uses hash_embedder_for_tests, so the ranking above is NOT"
+        " semantic. Wire a real embedder to see the feature itself.)"
     )
 
 

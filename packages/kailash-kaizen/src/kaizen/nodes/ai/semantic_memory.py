@@ -22,6 +22,16 @@ if TYPE_CHECKING:
     import numpy as np
 
 
+class EmbeddingUnavailable(RuntimeError):
+    """Raised when embeddings cannot be produced by the configured model.
+
+    Exists so the failure is typed and catchable. It replaces a silent
+    fallback to MD5-derived vectors (#2174): callers that genuinely tolerate
+    degraded retrieval can catch this and decide, which is a choice they
+    could not previously make because the degradation was invisible.
+    """
+
+
 @dataclass
 class EmbeddingResult:
     """Result of an embedding operation."""
@@ -109,23 +119,45 @@ class SimpleEmbeddingProvider:
 
                 data = {"model": self.model_name, "prompt": txt}
 
+                # #2174 sibling: both arms below used to fall back to
+                # `_hash_embedding` — MD5-derived vectors returned as if they
+                # came from `self.model_name`, with no raise and no log. The
+                # EmbeddingResult even carried `model=self.model_name`, so the
+                # fabricated vectors were labelled with the real model's
+                # provenance and were indistinguishable downstream.
+                #
+                # Failing loud instead: a caller asking this provider for
+                # embeddings gets embeddings or an error, never hash noise
+                # ranked as if it were semantic. Mirrors the #1952 fix on
+                # EmbeddingGeneratorNode.
                 try:
                     async with session.post(self.embed_url, json=data) as response:
-                        if response.status == 200:
-                            result = await response.json()
-                            embedding = np.array(result["embedding"])
-                            all_embeddings.append(embedding)
+                        if response.status != 200:
+                            body = await response.text()
+                            raise EmbeddingUnavailable(
+                                f"SimpleEmbeddingProvider: embedding request to "
+                                f"{self.embed_url} returned HTTP {response.status} "
+                                f"for model '{self.model_name}'. Refusing to "
+                                f"substitute hash-derived vectors, which would "
+                                f"rank as if semantic (#2174). Response: "
+                                f"{body[:200]}"
+                            )
+                        result = await response.json()
+                        embedding = np.array(result["embedding"])
+                        all_embeddings.append(embedding)
 
-                            # Cache the embedding
-                            self._cache[cache_key] = embedding
-                        else:
-                            # Fallback to simple hash-based embedding
-                            embedding = self._hash_embedding(txt)
-                            all_embeddings.append(embedding)
-                except Exception:
-                    # Fallback to simple hash-based embedding
-                    embedding = self._hash_embedding(txt)
-                    all_embeddings.append(embedding)
+                        # Cache the embedding
+                        self._cache[cache_key] = embedding
+                except EmbeddingUnavailable:
+                    raise
+                except Exception as e:
+                    raise EmbeddingUnavailable(
+                        f"SimpleEmbeddingProvider: embedding request to "
+                        f"{self.embed_url} failed for model "
+                        f"'{self.model_name}': {type(e).__name__}: {e}. "
+                        f"Refusing to substitute hash-derived vectors, which "
+                        f"would rank as if semantic (#2174)."
+                    ) from e
 
         embeddings_array = np.vstack(all_embeddings)
 
@@ -135,21 +167,6 @@ class SimpleEmbeddingProvider:
             dimension=embeddings_array.shape[1],
             metadata={"host": self.host},
         )
-
-    def _hash_embedding(self, text: str, dimension: int = 384) -> np.ndarray:
-        """Create a simple hash-based embedding as fallback."""
-        np = require_numpy("hash-based embedding fallback")
-        # Simple deterministic embedding based on text content
-        hash_str = hashlib.md5(text.encode()).hexdigest()
-        # Convert hex to numbers and normalize
-        values = [
-            int(hash_str[i : i + 2], 16) / 255.0
-            for i in range(0, min(len(hash_str), dimension * 2), 2)
-        ]
-        # Pad or truncate to desired dimension
-        while len(values) < dimension:
-            values.extend(values[: dimension - len(values)])
-        return np.array(values[:dimension])
 
 
 class InMemoryVectorStore:

@@ -235,8 +235,18 @@ class LongConversationAgent(BaseAgent):
 ```python
 from kaizen.memory.vector import VectorMemory
 
-# Default: Mock hash-based embedder (testing only)
-memory = VectorMemory(embedding_fn=None, top_k=5)
+# embedding_fn is REQUIRED. Omitting it (or passing None) raises
+# ConfigurationError. It used to fall back to a hash-based pseudo-embedder,
+# which returned vectors of the right shape with no semantic signal, so
+# similarity search silently ranked MD5 noise (#2174).
+memory = VectorMemory(embedding_fn=custom_embedder, top_k=5)
+
+# For tests ONLY, an explicitly-named stand-in is available. It carries no
+# semantic signal — use it to exercise storage/retrieval mechanics, never to
+# assert on ranking quality.
+from kaizen.memory.vector import hash_embedder_for_tests
+
+memory = VectorMemory(embedding_fn=hash_embedder_for_tests, top_k=5)
 
 # Custom embedder (production)
 def custom_embedder(text: str) -> List[float]:

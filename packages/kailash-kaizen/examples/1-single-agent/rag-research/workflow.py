@@ -106,9 +106,12 @@ class RAGResearchAgent(BaseAgent):
         # Initialize memory if enabled
         memory = None
         if config.memory_config and config.memory_config.get("enabled"):
-            embedding_fn = config.memory_config.get(
-                "embedder"
-            )  # Optional custom embedder
+            # REQUIRED when memory is enabled. There is no fallback embedder:
+            # VectorMemory used to substitute a hash-based one, which returned
+            # vectors of the right shape with no semantic signal, so retrieval
+            # ranked MD5 noise while looking like it worked (#2174). Omitting
+            # this now raises ConfigurationError naming the wiring.
+            embedding_fn = config.memory_config.get("embedder")
             top_k = config.memory_config.get("top_k", 5)
             similarity_threshold = config.memory_config.get("similarity_threshold", 0.7)
             memory = VectorMemory(embedding_fn=embedding_fn, top_k=top_k)
