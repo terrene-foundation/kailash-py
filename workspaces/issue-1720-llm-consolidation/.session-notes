@@ -19,7 +19,7 @@ isort/D3). Three PRs open.
 | --- | --- | --- |
 | #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running; CodeQL: 1 real alert fixed, 5 deferred with runtime proof (#2178) |
 | #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
-| #2150 | kaizen SSRF consolidation | **69 behind**, has its OWN CodeQL HIGH (`url_safety.py:130`) — not yet rebased |
+| #2150 | kaizen SSRF consolidation | **77 behind**; branch is checked out in the `l7-kaizen` worktree (clean). The "own CodeQL HIGH" claim below was WRONG — see the correction |
 | #2123 | loom sync | 116 behind, untouched this session |
 
 ## What #2169 fixed (merged)
@@ -139,6 +139,11 @@ Carried forward, still true:
   PYTHONPATH and print `__file__` **in the same process** you are measuring.
 - **`--color=no` when grepping pytest output** — ANSI codes defeat `grep "^FAILED"` silently.
 - **`--continue-on-collection-errors --maxfail=100000`** or you measure a truncated suite.
+- **`gh api` code-scanning WITHOUT `--paginate` silently truncates.** This repo has **2301 open
+  alerts**; `?per_page=100` returns the first page and an absent alert reads exactly like "no
+  such alert." Cost a false "no CodeQL alert on that file" that was one message from being
+  reported as fact. **Always `gh api --paginate`, and positive-control the query against a ref
+  you know has hits.**
 - **`gh run view --log-failed` can return 0 bytes** on a genuinely failed job. That is zero
   evidence, not "no failures". Fall back to the run-level zip
   (`gh api .../runs/<id>/logs > x.zip; unzip -p x.zip "<job>.txt"`).
@@ -193,7 +198,23 @@ failure count as a regression without diffing against this baseline.**
   (`url_safety.py`), an unkeyed hash fingerprinting client IPs in rate-limit middleware, an
   unsanitized caller id, a bad-tag-filter question, **a mock embedder as the production
   default**, and an unpinned TLS minimum version.
-- **#2150's own CodeQL HIGH** — `py/clear-text-logging-sensitive-data` at `url_safety.py:130`
+- **CORRECTED — "#2150's own CodeQL HIGH at `url_safety.py:130`" was FALSE.** Measured with
+  `--paginate` (the repo has **2301 open alerts**, so an unpaginated query silently truncates):
+  there is **no alert at `url_safety.py:130`**. The real one is **10867**,
+  `py/clear-text-logging-sensitive-data` at `url_safety.py:71`, **on `main`, open since
+  2026-04-24** — pre-existing, NOT carried by #2150.
+  I repeated `:130` from the cont-18 notes across several messages and wrote it back into these
+  notes without ever re-deriving it. **A claim inherited from session notes is a specification,
+  not a measurement** — re-derive before acting on it or repeating it.
+  Alert 10867 looks like a FALSE POSITIVE on its face: line 71 logs
+  `_url_fingerprint(url)` — a truncated BLAKE2b digest — not the URL. But the disposition should
+  be written against the real defect underneath it (next bullet), not against ":130".
+- **`fingerprint_secret`'s docstring contradicts itself, and the false half is load-bearing.**
+  `url_credentials.py:689` says *"BLAKE2b is a fast **keyed-hash** that CodeQL does not flag for
+  this rule"*; `:714` in the SAME docstring says *"no secret keying material"*. The
+  implementation passes no `key=`. The `:689` claim is the stated JUSTIFICATION for the rule not
+  applying, so a reader stops there and never reaches `:714`. Added to **#2170**; the #2181
+  ceremony's SCOPE CAVEAT already points at it.
 - **Two wall-clock perf flakes** in kaizen (`test_async_execution_overhead` ~4.5s against a 5.0s
   bound). Left alone deliberately: bumping an absolute bound is how a complexity regression
   hides. The correct fix is a self-normalizing ratio (measure 1/N scale in the same run), not a
