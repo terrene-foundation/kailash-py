@@ -5,6 +5,8 @@ Tests the token counting utility with both tiktoken-based counting
 and fallback heuristics when tiktoken is unavailable.
 """
 
+import logging
+
 import pytest
 
 from kaizen.core.token_counter import (
@@ -278,46 +280,120 @@ class TestGlobalCounter:
         assert tokens > 0
 
 
+class _StubEncoder:
+    """Deterministic stand-in for a tiktoken ``Encoding``.
+
+    Counts one token per whitespace-separated word, which is deliberately
+    NOT what the character-based fallback produces for the strings used
+    below — that difference is what makes the delegation assertions able to
+    fail.
+    """
+
+    def __init__(self) -> None:
+        self.encode_calls = 0
+
+    def encode(self, text: str) -> list:
+        self.encode_calls += 1
+        return list(range(len(text.split())))
+
+
+@pytest.fixture
+def stub_encoder(monkeypatch):
+    """Install a stub encoder in place of real tiktoken lookups.
+
+    Requires tiktoken to be importable (``_get_encoder`` returns None early
+    otherwise), but never touches tiktoken's BPE tables or the network.
+    """
+    if not TIKTOKEN_AVAILABLE:
+        pytest.skip("tiktoken not installed")
+
+    from kaizen.core import token_counter as tc
+
+    encoder = _StubEncoder()
+    calls = []
+
+    def _fake_get_encoding(name):
+        calls.append(name)
+        return encoder
+
+    monkeypatch.setattr(tc.tiktoken, "get_encoding", _fake_get_encoding)
+    encoder.get_encoding_calls = calls
+    return encoder
+
+
 class TestEncoderCaching:
     """Tests for encoder caching."""
 
-    def test_encoder_caching(self):
-        """Test that encoders are cached."""
+    def test_encoder_caching(self, stub_encoder):
+        """Test that encoders are cached.
+
+        Asserts unconditionally. The previous version guarded the assertion
+        with ``if encoder1 is not None``, so on any runner where the encoding
+        was unavailable it asserted nothing and still passed.
+        """
         counter = TokenCounter()
-        # First call should create encoder
+
         encoder1 = counter._get_encoder("cl100k_base")
-        # Second call should return cached
         encoder2 = counter._get_encoder("cl100k_base")
-        if encoder1 is not None:
-            assert encoder1 is encoder2
+
+        assert encoder1 is not None
+        assert encoder1 is encoder2
+        # Cached: the underlying lookup ran exactly once for two calls.
+        assert stub_encoder.get_encoding_calls == ["cl100k_base"]
 
 
-@pytest.mark.skipif(
-    not TIKTOKEN_AVAILABLE,
-    reason="tiktoken not installed - tests require tiktoken",
-)
-class TestTiktokenSpecific:
-    """Tests that specifically require tiktoken."""
+class TestEncoderDelegation:
+    """``count`` must USE an available encoder, not silently estimate.
 
-    def test_tiktoken_exact_count(self):
-        """Test exact token count with tiktoken."""
+    This is the Tier-1 half of what the tiktoken tests used to cover. The
+    other half — that real tiktoken tables produce a specific count — needs
+    the downloaded BPE data and now lives in
+    ``tests/integration/core/test_token_counter_tiktoken.py``.
+
+    The regression this guards is exactly the one that hid a network
+    dependency for so long: when the encoder cannot be obtained, ``count``
+    falls back to a character estimate and returns a plausible-but-wrong
+    number instead of failing.
+    """
+
+    def test_count_delegates_to_encoder_when_available(self, stub_encoder):
         counter = TokenCounter()
-        # "Hello, world!" is exactly 4 tokens in cl100k_base
+
         tokens = counter.count("Hello, world!", encoding_name="cl100k_base")
-        assert tokens == 4
 
-    def test_tiktoken_encoding_for_model(self):
-        """Test tiktoken-based encoding selection."""
-        import tiktoken
+        # Stub counts words (2); the fallback estimate for this string is 3.
+        # Asserting the encoder's answer AND that it differs from the
+        # estimate is what makes a silent regression to the fallback visible.
+        assert tokens == 2
+        assert tokens != counter._estimate_tokens("Hello, world!")
+        assert stub_encoder.encode_calls == 1
+
+    def test_count_falls_back_and_warns_when_encoder_unavailable(
+        self, monkeypatch, caplog
+    ):
+        if not TIKTOKEN_AVAILABLE:
+            pytest.skip("tiktoken not installed")
+
+        from kaizen.core import token_counter as tc
+
+        def _unavailable(name):
+            raise RuntimeError("encoding data unavailable")
+
+        monkeypatch.setattr(tc.tiktoken, "get_encoding", _unavailable)
 
         counter = TokenCounter()
-        # Get encoding directly from tiktoken
-        expected = tiktoken.encoding_for_model("gpt-4")
-        actual = counter._get_encoder("cl100k_base")
-        assert actual is not None
-        # Verify they produce same result
-        text = "Test text"
-        assert len(expected.encode(text)) == len(actual.encode(text))
+        with caplog.at_level(logging.WARNING):
+            tokens = counter.count("Hello, world!", encoding_name="cl100k_base")
+
+        assert tokens == counter._estimate_tokens("Hello, world!")
+        # The degraded path MUST announce itself; a silent fallback is what
+        # made "3 instead of 4" look like a passing test for so long.
+        assert any(
+            "Failed to get encoder cl100k_base" in r.message for r in caplog.records
+        )
+        assert any(
+            "character-based token estimation" in r.message for r in caplog.records
+        )
 
 
 class TestModelContextSizes:
