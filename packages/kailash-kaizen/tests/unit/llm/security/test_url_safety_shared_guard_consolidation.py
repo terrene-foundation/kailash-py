@@ -241,8 +241,19 @@ def test_both_kaizen_guards_use_the_shared_classifiers():
     assert hc._is_private_ipv4 is network_guard.is_private_ipv4
     assert hc._is_private_ipv6 is network_guard.is_private_ipv6
     assert hc._METADATA_IPS is network_guard.METADATA_IPS
-    assert hc._IPV4_TRANSLATED_NETWORK is network_guard.IPV4_TRANSLATED_NETWORK
-    assert hc._NAT64_WELLKNOWN_NETWORK is network_guard.NAT64_WELLKNOWN_NETWORK
+    # The reason MAPPING is shared too, not just the private-range predicates.
+    # Sharing only the predicates is what let the two gates agree on the
+    # verdict while disagreeing on the bucket for six addresses.
+    assert hc.metadata_candidates is network_guard.metadata_candidates
+    assert hc._ip_reason is network_guard.ip_reason
+    # The RFC 2765 / RFC 6052 ranges are no longer referenced here at all --
+    # `ip_reason` and `metadata_candidates` own that decision now. Re-importing
+    # them would mean a second wrapper ladder had grown back.
+    for name in ("_IPV4_TRANSLATED_NETWORK", "_NAT64_WELLKNOWN_NETWORK"):
+        assert not hasattr(hc, name), (
+            f"http_client re-grew {name}: the wrapper decision belongs to "
+            f"network_guard.metadata_candidates / ip_reason, once"
+        )
 
 
 def test_url_safety_holds_no_private_classifier_copy():
