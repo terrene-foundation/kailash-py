@@ -300,3 +300,53 @@ def test_http_node_still_logs_a_usable_diagnostic():
     assert (
         "api.example.com" in cap.text
     ), f"the host must survive masking or the log is useless: {cap.text!r}"
+
+
+class TestRedactionKeyMatching:
+    """Key-shape gaps found by adversarially probing `redact_mapping` directly.
+
+    All three were live after the sink fixes above were already passing: the
+    sink tests exercise the keys a producer in THIS repo happens to emit, so a
+    key-matching gap is invisible to them. Probing the matcher itself is what
+    surfaced these.
+    """
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "pwd",  # `passwd` has no adjacent p-w-d, so it never covered this
+            "db_pwd",
+            "X.API.Key",  # SAML/OIDC attribute bags arrive dotted
+            "api key",  # hand-built dicts arrive spaced
+            "X-API-Key",  # the header form, guarded before -- kept as a pin
+        ],
+        ids=["pwd", "db_pwd", "dotted", "spaced", "hyphenated"],
+    )
+    def test_credential_key_separator_and_alias_forms_are_withheld(self, key):
+        from kailash.utils.secure_logging import redact_mapping
+
+        out = redact_mapping({key: _SECRET})
+        assert _SECRET not in repr(
+            out
+        ), f"{key!r} passed the credential through: {out!r}"
+        assert out[key] == "[REDACTED]"
+
+    def test_non_credential_keys_stay_readable(self):
+        """The separator folding must not over-match and blind the auditor."""
+        from kailash.utils.secure_logging import redact_mapping
+
+        out = redact_mapping({"user_id": "alice", "status": "ok", "attempt": 3})
+        assert out == {"user_id": "alice", "status": "ok", "attempt": 3}
+
+    def test_a_set_is_left_alone_rather_than_reshaped(self):
+        """Pins the MEASURED decision not to walk sets (see redact_mapping).
+
+        A set holds only hashables, so it never contains a dict and there is no
+        key to match; walking it returned the same credential as a list. This
+        asserts the shape is preserved so nobody re-adds a walk believing it
+        redacts something.
+        """
+        from kailash.utils.secure_logging import redact_mapping
+
+        out = redact_mapping({"plain": {"a", "b"}})
+        assert isinstance(out["plain"], set)

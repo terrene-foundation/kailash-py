@@ -518,6 +518,11 @@ _SENSITIVE_KEY_FRAGMENTS = (
     "authorization",
     "cookie",
     "session_id",
+    # `pwd` is NOT reachable as a substring of `passwd` (p-a-s-s-w-d has no
+    # adjacent p-w-d), so this fragment is doing real work rather than
+    # duplicating the entry above it: it is what catches `pwd`, `db_pwd` and
+    # `user_pwd`, all of which passed through byte-intact before.
+    "pwd",
 )
 
 _MAX_REDACTION_DEPTH = 6
@@ -561,13 +566,30 @@ def redact_mapping(data: Any, _depth: int = 0) -> Any:
     if isinstance(data, dict):
         redacted = {}
         for key, value in data.items():
-            lowered = str(key).lower().replace("-", "_")
+            # Normalize every separator a producer might spell the same
+            # concept with, not just the hyphen. SAML/OIDC attribute bags
+            # arrive dotted (`X.API.Key`, or a full claim URI whose last
+            # segment is dotted) and hand-built dicts arrive spaced
+            # (`"api key"`); both reached the log byte-intact when only `-`
+            # was folded, because neither `x.api.key` nor `api key` contains
+            # the `api_key` fragment.
+            lowered = (
+                str(key).lower().replace("-", "_").replace(".", "_").replace(" ", "_")
+            )
             if any(fragment in lowered for fragment in _SENSITIVE_KEY_FRAGMENTS):
                 redacted[key] = "[REDACTED]"
             else:
                 redacted[key] = redact_mapping(value, _depth + 1)
         return redacted
     if isinstance(data, (list, tuple)):
+        # Sets are deliberately NOT walked. Walking one was tried and MEASURED
+        # to close nothing: a set can only hold hashables, so it never contains
+        # a dict, so there is no KEY for this function to match on -- the walk
+        # returned `{'s': ['SUPERSECRET']}`, the same credential in a different
+        # shape. A set under a credential-NAMED key (`{"tokens": {...}}`) is
+        # already withheld whole by the key check above. Adding the walk would
+        # have mutated set->list for zero redaction gain, which is a change
+        # that reads as a fix and is not one.
         return [redact_mapping(item, _depth + 1) for item in data]
     if isinstance(data, str):
         # KEY-BASED WITHHOLDING IS NOT SUFFICIENT ON ITS OWN. A credential also
