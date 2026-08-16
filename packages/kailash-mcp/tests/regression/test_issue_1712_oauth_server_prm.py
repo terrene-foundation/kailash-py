@@ -35,6 +35,9 @@ driven directly through the ASGI protocol.
 import asyncio
 
 import pytest
+from starlette.applications import Starlette
+from starlette.testclient import TestClient
+
 from kailash_mcp.auth.oauth import (
     AuthorizationServer,
     JWTManager,
@@ -48,8 +51,6 @@ from kailash_mcp.auth.well_known import (
     protected_resource_metadata_url,
 )
 from kailash_mcp.errors import AuthenticationError, AuthorizationError
-from starlette.applications import Starlette
-from starlette.testclient import TestClient
 
 _ISSUER = "https://as.example.com"
 _RESOURCE = "https://mcp.example.com"  # origin-root → bare well-known path

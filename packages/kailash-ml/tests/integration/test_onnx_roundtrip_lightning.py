@@ -38,7 +38,6 @@ def test_lightning_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     import pytorch_lightning as pl
     import torch
     import torch.nn as nn
-
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)

@@ -29,10 +29,9 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from kailash_mcp.client import MCPClient
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.builder import WorkflowBuilder
+from kailash_mcp.client import MCPClient
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import ToolCategory, ToolDefinition, ToolParameter
 

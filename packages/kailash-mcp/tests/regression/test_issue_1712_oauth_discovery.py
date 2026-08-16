@@ -31,6 +31,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
+
 from kailash_mcp.auth.oauth import (
     OAuth2Client,
     OAuthDiscoveryError,

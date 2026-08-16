@@ -248,7 +248,7 @@ line_length = 88
 # reclassifies `kailash` as THIRD-party for every file under this package — which
 # is the blank-line-between-import-blocks that flip-flopped on every run and left
 # ~2,000 files permanently modified (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
 
 [tool.ruff]
 line-length = 88

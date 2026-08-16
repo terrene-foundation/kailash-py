@@ -9,9 +9,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from kailash_mcp import MCPServer
-
 from kailash.workflow import Workflow
+from kailash_mcp import MCPServer
 
 logger = logging.getLogger(__name__)
 

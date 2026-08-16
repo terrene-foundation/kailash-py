@@ -20,6 +20,7 @@ server-side gaps:
 """
 
 import pytest
+
 from kailash_mcp.server import (
     LATEST_PROTOCOL_VERSION,
     SUPPORTED_PROTOCOL_VERSIONS,

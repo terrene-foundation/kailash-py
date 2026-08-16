@@ -8,12 +8,12 @@ from typing import Any, Dict
 import pytest
 import pytest_asyncio
 from aiohttp import web
+
+from kailash.middleware.gateway.event_store import EventStore
 from kailash_mcp.auth.providers import AuthManager
 from kailash_mcp.protocol.protocol import get_protocol_manager
 from kailash_mcp.server import MCPServer
 from kailash_mcp.transports.transports import WebSocketServerTransport
-
-from kailash.middleware.gateway.event_store import EventStore
 
 # from tests.utils.mcp_utils import create_test_mcp_server
 

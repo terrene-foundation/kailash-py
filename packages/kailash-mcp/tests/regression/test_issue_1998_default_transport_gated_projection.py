@@ -34,10 +34,11 @@ and execute on ``tools/call``. Each was the observed pre-fix behaviour.
 """
 
 import pytest
+from mcp.shared.memory import create_connected_server_and_client_session
+
 from kailash_mcp.auth.providers import APIKeyAuth
 from kailash_mcp.errors import MCPError, ToolError
 from kailash_mcp.server import MCPServer
-from mcp.shared.memory import create_connected_server_and_client_session
 
 pytestmark = pytest.mark.regression
 

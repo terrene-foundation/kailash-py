@@ -48,11 +48,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 from urllib.parse import urlparse
 
+from kailash.utils.url_credentials import mask_error_text
 from kailash_mcp.auth.providers import AuthProvider
 from kailash_mcp.errors import MCPError, MCPErrorCode, ServiceDiscoveryError
 from kailash_mcp.security import SpawnSecurityError, validate_spawn_command
-
-from kailash.utils.url_credentials import mask_error_text
 
 logger = logging.getLogger(__name__)
 

@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from kailash_ml.autolog import _distribution, autolog
 from kailash_ml.tracking import SqliteTrackerStore, track
 

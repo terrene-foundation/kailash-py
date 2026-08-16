@@ -238,7 +238,7 @@ profile = "black"
 line_length = 88
 # MUST match the root pyproject.toml list exactly — see the note in
 # packages/kailash-kaizen/pyproject.toml (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0

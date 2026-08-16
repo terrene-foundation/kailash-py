@@ -10,6 +10,7 @@ and that invalid inputs are rejected with JsonRpcValidationError.
 from __future__ import annotations
 
 import pytest
+
 from kailash_mcp.protocol.messages import (
     JsonRpcError,
     JsonRpcRequest,

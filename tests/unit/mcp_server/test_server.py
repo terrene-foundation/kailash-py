@@ -5,6 +5,7 @@ FUNCTIONAL TESTS - Tests actual behavior, not external dependencies.
 """
 
 import pytest
+
 from kailash_mcp.auth.providers import APIKeyAuth, BasicAuth
 from kailash_mcp.server import MCPServer, MCPServerBase
 

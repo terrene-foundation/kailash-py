@@ -48,7 +48,6 @@ TextAnalysisSignature = agent_as_server_example.TextAnalysisSignature
 
 # Production MCP infrastructure - kailash_mcp
 from kailash_mcp import MCPServer
-
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)

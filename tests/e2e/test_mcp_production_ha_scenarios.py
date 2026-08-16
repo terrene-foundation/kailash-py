@@ -17,6 +17,7 @@ import aiohttp
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
+
 from kailash_mcp import MCPClient, MCPServer
 from kailash_mcp.auth.oauth import ResourceServer
 from kailash_mcp.auth.providers import APIKeyAuth
@@ -27,7 +28,6 @@ from kailash_mcp.discovery.discovery import (
     ServiceMesh,
     ServiceRegistry,
 )
-
 from tests.utils.docker_config import (
     ensure_docker_services,
     get_postgres_connection_string,

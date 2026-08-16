@@ -317,7 +317,7 @@ known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 
 [tool.isort]
 profile = "black"
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
 # Scaffold templates are NOT valid Python — they carry `{Placeholder}` substitution tokens
 # (e.g. `class Test{AgentName}Initialization:`), so every formatter fails to parse them.
 # Excluded at CONFIG level, not in the pre-commit hook alone, so a direct `isort .` /

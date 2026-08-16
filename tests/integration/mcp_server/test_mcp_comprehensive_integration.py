@@ -11,6 +11,7 @@ import time
 
 import aiohttp
 import pytest
+
 from kailash_mcp import (
     MCPClient,
     MCPServer,
@@ -21,7 +22,6 @@ from kailash_mcp import (
 from kailash_mcp.auth.providers import APIKeyAuth, AuthManager
 from kailash_mcp.discovery.discovery import ServerInfo
 from kailash_mcp.errors import AuthenticationError, MCPError
-
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 

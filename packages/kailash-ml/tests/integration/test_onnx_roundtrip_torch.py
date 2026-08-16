@@ -35,7 +35,6 @@ def test_torch_onnx_roundtrip_prediction_parity(tmp_path: Path) -> None:
     import onnxruntime as ort
     import torch
     import torch.nn as nn
-
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)
@@ -119,7 +118,6 @@ def test_torch_onnx_roundtrip_dynamic_batch_size(tmp_path: Path) -> None:
     import onnxruntime as ort
     import torch
     import torch.nn as nn
-
     from kailash_ml.bridge.onnx_bridge import OnnxBridge
 
     torch.manual_seed(42)
