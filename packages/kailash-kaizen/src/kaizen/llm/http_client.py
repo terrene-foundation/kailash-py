@@ -22,33 +22,27 @@ the framework did not route. This class is the structural enforcement.
 every outbound connection -- even one whose hostname resolves to a
 private IP at connect time -- is rejected before the TCP SYN fires.
 
-The two gates split by what each can DECIDE, not by belt-and-braces:
+Two gates run. `url_safety.check_url()` runs at `Endpoint` construction
+and catches literal-IP SSRF plus everything else decidable from the URL
+alone; `SafeDnsResolver` re-decides at connect time.
 
-* `url_safety.check_url()` runs at `Endpoint` construction with
-  `resolve_dns=False` and owns everything decidable OFFLINE -- scheme
-  (HTTPS-only except the `localhost` label), literal-IP classification,
-  metadata hostnames, encoded-IP and `inet_aton` short forms. Those
-  answers do not expire.
-* `SafeDnsResolver` owns the RESOLUTION-dependent half, because that
-  answer does expire: a name that resolves public at parse time can
-  resolve to loopback at connect time. Deciding it at parse time was
-  never durable, so it is decided here instead -- see
-  `deployment.Endpoint._validate_base_url` for the full rationale.
-
-Both gates reach the same verdict AND the same reason bucket for any
-given address: they share `network_guard.metadata_candidates` and
+Both reach the same verdict AND the same reason bucket for any given
+address: they share `network_guard.metadata_candidates` and
 `network_guard.ip_reason` rather than each carrying its own ladder
-(`security.md` § Enforcement-Surface Parity).
+(`security.md` § Enforcement-Surface Parity). Before that sharing they
+agreed on the verdict and disagreed on the bucket for six addresses --
+including four IMDS-wrapper forms that reported the generic `ipv4_mapped`
+instead of `metadata_service`.
 
-This narrows the DNS-rebinding window to the resolver-cache interval; it
-does not eliminate it. `check_host` resolves, classifies, and discards,
-and httpx then resolves independently, so a 0-TTL record can still answer
-differently to the two lookups. Pinning the validated address into the
-connection would close that; today it is not closed, and no docstring
-here should imply otherwise.
+`SafeDnsResolver` NARROWS the DNS-rebinding window to the resolver-cache
+interval; it does not eliminate it. `check_host` resolves, classifies,
+and discards, and httpx then resolves independently, so a 0-TTL record
+can still answer differently to the two lookups. Pinning the validated
+address into the connection would close that; today it is not closed, and
+no docstring here should imply otherwise.
 
 Removing the resolver install widens the surface -- it is the only gate
-that sees a resolved address at all.
+that re-checks an address at the moment of use.
 
 # Observability
 
@@ -99,12 +93,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 #
 # The URL safety guard in `kaizen.llm.url_safety.check_url` runs at
-# Endpoint construction and catches literal-IP SSRF. It deliberately does
-# NOT resolve there: a hostname that resolves to 1.2.3.4 at parse time can
-# resolve to 127.0.0.1 at connect time (classic DNS rebinding), so a
-# parse-time answer is stale by construction. SafeDnsResolver is where the
-# resolution-dependent decision is made -- at the moment httpx is about to
-# open a TCP connection, which is as close to the SYN as this layer gets.
+# Endpoint construction. Whatever it concluded there is stale by the time
+# the connection opens: a hostname that resolved to 1.2.3.4 at parse time
+# can resolve to 127.0.0.1 at connect time (classic DNS rebinding).
+# SafeDnsResolver re-decides at the moment httpx is about to open a TCP
+# connection, which is as close to the SYN as this layer gets.
 
 
 # Address classification is the SHARED implementation (#2091 follow-up).

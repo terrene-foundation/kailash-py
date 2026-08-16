@@ -177,14 +177,14 @@ def check_url(url: str, *, resolve_dns: bool = True) -> None:
 
     `resolve_dns=False` runs only the checks that are DECIDABLE OFFLINE:
     scheme, metadata hostnames, literal-IP classification, encoded-IP and
-    `inet_aton` short-form bypasses. It is NOT a test-only knob — it is the
-    posture `deployment.Endpoint._validate_base_url` uses, because
-    constructing an Endpoint is config parsing, not egress, and a name that
-    resolves public at parse time can resolve to loopback at connect time.
-    The resolve-time gate is `http_client.SafeDnsResolver.check_host`,
-    installed structurally on the only httpx transport in `kaizen/llm/**`
-    and re-run immediately before every TCP SYN. See that validator's
-    docstring for the full rationale.
+    `inet_aton` short-form bypasses. Today it is a test-only knob — every
+    production caller takes the default. Whether the DEFAULT is right for
+    `Endpoint` construction (a name that resolves public at parse time can
+    resolve to loopback at connect time, so the parse-time answer is stale
+    by construction, while `http_client.SafeDnsResolver.check_host` re-runs
+    the same decision immediately before the connection opens) is an open
+    product question tracked on `main`, NOT here — this branch leaves the
+    posture exactly as it found it.
 
     The address checks are `kailash.utils.network_guard.check_url`. The
     HTTPS-only policy below is kaizen's own and runs first — see the module
