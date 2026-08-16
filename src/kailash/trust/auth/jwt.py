@@ -45,7 +45,68 @@ _ASYMMETRIC_ALGORITHMS = {"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
 __all__ = [
     "JWTConfig",
     "JWTValidator",
+    "subject_from_claims",
 ]
+
+
+def subject_from_claims(claims: Dict[str, Any]) -> Optional[str]:
+    """The subject identifier a set of verified JWT claims names, or ``None``.
+
+    THE one place the claim precedence for "who is this token about" is
+    written. ``sub`` is the RFC 7519 §4.1.2 registered claim and wins; the two
+    fallbacks are the spellings this SDK's own issuers and common external
+    providers emit.
+
+    Extracted from :meth:`JWTValidator.create_user_from_payload`, which now
+    calls it, because a SECOND caller appeared:
+    :class:`~kailash.middleware.communication.api_gateway.APIGateway` verifies
+    a bearer token directly on the deployments where no gate middleware is
+    installed, and needs the same answer. Two copies of a precedence rule is
+    how one of them silently starts disagreeing -- the gateway's own first
+    attempt read ``payload.get("user_id")`` alone, which is ``None`` for every
+    token this SDK mints, so the identity it derived was always empty
+    (``security.md`` § Credential Decode Helpers: one shared helper, never
+    per-site copies).
+
+    Args:
+        claims: A decoded, ALREADY-VERIFIED JWT payload. This function performs
+            no verification of any kind and must never be handed the output of
+            an unverified decode.
+
+    Returns:
+        The subject as a non-empty ``str``, or ``None`` when no claim carries
+        one.
+
+        An integer subject is accepted and rendered -- RFC 7519 calls for a
+        StringOrURI, but numeric ``sub`` claims are common enough in the wild
+        that refusing them here would start rejecting tokens this SDK accepted
+        before the extraction. ``bool`` is excluded explicitly despite being an
+        ``int`` subclass, because ``"True"`` is not an identity. Every other
+        type -- a nested object, a list, ``None`` -- returns ``None`` rather
+        than being coerced: ``str()`` of a dict would manufacture a principal
+        that never existed.
+    """
+    for claim in ("sub", "user_id", "uid"):
+        if claim not in claims:
+            continue
+        value = claims[claim]
+        if isinstance(value, str) and value:
+            return value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+        # PRESENT but wrong-shape -> hard None, never fall through.
+        #
+        # Falling through let a malformed registered claim be OVERRIDDEN by a
+        # lower-precedence one: `{"sub": "", "user_id": "mallory"}` resolved to
+        # `"mallory"`. `sub` is the RFC 7519 registered claim and the one an
+        # issuer controls; `user_id`/`uid` are the accommodation spellings and
+        # are NOT in the minter's reserved-claim guard, so a caller who can
+        # influence extra claims but not `sub` could be promoted by the
+        # fallback. Latent today (no in-tree caller forwards untrusted kwargs
+        # into the minter) and closed here rather than left to become
+        # reachable (`security.md` § Secure-Default: fail closed).
+        return None
+    return None
 
 
 @dataclass
@@ -366,8 +427,9 @@ class JWTValidator:
         Raises:
             InvalidTokenError: If required claims are missing
         """
-        # Extract user_id
-        user_id = payload.get("sub") or payload.get("user_id") or payload.get("uid")
+        # Extract user_id. The precedence lives in `subject_from_claims` so the
+        # gateway's direct-verification path cannot drift from this one.
+        user_id = subject_from_claims(payload)
         if not user_id:
             raise InvalidTokenError("Token missing user identifier (sub)")
 

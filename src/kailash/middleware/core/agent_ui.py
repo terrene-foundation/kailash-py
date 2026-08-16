@@ -566,16 +566,24 @@ class AgentUIMiddleware:
             # Validate the workflow using SDK validation
             workflow.validate()
 
-            # Log workflow creation
+            # Log workflow creation. `name` is `WorkflowCreateRequest.name`,
+            # a caller-supplied POST body field, and this sink sits ~110 lines
+            # BELOW the two the first #2104 sweep fixed at :452-456 -- the
+            # same-file drift that sweep's own rationale warns about.
             logger.info(
-                f"Workflow built: {config.get('name', 'unnamed')} with {len(config.get('nodes', []))} nodes"
+                "Workflow built: %s with %d nodes",
+                sanitize_log_value(config.get("name", "unnamed"), 128),
+                len(config.get("nodes", [])),
             )
 
             return workflow
 
         except Exception as e:
-            # Log error
-            logger.error(f"Workflow build failed: {str(e)}")
+            # The exception text is derived from the caller's own node graph
+            # (a build/validate failure on the config they submitted), so it
+            # carries attacker-chosen bytes on the failure path a prober
+            # drives repeatedly.
+            logger.error("Workflow build failed: %s", sanitize_log_value(e))
             raise ValueError(f"Failed to build workflow from config: {e}")
 
     # Workflow Execution

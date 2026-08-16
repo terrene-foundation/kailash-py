@@ -424,8 +424,36 @@ class JWTWebSocketAuthMiddleware:
             return
 
         if token.startswith("__apikey__") and self.config.api_key_enabled:
-            if not await self._api_key_ok(token[len("__apikey__") :]):
+            api_key_result = await self._api_key_ok(token[len("__apikey__") :])
+            if not api_key_result:
                 await self._deny(scope, receive, send, "invalid_api_key")
+                return
+            # Populate the principal, exactly as the HTTP sibling does at
+            # `_dispatch_api_key`. This branch previously accepted the
+            # handshake and passed it through with NO `scope["state"]["user"]`,
+            # so a route that reads the authenticated principal saw nothing on
+            # a credential the gate had just ACCEPTED -- and a fail-closed
+            # route then refused it (close 1008). Not a bypass, but a
+            # reachability regression for a valid credential, and the exact
+            # surface-parity gap `security.md` names: two independent paths
+            # authenticating the same key, only one recording who it was.
+            scope.setdefault("state", {})
+            try:
+                if isinstance(api_key_result, dict):
+                    scope["state"]["user"] = self._validator.create_user_from_payload(
+                        api_key_result
+                    )
+                else:
+                    scope["state"]["user"] = AuthenticatedUser(
+                        user_id="apikey", roles=["api"]
+                    )
+                scope["state"]["token_payload"] = {"type": "api_key"}
+            except Exception:
+                logger.exception(
+                    "jwt_ws_auth_middleware.api_key_user_construction_failed",
+                    extra={"path": scope.get("path", "")},
+                )
+                await self._deny(scope, receive, send, "auth_error")
                 return
             await self.app(scope, receive, send)
             return
@@ -472,21 +500,33 @@ class JWTWebSocketAuthMiddleware:
 
         await self.app(scope, receive, send)
 
-    async def _api_key_ok(self, api_key: str) -> bool:
+    async def _api_key_ok(self, api_key: str) -> Any:
+        """Authenticate an API key, RETURNING the validator's own result.
+
+        Returns the validator's value rather than a bare bool so the caller
+        can build the same principal the HTTP path builds: a dict result
+        carries claims (name, roles, tenant) that `create_user_from_payload`
+        normalizes, and collapsing it to `True` discarded exactly the
+        information needed to say WHO connected. Falsy (reject) and the
+        error paths return a falsy value, so `if not result` still reads as
+        the rejection test.
+        """
         validator = self.config.api_key_validator
         if validator is None:
             logger.error(
                 "jwt_ws_auth_middleware.api_key_enabled_without_validator",
             )
-            return False
+            return None
         try:
             result = validator(api_key)
             if inspect.isawaitable(result):
                 result = await result
         except Exception:
+            # Logged with a stack trace and failing CLOSED (the caller denies
+            # on a falsy return) -- not a swallow.
             logger.exception("jwt_ws_auth_middleware.api_key_validator_failed")
-            return False
-        return bool(result)
+            return None
+        return result
 
     async def _deny(
         self, scope: Dict[str, Any], receive: Any, send: Any, error: str

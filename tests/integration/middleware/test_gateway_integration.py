@@ -135,7 +135,13 @@ result = {
         """Test complete end-to-end workflow execution through middleware stack."""
         # Create middleware stack
         agent_ui = AgentUIMiddleware(max_sessions=10, session_timeout_minutes=5)
-        gateway = create_gateway(require_auth=False, title="E2E Test Gateway")
+        # `enable_auth=False` as well as `require_auth=False`: the two are
+        # different knobs. `require_auth` is the request GATE; `enable_auth`
+        # holds a token ISSUER, defaults True, and raises without
+        # KAILASH_API_GATEWAY_SECRET (#636). This test wants neither.
+        gateway = create_gateway(
+            enable_auth=False, require_auth=False, title="E2E Test Gateway"
+        )
         gateway.agent_ui = agent_ui
 
         # Create session
@@ -164,7 +170,7 @@ result = {
         assert workflow_id is not None
 
         # Execute workflow through middleware
-        execution_id = await agent_ui.execute_workflow(
+        execution_id = await agent_ui.execute(
             session_id,
             workflow_id,
             inputs={"processor": {"input_data": [1, 2, 3, 4, 5]}},
@@ -235,11 +241,11 @@ result = {
         # Execute workflows in sequence
         test_data = [{"value": 10}, {"value": 20}, {"value": 30}]
 
-        exec1_id = await agent_ui.execute_workflow(
+        exec1_id = await agent_ui.execute(
             session_id, workflow1_id, inputs={"validate": {"data": test_data}}
         )
 
-        exec2_id = await agent_ui.execute_workflow(
+        exec2_id = await agent_ui.execute(
             session_id, workflow2_id, inputs={"analyze": {"data": test_data}}
         )
 
@@ -301,7 +307,7 @@ result = {
         )
 
         # Execute workflow and monitor events
-        execution_id = await agent_ui.execute_workflow(
+        execution_id = await agent_ui.execute(
             session_id, workflow_id, inputs={"emitter": {}}
         )
 
@@ -351,13 +357,13 @@ result = {
         )
 
         # Execute workflows with different data
-        exec1_id = await agent_ui.execute_workflow(
+        exec1_id = await agent_ui.execute(
             session1_id,
             workflow1_id,
             inputs={"identifier": {"session_id": "session_1_data"}},
         )
 
-        exec2_id = await agent_ui.execute_workflow(
+        exec2_id = await agent_ui.execute(
             session2_id,
             workflow2_id,
             inputs={"identifier": {"session_id": "session_2_data"}},
@@ -394,6 +400,7 @@ result = {
         # Create complete middleware stack
         agent_ui = AgentUIMiddleware(max_sessions=100, session_timeout_minutes=30)
         gateway = create_gateway(
+            enable_auth=False,
             require_auth=False,
             title="Health Monitor Test",
             description="Testing health monitoring",
@@ -451,7 +458,7 @@ result = {
             workflow_id = await agent_ui.create_dynamic_workflow(
                 session_id, workflow_config
             )
-            execution_id = await agent_ui.execute_workflow(
+            execution_id = await agent_ui.execute(
                 session_id,
                 workflow_id,
                 inputs={"processor": {"input_data": f"data_for_user_{user_id}"}},
@@ -537,12 +544,12 @@ result = {
             )
 
             # Execute error workflow
-            error_execution_id = await agent_ui.execute_workflow(
+            error_execution_id = await agent_ui.execute(
                 session_id, error_workflow_id, inputs={"error_node": {}}
             )
 
             # Execute success workflow (should still work despite error in other workflow)
-            success_execution_id = await agent_ui.execute_workflow(
+            success_execution_id = await agent_ui.execute(
                 session_id, success_workflow_id, inputs={"success_node": {}}
             )
 
@@ -602,7 +609,7 @@ result = {
             workflow_id = await agent_ui.create_dynamic_workflow(
                 session_id, workflow_config
             )
-            execution_id = await agent_ui.execute_workflow(
+            execution_id = await agent_ui.execute(
                 session_id, workflow_id, inputs={"calculator": {"input_id": op_id}}
             )
 

@@ -22,6 +22,7 @@ except ImportError:
     jwt = None
     rsa = None
 
+from ...utils.secure_logging import sanitize_log_value
 from .exceptions import (
     InvalidTokenError,
     RefreshTokenError,
@@ -423,7 +424,9 @@ class JWTAuthManager:
                 algorithm=self.config.algorithm,
             )
 
-        logger.debug(f"Created access token for user {user_id}")
+        logger.debug(
+            "Created access token for user %s", sanitize_log_value(user_id, 128)
+        )
         return token
 
     def create_refresh_token(
@@ -486,7 +489,9 @@ class JWTAuthManager:
             "last_used": None,
         }
 
-        logger.debug(f"Created refresh token for user {user_id}")
+        logger.debug(
+            "Created refresh token for user %s", sanitize_log_value(user_id, 128)
+        )
         return token
 
     def create_token_pair(
@@ -537,7 +542,17 @@ class JWTAuthManager:
 
                 # Verify key ID matches current key (optional check)
                 if key_id and key_id != self._key_id:
-                    logger.warning(f"Token signed with unknown key ID: {key_id}")
+                    # `key_id` comes from `get_unverified_header` -- it is read
+                    # BEFORE any signature check, because reading it is how the
+                    # verification key gets selected, so it is wholly
+                    # unauthenticated attacker-chosen input. Interpolated, an
+                    # embedded newline lets an unauthenticated caller forge
+                    # additional well-formed WARNING records on the very path
+                    # a key-ID prober drives repeatedly (issue #2104).
+                    logger.warning(
+                        "Token signed with unknown key ID: %s",
+                        sanitize_log_value(key_id, 128),
+                    )
                     # In production, you might want to support multiple keys
                     # for graceful key rotation
 
@@ -580,10 +595,14 @@ class JWTAuthManager:
             logger.debug("Token has expired")
             raise
         except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid token: {e}")
+            # PyJWT builds several of these messages FROM the presented token --
+            # `DecodeError(f"Invalid header string: {e}")` is the clearest case
+            # -- so the exception text is attacker-influenced on exactly the
+            # path an unauthenticated caller drives (issue #2104).
+            logger.warning("Invalid token: %s", sanitize_log_value(e))
             raise
         except Exception as e:
-            logger.error(f"Token verification error: {e}")
+            logger.error("Token verification error: %s", sanitize_log_value(e))
             raise jwt.InvalidTokenError(f"Token verification failed: {e}")
 
     def refresh_access_token(self, refresh_token: str) -> TokenPair:
@@ -633,7 +652,7 @@ class JWTAuthManager:
             )
 
         except Exception as e:
-            logger.error(f"Token refresh failed: {e}")
+            logger.error("Token refresh failed: %s", sanitize_log_value(e))
             raise
 
     def revoke_token(self, token: str):
@@ -650,7 +669,14 @@ class JWTAuthManager:
             exp = payload.get("exp")
             expires_at = datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None
             self._revocation_store.revoke(jti=jti, token=token, expires_at=expires_at)
-            logger.info(f"Revoked token {jti}" if jti else "Revoked token")
+            # `jti` is decoded from a token the CALLER presented. It verified,
+            # so it is not unauthenticated -- but a holder of any valid token
+            # still chooses this value if it minted the token elsewhere, and a
+            # verified caller is not a trusted log author (issue #2104).
+            if jti:
+                logger.info("Revoked token %s", sanitize_log_value(jti, 128))
+            else:
+                logger.info("Revoked token")
         except Exception:
             # Even if verification fails, revoke by raw token string so a
             # malformed/expired token presented for revocation is still recorded.
@@ -682,7 +708,7 @@ class JWTAuthManager:
         """Revoke specific refresh token."""
         if jti in self._refresh_tokens:
             del self._refresh_tokens[jti]
-            logger.info(f"Revoked refresh token {jti}")
+            logger.info("Revoked refresh token %s", sanitize_log_value(jti, 128))
 
     def revoke_all_user_tokens(self, user_id: str):
         """Revoke all tokens for a specific user."""
@@ -695,7 +721,7 @@ class JWTAuthManager:
         for jti in to_remove:
             del self._refresh_tokens[jti]
 
-        logger.info(f"Revoked all tokens for user {user_id}")
+        logger.info("Revoked all tokens for user %s", sanitize_log_value(user_id, 128))
 
     def cleanup_expired_tokens(self):
         """Remove expired tokens from tracking."""

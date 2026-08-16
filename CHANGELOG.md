@@ -13,6 +13,48 @@ such as `>=2.0`.
 
 ## [Unreleased]
 
+### Changed (BREAKING) — the middleware gateway derives identity from the credential, never from the request (#2102)
+
+**Read the migration note at the end of this entry before upgrading.** If you call `POST /api/sessions`, `GET /events` or `WS /ws` on `kailash.middleware.communication.api_gateway.APIGateway` with `enable_auth` at its default, the identity those routes act under changes.
+
+- **A valid credential lost to a POST body field (HIGH).** On a default `APIGateway()`, `POST /api/sessions` created the session under the body's `user_id` even when the caller presented a verified bearer token for somebody else. **Measured on the pre-fix source**, with a token this gateway itself minted for `alice`:
+
+  ```
+  POST /api/sessions {"user_id": "attacker-chosen"}   Authorization: Bearer <alice>
+  -> 200 {"session_id": "...", "user_id": "attacker-chosen", "active": true}
+  ```
+
+  This is the identity-derivation-parity class (`security.md` § Enforcement-Surface Parity), the same defect #2047 fixed in `MultiFactorAuthNode` and the caller-controlled `user_id` #2040 traced into the log sink.
+
+- **Two defects stacked, and both had to be fixed for either to matter.** The session dependency ran `await self.auth_manager.verify_token(token)` — but `JWTAuthManager.verify_token` is **sync** while `MiddlewareAuthManager.verify_token` is **async**, so with the manager this class constructs *by default* every verification raised `TypeError: object dict can't be used in 'await' expression`, was caught, and resolved to "no principal". And the claim it read was `payload.get("user_id")`, while every token this SDK mints carries the subject as `sub` — so even with the await corrected the derived identity would have been empty, and the route's own "credential carries no usable subject" guard would have 401'd every legitimate caller. The call is now awaited **only if awaitable**, and the subject comes from the shared `kailash.trust.auth.jwt.subject_from_claims`.
+
+- **One derivation, one policy, three routes.** `APIGateway._authenticated_user_id` is the single place this gateway answers "who is calling", and `_resolve_identity` the single place it decides what to do when the answer is nobody. Both read the principal the installed gate already verified (`scope["state"]["user"]`, set by `JWTAuthMiddleware` for HTTP and `JWTWebSocketAuthMiddleware` for the handshake) before falling back to verifying a presented bearer directly — which is the path that matters on a deployment where no gate is installed here.
+
+- **The sibling sweep found two more sites, and they were not labels (`security.md` § Enforcement-Surface Parity).** `WS /ws` and `GET /events` took `user_id` from the **query string** and handed it to `EventFilter`, so it decides *whose events the stream receives*: an authenticated caller passing `?user_id=<someone else>` subscribed to that user's event stream. Both now resolve identity the same way as the session route. A websocket cannot carry a 401, so an unresolvable identity closes the handshake with **1008 (policy violation)** without `accept()`, matching `JWTWebSocketAuthMiddleware._deny`.
+
+- **Recorded per route, including the ones left alone.** Every other route on this gateway was checked. `GET /api/sessions/{id}`, `DELETE /api/sessions/{id}`, `GET /api/sessions`, the `/api/workflows` and `/api/executions` families take **no identity field** — they take a server-minted `session_id`, and whether a caller may act on *someone else's* session is a horizontal-authorization question, a different class with a different fix, deliberately **not** smuggled in here. The other server surfaces (`servers/workflow_server.py`, `servers/enterprise_workflow_server.py`, `servers/durable_workflow_server.py`, `api/gateway.py`) declare no caller-supplied identity parameter on any route, so this class is confined to this module.
+
+- **`subject_from_claims` is shared, not copied** (`security.md` § Credential Decode Helpers). `JWTValidator.create_user_from_payload` now calls it rather than carrying its own `sub` / `user_id` / `uid` precedence, so the gate's normalizer and the gateway's direct-verification path cannot drift. A numeric `sub` is rendered rather than rejected (common in the wild, and refusing it would start rejecting tokens this SDK accepted before the extraction); `bool` is excluded despite being an `int` subclass, and structural claims yield no principal rather than being coerced into one.
+
+**Migration.** With `enable_auth` at its default, the identity is now **the credential's**, and a request that carries none is refused:
+
+| Configuration | No credential | Credential presented |
+| --- | --- | --- |
+| `APIGateway()` (default) | **401** — unchanged since #2072's gate | session owned by the **token's subject** (was: the body's `user_id`) |
+| `APIGateway(external_auth_reason=...)` | **401 (new)** — the route refuses; nothing else does | session owned by the **token's subject** |
+| `APIGateway(require_auth=False)` | body/query value, unchanged | session owned by the **token's subject** |
+| `APIGateway(enable_auth=False)` | body/query value, unchanged | body/query value, unchanged |
+
+If you were relying on setting `user_id` in the body while authenticated — an admin creating a session on another user's behalf, say — that is now a 401-free but ignored field; act on it through a credential minted for that subject. To keep the old open behaviour deliberately, construct with `require_auth=False` (or `enable_auth=False`), which is the explicit opt-out `resolve_server_auth` already announces with a WARN at construction. Tests that create sessions without credentials keep working unchanged if they already pass `enable_auth=False`, which #2072 required of them.
+
+### Security — attacker-supplied JWT header `key_id` reached a log line (#2104)
+
+- **`key_id` is read before any signature is verified, by design.** `JWTAuthManager.verify_token` reads the presented token's header with `jwt.get_unverified_header` — that is how the verification key gets selected — and then logged the `kid` it found by interpolation: `logger.warning(f"Token signed with unknown key ID: {key_id}")`. The value is therefore wholly unauthenticated, attacker-chosen input reaching a `WARNING` record, on the **failure** path an attacker probing key IDs drives repeatedly, at a level that survives the production log filters which drop its `DEBUG` siblings. An embedded newline forged additional well-formed records; NUL and ANSI escapes corrupted operator consoles and downstream SIEM ingestion.
+- **Routed through the existing public sanitizer, not a second copy** (`security.md` § Credential Decode Helpers). `kailash.utils.secure_logging.sanitize_log_value` — added in #2103 for exactly this class — flattens every non-printable to a space and bounds the value, and the call sites moved to lazy `%s` arguments so the sanitized value is what the formatter receives.
+- **The five siblings in the same file are fixed in the same change**, because a per-site fix here is precisely the drift #2088 documents: `user_id` in `create_access_token` / `create_refresh_token`, `jti` in `revoke_token` / `revoke_refresh_token`, and `user_id` in `revoke_all_user_tokens`; plus the exception-text sinks in `verify_token` and `refresh_access_token`. **Measured rather than assumed for those last three:** PyJWT's own messages do *not* echo the presented bytes (`DecodeError` reports `Invalid header string: Invalid control character at: line 1 column 25`, naming a position, not content), so the taint there arrives from any *other* exception reaching the sink — a revocation-store backend reporting a remote failure being the documented case.
+- **Three sites in the file are deliberately left interpolated, recorded so a later sweep does not re-flag them:** `Failed to load RSA keys` (operator-supplied key material, where flattening a multi-line PEM error would cost the operator the diagnostic), `Generated new JWT key pair with ID` (a server-minted uuid4), and the expired-token cleanup count (an int).
+- **The regression tests measure the emitted stream, not the `LogRecord`.** A forged record is forged at *format* time, so counting records cannot tell a sanitized call from an unsanitized one; the tests attach a real `StreamHandler` with a real `Formatter` and count the lines a log collector would actually ingest.
+
 ### Security (BREAKING) — server-wide authentication now fails closed (#2072)
 
 **Read the migration note below before upgrading. Every `create_gateway()` / `WorkflowServer()` deployment that has not configured a credential source will stop booting.** That is the intended behaviour, and the reason is in the first bullet.
