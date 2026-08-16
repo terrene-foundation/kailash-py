@@ -27,6 +27,44 @@ widen the SSRF posture:
 Tier 1, offline: `socket.getaddrinfo` is monkeypatched to RAISE if the
 construction path calls it, so this test fails loudly if a future change
 reintroduces resolution at parse time.
+
+Differential evidence, 46 probes, pre- vs post-change
+-----------------------------------------------------
+
+Construction alone is not the security surface — a URL is egressed only if
+BOTH gates admit it. Measuring construction alone shows one reject->ALLOW
+and would read as a widening:
+
+    AT CONSTRUCTION   TOTAL 46   DIFFERENCES 8   reject->ALLOW: 1
+       'https://myfoundry.services.ai.azure.com'
+           reject:resolution_failed -> ALLOW
+
+Measuring the composite (`Endpoint(...)` AND
+`SafeDnsResolver.check_host(host)`, i.e. "does this reach a TCP SYN") shows
+what actually changed — the gate moved, the verdict did not:
+
+    MODE real     REACHES_WIRE before=5 after=5   WIDENING AT THE WIRE: 0
+       'https://myfoundry.services.ai.azure.com'
+           reject@parse:resolution_failed -> reject@connect:resolution_failed
+
+    MODE rebind   REACHES_WIRE before=2 after=2   WIDENING AT THE WIRE: 0
+       (every hostname forced to resolve to 169.254.169.254)
+       'https://api.openai.com/v1'
+           reject@parse:metadata_service -> reject@connect:metadata_service
+       'https://example.com/v1'                  (same move)
+       'https://myresource.openai.azure.com'     (same move)
+       'https://myfoundry.services.ai.azure.com' (same move)
+
+The `rebind` mode is the discriminating half: it is the DNS-rebinding
+scenario live DNS cannot produce on demand, and it is where a genuine
+widening would surface as `REACHES_WIRE`. It does not. Same reason code,
+same rejection, one gate later.
+
+The other seven differences are the reason-code reclassifications this
+branch already recorded in
+`test_url_safety_shared_guard_consolidation.py` (three scheme-ordering
+moves from the consolidation, four IMDS-wrapper moves from #2136) —
+reproduced unchanged here, all reject->reject.
 """
 
 from __future__ import annotations
