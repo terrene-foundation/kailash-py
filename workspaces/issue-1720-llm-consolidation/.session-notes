@@ -2,8 +2,8 @@
 
 ## Where we are
 
-main `ee7d96e14` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
-merged (#2169). **16 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
+main `602570a00` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
+merged (#2169). **21 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
 isort/D3). Three PRs open.
 
 ## Read first
@@ -19,7 +19,7 @@ isort/D3). Three PRs open.
 | --- | --- | --- |
 | #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running; CodeQL: 1 real alert fixed, 5 deferred with runtime proof (#2178) |
 | #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
-| #2150 | kaizen SSRF consolidation | **77 behind**; branch is checked out in the `l7-kaizen` worktree (clean). The "own CodeQL HIGH" claim below was WRONG — see the correction |
+| ~~#2150~~ | ✅ **MERGED** — kaizen SSRF consolidation | See "What #2150 landed" below |
 | #2123 | loom sync | 116 behind, untouched this session |
 
 ## What #2169 fixed (merged)
@@ -77,6 +77,27 @@ believing it redacts something.
 
 Known, accepted limitation: a credential inside an innocently-named free-text value
 (`{"note": "user pw is …"}`) is not reachable by key-based or URL-based redaction.
+
+## What #2150 landed (merged)
+
+The kaizen SSRF consolidation, rebased from 77 behind and verified before merge:
+
+- **The connect-time gate now shares the parse gate's classifier**, so `url_safety.py` holds no
+  private copy. Two guards that agreed by coincidence now agree by construction.
+- **`fingerprint_secret` left BYTE-IDENTICAL on purpose.** The lane needed a fingerprint helper
+  and added a NEW `fingerprint_value` rather than editing the existing one — because changing
+  that body would re-number CodeQL alert **11474**, which is exactly what #2181's ceremony
+  dispositions. Verified independently: 66 lines, sha `e60c2f27c53eafab` on both sides.
+  **Cross-lane dependency worth remembering: a refactor that moves a flagged line invalidates
+  another lane's in-flight ceremony.**
+- **Discrimination verified, not assumed:** its 92 new tests were run against MAIN's source with
+  the rootdir pinned to main's kaizen package — **10 failed there, all 92 pass on the branch.**
+
+**Alert 10867 is NOT dispositioned and remains open.** It is `py/clear-text-logging-sensitive-data`
+at `url_safety.py:71` — **pre-existing on `main` since 2026-04-24, not introduced by #2150**, so
+it did not gate the merge. It still needs either a Rule-1b ceremony or a fix, written against the
+real defect (the `fingerprint_secret` docstring self-contradiction, #2170), not against the alert
+text. On its face it is a false positive: line 71 logs a truncated BLAKE2b digest, not the URL.
 
 ## Traps (measured this session — do not rediscover)
 
@@ -144,6 +165,15 @@ Carried forward, still true:
   such alert." Cost a false "no CodeQL alert on that file" that was one message from being
   reported as fact. **Always `gh api --paginate`, and positive-control the query against a ref
   you know has hits.**
+- **Comparing a FIXED LINE RANGE across two refs is invalid when the file's length changed.**
+  I hashed `sed -n '667,733p'` on both sides to check whether a function was byte-identical; the
+  branch had added 67 lines, so the ranges covered different text and the hashes differed. Read
+  as "the function changed" — it had not. **Extract the function BY NAME (`awk` from its `def`
+  to its close), never by line number.**
+- **A hash of empty input is a hash.** My by-name extraction then failed on shell quoting and
+  returned nothing on BOTH sides; two empty strings hash identically to
+  `e3b0c44298fc1c14`, which printed as "IDENTICAL — verified". **Guard every extract-then-hash
+  with a non-empty/line-count assertion before comparing.**
 - **`gh run view --log-failed` can return 0 bytes** on a genuinely failed job. That is zero
   evidence, not "no failures". Fall back to the run-level zip
   (`gh api .../runs/<id>/logs > x.zip; unzip -p x.zip "<job>.txt"`).
