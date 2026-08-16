@@ -93,11 +93,23 @@ The kaizen SSRF consolidation, rebased from 77 behind and verified before merge:
 - **Discrimination verified, not assumed:** its 92 new tests were run against MAIN's source with
   the rootdir pinned to main's kaizen package — **10 failed there, all 92 pass on the branch.**
 
-**Alert 10867 is NOT dispositioned and remains open.** It is `py/clear-text-logging-sensitive-data`
-at `url_safety.py:71` — **pre-existing on `main` since 2026-04-24, not introduced by #2150**, so
-it did not gate the merge. It still needs either a Rule-1b ceremony or a fix, written against the
-real defect (the `fingerprint_secret` docstring self-contradiction, #2170), not against the alert
-text. On its face it is a false positive: line 71 logs a truncated BLAKE2b digest, not the URL.
+**Alert 10867 went `fixed` at 14:51Z — WITHOUT the property changing.** This is the sharpest
+instance of the session's own pattern, so read it carefully before citing it as closed.
+
+The consolidation merged two copies of the rejection log into one shared helper, which moved the
+flagged statement from `url_safety.py:71` to `:139`. **CodeQL matches on location**, so the alert
+stopped matching and transitioned to `fixed`. The logged expression is unchanged in substance and
+the value is still an **unkeyed, truncated BLAKE2b digest** — `fingerprint_value` (added by #2150
+so the two taint graphs stay separate, protecting #2181) is byte-identical to `fingerprint_secret`,
+verified empirically: both return `493fa3b2` for the same URL.
+
+There is now **no open CodeQL alert on `url_safety.py` at all** (positive control: the paginated
+query returns 2300 repo-wide, down exactly one from 2301).
+
+**The alert was the thing keeping anyone looking at that line, and it closed with no ceremony, no
+dismissal, and no human decision.** #2170 is now the SOLE tracker; the open question is recorded
+there. **A scanner alert going `fixed` is evidence the pattern no longer matches at a LOCATION —
+not evidence the risk was addressed.**
 
 ## Traps (measured this session — do not rediscover)
 
