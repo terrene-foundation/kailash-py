@@ -1,29 +1,41 @@
 name: Test kailash-ml
 
-# IT-1 note: CUDA jobs run on [self-hosted, cuda, gpu] runners with
-# continue-on-error: true until the runner is provisioned and verified
-# green via gpu-smoke.yml.  Once green, flip to blocking by removing
-# the `continue-on-error: true  # IT-1: non-blocking until runner live`
-# line from each CUDA job.  Grep pattern for the flip:
-#   grep -n 'continue-on-error: true.*IT-1' .github/workflows/test-kailash-ml.yml
+# IT-1 / #2155 — CUDA jobs RETIRED (decision D2, 2026-08-16).
 #
-# MEASURED (2026-08-15, issue #2155): "non-blocking until runner live"
-# currently describes a runner that has never been live. Two independent
-# instruments agree:
+# `test-cuda` and `test-cuda-dl` used to live at the bottom of this file,
+# routed to `runs-on: [self-hosted, cuda, gpu]` with `continue-on-error: true`
+# pending a runner. Re-derived independently before removal:
 #   $ gh api repos/terrene-foundation/kailash-py/actions/runners --jq '.total_count'
 #   0
 #   $ gh api orgs/terrene-foundation/actions/runners --jq '.total_count'
 #   0
-#   $ gh run list --workflow gpu-smoke.yml --limit 5 --json status,conclusion,createdAt
-#   [cancelled 2026-06-17, cancelled 2026-06-13 x2, cancelled 2026-06-12,
-#    cancelled 2026-06-07]  <- every run queues until cancelled, none dispatch
-# So `test-cuda` / `test-cuda-dl` below cannot execute at all right now (they
-# don't fail into continue-on-error, GitHub Actions never assigns them a
-# runner in the first place). Their `-m cuda` / `-m dl` selector fixes
-# (issue #2076) are correct but currently unexercised. #2155 tracks the
-# decision: provision the runner, or retire these two jobs the way #2135
-# retired kailash-align's test-gpu (which had the same "selector matches
-# nothing" defect AND, unlike these two, no runner story to begin with).
+#   $ gh run list --workflow=gpu-smoke.yml --limit 5
+#   cancelled x5, back to 2026-06-07 -- every run queues until cancelled,
+#   none ever get assigned a runner
+# No self-hosted runner is registered at repo or org level, and
+# gpu-smoke.yml (the canary these jobs depended on; also retired, see
+# docs/ci/self-hosted-runner.md) has never completed a single run.
+# continue-on-error never got exercised because GitHub Actions never
+# assigned either job a runner in the first place -- same defect class as
+# #2038, and the same disposition #2135 gave kailash-align's test-gpu.
+#
+# What was removed, and how to restore it once a runner is live:
+#   - test-cuda      ran `-m 'cuda'` over tests/unit/ + tests/integration/
+#   - test-cuda-dl   ran `-m 'dl'`   over tests/ (torch training on real GPU
+#                    hardware -- a different signal than test-dl below,
+#                    which still runs the same `-m 'dl'` selection but on a
+#                    CPU-only GitHub-hosted runner and is NOT retired)
+#   Both selector fixes (issue #2076) are correct and unchanged. The tests
+#   they selected remain marked today -- `@pytest.mark.cuda` on
+#   test_xgboost_cuda_fits_and_reports_cuda (also `@requires_cuda`, so it
+#   SKIPS cleanly under test-base's CPU-only `-m 'not (slow or gpu or
+#   bench)'` filter rather than running) and `@pytest.mark.dl` on the 11
+#   torch/lightning/transformers modules test-dl already exercises on CPU.
+#   Restore both job bodies verbatim from git history (do not re-derive the
+#   selectors -- restore them):
+#     git log --oneline --all -- .github/workflows/test-kailash-ml.yml | grep -i 2155
+#     git show <that-commit>^:.github/workflows/test-kailash-ml.yml
+#   once a runner is provisioned and a restored gpu-smoke.yml passes green.
 
 on:
   push:
@@ -362,228 +374,8 @@ jobs:
             --maxfail=5 -q --timeout=120
 
   # ---------------------------------------------------------------------------
-  # CUDA jobs — runs on [self-hosted, cuda, gpu] runner (IT-1)
-  #
-  # These jobs are currently NON-BLOCKING (continue-on-error: true) because
-  # the self-hosted GPU runner has not been provisioned yet — and, MEASURED
-  # 2026-08-15 (issue #2155), currently cannot even be DISPATCHED: 0
-  # self-hosted runners registered at the repo or org level, and every one
-  # of gpu-smoke.yml's last 5 runs (back to 2026-06-07) queued until
-  # cancelled rather than running. continue-on-error never gets exercised
-  # because the job never gets a runner in the first place. See the top-of-
-  # file header comment for the full measurement and #2155 for the
-  # provision-vs-retire decision this is filed under.
-  #
-  # To flip CUDA from non-blocking to blocking once the runner is live:
-  #   1. Run gpu-smoke.yml manually and confirm it passes green.
-  #   2. Remove the line `continue-on-error: true  # IT-1: non-blocking until runner live`
-  #      from the test-cuda and test-cuda-dl jobs below.
-  #   Grep pattern:  grep -n 'continue-on-error: true.*IT-1' .github/workflows/test-kailash-ml.yml
-  #
-  # Runner registration (human steps):
-  #   See docs/ci/self-hosted-runner.md for the full provisioning guide.
-  #   Required labels: self-hosted, cuda, gpu
-  #   Required secret:  RUNNER_TOKEN  (GitHub org secret, rotated per schedule)
+  # CUDA jobs (test-cuda, test-cuda-dl) — RETIRED, #2155.
+  # See the top-of-file header comment for the full measurement, what each
+  # job's selector was, and the exact restore procedure. Do not re-add a
+  # stub/placeholder job here — restore the real bodies from git history.
   # ---------------------------------------------------------------------------
-
-  test-cuda:
-    name: CUDA smoke (km.doctor + DeviceReport)
-    needs: version-check
-    # workflow_dispatch-only; release/v* exclusion is implicit but kept
-    # explicit per ci-runners.md MUST Rule 8.
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'cuda' || inputs.variant == 'all') &&
-      !startsWith(github.head_ref, 'release/')
-    # IT-1: route to self-hosted GPU runner once provisioned.
-    # Keep this runs-on value — as soon as the runner registers with these
-    # labels, GitHub will assign jobs here automatically.
-    runs-on: [self-hosted, cuda, gpu]
-    # IT-1: non-blocking until runner live — remove this line to make blocking
-    continue-on-error: true # IT-1: non-blocking until runner live
-    timeout-minutes: 30
-
-    steps:
-      - name: Pre-run cleanup
-        shell: bash
-        run: |
-          rm -rf .venv
-          echo "Pre-run cleanup complete."
-
-      - uses: actions/checkout@v7
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Verify CUDA host
-        shell: bash
-        run: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader,nounits
-
-      - name: Install kailash-ml[dl,dev] + root kailash editable
-        run: |
-          uv venv .venv
-          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-ml/tests/unit/ + tests/integration/
-          #            -m 'cuda'  (updated by #2076; was 'cuda or gpu', which
-          #            selected zero tests — see the Test step below. The
-          #            module-import-count measurement is UNCHANGED: naming
-          #            the same two directories imports the same modules at
-          #            collection time regardless of the -m expression.)
-          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
-          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
-          #   kailash_ml    -> 139          (package under test, editable)
-          #   kailash       -> 251          editable, this tree
-          # tests/integration/ contains the feature-store files that import
-          # dataflow at module scope, so collection touches them regardless of
-          # the marker filter. Installed editable below.
-          uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
-          uv pip install -e "packages/kailash-align" --python .venv/bin/python
-
-      - name: km.doctor gpu — assert CUDA DeviceReport populated
-        run: |
-          .venv/bin/python - <<'PYEOF'
-          import io, json
-          from kailash_ml.doctor import doctor
-          buf = io.StringIO()
-          code = doctor(as_json=True, out=buf)
-          payload = json.loads(buf.getvalue())
-          print(json.dumps(payload, indent=2))
-          assert code == 0, f"km.doctor exit {code}"
-          by_name = {b["backend"]: b for b in payload["backends"]}
-          assert "cuda" in by_name, f"cuda not found: {list(by_name)}"
-          assert by_name["cuda"]["status"] == "ok", by_name["cuda"]
-          assert by_name["cuda"]["devices"] >= 1, by_name["cuda"]
-          print(f"PASS: {by_name['cuda']['devices']} CUDA GPU(s) ok")
-          PYEOF
-
-      - name: Test CUDA-gated unit + integration tests
-        timeout-minutes: 20
-        # Issue #2076 FIX: `-m 'cuda or gpu'` selected ZERO tests (2493
-        # collected, 2493 deselected, pytest exit 5) — neither marker was
-        # registered nor applied anywhere. Disposition: MARK the one test
-        # that genuinely hard-requires real CUDA hardware to exercise
-        # anything new — test_xgboost_cuda_fits_and_reports_cuda (already
-        # skipif'd on `not torch.cuda.is_available()`; every other
-        # cuda/gpu-string-matching test in the package tests CPU-only
-        # fallback/eviction LOGIC, not real hardware, so marking those would
-        # misrepresent what needs a GPU to mean anything). `cuda` is now
-        # registered in packages/kailash-ml/pyproject.toml; `gpu` dropped
-        # from the selector — no test in this package will ever carry it.
-        # Verified: `-m cuda` here collects 1/2493 (was 0/2493).
-        run: |
-          .venv/bin/python -m pytest \
-            packages/kailash-ml/tests/unit/ \
-            packages/kailash-ml/tests/integration/ \
-            -m 'cuda' \
-            --maxfail=5 -q --timeout=120
-
-      - name: Post-run cleanup
-        if: always()
-        shell: bash
-        run: |
-          rm -rf .venv
-          echo "Post-run cleanup complete."
-
-  test-cuda-dl:
-    name: CUDA deep learning (torch training on GPU)
-    needs: version-check
-    # workflow_dispatch-only; release/v* exclusion is implicit but kept
-    # explicit per ci-runners.md MUST Rule 8.
-    if: >-
-      github.event_name == 'workflow_dispatch' &&
-      (inputs.variant == 'cuda' || inputs.variant == 'all') &&
-      !startsWith(github.head_ref, 'release/')
-    # IT-1: route to self-hosted GPU runner once provisioned.
-    runs-on: [self-hosted, cuda, gpu]
-    # IT-1: non-blocking until runner live — remove this line to make blocking
-    continue-on-error: true # IT-1: non-blocking until runner live
-    timeout-minutes: 45
-
-    steps:
-      - name: Pre-run cleanup
-        shell: bash
-        run: |
-          rm -rf .venv
-          echo "Pre-run cleanup complete."
-
-      - uses: actions/checkout@v7
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Verify CUDA host
-        shell: bash
-        run: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader,nounits
-
-      - name: Install kailash-ml[dl,dev] + root kailash editable
-        run: |
-          uv venv .venv
-          # ISSUE #2023 SIBLING DECLARATION — measured, do not re-derive.
-          # Selection: packages/kailash-ml/tests/ -m 'dl'  (updated by #2076;
-          # was '(dl or deep_learning) and (cuda or gpu)', which selected
-          # zero tests — see the Test step below. The module-import-count
-          # measurement is UNCHANGED: naming the whole tests/ dir imports the
-          # same modules at collection time regardless of the -m expression.)
-          #   dataflow      -> 112 modules  EXERCISED at COLLECTION time
-          #   kailash_align -> 13  modules  EXERCISED at COLLECTION time
-          #   kailash_ml    -> 139          (package under test, editable)
-          #   kailash       -> 251          editable, this tree
-          # Installed editable below — whole-tests/ collection imports them.
-          uv pip install -e "." --python .venv/bin/python
-          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
-          uv pip install -e "packages/kailash-dataflow" --python .venv/bin/python
-          uv pip install -e "packages/kailash-align" --python .venv/bin/python
-
-      - name: Test DL on CUDA (torch + GPU-backed tests)
-        timeout-minutes: 35
-        # Issue #2076 FIX: `(dl or deep_learning) and (cuda or gpu)` selected
-        # ZERO tests — neither operand existed as a marker, AND (measured
-        # after registering `dl`/`cuda`, see test-dl / test-cuda above) no
-        # single test in the package is tagged BOTH `dl` and `cuda`: the one
-        # genuinely hardware-gated test is XGBoost (gradient-boosted, not a
-        # neural net), not a torch/lightning test. A conjunction of the two
-        # correct markers would therefore still select nothing — same stub-
-        # gate defect, one layer deeper than the missing-marker case.
-        #
-        # Disposition: CHANGE the selector rather than delete the job. This
-        # job's stated purpose is "torch training on GPU" — that WOULD be
-        # meaningfully served by running the full `dl` suite (same 79 tests
-        # as test-dl) on a runner where `torch.cuda.is_available()` is
-        # actually True (DIFFERENT information than test-dl's CPU-only run:
-        # any DL code path that auto-detects/branches on real GPU presence
-        # would only be exercised here). Verified: `-m dl` collects 79/2606
-        # (was 0/2606) — the selector itself is correct and is a prerequisite
-        # either way.
-        #
-        # BUT (measured 2026-08-15, issue #2155): this job currently yields
-        # ZERO information regardless of the selector fix, because it cannot
-        # be DISPATCHED at all — 0 self-hosted runners exist (repo + org),
-        # and gpu-smoke.yml's last 5 runs all queued until cancelled, never
-        # ran. `continue-on-error: true` never even gets exercised; the job
-        # just never gets assigned a runner. See the top-of-file header and
-        # #2155 for the full measurement and the provision-vs-retire
-        # decision this is filed under.
-        run: |
-          .venv/bin/python -m pytest \
-            packages/kailash-ml/tests/ \
-            -m 'dl' \
-            --maxfail=5 -q --timeout=300
-
-      - name: Post-run cleanup
-        if: always()
-        shell: bash
-        run: |
-          rm -rf .venv
-          echo "Post-run cleanup complete."
