@@ -6,6 +6,34 @@
 
 ---
 
+## 0. Current Status — Workflows Retired Pending A Runner (2026-08-16, #2155)
+
+**No self-hosted runner exists today** — measured 0 runners at repo and org
+level, and `gpu-smoke.yml` never completed a single run (5/5 queued until
+auto-cancelled, back to 2026-06-07). Decision D2 retired the three CUDA
+workflow artifacts this guide describes:
+
+- `.github/workflows/gpu-smoke.yml` — **deleted.** Restore verbatim from git
+  history (`git log --oneline --all -- .github/workflows/gpu-smoke.yml`)
+  before starting § 3.6 below. While restoring, fix the pre-existing selector
+  defect in its "DeviceReport populated on training call" step: it still
+  reads `-m 'cuda or gpu'`, which the file's own comment already documents as
+  matching zero tests (`gpu` was never a registered marker in
+  `packages/kailash-ml/pyproject.toml`; only `cuda` is). Change it to
+  `-m 'cuda'` — the exact fix issue #2076 already applied to `test-cuda` in
+  `test-kailash-ml.yml`.
+- `test-cuda` / `test-cuda-dl` in `.github/workflows/test-kailash-ml.yml` —
+  **removed.** Restore verbatim from git history per that file's top-of-file
+  header comment. Their selectors (`-m 'cuda'`, `-m 'dl'`) are already
+  correct and unchanged.
+
+Everything below this section describes the procedure as it worked, and will
+work again, once these files are restored and a runner is registered. Do not
+follow § 3.6 / § 4 against the current tree — the files it names do not exist
+until restored.
+
+---
+
 ## 1. Runner Strategy
 
 **Chosen path: persistent-but-controlled.**
@@ -325,3 +353,23 @@ gh workflow run gpu-smoke.yml --repo terrene-foundation/kailash-py
 **Review trigger:** Re-evaluate if runner pool exceeds 3 machines or if ephemeral GPU cloud instances become cost-competitive with persistent hosts.
 
 **IT-1 scope:** This document covers the code/docs side of IT-1. The actual act of provisioning a GPU VM and registering with GitHub is a human step requiring billing authorization and GitHub org admin credentials.
+
+---
+
+**Date:** 2026-08-16
+**Decision (D2, #2155):** Retire `gpu-smoke.yml` and the `test-cuda` /
+`test-cuda-dl` jobs in `test-kailash-ml.yml` rather than leave them live
+with `continue-on-error: true`.
+**Reason:** Measured 0 self-hosted runners at repo and org level, and
+`gpu-smoke.yml`'s last 5 runs (back to 2026-06-07) all queued until
+auto-cancelled — none were ever assigned a runner. `gpu-smoke.yml`'s
+automatic `push:` trigger on every `feat/*`/`session/*` push touching
+`packages/kailash-ml/**` was actively generating this dead-queue churn on
+every relevant commit; the two `workflow_dispatch`-only CUDA jobs were inert
+by comparison (only fire on deliberate manual dispatch) but shared the same
+"cannot be dispatched" defect. Same disposition #2135 gave kailash-align's
+`test-gpu` (a broken-selector stub gate); here the defect is "no runner to
+target" rather than "selector matches nothing," but the retire-not-ship-
+degraded logic is identical.
+**Review trigger:** Restore all three files (§ 0 above) the moment a runner
+is provisioned and registers with `self-hosted, cuda, gpu`.
