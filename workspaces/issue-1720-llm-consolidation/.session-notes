@@ -2,8 +2,8 @@
 
 ## Where we are
 
-main `602570a00` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
-merged (#2169). **21 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
+main `71e230102` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
+merged (#2169). **24 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
 isort/D3). Three PRs open.
 
 ## Read first
@@ -20,6 +20,8 @@ isort/D3). Three PRs open.
 | #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running; CodeQL: 1 real alert fixed, 5 deferred with runtime proof (#2178) |
 | #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
 | ~~#2150~~ | ✅ **MERGED** — kaizen SSRF consolidation | See "What #2150 landed" below |
+| ~~#2185~~ | ✅ **MERGED** — mock embedder no longer the production default (#2174) | See "What #2185 landed" below |
+| #2186 | kaizen: correct a delegation claim shipped in #2150 | OPEN — `fingerprint_secret` does NOT delegate to `fingerprint_value`; they are duplicate bodies held identical by nothing but a test |
 | #2123 | loom sync | 116 behind, untouched this session |
 
 ## What #2169 fixed (merged)
@@ -110,6 +112,30 @@ query returns 2300 repo-wide, down exactly one from 2301).
 dismissal, and no human decision.** #2170 is now the SOLE tracker; the open question is recorded
 there. **A scanner alert going `fixed` is evidence the pattern no longer matches at a LOCATION —
 not evidence the risk was addressed.**
+
+## What #2185 landed (merged) — the mock embedder, and a worse sibling
+
+**Disposition was fail-CLOSED, not the WARN branch** — and that was earned by a sweep, not
+assumed: every `VectorMemory(...)` construction was checked and **no production caller relied on
+the default** (all tests, examples, or docs). So `embedding_fn` is required and its absence raises
+`ConfigurationError` naming the wiring. Mirrors #1952 on `EmbeddingGeneratorNode`; the two surfaces
+now agree.
+
+**The sibling found by the sweep was worse than the original.**
+`SimpleEmbeddingProvider.embed_text` fell back to `_hash_embedding` on BOTH a non-200 response AND
+a bare `except Exception:` — no raise, no log — and the returned `EmbeddingResult` carried
+`model=self.model_name`, so **fabricated MD5 vectors were labelled with the real model's
+provenance** and were indistinguishable downstream. `hybrid_search.py:337` constructs it, so the
+path was live. Both arms now raise a typed `EmbeddingUnavailable`; `_hash_embedding` is DELETED
+rather than left reachable (the only remaining mention is a comment recording the removal).
+
+**The docs and examples were teaching the defect** — the sharpest part.
+`memory-patterns-guide.md` documented `VectorMemory(embedding_fn=None)` under the heading
+*"Default: Mock hash-based embedder (testing only)"*, and `memory-showcase/demo.py` printed
+*"Key Feature: Semantic search"* while ranking MD5 noise. **The defect WAS the documented API.**
+
+Discrimination verified independently: reverting ONLY `vector.py` to main → **10 failed**;
+restored → 24 pass, worktree clean.
 
 ## Traps (measured this session — do not rediscover)
 
