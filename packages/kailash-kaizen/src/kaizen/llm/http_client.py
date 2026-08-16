@@ -194,9 +194,16 @@ class SafeDnsResolver:
         Raises `InvalidEndpoint(reason="metadata_service")` for the AWS
         / GCP / Azure metadata IPs specifically so forensic aggregation
         can separate "metadata exfiltration attempt" from the broader
-        "private_ipv4" bucket. This mirrors `url_safety.check_url`'s
-        reason-code taxonomy so downstream dashboards can group findings
-        across the two guards without translation.
+        "private_ipv4" bucket -- including when the address is wrapped in
+        one of the IPv6 embedded-IPv4 forms, which is what an attacker
+        reaches for once the bare address is blocked.
+
+        The reason codes match `url_safety.check_url`'s because
+        `_classify_or_raise` calls the SAME `network_guard` functions in the
+        same order, not because two ladders were written to agree. Pinned by
+        `test_url_safety_shared_guard_consolidation.py`
+        (`test_parse_time_and_connect_time_agree_on_verdict_AND_bucket`),
+        which asserts both gates across 29 addresses -- verdict and bucket.
         """
         if not isinstance(host, str) or not host:
             raise InvalidEndpoint("malformed_url", raw_url=None)
