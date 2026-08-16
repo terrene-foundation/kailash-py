@@ -175,7 +175,15 @@ class AgentConfig:
     # =========================================================================
 
     enable_checkpointing: bool = False
-    """Enable automatic checkpointing (disabled by default until checkpoint module is implemented)"""
+    """Enable automatic checkpointing.
+
+    #2111 — the stated reason for this default ("until checkpoint module is
+    implemented") no longer holds: checkpointing is wired to
+    ``StateManager`` over ``FilesystemStorage``. The default stays ``False``
+    here so that constructing an ``AgentConfig`` directly has no filesystem
+    side effect; ``Agent`` opts in for its own callers, and enabling it
+    creates ``checkpoint_path``.
+    """
 
     checkpoint_path: str = ".kaizen/checkpoints"
     """Checkpoint storage directory"""
@@ -298,7 +306,24 @@ class AgentConfig:
     # Helper Methods
     # =========================================================================
 
-    # Valid provider names (lowercase)
+    # Valid provider names (lowercase).
+    #
+    # Hand-maintained ON PURPOSE, and NOT derived from
+    # ``LlmProvider._REGISTRY``. That registry is a model-PREFIX table — a
+    # provider earns a row only once it has a confirmed prefix mapping — so
+    # deriving from it was measured to drop nine dispatchable providers,
+    # including ``mock`` (which the whole test harness runs on) and ``ollama``
+    # (which detection itself used to return, so a derived allowlist would
+    # have contradicted its own detector on day one).
+    #
+    # What IS enforced is one-directional containment: this set may never be
+    # NARROWER than what the resolvers can emit, since a provider that can be
+    # resolved but not validated makes the class reject its own output. The
+    # reverse is left free, because a provider can be dispatchable without
+    # owning a prefix row. Pinned by
+    # ``tests/regression/test_issue_2069_provider_fail_closed.py``.
+    #
+    # ``deepseek`` was the live gap that invariant caught (#2069).
     VALID_PROVIDERS = frozenset(
         {
             "openai",
@@ -313,58 +338,71 @@ class AgentConfig:
             "perplexity",
             "pplx",
             "mock",
+            "deepseek",
         }
     )
 
     def __post_init__(self):
-        """Post-initialization validation and auto-configuration."""
-        # Validate llm_provider if explicitly set
-        if self.llm_provider is not None:
-            # Reject empty string
-            if self.llm_provider == "":
-                raise ValueError(
-                    "llm_provider cannot be empty string. "
-                    "Use None for auto-detection or specify a valid provider: "
-                    f"{sorted(self.VALID_PROVIDERS)}"
-                )
-            # Validate against known providers
-            if self.llm_provider.lower() not in self.VALID_PROVIDERS:
-                raise ValueError(
-                    f"Invalid llm_provider: '{self.llm_provider}'. "
-                    f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
-                )
+        """Post-initialization validation and auto-configuration.
 
-        # Auto-detect LLM provider if not specified
-        if self.llm_provider is None:
-            self.llm_provider = self._detect_provider_from_model(self.model)
+        #2069 — ORDER MATTERS HERE. The allowlist gate used to run only when
+        ``llm_provider`` arrived non-None, which put it strictly ABOVE the
+        auto-detect assignment and left the auto-detected path structurally
+        un-validatable: whatever detection returned was adopted unchecked. It
+        never bit only because every literal detection could return happened
+        to sit in ``VALID_PROVIDERS``.
 
-    def _detect_provider_from_model(self, model: str) -> str:
+        So detection now runs FIRST and the gate sits BELOW it, where both
+        paths pass through exactly one check. Moving the gate down is a
+        prerequisite for delegating detection to a shared resolver — a
+        resolver can legitimately return a provider this class does not list
+        (``deepseek`` was the live example), and adopting that unchecked would
+        be worse than the fail-open it replaced: inconsistent rather than
+        merely wrong.
         """
-        Auto-detect LLM provider from model name.
+        # Reject empty string. Only meaningful for an explicitly-supplied
+        # value; auto-detection never produces one.
+        if self.llm_provider == "":
+            raise ValueError(
+                "llm_provider cannot be empty string. "
+                "Use None for auto-detection or specify a valid provider: "
+                f"{sorted(self.VALID_PROVIDERS)}"
+            )
 
-        Args:
-            model: Model name
+        # Auto-detect LLM provider if not specified.
+        #
+        # #2069 — delegated to the shared resolver rather than kept as a local
+        # substring table. This class used to own one, ending in a terminal
+        # `else: return "openai"`, so a model it did not recognise was
+        # dispatched to OpenAI under whatever credential was configured, with
+        # the caller never told. `resolve_agent_provider` adds no mapping of
+        # its own: it composes the registry-DERIVED prefix table (which cannot
+        # drift from the provider registry) with the env fallback, and raises
+        # ConfigurationError naming the model when neither resolves.
+        auto_detected = self.llm_provider is None
+        if auto_detected:
+            from kaizen.core import _provider_env
 
-        Returns:
-            Provider name
-        """
-        model_lower = model.lower()
+            self.llm_provider = _provider_env.resolve_agent_provider(
+                self.model, component="AgentConfig"
+            )
 
-        if "gpt" in model_lower or "davinci" in model_lower:
-            return "openai"
-        elif "claude" in model_lower:
-            return "anthropic"
-        elif (
-            "llama" in model_lower
-            or "mistral" in model_lower
-            or "bakllava" in model_lower
-        ):
-            return "ollama"
-        elif "gemini" in model_lower:
-            return "google"
-        else:
-            # Default to openai for unknown models
-            return "openai"
+        # ONE gate, reached by BOTH paths.
+        if self.llm_provider.lower() not in self.VALID_PROVIDERS:
+            if auto_detected:
+                # Not user error — the resolver emitted something this class
+                # cannot validate, so say that rather than blaming the caller.
+                raise ValueError(
+                    f"Auto-detected llm_provider '{self.llm_provider}' for model "
+                    f"'{self.model}' is not in VALID_PROVIDERS: "
+                    f"{sorted(self.VALID_PROVIDERS)}. The provider resolver and "
+                    f"this allowlist have drifted apart; add the provider to "
+                    f"VALID_PROVIDERS or pass llm_provider explicitly."
+                )
+            raise ValueError(
+                f"Invalid llm_provider: '{self.llm_provider}'. "
+                f"Valid providers: {sorted(self.VALID_PROVIDERS)}"
+            )
 
     def has_custom_memory(self) -> bool:
         """Check if custom memory implementation is provided."""

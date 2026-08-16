@@ -238,10 +238,20 @@ class TestAgentLLMProviderAutoDetection:
             config = AgentConfig(model=model)
             assert config.llm_provider == "openai", f"{model} should detect as openai"
 
-    def test_auto_detect_davinci_as_openai(self):
-        """Davinci models should auto-detect as openai."""
+    def test_auto_detect_davinci_as_openai(self, monkeypatch):
+        """Davinci resolves as openai via the ENV fallback, not a prefix row.
+
+        #2069 changed the mechanism. Detection used to substring-match
+        "davinci"; it now delegates to the shared resolver, whose prefix table
+        is derived from the provider registry and has no davinci row. So the
+        model falls through to the env fallback, which answers openai when an
+        OpenAI credential is present — the correct answer, reached honestly.
+        With no credential it raises rather than guessing, which is the point
+        of the issue.
+        """
         from kaizen.agent_config import AgentConfig
 
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-2069-placeholder-not-sent")
         config = AgentConfig(model="davinci-002")
         assert config.llm_provider == "openai"
 
@@ -255,19 +265,36 @@ class TestAgentLLMProviderAutoDetection:
                 config.llm_provider == "anthropic"
             ), f"{model} should detect as anthropic"
 
-    def test_auto_detect_llama_as_ollama(self):
-        """Llama models should auto-detect as ollama."""
+    @pytest.mark.parametrize("model", ["llama-3.1", "mistral-7b"])
+    def test_local_models_no_longer_auto_detect_as_ollama(self, model, monkeypatch):
+        """BEHAVIOUR CHANGE (#2069): llama/mistral no longer imply ollama.
+
+        The old substring table mapped these to ollama. Delegation removed
+        that mapping along with the rest of the table, and the shared resolver
+        has no ollama row — its prefix table is registry-derived and ollama
+        serves arbitrary model names, so no prefix identifies it.
+
+        The practical consequence, stated plainly because it is the one
+        user-visible regression in this change: a local Ollama user who
+        relied on `Agent(model="llama-3.1")` must now pass
+        `llm_provider="ollama"` explicitly. That path is asserted below so the
+        supported alternative is pinned, not merely described.
+
+        If implicit ollama detection is wanted back, it belongs in the shared
+        resolver where every caller gets it — re-adding a private table here
+        would rebuild exactly the drift #2069 removed.
+        """
         from kaizen.agent_config import AgentConfig
 
-        config = AgentConfig(model="llama-3.1")
-        assert config.llm_provider == "ollama"
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    def test_auto_detect_mistral_as_ollama(self):
-        """Mistral models should auto-detect as ollama."""
-        from kaizen.agent_config import AgentConfig
+        with pytest.raises(Exception, match=model):
+            AgentConfig(model=model)
 
-        config = AgentConfig(model="mistral-7b")
-        assert config.llm_provider == "ollama"
+        # The supported path: say which provider serves it.
+        assert AgentConfig(model=model, llm_provider="ollama").llm_provider == "ollama"
 
     def test_auto_detect_gemini_as_google(self):
         """Gemini models should auto-detect as google."""
@@ -276,27 +303,46 @@ class TestAgentLLMProviderAutoDetection:
         config = AgentConfig(model="gemini-pro")
         assert config.llm_provider == "google"
 
-    def test_unknown_model_defaults_to_openai(self):
-        """Unknown models should default to openai."""
-        from kaizen.agent_config import AgentConfig
+    def test_unknown_model_fails_closed_not_defaults_to_openai(self, monkeypatch):
+        """INVERTED by #2069 — this test used to assert the defect.
 
-        config = AgentConfig(model="some-custom-model")
-        assert config.llm_provider == "openai"
-
-    def test_azure_deployment_not_auto_detected(self):
-        """Azure deployment names with 'gpt' should NOT auto-detect azure.
-
-        This documents the expected behavior: Azure deployments need explicit
-        llm_provider='azure' because the model name alone cannot distinguish
-        Azure from OpenAI.
+        It read "Unknown models should default to openai" and pinned exactly
+        the silent wrong-vendor dispatch the issue was filed about: an
+        unrecognised model went to OpenAI under whatever credential was
+        configured, carrying the prompt with it. A test asserting the bug is
+        why the bug survived, so it is inverted here rather than deleted —
+        the same name should not quietly stop covering the same line.
         """
         from kaizen.agent_config import AgentConfig
 
-        # Azure deployment with gpt in name - would be detected as openai
-        config = AgentConfig(model="cashflow-gpt5")
-        assert config.llm_provider == "openai"  # NOT azure
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-        # To use Azure, must be explicit
+        with pytest.raises(Exception, match="some-custom-model"):
+            AgentConfig(model="some-custom-model")
+
+    def test_azure_deployment_not_auto_detected(self, monkeypatch):
+        """Azure deployment names containing 'gpt' must not become openai.
+
+        The conclusion is unchanged — Azure needs an explicit provider,
+        because a deployment name cannot distinguish Azure from OpenAI — but
+        #2069 made the mechanism honest. The old substring table matched "gpt"
+        anywhere and silently answered openai for a name like "cashflow-gpt5".
+        The registry table matches the "gpt-" PREFIX, so this name resolves
+        through nothing and fails closed instead of being quietly misrouted to
+        the wrong vendor.
+        """
+        from kaizen.agent_config import AgentConfig
+
+        monkeypatch.delenv("KAIZEN_ALLOW_KEYLESS_MOCK", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        with pytest.raises(Exception, match="cashflow-gpt5"):
+            AgentConfig(model="cashflow-gpt5")
+
+        # To use Azure, must be explicit — unchanged.
         config2 = AgentConfig(model="cashflow-gpt5", llm_provider="azure")
         assert config2.llm_provider == "azure"
 
