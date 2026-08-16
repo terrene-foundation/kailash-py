@@ -1,107 +1,177 @@
-# Session Notes — 2026-08-16 (cont-18: wave-1 parallel + root-cause marker fix)
+# Session Notes — 2026-08-16 (cont-19: main unblocked, credential redaction, instrument discipline)
 
 ## Where we are
 
-main `454f27acc`. **7 PRs merged, 10 issues closed.** The CI verification chain is closed and
-the root cause under it is fixed — infra markers now derive from the **fixture dependency
-graph**, never from test names. Seven of our PRs remain open; four are green and ready to merge.
+main `885f7f270` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
+merged (#2169). **14 PRs merged across cont-18/19.** Four PRs open, all rebased onto merged
+main with CI running.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/sweep-cont18-report.md` — the decision report:
-   completion status w/ receipts, value-ranked queue, **five open decisions (D1–D5)**
-2. This file's **Merge now** and **Traps** sections
+1. This file's **Traps** section — three NEW instrument failures this session, each of which
+   produced a confident wrong answer that nearly shipped
+2. `workspaces/issue-1720-llm-consolidation/sweep-cont18-report.md` — decision report D1–D5
 3. `CLAUDE.md` — Absolute Directives
 
-## Merge now (all green, all verified by me — start here)
+## Open PRs (all rebased on 885f7f270)
 
-| PR | State | Note |
+| PR | What | State |
 | --- | --- | --- |
-| #2161 | 4 green | docs/notes cleanup |
-| #2139 | 23 green | refresh-token refusal verified present; adversarially reviewed |
-| #2136 | 12 green | IMDS bypass **verified closed** — all 4 wrapper forms refused, `10.1.2.3` still ACCEPTED |
-| #2154 | 17 green | kaizen #2111/#2069 |
+| #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running |
+| #2165 | isort self-contradiction (D3) | CI running; both invocation modes now agree |
+| #2140 | API-key auth that could not authenticate (#2108/#2114) | CI running; D1 dismissal verified still in place |
+| #2150 | kaizen SSRF consolidation | **69 behind**, has its OWN CodeQL HIGH (`url_safety.py:130`) — not yet rebased |
+| #2123 | loom sync | 116 behind, untouched this session |
 
-Then **#2156** (session IDOR, 13/13 routes) and **#2150** (kaizen SSRF consolidation)
-auto-retarget once their bases (#2139 / #2136) land — **verify the retarget happened**; GitHub
-only auto-retargets if the base branch is DELETED on merge.
+## What #2169 fixed (merged)
 
-**#2140 is blocked on decision D1**, not on engineering.
+`tests/unit/` had a hidden network dependency: 255 of 1615 tests in `tests/unit/llm` plus 6 in
+`tests/unit/providers` fail without DNS, and 29 fixture hostnames resolved only because the
+runner had internet. `myresource.openai.azure.com` resolves (Azure wildcard DNS);
+`myfoundry.services.ai.azure.com` does not — both are invented fixtures on the same code path,
+which is why exactly five tests failed rather than all of them.
 
-## The root-cause fix (what #2159 + #2160 actually changed)
+Verified with a poisoned resolver, plugin-load proven by a stderr sentinel:
 
-The name is no longer consulted. A test needs infrastructure IFF its resolved fixture closure
-(`item.fixturenames`, transitive) contains a fixture providing it. Measured over 14,773 items,
-name-matching agreed with the graph only **84.9%** — 2,246 false positives AND 2 false
-negatives. The false negatives ran in infra-free CI where they could only fail or flake.
+| arm | result |
+| --- | --- |
+| main, poisoned | collection ABORTED — 573 of 1935 collected, 10 failed |
+| #2169, poisoned | **1934 passed, 1 skipped, 0 failed** |
 
-`tests/unit/test_infra_marker_mapping.py` guards three decay paths (unmapped fixture / renamed
-fixture / name-inference reintroduced), **each mutation-verified to RED**. Adding an infra
-fixture without a `_INFRA_FIXTURES` entry FAILS the guard — add both in the same commit.
+The egress block then caught a THIRD class nobody scoped: two Tier-1 tests in
+`test_token_counter.py` downloading `cl100k_base.tiktoken` at test time. Real-tiktoken
+assertions moved to Tier 2; Tier 1 keeps a stubbed encoder so delegation is still covered
+offline.
 
-Suite CI runs (`tests/regression/`, infra-free filter, on merged main):
-`1288 passed/342 deselected` → **`1623 passed/5 deselected/0 failed`**, plus **812
-kaizen-agents tests** that had never run at all.
+**Still open — #2168:** `check_url` performs a live DNS lookup during `Endpoint` construction,
+and the `resolve_dns=False` escape hatch its comment advertises **is not plumbed anywhere**.
+That affordance was cited in a delegation brief without being verified to exist — a defect in
+the brief, not in the lane's work.
 
-## Traps (measured — do not rediscover)
+## What #2176 fixes (open)
 
-- **A stale installed wheel shadows repo source.** Bit me on `kailash.nodes.base` and again on
-  `kaizen_agents` — that second one WAS a test failure's root cause: tests in `kailash-kaizen`'s
-  tree resolved `kaizen_agents` to `site-packages`, not branch source. Always
-  `python3 -c "import X; print(X.__file__)"` before trusting a result; repo `src` FIRST on
-  PYTHONPATH.
-- **`--continue-on-collection-errors --maxfail=100000` or you measure a truncated suite.** A
-  naive kaizen collect stops at 10 errors and reports **3,760** items; the real number is
-  **14,773**. My first scope measurement was wrong because of this.
-- **`--color=no` when grepping pytest output.** ANSI codes silently defeated `grep "^FAILED"`
-  twice and returned empty — which reads exactly like "no failures".
-- **Combining root `tests/` and `packages/*/tests/` in ONE pytest invocation** raises
-  `ImportPathMismatchError` (conftest collision). Run separately, as CI does.
-- **`paths:` filters are NOT test targets.** `packages/kaizen-agents/**` appeared in workflows
-  only as a trigger filter; no pytest invocation targeted it. 812 tests never ran.
-- **A bare `git stash -u` on a CLEAN tree stashes nothing, but `git stash pop` still pops** —
-  possibly another session's stash (#2158). Both exit 0 silently.
-- **Read-only agents (`security-reviewer`) have NO Bash.** Dispatching them with `git diff`
-  instructions returns EMPTY, indistinguishable from a clean review. Materialize the diff to a
-  file with the pinned SHA on line 1. Cost 2 wasted review cycles this session.
-- **Agent plain-text output is invisible to the orchestrator.** Three reviewers completed work
-  that never arrived. Require SendMessage explicitly.
+Five CodeQL HIGH alerts named two sinks; the regression test written for them found a third
+that is wider than both.
 
-## Open decisions (full pros/cons in the sweep report)
+- **audit sinks** — `event_data` went through `sanitize_log_structure` alone, which is
+  explicitly NOT a redaction step, so a credential up to its 256-char bound reached the log
+  byte-intact. Redaction is now COMPOSED with sanitization; dropping either half trades a
+  credential leak for a log-injection hole, or the reverse.
+- **HTTP nodes** — URL, `Authorization` header, and body logged unmasked. CodeQL flagged only
+  the async class; the sync sibling is byte-identical and was equally live.
+- **`Node.execute`** — logged EVERY node's validated input dict. Not one node's leak but every
+  node's: `auth_password`, `api_key`, connection strings. Guarded with `isEnabledFor` so the
+  walk costs nothing when DEBUG is off.
 
-- **D1 — #2140 CodeQL.** Cannot be cleared in-repo; two approaches measured non-working.
-  Recommend: dismiss with #2146's proof. **Needs your action.**
-- **D2 — GPU CI (#2155).** No runner exists at repo or org level; `gpu-smoke.yml` never
-  succeeded since 2026-06-07. Recommend: retire.
-- **D3 — isort misconfigured** (`kailash_mcp` missing from `known_first_party`); fix is
-  repo-wide. Recommend: dedicated PR, no other content.
-- **D4 — branch protection requires ZERO checks** (`strict:true, checks:[]`). Command ready in
-  #2144's body. Recommend: apply — cheapest high-value action available.
-- **D5 — release ordering: core 2.63.0 MUST publish before nexus AND kaizen** (both now import
-  `kailash.utils.network_guard`, new in core). Nine packages drifted; every security fix from
-  the last two sessions is unreleased.
+Then probing the matcher DIRECTLY (not through a sink) found three more, all live after the
+sink tests were already green — **sink tests only exercise the keys producers in this repo
+happen to emit, so a key-matching gap is invisible to them**:
+
+- `pwd` was uncovered (`passwd` has no adjacent p-w-d, so that fragment never matched it)
+- dotted (`X.API.Key` — the SAML/OIDC attribute-bag shape) and spaced (`api key`) keys missed
+  the `api_key` fragment because only `-` was folded
+
+**Walking sets was tried and REVERTED** — measured, it closed nothing. A set holds only
+hashables, so it never contains a dict, so there is no key to match; the walk returned the same
+credential as a list. A shape-pinning test records that decision so nobody re-adds the walk
+believing it redacts something.
+
+Known, accepted limitation: a credential inside an innocently-named free-text value
+(`{"note": "user pw is …"}`) is not reachable by key-based or URL-based redaction.
+
+## Traps (measured this session — do not rediscover)
+
+**Eight instrument failures this session, all the same shape: a check that returns the same
+result whether or not the thing is true, read as the negative answer.** Three are new:
+
+- **Running a worktree's test FILE from another checkout silently tests the WORKTREE.** Mirror
+  of the known pythonpath trap. Ran `pytest <worktree>/tests/.../t.py` from main with main's
+  `src` on PYTHONPATH to establish a red; all 11 PASSED, reading as "the regression test is
+  vacuous." It was not: pytest set `rootdir` to the WORKTREE (its `pytest.ini` won) and put the
+  worktree's FIXED `src` ahead of PYTHONPATH. My `__file__` check ran in a SEPARATE process, so
+  it measured nothing about the pytest run. **Copy the test INTO the target checkout**; confirm
+  with `--collect-only 2>&1 | grep -i rootdir` in the SAME invocation. Correct control: 10
+  failed / 1 passed (the 1 is the test's own no-false-positive control).
+- **`tail -N` inside a comparison pipeline fabricates agreement.** I captured branch failures
+  through `| tail -15` and main's in full, then diffed: "0 new failures, 101 fixed." Both halves
+  were truncation artifact. Untruncated: 115 vs 114, 0 new, 1 fixed. **Never truncate either
+  side of a comparison.**
+- **`assert SECRET not in captured_text` passes when captured_text is EMPTY.** Any log-capture
+  assertion needs a paired positive control (`assert MARKER in text`), or a wrong logger name
+  makes it green forever.
+
+Carried forward, still true:
+
+- **A stale installed wheel shadows repo source** — hit it 4× this session, including through
+  *pyright diagnostics*, which resolved `redact_mapping`/`mask_error_text` against
+  site-packages and reported phantom undefined-name errors. Always pin repo `src` FIRST on
+  PYTHONPATH and print `__file__` **in the same process** you are measuring.
+- **`--color=no` when grepping pytest output** — ANSI codes defeat `grep "^FAILED"` silently.
+- **`--continue-on-collection-errors --maxfail=100000`** or you measure a truncated suite.
+- **`gh run view --log-failed` can return 0 bytes** on a genuinely failed job. That is zero
+  evidence, not "no failures". Fall back to the run-level zip
+  (`gh api .../runs/<id>/logs > x.zip; unzip -p x.zip "<job>.txt"`).
+- **`gh pr create` can open the PR against an UNPUSHED commit.** #2176 was created pointing at
+  the pre-rebase SHA while the push had failed non-fast-forward. Always verify
+  `gh pr view <N> --json headRefOid` equals local HEAD after creating.
+- **A pre-commit "Skipped — no files to check" is NOT a pass.** A multi-file
+  `pre-commit run --files $files` silently matched nothing; per-file invocation ran 14 hooks
+  each. Count the hooks that actually ran.
+- **Read-only agents (`security-reviewer`) have NO Bash** — dispatching them with `git diff`
+  instructions returns EMPTY, indistinguishable from a clean review.
+
+## Local full-sweep baseline (for the next session)
+
+`tests/unit tests/security tests/regression` on main, untruncated:
+`115 failed, 7141 passed, 50 errors`. These are local-environment failures (optional deps,
+no infra); the per-package CI matrix installs extras and is green. **Do not read a local
+failure count as a regression without diffing against this baseline.**
+
+## Decisions status
+
+- **D1 CodeQL** ✅ alert 11547 dismissed, re-verified this session (`state=dismissed`,
+  `reason="false positive"`)
+- **D2 GPU CI** ✅ #2164 merged; jobs retired, restoration trail in `docs/ci/self-hosted-runner.md`
+- **D3 isort** — in #2165, verified: `--all-files` and `--from-ref` now agree, tree clean after both
+- **D4 branch protection** ✅ applied as the verified always-running intersection
+  `['CodeQL','Analyze Python','test-with-infrastructure']`. **Limitation:** this is a floor —
+  the Python/PACT/DataFlow matrix is path-conditional and cannot be required directly; that
+  needs an always-running gate job depending on them.
+- **D5 release** — **NOT run, deliberately.** Publishing is irreversible and remains the
+  co-owner's explicit call. core 2.63.0 MUST publish before nexus AND kaizen (both import
+  `kailash.utils.network_guard`, new in core). Nine packages carry drift; every security fix
+  from the last three sessions is unreleased.
+
+## Still-open findings worth routing
+
+- **#2166** `MiddlewareAccessControlManager.check_session_access` cannot work — passes 3 kwargs
+  `PermissionCheckNode` does not declare, omits required `operation`, misreads the return shape.
+  Was unreachable until #2140 made the manager constructible. Needs an authorization-schema
+  decision; fixing it blind would ship a WRONG authz check in place of a loud failure.
+- **#2168** the unreachable `resolve_dns=False` affordance (above)
+- **#2150's own CodeQL HIGH** — `py/clear-text-logging-sensitive-data` at `url_safety.py:130`
+- **Two wall-clock perf flakes** in kaizen (`test_async_execution_overhead` ~4.5s against a 5.0s
+  bound). Left alone deliberately: bumping an absolute bound is how a complexity regression
+  hides. The correct fix is a self-normalizing ratio (measure 1/N scale in the same run), not a
+  bigger constant.
 
 ## Wave tracker
 
-None in flight. All lanes closed (sessions hit their limit; R1 completed and its work merged).
-No background agents running at wrapup.
-
-## Issues filed this session
-
-#2135 · #2138 · #2141 · #2142 · #2145 (**highest open severity** — authenticated code execution
-in another user's session) · #2146 · #2149 · #2151 · #2152 (closed by #2159) · #2153 · #2155 ·
-#2157 · #2158 · #2162 · #2163
+No agents reachable at wrapup. The `f-codeql` lane went unreachable with 13 files of
+uncommitted work in its worktree; that work was verified (10 of 11 new tests red against
+unfixed main) and taken over — it is #2176. **`git worktree list` still shows ~18 worktrees;
+several hold merged branches and can be pruned.**
 
 ## The pattern worth carrying forward
 
-**Eleven independent findings share one shape: a control that reports success without doing its
-job.** `verify_api_key` that cannot succeed · rotation that never fires · `--auth` that unlocks
-a `0.0.0.0` bind while installing nothing · `enable_checkpointing` with no module · CI gates
-matching zero tests · a "signature" that is 8 chars of the secret · a marker hook keyed on
-memory addresses · an LOC guard raised 1015→1070 to pass · `run()` returning an un-awaited
-coroutine · an IMDS guard documented "unconditional" that no shipped config executed · two
-conformance MUSTs that cannot return False (#2162).
+**Every product defect this session shares one shape with every one of my own instrument
+failures: a check that reports success without discriminating.** `verify_api_key` that cannot
+succeed · rotation that never fires · `--auth` that unlocks a `0.0.0.0` bind while installing
+nothing · CI gates matching zero tests · a marker hook keyed on memory addresses · an LOC guard
+raised to pass · two conformance MUSTs that cannot return False · a sanitizer that renders but
+never withholds — and, on my side, a truncated diff, an empty capture, a clean worktree, a
+rootdir that silently swapped the code under test.
 
-**None are tested-path defects. All would ship green.** When auditing, ask of every control:
-*what result would this produce if the thing it checks were broken?* If the answer is "the same
-one", it is not a check.
+**None are tested-path defects. All would ship green.** Ask of every check, before citing it:
+*what result would this produce if the thing it checks were false?* If the answer is "the same
+one", it is not evidence.
