@@ -5,13 +5,48 @@
 main `77f1af4ed`. **13 PRs merged.** The CI verification chain is closed, the marker root cause
 is fixed, and the approved decision set is mostly executed (D1/D2/D4 done, D3 in PR, D5 pending).
 
-## ⚠ main is RED — fix this first
+## ⚠ main is RED — fix lands in PR #2169 (open, verified, awaiting CI)
 
 ```
 packages/kailash-kaizen: pytest tests/unit/llm/test_deployment_resolver_azure.py \
                                 tests/unit/llm/test_governance_required_gate.py
--> 5 failed, 73 passed        (reason=resolution_failed)
+-> 5 failed, 73 passed        (reason=resolution_failed)   [on main]
+-> 78 passed                                               [on #2169]
 ```
+
+**#2169 verified independently, with a discriminating control.** Poisoned the real
+resolver process-wide (`socket.getaddrinfo` raises) via a `-p` plugin that prints a
+load sentinel to stderr, then ran `tests/unit/llm` + `tests/unit/providers` on both:
+
+| arm | plugin loaded | result |
+| --- | --- | --- |
+| main, poisoned | yes | collection ABORTED — 573 of 1935 collected, 10 failed |
+| #2169, poisoned | yes | **1934 passed, 1 skipped, 0 failed** |
+
+Both collect 1935 unpoisoned, so the main-arm shortfall is collection death from the
+hidden dependency. The E-dns lane ran its own two sabotage controls (stub raises /
+stub returns a private address) — both red exactly the 255 that fail on unfixed code,
+the second with `reason=private_ipv4`, proving the guard consumes the stub's address
+rather than merely that resolution succeeded.
+
+**Scope was widened by that lane, correctly:** the fixture went to
+`tests/unit/conftest.py` (tier-wide) not the 4 files the brief named, because 255 of
+1615 in `tests/unit/llm` **plus 6 in `tests/unit/providers`** fail without DNS and 29
+fixture hostnames resolve only because the runner has internet.
+
+**#2169's egress block then caught a THIRD class nobody scoped** — two pre-existing
+Tier-1 network dependencies in `tests/unit/core/test_token_counter.py`: one downloads
+`cl100k_base.tiktoken` from `openaipublic.blob.core.windows.net` at test time; the
+other (`assert 3 == 4`) fails because `TokenCounter` falls back to a `len(text)/4.0`
+estimate when the encoding can't be fetched. That fallback **is logged** (WARNING at
+`token_counter.py:233` and `:288`) — not silent — but its one-time message reads
+"Install tiktoken for accurate counting" when tiktoken IS installed and only the
+encoding fetch failed, which misdirects.
+
+**The `resolve_dns=False` affordance cited in that lane's brief does not exist** —
+`check_url`'s comment advertises it but nothing plumbs it from `Endpoint` /
+`LlmDeployment` down. That is a defect in the BRIEF (an un-re-derived specification
+claim), not in the lane's work. Filed as #2168.
 
 **This is a self-inflicted exposure, not a new bug.** The marker fix (#2159) released these five;
 they had been deselected by the old `"ai"` substring matcher for as long as they existed. I
@@ -111,6 +146,22 @@ kaizen-agents tests** that had never run at all.
   `kailash`, `kaizen_agents`, and now `nexus` (a stale nexus wheel invents 19 failures in
   `test_issue_2013_inert_auth_control.py` with `ModuleNotFoundError: nexus.auth_bootstrap`).
   Put EVERY relevant `packages/*/src` on PYTHONPATH ahead of site-packages.
+- **Running a worktree's test FILE from another checkout silently tests the WORKTREE.**
+  This is the MIRROR of the known pythonpath trap, and it cost a false verdict here.
+  I ran `pytest <worktree>/tests/.../test_x.py` from the main checkout with main's
+  `src` on PYTHONPATH to establish the red; all 11 tests PASSED, which read as
+  "the regression test is vacuous — it passes without the fix." It was not vacuous:
+  pytest set `rootdir` to the WORKTREE (its `pytest.ini` won) and put the worktree's
+  fixed `src` ahead of my PYTHONPATH, so the test never saw main's code. My
+  verification of `__file__` ran in a SEPARATE process, so it measured nothing about
+  the pytest run. **Copy the test file INTO the target checkout and run it there**;
+  confirm with `--collect-only 2>&1 | grep -i rootdir` IN THE SAME INVOCATION.
+  Correct control then gave 10 failed / 1 passed on main — the 1 is the test's own
+  deliberate no-false-positive control (`..._still_logs_a_usable_diagnostic`).
+- **`assert SECRET not in captured_text` passes when captured_text is EMPTY.** Any
+  log-capture assertion needs a paired positive control (`assert MARKER in text`) or
+  a wrong logger name makes it green forever. A's audit tests have one; its HTTP
+  tests do not — they would pass vacuously on a logger-name change.
 - **Read-only agents (`security-reviewer`) have NO Bash.** Dispatching them with `git diff`
   instructions returns EMPTY, indistinguishable from a clean review. Materialize the diff to a
   file with the pinned SHA on line 1. Cost 2 wasted review cycles this session.
