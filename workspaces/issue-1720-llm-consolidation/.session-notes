@@ -2,9 +2,9 @@
 
 ## Where we are
 
-main `885f7f270` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
-merged (#2169). **14 PRs merged across cont-18/19.** Four PRs open, all rebased onto merged
-main with CI running.
+main `ee7d96e14` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
+merged (#2169). **16 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
+isort/D3). Three PRs open.
 
 ## Read first
 
@@ -17,9 +17,8 @@ main with CI running.
 
 | PR | What | State |
 | --- | --- | --- |
-| #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running |
-| #2165 | isort self-contradiction (D3) | CI running; both invocation modes now agree |
-| #2140 | API-key auth that could not authenticate (#2108/#2114) | CI running; D1 dismissal verified still in place |
+| #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running; CodeQL: 1 real alert fixed, 5 deferred with runtime proof (#2178) |
+| #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
 | #2150 | kaizen SSRF consolidation | **69 behind**, has its OWN CodeQL HIGH (`url_safety.py:130`) — not yet rebased |
 | #2123 | loom sync | 116 behind, untouched this session |
 
@@ -132,7 +131,9 @@ failure count as a regression without diffing against this baseline.**
 - **D1 CodeQL** ✅ alert 11547 dismissed, re-verified this session (`state=dismissed`,
   `reason="false positive"`)
 - **D2 GPU CI** ✅ #2164 merged; jobs retired, restoration trail in `docs/ci/self-hosted-runner.md`
-- **D3 isort** — in #2165, verified: `--all-files` and `--from-ref` now agree, tree clean after both
+- **D3 isort** ✅ #2165 merged. Verified before merge with the discriminating check, not a single
+  green run: `--all-files` and `--from-ref` now AGREE and the tree is clean after both. (The
+  defect was the two modes contradicting each other, so one passing run proves nothing.)
 - **D4 branch protection** ✅ applied as the verified always-running intersection
   `['CodeQL','Analyze Python','test-with-infrastructure']`. **Limitation:** this is a floor —
   the Python/PACT/DataFlow matrix is path-conditional and cannot be required directly; that
