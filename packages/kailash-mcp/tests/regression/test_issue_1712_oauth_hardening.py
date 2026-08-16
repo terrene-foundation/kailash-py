@@ -35,6 +35,7 @@ import hashlib
 import secrets
 
 import pytest
+
 from kailash_mcp.auth.oauth import (
     AuthorizationCode,
     AuthorizationServer,

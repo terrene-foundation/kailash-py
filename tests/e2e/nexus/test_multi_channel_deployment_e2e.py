@@ -382,7 +382,6 @@ class TestResourceSystemE2E:
         E2E Test: Validates resource system end-to-end.
         """
         from kailash_mcp import MCPServer
-
         from nexus.resources import NexusResourceManager
 
         nexus = Nexus(
@@ -434,7 +433,6 @@ class TestResourceSystemE2E:
         E2E Test: Validates documentation resource endpoints.
         """
         from kailash_mcp import MCPServer
-
         from nexus.resources import NexusResourceManager
 
         nexus = Nexus(auto_discovery=False, enable_durability=False)

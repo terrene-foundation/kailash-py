@@ -48,9 +48,8 @@ def test_diagnose_dl_pytorch_dataloader_end_to_end() -> None:
     (``n_batches > 0``, ``n_samples == 64``).
     """
     torch = pytest.importorskip("torch")
-    from torch.utils.data import DataLoader, TensorDataset
-
     from kailash_ml import diagnose
+    from torch.utils.data import DataLoader, TensorDataset
 
     # Deterministic seed — rules/testing.md § Rules: no random data
     # without seeds. The DataLoader's `shuffle=False` default plus a

@@ -6,6 +6,8 @@ from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
+
+from kailash.middleware.gateway.event_store import EventStore
 from kailash_mcp.advanced.subscriptions import (
     AggregationTransformer,
     DataEnrichmentTransformer,
@@ -15,8 +17,6 @@ from kailash_mcp.advanced.subscriptions import (
     ResourceSubscriptionManager,
 )
 from kailash_mcp.server import MCPServer
-
-from kailash.middleware.gateway.event_store import EventStore
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 

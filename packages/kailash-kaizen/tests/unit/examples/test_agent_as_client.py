@@ -49,7 +49,6 @@ ResultSynthesisSignature = agent_as_client_example.ResultSynthesisSignature
 
 # Production MCP infrastructure - kailash_mcp
 from kailash_mcp import MCPClient
-
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)

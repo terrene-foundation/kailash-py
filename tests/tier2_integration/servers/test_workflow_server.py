@@ -11,7 +11,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.kailash.servers import WorkflowServer
 from src.kailash.utils.server_auth import mounted_subapp_auth_kwargs
 from src.kailash.workflow import Workflow

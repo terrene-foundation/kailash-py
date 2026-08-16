@@ -143,7 +143,7 @@ profile = "black"
 # MUST match the root pyproject.toml list exactly — this previously carried only
 # 3 of the 6 entries, so dataflow/nexus/pact were third-party here and
 # first-party everywhere else (#1995).
-known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact", "kailash_mcp"]
 
 [tool.mypy]
 python_version = "3.11"

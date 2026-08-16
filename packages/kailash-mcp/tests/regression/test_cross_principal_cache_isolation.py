@@ -49,6 +49,7 @@ or a tool body that never read the client at all, cannot make this suite pass.
 import asyncio
 
 import pytest
+
 from kailash_mcp.server import _CURRENT_TOOL_CLIENT, MCPServer
 
 CACHE_NAME = "answers"
