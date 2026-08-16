@@ -88,9 +88,17 @@ def _url_fingerprint(raw: str | None) -> str:
     #617: migrated from hashlib.sha256 to the canonical BLAKE2b helper in
     `kailash.utils.url_credentials` to stay aligned with
     `errors._fingerprint` after the same migration. The two MUST use the same
-    algorithm or log-to-exception correlation breaks — and they still do:
-    `fingerprint_value` IS the implementation `fingerprint_secret` delegates
-    to, so both names return byte-identical output.
+    algorithm or log-to-exception correlation breaks.
+
+    They do, but NOT by delegation. `errors._fingerprint` calls
+    `fingerprint_secret`; this one calls `fingerprint_value`; the two helpers
+    hold SEPARATE, byte-identical bodies and neither calls the other. That is
+    deliberate — see `url_credentials.fingerprint_value` § "Why this repeats
+    the three-line digest instead of delegating" — and it means the identity
+    is held by a test (`test_url_safety_log_fingerprint_contract.py`, 70
+    input x length combinations), not by the call graph. Simplifying one body
+    into a call to the other silently breaks the correlation this docstring
+    promises, and re-numbers the CodeQL alert the other body's line carries.
 
     `fingerprint_value` rather than `fingerprint_secret` because the value
     fingerprinted here is a URL, not a credential, and the tag goes to a LOG
