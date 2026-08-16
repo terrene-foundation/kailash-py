@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import inspect
 import logging
+import textwrap
 
 import pytest
 
@@ -188,3 +189,66 @@ def test_exactly_one_rejection_logging_site() -> None:
         f"url_safety must have exactly ONE logging site, found "
         f"{len(log_calls)}; _reject routes through _rejecting_error_factory"
     )
+
+
+# ---------------------------------------------------------------------------
+# 5. The separation itself — which byte-identity alone cannot see.
+# ---------------------------------------------------------------------------
+
+
+def _calls_within(func) -> set[str]:
+    """Names called inside `func`'s own body."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Name):
+                names.add(f.id)
+            elif isinstance(f, ast.Attribute):
+                names.add(f.attr)
+    return names
+
+
+def test_the_two_fingerprint_helpers_do_not_call_each_other() -> None:
+    """Separate bodies, held apart on purpose — and byte-identity is blind to it.
+
+    `test_fingerprint_value_is_byte_identical_to_fingerprint_secret` passes
+    whether the two helpers are independent OR one delegates to the other:
+    delegation produces identical output by construction. So the property
+    that actually has to hold is unpinned by that test, and it is the one
+    that matters:
+
+    * if `fingerprint_secret` delegated to `fingerprint_value`, credential-
+      classified taint would flow into the latter and CodeQL would report
+      `py/weak-sensitive-data-hashing` at its line;
+    * if `fingerprint_value` delegated to `fingerprint_secret`, a
+      `secret`-named callee would be back on the logging path and
+      `py/clear-text-logging-sensitive-data` (HIGH) would return;
+    * and either collapse RE-NUMBERS the surviving `hashlib.blake2b` line,
+      which invalidates the disposition written against the alert that line
+      carries.
+
+    A future reader who sees two identical bodies will reasonably try to
+    remove one. This is the test that tells them why not.
+    """
+    secret_calls = _calls_within(fingerprint_secret)
+    value_calls = _calls_within(fingerprint_value)
+
+    assert "fingerprint_value" not in secret_calls, (
+        "fingerprint_secret now delegates to fingerprint_value: credential "
+        "taint reaches that body and re-reports py/weak-sensitive-data-hashing "
+        "there. Keep the bodies separate; byte-identity is pinned by test, not "
+        "by the call graph."
+    )
+    assert "fingerprint_secret" not in value_calls, (
+        "fingerprint_value now delegates to fingerprint_secret: a `secret`-named "
+        "callee is back on the logging path and py/clear-text-logging-sensitive-"
+        "data (HIGH) returns. Keep the bodies separate."
+    )
+    # Both must still actually compute the digest themselves.
+    for name, calls in (
+        ("fingerprint_secret", secret_calls),
+        ("fingerprint_value", value_calls),
+    ):
+        assert "blake2b" in calls, f"{name} no longer computes its own digest"
