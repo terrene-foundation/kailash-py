@@ -32,7 +32,7 @@ demo_session_isolation = _demo_module.demo_session_isolation
 from kaizen.memory.buffer import BufferMemory
 from kaizen.memory.knowledge_graph import KnowledgeGraphMemory
 from kaizen.memory.summary import SummaryMemory
-from kaizen.memory.vector import VectorMemory
+from kaizen.memory.vector import VectorMemory, hash_embedder_for_tests
 
 
 class TestMemoryShowcaseDemoFunctions:
@@ -168,7 +168,9 @@ class TestMemoryShowcaseIntegration:
         # Create agents with different memory types
         buffer_agent = DemoAgent(config, memory=BufferMemory(max_turns=3))
         summary_agent = DemoAgent(config, memory=SummaryMemory(keep_recent=2))
-        vector_agent = DemoAgent(config, memory=VectorMemory(top_k=2))
+        vector_agent = DemoAgent(
+            config, memory=VectorMemory(top_k=2, embedding_fn=hash_embedder_for_tests)
+        )
         kg_agent = DemoAgent(config, memory=KnowledgeGraphMemory())
         no_memory_agent = DemoAgent(config, memory=None)
 
@@ -270,7 +272,7 @@ class TestMemoryShowcaseMemoryInteraction:
     def test_vector_memory_stores_all_turns(self):
         """Test VectorMemory stores all conversation turns."""
         config = DemoConfig()
-        memory = VectorMemory(top_k=2)
+        memory = VectorMemory(top_k=2, embedding_fn=hash_embedder_for_tests)
         agent = DemoAgent(config, memory=memory)
 
         session_id = "test_vector"

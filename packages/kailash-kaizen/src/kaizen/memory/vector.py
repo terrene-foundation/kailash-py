@@ -5,9 +5,15 @@ This memory implementation uses vector embeddings to enable semantic search
 over conversation history, retrieving the most relevant past turns based on
 similarity to the current query.
 
+``embedding_fn`` is REQUIRED. It previously defaulted to a hash-based
+pseudo-embedder, so a caller who omitted it got vectors of the right shape
+carrying no semantic signal — every similarity search still returned ranked
+results, but the ranking was over MD5 noise (#2174, ``zero-tolerance.md``
+Rule 2). Nothing raised and nothing warned, which is why it survived.
+
 Example:
     >>> from kaizen.memory.vector import VectorMemory
-    >>> memory = VectorMemory(top_k=3)
+    >>> memory = VectorMemory(top_k=3, embedding_fn=my_embedder)
     >>> memory.save_turn("session1", {"user": "Python programming", "agent": "Great!"})
     >>> memory.save_turn("session1", {"user": "What's for dinner?", "agent": "Pizza"})
     >>> context = memory.load_context("session1", query="coding in Python")
@@ -21,7 +27,26 @@ VectorStoreRetrieverMemory but NOT integrated with LangChain.
 import hashlib
 from typing import Any, Callable, Dict, List, Optional
 
+from kaizen.config.providers import ConfigurationError
 from kaizen.memory.conversation_base import KaizenMemory
+
+
+def hash_embedder_for_tests(text: str, dimensions: int = 128) -> List[float]:
+    """NOT AN EMBEDDER. A deterministic hash-derived vector, for tests only.
+
+    Produces a stable vector of the right shape so storage/retrieval mechanics
+    can be exercised without an embedding service. It carries NO semantic
+    signal whatsoever: nearest-neighbour over these vectors is nearest-
+    neighbour over MD5 noise, so any test asserting on the QUALITY of a
+    ranking is meaningless with this function.
+
+    It is deliberately module-level and explicitly named rather than a default
+    on ``VectorMemory``. As ``VectorMemory._default_embedder`` it silently
+    served every caller who omitted ``embedding_fn`` (#2174); the name has to
+    make its status unmistakable at the call site.
+    """
+    hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
+    return [float((hash_val >> i) & 1) for i in range(dimensions)]
 
 
 class VectorMemory(KaizenMemory):
@@ -47,40 +72,26 @@ class VectorMemory(KaizenMemory):
 
         Args:
             top_k: Maximum number of relevant turns to return in search (default: 5)
-            embedding_fn: Optional custom embedding function that takes text
-                         and returns a vector (list of floats). If None, uses
-                         default mock embedder for testing.
+            embedding_fn: REQUIRED. Embedding function taking text and returning
+                         a vector (list of floats).
+
+        Raises:
+            ConfigurationError: if ``embedding_fn`` is not supplied.
         """
+        if embedding_fn is None:
+            raise ConfigurationError(
+                "VectorMemory: 'embedding_fn' is required. It no longer "
+                "defaults to a hash-based pseudo-embedder, which returned "
+                "vectors of the correct shape carrying no semantic signal — "
+                "similarity search kept returning ranked results, but the "
+                "ranking was over MD5 noise, with nothing raised and nothing "
+                "logged (#2174). Pass a real embedding function (OpenAI, "
+                "sentence-transformers, HuggingFace, ...), or for tests pass "
+                "kaizen.memory.vector.hash_embedder_for_tests explicitly."
+            )
         self.top_k = top_k
-        self.embedding_fn = embedding_fn or self._default_embedder
+        self.embedding_fn = embedding_fn
         self._stores: Dict[str, Dict[str, Any]] = {}
-
-    def _default_embedder(self, text: str) -> List[float]:
-        """
-        Default mock embedder for testing.
-
-        In production, this would use actual embedding models like:
-        - sentence-transformers
-        - OpenAI embeddings
-        - HuggingFace models
-
-        For testing, we create a simple hash-based embedding.
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            Vector embedding (128-dimensional)
-        """
-        # Simple hash-based embedding for testing
-        hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
-        # Generate 128-dimensional vector from hash
-        vector = []
-        for i in range(128):
-            # Extract bits from hash to create pseudo-random but deterministic values
-            bit_val = (hash_val >> i) & 1
-            vector.append(float(bit_val))
-        return vector
 
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """
