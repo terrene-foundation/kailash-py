@@ -80,8 +80,31 @@ Known, accepted limitation: a credential inside an innocently-named free-text va
 
 ## Traps (measured this session — do not rediscover)
 
-**Eight instrument failures this session, all the same shape: a check that returns the same
-result whether or not the thing is true, read as the negative answer.** Three are new:
+**Nine instrument failures this session, all the same shape: a check that returns the same
+result whether or not the thing is true, read as the negative answer.**
+
+**There are THREE flavours, and they get harder to catch in this order** (taxonomy from the
+`A-rebase2140` lane, adopted here because it predicts the next one rather than describing the
+last):
+
+| flavour | why it is hard | example from today |
+| --- | --- | --- |
+| **empty** | at least looks odd | `grep` defeated by ANSI codes |
+| **truncated** | looks like DATA | `per_page=100` → "13 alerts" when there were 36; `tail -15` in a comparison |
+| **errored** | looks like an ANSWER TO A DIFFERENT QUESTION | `file or directory not found` reading as "no such tests exist" |
+
+**One control covers all three: run something whose answer you already know, in the same
+breath.**
+
+**The costliest instance was #9: `ListAgents` returned "No reachable agents" and I read it as
+"the lanes are dead."** Both lanes were alive and working. On that inference I entered another
+session's worktree, committed its 13 uncommitted files under a message I wrote, and pushed —
+which the lane then correctly reported as an unexplained commit it did not author. **A lane's
+liveness is not observable from an empty agent listing.** Ask the lane, or check its artifact
+trail (pushed branches, filed issues, PR comments); read-only and in-progress work is invisible
+to both git AND the listing.
+
+Three others are new:
 
 - **Running a worktree's test FILE from another checkout silently tests the WORKTREE.** Mirror
   of the known pythonpath trap. Ran `pytest <worktree>/tests/.../t.py` from main with main's
@@ -98,6 +121,15 @@ result whether or not the thing is true, read as the negative answer.** Three ar
 - **`assert SECRET not in captured_text` passes when captured_text is EMPTY.** Any log-capture
   assertion needs a paired positive control (`assert MARKER in text`), or a wrong logger name
   makes it green forever.
+
+- **A test guarded by `if x is not None:` cannot fail.** `TestEncoderCaching` asserted nothing
+  on any runner without the tiktoken encoding data — zero caching coverage, presenting as
+  green. Same shape as every product defect this session found, inside our own suite. Grep
+  tests for `if .* is not None:` wrapping the assertion.
+- **A stub whose output AGREES with the fallback is a test that cannot fail.** The tiktoken
+  Tier-1 stub counts WORDS, not characters, precisely so a regression to the character-estimate
+  fallback is visible rather than merely plausible. Choose stub outputs that differ from the
+  degraded path.
 
 Carried forward, still true:
 
@@ -150,6 +182,17 @@ failure count as a regression without diffing against this baseline.**
   Was unreachable until #2140 made the manager constructible. Needs an authorization-schema
   decision; fixing it blind would ship a WRONG authz check in place of a loud failure.
 - **#2168** the unreachable `resolve_dns=False` affordance (above)
+- **#2180 — `packages/kailash-kaizen/tests/integration/` (131 files) runs in NO workflow.**
+  Fourth instance of the #2038/#2074 bug class. The only reference is a `paths:` TRIGGER filter
+  in `trust-tests.yml:19`, and all three kaizen invocations carry `-m 'not (integration or ...)'`.
+  **This is why the tiktoken tests were NOT simply moved to Tier 2** — "one tier later" would
+  have been "never", so the split keeps a stubbed-encoder delegation test in Tier 1. Wiring it
+  costs CI time and is the co-owner's spend decision; the issue records the gap without
+  changing any workflow.
+- **#2170–#2175** filed by the CodeQL lane: a "non-reversible" tag claim that is not
+  (`url_safety.py`), an unkeyed hash fingerprinting client IPs in rate-limit middleware, an
+  unsanitized caller id, a bad-tag-filter question, **a mock embedder as the production
+  default**, and an unpinned TLS minimum version.
 - **#2150's own CodeQL HIGH** — `py/clear-text-logging-sensitive-data` at `url_safety.py:130`
 - **Two wall-clock perf flakes** in kaizen (`test_async_execution_overhead` ~4.5s against a 5.0s
   bound). Left alone deliberately: bumping an absolute bound is how a complexity regression
@@ -158,10 +201,19 @@ failure count as a regression without diffing against this baseline.**
 
 ## Wave tracker
 
-No agents reachable at wrapup. The `f-codeql` lane went unreachable with 13 files of
-uncommitted work in its worktree; that work was verified (10 of 11 new tests red against
-unfixed main) and taken over — it is #2176. **`git worktree list` still shows ~18 worktrees;
-several hold merged branches and can be pruned.**
+**Both lanes were ALIVE and completed their work** — `ListAgents` reporting "No reachable
+agents" was wrong (see instance #9 above). Corrected record:
+
+- **E-dns** — delivered #2169 (merged) + #2168. Pushed back on a bad recommendation of mine and
+  was right to.
+- **A-rebase2140 (`f-codeql`)** — delivered the two real CodeQL fixes, found two MORE leaks
+  nobody had reported (`Node.execute` logging every node's inputs; the driver exception text
+  re-leaking the masked URL), filed #2170–#2175, and drafted three Rule-1b ceremonies
+  (**approved**, verified independently, to be filed as ONE issue with the 11474 caveat
+  verbatim). Its work is #2176. **I committed its files from under it on a bad
+  liveness inference — the commit message on `4184b409c` is mine, not the lane's.**
+
+**`git worktree list` shows ~18 worktrees; several hold merged branches and can be pruned.**
 
 ## The pattern worth carrying forward
 
