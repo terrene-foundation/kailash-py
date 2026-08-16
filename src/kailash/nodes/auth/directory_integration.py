@@ -24,11 +24,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.nodes.api import AsyncHTTPRequestNode
-from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
+from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+from kailash.utils.secure_logging import redact_mapping
 
 
 def _is_enabled(value: Any) -> bool:

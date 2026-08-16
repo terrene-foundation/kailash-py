@@ -37,7 +37,7 @@ import unicodedata
 from functools import wraps
 from typing import Any, Dict, List, Optional, Pattern, Set, Union
 
-from kailash.utils.url_credentials import is_sensitive_query_key
+from kailash.utils.url_credentials import is_sensitive_query_key, mask_error_text
 
 # Module-level logger. Added with the totality-wrapper telemetry below: this
 # module had NO module-scope logger, only an instance one on the mixin, so a
@@ -392,8 +392,8 @@ def sanitize_log_value(value: object, limit: int = _DEFAULT_LOG_VALUE_CHARS) -> 
 
     NOT a redaction step. A short attacker-chosen value survives on purpose --
     it is usually the only diagnostic there is. For withholding credential
-    material by key name, compose
-    :func:`kailash.nodes.auth._log_hygiene.redact_mapping` instead.
+    material by key name, compose :func:`redact_mapping` (in this module)
+    with it -- redact first, then sanitize what survives.
 
     Total: never raises. A logging call site must not fail on the thing it is
     describing, so a value whose ``__str__`` raises degrades to a marker.
@@ -496,6 +496,94 @@ def sanitize_log_structure(
     if data is None or isinstance(data, (bool, int, float)):
         return data
     return sanitize_log_value(data, limit)
+
+
+#: Keys whose VALUES are credential material or bulk personal data and must not
+#: be copied into a log record. Matched case-insensitively as substrings after
+#: separator normalization, so ``access_token``, ``refresh_token``,
+#: ``totp_secret`` and the header spelling ``X-API-Key`` are all caught.
+_SENSITIVE_KEY_FRAGMENTS = (
+    "secret",
+    "token",
+    "password",
+    "passwd",
+    "credential",
+    "backup_code",
+    "recovery_code",
+    "private_key",
+    "api_key",
+    "qr_code",
+    "provisioning_uri",
+    "assertion",
+    "authorization",
+    "cookie",
+    "session_id",
+)
+
+_MAX_REDACTION_DEPTH = 6
+
+
+def redact_mapping(data: Any, _depth: int = 0) -> Any:
+    """Recursively replace credential-bearing VALUES with a redaction marker.
+
+    THE COMPANION TO, NOT A REPLACEMENT FOR, :func:`sanitize_log_structure`.
+    The two answer different questions and a sink that needs both must compose
+    them: this one decides WHETHER a value may be recorded (by key name), and
+    ``sanitize_log_structure`` decides HOW the survivors are rendered (flattened
+    and bounded, so none can forge a second record). Swapping one for the other
+    trades a credential leak for a log-injection hole, or the reverse.
+
+    Used for the free-form attribute bags that audit and security sinks accept:
+    a provisioning record carries whatever the IdP returned, which routinely
+    includes tokens, and a directory sync carries the full mapped LDAP/AD entry.
+    The record KEEPS ITS SHAPE -- the key stays, so an auditor can still see
+    WHICH fields were present -- while the value is withheld.
+
+    **Separator-normalized**, which is load-bearing rather than cosmetic: HTTP
+    headers spell the same concept with hyphens, so ``X-API-Key`` lowercases to
+    ``x-api-key`` and would NOT have matched the ``api_key`` fragment. That is
+    the exact default header name ``HTTPRequestNode`` carries an API key in
+    (``http.py``, ``api_key_header="X-API-Key"``), so without this the header
+    redaction would have silently passed the credential through.
+
+    Depth is bounded so a self-referential or pathologically nested attribute
+    bag cannot exhaust the stack inside a logging call.
+
+    Args:
+        data: Any structure. Mappings are walked; lists and tuples are walked
+            element-wise; every other value is returned unchanged.
+
+    Returns:
+        The same shape with credential-named values replaced by ``"[REDACTED]"``.
+    """
+    if _depth >= _MAX_REDACTION_DEPTH:
+        return "[REDACTED_DEPTH]"
+    if isinstance(data, dict):
+        redacted = {}
+        for key, value in data.items():
+            lowered = str(key).lower().replace("-", "_")
+            if any(fragment in lowered for fragment in _SENSITIVE_KEY_FRAGMENTS):
+                redacted[key] = "[REDACTED]"
+            else:
+                redacted[key] = redact_mapping(value, _depth + 1)
+        return redacted
+    if isinstance(data, (list, tuple)):
+        return [redact_mapping(item, _depth + 1) for item in data]
+    if isinstance(data, str):
+        # KEY-BASED WITHHOLDING IS NOT SUFFICIENT ON ITS OWN. A credential also
+        # hides INSIDE an innocently-named value: `{"url":
+        # "https://svc:pw@host/x?api_key=..."}` has no sensitive key, and a
+        # purely key-based pass returns it verbatim. Measured -- the #2167
+        # regression test caught exactly this after the key-based half was
+        # already working, with `auth_password` correctly `[REDACTED]` and the
+        # same password still readable in the sibling `url` field.
+        #
+        # `mask_error_text` is the canonical helper for credentials embedded in
+        # arbitrary text (userinfo plus the sensitive-query-key set), and it
+        # returns non-credential input unchanged, so this is a no-op for the
+        # overwhelming majority of leaves.
+        return mask_error_text(data)
+    return data
 
 
 def safe_type_name(obj: object) -> str:

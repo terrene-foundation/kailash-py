@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 
 from kailash.nodes.api import AsyncHTTPRequestNode
 from kailash.nodes.auth._http_response import http_body
-from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
+from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.auth.session_management import SessionManagementNode
@@ -36,6 +36,7 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security import AuditLogNode, SecurityEventNode
+from kailash.utils.secure_logging import redact_mapping
 
 # One-time-per-process latch for the "JWT issuer is not pinned" warning
 # (issue #2089). Module-level, not per-instance: a provider constructed per
