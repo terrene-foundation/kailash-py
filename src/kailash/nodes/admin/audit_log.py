@@ -250,7 +250,17 @@ class EnterpriseAuditLogNode(Node):
     """
 
     def __init__(self, **config):
-        assert self._db_node is not None
+        # NO `assert self._db_node is not None` here. It stood immediately
+        # before the assignment below, so it read an attribute that did not
+        # exist yet and asserted non-None on a value it was about to set to
+        # None -- making this node unconstructable:
+        #   AttributeError: 'EnterpriseAuditLogNode' object has no attribute
+        #   '_db_node'
+        # The identical misplacement in `EnterpriseSecurityEventNode` was
+        # corrected in #2108; this is its sibling, found by the same sweep.
+        # The dependency is created lazily by `_init_dependencies`; the
+        # narrowing asserts that belong to this class are the ones AFTER that
+        # call, and those are kept.
         super().__init__(**config)
         self._db_node = None
 
@@ -368,7 +378,9 @@ class EnterpriseAuditLogNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute audit logging operation."""
-        assert self._db_node is not None
+        # The narrowing assert belongs AFTER `_init_dependencies` (below), which
+        # is what assigns `_db_node`. Placed here it fired on the None the
+        # constructor sets, so no operation could ever run.
         try:
             operation = AuditOperation(inputs["operation"])
 
@@ -407,7 +419,8 @@ class EnterpriseAuditLogNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database dependencies."""
-        assert self._db_node is not None
+        # This method is what ASSIGNS `_db_node`, so an assert that it is
+        # already non-None could only ever fail on the first call.
         # Get database config
         db_config = inputs.get(
             "database_config",
