@@ -149,6 +149,13 @@ def test_module_does_not_route_a_log_through_a_secret_named_callee() -> None:
     reaching a logging sink. `url_safety` logs a fingerprint on every
     rejection path, so any reintroduction of `fingerprint_secret` here
     reintroduces the HIGH alert.
+
+    SCOPE, stated precisely because the CodeQL flow is interprocedural and
+    this pin is not: it covers `url_safety`'s OWN calls and imports, one hop.
+    `errors._fingerprint` still calls `fingerprint_secret` and that is
+    correct — its input is credential-adjacent and its output reaches an
+    exception message, not a log sink. A future `logger.*(str(exc))`
+    anywhere would put that hop on a logging path and is NOT caught here.
     """
     names = _called_and_imported_names(url_safety)
     offenders = sorted(n for n in names if "secret" in n.lower())
