@@ -725,12 +725,6 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
 
     Returns:
         The first ``length`` hex characters of BLAKE2b(value).
-
-    MUST stay byte-identical to :func:`fingerprint_value`: the two names are
-    one correlation namespace, and a tag emitted through either has to join a
-    tag emitted through the other. Deliberately NOT delegating -- see that
-    function's "Why this repeats the three-line digest" section. Change one,
-    change both.
     """
     if not value:
         return "0" * length
