@@ -1,199 +1,107 @@
-# Session Notes — 2026-08-15 (wave-1 parallel, cont-18)
+# Session Notes — 2026-08-16 (cont-18: wave-1 parallel + root-cause marker fix)
 
 ## Where we are
 
-Seven-lane parallel wave dispatched against the ratified cont-17 queue. **First merge landed:
-PR #2143 (`e228c5514`) — #2119 + #2067.** That merge is load-bearing: it unblocks the CI chain,
-because L6's restored root-regression gate had exactly one failure and it was #2119.
-
-Nine PRs remain open. Two adversarial security reviews have completed and BOTH produced HIGH
-findings that a correctness lens would not have caught.
+main `454f27acc`. **7 PRs merged, 10 issues closed.** The CI verification chain is closed and
+the root cause under it is fixed — infra markers now derive from the **fixture dependency
+graph**, never from test names. Seven of our PRs remain open; four are green and ready to merge.
 
 ## Read first
 
-1. `workspaces/issue-1720-llm-consolidation/sweep-cont17-report.md` — the ratified queue this wave executes
-2. This file's **Merge chain** and **Open decisions** sections
+1. `workspaces/issue-1720-llm-consolidation/sweep-cont18-report.md` — the decision report:
+   completion status w/ receipts, value-ranked queue, **five open decisions (D1–D5)**
+2. This file's **Merge now** and **Traps** sections
 3. `CLAUDE.md` — Absolute Directives
 
-## Merge chain (dependency-ordered — do not reorder)
+## Merge now (all green, all verified by me — start here)
 
-CI lane:  **#2143 (`e228c5514`) → #2144 (`8a4dca737`) → #2147 (`decd9eb8e`) — ALL MERGED**
-Auth lane: #2139 → #2140 → (#2156 auto-retargets)
-Independent: #2136 → #2150 (stacked); **#2137 MERGED (`2e3ddd9e7`)**; **#2148 MERGED (`a94aad89a`)**
+| PR | State | Note |
+| --- | --- | --- |
+| #2161 | 4 green | docs/notes cleanup |
+| #2139 | 23 green | refresh-token refusal verified present; adversarially reviewed |
+| #2136 | 12 green | IMDS bypass **verified closed** — all 4 wrapper forms refused, `10.1.2.3` still ACCEPTED |
+| #2154 | 17 green | kaizen #2111/#2069 |
 
-**FIVE MERGED:** #2143, #2144, #2137, #2148, #2147. The CI lane is COMPLETE — root
-regression gates restored and running to completion on the real runner (2403 passed / 277s).
+Then **#2156** (session IDOR, 13/13 routes) and **#2150** (kaizen SSRF consolidation)
+auto-retarget once their bases (#2139 / #2136) land — **verify the retarget happened**; GitHub
+only auto-retargets if the base branch is DELETED on merge.
 
-## ROOT-CAUSE FIX — #2160 MERGED (`995d72bc4`), #2159 rebased green, awaiting CI
+**#2140 is blocked on decision D1**, not on engineering.
 
-The marker defect is fixed at the root, not patched again. **The name is no longer
-consulted at all.** A test needs infrastructure IFF its resolved fixture closure
-(`item.fixturenames`, transitive) contains a fixture that provides it — a structural fact
-about the dependency graph, not a guess about English.
+## The root-cause fix (what #2159 + #2160 actually changed)
 
-Why the two prior fixes were both symptom-level, measured over 14,773 items:
-```
-name-matcher agrees with the fixture graph        : 12544 (84.9%)
-FALSE POSITIVES (name says infra, no infra fixture): 2246
-FALSE NEGATIVES (uses infra fixture, name misses)  :    2
-```
-The FALSE NEGATIVES are the half no word-list edit reaches: `test_integration_multi_service`
-(redis) and `test_audit_hook_includes_trace_id` (postgres) requested infra fixtures, went
-UNMARKED, and RAN in infra-free CI where they can only fail or flake. Both correct now.
+The name is no longer consulted. A test needs infrastructure IFF its resolved fixture closure
+(`item.fixturenames`, transitive) contains a fixture providing it. Measured over 14,773 items,
+name-matching agreed with the graph only **84.9%** — 2,246 false positives AND 2 false
+negatives. The false negatives ran in infra-free CI where they could only fail or flake.
 
-`tests/unit/test_infra_marker_mapping.py` guards the three decay paths, **each
-mutation-verified to RED** (unmapped fixture / renamed fixture / name-inference
-reintroduced), conftest restored byte-identical after each.
+`tests/unit/test_infra_marker_mapping.py` guards three decay paths (unmapped fixture / renamed
+fixture / name-inference reintroduced), **each mutation-verified to RED**. Adding an infra
+fixture without a `_INFRA_FIXTURES` entry FAILS the guard — add both in the same commit.
 
-Progression on the suite CI runs (`tests/regression/`, full infra-free filter):
-```
-main (before)            : 1288 passed, 342 deselected   [342 was a random variable]
-keyword patch            : 1494 passed, 145 deselected, 3 failed, 4 errors
-fixture graph alone      : 1616 passed,   5 deselected, 3 failed, 6 errors
-fixture graph + #2160    : 1623 passed,   5 deselected, 0 failed, 0 errors
-```
+Suite CI runs (`tests/regression/`, infra-free filter, on merged main):
+`1288 passed/342 deselected` → **`1623 passed/5 deselected/0 failed`**, plus **812
+kaizen-agents tests** that had never run at all.
 
-### What #2160 found (all three verified independently before merge)
-1. **A live product bug** — MCP auto-discovery aborted the ENTIRE server registration when
-   one method declared `**kwargs`, so auto-registration registered nothing. Fixed in
-   `mcp_mixin.py`: an explicit tool list is a demand (publish or raise); auto-discovery
-   warns past un-publishable methods.
-2. **The ScopeMismatch cause** — a fixture shadowing `pytest-base-url`'s `base_url`, not a
-   scope that needed widening.
-3. **The stale-wheel trap, second instance.** `test_issue_1973` failed because
-   `kaizen_agents` resolved to `site-packages` (old wheel) from kailash-kaizen's tree and to
-   branch source from kaizen-agents' tree. The product was fine; the test placement was wrong.
-4. **`packages/kaizen-agents/tests/` had NEVER run in CI — 812 tests.** The only
-   `packages/kaizen-agents` references were `paths:` TRIGGER filters (which workflow runs),
-   not pytest targets. Now wired into `test-kailash-kaizen.yml` with baseline
-   `812 passed, 2 deselected, 0 failed` established BEFORE wiring.
+## Traps (measured — do not rediscover)
 
-**Four independent never-ran mechanisms found in one chain:** masked Tier 2 (#2038),
-unwired kaizen regression (#2074), memory-address markers (#2152), unreferenced package
-suite (#2160). Assume more exist; the pattern is "a control that reports success without
-doing its job."
-
-## (superseded) PR #2159 blocker notes
-
-`fix/2152-marker-substring-boundary` (`255b94031`) fixes the F1 regression below. It is
-CORRECT and verified both polarities, but it RELEASES ~1,627 previously-excluded tests
-into the infra-free CI step, which surfaces **pre-existing** failures:
-
-```
-WITH the fix : 3 failed, 1494 passed, 145 deselected, 8 xfailed, 4 errors
-BASELINE     : 1 failed, 8 passed, 5 deselected, 2 errors   (main's own conftest, same 2 files)
-```
-
-Pre-existing, NOT caused by the fix — same failures reproduce against main's conftest.
-Two distinct test-infrastructure defects to fix before merging #2159:
-
-1. `test_mcp_tool_wrapper_closure_capture.py::test_pre_fix_wrapper_shape_is_rejected_by_real_registration`
-   → `ValueError: Functions with **kwargs are not supported as tools`
-2. `test_issue_1720_b1b_embed_cutover.py` → `ScopeMismatch` on a function-scoped fixture (4 params)
-
-Measured scope of the fix (14,773 items, past the `maxfail` that truncates a naive run to 3,760):
-any-infra marker **2229 (15.1%) → 576 (3.9%)**; `requires_ollama` **1980 → 353**.
-
-## ⚠ REGRESSION ON MAIN — fixed by #2159, not yet merged (F1)
-
-**#2143 × #2144 do not compose.** #2144's marker fix switched `str(item.function)` →
-`item.name.lower()` but kept the BARE SUBSTRING list, and `"ai"` is in it:
-`'ai' in 'kaizen'` is True. Measured on merged main (`2e3ddd9e7`):
-```
-test_issue_1720_b1a_live_cutover.py --co                     -> 5 collected
-same, -m "not requires_ollama"                               -> 2/5 (3 deselected)
-```
-**`test_azure_ai_foundry_routes_through_four_axis_path` — the #2067 test #2143 made
-hermetic — is deselected from every infra-free CI step.** #2143 fixed a test; #2144
-stopped running it. L4 is fixing (word-boundary match, or drop the 2-letter fragments).
-Scope number UNRECONCILED: reviewer measured 14.4% of 12,629 items; my own run over
-`packages/kailash-kaizen/tests/` collected 3,760 with 10 collection errors and the filter
-deselected NOTHING at that scope. Both cannot be complete — re-derive before citing.
-
-- **#2144** (CI selectors) — MERGED `8a4dca737`. Carries the marker-determinism fix (#2152).
-- **#2147** (CI hang) — rebases onto #2144 after it merges. MUST confirm L4's `schedule:` block,
-  `pull-requests: read`, and the #2133 comment block survive the rebase as a POSITIVE check.
-  `git merge-tree` between the two heads = exit 0, so no conflict expected.
-- **#2139** (gateway identity) — BLOCKED on the refresh-token fix (see Findings).
-- **#2140** (API-key auth) — RED on CodeQL, not converging. See Findings.
-- **#2136** (SSRF guard) — BLOCKED on a HIGH IMDS bypass (see Findings). #2150 is stacked on it
-  and must retarget to `main` only after #2136 merges.
-- **#2137** (server gating) — HIGH + MEDIUM fixed; one pre-existing coroutine defect to close.
-- **#2148** (ruff E721 cleanup) — green, mergeable, independent.
-
-## Findings that block merges
-
-- **#2136 HIGH — IMDS reachable on the DEFAULT posture via IPv6 wrappers.** Reproduced:
-  `64:ff9b::169.254.169.254` and `::ffff:0:a9fe:a9fe` are ACCEPTED. The translation-range
-  constants exist and are documented "unconditional", but are only consulted inside
-  `is_private_ipv6`, which only runs under `if not allow_private:` — and the proxy defaults
-  `require_public_destination=False`. Fix: hoist into the `if not allow_metadata:` block, match
-  by embedded IPv4 not `str(ip)`, and ADD IPv6 rows to `test_issue_2091` (absent coverage is why
-  it shipped).
-- **#2139 HIGH — the direct-verification path accepts a REFRESH token; the gate rejects it.**
-  `trust/auth/jwt.py:352-353` refuses `token_type == "refresh"`; neither manager does
-  (`auth_manager.py` has ZERO `token_type` occurrences). This is the one defect the PR made
-  reachable.
-- **#2140 — CodeQL HIGH unresolved.** #2146 carries a sound Rule-1b proof (SHA-256 over a
-  256-bit CSPRNG token is not password hashing; a slow KDF on `verify_api_key` would be a DoS
-  amplifier on an unauthenticated path) but a proof does not turn a check green.
-  `.github/codeql/sanitizers/` already exists with precedent. **Confirm WHICH alert is live
-  first** — a later commit changed key addressing and may have moved it.
-
-## Open decisions for the human (unchanged, still blocking nothing)
-
-- **isort is misconfigured** — the repo's own hook contradicts itself (`--all-files` vs
-  `--from-ref`). Probable one-line cause: `kailash_mcp` missing from `known_first_party`.
-  Fixing it rewrites every file importing `kailash_mcp`; this repo already sat at ~2,000
-  permanently-modified files for four cycles from this exact failure (#1995). NOT actioned.
-- **GPU CI (#2155)** — no self-hosted runner exists at repo OR org level (`total_count: 0` both),
-  and `gpu-smoke.yml` has never completed successfully since at least 2026-06-07 (5× cancelled).
-  Provision or retire, like `test-gpu` was (#2135).
-- **Branch protection requires ZERO status checks** — `strict: true, checks: []`, confirmed
-  independently by two lanes. Combined with #2133 (CI never ran on main), a PR could merge with
-  nothing required to pass. L4 has the exact `gh api` command in #2144's body, unapplied.
-- **Release ordering is now core → {nexus, kaizen}.** `kailash.utils.network_guard` is new in
-  core 2.63.0 (unreleased; PyPI latest is 2.62.0), and BOTH nexus and kaizen now import it.
-  Kaizen's floor was genuinely wrong (`>=2.56.0`, seven minors low) and is raised.
-
-## Traps (measured this session — do not rediscover)
-
-- **A stale installed wheel at `~/.pyenv/.../site-packages/kailash/` shadows repo source.**
-  Bit me directly: the kaizen slimming guard failed with `ImportError: cannot import name 'Node'`
-  until I put `$root/src` FIRST on PYTHONPATH. Always verify with
-  `python3 -c "import kailash.nodes.base as b; print(b.__file__)"`.
-- **Combining root `tests/` and `packages/kailash-kaizen/tests/` in one pytest invocation raises
-  `ImportPathMismatchError`** (conftest collision). Run them separately, as CI does.
-- **Read-only reviewers (`security-reviewer`) have NO Bash.** Dispatching them with `git diff` /
-  `git rev-parse` instructions produces an EMPTY return that is indistinguishable from a clean
-  review. Materialize the diff to a file with the pinned SHA on line 1. Cost this session: two
-  wasted review cycles.
-- **Agents' plain-text output is invisible to the orchestrator.** Two reviewers completed work
+- **A stale installed wheel shadows repo source.** Bit me on `kailash.nodes.base` and again on
+  `kaizen_agents` — that second one WAS a test failure's root cause: tests in `kailash-kaizen`'s
+  tree resolved `kaizen_agents` to `site-packages`, not branch source. Always
+  `python3 -c "import X; print(X.__file__)"` before trusting a result; repo `src` FIRST on
+  PYTHONPATH.
+- **`--continue-on-collection-errors --maxfail=100000` or you measure a truncated suite.** A
+  naive kaizen collect stops at 10 errors and reports **3,760** items; the real number is
+  **14,773**. My first scope measurement was wrong because of this.
+- **`--color=no` when grepping pytest output.** ANSI codes silently defeated `grep "^FAILED"`
+  twice and returned empty — which reads exactly like "no failures".
+- **Combining root `tests/` and `packages/*/tests/` in ONE pytest invocation** raises
+  `ImportPathMismatchError` (conftest collision). Run separately, as CI does.
+- **`paths:` filters are NOT test targets.** `packages/kaizen-agents/**` appeared in workflows
+  only as a trigger filter; no pytest invocation targeted it. 812 tests never ran.
+- **A bare `git stash -u` on a CLEAN tree stashes nothing, but `git stash pop` still pops** —
+  possibly another session's stash (#2158). Both exit 0 silently.
+- **Read-only agents (`security-reviewer`) have NO Bash.** Dispatching them with `git diff`
+  instructions returns EMPTY, indistinguishable from a clean review. Materialize the diff to a
+  file with the pinned SHA on line 1. Cost 2 wasted review cycles this session.
+- **Agent plain-text output is invisible to the orchestrator.** Three reviewers completed work
   that never arrived. Require SendMessage explicitly.
-- **`str(item.function)` embeds the ASLR memory address** — see #2152. Any keyword match against
-  it is non-deterministic.
+
+## Open decisions (full pros/cons in the sweep report)
+
+- **D1 — #2140 CodeQL.** Cannot be cleared in-repo; two approaches measured non-working.
+  Recommend: dismiss with #2146's proof. **Needs your action.**
+- **D2 — GPU CI (#2155).** No runner exists at repo or org level; `gpu-smoke.yml` never
+  succeeded since 2026-06-07. Recommend: retire.
+- **D3 — isort misconfigured** (`kailash_mcp` missing from `known_first_party`); fix is
+  repo-wide. Recommend: dedicated PR, no other content.
+- **D4 — branch protection requires ZERO checks** (`strict:true, checks:[]`). Command ready in
+  #2144's body. Recommend: apply — cheapest high-value action available.
+- **D5 — release ordering: core 2.63.0 MUST publish before nexus AND kaizen** (both now import
+  `kailash.utils.network_guard`, new in core). Nine packages drifted; every security fix from
+  the last two sessions is unreleased.
 
 ## Wave tracker
 
-L1 #2140 (CodeQL, not converging) · L2 #2139 + #2145 + #2148 · L3 #2137 · L4 #2144 (DONE) ·
-L5 #2143 (MERGED) + #2111/#2069 next · L6 #2147 (awaiting #2144) · L7 #2136 + #2150 + webhooks.
-Reviewers: R1 (#2139 done), R2 (#2137 + #2136 done), R3 (#2143/#2139/#2137 correctness — never
-reported; treat as NOT run).
+None in flight. All lanes closed (sessions hit their limit; R1 completed and its work merged).
+No background agents running at wrapup.
 
 ## Issues filed this session
 
-#2135 (GPU tests) · #2138 (rotation never fires) · #2141 (kailash-ml unauth DELETE) ·
-#2142 (kaizen un-gated surfaces) · #2145 (**session IDOR — authenticated RCE in another user's
-session; highest open severity**) · #2146 (codeql defer) · #2149 (order-dependent test) ·
-#2151 (cross-user event stream, FIXED by #2139) · #2152 (marker residue + "ai" substring) ·
-#2155 (GPU runner decision).
+#2135 · #2138 · #2141 · #2142 · #2145 (**highest open severity** — authenticated code execution
+in another user's session) · #2146 · #2149 · #2151 · #2152 (closed by #2159) · #2153 · #2155 ·
+#2157 · #2158 · #2162 · #2163
 
 ## The pattern worth carrying forward
 
-Ten independent findings share ONE shape: **a control that reports success without doing its
-job.** `verify_api_key` that can never succeed; rotation that never fires; `--auth` that unlocks
-a 0.0.0.0 bind while installing nothing; `enable_checkpointing` with no checkpoint module; CI
-gates matching zero tests; a "signature" that is 8 chars of the secret; a marker hook keyed on
-memory addresses; an LOC guard silently raised from 1015 to 1070 to pass; a `run()` returning an
-un-awaited coroutine; and an IMDS guard documented "unconditional" that no shipped config
-executes. None are tested-path defects. All would ship green.
+**Eleven independent findings share one shape: a control that reports success without doing its
+job.** `verify_api_key` that cannot succeed · rotation that never fires · `--auth` that unlocks
+a `0.0.0.0` bind while installing nothing · `enable_checkpointing` with no module · CI gates
+matching zero tests · a "signature" that is 8 chars of the secret · a marker hook keyed on
+memory addresses · an LOC guard raised 1015→1070 to pass · `run()` returning an un-awaited
+coroutine · an IMDS guard documented "unconditional" that no shipped config executed · two
+conformance MUSTs that cannot return False (#2162).
+
+**None are tested-path defects. All would ship green.** When auditing, ask of every control:
+*what result would this produce if the thing it checks were broken?* If the answer is "the same
+one", it is not a check.
