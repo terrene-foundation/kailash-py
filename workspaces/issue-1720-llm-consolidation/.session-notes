@@ -1,32 +1,74 @@
-# Session Notes — 2026-08-16 (cont-18: wave-1 parallel + root-cause marker fix)
+# Session Notes — 2026-08-16 (cont-18: wave-1 + root-cause marker fix + approved-plan execution)
 
 ## Where we are
 
-main `454f27acc`. **7 PRs merged, 10 issues closed.** The CI verification chain is closed and
-the root cause under it is fixed — infra markers now derive from the **fixture dependency
-graph**, never from test names. Seven of our PRs remain open; four are green and ready to merge.
+main `77f1af4ed`. **13 PRs merged.** The CI verification chain is closed, the marker root cause
+is fixed, and the approved decision set is mostly executed (D1/D2/D4 done, D3 in PR, D5 pending).
 
-## Read first
+## ⚠ main is RED — fix this first
 
-1. `workspaces/issue-1720-llm-consolidation/sweep-cont18-report.md` — the decision report:
-   completion status w/ receipts, value-ranked queue, **five open decisions (D1–D5)**
-2. This file's **Merge now** and **Traps** sections
-3. `CLAUDE.md` — Absolute Directives
+```
+packages/kailash-kaizen: pytest tests/unit/llm/test_deployment_resolver_azure.py \
+                                tests/unit/llm/test_governance_required_gate.py
+-> 5 failed, 73 passed        (reason=resolution_failed)
+```
 
-## Merge now (all green, all verified by me — start here)
+**This is a self-inflicted exposure, not a new bug.** The marker fix (#2159) released these five;
+they had been deselected by the old `"ai"` substring matcher for as long as they existed. I
+verified the `tests/regression/` step after that fix and NOT the `tests/unit/llm/` step the same
+conftest governs.
 
-| PR | State | Note |
+**The defect is bigger than 5 tests.** `deployment.py` routes `Endpoint.base_url` through
+`url_safety.check_url`, which resolves DNS at CONSTRUCTION. Measured:
+```
+myresource.openai.azure.com      RESOLVES        <- Azure wildcard DNS
+myfoundry.services.ai.azure.com  does NOT resolve
+```
+Both are fake fixtures on the same code path. **The 73 "passing" tests pass only because one
+invented hostname lands under a real wildcard record and the runner has network** — on an
+air-gapped runner they fail too. `tests/unit/llm/` has a hidden network dependency.
+
+Branch `fix/kaizen-unit-llm-dns-dependency` is fixing it (stub the resolver for the unit tier).
+**Every open PR inherits these five until it lands.**
+Deliberately NOT decided there: whether `check_url` should resolve DNS during endpoint
+construction at all — a real design question with SSRF implications, filed as follow-up.
+
+## Open PRs
+
+| PR | State | Blocker |
 | --- | --- | --- |
-| #2161 | 4 green | docs/notes cleanup |
-| #2139 | 23 green | refresh-token refusal verified present; adversarially reviewed |
-| #2136 | 12 green | IMDS bypass **verified closed** — all 4 wrapper forms refused, `10.1.2.3` still ACCEPTED |
-| #2154 | 17 green | kaizen #2111/#2069 |
+| #2140 | 18 green, 1 fail | inherits main's 5; rebase verified sound |
+| #2150 | 12 green, 2 fail | its OWN CodeQL HIGH (`url_safety.py:130` clear-text logging) + inherited 5 |
+| #2165 | 21 green, 2 fail | inherits main's 5 only (isort fix itself is clean) |
+| (E-dns) | in progress | the main-unblocker |
 
-Then **#2156** (session IDOR, 13/13 routes) and **#2150** (kaizen SSRF consolidation)
-auto-retarget once their bases (#2139 / #2136) land — **verify the retarget happened**; GitHub
-only auto-retargets if the base branch is DELETED on merge.
+## Decisions status
 
-**#2140 is blocked on decision D1**, not on engineering.
+- **D1 CodeQL — DONE.** Alert #11547 dismissed (false positive, proof in #2146), verified by re-read.
+- **D2 GPU CI — DONE.** #2164 merged; `test-cuda`/`test-cuda-dl`/`gpu-smoke.yml` retired, selector
+  fixes + test markers preserved, restoration trail in `docs/ci/self-hosted-runner.md`.
+- **D3 isort — PR #2165.** Root cause corrected: NOT batch-sensitive `src_paths`. isort resolves
+  ONE config per invocation from `file_names[0]` (`main.py`), and FOUR `pyproject.toml` files each
+  carried a duplicated `known_first_party`, all missing `kailash_mcp`. Three already carried
+  comments warning about this exact hazard citing #1995.
+- **D4 branch protection — DONE, but NOT as specified.** L4's five proposed contexts were ALL
+  absent from a docs-only PR (path-filtered) — requiring them would have blocked every docs PR
+  forever. Applied the verified always-running intersection instead:
+  `strict:true, contexts:['CodeQL','Analyze Python','test-with-infrastructure']`.
+  **Limitation:** this is a floor. The Python/PACT/DataFlow matrix is path-conditional and cannot
+  be required directly; that needs an always-running gate job depending on them.
+- **D5 release ordering — PENDING.** core 2.63.0 MUST publish before nexus AND kaizen.
+  `/release` NOT run — publishing is irreversible and stays an explicit human gate.
+
+## Still-open findings worth routing
+
+- **Open HIGH CodeQL alert on main**, unrelated to this session: `py/weak-sensitive-data-hashing`
+  at `url_credentials.py:731` (BLAKE2B), open since 2026-08-10.
+- **`MiddlewareAccessControlManager.check_session_access` cannot work** — passes 3 kwargs
+  `PermissionCheckNode` does not declare, omits the required `operation`, misreads the return
+  shape. **Was unreachable until #2140 made the manager constructible.** Needs an
+  authorization-schema decision; fixing it blind would ship a WRONG authz check in place of a
+  loud failure. Same family as #2108. `check_workflow_access:129` looks like the same shape.
 
 ## The root-cause fix (what #2159 + #2160 actually changed)
 
@@ -61,6 +103,14 @@ kaizen-agents tests** that had never run at all.
   only as a trigger filter; no pytest invocation targeted it. 812 tests never ran.
 - **A bare `git stash -u` on a CLEAN tree stashes nothing, but `git stash pop` still pops** —
   possibly another session's stash (#2158). Both exit 0 silently.
+- **`git show <ref>:<path> > file` can silently TRUNCATE.** It gave me 106 lines of a 1757-line
+  file, so every grep against it returned 0 — which reads exactly like "the code is gone". I
+  nearly filed a false regression against a correct rebase. Use `git cat-file -p <blob>` and
+  sanity-check the line count.
+- **Stale-wheel trap, THIRD instance — it is a general hazard, not per-package.** Confirmed for
+  `kailash`, `kaizen_agents`, and now `nexus` (a stale nexus wheel invents 19 failures in
+  `test_issue_2013_inert_auth_control.py` with `ModuleNotFoundError: nexus.auth_bootstrap`).
+  Put EVERY relevant `packages/*/src` on PYTHONPATH ahead of site-packages.
 - **Read-only agents (`security-reviewer`) have NO Bash.** Dispatching them with `git diff`
   instructions returns EMPTY, indistinguishable from a clean review. Materialize the diff to a
   file with the pinned SHA on line 1. Cost 2 wasted review cycles this session.
