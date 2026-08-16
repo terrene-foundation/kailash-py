@@ -60,7 +60,7 @@ import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 # `httpx`, `fastapi`, and `starlette` are OPTIONAL dependencies under the
 # `server` extra (pyproject.toml:55-67), not in slim-core dependencies. Per
@@ -101,7 +101,9 @@ from ..utils.proxy_guard import (
     PathPattern,
     compile_path_allowlist,
     normalize_allowed_methods,
+    normalize_max_response_bytes,
     path_matches_allowlist,
+    reject_unsafe_proxy_destination,
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
@@ -703,6 +705,10 @@ class WorkflowAPIGateway:
         allowed_methods: list[str] | None = None,
         auth_dependency: Callable[..., Any] | None = None,
         forward_credentials: bool = False,
+        blocked_networks: Sequence[Any] | None = None,
+        allow_metadata_destination: bool = False,
+        require_public_destination: bool = False,
+        max_response_bytes: int | None = None,
     ):
         """Register a proxied workflow with real request forwarding.
 
@@ -744,10 +750,26 @@ class WorkflowAPIGateway:
                 whichever round-robin backend was selected. Set True only when
                 the backend is trusted and genuinely needs to re-authorize the
                 original caller.
+            blocked_networks: Extra CIDR blocks no backend may resolve into,
+                on top of the always-blocked metadata and link-local ranges.
+            allow_metadata_destination: Permit a backend in the cloud
+                metadata / link-local set (issue #2091). Defaults to False and
+                logs a WARNING naming the disabled protection when set.
+            require_public_destination: Also refuse RFC1918 and loopback
+                backends, adopting the stricter ``nexus.http_client`` posture.
+                Defaults to False because proxying to an internal service is
+                this surface's common legitimate use.
+            max_response_bytes: Largest backend response body this route will
+                buffer, in bytes. Defaults to
+                :data:`~kailash.utils.proxy_guard.DEFAULT_MAX_RESPONSE_BYTES`
+                (64 MiB). A larger response is refused with 502 rather than
+                truncated (issue #2085). There is no 'unlimited' value.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control is
                 configured for the route.
+            BlockedDestinationError: A backend URL resolves into the blocked
+                destination set (issue #2091).
             ValueError: ``name`` is already registered, or ``allowed_paths`` /
                 ``allowed_methods`` is missing or invalid.
         """
@@ -767,9 +789,27 @@ class WorkflowAPIGateway:
         path_allowlist = compile_path_allowlist(allowed_paths, name=name)
         methods = normalize_allowed_methods(allowed_methods, name=name)
 
+        max_response_bytes = normalize_max_response_bytes(max_response_bytes, name=name)
+
         # Support multiple backends via comma-separated URLs
         backends = [u.strip() for u in proxy_url.split(",") if u.strip()]
         primary_url = backends[0]
+
+        # The DESTINATION control (#2091), applied to EVERY backend rather
+        # than just the primary. Round-robin means a caller cannot choose
+        # which one serves their request, so checking only `primary_url`
+        # would leave the second and later entries unconstrained -- the same
+        # partial-coverage shape the credential-forwarding defect had here
+        # before #2025.
+        for backend_url in backends:
+            reject_unsafe_proxy_destination(
+                backend_url,
+                name=name,
+                surface="WorkflowAPIGateway",
+                blocked_networks=blocked_networks,
+                allow_metadata_destination=allow_metadata_destination,
+                require_public_destination=require_public_destination,
+            )
 
         self.workflows[name] = WorkflowRegistration(
             name=name,
@@ -883,7 +923,18 @@ class WorkflowAPIGateway:
 
             try:
                 client = await self._get_proxy_client()
-                resp = await client.request(
+                # BOUNDED read (#2085). `client.request(...)` reads the whole
+                # body before returning, so a multi-gigabyte backend response
+                # was buffered entire in this process and concurrent requests
+                # multiplied it. Streaming lets the accumulation stop at the
+                # cap instead.
+                #
+                # `content-length` is deliberately NOT trusted as the signal:
+                # it is absent from the response allowlist precisely because
+                # it describes COMPRESSED bytes over a decompressed body
+                # (#2025). httpx's `aiter_bytes()` yields DECOMPRESSED bytes,
+                # which is the memory that actually matters.
+                proxy_request = client.build_request(
                     method=request.method,
                     url=target_url,
                     headers=headers,
@@ -892,13 +943,49 @@ class WorkflowAPIGateway:
                     # dict() silently kept only the last (issue #2025).
                     params=list(request.query_params.multi_items()),
                 )
+                resp = await client.send(proxy_request, stream=True)
+                try:
+                    chunks: list[bytes] = []
+                    total = 0
+                    too_large = False
+                    async for chunk in resp.aiter_bytes():
+                        total += len(chunk)
+                        if total > max_response_bytes:
+                            too_large = True
+                            break
+                        chunks.append(chunk)
+                finally:
+                    await resp.aclose()
+
+                if too_large:
+                    logger.warning(
+                        "gateway.proxy.response_too_large",
+                        extra={
+                            "workflow": name,
+                            "max_response_bytes": max_response_bytes,
+                        },
+                    )
+                    # Fail CLOSED: refuse rather than return a TRUNCATED body,
+                    # which the caller could not distinguish from a complete
+                    # one.
+                    return Response(
+                        content=json.dumps(
+                            {
+                                "error": "Backend response exceeded the "
+                                "configured limit for this proxy route"
+                            }
+                        ),
+                        status_code=502,
+                        media_type="application/json",
+                    )
+
                 filtered_headers = {
                     k: v
                     for k, v in resp.headers.items()
                     if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
                 }
                 return Response(
-                    content=resp.content,
+                    content=b"".join(chunks),
                     status_code=resp.status_code,
                     headers=filtered_headers,
                     media_type=resp.headers.get("content-type"),

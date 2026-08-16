@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 
 # `uvicorn` and `starlette` are OPTIONAL dependencies under the `server` extra.
 # Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
@@ -533,6 +533,10 @@ class APIChannel(Channel):
         allowed_methods: Optional[list] = None,
         auth_dependency: Optional[Callable[..., Any]] = None,
         forward_credentials: bool = False,
+        blocked_networks: Optional[Sequence[Any]] = None,
+        allow_metadata_destination: bool = False,
+        require_public_destination: bool = False,
+        max_response_bytes: Optional[int] = None,
     ) -> None:
         """Register a proxied workflow with this API channel.
 
@@ -561,9 +565,20 @@ class APIChannel(Channel):
                 omitted, the underlying server's ``auth_manager`` supplies one.
             forward_credentials: Forward the caller's credential headers to the
                 backend. Defaults to False (stripped).
+            blocked_networks: Extra CIDR blocks the destination may not
+                resolve into (issue #2091).
+            allow_metadata_destination: Permit a cloud-metadata / link-local
+                destination. Defaults to False; logs a WARNING when set.
+            require_public_destination: Also refuse RFC1918 and loopback
+                destinations. Defaults to False.
+            max_response_bytes: Largest backend response body this route will
+                buffer (issue #2085). Defaults to 64 MiB; larger responses are
+                refused with 502 rather than truncated.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control configured.
+            BlockedDestinationError: ``proxy_url`` resolves into the blocked
+                destination set (issue #2091).
             ValueError: ``allowed_paths`` missing or invalid.
         """
         self.workflow_server.proxy_workflow(
@@ -576,6 +591,10 @@ class APIChannel(Channel):
             allowed_methods=allowed_methods,
             auth_dependency=auth_dependency,
             forward_credentials=forward_credentials,
+            blocked_networks=blocked_networks,
+            allow_metadata_destination=allow_metadata_destination,
+            require_public_destination=require_public_destination,
+            max_response_bytes=max_response_bytes,
         )
         logger.info(
             f"Registered proxied workflow '{name}' with API channel {self.name}"

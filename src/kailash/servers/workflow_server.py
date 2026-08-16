@@ -10,7 +10,7 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 # `fastapi` and `starlette` are OPTIONAL dependencies under the `server` extra.
 # Per `rules/dependencies.md` § "Declared = Imported": optional-extra imports
@@ -43,7 +43,9 @@ from ..utils.proxy_guard import (
     PathPattern,
     compile_path_allowlist,
     normalize_allowed_methods,
+    normalize_max_response_bytes,
     path_matches_allowlist,
+    reject_unsafe_proxy_destination,
     reject_unsafe_proxy_path,
     resolve_proxy_auth_dependency,
 )
@@ -285,6 +287,16 @@ class WorkflowServer:
             "executor", lambda: self.executor.shutdown(wait=True), priority=0
         )
 
+        # Shared outbound session for proxied routes (#2085). One session for
+        # the server's lifetime rather than one per REQUEST, closed on the
+        # normal shutdown path at priority 3 ("close") so the connector and
+        # its sockets are released rather than leaked to GC.
+        self._proxy_session: Any = None
+        self._proxy_session_loop: Any = None
+        self.shutdown_coordinator.register(
+            "proxy_session", self.aclose_proxy_session, priority=3
+        )
+
         # Create FastAPI app with lifespan.
         #
         # Historical bug #500: passing ANY custom `lifespan` to FastAPI()
@@ -515,18 +527,24 @@ class WorkflowServer:
                 if reg.type == "embedded":
                     health_status["workflows"][name] = "healthy"
                 elif reg.type == "proxied" and reg.proxy_url:
-                    # Check proxy health by hitting the remote health endpoint
+                    # Check proxy health by hitting the remote health endpoint.
+                    # Uses the SHARED session (#2085): this is the sibling
+                    # call site of the per-request-session defect, and health
+                    # checks run on a schedule, so leaving it constructing its
+                    # own session per poll would have kept the fd/socket churn
+                    # the fix exists to remove.
                     try:
                         import aiohttp
 
                         url = f"{reg.proxy_url.rstrip('/')}{reg.health_check}"
-                        timeout = aiohttp.ClientTimeout(total=5)
-                        async with aiohttp.ClientSession(timeout=timeout) as session:
-                            async with session.get(url) as resp:
-                                if resp.status == 200:
-                                    health_status["workflows"][name] = "healthy"
-                                else:
-                                    health_status["workflows"][name] = "degraded"
+                        session = await self._get_proxy_session()
+                        async with session.get(
+                            url, timeout=aiohttp.ClientTimeout(total=5)
+                        ) as resp:
+                            if resp.status == 200:
+                                health_status["workflows"][name] = "healthy"
+                            else:
+                                health_status["workflows"][name] = "degraded"
                     except Exception as e:
                         logger.warning(f"Proxy health check failed for {name}: {e}")
                         health_status["workflows"][name] = "unhealthy"
@@ -699,6 +717,71 @@ class WorkflowServer:
                     status_code=404,
                     content={"error": "Workflow or query not found"},
                 )
+
+    async def _get_proxy_session(self) -> Any:
+        """Get or create the shared ``aiohttp.ClientSession`` for proxying.
+
+        Before #2085 every proxied request built and tore down its own
+        session, which means a new connector, a new connection pool and fresh
+        sockets per request -- no keep-alive reuse at all. That churn is not
+        theoretical here: this repo already hit fd/thread exhaustion in CI
+        (#2078).
+
+        This mirrors ``WorkflowAPIGateway._get_proxy_client()``, which had it
+        right; the two surfaces disagreeing on connection lifecycle was itself
+        an enforcement-surface asymmetry, the same shape as the
+        credential-stripping and redirect-policy disagreements #2025 closed.
+        """
+        import aiohttp
+
+        # An aiohttp session binds to the event loop that CREATED it: its
+        # connector registers transports and timer callbacks on that loop, so
+        # reusing one across loops raises "Event loop is closed" from the
+        # connector rather than from anything the caller can see. The session
+        # is therefore keyed by loop, not merely cached -- servers under a
+        # single uvicorn loop get one session for their whole lifetime (the
+        # point of #2085), while test harnesses and embedded hosts that run
+        # several loops each get a live one instead of a corpse.
+        loop = asyncio.get_running_loop()
+        session = self._proxy_session
+        if (
+            session is not None
+            and not session.closed
+            and self._proxy_session_loop is loop
+        ):
+            return session
+
+        if session is not None and not session.closed:
+            # Belongs to a different loop. Close it THERE if that loop is
+            # still alive; a closed loop has already dropped its transports,
+            # so there is nothing left to release and calling close() would
+            # raise. Not a silent swallow: the stale session is replaced and
+            # the reason is this comment.
+            old_loop = self._proxy_session_loop
+            if old_loop is not None and not old_loop.is_closed():
+                old_loop.call_soon_threadsafe(
+                    lambda s=session: asyncio.ensure_future(s.close(), loop=old_loop)
+                )
+
+        session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        self._proxy_session = session
+        self._proxy_session_loop = loop
+        return session
+
+    async def aclose_proxy_session(self) -> None:
+        """Close the shared proxy session. Idempotent.
+
+        Registered with the :class:`~kailash.runtime.shutdown.ShutdownCoordinator`
+        at construction, so the session is released on the normal shutdown
+        path rather than leaked to GC (#2085).
+        """
+        session = self._proxy_session
+        self._proxy_session = None
+        self._proxy_session_loop = None
+        if session is not None and not session.closed:
+            await session.close()
 
     def close(self) -> None:
         """Release per-workflow API runtimes (issue #1285).
@@ -924,6 +1007,10 @@ class WorkflowServer:
         allowed_methods: list[str] | None = None,
         auth_dependency: Callable[..., Any] | None = None,
         forward_credentials: bool = False,
+        blocked_networks: Sequence[Any] | None = None,
+        allow_metadata_destination: bool = False,
+        require_public_destination: bool = False,
+        max_response_bytes: int | None = None,
     ):
         """Register a proxied workflow running on another server.
 
@@ -963,10 +1050,33 @@ class WorkflowServer:
                 re-authorize the original caller; #2025 noted that stripping
                 unconditionally left the backend unable to re-authorize, and
                 this is the documented way to allow it.
+            blocked_networks: Extra CIDR blocks the destination may not
+                resolve into, on top of the always-blocked metadata and
+                link-local ranges. See
+                :func:`kailash.utils.proxy_guard.reject_unsafe_proxy_destination`.
+            allow_metadata_destination: Permit a destination in the cloud
+                metadata / link-local set (issue #2091). Defaults to False and
+                logs a WARNING naming the disabled protection when set --
+                there is no legitimate reason to proxy to 169.254.169.254,
+                and on the usual providers it hands out IAM credentials.
+            require_public_destination: Also refuse RFC1918 and loopback
+                destinations, adopting the stricter posture
+                ``nexus.http_client`` uses for outbound calls. Defaults to
+                False because proxying to an internal service is this
+                surface's common legitimate use.
+            max_response_bytes: Largest backend response body this route will
+                buffer, in bytes. Defaults to
+                :data:`~kailash.utils.proxy_guard.DEFAULT_MAX_RESPONSE_BYTES`
+                (64 MiB). A larger response is refused with 502 rather than
+                truncated (issue #2085). Per-registration so a backend that
+                legitimately serves large exports can raise it without
+                widening every other route. There is no 'unlimited' value.
 
         Raises:
             ProxyAuthNotConfiguredError: No authentication control is
                 configured for the route.
+            BlockedDestinationError: ``proxy_url`` resolves into the blocked
+                destination set (issue #2091).
             ValueError: ``name`` is already registered, or ``allowed_paths`` /
                 ``allowed_methods`` is missing or invalid.
         """
@@ -988,6 +1098,17 @@ class WorkflowServer:
             allowed_methods,
             name=name,
             supported=("GET", "POST", "PUT", "DELETE", "PATCH"),
+        )
+        max_response_bytes = normalize_max_response_bytes(max_response_bytes, name=name)
+        # The DESTINATION control (#2091). The four above constrain what a
+        # caller can do; this one constrains what the deployment can point at.
+        reject_unsafe_proxy_destination(
+            proxy_url,
+            name=name,
+            surface="WorkflowServer",
+            blocked_networks=blocked_networks,
+            allow_metadata_destination=allow_metadata_destination,
+            require_public_destination=require_public_destination,
         )
 
         # Create proxied workflow registration
@@ -1079,63 +1200,112 @@ class WorkflowServer:
             # refusing it.
 
             target_url = f"{proxy_url.rstrip('/')}/{path}"
-            timeout = aiohttp.ClientTimeout(total=30)
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                # Forward headers, excluding hop-by-hop headers and -- unless
-                # the registration opted in -- the caller's credentials. The
-                # credential set is shared with WorkflowAPIGateway so the two
-                # proxy surfaces cannot drift (security.md, Enforcement-Surface
-                # Parity); before #2025 they disagreed in opposite directions.
-                _excluded_headers = {"host", "content-length"}
-                _excluded_headers |= PROXY_HOP_BY_HOP_HEADERS
-                if not forward_credentials:
-                    _excluded_headers |= PROXY_CREDENTIAL_HEADERS
-                headers = {
-                    k: v
-                    for k, v in request.headers.items()
-                    if k.lower() not in _excluded_headers
-                }
+            # ONE session for the server's lifetime, not one per request
+            # (#2085). Deliberately NOT an `async with`: the session outlives
+            # this handler and is closed by the ShutdownCoordinator, so
+            # closing it here would tear it out from under concurrent
+            # requests.
+            session = await self._get_proxy_session()
 
-                body = (
-                    await request.body()
-                    if request.method in ("POST", "PUT", "PATCH")
-                    else None
-                )
+            # Forward headers, excluding hop-by-hop headers and -- unless
+            # the registration opted in -- the caller's credentials. The
+            # credential set is shared with WorkflowAPIGateway so the two
+            # proxy surfaces cannot drift (security.md, Enforcement-Surface
+            # Parity); before #2025 they disagreed in opposite directions.
+            _excluded_headers = {"host", "content-length"}
+            _excluded_headers |= PROXY_HOP_BY_HOP_HEADERS
+            if not forward_credentials:
+                _excluded_headers |= PROXY_CREDENTIAL_HEADERS
+            headers = {
+                k: v
+                for k, v in request.headers.items()
+                if k.lower() not in _excluded_headers
+            }
 
-                async with session.request(
-                    request.method,
-                    target_url,
-                    headers=headers,
-                    data=body,
-                    # multi_items() preserves repeated keys (?tag=a&tag=b);
-                    # dict() silently kept only the last (issue #2025).
-                    params=list(request.query_params.multi_items()),
-                    # EXPLICIT, and load-bearing. aiohttp defaults this to
-                    # True. Every control this route enforces -- the auth
-                    # gate, the path allowlist, traversal rejection, the
-                    # charset barrier -- applies to hop 1 only, so following a
-                    # redirect hands the caller an authority pivot on hop 2:
-                    # a backend with any open redirect (an SSO `?next=` bounce
-                    # is ubiquitous, and query strings are forwarded verbatim)
-                    # makes the proxy fetch an arbitrary host and return the
-                    # body as if it were the backend's. `location` is not in
-                    # the response allowlist, so the caller cannot even see
-                    # that it happened. Measured before this line existed:
-                    # a fully-hardened registration fetched cloud-metadata.
-                    allow_redirects=False,
-                ) as resp:
-                    content = await resp.read()
-                    safe_headers = {
-                        k: v
-                        for k, v in resp.headers.items()
-                        if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
-                    }
-                    return StarletteResponse(
-                        content=content,
-                        status_code=resp.status,
-                        headers=safe_headers,
+            body = (
+                await request.body()
+                if request.method in ("POST", "PUT", "PATCH")
+                else None
+            )
+
+            async with session.request(
+                request.method,
+                target_url,
+                headers=headers,
+                data=body,
+                # multi_items() preserves repeated keys (?tag=a&tag=b);
+                # dict() silently kept only the last (issue #2025).
+                params=list(request.query_params.multi_items()),
+                # EXPLICIT, and load-bearing. aiohttp defaults this to
+                # True. Every control this route enforces -- the auth
+                # gate, the path allowlist, traversal rejection, the
+                # charset barrier -- applies to hop 1 only, so following a
+                # redirect hands the caller an authority pivot on hop 2:
+                # a backend with any open redirect (an SSO `?next=` bounce
+                # is ubiquitous, and query strings are forwarded verbatim)
+                # makes the proxy fetch an arbitrary host and return the
+                # body as if it were the backend's. `location` is not in
+                # the response allowlist, so the caller cannot even see
+                # that it happened. Measured before this line existed:
+                # a fully-hardened registration fetched cloud-metadata.
+                allow_redirects=False,
+            ) as resp:
+                # BOUNDED read (#2085). `resp.read()` buffered the entire
+                # body with no cap, so a backend serving a multi-gigabyte
+                # response -- compromised, misconfigured, or just exporting
+                # a large dataset -- was buffered whole in this process, and
+                # concurrent requests multiplied it.
+                #
+                # Accumulate in CHUNKS until the cap is exceeded or the body
+                # ends. `resp.content.read(n)` looks like the obvious way to
+                # do this and is WRONG: aiohttp's StreamReader returns *up to*
+                # n bytes -- whatever is buffered -- so a single call silently
+                # returns a SHORT read on a large body. Measured: an 8 MiB
+                # backend response came back as 155023 bytes with a 200,
+                # i.e. truncated and indistinguishable from complete.
+                #
+                # `content-length` is deliberately not trusted as the signal
+                # either: it is absent from the response allowlist precisely
+                # because it describes COMPRESSED bytes over a decompressed
+                # body (#2025). The bytes counted here are DECOMPRESSED,
+                # which is the memory that actually matters.
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in resp.content.iter_chunked(65536):
+                    total += len(chunk)
+                    if total > max_response_bytes:
+                        break
+                    chunks.append(chunk)
+                content = b"".join(chunks)
+                if total > max_response_bytes:
+                    logger.warning(
+                        "workflow_server.proxy.response_too_large",
+                        extra={
+                            "workflow": name,
+                            "max_response_bytes": max_response_bytes,
+                        },
                     )
+                    # Fail CLOSED: refuse rather than return a TRUNCATED body,
+                    # which would be indistinguishable from a complete one to
+                    # the caller and is its own correctness defect.
+                    return JSONResponse(
+                        status_code=502,
+                        content={
+                            "error": "Backend response exceeded the configured "
+                            "limit for this proxy route"
+                        },
+                    )
+                safe_headers = {
+                    k: v
+                    for k, v in resp.headers.items()
+                    if k.lower() in PROXY_SAFE_RESPONSE_HEADERS
+                }
+                return StarletteResponse(
+                    content=content,
+                    status_code=resp.status,
+                    headers=safe_headers,
+                )
 
         logger.info(f"Registered proxied workflow '{name}' -> {proxy_url}")
 

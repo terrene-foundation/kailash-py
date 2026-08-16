@@ -61,17 +61,60 @@ The four registration-time controls:
 4. **Traversal rejection** -- :func:`reject_unsafe_proxy_path` refuses ``..``
    segments and encoded separators before the target URL is built, rather
    than relying on the HTTP client's URL normalization.
+
+Segment-parameter collapse (#2087) and what this guard does NOT close
+---------------------------------------------------------------------
+
+The ``..`` segment check above is correct for the RFC 3986 shape and was
+BYPASSABLE for the servlet-class one. Tomcat, Jetty and others strip
+everything from ``;`` to the end of a path segment while resolving it, so a
+segment of ``..;`` is not equal to ``..`` at this proxy, passes the check,
+and is then normalised BY THE BACKEND to ``..`` -- restoring the traversal
+the guard exists to prevent. ``..;foo``, ``..%3B`` and the double-encoded
+``..%253B`` are the same defect under different spellings.
+
+The approach taken is deliberately the NARROW one of the three the issue
+weighed: :func:`_collapse_segment_parameters` models the servlet path-
+parameter rule for ONE purpose -- deciding whether a segment would BECOME a
+dot-segment -- and the refusal fires only when it would. A segment carrying a
+legitimate matrix parameter (``products;color=blue``, ``a;jsessionid=xyz``)
+is untouched, because a blanket ban on ``;`` would be a regression: ``;`` is
+an RFC 3986 sub-delimiter and valid in paths.
+
+**This closes one MEMBER of the family, not the class**, and that is stated
+here rather than implied. The guard models the ``;`` convention because it is
+the one with known backends behind it. A backend that collapses a DIFFERENT
+character, or that applies a different normalisation before path resolution,
+reintroduces the same class under a new spelling and would need its own
+clause here. The alternative -- carrying a full normalisation model of "the
+strictest plausible backend" in core -- was rejected: it is a maintenance
+surface whose divergence from what the real backend does is itself a source
+of bypasses, and it would claim a completeness this cannot deliver.
+
+Also NOT closed, and worth naming so it is not assumed: this is a check on
+the path THIS process forwards. It does not constrain how the backend
+resolves the result, and it is not a substitute for the backend refusing to
+serve paths outside its own root.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
+from .network_guard import BlockedDestinationError
+from .network_guard import check_url as _check_destination_url
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFAULT_MAX_RESPONSE_BYTES",
+    "BlockedDestinationError",
+    "ProxyResponseTooLargeError",
+    "normalize_max_response_bytes",
+    "reject_unsafe_proxy_destination",
     "DEFAULT_ALLOWED_METHODS",
     "PROXY_CREDENTIAL_HEADERS",
     "PROXY_HOP_BY_HOP_HEADERS",
@@ -202,6 +245,173 @@ PROXY_SAFE_RESPONSE_HEADERS: frozenset = frozenset(
         "last-modified",
     }
 )
+
+
+#: Bytes a proxied response body may occupy in this process before the proxy
+#: refuses it (#2085). Per-registration, so a backend that legitimately serves
+#: large exports can raise it without widening every other route.
+#:
+#: 64 MiB is chosen to be generous for API payloads while still bounding the
+#: damage: the pre-#2085 behaviour was UNBOUNDED, and concurrent requests
+#: multiply whatever the figure is. A finite documented default is the point;
+#: the exact number is a judgement call the registration can override.
+DEFAULT_MAX_RESPONSE_BYTES: int = 64 * 1024 * 1024
+
+
+class ProxyResponseTooLargeError(ValueError):
+    """A proxied backend response exceeded the registration's byte cap."""
+
+
+def normalize_max_response_bytes(
+    max_response_bytes: Optional[int],
+    *,
+    name: str,
+) -> int:
+    """Validate the per-registration response cap.
+
+    Args:
+        max_response_bytes: The cap. ``None`` selects
+            :data:`DEFAULT_MAX_RESPONSE_BYTES`.
+        name: Workflow identifier, for error messages.
+
+    Returns:
+        The cap in bytes.
+
+    Raises:
+        ValueError: The cap is not a positive integer. There is deliberately
+            no "unlimited" spelling: ``0`` or a negative value raises rather
+            than disabling the bound, because an unbounded proxy is the defect
+            #2085 exists to close and a magic disable value is how it would
+            quietly come back.
+    """
+    if max_response_bytes is None:
+        return DEFAULT_MAX_RESPONSE_BYTES
+    if isinstance(max_response_bytes, bool) or not isinstance(max_response_bytes, int):
+        raise ValueError(
+            f"max_response_bytes for proxied workflow '{name}' must be a "
+            f"positive integer, got {type(max_response_bytes).__name__} "
+            f"({max_response_bytes!r})."
+        )
+    if max_response_bytes <= 0:
+        raise ValueError(
+            f"max_response_bytes for proxied workflow '{name}' must be a "
+            f"POSITIVE integer, got {max_response_bytes}. There is no "
+            f"'unlimited' setting: unbounded buffering is the defect this cap "
+            f"exists to close (issue #2085). Raise the cap instead."
+        )
+    return max_response_bytes
+
+
+def reject_unsafe_proxy_destination(
+    proxy_url: str,
+    *,
+    name: str,
+    surface: str,
+    blocked_networks: Optional[Sequence[ipaddress._BaseNetwork]] = None,
+    allow_metadata_destination: bool = False,
+    require_public_destination: bool = False,
+) -> None:
+    """Refuse a proxy registration whose DESTINATION is an unsafe address.
+
+    The fifth registration-time control (#2091). The four above constrain what
+    a CALLER can do; this one constrains what the DEPLOYMENT can point at.
+
+    ``proxy_url`` comes from a developer calling a Python API, not from
+    request data, so this is a deployment-misconfiguration surface rather
+    than a caller-driven one -- materially lower severity than the defects
+    #2064 closed, and worth stating rather than glossing. It still matters:
+    a registration pointing at ``http://169.254.169.254/`` publishes cloud
+    metadata -- including IAM credentials on the usual providers -- to every
+    authenticated caller, and a reader of the pre-#2091 code would reasonably
+    have concluded the destination was deliberately unconstrained.
+
+    The decision logic is :func:`kailash.utils.network_guard.check_url`,
+    which is the guard lifted out of ``nexus.http_client`` -- the reference
+    implementation the issue named. Both now run the same code.
+
+    Default posture, and why it is not simply nexus's
+    -------------------------------------------------
+
+    Nexus blocks RFC1918 + loopback + link-local + IMDS, which is right for
+    an outbound client talking to the public internet. A reverse proxy is
+    frequently pointed at an internal service ON PURPOSE -- that is the
+    common legitimate use -- so a blanket RFC1918 block here would break the
+    normal case, and a control that breaks the normal case gets switched off
+    wholesale, taking the IMDS protection with it.
+
+    So the default blocks the subset with NO legitimate proxy use at all:
+    cloud metadata addresses, the metadata hostnames, and link-local
+    (169.254.0.0/16, fe80::/10). RFC1918 and loopback are permitted by
+    default and can be blocked with ``require_public_destination=True``.
+
+    Per ``security.md`` § Secure-Default the metadata block is ON by default
+    with an EXPLICIT, LOUD opt-out: ``allow_metadata_destination=True`` logs
+    a WARNING naming the protection being disabled. It is deliberately a
+    separate argument from ``require_public_destination`` so that widening
+    the posture for internal backends never silently widens IMDS too.
+
+    Limits, stated rather than implied
+    ----------------------------------
+
+    * The check runs at REGISTRATION, against the address the destination
+      resolves to THEN. A hostname that resolves benign at registration and
+      to 169.254.169.254 later is NOT caught -- this is not a DNS-rebinding
+      defence. The metadata HOSTNAMES are additionally blocked by name, which
+      does not depend on resolution.
+    * A destination that cannot be resolved at registration is PERMITTED with
+      a WARNING rather than refused. Backends legitimately are not up yet
+      when the proxy is registered, and failing there would make the control
+      one that deployments route around. The warning names the destination as
+      unverified so the gap is visible rather than silent.
+
+    Raises:
+        BlockedDestinationError: The destination is in the blocked set.
+    """
+    if allow_metadata_destination:
+        logger.warning(
+            "proxy_guard.metadata_destination_allowed",
+            extra={"workflow": name, "surface": surface},
+        )
+        logger.warning(
+            "Proxied workflow '%s' on %s registered with "
+            "allow_metadata_destination=True: cloud-metadata and link-local "
+            "destinations are NOT blocked for this route. On the usual cloud "
+            "providers the metadata service hands out IAM credentials, so any "
+            "caller authorized to use this proxy can read them (issue #2091).",
+            name,
+            surface,
+        )
+
+    try:
+        _check_destination_url(
+            proxy_url,
+            blocked_networks=blocked_networks,
+            allow_private=not require_public_destination,
+            allow_metadata=allow_metadata_destination,
+            resolve_dns=True,
+        )
+    except BlockedDestinationError as exc:
+        if exc.reason != "resolution_failed":
+            raise
+        # Not fatal -- see "Limits" above. Loud, and it names what was not
+        # checked, so an unverified destination is visible rather than silent.
+        logger.warning(
+            "proxy_guard.destination_unresolved",
+            extra={
+                "workflow": name,
+                "surface": surface,
+                "url_fingerprint": exc.url_fingerprint,
+            },
+        )
+        logger.warning(
+            "Destination for proxied workflow '%s' on %s could not be "
+            "resolved at registration, so its address was NOT checked "
+            "against the blocked set (issue #2091). Registration proceeds "
+            "because a backend is legitimately not always up yet at "
+            "registration time.",
+            name,
+            surface,
+        )
 
 
 class ProxyAuthNotConfiguredError(RuntimeError):
@@ -508,6 +718,29 @@ def path_matches_allowlist(path: str, allowlist: Sequence[PathPattern]) -> bool:
 #: process would forward verbatim for the backend to decode a second time.
 _ENCODED_TRAVERSAL_TOKENS: tuple[str, ...] = ("%2e", "%2f", "%5c")
 
+#: A still-encoded semicolon, in either case. Starlette decodes a path
+#: parameter ONCE, so ``..%3B/`` already arrives as ``..;/`` and is handled by
+#: the literal-``;`` truncation in :func:`_collapse_segment_parameters`. This
+#: catches the DOUBLE-encoded form (``..%253B/`` -> ``..%3B/`` after that
+#: decode), which this process would otherwise forward verbatim for the
+#: backend to decode a second time and then collapse.
+_ENCODED_SEMICOLON_RE: re.Pattern = re.compile(r"%3[bB]")
+
+
+def _collapse_segment_parameters(segment: str) -> str:
+    """Return ``segment`` as a servlet-class backend would resolve it.
+
+    Servlet-class backends (Tomcat, Jetty, and others following the same
+    convention) treat everything from ``;`` to the end of a path SEGMENT as a
+    path parameter -- ``jsessionid`` is the canonical one -- and strip it
+    while resolving the path. So the segment ``..;`` is not equal to ``..``
+    at this proxy but IS ``..`` at the backend.
+
+    The still-encoded ``%3B`` form is decoded first so the double-encoded
+    spelling collapses the same way.
+    """
+    return _ENCODED_SEMICOLON_RE.sub(";", segment).split(";", 1)[0]
+
 
 def reject_unsafe_proxy_path(path: str) -> Optional[str]:
     """Return a human-readable reason to refuse ``path``, or ``None``.
@@ -538,8 +771,19 @@ def reject_unsafe_proxy_path(path: str) -> Optional[str]:
     for token in _ENCODED_TRAVERSAL_TOKENS:
         if token in lowered:
             return f"path contains an encoded path separator or dot-segment ({token})"
-    if any(segment == ".." for segment in path.split("/")):
-        return "path contains a parent-directory segment (..)"
+    for segment in path.split("/"):
+        if segment == "..":
+            return "path contains a parent-directory segment (..)"
+        # #2087: the segment is not `..` HERE, but a servlet-class backend
+        # strips the path parameter and resolves it as `..`. Checked only
+        # when the collapse actually changes the segment, so legitimate
+        # matrix parameters (`products;color=blue`) are unaffected -- only a
+        # segment that BECOMES a dot-segment is refused.
+        if segment != ".." and _collapse_segment_parameters(segment) == "..":
+            return (
+                "path contains a parent-directory segment carrying a path "
+                "parameter (..;), which a servlet-class backend resolves to .."
+            )
     if "\u2028" in path or "\u2029" in path:
         return "path contains a Unicode line or paragraph separator"
     return None

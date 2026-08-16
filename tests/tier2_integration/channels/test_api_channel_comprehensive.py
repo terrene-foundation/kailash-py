@@ -1,6 +1,7 @@
 """Comprehensive unit tests for api_channel module."""
 
 import asyncio
+import ipaddress
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -353,6 +354,14 @@ class TestAPIChannel:
             allowed_methods=None,
             auth_dependency=None,
             forward_credentials=False,
+            # #2091 destination controls and the #2085 response cap. Each
+            # defaults to None/False here and is resolved by the SERVER, not
+            # the channel -- the channel's job is to thread them, and this
+            # assertion is what catches it silently dropping one.
+            blocked_networks=None,
+            allow_metadata_destination=False,
+            require_public_destination=False,
+            max_response_bytes=None,
         )
 
     def test_proxy_workflow_threads_security_kwargs(self, api_channel):
@@ -368,6 +377,10 @@ class TestAPIChannel:
             allowed_methods=["GET", "POST"],
             auth_dependency=dep,
             forward_credentials=True,
+            blocked_networks=[ipaddress.ip_network("10.9.0.0/16")],
+            allow_metadata_destination=True,
+            require_public_destination=True,
+            max_response_bytes=4096,
         )
 
         kwargs = api_channel.workflow_server.proxy_workflow.call_args.kwargs
@@ -375,6 +388,14 @@ class TestAPIChannel:
         assert kwargs["allowed_methods"] == ["GET", "POST"]
         assert kwargs["auth_dependency"] is dep
         assert kwargs["forward_credentials"] is True
+        # #2091 destination controls + #2085 response cap. Asserted with
+        # NON-DEFAULT values on purpose: a channel that dropped one and let the
+        # server's default stand would still pass an assertion written against
+        # the defaults.
+        assert kwargs["blocked_networks"] == [ipaddress.ip_network("10.9.0.0/16")]
+        assert kwargs["allow_metadata_destination"] is True
+        assert kwargs["require_public_destination"] is True
+        assert kwargs["max_response_bytes"] == 4096
 
     @pytest.mark.asyncio
     async def test_health_check(self, api_channel):
