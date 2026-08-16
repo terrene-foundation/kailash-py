@@ -325,6 +325,8 @@ class APIGateway:
         # a principal from a request field (issue #2102). Read by
         # `_resolve_identity`.
         self._require_auth = resolved_require_auth
+        if not resolved_require_auth:
+            self._warn_session_ownership_unenforced()
         self._auth_config = resolve_server_auth(
             require_auth=resolved_require_auth,
             auth_config=(
@@ -616,6 +618,133 @@ class APIGateway:
 
         return caller_supplied
 
+    async def _require_session_owner(
+        self, connection: Any, session_id: str
+    ) -> Optional[str]:
+        """Fail closed unless the caller OWNS ``session_id``.
+
+        THE single ownership predicate for this gateway. Every session-scoped
+        route calls it, so there is one rule rather than twelve inline
+        comparisons that drift (issue #2145; the same consolidation argument
+        as `_resolve_identity` and `subject_from_claims`).
+
+        #2102 answered "who is calling". This answers the adjacent question it
+        does NOT answer: **what may that caller act on**. Every route here
+        takes a caller-supplied ``session_id`` and acted on it without ever
+        comparing the session's owner against the caller, even though
+        ``WorkflowSession.user_id`` has always carried that owner. Measured
+        before the fix, both parties holding valid tokens this gateway
+        itself minted::
+
+            POST /api/workflows?session_id=<alice>   as bob -> 200
+            POST /api/executions?session_id=<alice>  as bob -> 200
+
+        which is authenticated arbitrary code execution inside another user's
+        session, since the workflow body is caller-authored `PythonCodeNode`
+        source.
+
+        The four outcomes, in order:
+
+        1. **Open deployment** (``require_auth`` resolved False -- i.e.
+           ``require_auth=False`` or ``enable_auth=False``). The check is
+           SKIPPED, deliberately and as an explicit branch rather than as a
+           side effect of there being no principal to compare. Such a
+           deployment has no identities at all, so there is nothing an
+           ownership rule could mean; the exposure is announced once at
+           construction by ``_warn_session_ownership_unenforced``.
+        2. **No principal** on a gated deployment -> 401, via
+           :meth:`_resolve_identity`, which owns that decision.
+        3. **Unclaimed session** -- the owner is empty or ``None`` -> 403.
+           This is legacy state: since #2102 every session created carries a
+           server-derived owner, so an ownerless one predates that fix.
+           Treating an empty owner as a wildcard that matches every caller
+           would be the silent-fallback shape (`zero-tolerance.md` Rule 3) and
+           would quietly re-open exactly what this closes.
+        4. **Someone else's session** -> 404, NOT 403, and the difference is
+           deliberate. 403 would confirm that a session id exists, turning
+           every route here into a membership oracle over session ids. The
+           unclaimed case above answers 403 because it is an operator-facing
+           condition about the server's own legacy state, and reaching it
+           requires already holding a valid session id -- it tells an attacker
+           nothing it did not already know.
+
+        Args:
+            connection: The HTTP request or WebSocket handshake.
+            session_id: The caller-supplied session identifier.
+
+        Returns:
+            The principal that owns the session, or ``None`` on an open
+            deployment where no ownership rule applies.
+
+        Raises:
+            HTTPException: 401 (no principal), 403 (unclaimed session), or 404
+                (unknown session, or one owned by somebody else).
+        """
+        if not self._require_auth:
+            return None
+
+        principal = await self._resolve_identity(connection, None)
+
+        session = await self.agent_ui.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        owner = getattr(session, "user_id", None)
+        if not isinstance(owner, str) or not owner:
+            logger.warning(
+                "api_gateway.session_without_owner",
+                extra={"session_id": sanitize_log_value(session_id, 128)},
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "This session has no recorded owner and cannot be acted "
+                    "on while the gateway authenticates requests. Sessions "
+                    "created before server-derived identity landed carry no "
+                    "owner; create a new session, or run the gateway with "
+                    "require_auth=False if it is meant to serve openly."
+                ),
+            )
+
+        if owner != principal:
+            # Logged with BOTH ids so an operator can see the attempt; the
+            # CLIENT is told only that there is no such session.
+            logger.warning(
+                "api_gateway.session_ownership_denied",
+                extra={
+                    "session_id": sanitize_log_value(session_id, 128),
+                    "principal": sanitize_log_value(principal, 128),
+                },
+            )
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return principal
+
+    def _warn_session_ownership_unenforced(self) -> None:
+        """Announce, once per gateway, that session ownership is not enforced.
+
+        Separate from `resolve_server_auth`'s own `server_auth.disabled` WARN
+        because it names a DIFFERENT protection. That one says requests are
+        not authenticated; this one says any caller may drive any session --
+        including executing workflows in it -- which is the consequence an
+        operator actually needs to weigh (`security.md` § Secure-Default:
+        a control that is off must say so loudly and name its wiring).
+        """
+        logger.warning(
+            "api_gateway.session_ownership_unenforced",
+            extra={
+                "reason": (
+                    "require_auth resolved False, so no principal exists to "
+                    "own a session"
+                ),
+                "exposure": (
+                    "any caller may read, drive and close any session, "
+                    "including POST /api/executions which runs workflows in it"
+                ),
+                "wiring": "construct with require_auth=True to enforce ownership",
+            },
+        )
+
     def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for gateway operations."""
 
@@ -824,8 +953,10 @@ class APIGateway:
                 raise HTTPException(status_code=500, detail=detail) from e
 
         @self.app.get("/api/sessions/{session_id}")
-        async def get_session(session_id: str):
+        async def get_session(session_id: str, http_request: Request):
             """Get session information."""
+            await self._require_session_owner(http_request, session_id)
+
             session = await self.agent_ui.get_session(session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
@@ -846,34 +977,64 @@ class APIGateway:
             }
 
         @self.app.delete("/api/sessions/{session_id}")
-        async def close_session(session_id: str):
+        async def close_session(session_id: str, http_request: Request):
             """Close a session."""
+            await self._require_session_owner(http_request, session_id)
+
             await self.agent_ui.close_session(session_id)
             return {"message": "Session closed"}
 
         @self.app.get("/api/sessions")
-        async def list_sessions():
-            """List all active sessions."""
+        async def list_sessions(http_request: Request):
+            """List the caller's active sessions.
+
+            SCOPED to the caller, where it used to enumerate every session on
+            the gateway with its owner's `user_id`. That listing was not merely
+            an information leak in its own right -- it was the TARGET DIRECTORY
+            for the rest of #2145: the other eleven routes need a `session_id`
+            they do not otherwise possess, and this handed out every one of
+            them, already labelled with whose it was.
+
+            On an open deployment (`require_auth` resolved False) there are no
+            identities, so the unscoped listing remains -- that is the same
+            explicit branch every other route here takes, not an oversight.
+            """
+            principal = (
+                await self._resolve_identity(http_request, None)
+                if self._require_auth
+                else None
+            )
+
             sessions = []
             for session_id, session in self.agent_ui.sessions.items():
-                if session.active:
-                    sessions.append(
-                        {
-                            "session_id": session_id,
-                            "user_id": session.user_id,
-                            "created_at": session.created_at.isoformat(),
-                            "workflow_count": len(session.workflows),
-                            "execution_count": len(session.executions),
-                        }
-                    )
+                if not session.active:
+                    continue
+                # `principal is None` ONLY on an open deployment: on a gated
+                # one `_resolve_identity` raised 401 rather than returning it.
+                if principal is not None and session.user_id != principal:
+                    continue
+                sessions.append(
+                    {
+                        "session_id": session_id,
+                        "user_id": session.user_id,
+                        "created_at": session.created_at.isoformat(),
+                        "workflow_count": len(session.workflows),
+                        "execution_count": len(session.executions),
+                    }
+                )
             return {"sessions": sessions, "total": len(sessions)}
 
     def _setup_workflow_routes(self):
         """Setup workflow management routes."""
 
         @self.app.post("/api/workflows")
-        async def create_workflow(request: WorkflowCreateRequest, session_id: str):
+        async def create_workflow(
+            request: WorkflowCreateRequest, session_id: str, http_request: Request
+        ):
             """Create a new workflow dynamically."""
+            # BEFORE the try: an ownership refusal is a deliberate status and
+            # must not be relabelled a 500 by the handler below.
+            await self._require_session_owner(http_request, session_id)
             try:
                 workflow_config = {
                     "name": request.name,
@@ -902,8 +1063,12 @@ class APIGateway:
                 ) from e
 
         @self.app.get("/api/workflows/{workflow_id}")
-        async def get_workflow(workflow_id: str, session_id: str):
+        async def get_workflow(
+            workflow_id: str, session_id: str, http_request: Request
+        ):
             """Get workflow information and schema."""
+            await self._require_session_owner(http_request, session_id)
+
             session = await self.agent_ui.get_session(session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
@@ -926,8 +1091,20 @@ class APIGateway:
             }
 
         @self.app.get("/api/workflows")
-        async def list_workflows(session_id: Optional[str] = None):
-            """List available workflows."""
+        async def list_workflows(
+            http_request: Request, session_id: Optional[str] = None
+        ):
+            """List available workflows.
+
+            `session_id` is OPTIONAL here, so the ownership check is too --
+            but only in the sense that there is nothing to own when it is
+            absent. Supplying another user's id is refused exactly as it is on
+            the routes where it is required; without one, the caller sees only
+            the SHARED workflows, which are shared by construction.
+            """
+            if session_id:
+                await self._require_session_owner(http_request, session_id)
+
             workflows = []
 
             # Add shared workflows
@@ -963,8 +1140,15 @@ class APIGateway:
         """Setup workflow execution routes."""
 
         @self.app.post("/api/executions", response_model=ExecutionResponse)
-        async def execute_workflow(request: WorkflowExecuteRequest, session_id: str):
+        async def execute_workflow(
+            request: WorkflowExecuteRequest, session_id: str, http_request: Request
+        ):
             """Execute a workflow."""
+            # THE site the #2145 attack trace ends at: the workflow body is
+            # caller-authored `PythonCodeNode` source, so an unowned execution
+            # here is arbitrary code execution in someone else's session.
+            # Outside the try, so the refusal is not relabelled a 500.
+            await self._require_session_owner(http_request, session_id)
             try:
                 execution_id = await self.agent_ui.execute(
                     session_id=session_id,
@@ -988,8 +1172,12 @@ class APIGateway:
                 ) from e
 
         @self.app.get("/api/executions/{execution_id}")
-        async def get_execution_status(execution_id: str, session_id: str):
+        async def get_execution_status(
+            execution_id: str, session_id: str, http_request: Request
+        ):
             """Get execution status."""
+            await self._require_session_owner(http_request, session_id)
+
             status = await self.agent_ui.get_execution_status(execution_id, session_id)
             if not status:
                 raise HTTPException(status_code=404, detail="Execution not found")
@@ -1004,14 +1192,20 @@ class APIGateway:
             }
 
         @self.app.delete("/api/executions/{execution_id}")
-        async def cancel_execution(execution_id: str, session_id: str):
+        async def cancel_execution(
+            execution_id: str, session_id: str, http_request: Request
+        ):
             """Cancel a running execution."""
+            await self._require_session_owner(http_request, session_id)
+
             await self.agent_ui.cancel_execution(execution_id, session_id)
             return {"message": "Execution cancelled"}
 
         @self.app.get("/api/executions")
-        async def list_executions(session_id: str):
+        async def list_executions(session_id: str, http_request: Request):
             """List executions for a session."""
+            await self._require_session_owner(http_request, session_id)
+
             session = await self.agent_ui.get_session(session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
@@ -1084,8 +1278,12 @@ class APIGateway:
             return {"node_type": node_type, "schema": schema}
 
         @self.app.get("/api/schemas/workflows/{workflow_id}")
-        async def get_workflow_schema(workflow_id: str, session_id: str):
+        async def get_workflow_schema(
+            workflow_id: str, session_id: str, http_request: Request
+        ):
             """Get schema for a specific workflow."""
+            await self._require_session_owner(http_request, session_id)
+
             session = await self.agent_ui.get_session(session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
@@ -1134,6 +1332,20 @@ class APIGateway:
 
             try:
                 resolved_user_id = await self._resolve_identity(websocket, user_id)
+                # `session_id` is the OTHER caller-supplied selector on this
+                # route, and #2139's `user_id` pin does not cover it:
+                # `ConnectionManager.send_to_session` walks
+                # `session_connections[session_id]` and calls
+                # `send_to_connection` DIRECTLY, never evaluating the
+                # `EventFilter`. So subscribing with another user's session id
+                # delivered that session's traffic regardless of the pinned
+                # user. Measured before this fix -- alice, authenticated as
+                # alice, on `?session_id=<bob's session>`::
+                #
+                #     send_to_session(bob) delivered to 1 connection(s)
+                #     ALICE'S SOCKET RECEIVED: {"body": "bob-session-only payload"}
+                if session_id:
+                    await self._require_session_owner(websocket, session_id)
             except HTTPException:
                 # A websocket cannot carry a 401. 1008 is POLICY VIOLATION,
                 # sent WITHOUT `accept()` so the handshake is refused outright
@@ -1179,15 +1391,44 @@ class APIGateway:
             """
             event_type_list = event_types.split(",") if event_types else None
             resolved_user_id = await self._resolve_identity(request, user_id)
+            # Same second selector as `/ws`, same reason: the SSE manager
+            # tracks streams by `session_id` independently of the filter.
+            if session_id:
+                await self._require_session_owner(request, session_id)
 
             return self.realtime.create_sse_stream(
                 request, session_id, resolved_user_id, event_type_list
             )
 
         @self.app.post("/api/webhooks")
-        async def register_webhook(request: WebhookRegisterRequest):
-            """Register a webhook endpoint."""
+        async def register_webhook(
+            request: WebhookRegisterRequest, http_request: Request
+        ):
+            """Register a webhook endpoint.
+
+            THE THIRD SUBSCRIPTION SURFACE, and the one both prior fixes
+            missed. `/ws` and `/events` were scoped to the caller's principal
+            (#2151, #2145), but a webhook is registered once and delivered to
+            by the server forever after -- it consults no connection registry,
+            so neither fix reaches it. Registered with an all-unset
+            `EventFilter`, it matched EVERY event from EVERY user, because
+            `EventFilter.matches` skips each unset criterion.
+
+            The deferral criterion the earlier sweep used -- "does this route
+            take an identity field?" -- is exactly what let this through: this
+            route takes none. For a subscription route the question is instead
+            "does it CREATE or SERVE a subscription to other users' events."
+            """
             webhook_id = str(uuid.uuid4())
+
+            # `None` ONLY on an open deployment, where there is no principal to
+            # scope by and the unscoped filter is that configuration's
+            # documented contract.
+            principal = (
+                await self._resolve_identity(http_request, None)
+                if self._require_auth
+                else None
+            )
 
             self.realtime.register_webhook(
                 webhook_id=webhook_id,
@@ -1195,6 +1436,7 @@ class APIGateway:
                 secret=request.secret,
                 event_types=request.event_types,
                 headers=request.headers,
+                user_id=principal,
             )
 
             return {
@@ -1235,11 +1477,34 @@ class APIGateway:
 
         @self.app.get("/api/events/recent")
         async def get_recent_events(
+            http_request: Request,
             count: int = 100,
             event_types: Optional[str] = None,
             session_id: Optional[str] = None,
         ):
-            """Get recent events with filtering."""
+            """Get recent events with filtering.
+
+            Two changes, and the second is the one that matters. With a
+            `session_id` the ownership check applies as everywhere else.
+            WITHOUT one this returned every user's recent events to any
+            authenticated caller -- the #2151 confidentiality defect at the
+            REST surface rather than the websocket one -- so the filter is now
+            pinned to the caller's own `user_id`.
+
+            That filter also excludes events carrying NO `user_id`, and that
+            is the intended direction: an event this gateway cannot attribute
+            to the caller is not one to hand them (`EventFilter.matches`
+            rejects on `event.user_id != self.user_id`).
+            """
+            # Outside the try: an ownership refusal is a deliberate status and
+            # must reach the client rather than becoming a 500 below.
+            principal = None
+            if self._require_auth:
+                principal = (
+                    await self._require_session_owner(http_request, session_id)
+                    if session_id
+                    else await self._resolve_identity(http_request, None)
+                )
             try:
                 # Parse event types
                 event_type_list = None
@@ -1250,7 +1515,9 @@ class APIGateway:
 
                 # Create filter
                 event_filter = EventFilter(
-                    event_types=event_type_list, session_id=session_id
+                    event_types=event_type_list,
+                    session_id=session_id,
+                    user_id=principal,
                 )
 
                 # Get events
