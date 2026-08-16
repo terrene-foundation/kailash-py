@@ -21,7 +21,7 @@ isort/D3). Three PRs open.
 | #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
 | ~~#2150~~ | ✅ **MERGED** — kaizen SSRF consolidation | See "What #2150 landed" below |
 | ~~#2185~~ | ✅ **MERGED** — mock embedder no longer the production default (#2174) | See "What #2185 landed" below |
-| #2186 | kaizen: correct a delegation claim shipped in #2150 | OPEN — `fingerprint_secret` does NOT delegate to `fingerprint_value`; they are duplicate bodies held identical by nothing but a test |
+| ~~#2186~~ | ✅ **MERGED** — corrects a delegation claim shipped in #2150 | `fingerprint_secret` does NOT delegate to `fingerprint_value`; they are DUPLICATE bodies. The false claim is gone and the byte-identity is now pinned by `test_url_safety_log_fingerprint_contract.py` — verified on merged main, both return `493fa3b2`. **Two duplicate bodies held in sync by nothing but a test is the same shape as everything else here: a control whose success is not what it appears to guarantee.** |
 | #2123 | loom sync | 116 behind, untouched this session |
 
 ## What #2169 fixed (merged)
