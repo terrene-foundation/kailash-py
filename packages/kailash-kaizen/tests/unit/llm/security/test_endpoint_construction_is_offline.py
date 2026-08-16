@@ -169,9 +169,14 @@ def test_offline_decidable_rejections_still_fire_at_construction(
 @pytest.mark.parametrize(
     "resolved_ip,expected_reason",
     [
-        ("127.0.0.1", "private_ipv4"),
+        ("127.0.0.1", "loopback"),
         ("10.0.0.5", "private_ipv4"),
         ("169.254.169.254", "metadata_service"),
+        # IPv6 wrapper forms -- the gap that hid the parse/connect bucket
+        # divergence, because no wrapper probe ever reached this gate.
+        ("64:ff9b::169.254.169.254", "metadata_service"),
+        ("::ffff:0:a9fe:a9fe", "metadata_service"),
+        ("::ffff:127.0.0.1", "ipv4_mapped"),
     ],
 )
 def test_safe_dns_resolver_still_refuses_the_host_construction_admitted(

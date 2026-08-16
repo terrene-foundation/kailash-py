@@ -74,7 +74,9 @@ __all__ = [
     "embedded_ipv4",
     "is_private_ipv4",
     "is_private_ipv6",
+    "ip_reason",
     "iter_resolved_ips",
+    "metadata_candidates",
     "url_fingerprint",
 ]
 
@@ -242,10 +244,19 @@ def embedded_ipv4(
     return None
 
 
-def _metadata_candidates(
+def metadata_candidates(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> "list[ipaddress.IPv4Address | ipaddress.IPv6Address]":
-    """The address plus any IPv4 it embeds -- both must clear the metadata gate."""
+    """The address plus any IPv4 it embeds -- both must clear the metadata gate.
+
+    PUBLIC because the metadata gate has more than one enforcement surface.
+    ``check_url`` below is the parse-time one; ``kaizen.llm.http_client``'s
+    ``SafeDnsResolver.check_host`` is the connect-time one, and it MUST reach
+    the same verdict AND the same reason bucket. Sharing this function is how
+    that is guaranteed rather than hoped for: a wrapper-aware metadata check
+    added here lands at every surface at once (``security.md`` §
+    Enforcement-Surface Parity).
+    """
     candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
     inner = embedded_ipv4(ip)
     if inner is not None:
@@ -253,8 +264,16 @@ def _metadata_candidates(
     return candidates
 
 
-def _ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
-    """Map an offending IP to an allowlisted rejection reason."""
+def ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """Map an offending IP to an allowlisted rejection reason.
+
+    PUBLIC for the same reason as :func:`metadata_candidates`: the reason
+    BUCKET is part of the security contract, not a private detail. Two
+    enforcement surfaces that agree on the verdict but disagree on the bucket
+    produce dashboards that under-count the category they were split out to
+    surface. ``kaizen.llm.http_client.SafeDnsResolver`` shares this function
+    so the connect-time gate and the parse-time gate cannot drift.
+    """
     ip_str = str(ip)
     if ip_str in METADATA_IPS:
         return "metadata_service"
@@ -525,7 +544,7 @@ def _validate_ip(
     # ``allow_private``. Hoisting them above the private-range check is
     # behaviour-preserving for the strict posture -- a link-local address is
     # already caught by ``is_private_ipv4``/``is_private_ipv6`` there, and
-    # ``_ip_reason`` returns the same "link_local" / "metadata_service"
+    # ``ip_reason`` returns the same "link_local" / "metadata_service"
     # string -- while making them un-widenable by the relaxed one. They are
     # also never loopback, so hoisting above the carve-out changes nothing.
     #
@@ -543,7 +562,7 @@ def _validate_ip(
     # the other half: the wrapper's string form is never equal to the bare
     # metadata address, so the equality test could not see through it.
     if not allow_metadata:
-        for candidate in _metadata_candidates(ip):
+        for candidate in metadata_candidates(ip):
             if str(candidate) in METADATA_IPS:
                 raise error_factory("metadata_service", raw_url=url)
             if candidate.is_link_local:
@@ -555,10 +574,10 @@ def _validate_ip(
             # loopback hostname label. Every other private range stays
             # blocked so allow_loopback can't be used as a wildcard.
             if not loopback_carveout:
-                raise error_factory(_ip_reason(ip), raw_url=url)
+                raise error_factory(ip_reason(ip), raw_url=url)
         if isinstance(ip, ipaddress.IPv6Address) and is_private_ipv6(ip):
             if not loopback_carveout:
-                raise error_factory(_ip_reason(ip), raw_url=url)
+                raise error_factory(ip_reason(ip), raw_url=url)
 
     # Extra blocklist (corporate / internal ranges callers supply).
     # When the loopback carve-out applies, skip this sweep as well --
@@ -569,7 +588,7 @@ def _validate_ip(
         for net in blocked_networks:
             try:
                 if ip in net:
-                    raise error_factory(_ip_reason(ip), raw_url=url)
+                    raise error_factory(ip_reason(ip), raw_url=url)
             except TypeError:
                 # Network family mismatch (v4 vs v6) is normal -- skip.
                 continue

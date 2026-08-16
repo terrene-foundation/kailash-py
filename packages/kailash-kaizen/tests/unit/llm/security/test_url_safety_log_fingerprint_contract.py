@@ -169,9 +169,22 @@ def test_module_does_not_route_a_log_through_a_secret_named_callee() -> None:
 
 
 def test_exactly_one_rejection_logging_site() -> None:
-    """Two copies of the WARN drift, and each is its own CodeQL sink."""
-    src = inspect.getsource(url_safety)
-    assert src.count("url_safety.rejected") == 1, (
-        "url_safety must have exactly ONE rejection-logging site; "
-        "_reject routes through _rejecting_error_factory"
+    """Two copies of the WARN drift, and each is its own CodeQL sink.
+
+    Counts `logger.*` CALLS via the AST rather than grepping for the tag
+    string: the tag appears in prose in this module's own docstrings, and a
+    grep-based count reds on a comment that merely mentions it.
+    """
+    tree = ast.parse(inspect.getsource(url_safety))
+    log_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "logger"
+    ]
+    assert len(log_calls) == 1, (
+        f"url_safety must have exactly ONE logging site, found "
+        f"{len(log_calls)}; _reject routes through _rejecting_error_factory"
     )

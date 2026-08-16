@@ -20,14 +20,35 @@ the framework did not route. This class is the structural enforcement.
 
 `SafeDnsResolver` is installed on the underlying httpx transport so that
 every outbound connection -- even one whose hostname resolves to a
-private IP at connect time -- is rejected before the TCP SYN fires. The
-`url_safety.check_url()` SSRF guard catches literal-IP and DNS-rebinding
-attempts at URL-parse time; `SafeDnsResolver` catches the same attack
-surface at resolve-time so a TOCTOU window between parse and connect
-cannot exist.
+private IP at connect time -- is rejected before the TCP SYN fires.
 
-Both guards run: URL safety is the earlier gate, SafeDnsResolver is the
-last-line structural defense. Removing either widens the surface.
+The two gates split by what each can DECIDE, not by belt-and-braces:
+
+* `url_safety.check_url()` runs at `Endpoint` construction with
+  `resolve_dns=False` and owns everything decidable OFFLINE -- scheme
+  (HTTPS-only except the `localhost` label), literal-IP classification,
+  metadata hostnames, encoded-IP and `inet_aton` short forms. Those
+  answers do not expire.
+* `SafeDnsResolver` owns the RESOLUTION-dependent half, because that
+  answer does expire: a name that resolves public at parse time can
+  resolve to loopback at connect time. Deciding it at parse time was
+  never durable, so it is decided here instead -- see
+  `deployment.Endpoint._validate_base_url` for the full rationale.
+
+Both gates reach the same verdict AND the same reason bucket for any
+given address: they share `network_guard.metadata_candidates` and
+`network_guard.ip_reason` rather than each carrying its own ladder
+(`security.md` § Enforcement-Surface Parity).
+
+This narrows the DNS-rebinding window to the resolver-cache interval; it
+does not eliminate it. `check_host` resolves, classifies, and discards,
+and httpx then resolves independently, so a 0-TTL record can still answer
+differently to the two lookups. Pinning the validated address into the
+connection would close that; today it is not closed, and no docstring
+here should imply otherwise.
+
+Removing the resolver install widens the surface -- it is the only gate
+that sees a resolved address at all.
 
 # Observability
 
@@ -78,12 +99,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 #
 # The URL safety guard in `kaizen.llm.url_safety.check_url` runs at
-# Endpoint construction. That catches literal-IP SSRF and DNS rebinding
-# that resolves at parse time. But between parse and connect there is a
-# TOCTOU window: a public hostname that resolved to 1.2.3.4 at parse
-# time could resolve to 127.0.0.1 at connect time (classic DNS
-# rebinding). SafeDnsResolver closes that window by re-checking every
-# resolve at the exact moment httpx is about to open a TCP connection.
+# Endpoint construction and catches literal-IP SSRF. It deliberately does
+# NOT resolve there: a hostname that resolves to 1.2.3.4 at parse time can
+# resolve to 127.0.0.1 at connect time (classic DNS rebinding), so a
+# parse-time answer is stale by construction. SafeDnsResolver is where the
+# resolution-dependent decision is made -- at the moment httpx is about to
+# open a TCP connection, which is as close to the SYN as this layer gets.
 
 
 # Address classification is the SHARED implementation (#2091 follow-up).
@@ -95,19 +116,59 @@ logger = logging.getLogger(__name__)
 # divergence here would mean the parse-time and connect-time checks disagreed
 # about what "private" means. Verified identical on a 19-address sweep before
 # consolidating (`zero-tolerance.md` Rule 4).
-from kailash.utils.network_guard import (  # noqa: E402
-    IPV4_TRANSLATED_NETWORK as _IPV4_TRANSLATED_NETWORK,
-)
 from kailash.utils.network_guard import METADATA_IPS as _METADATA_IPS  # noqa: E402
-from kailash.utils.network_guard import (  # noqa: E402
-    NAT64_WELLKNOWN_NETWORK as _NAT64_WELLKNOWN_NETWORK,
-)
+from kailash.utils.network_guard import ip_reason as _ip_reason  # noqa: E402
 from kailash.utils.network_guard import (  # noqa: E402
     is_private_ipv4 as _is_private_ipv4,
 )
 from kailash.utils.network_guard import (  # noqa: E402
     is_private_ipv6 as _is_private_ipv6,
 )
+from kailash.utils.network_guard import metadata_candidates  # noqa: E402
+
+
+def _classify_or_raise(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str
+) -> None:
+    """Raise `InvalidEndpoint` if `ip` is not safe to connect to.
+
+    ONE classification for both the literal-IP and the resolved-IP path.
+    They previously carried two copies of the same ladder, and a copy of a
+    security decision is a divergence waiting to happen
+    (`zero-tolerance.md` Rule 4).
+
+    Both the candidate sweep and the reason mapping are the SAME functions
+    the parse-time gate uses (`network_guard._validate_ip`), in the same
+    order. That is what makes the two gates agree on the reason BUCKET and
+    not merely on the verdict:
+
+    * `metadata_candidates(ip)` yields the address PLUS any IPv4 it embeds.
+      Matching on `str(ip)` alone cannot see through a wrapper — the string
+      form of `::ffff:169.254.169.254` is never equal to the bare metadata
+      address — so this gate used to report the generic `ipv4_mapped` for
+      four IMDS-wrapper forms the parse gate buckets as `metadata_service` /
+      `link_local`. `network_guard` fixed exactly this at the parse surface
+      (#2136) and documents it inline; the connect surface still carried the
+      un-fixed half.
+    * `ip_reason(ip)` supplies the bucket, so an IPv4 loopback reports
+      `loopback` here as it does there, not the coarser `private_ipv4`.
+
+    Every address was REFUSED by both gates before and after — this is
+    forensic accuracy, not a widening. It matters because `metadata_service`
+    exists precisely so a metadata-exfiltration attempt is separable from the
+    generic private bucket in a dashboard, and half the enforcement surfaces
+    were not producing it (`security.md` § Enforcement-Surface Parity).
+    """
+    for candidate in metadata_candidates(ip):
+        if str(candidate) in _METADATA_IPS:
+            raise InvalidEndpoint("metadata_service", raw_url=host)
+        if candidate.is_link_local:
+            raise InvalidEndpoint("link_local", raw_url=host)
+
+    if isinstance(ip, ipaddress.IPv4Address) and _is_private_ipv4(ip):
+        raise InvalidEndpoint(_ip_reason(ip), raw_url=host)
+    if isinstance(ip, ipaddress.IPv6Address) and _is_private_ipv6(ip):
+        raise InvalidEndpoint(_ip_reason(ip), raw_url=host)
 
 
 class SafeDnsResolver:
@@ -145,21 +206,7 @@ class SafeDnsResolver:
         except (ValueError, TypeError):
             parsed = None
         if parsed is not None:
-            if str(parsed) in _METADATA_IPS:
-                raise InvalidEndpoint("metadata_service", raw_url=host)
-            if isinstance(parsed, ipaddress.IPv4Address) and _is_private_ipv4(parsed):
-                raise InvalidEndpoint("private_ipv4", raw_url=host)
-            if isinstance(parsed, ipaddress.IPv6Address) and _is_private_ipv6(parsed):
-                if parsed.ipv4_mapped is not None or (
-                    parsed in _IPV4_TRANSLATED_NETWORK
-                    or parsed in _NAT64_WELLKNOWN_NETWORK
-                ):
-                    raise InvalidEndpoint("ipv4_mapped", raw_url=host)
-                if parsed.is_loopback:
-                    raise InvalidEndpoint("loopback", raw_url=host)
-                if parsed.is_link_local:
-                    raise InvalidEndpoint("link_local", raw_url=host)
-                raise InvalidEndpoint("private_ipv6", raw_url=host)
+            _classify_or_raise(parsed, host)
             # Literal public IP -- accept.
             return
 
@@ -181,20 +228,7 @@ class SafeDnsResolver:
                 ip = ipaddress.ip_address(ip_str)
             except (ValueError, TypeError):
                 continue
-            if str(ip) in _METADATA_IPS:
-                raise InvalidEndpoint("metadata_service", raw_url=host)
-            if isinstance(ip, ipaddress.IPv4Address) and _is_private_ipv4(ip):
-                raise InvalidEndpoint("private_ipv4", raw_url=host)
-            if isinstance(ip, ipaddress.IPv6Address) and _is_private_ipv6(ip):
-                if ip.ipv4_mapped is not None or (
-                    ip in _IPV4_TRANSLATED_NETWORK or ip in _NAT64_WELLKNOWN_NETWORK
-                ):
-                    raise InvalidEndpoint("ipv4_mapped", raw_url=host)
-                if ip.is_loopback:
-                    raise InvalidEndpoint("loopback", raw_url=host)
-                if ip.is_link_local:
-                    raise InvalidEndpoint("link_local", raw_url=host)
-                raise InvalidEndpoint("private_ipv6", raw_url=host)
+            _classify_or_raise(ip, host)
 
     def kind(self) -> str:
         """Stable label for observability -- cross-SDK parity."""

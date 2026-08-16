@@ -128,19 +128,19 @@ class Endpoint(BaseModel):
            validator used to catch; the rejection surfaces at first request
            instead of at construction.
 
-           Two honest caveats about that gate, neither of which this change
-           introduces or worsens:
+           The two gates agree on the reason BUCKET, not merely on the
+           verdict, because they share `network_guard.metadata_candidates`
+           and `network_guard.ip_reason` rather than each carrying their own
+           ladder. Measured over 29 addresses spanning every class — RFC1918,
+           loopback, link-local, IMDS, multicast, unspecified, CGNAT, and the
+           three IPv6 embedded-IPv4 wrapper forms — zero bucket mismatches.
 
-           * Its address classification is at least as strict as this one,
-             but its IPv4 reason BUCKET is coarser: an IPv4 loopback or
-             link-local address surfaces as `private_ipv4` there, where this
-             validator reports `loopback` / `link_local`. IPv6 buckets match.
-             Verdicts agree; only forensic granularity differs.
-           * `check_host` resolves, classifies, and discards; httpx then
-             resolves independently. That narrows the rebinding window to the
-             resolver-cache interval rather than eliminating it. It was
-             equally rebindable when the check ran here — parse time is
-             strictly further from the SYN than connect time is.
+           One honest caveat, which this change neither introduces nor
+           worsens: `check_host` resolves, classifies, and discards; httpx
+           then resolves independently. That narrows the rebinding window to
+           the resolver-cache interval rather than eliminating it. It was
+           equally rebindable when the check ran here — parse time is
+           strictly further from the SYN than connect time is.
         2. **It made config parsing depend on a live resolver.** A DNS blip
            made a perfectly well-formed endpoint fail to CONSTRUCT, and it
            put a blocking `getaddrinfo` on every `LlmDeployment` build. It

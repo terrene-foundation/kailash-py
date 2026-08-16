@@ -271,7 +271,7 @@ def test_safednsresolver_still_blocks_at_connect_time():
     for host, reason in [
         ("169.254.169.254", "metadata_service"),
         ("10.1.2.3", "private_ipv4"),
-        ("127.0.0.1", "private_ipv4"),
+        ("127.0.0.1", "loopback"),
     ]:
         with pytest.raises(InvalidEndpoint) as exc:
             resolver.check_host(host)
@@ -280,24 +280,78 @@ def test_safednsresolver_still_blocks_at_connect_time():
     resolver.check_host("8.8.8.8")
 
 
-def test_parse_time_and_connect_time_agree_on_what_is_private():
-    """The reason the in-package duplicate mattered.
+#: Spans every class the two gates classify: RFC1918, loopback, link-local,
+#: IMDS (v4 + v6), multicast, unspecified, CGNAT, benchmark, public, and all
+#: three IPv6 embedded-IPv4 wrapper forms. The wrappers are the ones that
+#: matter — a corpus without them is exactly what let the parse gate and the
+#: connect gate disagree unnoticed.
+_PARITY_ADDRESSES = [
+    "127.0.0.1",
+    "127.255.255.254",
+    "10.0.0.1",
+    "10.255.255.255",
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "169.254.169.254",
+    "169.254.0.1",
+    "0.0.0.0",
+    "224.0.0.1",
+    "100.64.0.1",
+    "198.18.0.1",
+    "8.8.8.8",
+    "1.1.1.1",
+    "::1",
+    "fe80::1",
+    "fc00::1",
+    "fd00:ec2::254",
+    "::",
+    "ff02::1",
+    "::ffff:127.0.0.1",
+    "::ffff:10.0.0.1",
+    "64:ff9b::7f00:1",
+    "64:ff9b::169.254.169.254",
+    "::ffff:0:a9fe:a9fe",
+    "64:ff9b::a9fe:a9fe",
+    "::ffff:169.254.169.254",
+    "2606:4700:4700::1111",
+]
 
-    Both halves now share one classifier, so this cannot drift.
+
+@pytest.mark.parametrize("addr", _PARITY_ADDRESSES)
+def test_parse_time_and_connect_time_agree_on_verdict_AND_bucket(addr):
+    """The reason the in-package duplicate mattered — and the bucket, not
+    just the verdict.
+
+    Asserting only the VERDICT is what let this drift: both gates refused
+    every wrapper form, so a verdict-only check stayed green while the
+    connect gate reported the generic `ipv4_mapped` for four IMDS-wrapper
+    addresses the parse gate buckets as `metadata_service` / `link_local`,
+    and reported `private_ipv4` where the parse gate said `loopback` /
+    `link_local`. `metadata_service` exists precisely so a metadata
+    exfiltration attempt is separable in a dashboard; half the enforcement
+    surfaces were not producing it.
+
+    Both gates now share `network_guard.metadata_candidates` and
+    `network_guard.ip_reason`, in that order, so the bucket cannot drift
+    without this failing.
     """
     from kaizen.llm.http_client import SafeDnsResolver
 
-    resolver = SafeDnsResolver()
-    for addr in [
-        "10.0.0.1",
-        "172.16.0.1",
-        "192.168.1.1",
-        "127.0.0.1",
-        "169.254.169.254",
-    ]:
-        ip = ipaddress.ip_address(addr)
-        assert (
-            network_guard.is_private_ipv4(ip) or str(ip) in network_guard.METADATA_IPS
-        )
-        with pytest.raises(InvalidEndpoint):
-            resolver.check_host(addr)
+    url = f"https://[{addr}]/" if ":" in addr else f"https://{addr}/"
+    try:
+        check_url(url, resolve_dns=False)
+        parse = "ALLOW"
+    except InvalidEndpoint as exc:
+        parse = f"reject:{exc.reason}"
+
+    try:
+        SafeDnsResolver().check_host(addr)
+        connect = "ALLOW"
+    except InvalidEndpoint as exc:
+        connect = f"reject:{exc.reason}"
+
+    assert parse == connect, (
+        f"{addr}: parse gate says {parse}, connect gate says {connect} — "
+        f"the two SSRF enforcement surfaces disagree"
+    )

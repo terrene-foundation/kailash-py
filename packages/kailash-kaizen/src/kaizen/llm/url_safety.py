@@ -128,7 +128,11 @@ def _rejecting_error_factory(reason: str, raw_url: Optional[str] = None):
 
     The fingerprint attached here matches the one stored on the exception
     (`InvalidEndpoint._fingerprint`), so audit trails can join the log line
-    with the exception instance via the shared tag. WARN is the correct level
+    with the exception instance via the shared tag. The one case where they
+    do not join is `raw_url` being None or empty: the log emits
+    `url_fingerprint="none"` and the exception omits the field entirely.
+    There is nothing to correlate there — no URL was supplied — so the gap
+    is stated rather than papered over. WARN is the correct level
     because the guard SUCCEEDED at blocking an attack — operators should see
     that in routine dashboards (rules/observability.md MUST Rule 3).
     """
