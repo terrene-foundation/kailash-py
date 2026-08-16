@@ -60,6 +60,9 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_BLOCKED_NETWORKS",
+    "DEFAULT_LOOPBACK_HOSTS",
+    "IPV4_TRANSLATED_NETWORK",
+    "NAT64_WELLKNOWN_NETWORK",
     "METADATA_HOSTNAMES",
     "METADATA_IPS",
     "REASON_ALLOWLIST",
@@ -71,7 +74,9 @@ __all__ = [
     "embedded_ipv4",
     "is_private_ipv4",
     "is_private_ipv6",
+    "ip_reason",
     "iter_resolved_ips",
+    "metadata_candidates",
     "url_fingerprint",
 ]
 
@@ -140,7 +145,9 @@ def url_fingerprint(raw: Optional[str]) -> str:
 IPV4_TRANSLATED_NETWORK = ipaddress.IPv6Network("::ffff:0:0:0/96")  # RFC 2765 SIIT
 NAT64_WELLKNOWN_NETWORK = ipaddress.IPv6Network("64:ff9b::/96")  # RFC 6052
 
-#: Private aliases retained so existing internal references keep resolving.
+#: Back-compat aliases for the private spellings used before these ranges
+#: became part of the shared surface; existing internal references keep
+#: resolving through them.
 _IPV4_TRANSLATED_NETWORK = IPV4_TRANSLATED_NETWORK
 _NAT64_WELLKNOWN_NETWORK = NAT64_WELLKNOWN_NETWORK
 
@@ -168,6 +175,12 @@ METADATA_HOSTNAMES: frozenset = frozenset(
 #: check so extra IPv4 + IPv6 CIDRs are rejected even when a libc helper
 #: somehow resolves them to look "public". RFC1918 + loopback + link-local +
 #: IMDS + CGNAT + ULA + link-local-v6.
+#: Host labels the ``allow_loopback`` carve-out applies to by default.
+#: Includes the literal loopback IPs, so ``allow_loopback=True`` permits both
+#: ``localhost`` and ``127.0.0.1``. Callers needing the LABEL-only posture
+#: pass ``loopback_hosts={"localhost"}`` -- see ``check_url``.
+DEFAULT_LOOPBACK_HOSTS: frozenset = frozenset({"localhost", "127.0.0.1", "::1"})
+
 DEFAULT_BLOCKED_NETWORKS: tuple[ipaddress._BaseNetwork, ...] = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -231,10 +244,19 @@ def embedded_ipv4(
     return None
 
 
-def _metadata_candidates(
+def metadata_candidates(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> "list[ipaddress.IPv4Address | ipaddress.IPv6Address]":
-    """The address plus any IPv4 it embeds -- both must clear the metadata gate."""
+    """The address plus any IPv4 it embeds -- both must clear the metadata gate.
+
+    PUBLIC because the metadata gate has more than one enforcement surface.
+    ``check_url`` below is the parse-time one; ``kaizen.llm.http_client``'s
+    ``SafeDnsResolver.check_host`` is the connect-time one, and it MUST reach
+    the same verdict AND the same reason bucket. Sharing this function is how
+    that is guaranteed rather than hoped for: a wrapper-aware metadata check
+    added here lands at every surface at once (``security.md`` §
+    Enforcement-Surface Parity).
+    """
     candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ip]
     inner = embedded_ipv4(ip)
     if inner is not None:
@@ -242,8 +264,16 @@ def _metadata_candidates(
     return candidates
 
 
-def _ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
-    """Map an offending IP to an allowlisted rejection reason."""
+def ip_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """Map an offending IP to an allowlisted rejection reason.
+
+    PUBLIC for the same reason as :func:`metadata_candidates`: the reason
+    BUCKET is part of the security contract, not a private detail. Two
+    enforcement surfaces that agree on the verdict but disagree on the bucket
+    produce dashboards that under-count the category they were split out to
+    surface. ``kaizen.llm.http_client.SafeDnsResolver`` shares this function
+    so the connect-time gate and the parse-time gate cannot drift.
+    """
     ip_str = str(ip)
     if ip_str in METADATA_IPS:
         return "metadata_service"
@@ -353,6 +383,7 @@ def check_url(
     resolve_dns: bool = True,
     allow_private: bool = False,
     allow_metadata: bool = False,
+    loopback_hosts: Optional[Sequence[str]] = None,
     error_factory: Callable[..., Exception] = BlockedDestinationError,
 ) -> None:
     """Validate ``url`` as an SSRF-safe destination.
@@ -382,6 +413,19 @@ def check_url(
         allow_metadata: Permit cloud-metadata and link-local destinations.
             The ONLY way past that block, deliberately separate from
             ``allow_private`` so widening RFC1918 never silently widens IMDS.
+        loopback_hosts: Host labels the ``allow_loopback`` carve-out applies
+            to. Defaults to ``{"localhost", "127.0.0.1", "::1"}``.
+
+            Narrowing this to ``{"localhost"}`` makes the carve-out apply to
+            the LABEL only, so a literal ``127.0.0.1`` / ``::1`` URL is still
+            refused while ``http://localhost:11434`` is permitted. That
+            asymmetry is not hypothetical: ``kaizen.llm.url_safety`` relies on
+            it, and ``kaizen.llm.deployment_resolver`` documents choosing the
+            ``localhost`` hostname over a literal loopback IP for its Ollama /
+            Docker-Model-Runner defaults precisely because a literal-IP
+            default would raise before any request was built (#2091 follow-up).
+            Parameterised rather than hard-coded so consolidating that guard
+            neither widens nor narrows what it accepts.
         error_factory: Exception constructor, called as
             ``error_factory(reason, raw_url=url)``. Lets ``nexus.http_client``
             keep raising its own ``InvalidEndpointError`` from this one
@@ -441,6 +485,7 @@ def check_url(
             allow_loopback,
             blocked_networks,
             host_lc,
+            set(loopback_hosts or DEFAULT_LOOPBACK_HOSTS),
             allow_private=allow_private,
             allow_metadata=allow_metadata,
             error_factory=error_factory,
@@ -457,7 +502,7 @@ def check_url(
         return
 
     any_resolved = False
-    loopback_hosts = {"localhost", "127.0.0.1", "::1"}
+    carve_out_hosts = set(loopback_hosts or DEFAULT_LOOPBACK_HOSTS)
     for ip in iter_resolved_ips(host):
         any_resolved = True
         _validate_ip(
@@ -466,13 +511,13 @@ def check_url(
             allow_loopback,
             blocked_networks,
             host_lc,
-            loopback_hosts,
+            carve_out_hosts,
             allow_private=allow_private,
             allow_metadata=allow_metadata,
             error_factory=error_factory,
         )
 
-    if not any_resolved and not (allow_loopback and host_lc in loopback_hosts):
+    if not any_resolved and not (allow_loopback and host_lc in carve_out_hosts):
         raise error_factory("resolution_failed", raw_url=url)
 
 
@@ -492,14 +537,14 @@ def _validate_ip(
 
     Central routine for both literal-IP URLs and DNS-resolved IPs.
     """
-    loopback_hosts = loopback_hosts or {"localhost", "127.0.0.1", "::1"}
+    loopback_hosts = loopback_hosts or set(DEFAULT_LOOPBACK_HOSTS)
     loopback_carveout = allow_loopback and ip.is_loopback and host_lc in loopback_hosts
 
     # Metadata and link-local are checked FIRST and are not relaxed by
     # ``allow_private``. Hoisting them above the private-range check is
     # behaviour-preserving for the strict posture -- a link-local address is
     # already caught by ``is_private_ipv4``/``is_private_ipv6`` there, and
-    # ``_ip_reason`` returns the same "link_local" / "metadata_service"
+    # ``ip_reason`` returns the same "link_local" / "metadata_service"
     # string -- while making them un-widenable by the relaxed one. They are
     # also never loopback, so hoisting above the carve-out changes nothing.
     #
@@ -517,7 +562,7 @@ def _validate_ip(
     # the other half: the wrapper's string form is never equal to the bare
     # metadata address, so the equality test could not see through it.
     if not allow_metadata:
-        for candidate in _metadata_candidates(ip):
+        for candidate in metadata_candidates(ip):
             if str(candidate) in METADATA_IPS:
                 raise error_factory("metadata_service", raw_url=url)
             if candidate.is_link_local:
@@ -529,10 +574,10 @@ def _validate_ip(
             # loopback hostname label. Every other private range stays
             # blocked so allow_loopback can't be used as a wildcard.
             if not loopback_carveout:
-                raise error_factory(_ip_reason(ip), raw_url=url)
+                raise error_factory(ip_reason(ip), raw_url=url)
         if isinstance(ip, ipaddress.IPv6Address) and is_private_ipv6(ip):
             if not loopback_carveout:
-                raise error_factory(_ip_reason(ip), raw_url=url)
+                raise error_factory(ip_reason(ip), raw_url=url)
 
     # Extra blocklist (corporate / internal ranges callers supply).
     # When the loopback carve-out applies, skip this sweep as well --
@@ -543,7 +588,7 @@ def _validate_ip(
         for net in blocked_networks:
             try:
                 if ip in net:
-                    raise error_factory(_ip_reason(ip), raw_url=url)
+                    raise error_factory(ip_reason(ip), raw_url=url)
             except TypeError:
                 # Network family mismatch (v4 vs v6) is normal -- skip.
                 continue

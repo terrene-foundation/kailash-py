@@ -31,7 +31,35 @@ dependencies = [
     # SDKs, observability, PostgreSQL, RAG numerics) remain lazy-loaded or
     # scoped to optional subsystems behind extras.
     # ─────────────────────────────────────────────────────────────
-    "kailash>=2.56.0",  # mask_error_text (ollama_provider.py) is new in core 2.56.0
+    # 2.63.0 for `kailash.utils.network_guard` (#2091 follow-up). The SSRF
+    # address guard — private/loopback/link-local/metadata classification, the
+    # encoded-IP bypass forms, the RFC 2765 / RFC 6052 embedded-IPv4 ranges —
+    # was duplicated THREE times (core proxy, nexus.http_client, and TWICE
+    # inside this package: kaizen.llm.url_safety and kaizen.llm.http_client's
+    # SafeDnsResolver). It now lives once in core and all of them import it,
+    # because two guards drift and the divergence is found by an attacker
+    # before a reader (`zero-tolerance.md` Rule 4).
+    #
+    # Both `kaizen.llm.url_safety` and `kaizen.llm.http_client` import it at
+    # MODULE scope, so an older kailash fails at IMPORT, not at first request.
+    # Measured, with the module made unavailable:
+    #
+    #     kaizen.llm.url_safety   ModuleNotFoundError:
+    #         No module named 'kailash.utils.network_guard'
+    #     kaizen.llm.http_client  ModuleNotFoundError: (same)
+    #
+    # This floor was 2.56.0 (mask_error_text) and is RAISED — unlike the nexus
+    # floor, which already happened to be high enough, this one was genuinely
+    # too low and would have shipped a broken clean install.
+    #
+    # RELEASE ORDERING, load-bearing: `network_guard` exists in NO released
+    # kailash (PyPI latest is 2.62.0; 2.63.0 unpublished at time of writing).
+    # Core kailash 2.63.0 MUST publish BEFORE the kaizen release carrying
+    # this, or `pip install kailash-kaizen` resolves an older core and
+    # `import kaizen.llm` raises ModuleNotFoundError on a clean install. The
+    # floor is what turns that into a resolver error at install time rather
+    # than an ImportError in production.
+    "kailash>=2.63.0",  # mask_error_text (2.56.0); kailash.utils.network_guard (#2091)
     # FLOOR RAISED TO 0.5.0, FROM 0.2.4 — release-blocking, not housekeeping.
     # kaizen constructs kailash_mcp.MCPServer directly (core/mcp_mixin.py:732,
     # mcp/builtin_server/server.py's KaizenMCPServer subclass, mcp/catalog_server),

@@ -32,10 +32,12 @@ from kaizen.llm.url_safety import InvalidEndpoint
         ("172.16.0.1", "private_ipv4"),
         ("172.31.255.255", "private_ipv4"),
         ("192.168.1.1", "private_ipv4"),
-        ("127.0.0.1", "private_ipv4"),
-        ("127.255.255.254", "private_ipv4"),
+        # loopback / link-local get their OWN buckets here, matching the
+        # parse-time gate exactly -- both now share network_guard.ip_reason.
+        ("127.0.0.1", "loopback"),
+        ("127.255.255.254", "loopback"),
         ("169.254.169.254", "metadata_service"),  # AWS / GCP metadata IP
-        ("169.254.0.1", "private_ipv4"),  # link-local (non-metadata)
+        ("169.254.0.1", "link_local"),  # link-local (non-metadata)
         ("0.0.0.0", "private_ipv4"),
         ("::1", "loopback"),
         ("fe80::1", "link_local"),

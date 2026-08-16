@@ -37,9 +37,11 @@ def resolver() -> SafeDnsResolver:
         ("172.31.255.254", "private_ipv4"),
         ("192.168.0.1", "private_ipv4"),
         ("192.168.1.100", "private_ipv4"),
-        ("127.0.0.1", "private_ipv4"),
-        ("127.1.2.3", "private_ipv4"),
-        ("169.254.0.1", "private_ipv4"),  # link-local but triggers private_ipv4 bucket
+        # loopback / link-local get their OWN buckets here, matching the
+        # parse-time gate exactly -- both now share network_guard.ip_reason.
+        ("127.0.0.1", "loopback"),
+        ("127.1.2.3", "loopback"),
+        ("169.254.0.1", "link_local"),
     ],
 )
 def test_resolver_rejects_private_ipv4(
@@ -101,9 +103,13 @@ def test_resolver_rejects_ipv4_mapped_ipv6(
     """
     with pytest.raises(InvalidEndpoint) as excinfo:
         resolver.check_host(host)
-    # All three reasons (metadata / ipv4_mapped / private_ipv4) surface here;
-    # the metadata-IP takes precedence even when wrapped.
-    assert excinfo.value.reason in {"ipv4_mapped", "metadata_service"}
+    # The bucket now comes from the SAME classifier the parse-time gate uses,
+    # so these match `network_guard` exactly: `::ffff:169.254.169.254` buckets
+    # as `link_local` (the wrapper itself is link-local, and that candidate is
+    # tested before the embedded IPv4), while the SIIT / NAT64 wrapper forms
+    # bucket as `metadata_service`. The verdict is REJECT in every case; only
+    # the forensic bucket is asserted here.
+    assert excinfo.value.reason in {"ipv4_mapped", "metadata_service", "link_local"}
 
 
 def test_resolver_accepts_public_literal_ipv4(resolver: SafeDnsResolver) -> None:
