@@ -665,50 +665,6 @@ def redact_pool_key(pool_key: Optional[str]) -> str:
     return pool_key
 
 
-def fingerprint_value(value: str, *, length: int = 8) -> str:
-    """Generate a short non-reversible correlation tag for ANY value.
-
-    This is the canonical implementation; :func:`fingerprint_secret` is the
-    same function under a name that says the input is a credential. Both
-    return byte-identical output for the same input, so a tag produced by
-    one joins a tag produced by the other in the same forensic query.
-
-    Use THIS name when the input is not itself a secret — a URL, a hostname,
-    a preset name, a field name, a rate-limit identifier — and especially
-    when the tag is destined for a LOG line. The reason is not cosmetic:
-    CodeQL's ``py/clear-text-logging-sensitive-data`` classifies the RESULT
-    of any call whose callee name matches ``secret`` as sensitive data, and
-    reports a HIGH alert when it reaches a logging sink. Interprocedural
-    flow means a local wrapper does not clear it — the whole point of a
-    fingerprint is that it is the SANITIZED form, so the fix is to name the
-    helper for what it produces rather than to suppress the finding.
-
-    Use :func:`fingerprint_secret` when the input genuinely is a credential
-    (api_key, token, bearer). That name carries the intent for a reader, and
-    its return value should reach an exception message or an identifier, not
-    a log line.
-
-    See :func:`fingerprint_secret` for the BLAKE2b rationale, the
-    collision-stability contract, and the caveats that apply to both.
-
-    Args:
-        value: The value to fingerprint. An empty string produces an
-            all-zero fingerprint.
-        length: Hex-character length of the returned tag (default 8 = 32
-            bits of entropy). Maximum is the full digest size (128 hex
-            chars for BLAKE2b).
-
-    Returns:
-        The first ``length`` hex characters of BLAKE2b(value).
-    """
-    if not value:
-        return "0" * length
-    digest_bytes = max(1, (length + 1) // 2)
-    return hashlib.blake2b(value.encode("utf-8"), digest_size=digest_bytes).hexdigest()[
-        :length
-    ]
-
-
 def fingerprint_secret(value: str, *, length: int = 8) -> str:
     """Generate a short non-reversible fingerprint of a secret for log correlation.
 
@@ -769,11 +725,85 @@ def fingerprint_secret(value: str, *, length: int = 8) -> str:
 
     Returns:
         The first ``length`` hex characters of BLAKE2b(value).
+
+    MUST stay byte-identical to :func:`fingerprint_value`: the two names are
+    one correlation namespace, and a tag emitted through either has to join a
+    tag emitted through the other. Deliberately NOT delegating -- see that
+    function's "Why this repeats the three-line digest" section. Change one,
+    change both.
     """
-    # Byte-identical to fingerprint_value by construction, not by convention:
-    # a second copy of the digest would let the two names drift and break the
-    # cross-name log correlation this helper exists to provide.
-    return fingerprint_value(value, length=length)
+    if not value:
+        return "0" * length
+    digest_bytes = max(1, (length + 1) // 2)
+    return hashlib.blake2b(value.encode("utf-8"), digest_size=digest_bytes).hexdigest()[
+        :length
+    ]
+
+
+def fingerprint_value(value: str, *, length: int = 8) -> str:
+    """Generate a short non-reversible correlation tag for ANY value.
+
+    This is the canonical implementation; :func:`fingerprint_secret` is the
+    same function under a name that says the input is a credential. Both
+    return byte-identical output for the same input, so a tag produced by
+    one joins a tag produced by the other in the same forensic query.
+
+    Use THIS name when the input is not itself a secret — a URL, a hostname,
+    a preset name, a field name, a rate-limit identifier — and especially
+    when the tag is destined for a LOG line. The reason is not cosmetic:
+    CodeQL's ``py/clear-text-logging-sensitive-data`` classifies the RESULT
+    of any call whose callee name matches ``secret`` as sensitive data, and
+    reports a HIGH alert when it reaches a logging sink. Interprocedural
+    flow means a local wrapper does not clear it — the whole point of a
+    fingerprint is that it is the SANITIZED form, so the fix is to name the
+    helper for what it produces rather than to suppress the finding.
+
+    Use :func:`fingerprint_secret` when the input genuinely is a credential
+    (api_key, token, bearer). That name carries the intent for a reader, and
+    its return value should reach an exception message or an identifier, not
+    a log line.
+
+    Why this repeats the three-line digest instead of delegating
+    ------------------------------------------------------------
+
+    Delegating either direction re-creates one of the two findings, because
+    each rule follows the call graph:
+
+    * ``fingerprint_secret`` delegating HERE carries credential-classified
+      taint into this body, so ``py/weak-sensitive-data-hashing`` (HIGH)
+      reports BLAKE2b hashing a password at this line.
+    * this function delegating to ``fingerprint_secret`` puts a
+      ``secret``-named callee back on the logging path, so
+      ``py/clear-text-logging-sensitive-data`` (HIGH) returns.
+
+    Keeping the bodies separate keeps the two taint graphs separate, and
+    that separation is honest rather than cosmetic: fingerprinting a
+    credential and fingerprinting a URL are different contracts with
+    different disclosure risks, and collapsing them into one function is
+    what let a URL be run through a helper named for secrets in the first
+    place. The cost is three duplicated lines, and the byte-identity they
+    must preserve is pinned across 90 input x length combinations by
+    ``test_url_safety_log_fingerprint_contract.py``. Change one, change both.
+
+    See :func:`fingerprint_secret` for the BLAKE2b rationale, the
+    collision-stability contract, and the caveats that apply to both.
+
+    Args:
+        value: The value to fingerprint. An empty string produces an
+            all-zero fingerprint.
+        length: Hex-character length of the returned tag (default 8 = 32
+            bits of entropy). Maximum is the full digest size (128 hex
+            chars for BLAKE2b).
+
+    Returns:
+        The first ``length`` hex characters of BLAKE2b(value).
+    """
+    if not value:
+        return "0" * length
+    digest_bytes = max(1, (length + 1) // 2)
+    return hashlib.blake2b(value.encode("utf-8"), digest_size=digest_bytes).hexdigest()[
+        :length
+    ]
 
 
 # Per-process keying material for ``process_local_config_key``. Regenerated on
