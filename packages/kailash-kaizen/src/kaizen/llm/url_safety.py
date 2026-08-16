@@ -154,9 +154,16 @@ def check_url(url: str, *, resolve_dns: bool = True) -> None:
     allowlist in `errors.InvalidEndpoint._REASON_ALLOWLIST`. The raw URL is
     hashed and attached only as a fingerprint on the exception, never echoed.
 
-    `resolve_dns=False` is a test-only knob — unit tests that supply a
-    synthetic hostname and want to assert the scheme/encoded-IP checks run
-    without bringing up a DNS resolver.
+    `resolve_dns=False` runs only the checks that are DECIDABLE OFFLINE:
+    scheme, metadata hostnames, literal-IP classification, encoded-IP and
+    `inet_aton` short-form bypasses. It is NOT a test-only knob — it is the
+    posture `deployment.Endpoint._validate_base_url` uses, because
+    constructing an Endpoint is config parsing, not egress, and a name that
+    resolves public at parse time can resolve to loopback at connect time.
+    The resolve-time gate is `http_client.SafeDnsResolver.check_host`,
+    installed structurally on the only httpx transport in `kaizen/llm/**`
+    and re-run immediately before every TCP SYN. See that validator's
+    docstring for the full rationale.
 
     The address checks are `kailash.utils.network_guard.check_url`. The
     HTTPS-only policy below is kaizen's own and runs first — see the module
