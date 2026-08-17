@@ -13,6 +13,43 @@ range such as `>=2.0`.
 
 ## [Unreleased]
 
+### Security (BREAKING) — `VectorMemory` no longer ships a mock embedder as its default (#2174)
+
+**Read the migration note below. Any code that constructed `VectorMemory` without `embedding_fn` will stop constructing.** That is the intended behaviour.
+
+- **`VectorMemory(embedding_fn=None)` ranked MD5 noise and called it semantic search.** The default fell back to a hash-derived vector, so "find related conversations" returned an ordering with no relationship to meaning — silently, with no warning, on the path a caller reaches by omitting one argument. `embedding_fn` is now required and its absence raises `ConfigurationError` naming the wiring.
+- **The defect was the DOCUMENTED API, not an oversight.** `docs/reference/memory-patterns-guide.md` showed `VectorMemory(embedding_fn=None, top_k=5)` under the heading _"Default: Mock hash-based embedder (testing only)"_, and `examples/1-single-agent/memory-showcase/demo.py` printed _"Key Feature: Semantic search - finds related conversations"_ while ranking that noise, with its sample questions annotated `# Related to Q1`. Anyone following the documentation correctly got fake semantics with a confident label. Both are corrected.
+- **A sibling was worse and is fixed in the same change.** `SimpleEmbeddingProvider.embed_text` fell back to `_hash_embedding` on **both** a non-200 response and a bare `except Exception:` — no raise, no log — and the returned `EmbeddingResult` carried `model=self.model_name`, so fabricated vectors were **labelled with the real model's provenance** and were indistinguishable downstream. `hybrid_search.py` constructs this provider, so the path was live. Both arms now raise a typed `EmbeddingUnavailable`, and `_hash_embedding` is **deleted** rather than left reachable.
+- **`EmbeddingGeneratorNode._generate_mock_embedding` is unaffected and was already sound** — it is reachable only via an explicit `provider="mock"`, fixed in #1952. Recorded so the two surfaces are not conflated.
+- **Fail-closed rather than a warning, because the sweep permitted it.** Every `VectorMemory(...)` construction in the repo was checked: all were tests, examples, or docs snippets, and **no production caller relied on the default**. The backward-compat WARN path that `security.md` § Secure-Default allows was therefore not needed.
+
+#### Migration (#2174)
+
+Pass the embedder you actually want:
+
+```python
+from kaizen.memory import VectorMemory
+memory = VectorMemory(embedding_fn=my_embedder, top_k=5)
+```
+
+For tests that only need determinism and not meaning, pass an explicit stub — the point is that it is now visible at the call site rather than inherited from a default:
+
+```python
+memory = VectorMemory(embedding_fn=lambda text: [float(len(text))] * 8)
+```
+
+There is deliberately no compatibility shim: a shim would have to keep returning the fabricated vectors.
+
+### Security — both SSRF guards now share one classifier instead of agreeing by coincidence (#2137)
+
+`kaizen/llm/url_safety.py` carried its own private copy of the private-range, link-local, IMDS and DNS-rebinding classification, and the connect-time gate carried another. The two agreed, but nothing made them agree — a fix applied to one left the other on the old taxonomy. Both now route through `kailash.utils.network_guard.check_url`, so `url_safety.py` holds no classifier of its own and the two gates share one reason-code mapping by construction. The shared behaviour is pinned by tests that assert the identity of the mapping rather than only the predicates.
+
+**Requires `kailash>=2.63.0`** — `kailash.utils.network_guard` is new in that release. Verified: the published `kailash-2.62.0` wheel does not contain the module.
+
+### Fixed — a docstring claimed a delegation that does not exist (#2170)
+
+`_url_fingerprint`'s docstring stated that `fingerprint_value` is the implementation `fingerprint_secret` delegates to. They are **duplicate bodies**; `fingerprint_secret` calls `fingerprint_value` zero times. The claim named the mechanism that keeps the two byte-identical, so a reader who believed it would expect a change to one to reach the other. The claim is corrected and the byte-identity is now pinned by a test, which is the only thing that actually holds them in sync.
+
 ### Security (BREAKING) — the encryption classes no longer invent their own key (#2092)
 
 **Read the migration note below before upgrading. Any code that constructed `EncryptionProvider`, `KeyManager`, `FieldEncryptor` or `CheckpointEncryptor` without a key will stop constructing.** That is the intended behaviour, and the reason is in the first bullet.
@@ -23,7 +60,7 @@ range such as `>=2.0`.
 - **All three now resolve key material through one shared chokepoint**, `kaizen.security.encryption.resolve_key_material`, so the floor and the wiring message cannot drift between the three classes in this module that all mint AES keys. `KAIZEN_ENCRYPTION_KEY` is read when no `key=` is passed; it was already mapped to `KaizenConfig.encryption_key`.
 - **`CheckpointEncryptor` (`kaizen.core.autonomy.security.encryption`) reads that SAME variable and enforced no floor.** Its `key_env_var` defaults to `KAIZEN_ENCRYPTION_KEY` and it stretches the value with the same PBKDF2-HMAC-SHA256 at the same iteration count — so one variable with one documented floor produced a hard refusal from `EncryptionProvider` and silent acceptance here. It now imports the same `MIN_PASSPHRASE_LENGTH` rather than re-declaring it. **The two modules' PBKDF2 salts remain deliberately different and are unchanged** — checkpoint storage and field encryption are not meant to interoperate, and that is the mechanism which keeps them from doing so.
 - **`EncryptionProvider.from_password` was a route around the floor.** It derives its own 32 bytes and hands them to a constructor that accepts any correctly-sized raw key, so `from_password("x")` succeeded on the same public class whose sibling constructor refuses 31 characters. It now enforces the same floor.
-- **Empty and whitespace-only values count as NOT CONFIGURED, never as a passphrase.** `EncryptionProvider(key=os.environ.get("K", ""))` is the ordinary way a caller spells "unset", and `export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET` produces the same thing. Stretching `""` derives a **fixed** key — stable across every deployment and reproducible by anyone reading this module's constants, which is *worse* than the per-process key this release removes, because it looks configured and survives a restart. Blank values now take the same fail-closed branch as `None`, and the refusal names the wiring rather than a character count.
+- **Empty and whitespace-only values count as NOT CONFIGURED, never as a passphrase.** `EncryptionProvider(key=os.environ.get("K", ""))` is the ordinary way a caller spells "unset", and `export KAIZEN_ENCRYPTION_KEY=$SOMETHING_UNSET` produces the same thing. Stretching `""` derives a **fixed** key — stable across every deployment and reproducible by anyone reading this module's constants, which is _worse_ than the per-process key this release removes, because it looks configured and survives a restart. Blank values now take the same fail-closed branch as `None`, and the refusal names the wiring rather than a character count.
 - **The floor is 32 characters, and it is a LENGTH floor, not an entropy floor.** It matches `kailash.trust.auth.jwt.JWTConfig.MIN_SECRET_LENGTH` (RFC 7518 §3.2 requires 256 bits for HMAC-SHA256). `"a" * 32` and a hyphenated UUID both pass. Material is measured **stripped** but stretched **verbatim**, so a passphrase that legitimately ends in whitespace keeps deriving the key it always did.
 - **No signal ever carries key material.** Every refusal names the environment variable and the length floor, never a value or any fingerprint that reconstructs one. Regression tests assert the generated material never reaches the log.
 
@@ -48,7 +85,7 @@ on every construction. That function imported four hook classes from
 that contains **no hook classes at all** — caught every resulting `ImportError`,
 and returned an empty `HookManager`. On the untouched default path:
 `is_observability_enabled()` returned `True` and **zero hooks were registered**.
-`enable_audit`, documented as *"Enable compliance audit trails"*, recorded nothing.
+`enable_audit`, documented as _"Enable compliance audit trails"_, recorded nothing.
 
 The subsystems were never missing, only mislocated: `TracingHook`, `MetricsHook`,
 `LoggingHook` and `AuditHook` all live in `kaizen.core.autonomy.hooks.builtin`,
@@ -59,12 +96,12 @@ path would have failed on the next line.
 
 **What now happens on a default agent construction:**
 
-| Flag | Hook installed | Requires |
-| --- | --- | --- |
-| `enable_logging` | `LoggingHook` | core deps only |
-| `enable_audit` | `AuditTrailHook` (new) writing `audit_log_path` | core deps only |
-| `enable_metrics` | `MetricsHook` | `kailash-kaizen[observability]` |
-| `enable_tracing` | `TracingHook` | `kailash-kaizen[observability]` |
+| Flag             | Hook installed                                  | Requires                        |
+| ---------------- | ----------------------------------------------- | ------------------------------- |
+| `enable_logging` | `LoggingHook`                                   | core deps only                  |
+| `enable_audit`   | `AuditTrailHook` (new) writing `audit_log_path` | core deps only                  |
+| `enable_metrics` | `MetricsHook`                                   | `kailash-kaizen[observability]` |
+| `enable_tracing` | `TracingHook`                                   | `kailash-kaizen[observability]` |
 
 - **New `AuditTrailHook`** bridges the observability `AuditTrailManager`
   (append-only JSONL, honours `audit_log_path`) into the hook system. The
@@ -87,8 +124,9 @@ path would have failed on the next line.
   stripped of event shape records that something happened and nothing about
   what — which is not an audit record. The trade is made explicit here rather
   than left implied, and it is why the file is created owner-only.
+
 - **A missing optional dependency is now loud.** `"Metrics hook not available,
-  skipping"` named neither what stopped working nor how to restore it. The
+skipping"` named neither what stopped working nor how to restore it. The
   replacement names the flag, the extra, and `enable_metrics=False` as the
   deliberate opt-out — emitted **once per process**, because this path runs per
   agent construction and a warning repeated on a hot path is one operators filter.
@@ -118,11 +156,11 @@ This is the other side of the fix above, and it is **not** limited to the
 broken path. The old gates keyed on `hooks_enabled` alone, so all three
 changed — with `hooks_enabled=False` **and** a manager supplied:
 
-| gate | before | after |
-| --- | --- | --- |
-| `register_hook` | raises `RuntimeError` | registers |
-| `trigger_hook` | returns `[]` — no handler runs | **fires every registered handler** |
-| `get_hook_stats` | returns `{}` | returns real stats |
+| gate             | before                         | after                              |
+| ---------------- | ------------------------------ | ---------------------------------- |
+| `register_hook`  | raises `RuntimeError`          | registers                          |
+| `trigger_hook`   | returns `[]` — no handler runs | **fires every registered handler** |
+| `get_hook_stats` | returns `{}`                   | returns real stats                 |
 
 `trigger_hook` is the larger of the three for a caller who was relying on the
 flag: handlers that never ran now execute, with whatever side effects they
@@ -133,11 +171,11 @@ Both are true of one change.
 
 Written out for `register_hook`, the row that changes is the third:
 
-| `hooks_enabled` | `hook_manager` supplied | `register_hook` before | after |
-| --- | --- | --- | --- |
-| `False` | no | raises | raises |
-| `True` | either | registers | registers |
-| `False` | **yes** | **raises** | **registers** |
+| `hooks_enabled` | `hook_manager` supplied | `register_hook` before | after         |
+| --------------- | ----------------------- | ---------------------- | ------------- |
+| `False`         | no                      | raises                 | raises        |
+| `True`          | either                  | registers              | registers     |
+| `False`         | **yes**                 | **raises**             | **registers** |
 
 On the `Agent` path it is unambiguously the fix:
 `SmartDefaultsManager` supplies a populated manager and nothing sets
