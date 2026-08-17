@@ -10,7 +10,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.utils.secure_logging import sanitize_log_structure, sanitize_log_value
+from kailash.utils.secure_logging import (
+    redact_mapping,
+    sanitize_log_structure,
+    sanitize_log_value,
+)
 
 
 class SeverityLevel(str, Enum):
@@ -139,6 +143,19 @@ class SecurityEventNode(Node):
         # ``metadata`` is sanitized recursively because this node returns it
         # and downstream consumers render it; a nested string is a record
         # field exactly as a top-level one is.
+        #
+        # It is also REDACTED first (issue #2167), composed with the sanitizer
+        # rather than replacing it -- see the longer note in
+        # ``AuditLogNode.execute`` for why both halves are required.
+        #
+        # The exposure here is narrower than its sibling's and is recorded so a
+        # later reader does not "simplify" this away: ``log_message`` below does
+        # NOT interpolate ``metadata``, so this bag does not reach ``self.logger``.
+        # It reaches the RETURN value (and this class's own docstring notes
+        # "downstream consumers render it"), which is a rendering surface just
+        # as a log line is -- workflow results are themselves routinely logged
+        # and persisted. Same class, same fix, which is why
+        # ``_log_hygiene.py`` named BOTH nodes.
         event_type = sanitize_log_value(inputs.get("event_type", "security_check"), 128)
         severity = self._coerce_severity(inputs.get("severity", "INFO"))
         message = sanitize_log_value(inputs.get("message", ""), 512)
@@ -147,7 +164,7 @@ class SecurityEventNode(Node):
         # the string "None" and would render "(User: None)" on every anonymous
         # event, and would make the `if user_id:` branch below always true.
         user_id = None if raw_user_id is None else sanitize_log_value(raw_user_id, 128)
-        metadata = sanitize_log_structure(inputs.get("metadata", {}))
+        metadata = sanitize_log_structure(redact_mapping(inputs.get("metadata", {})))
 
         # Create security event
         security_event = SecurityEvent(

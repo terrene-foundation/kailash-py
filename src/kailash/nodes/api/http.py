@@ -6,6 +6,7 @@ the best features from both the original HTTPRequestNode and HTTPClientNode.
 
 import asyncio
 import base64
+import json
 import time
 from enum import Enum
 from typing import Any
@@ -35,6 +36,41 @@ from kailash.utils.resource_manager import (
     ResourcePool,
     managed_resource,
 )
+from kailash.utils.secure_logging import redact_mapping, sanitize_log_value
+from kailash.utils.url_credentials import mask_error_text, mask_url
+
+
+def _log_safe_body(body: Any, limit: int = 500) -> str:
+    """Render a request/response body for a log line without leaking credentials.
+
+    Issue #2167. These nodes logged bodies verbatim, and the bodies genuinely
+    carry credentials in both directions: ``nodes/auth/sso.py`` POSTs an OAuth
+    token exchange through this node with ``client_secret`` in the payload, and
+    the RESPONSE to that exchange is a JSON object whose ``access_token`` field
+    is the credential itself.
+
+    Structured bodies keep their shape and lose only credential-named values, so
+    the diagnostic survives. An OPAQUE body -- a raw string or bytes that is not
+    JSON -- is withheld entirely and reported by type and size: there are no keys
+    to redact by, so there is no way to withhold the secret half while keeping
+    the rest, and guessing would be the "control that reports success without
+    doing its job" shape.
+    """
+    if body is None:
+        return "<empty>"
+    if isinstance(body, (dict, list)):
+        return sanitize_log_value(str(redact_mapping(body)), limit)
+    if isinstance(body, (bytes, bytearray)):
+        return f"<{len(body)} bytes withheld>"
+    if isinstance(body, str):
+        try:
+            parsed = json.loads(body)
+        except (ValueError, TypeError):
+            return f"<{len(body)} chars withheld>"
+        if isinstance(parsed, (dict, list)):
+            return sanitize_log_value(str(redact_mapping(parsed)), limit)
+        return f"<{len(body)} chars withheld>"
+    return f"<{type(body).__name__} withheld>"
 
 
 class HTTPMethod(str, Enum):
@@ -535,13 +571,31 @@ class HTTPRequestNode(Node):
             request_kwargs["data"] = data
 
         # Execute request with retries
+        # CREDENTIAL-SAFE LOGGING (issue #2167, CodeQL 11506/11507).
+        #
+        # `url` goes through `mask_url` because it is the SDK's single source of
+        # truth for credential masking -- its own docstring: "Every log line,
+        # error message, exception payload, or stdout writeback that mentions a
+        # connection string MUST route the URL through this helper first." It
+        # handles http(s) userinfo (`https://svc:pw@host`) and credential query
+        # params (a presigned `?X-Amz-Signature=...`). Nothing in this file
+        # imported any masker before this change.
+        #
+        # `headers` is redacted because `_apply_authentication` puts the
+        # credential THERE: `Authorization: Basic <base64(user:pass)>`. Base64
+        # is an encoding, not a mask -- the password is trivially recoverable
+        # from a log. The redactor is separator-normalized so the default
+        # `X-API-Key` header name matches too.
+        #
+        # NOTE the else-branch is the DEFAULT path (`log_requests` defaults
+        # False), so the unmasked URL was logged on EVERY request.
         if log_requests:
-            self.logger.info(f"Request: {method} {url}")
-            self.logger.info(f"Headers: {headers}")
+            self.logger.info("Request: %s %s", method, mask_url(url))
+            self.logger.info("Headers: %s", redact_mapping(headers))
             if data or json_data:
-                self.logger.info(f"Body: {json_data or data}")
+                self.logger.info("Body: %s", _log_safe_body(json_data or data))
         else:
-            self.logger.info(f"Making {method} request to {url}")
+            self.logger.info("Making %s request to %s", method, mask_url(url))
 
         response = None
         response_time: float = 0.0
@@ -564,15 +618,25 @@ class HTTPRequestNode(Node):
 
                 # Log response if enabled
                 if log_requests:
-                    self.logger.info(f"Response: {response.status_code}")
-                    self.logger.info(f"Headers: {dict(response.headers)}")
-                    self.logger.info(f"Body: {response.text[:500]}...")
+                    # Response headers and body carry credentials too (#2167):
+                    # `Set-Cookie` is a session credential, and the RESPONSE to the
+                    # OAuth token exchange `nodes/auth/sso.py` drives through this
+                    # node is a JSON object whose `access_token` IS the credential.
+                    self.logger.info("Response: %s", response.status_code)
+                    self.logger.info(
+                        "Headers: %s", redact_mapping(dict(response.headers))
+                    )
+                    self.logger.info("Body: %s", _log_safe_body(response.text))
 
                 # Success, break the retry loop
                 break
 
             except requests.RequestException as e:
-                self.logger.warning(f"Request failed: {str(e)}")
+                # The driver renders the FULL request URL into its exception text --
+                # credentials and all. `mask_error_text` is the canonical helper for
+                # exactly this "opaque {e} that may embed a credential-bearing URL"
+                # case (#2167).
+                self.logger.warning("Request failed: %s", mask_error_text(e))
 
                 # Last attempt, no more retries
                 if attempt == retry_count:
@@ -581,7 +645,10 @@ class HTTPRequestNode(Node):
                         "response": None,
                         "status_code": None,
                         "success": False,
-                        "error": str(e),
+                        # Returned into workflow results, which are themselves
+                        # logged and persisted -- masked for the same reason
+                        # the log line above is (#2167).
+                        "error": mask_error_text(e),
                         "error_type": type(e).__name__,
                         "recovery_suggestions": [
                             "Check network connectivity",
@@ -615,7 +682,8 @@ class HTTPRequestNode(Node):
                 content = response.text  # Fallback to text
         except Exception as e:
             self.logger.warning(
-                f"Failed to parse response as {response_format}: {str(e)}"
+                f"Failed to parse response as {response_format}: "
+                f"{mask_error_text(e)}"
             )
             content = response.text  # Fallback to text
 
@@ -884,13 +952,31 @@ class AsyncHTTPRequestNode(AsyncNode):
             request_kwargs["data"] = data
 
         # Execute request with retries
+        # CREDENTIAL-SAFE LOGGING (issue #2167, CodeQL 11506/11507).
+        #
+        # `url` goes through `mask_url` because it is the SDK's single source of
+        # truth for credential masking -- its own docstring: "Every log line,
+        # error message, exception payload, or stdout writeback that mentions a
+        # connection string MUST route the URL through this helper first." It
+        # handles http(s) userinfo (`https://svc:pw@host`) and credential query
+        # params (a presigned `?X-Amz-Signature=...`). Nothing in this file
+        # imported any masker before this change.
+        #
+        # `headers` is redacted because `_apply_authentication` puts the
+        # credential THERE: `Authorization: Basic <base64(user:pass)>`. Base64
+        # is an encoding, not a mask -- the password is trivially recoverable
+        # from a log. The redactor is separator-normalized so the default
+        # `X-API-Key` header name matches too.
+        #
+        # NOTE the else-branch is the DEFAULT path (`log_requests` defaults
+        # False), so the unmasked URL was logged on EVERY request.
         if log_requests:
-            self.logger.info(f"Request: {method} {url}")
-            self.logger.info(f"Headers: {headers}")
+            self.logger.info("Request: %s %s", method, mask_url(url))
+            self.logger.info("Headers: %s", redact_mapping(headers))
             if data or json_data:
-                self.logger.info(f"Body: {json_data or data}")
+                self.logger.info("Body: %s", _log_safe_body(json_data or data))
         else:
-            self.logger.info(f"Making async {method} request to {url}")
+            self.logger.info("Making async %s request to %s", method, mask_url(url))
 
         response = None
 
@@ -919,10 +1005,15 @@ class AsyncHTTPRequestNode(AsyncNode):
 
                         # Log response if enabled
                         if log_requests:
-                            self.logger.info(f"Response: {response.status}")
-                            self.logger.info(f"Headers: {dict(response.headers)}")
+                            # Same reasoning as the sync sibling above (#2167):
+                            # `Set-Cookie` and an OAuth `access_token` both live
+                            # on the response side.
+                            self.logger.info("Response: %s", response.status)
+                            self.logger.info(
+                                "Headers: %s", redact_mapping(dict(response.headers))
+                            )
                             text_preview = await response.text()
-                            self.logger.info(f"Body: {text_preview[:500]}...")
+                            self.logger.info("Body: %s", _log_safe_body(text_preview))
 
                         # Determine response format
                         actual_format = response_format
@@ -946,7 +1037,8 @@ class AsyncHTTPRequestNode(AsyncNode):
                                 content = await response.text()  # Fallback to text
                         except Exception as e:
                             self.logger.warning(
-                                f"Failed to parse response as {actual_format}: {str(e)}"
+                                f"Failed to parse response as {actual_format}: "
+                                f"{mask_error_text(e)}"
                             )
                             content = await response.text()  # Fallback to text
 
@@ -977,7 +1069,8 @@ class AsyncHTTPRequestNode(AsyncNode):
                         return result
 
             except (TimeoutError, aiohttp.ClientError) as e:
-                self.logger.warning(f"Async request failed: {str(e)}")
+                # Same as the sync sibling: the URL is inside the exception text.
+                self.logger.warning("Async request failed: %s", mask_error_text(e))
 
                 # Last attempt, no more retries
                 if attempt == retry_count:
@@ -986,7 +1079,10 @@ class AsyncHTTPRequestNode(AsyncNode):
                         "response": None,
                         "status_code": None,
                         "success": False,
-                        "error": str(e),
+                        # Returned into workflow results, which are themselves
+                        # logged and persisted -- masked for the same reason
+                        # the log line above is (#2167).
+                        "error": mask_error_text(e),
                         "error_type": type(e).__name__,
                         "recovery_suggestions": [
                             "Check network connectivity",

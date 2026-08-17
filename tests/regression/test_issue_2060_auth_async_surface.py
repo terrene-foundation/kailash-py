@@ -925,7 +925,7 @@ def test_directory_security_events_redact_credential_bearing_fields():
 
 
 def test_redact_mapping_withholds_values_and_keeps_shape():
-    from kailash.nodes.auth._log_hygiene import redact_mapping
+    from kailash.utils.secure_logging import redact_mapping
 
     out = redact_mapping(
         {
@@ -945,7 +945,7 @@ def test_redact_mapping_withholds_values_and_keeps_shape():
 def test_redact_mapping_bounds_recursion_depth():
     """A self-referential attribute bag must not blow the stack inside a
     logging call."""
-    from kailash.nodes.auth._log_hygiene import redact_mapping
+    from kailash.utils.secure_logging import redact_mapping
 
     node: dict = {}
     node["self"] = node

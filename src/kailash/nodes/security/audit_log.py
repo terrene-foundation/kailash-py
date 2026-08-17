@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from kailash.nodes.base import Node, NodeParameter, register_node
-from kailash.utils.secure_logging import sanitize_log_structure, sanitize_log_value
+from kailash.utils.secure_logging import (
+    redact_mapping,
+    sanitize_log_structure,
+    sanitize_log_value,
+)
 
 
 @register_node()
@@ -81,7 +85,31 @@ class AuditLogNode(Node):
         # Covering the non-json path is what promotes this from latent to
         # fixed, so ``event_data`` is sanitized recursively rather than only
         # at its top level.
-        event_data = sanitize_log_structure(inputs.get("event_data", {}))
+        #
+        # REDACTION IS COMPOSED WITH THAT, NOT SUBSTITUTED FOR IT (issue #2167).
+        # The two helpers answer different questions and BOTH are needed here:
+        # `redact_mapping` decides WHETHER a value may be recorded (by key
+        # name), `sanitize_log_structure` decides HOW the survivors render.
+        # Swapping one for the other trades a credential leak for a
+        # log-injection hole, or the reverse -- `sanitize_log_value`'s own
+        # docstring says it plainly: "NOT a redaction step. A short
+        # attacker-chosen value survives on purpose."
+        #
+        # Without the redaction half, a credential up to the 256-char sanitizer
+        # bound reached this log BYTE-INTACT. `event_data` is a free-form
+        # caller bag and real producers put credentials in it: kaizen's
+        # `nodes/auth/sso.py` forwards the raw IdP attribute bag, while the
+        # core-SDK sibling for the SAME bag already redacted it -- the SDK
+        # disagreeing with itself about whether that bag is credential-bearing.
+        # CodeQL flagged the three sinks below as 11503/11504/11505.
+        #
+        # This is the fix `nodes/auth/_log_hygiene.py` named as belonging
+        # "one layer down ... so that EVERY caller in the SDK is covered
+        # rather than only this package's". Redact FIRST: the sanitizer then
+        # never handles the credential at all.
+        event_data = sanitize_log_structure(
+            redact_mapping(inputs.get("event_data", {}))
+        )
         event_type = sanitize_log_value(inputs.get("event_type", "info"), 128)
         raw_user_id = inputs.get("user_id")
         # Preserve the None/absent distinction rather than recording the

@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from kailash.nodes.auth._log_hygiene import log_safe, redact_mapping
+from kailash.nodes.auth._log_hygiene import log_safe
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode

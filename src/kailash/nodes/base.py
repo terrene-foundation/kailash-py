@@ -37,6 +37,7 @@ from kailash.sdk_exceptions import (
     NodeExecutionError,
     NodeValidationError,
 )
+from kailash.utils.secure_logging import redact_mapping
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -1560,7 +1561,25 @@ class Node(ABC):
 
             # Validate inputs
             validated_inputs = self.validate_inputs(**merged_inputs)
-            self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
+            # REDACTED (#2167). This logged EVERY node's full validated input
+            # dict, so any credential parameter -- `auth_password`, `api_key`,
+            # `secret_key`, a connection string -- reached the log in clear text,
+            # for every node in the SDK rather than one. Surfaced by the #2167
+            # http.py regression test, which caught `auth_password` here after the
+            # http-level leak beside it was already fixed. DEBUG is not a defence:
+            # debug logging is routinely enabled in staging and shipped to an
+            # aggregator. Keys are preserved so the diagnostic still says which
+            # inputs bound.
+            # Guarded: `redact_mapping` walks the whole input structure, and this
+            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
+            # enough -- the call itself would still evaluate before `debug()` is
+            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(
+                    "Validated inputs for %s: %s",
+                    self.id,
+                    redact_mapping(validated_inputs),
+                )
 
             # Execute node logic with progress context
             from kailash.runtime.progress import _current_node_id
@@ -2155,9 +2174,25 @@ class AsyncTypedNode(TypedNode):
 
             # Validate inputs (includes port validation and setting port values)
             validated_inputs = self.validate_inputs(**merged_inputs)
-            self.logger.debug(
-                f"Validated inputs for async node {self.id}: {validated_inputs}"
-            )
+            # REDACTED (#2167). This logged EVERY node's full validated input
+            # dict, so any credential parameter -- `auth_password`, `api_key`,
+            # `secret_key`, a connection string -- reached the log in clear text,
+            # for every node in the SDK rather than one. Surfaced by the #2167
+            # http.py regression test, which caught `auth_password` here after the
+            # http-level leak beside it was already fixed. DEBUG is not a defence:
+            # debug logging is routinely enabled in staging and shipped to an
+            # aggregator. Keys are preserved so the diagnostic still says which
+            # inputs bound.
+            # Guarded: `redact_mapping` walks the whole input structure, and this
+            # runs on EVERY node execution. Passing it as a lazy `%s` arg is not
+            # enough -- the call itself would still evaluate before `debug()` is
+            # entered. `isEnabledFor` keeps the cost at zero when DEBUG is off.
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(
+                    "Validated inputs for async node %s: %s",
+                    self.id,
+                    redact_mapping(validated_inputs),
+                )
 
             # Execute async node logic with progress context
             from kailash.runtime.progress import _current_node_id
