@@ -5,6 +5,8 @@ Consolidates existing Kailash access control implementations (RBAC/ABAC)
 into the middleware layer for unified authentication and authorization.
 """
 
+import inspect
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -34,6 +36,8 @@ from kailash.nodes.security import CredentialManagerNode, RotatingCredentialNode
 # Import middleware event system
 from ..communication.events import EventStream, EventType
 from ..core.agent_ui import AgentUIMiddleware
+
+logger = logging.getLogger(__name__)
 
 
 class MiddlewareAccessControlManager:
@@ -350,19 +354,71 @@ class MiddlewareAccessControlManager:
 class MiddlewareAuthenticationMiddleware:
     """
     Authentication middleware that integrates with Kailash security components.
+
+    Note:
+        Token verification is delegated to
+        :class:`~kailash.trust.auth.jwt.JWTValidator`, which is where this SDK's
+        JWT crypto lives (algorithm-confusion rejection, the ``none``-algorithm
+        ban, the RFC 7518 §3.2 key-length floor). This class contributes header
+        parsing and the ``UserContext`` mapping and deliberately implements no
+        crypto of its own.
     """
 
     def __init__(
         self,
         access_control_manager: MiddlewareAccessControlManager,
         credential_manager: Optional[CredentialManagerNode] = None,
+        token_verifier: Optional[Any] = None,
     ):
+        """
+        Args:
+            access_control_manager: Authorization manager for this middleware.
+            credential_manager: Node used to FETCH the JWT signing secret when
+                no ``token_verifier`` is supplied. Its declared credential is
+                ``jwt_secret``.
+            token_verifier: Any object exposing ``verify_token(token)`` -- a
+                ``MiddlewareAuthManager``, a ``JWTAuthManager``, or a
+                ``JWTValidator``. Supplying one is the recommended wiring: it
+                shares the verification policy with the rest of the deployment
+                instead of deriving a second one here.
+        """
         self.access_manager = access_control_manager
         self.credential_manager = credential_manager or CredentialManagerNode(
             name="middleware_credentials",
             credential_name="jwt_secret",
             credential_type="api_key",
         )
+        self._token_verifier = token_verifier
+        # Latch so a missing credential is reported once per instance rather
+        # than once per unauthenticated request (the #2114 amplification shape).
+        self._no_verifier_logged = False
+
+    def _resolve_verifier(self) -> Optional[Any]:
+        """Return something that can verify a token, or None.
+
+        Resolution order: the injected verifier, else a
+        :class:`~kailash.trust.auth.jwt.JWTValidator` built from the secret the
+        credential manager fetches. Built once and cached -- rebuilding per
+        request would re-read the environment on every call.
+        """
+        if self._token_verifier is not None:
+            return self._token_verifier
+
+        try:
+            result = self.credential_manager.execute()
+            credentials = result.get("credentials") or {}
+            secret = credentials.get("api_key") or credentials.get("value")
+        except Exception as exc:
+            secret = None
+            logger.debug("jwt_secret credential fetch failed: %s", type(exc).__name__)
+
+        if not secret:
+            return None
+
+        from kailash.trust.auth.jwt import JWTConfig, JWTValidator
+
+        self._token_verifier = JWTValidator(JWTConfig(secret=secret))
+        return self._token_verifier
 
     async def authenticate_request(
         self, headers: Dict[str, str], session_id: Optional[str] = None
@@ -370,8 +426,21 @@ class MiddlewareAuthenticationMiddleware:
         """
         Authenticate incoming request using Kailash security patterns.
 
+        This method could not authenticate anyone before issue #2108. It called
+        ``credential_manager.execute(action="validate_token", token=token)`` and
+        checked ``cred_result.get("valid", False)`` -- but ``CredentialManagerNode``
+        FETCHES credentials and has no token-validation operation, its
+        ``get_parameters()`` declared neither ``action`` nor ``token`` (so
+        ``Node.execute`` stripped both), and its return dict has no ``valid``
+        key on any path. The check was therefore unconditionally False and every
+        request was refused, with an in-code comment ("For now, simulating with
+        credential manager") standing in for the implementation
+        (``zero-tolerance.md`` Rule 2).
+
         Returns:
-            Tuple of (authenticated, user_context)
+            Tuple of (authenticated, user_context). ``(False, None)`` for a
+            missing/malformed header, an invalid token, or no configured key
+            material -- the last of which fails CLOSED and is reported once.
         """
 
         # Extract token from headers
@@ -381,37 +450,76 @@ class MiddlewareAuthenticationMiddleware:
 
         token = auth_header[7:]  # Remove "Bearer " prefix
 
-        # Use Kailash credential manager for token validation
+        verifier = self._resolve_verifier()
+        if verifier is None:
+            # No key material: refuse, and name the OFF protection and its
+            # wiring exactly once (``security.md`` § Secure-Default). Silence
+            # here would leave an operator debugging blanket 401s with nothing
+            # in the log pointing at the cause.
+            if not self._no_verifier_logged:
+                self._no_verifier_logged = True
+                logger.warning(
+                    "middleware_auth.no_token_verifier",
+                    extra={
+                        "exposure": "every request is refused; no token can verify",
+                        "wiring": (
+                            "pass token_verifier=... , or configure the "
+                            "'jwt_secret' credential the credential manager reads"
+                        ),
+                    },
+                )
+            return False, None
+
         try:
-            # This would typically validate JWT token
-            # For now, simulating with credential manager
-            cred_result = self.credential_manager.execute(
-                action="validate_token", token=token
-            )
+            payload = verifier.verify_token(token)
+            if inspect.isawaitable(payload):
+                # `MiddlewareAuthManager.verify_token` is async while
+                # `JWTAuthManager.verify_token` and `JWTValidator.verify_token`
+                # are sync. Awaiting unconditionally raises TypeError on the
+                # sync ones (measured: "object dict can't be used in 'await'
+                # expression"), which the handler below would then read as an
+                # authentication failure for a perfectly valid token.
+                payload = await payload
 
-            if not cred_result.get("valid", False):
-                return False, None
+            # Create user context from the verified claims. BOTH subject
+            # spellings are read: `MiddlewareAuthManager` stamps `user_id`,
+            # while `JWTAuthManager` stamps the RFC 7519 registered `sub`.
+            user_id = payload.get("user_id") or payload.get("sub")
+            if not user_id:
+                # A token that verified but names no subject is a BROKEN
+                # credential, not an authenticated one. Admitting it would
+                # produce a UserContext with no owner.
+                raise ValueError("verified token carries no subject claim")
 
-            # Create user context from token data
-            token_data = cred_result.get("token_data", {})
             user_context = UserContext(
-                user_id=token_data.get("user_id"),
-                tenant_id=token_data.get("tenant_id"),
-                email=token_data.get("email"),
-                roles=token_data.get("roles", []),
-                attributes=token_data.get("attributes", {}),
+                user_id=user_id,
+                tenant_id=payload.get("tenant_id"),
+                email=payload.get("email"),
+                roles=payload.get("roles", []),
+                attributes=payload.get("attributes") or payload.get("metadata") or {},
                 session_id=session_id,
             )
 
             return True, user_context
 
         except Exception as e:
-            # Log security event using Kailash security event node
-            self.access_manager.security_event_node.execute(
-                event_type="authentication_failure",
-                error=str(e),
-                token_preview=token[:10] + "..." if len(token) > 10 else token,
-            )
+            # Log security event using Kailash security event node -- BEST
+            # EFFORT. The auth decision is the `(False, None)` below; the event
+            # is a side effect, and `SecurityEventNode` talks to a database it
+            # may not have. Letting it raise would convert a clean deny into an
+            # exception escaping an authentication call, which callers read as a
+            # server fault rather than a refusal. Same disposition as
+            # `MiddlewareAuthManager._emit_security_event`.
+            try:
+                self.access_manager.security_event_node.execute(
+                    event_type="authentication_failure",
+                    error=str(e),
+                    token_preview=token[:10] + "..." if len(token) > 10 else token,
+                )
+            except Exception:
+                logger.warning(
+                    "security event logging failed for authentication_failure"
+                )
 
             return False, None
 

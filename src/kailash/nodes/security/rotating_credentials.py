@@ -32,7 +32,20 @@ class RotatingCredentialNode(Node):
     refreshing from configured sources, and providing zero-downtime rotation
     for enterprise applications.
 
-    Key capabilities:
+    .. warning::
+        **Rotation does not currently fire — tracked as issue #2138.** This node
+        drives :class:`~kailash.nodes.security.credential_manager.CredentialManagerNode`
+        through four operations that node does not implement
+        (``get_credential``, ``store_credential``, ``validate_credential``,
+        ``delete_credential``) and checks a ``"success"`` key it returns on no
+        path, so every rotation check resolves to "no rotation needed". Closing
+        it requires a writable credential backend with atomic swap and rollback,
+        which is a feature rather than a correction; the capabilities listed
+        below describe the intended design, not current behaviour. Found by the
+        #2108 sweep, which fixed the sibling call sites in
+        ``MiddlewareAuthManager``.
+
+    Key capabilities (intended design — see the warning above):
     1. Automatic expiration detection
     2. Multi-source credential refresh
     3. Zero-downtime rotation
@@ -636,9 +649,70 @@ class RotatingCredentialNode(Node):
                 )
                 time.sleep(min(check_interval, 300))  # Sleep at most 5 minutes on error
 
+    #: Operations that cannot function until #2138 lands, and why.
+    #:
+    #: `CredentialManagerNode` implements NONE of `get_credential`,
+    #: `store_credential` or `delete_credential` — it FETCHES credentials and has
+    #: no write path — and returns no `"success"` key on any branch, so every
+    #: `if not result.get("success")` guard in the rotation path is
+    #: unconditionally true. A worker started anyway logs "Failed to retrieve
+    #: credential" on every tick and rotates nothing.
+    _UNIMPLEMENTED_STORE_OPERATIONS = (
+        "get_credential",
+        "store_credential",
+        "delete_credential",
+    )
+
+    def _refuse_unimplemented_rotation(self, operation: str) -> None:
+        """Refuse an operation that cannot rotate anything. Never returns.
+
+        Fails LOUD rather than silently: `start_rotation` previously returned
+        ``{"success": True, "message": "Rotation started..."}`` and spawned a
+        worker that could only ever conclude "no rotation needed". A caller
+        reading that success has every reason to believe its credentials are
+        being rotated, so a credential advertised as rotating stayed valid
+        forever with nothing in the response or the return value saying
+        otherwise. A security control that cannot function must not report
+        success (``security.md`` § Secure-Default).
+
+        This is a REFUSAL, not the fix. #2138 carries the fix: a writable
+        credential backend with atomic swap and rollback.
+
+        Raises:
+            NodeExecutionError: Always.
+        """
+        raise NodeExecutionError(
+            f"RotatingCredentialNode cannot perform '{operation}': credential "
+            "rotation is not implemented (issue #2138). It requires "
+            f"CredentialManagerNode operations {list(self._UNIMPLEMENTED_STORE_OPERATIONS)}, "
+            "none of which exist — that node FETCHES credentials from an "
+            "environment variable, a file, or a vault and has no write path. "
+            "Starting a rotation worker anyway would report success and then "
+            "rotate nothing, leaving a credential you believe is rotating valid "
+            "indefinitely. Rotate this credential through your secret backend "
+            "(Vault, AWS Secrets Manager, Azure Key Vault) until #2138 lands. "
+            "'stop_rotation', 'check_status' and 'get_audit_log' remain "
+            "available; they are bookkeeping and do not touch the missing "
+            "operations."
+        )
+
     def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute credential rotation operation."""
+        """Execute credential rotation operation.
+
+        Raises:
+            NodeExecutionError: ``start_rotation`` / ``rotate_now`` — rotation
+                is unimplemented (#2138) and refuses rather than silently
+                no-opping. See :meth:`_refuse_unimplemented_rotation`.
+            NodeConfigurationError: Unknown operation, or a required argument
+                is missing.
+        """
         operation = kwargs.get("operation", "start_rotation")
+
+        # Refused BEFORE any argument validation, so the caller is told the
+        # capability is absent rather than being walked through configuring a
+        # worker that cannot work.
+        if operation in ("start_rotation", "rotate_now"):
+            self._refuse_unimplemented_rotation(operation)
 
         if operation == "start_rotation":
             credential_name = kwargs.get("credential_name")

@@ -392,7 +392,11 @@ class UserManagementNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute user management operation."""
-        assert self._db_node is not None
+        # The narrowing assert belongs AFTER `_init_dependencies` (below), which
+        # is what assigns `_db_node`. Placed here it fired on the None the
+        # constructor sets, so every operation raised a bare `AssertionError`
+        # with no message -- the third instance of the misplacement #2108
+        # corrected in `EnterpriseSecurityEventNode`.
         try:
             operation = UserOperation(inputs["operation"])
 
