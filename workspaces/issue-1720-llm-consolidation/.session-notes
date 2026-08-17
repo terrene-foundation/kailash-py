@@ -187,7 +187,44 @@ which protects the window between publishes.
   into a fresh venv, and confirmed `network_guard.check_url` imports AND `redact_mapping` works
   (`{'api_key': '[REDACTED]'}`) from site-packages, not the repo
 
-**NOT yet done:** the `/release` authorization prompt (`build-repo-release-discipline.md` Rule 4)
+**RELEASE COMPLETE — 2026-08-17. All six published and verified installable from production
+PyPI; zero drift across all nine packages.**
+
+| package | version | PyPI | GH Release |
+| --- | --- | --- | --- |
+| kailash | 2.63.0 | ✅ | ✅ |
+| kailash-dataflow | 2.20.0 | ✅ | ⚠ missing (503) |
+| kailash-ml | 2.2.3 | ✅ | ✅ (created after the fact) |
+| kaizen-agents | 0.13.0 | ✅ | ✅ |
+| kailash-kaizen | 2.46.0 | ✅ | ✅ |
+| kailash-nexus | 2.16.0 | ✅ | ✅ |
+
+**The publish-order constraint held end to end, verified rather than assumed:** a clean-venv
+`pip install kailash-kaizen==2.46.0` from production PyPI resolved `kailash 2.63.0`, imported
+`network_guard`, and the BREAKING change failed closed —
+`ConfigurationError: VectorMemory: 'embedding_fn' is required`.
+
+**TestPyPI earned its keep, and its own hazard is worth recording.** All five minors were
+validated there first. `kailash-nexus` appeared to FAIL — `FileNotFoundError: 'DESCRIPTION.txt'`
+— which looked like a broken sdist in our package. It was not: with `--index-url` pointing at
+TestPyPI, **every transitive dep resolves from TestPyPI first**, and TestPyPI hosts a stale
+`fastapi` whose version number outranks PyPI's, so pip picked it and tried to build it.
+Reversing the index order does NOT fix it (pip merges both indexes and takes the highest
+version). **The working form is: deps from real PyPI, then your own artifacts with `--no-deps`
+from TestPyPI.**
+
+**GitHub was in a MAJOR PARTIAL OUTAGE throughout** (Issues + Pull Requests `major_outage`,
+Actions + API `degraded_performance`). Every publish failure was infrastructure, none was code:
+`429/503` downloading `actions/download-artifact` from codeload (dataflow, nexus), and `503` on
+Create-GitHub-Release (dataflow, ml). **Read the job-level outcome, not the run-level
+conclusion** — `ml-v2.2.3` shows run=failure but `Publish to PyPI: success`, and the package IS
+live. Backing off ~75s beat hammering retries on the 429.
+
+**Residual:** the `dataflow-v2.20.0` GitHub Release could not be created (persistent 503). The
+package is on PyPI and installable; only the Release page is missing. Create it with
+`gh release create dataflow-v2.20.0 --verify-tag` once GitHub recovers.
+
+**NOT done (superseded):** the `/release` authorization prompt (`build-repo-release-discipline.md` Rule 4)
 — the co-owner approved "release" but has not seen the enumerated version list above, and PyPI
 is immutable.
 
