@@ -2,8 +2,8 @@
 
 ## Where we are
 
-main `71e230102` — **GREEN**. The five Azure tests that blocked every open PR are fixed and
-merged (#2169). **24 PRs merged across cont-18/19** (#2169 unblocked main, #2177 notes, #2165
+main `96ab3d87a` — release-ready. The five Azure tests that blocked every open PR are fixed and
+merged (#2169). **28 PRs merged across cont-18/19/20** (#2169 unblocked main, #2177 notes, #2165
 isort/D3). Three PRs open.
 
 ## Read first
@@ -17,8 +17,9 @@ isort/D3). Three PRs open.
 
 | PR | What | State |
 | --- | --- | --- |
-| #2176 | **NEW** — credential redaction at every log sink (#2167) | CI running; CodeQL: 1 real alert fixed, 5 deferred with runtime proof (#2178) |
-| #2140 | API-key auth that could not authenticate (#2108/#2114) | 25 green, **1 CodeQL HIGH needing a co-owner call** — see the PR comment; D1 dismissal verified still in place |
+| ~~#2176~~ | ✅ **MERGED** — credential redaction at every log sink (#2167) | incl. `Node.execute` logging every node's inputs |
+| ~~#2140~~ | ✅ **MERGED** — API-key auth that could not authenticate (#2108/#2114) | |
+| ~~#2190~~ | ✅ **MERGED** — CHANGELOG release prep | core + kaizen entries for today's work |
 | ~~#2150~~ | ✅ **MERGED** — kaizen SSRF consolidation | See "What #2150 landed" below |
 | ~~#2185~~ | ✅ **MERGED** — mock embedder no longer the production default (#2174) | See "What #2185 landed" below |
 | ~~#2186~~ | ✅ **MERGED** — corrects a delegation claim shipped in #2150 | `fingerprint_secret` does NOT delegate to `fingerprint_value`; they are DUPLICATE bodies. The false claim is gone and the byte-identity is now pinned by `test_url_safety_log_fingerprint_contract.py` — verified on merged main, both return `493fa3b2`. **Two duplicate bodies held in sync by nothing but a test is the same shape as everything else here: a control whose success is not what it appears to guarantee.** |
@@ -136,6 +137,63 @@ rather than left reachable (the only remaining mention is a comment recording th
 
 Discrimination verified independently: reverting ONLY `vector.py` to main → **10 failed**;
 restored → 24 pass, worktree clean.
+
+## RELEASE STATE — read before running /release
+
+**All dispositions are CLEARED (co-owner approved 2026-08-17).** Nine CodeQL alerts dismissed
+with proof: 11557–11561 (#2178, the http.py fix lines), 11484/11485/**11556** (#2181), 11555
+(#2140). #2170's decision is recorded on the issue.
+
+**The 11556 substitution is the thing to carry forward.** #2181's ceremony was written against
+**11474**, which went `fixed` when #2150 shifted the flagged line 731→732 — CodeQL matches on
+LOCATION, so it opened a NEW alert, 11556, for the same code in the same function. The ceremony
+was pointing at a dead alert while the live one sat open. **A ceremony can be silently orphaned
+by a one-line shift**, and "the alert we dispositioned is now fixed" is not evidence the
+disposition still applies. Third instance today (10867, 11474→11556).
+
+Related: `fingerprint_value` (`url_credentials.py:798`) holds the IDENTICAL unkeyed blake2b and
+carries **no alert at all** — the scanner flagged one of the two duplicate bodies, so a future
+edit to the other has zero scanner coverage. The byte-identity test is the only guard.
+
+### Drift + the publish-ORDER constraint (verified, not inherited)
+
+Six packages drifted (NOT the nine an earlier note claimed):
+
+| package | PyPI | repo |
+| --- | --- | --- |
+| kailash | 2.62.0 | **2.63.0** |
+| kailash-dataflow | 2.19.1 | 2.20.0 |
+| kailash-kaizen | 2.45.0 | **2.46.0** |
+| kailash-ml | 2.2.2 | 2.2.3 |
+| kailash-nexus | 2.15.0 | **2.16.0** |
+| kaizen-agents | 0.12.0 | 0.13.0 |
+
+In sync: align 0.7.4, mcp 0.5.1, pact 0.18.0.
+
+**core 2.63.0 MUST publish before kaizen 2.46.0 AND nexus 2.16.0.** Verified against the
+published artifact rather than assumed: the `kailash-2.62.0` wheel contains **789 files and zero
+`network_guard` hits**, with `url_credentials.py` present as a positive control. Both dependents
+already declare `kailash>=2.63.0`, so the FLOORS are correct — the constraint is publish ORDER,
+which protects the window between publishes.
+
+### Pre-release gates run
+
+- version consistency: **9/9 packages** `pyproject` == `__init__` (align + ml resolve through
+  `_version.py`; a naive grep reports those as mismatches — they are not)
+- working tree clean
+- CHANGELOGs written for today's work: core #2167 + #2108/#2114; kaizen #2174 (BREAKING, with
+  migration) + #2137 + #2170
+- **clean-venv gate on the real artifact**: built `kailash-2.63.0-py3-none-any.whl`, installed it
+  into a fresh venv, and confirmed `network_guard.check_url` imports AND `redact_mapping` works
+  (`{'api_key': '[REDACTED]'}`) from site-packages, not the repo
+
+**NOT yet done:** the `/release` authorization prompt (`build-repo-release-discipline.md` Rule 4)
+— the co-owner approved "release" but has not seen the enumerated version list above, and PyPI
+is immutable.
+
+**GitHub was degraded during this work** — repeated 503s on the merge API and step-1 "Set up job"
+/ step-4 "Install uv" runner failures across several PRs. All were infrastructure, none was code;
+each cleared on re-run. Do not read those as test failures.
 
 ## Traps (measured this session — do not rediscover)
 
