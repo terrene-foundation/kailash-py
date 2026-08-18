@@ -17,22 +17,22 @@ are merged; the #2189 sweep has run and produced one fix PR plus one filed decis
 
 ## In flight
 
-**PR #2195 (open)** — `fix/2189-absence-rendered-as-success`. Two defects fixed + one
-test-hygiene fix, 9 regression tests, 5 of which RED against unfixed code. **Baseline
-comparison is DONE and clean** — `tests/regression tests/trust` untruncated on both sides
-vs parent `c23836a17`: branch 54F/9017P/11E, baseline 53F/9009P/11E, diffed BY TEST ID.
-Exactly one id differed (a hypothesis `DeadlineExceeded` timing flake on a keygen property
-test, passing 3/3 in isolation) — fixed in the PR's second commit with a positive control
-(`deadline=1` FAILS, `deadline=None` PASSES). Zero other new failures. Awaiting CI + merge.
+**Nothing is open.** PR queue empty; main `257113226`, working tree clean.
 
-**Issue #2194 (filed, NOT fixed — deliberately).** Governance API actor provenance:
-`POST /clearances` and `POST /knowledge-share-policies` take `granted_by_role_address` /
-`created_by_role_address` from the REQUEST BODY and write them into a durable clearance
-record and a governance audit event. `identity` is bound at all nine endpoints and read at
-none. The reason it is filed rather than fixed: `GovernanceAuth.verify_token` returns the
-constant `"authenticated"` for one shared token, so **there is no per-principal identity to
-derive the actor from.** Three candidate schemas are laid out in the issue. Same disposition
-as #2166 — fixing it blind ships a wrong authz check in place of an honest gap.
+**#2141 — reconciled, NOT implemented, and the reason is load-bearing.** Every claim in the
+issue re-verified true on current main (`self._auth` assigned once, read nowhere; DELETE
+mounted unconditionally; zero middleware on a driven app). Two NEW findings posted to the
+issue: (1) spec §8.3's claim that `--enable-control` "permits writes only on 127.0.0.1" is
+FALSE — `create_app` never receives `enable_control` and the DELETE route is registered
+unconditionally; (2) **the spec never says what `--auth` DOES** — §8.3 specifies only the
+pairing refusal, and the flag's help calls it a policy URL. So fixing this means DECIDING
+what a security flag means on a released CLI. Recommendation posted (make `--auth` a
+require-auth switch + wire the shared `resolve_server_auth`/`install_server_auth_middleware`
+helper, since that is the only reading under which `_validate_bind`'s own error message is
+true), with implications: **dependency floor must rise `kailash>=2.31.0` → `>=2.63.0`**
+(server_auth first ships in 2.63.0 — verified by object presence across tags with a negative
+control), it is a behaviour change on a released CLI, and it needs a kailash-ml RELEASE to
+reach users. Awaiting the semantics call.
 
 **Merged this block:** #2192 (mounted-subapp auth tristate, red established before merge —
 4 of 6 tests flip) · #2123 (loom Gate-2 sync, rebased 177 commits forward, zero conflicts).
