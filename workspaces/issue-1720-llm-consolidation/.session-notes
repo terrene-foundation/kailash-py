@@ -2,7 +2,7 @@
 
 ## Where we are
 
-main `6fb3f5d0f` — green. **The PR queue is empty.** Both PRs the last session left open
+main — green. **The PR queue is empty.** Both PRs the last session left open
 are merged; the #2189 sweep has run and produced one fix PR plus one filed decision.
 
 ## Read first (in this order)
@@ -17,7 +17,9 @@ are merged; the #2189 sweep has run and produced one fix PR plus one filed decis
 
 ## In flight
 
-**Nothing is open.** PR queue empty; main `257113226`, working tree clean.
+**Nothing is open.** PR queue empty, working tree clean — verify with `gh pr list` and
+`git status --porcelain` rather than trusting this line; a pinned SHA here goes stale the
+moment these notes are themselves merged, which is why none is quoted.
 
 **#2141 — reconciled, NOT implemented, and the reason is load-bearing.** Every claim in the
 issue re-verified true on current main (`self._auth` assigned once, read nowhere; DELETE
