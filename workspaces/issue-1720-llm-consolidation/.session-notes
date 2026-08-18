@@ -1,192 +1,145 @@
-# Session Notes — 2026-08-18 (cont-20 close-out: released, consolidated, seeded)
+# Session Notes — 2026-08-18 (cont-21: PR queue cleared, #2189 sweep executed)
 
 ## Where we are
 
-main `d5b8fe390` — **green, released, and consolidated.** 28 PRs merged across cont-18/19/20.
-**Six packages published to PyPI; zero drift across all nine.** Two PRs open. Worktrees reduced
-18 → 2, local branches 206 → 171.
+main `6fb3f5d0f` — green. **The PR queue is empty.** Both PRs the last session left open
+are merged; the #2189 sweep has run and produced one fix PR plus one filed decision.
 
 ## Read first (in this order)
 
-1. **`sweep-cont20-report.md`** — the decision report: completion status, ETA in cycles,
-   value-ranked queue, three decisions (D1–D3) needing the co-owner
-2. **§ Seed the next session** below — copy-paste starting instructions
-3. **§ Branch + worktree ledger** below — nothing is lost; this is the map
-4. **§ Traps** — measured this block, do not rediscover
+1. **§ In flight** below — the one open PR and what still has to happen to it
+2. **§ What the #2189 sweep found** — the results, including the clean surfaces, so the
+   next sweep does not re-walk them
+3. **§ Traps** — carried forward from cont-20, plus three measured this block
+4. `sweep-cont20-report.md` — still current for the value-ranked queue and D1/D2/D3
 
 ---
 
-## Seed the next session
+## In flight
 
-Paste this as the opening message:
+**PR #2195 (open)** — `fix/2189-absence-rendered-as-success`. Two defects fixed + one
+test-hygiene fix, 9 regression tests, 5 of which RED against unfixed code. **Baseline
+comparison is DONE and clean** — `tests/regression tests/trust` untruncated on both sides
+vs parent `c23836a17`: branch 54F/9017P/11E, baseline 53F/9009P/11E, diffed BY TEST ID.
+Exactly one id differed (a hypothesis `DeadlineExceeded` timing flake on a keygen property
+test, passing 3/3 in isolation) — fixed in the PR's second commit with a positive control
+(`deadline=1` FAILS, `deadline=None` PASSES). Zero other new failures. Awaiting CI + merge.
 
-```
-Read workspaces/issue-1720-llm-consolidation/.session-notes and
-workspaces/issue-1720-llm-consolidation/sweep-cont20-report.md first.
+**Issue #2194 (filed, NOT fixed — deliberately).** Governance API actor provenance:
+`POST /clearances` and `POST /knowledge-share-policies` take `granted_by_role_address` /
+`created_by_role_address` from the REQUEST BODY and write them into a durable clearance
+record and a governance audit event. `identity` is bound at all nine endpoints and read at
+none. The reason it is filed rather than fixed: `GovernanceAuth.verify_token` returns the
+constant `"authenticated"` for one shared token, so **there is no per-principal identity to
+derive the actor from.** Three candidate schemas are laid out in the issue. Same disposition
+as #2166 — fixing it blind ships a wrong authz check in place of an honest gap.
 
-State: main d5b8fe390, green. Six packages released to PyPI (kailash 2.63.0,
-dataflow 2.20.0, kaizen 2.46.0, nexus 2.16.0, ml 2.2.3, kaizen-agents 0.13.0).
-Zero version drift. Nothing is blocked on a release.
-
-Do these in order:
-
-1. #2189 — sweep this repo for "an absence rendered as a success". A sibling SDK
-   swept the same class and found 22 instances, 3 critical, all in code that looked
-   correct on review. This session hit the class ~12 times without looking for it.
-   Highest expected yield of anything open. Read the issue body first; it lists the
-   shapes.
-
-2. #2192 — recovered work, ALREADY REBASED and green (6 tests pass). Before merging,
-   ESTABLISH THE RED: nobody has shown those 6 tests fail against unfixed code. If
-   they do not discriminate, say so rather than merging.
-
-3. #2123 — loom sync PR, 116 behind main. Rebase, verify, merge or close.
-
-4. #2141 / #2142 — the last un-gated HTTP surfaces. #2141 is sharper: an
-   unauthenticated DELETE /api/runs/{id}, and --auth unlocks a 0.0.0.0 bind while
-   installing nothing.
-
-Do NOT start #2166 (check_session_access) without the co-owner specifying the
-authorization schema — fixing it blind ships a WRONG authz check in place of a loud
-failure.
-
-Before citing ANY check as evidence, name what result it would produce if the thing
-it checks were false. If that is the same result, it is not evidence. See § Traps.
-```
+**Merged this block:** #2192 (mounted-subapp auth tristate, red established before merge —
+4 of 6 tests flip) · #2123 (loom Gate-2 sync, rebased 177 commits forward, zero conflicts).
 
 ---
 
-## Branch + worktree ledger (post-consolidation)
+## What the #2189 sweep found
 
-**Worktrees — 2 remain, both intentional:**
+The class: *a mechanism that learned NOTHING reports the same value as one that checked and
+passed.* Swept by AST over 2431 non-test source files for the issue's five shapes.
 
-| path | branch | why kept |
-| --- | --- | --- |
-| `build/kailash-py` | `main` | the main checkout |
-| `build/.kailash-py-wt/l4-post-merge-verify` | `fix/2113-…-tristate` | active **PR #2192** |
+### Fixed (in the open PR)
 
-15 merged worktrees removed with `git worktree remove` (refuses on a dirty tree — all were
-clean). 2 stale `/tmp` loom-gate2 entries pruned; both pointed at commits already on main
-(`d248afd78`, `1ccab9ac0`), so nothing was lost.
+1. **`MultiDimensionEvaluator.evaluate` reported a constraint set it never evaluated as
+   `satisfied=True`.** An unregistered dimension was appended to `warnings` and `continue`d —
+   dropped from `dimension_results` AND `failed_dimensions`. Every-dimension-unknown returned
+   `satisfied=True, failed=[], results={}`, identical on the gated field to a passing run.
+   Partial case was worse: CONJUNCTIVE "ALL must pass" computed over the shrunk subset.
+2. **Stripe/Slack webhook verifiers guarded the timestamp parse but not the conversion.**
+   `math.isfinite` admits `1e300`; `datetime.fromtimestamp` then raised `OverflowError`
+   OUTSIDE the guarded block, past `handle_webhook`'s documented return contract, skipping
+   `metrics.record_webhook` — so the rejected delivery was invisible, not merely mis-reported.
+   `handle_webhook`'s own generic path already caught `OverflowError`; the two provider
+   verifiers stopped one step short.
 
-**Recovered from near-loss — read this before trusting a worktree sweep again.**
-`fix/2113-mounted-subapp-auth-reason-tristate` existed **only in a local worktree and had never
-been pushed**. A prune would have destroyed 196 insertions including a 154-line regression test.
-It is now on origin and open as **PR #2192**. The general rule: before removing any worktree,
-verify its branch is EITHER merged into main OR present on origin — a branch that is neither is
-unrecoverable.
+### Clean — verified, do not re-walk
 
-**Branches still open (recent):**
+- `pact/mcp/enforcer.py` — `cost_estimate` non-finite → fail-closed BLOCK (Step 2), AND
+  `McpToolPolicy.__post_init__` validates `max_cost` finite. **Both** operands guarded.
+- All three financial-constraint classes validate finite + non-negative:
+  `trust/envelope.py::FinancialConstraint`, `trust/plane/models.py::FinancialConstraints`,
+  `trust/pact/config.py::FinancialConstraintConfig`.
+- `trust/enforce/proximity.py::scan` — non-finite usage escalates to HELD, with a comment
+  naming the exact hazard.
+- `trust/plane/project.py::check` — `action_cost` isfinite + negative → BLOCKED.
+- `security.py`, `gateway/security.py`, `utils/network_guard.py` exception paths — every one
+  deliberate, with a comment saying why.
+- `migrations/performance_validator.py` — RAISES on an empty baseline set.
 
-| branch | state |
-| --- | --- |
-| `fix/2113-…-tristate` | **PR #2192** — rebased, 6 tests pass, red NOT established |
-| `sync/2026-08-13-loom-build-py` | **PR #2123** — 116 behind |
-| `fix/2070-logging-hook-redaction-defeat` | **superseded** by PR #2101 (#2084 fix + 2 test files are on main). On origin; disposable |
-| `backup/pre-rebase-2150` | disposable — #2150 merged; the backup is 12,799 lines BEHIND main. Left deliberately (named `backup/`) |
-| `docs/notes-cont18-execution` | superseded by later notes PRs |
+**`trust/plane/conformance/__init__.py::_level_passes` is the reference implementation of
+the right answer**: `if not must_tests: return False` — *"cannot claim a level without
+evidence."* Cite it when arguing the shape.
 
-**165 historical local branches** (oldest 2025-06-09) were NOT examined and NOT touched. See
-sweep report D3 — do not assume they are disposable.
+### Latent / design-level — recorded, NOT fixed
+
+- **`PlanSuspension.all_conditions_met()` returns True vacuously on empty `resume_conditions`,
+  and `tests/trust/pact/unit/test_plan_suspension.py:597` asserts that vacuity as intended
+  behaviour.** This is the issue's hardest flavour — a test named for the vacuous outcome,
+  green, that anyone checking "is it covered?" would count as coverage. No production caller
+  builds an empty tuple today (`suspend_plan` always passes one condition), but `from_dict`
+  accepts `"resume_conditions": []` and the resume gate at `pact/engine.py:777` reads it.
+- **`verify_chain()` returns True on an empty chain** in three places (`trust/audit_store.py`
+  ×2, `kaizen_agents/audit/trail.py`). Semantically defensible; the caller cannot tell
+  "nothing to verify" from "the store did not load." Fixing means a richer return type on a
+  released public API — a decision, not a patch.
+- **`api_channel` / `mcp_channel` / `cli_channel` `health_check`**: `all(checks.values())`
+  where one value is a nested dict. A non-empty dict is always truthy, so the
+  `enterprise_features` sub-checks never affect `all_healthy` — reported, never enforced.
+
+### The meta-finding
+
+The pre-existing `test_unknown_dimension_warning` asserted that a warning was emitted and
+**never looked at `satisfied`**. A green test, correctly named for the case, that did not
+touch the consequential field. `"is it tested?"` is itself an instance of the class; the
+question that discriminates is `"has this test been shown to fail for the right reason?"`
 
 ---
 
-## What shipped this block
+## Traps
 
-**Released** (all verified installable from clean venvs):
-`kailash 2.63.0` · `kailash-dataflow 2.20.0` · `kailash-kaizen 2.46.0` (BREAKING) ·
-`kailash-nexus 2.16.0` · `kailash-ml 2.2.3` · `kaizen-agents 0.13.0`
+Everything in the cont-20 notes still holds (`git log` them if needed — they were replaced,
+not deleted: `git show d386a18a3:workspaces/issue-1720-llm-consolidation/.session-notes`).
+Highest-value carried forward, plus what this block measured:
 
-**Nine CodeQL alerts dispositioned** with runtime proofs: 11557–11561 (#2178), 11484/11485/**11556**
-(#2181), 11555 (#2140).
-
-**The 11556 substitution is the thing to remember.** #2181's ceremony was written against
-**11474**, which went `fixed` when #2150 shifted the flagged line 731→732. **CodeQL matches on
-LOCATION**, so it opened a NEW alert — 11556 — for the same code in the same function, and the
-ceremony was pointing at a dead alert while the live one sat open. Third instance this block
-(10867, 11474→11556). **A ceremony can be silently orphaned by a one-line shift**, and "the alert
-we dispositioned is now fixed" is not evidence the disposition still applies.
-
-Related and still true: `fingerprint_value` (`url_credentials.py:798`) holds the IDENTICAL
-unkeyed blake2b and carries **no alert at all** — the scanner flagged one of two duplicate
-bodies, so a future edit to the other has zero scanner coverage. A test is the only guard.
-
----
-
-## Traps (measured — do not rediscover)
-
-**The class:** a check that returns the same result whether or not the thing is true, read as
-the negative answer. **Three flavours, hardest last:**
-
-| flavour | why it is hard | example |
-| --- | --- | --- |
-| **empty** | at least looks odd | `grep` defeated by ANSI codes |
-| **truncated** | looks like DATA | `per_page=100` → "13 alerts" when there were 36 |
-| **errored** | looks like an ANSWER TO A DIFFERENT QUESTION | `file or directory not found` read as "no such tests" |
-
-**One control covers all three: run something whose answer you already know, in the same breath.**
-
-Specific instances, each of which produced a confident wrong answer this block:
-
-- **`ListAgents` returning empty ≠ lanes dead.** Both lanes were alive and working. On that
-  inference I entered another session's worktree, committed its 13 uncommitted files under a
-  message I wrote, and pushed. Ask the lane, or check its artifact trail.
-- **pytest `rootdir` beats `PYTHONPATH`.** Running a worktree's test FILE from another checkout
-  silently tests the WORKTREE. Made a discriminating regression test look vacuous. Copy the test
-  INTO the target checkout; confirm with `--collect-only | grep -i rootdir` in the SAME invocation.
-- **`tail -N` inside a comparison fabricates agreement.** Truncating one side produced
-  "0 new failures, 101 fixed"; untruncated it was 115 vs 114. Never truncate either side.
-- **Comparing a FIXED LINE RANGE across refs whose file length changed.** `sed -n '667,733p'` on
-  both sides covered different text after a 67-line insertion. Extract by NAME, never by line.
-- **A hash of empty input is a hash.** Two failed extractions both hashed to `e3b0c44298fc1c14`
-  and printed as "IDENTICAL — verified". Guard extract-then-hash with a line-count assertion.
-- **`gh api` code-scanning WITHOUT `--paginate` silently truncates** — 2301 open alerts here, so
-  an absent alert reads exactly like "no such alert". Always `--paginate` + a positive control.
-- **A claim inherited from session notes is a SPECIFICATION, not a measurement.** I repeated
-  `url_safety.py:130` across several messages and into these notes without re-deriving it; no
-  alert existed at that line. Re-derive before acting or repeating.
-- **`assert SECRET not in captured_text` passes when the capture is EMPTY.** Pair every
-  log-capture assertion with a positive control (`assert MARKER in text`).
-- **A test guarded by `if x is not None:` cannot fail.** Found in our own suite.
-- **A stub whose output AGREES with the fallback cannot detect a regression to it.**
-- **In zsh, assigning to `path` destroys `PATH`.** Produced "command not found: git", which reads
-  as an environment problem rather than your bug.
-- **`git worktree remove` refuses on a dirty tree** — use it instead of `rm -rf`.
-- **Stale installed wheel shadows repo source** — hit 4× this block, including through *pyright*
-  diagnostics resolving against site-packages. Pin repo `src` FIRST on PYTHONPATH and print
-  `__file__` **in the same process** you are measuring.
-- **`--continue-on-collection-errors --maxfail=100000`** or you measure a truncated suite.
-- **`--color=no`** when grepping pytest output.
-
-### Release-specific
-
-- **TestPyPI's own hazard:** with `--index-url` on TestPyPI, EVERY transitive dep resolves from
-  TestPyPI first, and it hosts a stale `fastapi` whose version outranks PyPI's — which made
-  `kailash-nexus` look like a broken sdist. Reversing index order does NOT help (pip merges both
-  and takes the highest). **Working form: deps from real PyPI, then your own artifacts with
-  `--no-deps` from TestPyPI.**
-- **Read JOB-level outcomes, not run-level.** `ml-v2.2.3` reported `run=failure` while
-  `Publish to PyPI: success` — the package was live, and a run-level read would have prompted a
-  republish of an immutable artifact.
-- **PyPI propagation:** the JSON API updates before the simple index pip uses. If the workflow
-  succeeded and `/pypi/<pkg>/<ver>/json` returns metadata, the publish happened — retry the
-  install, do not re-publish.
-- **On a 429, back off rather than retry immediately.** nexus failed twice; a ~75s pause then
-  succeeded.
+- **`pre-commit run --from-ref X --to-ref Y --files ...` silently checks NOTHING.** Every
+  hook printed `(no files to check) Skipped` and the run "passed." Combining the ref range
+  with `--files` yields an empty set. Use `--files <paths>` alone, and read the hook lines,
+  not the exit code. Black then reformatted a file the "passing" run had not opened.
+- **`node --check` over a glob proves nothing without a count and a positive control.** Print
+  the file count AND run the checker against a deliberately malformed file in the same breath.
+- **`git -C <repo> worktree add <relative-path>` resolves the path INSIDE that repo**, creating
+  a nested worktree the rules forbid. Pass an absolute path.
+- **`$?` after a pipe is the LAST stage's status, not the command's.** `node x.mjs | tail`
+  reported `EXIT=0` for a run that exited 1. Redirect to a file, then read the exit code.
+- **A validator failing identically on both sides is not a regression.** `validate-emit`
+  reported 4 blocking failures on the sync PR; `main` produced the byte-identical fail set,
+  all rooted in `.claude/sync-manifest.yaml` being loom-only. Always run the baseline before
+  reading a red as caused by the change.
+- **Establish the red with a positive control that the mutation reached the code.** Revert the
+  source, then assert the fix is *absent* from the imported module (`inspect.getsource`,
+  signature check) BEFORE reading the test result — otherwise a non-reddening test has two
+  explanations and you cannot tell which.
+- **Write controls that would fail if the fix were "always return False."** Four of the nine
+  new tests exist only for that; without them the suite could not distinguish a real fix from
+  a uniformly negative one.
 
 ---
 
 ## Local full-suite baseline (for regression comparison)
 
 `tests/unit tests/security tests/regression` on main, untruncated: **115 failed, 7141 passed,
-50 errors**. These are local-environment failures (optional deps, no infra); the per-package CI
-matrix installs extras and is green. **Do not read a local failure count as a regression without
-diffing against this baseline, untruncated on both sides.**
-
----
+50 errors** — local-environment failures (optional deps, no infra); the per-package CI matrix
+installs extras and is green. **Never read a local failure count as a regression without
+diffing against a same-selection baseline, untruncated on BOTH sides.**
 
 ## Open decisions
 
-See `sweep-cont20-report.md` § 5. In brief: **D1** wire `tests/integration/` (131 files, real CI
-cost) · **D2** specify the authorization schema for #2166 · **D3** the 165 historical branches
-(recommend: leave, audit separately).
+`sweep-cont20-report.md` § 5 — **D1** wire `tests/integration/` (131 files, real CI cost) ·
+**D2** authorization schema for #2166 · **D3** the 165 historical branches (recommend: leave).
+**New: D4** — the #2194 governance-API actor schema (three options laid out in the issue).
