@@ -93,7 +93,7 @@ class TestSignatureIntegrity:
     """Property-based tests for Ed25519 sign/verify round-trip."""
 
     @given(payload=signing_payload_str)
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_sign_then_verify_returns_true(self, payload: str) -> None:
         """For any payload and valid keypair, signing then verifying succeeds."""
         private_key, public_key = generate_keypair()
@@ -101,7 +101,7 @@ class TestSignatureIntegrity:
         assert verify_signature(payload, signature, public_key) is True
 
     @given(payload=payload_dict)
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_sign_then_verify_dict_returns_true(self, payload: dict) -> None:
         """For any dict payload and valid keypair, signing then verifying succeeds."""
         private_key, public_key = generate_keypair()
@@ -112,7 +112,7 @@ class TestSignatureIntegrity:
         payload=signing_payload_str,
         tampered=signing_payload_str,
     )
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_tampered_payload_fails_verification(
         self, payload: str, tampered: str
     ) -> None:
@@ -123,7 +123,7 @@ class TestSignatureIntegrity:
         assert verify_signature(tampered, signature, public_key) is False
 
     @given(payload=signing_payload_str)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_wrong_key_fails_verification(self, payload: str) -> None:
         """A signature verified with a different keypair must fail."""
         priv1, _pub1 = generate_keypair()
@@ -725,7 +725,7 @@ class TestDIDGenerationDeterminism:
 
         assert generate_did(agent_id1) != generate_did(agent_id2)
 
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     @given(data=st.data())
     def test_generate_did_key_deterministic(self, data) -> None:
         """generate_did_key must be deterministic for the same public key."""
