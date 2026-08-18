@@ -33,4 +33,4 @@ Enables agents to share insights and coordinate.
 - Importance-based retrieval
 
 ## References
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 94-113
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 94-113

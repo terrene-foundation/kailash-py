@@ -533,10 +533,18 @@ function hasParseableHookDecision(hookStdout) {
 // head ("STOP — Tool call blocked.") is exit-2 → the deny path, never surface;
 // it is intentionally absent here. Coupling to instruct-and-wait.js is locked by
 // the force-push (surface) + clean (no-surface) assertions in test-server.mjs.
+// loom#1590 — these three MUST stay byte-identical to the non-block heads in
+// lib/instruct-and-wait.js::buildValidationBody. They were reworded there so an
+// agent can tell a DENIED call from one that ALREADY RAN without inspecting the
+// transport (both classes previously opened "STOP — "). Because the head is the
+// ONLY structural discriminator here, leaving these stale would not merely
+// mislabel — every halt-and-report would fall through `isActionableValidation`
+// as a clean confirmation and be SILENTLY SWALLOWED on the Codex lane, which is
+// strictly worse than the annotation defect #1590 set out to fix.
 const ACTIONABLE_VALIDATION_HEADS = Object.freeze([
-  "STOP — Action requires acknowledgement.", // halt-and-report
-  "ADVISORY — Acknowledge in next message.", // advisory
-  "POST-MORTEM — Recorded for next session.", // post-mortem (defensive; Stop-class)
+  "NOT BLOCKED — the action ALREADY RAN. Report it and wait.", // halt-and-report
+  "ADVISORY — the action proceeded. Acknowledge in next message.", // advisory
+  "POST-MORTEM — already happened; recorded for next session.", // post-mortem (defensive; Stop-class)
 ]);
 function isActionableValidation(validation) {
   return (

@@ -17,6 +17,7 @@ Fix common runtime execution errors including wrong runtime usage, execution fai
 ## Common Errors
 
 ### Wrong Runtime Parameter Name
+
 ```python
 # ❌ Error
 runtime.execute(workflow.build(), config={"node": {"param": "value"}})
@@ -28,6 +29,7 @@ runtime.execute(workflow.build(), parameters={"node": {"param": "value"}})
 ```
 
 ### Wrong Runtime Selection
+
 ```python
 # ❌ Error: Using sync runtime in async context (Nexus/Docker)
 from kailash.runtime import LocalRuntime
@@ -47,6 +49,7 @@ async def execute_workflow():
 ```
 
 ### Missing Return Values
+
 ```python
 # ❌ Error: Not capturing run_id
 results = runtime.execute(workflow.build())  # Missing run_id
@@ -57,16 +60,17 @@ results, run_id = runtime.execute(workflow.build())
 
 ## Runtime Selection Guide
 
-| Context | Runtime | Method |
-|---------|---------|--------|
-| **CLI/Scripts** | `LocalRuntime()` | `execute(workflow.build())` |
-| **Nexus/Docker** | `AsyncLocalRuntime()` | `await execute_workflow_async(workflow.build(), inputs={})` |
-| **Parallel** | `ParallelRuntime(max_workers=4)` | `execute(workflow.build())` |
-| **Auto-detect** | `get_runtime()` | Context-aware |
+| Context          | Runtime                          | Method                                                      |
+| ---------------- | -------------------------------- | ----------------------------------------------------------- |
+| **CLI/Scripts**  | `LocalRuntime()`                 | `execute(workflow.build())`                                 |
+| **Nexus/Docker** | `AsyncLocalRuntime()`            | `await execute_workflow_async(workflow.build(), inputs={})` |
+| **Parallel**     | `ParallelRuntime(max_workers=4)` | `execute(workflow.build())`                                 |
+| **Auto-detect**  | `get_runtime()`                  | Context-aware                                               |
 
 ## Complete Examples
 
 ### CLI/Script Pattern
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -82,6 +86,7 @@ print(f"Completed: {run_id}")
 ```
 
 ### Nexus/Async Pattern
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import AsyncLocalRuntime
@@ -109,6 +114,7 @@ async def execute():
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Complex runtime configuration needed
 - Performance optimization required
 - Custom runtime development
@@ -116,7 +122,8 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **CLAUDE.md**: [`CLAUDE.md` (lines 106-137)](../../../CLAUDE.md#L106-L137)
+
+- **CLAUDE.md**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ## Quick Tips
 

@@ -1,6 +1,6 @@
 ---
 id: "PATTERNS"
-paths: ["**/*.py", "**/*.ts", "**/*.js"]
+paths: ["**/*.py", "**/*.ts", "**/*.js", "**/*.rs"]
 ---
 
 # Kailash Pattern Rules

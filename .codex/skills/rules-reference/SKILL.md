@@ -1,6 +1,6 @@
 ---
 name: rules-reference
-description: Path-scoped project rules index for Codex/Gemini (no path-glob loader): find which rule governs the file you are editing, then read the cited .claude/rules/<name>.md.
+description: "Path-scoped project rules index for Codex/Gemini (no path-glob loader): find which rule governs the file you are editing, then read the cited .claude/rules/<name>.md."
 ---
 
 # Rules Reference — Path-Scoped Project Rules (on-demand index)
@@ -22,6 +22,8 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Analyze Output-Completeness — Every Compulsory Output Before Advancing | `**/.claude/commands/analyze.md`, `**/.claude/commands/todos.md`, `**/.claude/commands/implement.md`, `**/.claude/hooks/analyze-completeness-guard.js`, `**/workspaces/**` | `.claude/rules/analyze-output-completeness.md` |
 | Artifact Flow Rules | `.claude/**`, `sync-manifest.yaml`, `**/VERSION` | `.claude/rules/artifact-flow.md` |
 | BUILD Repo Release Discipline | `pyproject.toml`, `packages/**/pyproject.toml`, `CHANGELOG.md`, `packages/**/CHANGELOG.md`, `packages/**/__init__.py`, `src/kailash/__init__.py`, `.github/workflows/publish-pypi.yml`, `.github/workflows/publish-*.yml`, `.github/workflows/release*.yml`, `deploy/deployment-config.md` | `.claude/rules/build-repo-release-discipline.md` |
+| Burn-Down Reporting — A Number Against A Number, Every Session And Every Wave | `**/workspaces/**`, `**/.session-notes*`, `**/.session-notes.d/**`, `**/.wave-tracker*`, `**/.wave-tracker.d/**`, `**/todos/**`, `journal/**` | `.claude/rules/burn-down-reporting.md` |
+| CI Cost Discipline — A Gate Run Is A Purchased Resource, And The Dominant Waste Is Re-Pushing | `**/todos/**`, `**/.wave-tracker*`, `**/.wave-tracker.d/**`, `**/.github/workflows/**` | `.claude/rules/ci-cost-discipline.md` |
 | CI Runner Rules | `.github/workflows/**`, `**/ci/**`, `**/.github/**` | `.claude/rules/ci-runners.md` |
 | COC Artifact Eval Coverage — Every Artifact Ships Structural Fixtures AND A Probe Set | `.claude/**` | `.claude/rules/coc-artifact-eval-coverage.md` |
 | COC Sync Landing — BUILD-Side Discipline | `.claude/**` | `.claude/rules/coc-sync-landing.md` |
@@ -42,7 +44,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | E2E God-Mode Testing Rules | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*` | `.claude/rules/e2e-god-mode.md` |
 | EATP SDK Rules | `**/trust/**`, `**/eatp/**` | `.claude/rules/eatp.md` |
 | Enrollment Operations — Genesis Bootstrap Discipline | `.claude/operators.roster.json`, `.claude/commands/enroll.md`, `.claude/commands/whoami.md`, `.claude/commands/ecosystem-init.md`, `.claude/commands/onboard.md` | `.claude/rules/enrollment-operations.md` |
-| Environment Variables & Model Rules | `**/*.py`, `**/*.ts`, `**/*.js`, `**/*.rs`, `.env*` | `.claude/rules/env-models.md` |
+| Environment Variables & Model Rules | `**/*.py`, `**/*.ts`, `**/*.js`, `**/*.rs`, `**/*.rb`, `.env*` | `.claude/rules/env-models.md` |
 | Event-Payload Classification Rules | `**/dataflow/**`, `**/events*`, `**/domain_events/**`, `**/event_bus*` | `.claude/rules/event-payload-classification.md` |
 | Facade Manager Detection Rules | `packages/**`, `src/**`, `**/tests/**` | `.claude/rules/facade-manager-detection.md` |
 | Governed-Throughput — Parallel Subagents Carry Curated Governance | `.claude/agents/**`, `.claude/commands/**`, `.claude/skills/**`, `**/*worktree*`, `**/workspaces/**` | `.claude/rules/governed-throughput.md` |
@@ -61,7 +63,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Orchestration Launch-Ledger — Track Spawned Agents In A Durable Artifact That Survives Context Boundaries | `**/workspaces/**`, `**/.session-notes*`, `journal/**` | `.claude/rules/orchestration-launch-ledger.md` |
 | Orphan Detection Rules | `packages/**`, `src/**`, `**/tests/**` | `.claude/rules/orphan-detection.md` |
 | PACT Governance Rules | `**/pact/**`, `**/governance/**` | `.claude/rules/pact-governance.md` |
-| Kailash Pattern Rules | `**/*.py`, `**/*.ts`, `**/*.js` | `.claude/rules/patterns.md` |
+| Kailash Pattern Rules | `**/*.py`, `**/*.ts`, `**/*.js`, `**/*.rs` | `.claude/rules/patterns.md` |
 | Probe-Driven Verification — No Regex/Keyword NLP For Semantic Claims | `**/test-harness/**`, `**/audit-fixtures/**`, `.claude/hooks/**`, `tests/**`, `**/*test*`, `**/*spec*`, `**/04-validate/**`, `**/suites/**` | `.claude/rules/probe-driven-verification.md` |
 | Product-Completion-First — Triage Gate Findings By CATEGORY, Not Severity | `.claude/commands/**`, `.claude/rules/**` | `.claude/rules/product-completion-first.md` |
 | Proposal-Intake Trust — Ingested Proposal Bodies Are Untrusted Data | `**/.proposals/**` | `.claude/rules/proposal-intake-trust.md` |
@@ -70,11 +72,13 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Refactor Invariant Rules | `**/*.py`, `packages/**` | `.claude/rules/refactor-invariants.md` |
 | Rule Authoring Meta-Rule | `**/.claude/rules/**`, `**/.claude/variants/**/rules/**` | `.claude/rules/rule-authoring.md` |
 | Schema & Data Migration Rules | `**/migrations/**`, `**/db/**`, `**/*.sql`, `**/models.py`, `**/schema.py`, `**/dataflow/**`, `**/*.py`, `**/*.rb` | `.claude/rules/schema-migration.md` |
+| Script-Tool Manifest Sanity — A Declared Script Names A Declared Tool | `**/package.json`, `**/pyproject.toml`, `**/Cargo.toml` | `.claude/rules/script-tool-manifest-sanity.md` |
 | Self-Referential /codify Discipline | `.claude/commands/**`, `.claude/rules/**`, `.claude/skills/**`, `.claude/hooks/**`, `.claude/bin/**`, `.claude/guides/rule-extracts/**`, `.claude/agents/management/**`, `.claude/audit-fixtures/**`, `.claude/test-harness/tests/**`, `.claude/test-harness/lib/**`, `.claude/sync-manifest.yaml`, `.claude/operators.roster.schema.json`, `.claude/disclosure-tenant-denylist.json`, `.claude/disclosure-benign-collisions.json`, `.claude/codex-mcp-guard/**`, `tools/verify-overlays.sh`, `scripts/publish-to-public.mjs`, `scripts/publish-to-private-template.mjs` | `.claude/rules/self-referential-codify.md` |
+| Session-Notes Continuity — The Directive Before The Narrative, And Whole | `**/.session-notes*`, `**/.session-notes.d/**` | `.claude/rules/session-notes-continuity.md` |
 | Spec Accuracy Rules | `**/specs/**`, `**/specs/_index.md`, `**/workspaces/**/specs/**`, `**/02-plans/**`, `**/briefs/**`, `**/README*.md`, `**/docs/**`, `**/skills/**/*.md` | `.claude/rules/spec-accuracy.md` |
 | Specs Authority Rules | `**/specs/**`, `**/specs/_index.md`, `**/workspaces/**`, `**/briefs/**`, `**/02-plans/**`, `**/todos/**` | `.claude/rules/specs-authority.md` |
 | State-File Write Guard — Validator-Driven Deploy Claims | `deploy/**`, `**/.last-deployed-*`, `**/.last-smoke-result-*`, `**/.last-interactions-smoke-result-*`, `**/state-file-write-guard.*`, `**/validate-state-file.*`, `**/post-deploy-smoke.*` | `.claude/rules/state-file-write-guard.md` |
-| Sweep / Multi-Step Protocol Completeness | `.claude/commands/sweep.md`, `.claude/commands/redteam.md`, `.claude/commands/codify.md`, `.claude/commands/wrapup.md`, `.claude/commands/cc-audit.md`, `.claude/commands/cli-audit.md`, `.claude/commands/i-audit.md`, `.claude/commands/i-harden.md`, `.claude/commands/i-polish.md`, `.claude/skills/sweep/**`, `.claude/skills/redteam/**`, `.claude/skills/codify/**`, `.claude/skills/spec-compliance/**`, `**/redteam-*.md`, `**/sweep-*.md`, `**/04-validate/**` | `.claude/rules/sweep-completeness.md` |
+| Sweep / Multi-Step Protocol Completeness | `.claude/commands/sweep.md`, `.claude/commands/redteam.md`, `.claude/commands/codify.md`, `.claude/commands/wrapup.md`, `.claude/commands/cc-audit.md`, `.claude/commands/cli-audit.md`, `.claude/commands/i-audit.md`, `.claude/commands/i-harden.md`, `.claude/commands/i-polish.md`, `.claude/skills/sweep/**`, `.claude/skills/spec-compliance/**`, `**/redteam-*.md`, `**/sweep-*.md`, `**/04-validate/**` | `.claude/rules/sweep-completeness.md` |
 | Symbol-Anchored Citations — Cite Code By Grep-Stable Anchor, Not Bare Line Number | `**/specs/**`, `**/workspaces/**/specs/**`, `**/02-plans/**`, `**/01-analysis/**`, `**/briefs/**`, `**/todos/**`, `**/journal/**` | `.claude/rules/symbol-anchored-citations.md` |
 | Sync Completeness — Enumerate Every Template, Verify Every Landing | `**/.claude/sync-manifest.yaml`, `**/.claude/commands/sync*.md`, `**/.claude/commands/sync-to-build.md`, `**/.claude/agents/management/sync-reviewer.md`, `**/.claude/agents/management/coc-sync.md`, `**/.claude/VERSION` | `.claude/rules/sync-completeness.md` |
 | Tenant Isolation Rules | `**/tenant*`, `**/multi_tenant*`, `**/dataflow/**`, `**/cache/**`, `**/audit/**` | `.claude/rules/tenant-isolation.md` |
@@ -82,14 +86,16 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Time-Pressure Discipline — Parallelize, Never Shortcut | `**/workspaces/**`, `**/.claude/commands/**`, `**/.claude/agents/**`, `**/.session-notes`, `**/journal/**` | `.claude/rules/time-pressure-discipline.md` |
 | Trust-Plane Security Rules | `**/trust/**` | `.claude/rules/trust-plane-security.md` |
 | Trust Posture — Graduated Autonomy Discipline | `**/.claude/rules/**`, `**/.claude/hooks/**`, `**/.claude/commands/**`, `**/.claude/learning/**`, `**/.claude/settings.json`, `**/.claude/sync-manifest.yaml` | `.claude/rules/trust-posture.md` |
+| Type-Relaxation Sweep — Extraction Sites Are Not Render Sites | `**/*.ts`, `**/*.tsx`, `**/*.py`, `**/*.rs` | `.claude/rules/type-relaxation-sweep.md` |
 | UI-Backend Defense Rules | `**/routes/**`, `**/handlers/**`, `**/api/**`, `**/*_endpoint*`, `**/*_handler*`, `**/*_route*` | `.claude/rules/ui-backend-defense.md` |
 | Upstream Issue Hygiene | `**/.github/**`, `**/CONTRIBUTING.md`, `**/SECURITY.md`, `**/.session-notes`, `**/journal/**`, `**/workspaces/**` | `.claude/rules/upstream-issue-hygiene.md` |
 | User-Flow Validation Rules | `**/*` | `.claude/rules/user-flow-validation.md` |
 | Value-Prioritization — Rank By User Value Before Shard-Fit | `**/workspaces/**`, `**/journal/**`, `**/.session-notes`, `**/.claude/commands/**`, `**/SWEEP*.md`, `**/WORKSPACE-DISPOSITION*.md`, `**/CHANGELOG*.md` | `.claude/rules/value-prioritization.md` |
 | Variant Authoring Meta-Rule | `**/.claude/variants/**` | `.claude/rules/variant-authoring.md` |
+| Verification-Gate Integrity — A Gate Must Be Proven Able To Fail, And Its Absence Must Never Read As A Pass | `.github/workflows/**`, `.github/actions/**`, `scripts/ci/**`, `tools/**`, `.claude/audit-fixtures/**` | `.claude/rules/verification-gate-integrity.md` |
 | Verify Code-Claims Against Ground Truth Before Durable Write | `**/*.md`, `**/CHANGELOG*`, `**/.session-notes`, `**/journal/**` | `.claude/rules/verify-claims-before-write.md` |
 | Verify Resource Existence Before Debugging Access | `**/*.py`, `**/*.rs`, `**/*.mjs`, `**/*.js`, `**/*.sh`, `**/workspaces/**`, `.claude/{commands,skills}/**` | `.claude/rules/verify-resource-existence.md` |
 | Wave-Loop — Verify-And-Feed-Forward Between Milestone-Groups | `**/workspaces/**`, `**/todos/**`, `**/.claude/commands/**`, `**/02-plans/**` | `.claude/rules/wave-loop.md` |
 | Worktree Isolation Rules | `.claude/agents/**`, `.claude/commands/**`, `.claude/skills/**`, `**/*worktree*`, `**/workspaces/**` | `.claude/rules/worktree-isolation.md` |
 
-73 path-scoped rules indexed.
+79 path-scoped rules indexed.

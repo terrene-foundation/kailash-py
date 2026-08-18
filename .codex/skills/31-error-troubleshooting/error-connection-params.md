@@ -33,6 +33,7 @@ Connection mapping error: output key 'X' not found
 ## Quick Fixes
 
 ### ❌ Error 1: Wrong Parameter Order (VERY COMMON)
+
 ```python
 # Wrong - parameters swapped (from_output and to_node positions)
 workflow.add_connection(
@@ -45,6 +46,7 @@ workflow.add_connection(
 ```
 
 ### ✅ Fix: Correct Parameter Order
+
 ```python
 # Correct - proper order: from_node, from_output, to_node, to_input
 workflow.add_connection(
@@ -58,12 +60,14 @@ workflow.add_connection(
 **Mnemonic**: **Source first** (node + output), **then Target** (node + input)
 
 ### ❌ Error 2: Only 3 Parameters (Deprecated)
+
 ```python
 # Wrong - old 3-parameter syntax (deprecated in v0.8.0+)
 workflow.add_connection("reader", "processor", "data")
 ```
 
 ### ✅ Fix: Use 4 Parameters
+
 ```python
 # Correct - modern 4-parameter syntax
 workflow.add_connection("reader", "data", "processor", "data")
@@ -71,6 +75,7 @@ workflow.add_connection("reader", "data", "processor", "data")
 ```
 
 ### ❌ Error 3: Missing Nested Path
+
 ```python
 # If node outputs: {'result': {'filters': {...}, 'limit': 50}}
 
@@ -83,6 +88,7 @@ workflow.add_connection(
 ```
 
 ### ✅ Fix: Use Dot Notation
+
 ```python
 # Correct - full path to nested value
 workflow.add_connection(
@@ -99,6 +105,7 @@ workflow.add_connection(
 ## Complete Example: Before & After
 
 ### ❌ Wrong Code (All Common Mistakes)
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -119,6 +126,7 @@ workflow.add_connection("prep", "filters", "search", "filter")
 ```
 
 ### ✅ Correct Code
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -136,6 +144,7 @@ workflow.add_connection("prep", "result.limit", "search", "limit")
 ## 4-Parameter Connection Pattern
 
 ### Parameter Breakdown
+
 ```python
 workflow.add_connection(
     from_node,    # 1. Source node ID (string)
@@ -147,16 +156,17 @@ workflow.add_connection(
 
 ### Common Patterns
 
-| Scenario | from_output | Example |
-|----------|-------------|---------|
-| **Simple field** | `"data"` | `workflow.add_connection("reader", "data", "processor", "input")` |
-| **Nested field** | `"result.data"` | `workflow.add_connection("prep", "result.data", "process", "input")` |
-| **Deep nesting** | `"result.user.email"` | `workflow.add_connection("fetch", "result.user.email", "send", "to")` |
-| **Array element** | `"result.items[0]"` | Not supported - use PythonCodeNode to extract |
+| Scenario          | from_output           | Example                                                               |
+| ----------------- | --------------------- | --------------------------------------------------------------------- |
+| **Simple field**  | `"data"`              | `workflow.add_connection("reader", "data", "processor", "input")`     |
+| **Nested field**  | `"result.data"`       | `workflow.add_connection("prep", "result.data", "process", "input")`  |
+| **Deep nesting**  | `"result.user.email"` | `workflow.add_connection("fetch", "result.user.email", "send", "to")` |
+| **Array element** | `"result.items[0]"`   | Not supported - use PythonCodeNode to extract                         |
 
 ## Debugging Connection Errors
 
 ### Step 1: Verify Node IDs Exist
+
 ```python
 # List all node IDs in your workflow
 node_ids = ["prep", "search", "process"]  # Your nodes
@@ -167,6 +177,7 @@ workflow.add_connection("prep", "result", "missing", "input")  # ✗ 'missing' n
 ```
 
 ### Step 2: Check Output Structure
+
 ```python
 # Debug by printing node outputs
 results, run_id = runtime.execute(workflow.build())
@@ -177,6 +188,7 @@ print(f"prep outputs: {results['prep'].keys()}")  # See available keys
 ```
 
 ### Step 3: Verify Parameter Order
+
 ```python
 # Remember the order: from_node, from_output, to_node, to_input
 #                     ^SOURCE^^  ^SOURCE^^^  ^TARGET^  ^TARGET^
@@ -198,6 +210,7 @@ workflow.add_connection(
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Complex multi-node connection patterns
 - Cyclic workflow connection issues
 - Advanced parameter mapping
@@ -206,10 +219,12 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Pattern Expert**: [`.codex/agents/implementation/pattern-expert.md` (lines 294-338)](../../agents/implementation/pattern-expert.md#L294-L338)
+
+- **Pattern Expert**: [`.codex/prompts/specialist-pattern-expert.md`](../../agents/implementation/pattern-expert.md)
 
 ### Related Documentation
-- **Critical Rules**: [`CLAUDE.md` (line 140)](../../../CLAUDE.md#L140)
+
+- **Critical Rules**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ## Quick Tips
 

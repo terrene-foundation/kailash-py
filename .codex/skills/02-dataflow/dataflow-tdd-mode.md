@@ -131,7 +131,8 @@ def db():
 ### Primary Sources
 
 ### Related Documentation
-- **DataFlow Specialist**: [`.codex/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L893-L940)
+
+- **DataFlow Specialist**: [`.codex/prompts/specialist-dataflow.md`](../../agents/frameworks/dataflow-specialist.md)
 - **Test Strategy**: [`test-3tier-strategy`](#)
 
 ## Quick Tips

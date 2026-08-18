@@ -31,4 +31,4 @@ best_worker = supervisor.select_worker_for_task(
 - ✅ 100% Google A2A compliant
 
 ## References
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 115-165
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 115-165

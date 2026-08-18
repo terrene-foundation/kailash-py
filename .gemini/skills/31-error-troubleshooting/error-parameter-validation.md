@@ -27,6 +27,7 @@ Parameter validation failed for node 'X'
 ## Root Cause
 
 Kailash SDK raises `ValueError` for validation errors including:
+
 - Missing required parameters
 - Invalid validation modes
 - Parameter type mismatches
@@ -36,6 +37,7 @@ Parameters must be provided through one of **3 methods**.
 ## Quick Fix: The 3 Methods
 
 ### Method 1: Node Configuration (Most Reliable)
+
 ```python
 # ✅ Provide parameters directly in node config
 workflow.add_node("UserCreateNode", "create", {
@@ -45,12 +47,14 @@ workflow.add_node("UserCreateNode", "create", {
 ```
 
 ### Method 2: Workflow Connections (Dynamic)
+
 ```python
 # ✅ Connect parameter from another node's output
 workflow.add_connection("form_data", "email", "create", "email")
 ```
 
 ### Method 3: Runtime Parameters (Override)
+
 ```python
 # ✅ Provide at runtime execution
 runtime.execute(workflow.build(), parameters={
@@ -61,6 +65,7 @@ runtime.execute(workflow.build(), parameters={
 ## Complete Example
 
 ### ❌ Wrong: Missing Required Parameter
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -76,6 +81,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### ✅ Fix Option 1: Add to Node Config
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -89,6 +95,7 @@ results, run_id = runtime.execute(workflow.build())  # ✓ Works!
 ```
 
 ### ✅ Fix Option 2: Use Connection
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -110,6 +117,7 @@ results, run_id = runtime.execute(workflow.build())  # ✓ Works!
 ```
 
 ### ✅ Fix Option 3: Runtime Parameters
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -126,17 +134,18 @@ results, run_id = runtime.execute(workflow.build(), parameters={
 
 ## Parameter Method Selection Guide
 
-| Scenario | Best Method | Why |
-|----------|-------------|-----|
-| **Static values** | Method 1 (Config) | Clear, explicit, easy to test |
-| **Dynamic data flow** | Method 2 (Connections) | Data from previous nodes |
-| **User input** | Method 3 (Runtime) | Dynamic values at execution |
-| **Environment config** | Method 3 (Runtime) | Different per environment |
-| **Testing** | Method 1 (Config) | Most reliable, deterministic |
+| Scenario               | Best Method            | Why                           |
+| ---------------------- | ---------------------- | ----------------------------- |
+| **Static values**      | Method 1 (Config)      | Clear, explicit, easy to test |
+| **Dynamic data flow**  | Method 2 (Connections) | Data from previous nodes      |
+| **User input**         | Method 3 (Runtime)     | Dynamic values at execution   |
+| **Environment config** | Method 3 (Runtime)     | Different per environment     |
+| **Testing**            | Method 1 (Config)      | Most reliable, deterministic  |
 
 ## Common Variations
 
 ### Missing Multiple Parameters
+
 ```python
 # ❌ Multiple missing parameters
 workflow.add_node("HTTPRequestNode", "api", {
@@ -151,6 +160,7 @@ workflow.add_node("HTTPRequestNode", "api", {
 ```
 
 ### Optional vs Required Parameters
+
 ```python
 # Some parameters are optional (have defaults)
 workflow.add_node("CSVReaderNode", "reader", {
@@ -163,6 +173,7 @@ workflow.add_node("CSVReaderNode", "reader", {
 ## Edge Case Warning
 
 **Method 3 Edge Case** - Fails when ALL conditions met:
+
 ```python
 # ❌ DANGEROUS combination
 workflow.add_node("CustomNode", "node", {})  # 1. Empty config
@@ -185,6 +196,7 @@ workflow.add_node("CustomNode", "node", {
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Complex parameter flow across many nodes
 - Custom node parameter definition issues
 - Advanced parameter validation requirements
@@ -195,7 +207,8 @@ Use `pattern-expert` subagent when:
 ### Primary Sources
 
 ### Related Documentation
-- **Critical Rules**: [`CLAUDE.md` (lines 139-145)](../../../CLAUDE.md#L139-L145)
+
+- **Critical Rules**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ## Quick Tips
 

@@ -123,12 +123,11 @@ Use `nexus-specialist` subagent when:
 
 ### Primary Sources
 
-- **Nexus Specialist**: [`.claude/agents/frameworks/nexus-specialist.md` (lines 320-386)](../../../.claude/agents/frameworks/nexus-specialist.md#L320-L386)
-- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md` (lines 13-25)](../../../.claude/agents/frameworks/dataflow-specialist.md#L13-L25)
+- **Nexus Specialist**: [`.claude/agents/frameworks/nexus-specialist.md`](../../../.claude/agents/frameworks/nexus-specialist.md)
+- **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md`](../../../.claude/agents/frameworks/dataflow-specialist.md)
 - **Integration Guide**: [`.claude/skills/03-nexus/nexus-dataflow-integration.md`](../../skills/03-nexus/nexus-dataflow-integration.md)
 
 ### Related Documentation
-
 
 ## Quick Tips
 

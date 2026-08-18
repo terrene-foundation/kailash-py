@@ -172,6 +172,6 @@ pip install kailash-align[all]      # Everything
 
 ## Cross-References
 
-- `.gemini/agents/frameworks/kaizen-specialist.md` — KaizenModelBridge integration
-- `.gemini/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
+- `.gemini/agents/kaizen-specialist.md` — KaizenModelBridge integration
+- `.gemini/agents/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
 - `.gemini/skills/04-kaizen/` — Kaizen Delegate patterns

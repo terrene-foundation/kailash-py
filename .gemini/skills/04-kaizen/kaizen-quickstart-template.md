@@ -53,4 +53,4 @@ if __name__ == "__main__":
 
 ## References
 
-- **Specialist**: `.gemini/agents/frameworks/kaizen-specialist.md` lines 489-520
+- **Specialist**: `.gemini/agents/kaizen-specialist.md` lines 489-520

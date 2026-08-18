@@ -251,8 +251,10 @@ dist/
 .claude/cross-repo-authz/
 
 # >>> coc:gitignore_additions — managed by loom /sync; do not edit between markers >>>
+.claude/cross-repo-authz/
 !.claude/bin/lib/
 !.claude/hooks/lib/
 !.claude/test-harness/lib/
 !.claude/audit-fixtures/**
+.claude/audit-fixtures/**/.DS_Store
 # <<< coc:gitignore_additions <<<

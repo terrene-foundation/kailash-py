@@ -26,4 +26,4 @@ result = pattern.execute_task("Analyze this codebase")
 
 ## References
 - **Examples**: `examples/2-multi-agent/supervisor-worker/`
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 115-165
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 115-165

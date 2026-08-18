@@ -22,5 +22,5 @@ class CoTAgent(BaseAgent):
 ```
 
 ## References
-- **Specialist**: `.gemini/agents/frameworks/kaizen-specialist.md` lines 215-227
+- **Specialist**: `.gemini/agents/kaizen-specialist.md` lines 215-227
 - **Examples**: `examples/1-single-agent/chain-of-thought/`

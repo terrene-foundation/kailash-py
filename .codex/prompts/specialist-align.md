@@ -179,6 +179,6 @@ pip install kailash-align[all]      # Everything
 
 ## Cross-References
 
-- `.codex/agents/frameworks/kaizen-specialist.md` — KaizenModelBridge integration
-- `.codex/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
+- `.codex/prompts/specialist-kaizen.md` — KaizenModelBridge integration
+- `.codex/prompts/specialist-ml.md` — ML lifecycle engines (feature engineering, drift, AutoML)
 - `.codex/skills/04-kaizen/` — Kaizen Delegate patterns

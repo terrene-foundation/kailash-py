@@ -189,7 +189,6 @@ Use `pattern-expert` subagent when:
 - Creating custom nodes from scratch
 - Optimizing workflow performance
 
-
 - Need to find specific nodes for your use case
 - Looking for workflow examples in specific domains (finance, healthcare, etc.)
 - Exploring advanced features and enterprise patterns
@@ -198,7 +197,7 @@ Use `pattern-expert` subagent when:
 
 ### Primary Sources
 
-- **Essential Pattern**: [`CLAUDE.md` (lines 106-137)](../../../CLAUDE.md#L106-L137)
+- **Essential Pattern**: [`CLAUDE.md`](../../../CLAUDE.md)
 
 ### Related Documentation
 
@@ -316,12 +315,12 @@ results, run_id = runtime.execute(workflow.build())
 
 ## Troubleshooting
 
-| Issue                                                                       | Cause                                               | Solution                                                                                                                                     |
-| --------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue                                                                       | Cause                                               | Solution                                                                                                                  |
+| --------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `AttributeError: 'WorkflowBuilder' object has no attribute 'execute'`       | Calling `.execute()` on workflow instead of runtime | Use `runtime.execute(workflow.build())` - see [`error-missing-build`](../31-error-troubleshooting/error-missing-build.md) |
-| `Node 'X' not found in workflow`                                            | Node ID mismatch in connections                     | Verify node IDs match exactly between `add_node()` and `add_connection()`                                                                    |
-| `TypeError: add_connection() takes 5 positional arguments but 4 were given` | Using old 3-parameter syntax                        | Update to 4 parameters: `(from_node, from_output, to_node, to_input)`                                                                        |
-| `ValidationError: Missing required parameter 'X'`                           | Node config missing required fields                 | Check node documentation or use `node-patterns-common` for examples                                                                          |
+| `Node 'X' not found in workflow`                                            | Node ID mismatch in connections                     | Verify node IDs match exactly between `add_node()` and `add_connection()`                                                 |
+| `TypeError: add_connection() takes 5 positional arguments but 4 were given` | Using old 3-parameter syntax                        | Update to 4 parameters: `(from_node, from_output, to_node, to_input)`                                                     |
+| `ValidationError: Missing required parameter 'X'`                           | Node config missing required fields                 | Check node documentation or use `node-patterns-common` for examples                                                       |
 
 ## Quick Tips
 

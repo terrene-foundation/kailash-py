@@ -53,4 +53,4 @@ if __name__ == "__main__":
 
 ## References
 
-- **Specialist**: `.codex/agents/frameworks/kaizen-specialist.md` lines 489-520
+- **Specialist**: `.codex/prompts/specialist-kaizen.md` lines 489-520

@@ -33,4 +33,4 @@ Enables agents to share insights and coordinate.
 - Importance-based retrieval
 
 ## References
-- **Specialist**: `.gemini/agents/frameworks/kaizen-specialist.md` lines 94-113
+- **Specialist**: `.gemini/agents/kaizen-specialist.md` lines 94-113

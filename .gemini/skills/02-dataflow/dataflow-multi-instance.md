@@ -92,10 +92,9 @@ class Model1:
 
 ### Primary Sources
 
-
 ### Specialist Reference
 
-- **DataFlow Specialist**: [`.gemini/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md#L86-L116)
+- **DataFlow Specialist**: [`.gemini/agents/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Quick Tips
 

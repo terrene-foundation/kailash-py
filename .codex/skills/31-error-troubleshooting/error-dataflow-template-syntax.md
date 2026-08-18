@@ -17,6 +17,7 @@ Fix template syntax errors in DataFlow - using wrong `{{}}` syntax instead of co
 ## The Error
 
 ### Common Error Message
+
 ```
 invalid literal for int() with base 10: '{{customer.id}}'
 ValidationError: Template syntax error
@@ -24,11 +25,13 @@ Parameter validation failed for '{{...}}'
 ```
 
 ### Root Cause
+
 **Kailash template syntax is `${}` NOT `{{}}`**. DataFlow node parameters should use **connections**, not template syntax.
 
 ## Quick Fix
 
 ### ❌ WRONG: Using {{}} Template Syntax
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -48,6 +51,7 @@ workflow.add_node("OrderCreateNode", "create", {
 ```
 
 ### ✅ FIX: Use Connections Instead
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -84,6 +88,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Template Syntax Reference
 
 ### Kailash SDK Template Syntax (Core SDK Only)
+
 ```python
 # ✅ Kailash uses ${} syntax (in specific contexts)
 "${node.output}"          # Valid in some nodes
@@ -100,6 +105,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Why DataFlow Doesn't Use Templates
 
 DataFlow nodes expect **native Python types**:
+
 - `customer_id: int` expects `int`, not `str` template
 - Templates would bypass type validation
 - Connections preserve type safety
@@ -107,6 +113,7 @@ DataFlow nodes expect **native Python types**:
 ## Complete Example
 
 ### ❌ Wrong Code (Template Approach)
+
 ```python
 db = DataFlow()
 
@@ -123,6 +130,7 @@ workflow.add_node("OrderCreateNode", "create", {
 ```
 
 ### ✅ Correct Code (Connection Approach)
+
 ```python
 db = DataFlow()
 
@@ -162,6 +170,7 @@ results, run_id = runtime.execute(workflow.build())
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` subagent when:
+
 - Complex DataFlow architecture
 - Enterprise DataFlow patterns
 - Migration system usage
@@ -170,7 +179,8 @@ Use `dataflow-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **DataFlow Specialist**: [`.codex/agents/frameworks/dataflow-specialist.md` (lines 30-33)](../../../.claude/agents/frameworks/dataflow-specialist.md#L30-L33)
+
+- **DataFlow Specialist**: [`.codex/prompts/specialist-dataflow.md`](../../../.claude/agents/frameworks/dataflow-specialist.md)
 
 ### Related Documentation
 

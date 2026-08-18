@@ -222,7 +222,7 @@ Use `dataflow-specialist` subagent when:
 ### Related Documentation
 
 ### Specialist Reference
-- **DataFlow Specialist**: [`.codex/agents/frameworks/dataflow-specialist.md`](../../agents/frameworks/dataflow-specialist.md)
+- **DataFlow Specialist**: [`.codex/prompts/specialist-dataflow.md`](../../agents/frameworks/dataflow-specialist.md)
 
 ## Examples
 
