@@ -1,414 +1,192 @@
-# Session Notes — 2026-08-16 (cont-19: main unblocked, credential redaction, instrument discipline)
+# Session Notes — 2026-08-18 (cont-20 close-out: released, consolidated, seeded)
 
 ## Where we are
 
-main `96ab3d87a` — release-ready. The five Azure tests that blocked every open PR are fixed and
-merged (#2169). **28 PRs merged across cont-18/19/20** (#2169 unblocked main, #2177 notes, #2165
-isort/D3). Three PRs open.
+main `d5b8fe390` — **green, released, and consolidated.** 28 PRs merged across cont-18/19/20.
+**Six packages published to PyPI; zero drift across all nine.** Two PRs open. Worktrees reduced
+18 → 2, local branches 206 → 171.
 
-## Read first
+## Read first (in this order)
 
-1. This file's **Traps** section — three NEW instrument failures this session, each of which
-   produced a confident wrong answer that nearly shipped
-2. `workspaces/issue-1720-llm-consolidation/sweep-cont18-report.md` — decision report D1–D5
-3. `CLAUDE.md` — Absolute Directives
+1. **`sweep-cont20-report.md`** — the decision report: completion status, ETA in cycles,
+   value-ranked queue, three decisions (D1–D3) needing the co-owner
+2. **§ Seed the next session** below — copy-paste starting instructions
+3. **§ Branch + worktree ledger** below — nothing is lost; this is the map
+4. **§ Traps** — measured this block, do not rediscover
 
-## Open PRs (all rebased on 885f7f270)
+---
 
-| PR | What | State |
+## Seed the next session
+
+Paste this as the opening message:
+
+```
+Read workspaces/issue-1720-llm-consolidation/.session-notes and
+workspaces/issue-1720-llm-consolidation/sweep-cont20-report.md first.
+
+State: main d5b8fe390, green. Six packages released to PyPI (kailash 2.63.0,
+dataflow 2.20.0, kaizen 2.46.0, nexus 2.16.0, ml 2.2.3, kaizen-agents 0.13.0).
+Zero version drift. Nothing is blocked on a release.
+
+Do these in order:
+
+1. #2189 — sweep this repo for "an absence rendered as a success". A sibling SDK
+   swept the same class and found 22 instances, 3 critical, all in code that looked
+   correct on review. This session hit the class ~12 times without looking for it.
+   Highest expected yield of anything open. Read the issue body first; it lists the
+   shapes.
+
+2. #2192 — recovered work, ALREADY REBASED and green (6 tests pass). Before merging,
+   ESTABLISH THE RED: nobody has shown those 6 tests fail against unfixed code. If
+   they do not discriminate, say so rather than merging.
+
+3. #2123 — loom sync PR, 116 behind main. Rebase, verify, merge or close.
+
+4. #2141 / #2142 — the last un-gated HTTP surfaces. #2141 is sharper: an
+   unauthenticated DELETE /api/runs/{id}, and --auth unlocks a 0.0.0.0 bind while
+   installing nothing.
+
+Do NOT start #2166 (check_session_access) without the co-owner specifying the
+authorization schema — fixing it blind ships a WRONG authz check in place of a loud
+failure.
+
+Before citing ANY check as evidence, name what result it would produce if the thing
+it checks were false. If that is the same result, it is not evidence. See § Traps.
+```
+
+---
+
+## Branch + worktree ledger (post-consolidation)
+
+**Worktrees — 2 remain, both intentional:**
+
+| path | branch | why kept |
 | --- | --- | --- |
-| ~~#2176~~ | ✅ **MERGED** — credential redaction at every log sink (#2167) | incl. `Node.execute` logging every node's inputs |
-| ~~#2140~~ | ✅ **MERGED** — API-key auth that could not authenticate (#2108/#2114) | |
-| ~~#2190~~ | ✅ **MERGED** — CHANGELOG release prep | core + kaizen entries for today's work |
-| ~~#2150~~ | ✅ **MERGED** — kaizen SSRF consolidation | See "What #2150 landed" below |
-| ~~#2185~~ | ✅ **MERGED** — mock embedder no longer the production default (#2174) | See "What #2185 landed" below |
-| ~~#2186~~ | ✅ **MERGED** — corrects a delegation claim shipped in #2150 | `fingerprint_secret` does NOT delegate to `fingerprint_value`; they are DUPLICATE bodies. The false claim is gone and the byte-identity is now pinned by `test_url_safety_log_fingerprint_contract.py` — verified on merged main, both return `493fa3b2`. **Two duplicate bodies held in sync by nothing but a test is the same shape as everything else here: a control whose success is not what it appears to guarantee.** |
-| #2123 | loom sync | 116 behind, untouched this session |
+| `build/kailash-py` | `main` | the main checkout |
+| `build/.kailash-py-wt/l4-post-merge-verify` | `fix/2113-…-tristate` | active **PR #2192** |
 
-## What #2169 fixed (merged)
+15 merged worktrees removed with `git worktree remove` (refuses on a dirty tree — all were
+clean). 2 stale `/tmp` loom-gate2 entries pruned; both pointed at commits already on main
+(`d248afd78`, `1ccab9ac0`), so nothing was lost.
 
-`tests/unit/` had a hidden network dependency: 255 of 1615 tests in `tests/unit/llm` plus 6 in
-`tests/unit/providers` fail without DNS, and 29 fixture hostnames resolved only because the
-runner had internet. `myresource.openai.azure.com` resolves (Azure wildcard DNS);
-`myfoundry.services.ai.azure.com` does not — both are invented fixtures on the same code path,
-which is why exactly five tests failed rather than all of them.
+**Recovered from near-loss — read this before trusting a worktree sweep again.**
+`fix/2113-mounted-subapp-auth-reason-tristate` existed **only in a local worktree and had never
+been pushed**. A prune would have destroyed 196 insertions including a 154-line regression test.
+It is now on origin and open as **PR #2192**. The general rule: before removing any worktree,
+verify its branch is EITHER merged into main OR present on origin — a branch that is neither is
+unrecoverable.
 
-Verified with a poisoned resolver, plugin-load proven by a stderr sentinel:
+**Branches still open (recent):**
 
-| arm | result |
+| branch | state |
 | --- | --- |
-| main, poisoned | collection ABORTED — 573 of 1935 collected, 10 failed |
-| #2169, poisoned | **1934 passed, 1 skipped, 0 failed** |
+| `fix/2113-…-tristate` | **PR #2192** — rebased, 6 tests pass, red NOT established |
+| `sync/2026-08-13-loom-build-py` | **PR #2123** — 116 behind |
+| `fix/2070-logging-hook-redaction-defeat` | **superseded** by PR #2101 (#2084 fix + 2 test files are on main). On origin; disposable |
+| `backup/pre-rebase-2150` | disposable — #2150 merged; the backup is 12,799 lines BEHIND main. Left deliberately (named `backup/`) |
+| `docs/notes-cont18-execution` | superseded by later notes PRs |
 
-The egress block then caught a THIRD class nobody scoped: two Tier-1 tests in
-`test_token_counter.py` downloading `cl100k_base.tiktoken` at test time. Real-tiktoken
-assertions moved to Tier 2; Tier 1 keeps a stubbed encoder so delegation is still covered
-offline.
+**165 historical local branches** (oldest 2025-06-09) were NOT examined and NOT touched. See
+sweep report D3 — do not assume they are disposable.
 
-**Still open — #2168:** `check_url` performs a live DNS lookup during `Endpoint` construction,
-and the `resolve_dns=False` escape hatch its comment advertises **is not plumbed anywhere**.
-That affordance was cited in a delegation brief without being verified to exist — a defect in
-the brief, not in the lane's work.
+---
 
-## What #2176 fixes (open)
+## What shipped this block
 
-Five CodeQL HIGH alerts named two sinks; the regression test written for them found a third
-that is wider than both.
+**Released** (all verified installable from clean venvs):
+`kailash 2.63.0` · `kailash-dataflow 2.20.0` · `kailash-kaizen 2.46.0` (BREAKING) ·
+`kailash-nexus 2.16.0` · `kailash-ml 2.2.3` · `kaizen-agents 0.13.0`
 
-- **audit sinks** — `event_data` went through `sanitize_log_structure` alone, which is
-  explicitly NOT a redaction step, so a credential up to its 256-char bound reached the log
-  byte-intact. Redaction is now COMPOSED with sanitization; dropping either half trades a
-  credential leak for a log-injection hole, or the reverse.
-- **HTTP nodes** — URL, `Authorization` header, and body logged unmasked. CodeQL flagged only
-  the async class; the sync sibling is byte-identical and was equally live.
-- **`Node.execute`** — logged EVERY node's validated input dict. Not one node's leak but every
-  node's: `auth_password`, `api_key`, connection strings. Guarded with `isEnabledFor` so the
-  walk costs nothing when DEBUG is off.
+**Nine CodeQL alerts dispositioned** with runtime proofs: 11557–11561 (#2178), 11484/11485/**11556**
+(#2181), 11555 (#2140).
 
-Then probing the matcher DIRECTLY (not through a sink) found three more, all live after the
-sink tests were already green — **sink tests only exercise the keys producers in this repo
-happen to emit, so a key-matching gap is invisible to them**:
+**The 11556 substitution is the thing to remember.** #2181's ceremony was written against
+**11474**, which went `fixed` when #2150 shifted the flagged line 731→732. **CodeQL matches on
+LOCATION**, so it opened a NEW alert — 11556 — for the same code in the same function, and the
+ceremony was pointing at a dead alert while the live one sat open. Third instance this block
+(10867, 11474→11556). **A ceremony can be silently orphaned by a one-line shift**, and "the alert
+we dispositioned is now fixed" is not evidence the disposition still applies.
 
-- `pwd` was uncovered (`passwd` has no adjacent p-w-d, so that fragment never matched it)
-- dotted (`X.API.Key` — the SAML/OIDC attribute-bag shape) and spaced (`api key`) keys missed
-  the `api_key` fragment because only `-` was folded
+Related and still true: `fingerprint_value` (`url_credentials.py:798`) holds the IDENTICAL
+unkeyed blake2b and carries **no alert at all** — the scanner flagged one of two duplicate
+bodies, so a future edit to the other has zero scanner coverage. A test is the only guard.
 
-**Walking sets was tried and REVERTED** — measured, it closed nothing. A set holds only
-hashables, so it never contains a dict, so there is no key to match; the walk returned the same
-credential as a list. A shape-pinning test records that decision so nobody re-adds the walk
-believing it redacts something.
+---
 
-Known, accepted limitation: a credential inside an innocently-named free-text value
-(`{"note": "user pw is …"}`) is not reachable by key-based or URL-based redaction.
+## Traps (measured — do not rediscover)
 
-## What #2150 landed (merged)
+**The class:** a check that returns the same result whether or not the thing is true, read as
+the negative answer. **Three flavours, hardest last:**
 
-The kaizen SSRF consolidation, rebased from 77 behind and verified before merge:
-
-- **The connect-time gate now shares the parse gate's classifier**, so `url_safety.py` holds no
-  private copy. Two guards that agreed by coincidence now agree by construction.
-- **`fingerprint_secret` left BYTE-IDENTICAL on purpose.** The lane needed a fingerprint helper
-  and added a NEW `fingerprint_value` rather than editing the existing one — because changing
-  that body would re-number CodeQL alert **11474**, which is exactly what #2181's ceremony
-  dispositions. Verified independently: 66 lines, sha `e60c2f27c53eafab` on both sides.
-  **Cross-lane dependency worth remembering: a refactor that moves a flagged line invalidates
-  another lane's in-flight ceremony.**
-- **Discrimination verified, not assumed:** its 92 new tests were run against MAIN's source with
-  the rootdir pinned to main's kaizen package — **10 failed there, all 92 pass on the branch.**
-
-**Alert 10867 went `fixed` at 14:51Z — WITHOUT the property changing.** This is the sharpest
-instance of the session's own pattern, so read it carefully before citing it as closed.
-
-The consolidation merged two copies of the rejection log into one shared helper, which moved the
-flagged statement from `url_safety.py:71` to `:139`. **CodeQL matches on location**, so the alert
-stopped matching and transitioned to `fixed`. The logged expression is unchanged in substance and
-the value is still an **unkeyed, truncated BLAKE2b digest** — `fingerprint_value` (added by #2150
-so the two taint graphs stay separate, protecting #2181) is byte-identical to `fingerprint_secret`,
-verified empirically: both return `493fa3b2` for the same URL.
-
-There is now **no open CodeQL alert on `url_safety.py` at all** (positive control: the paginated
-query returns 2300 repo-wide, down exactly one from 2301).
-
-**The alert was the thing keeping anyone looking at that line, and it closed with no ceremony, no
-dismissal, and no human decision.** #2170 is now the SOLE tracker; the open question is recorded
-there. **A scanner alert going `fixed` is evidence the pattern no longer matches at a LOCATION —
-not evidence the risk was addressed.**
-
-## What #2185 landed (merged) — the mock embedder, and a worse sibling
-
-**Disposition was fail-CLOSED, not the WARN branch** — and that was earned by a sweep, not
-assumed: every `VectorMemory(...)` construction was checked and **no production caller relied on
-the default** (all tests, examples, or docs). So `embedding_fn` is required and its absence raises
-`ConfigurationError` naming the wiring. Mirrors #1952 on `EmbeddingGeneratorNode`; the two surfaces
-now agree.
-
-**The sibling found by the sweep was worse than the original.**
-`SimpleEmbeddingProvider.embed_text` fell back to `_hash_embedding` on BOTH a non-200 response AND
-a bare `except Exception:` — no raise, no log — and the returned `EmbeddingResult` carried
-`model=self.model_name`, so **fabricated MD5 vectors were labelled with the real model's
-provenance** and were indistinguishable downstream. `hybrid_search.py:337` constructs it, so the
-path was live. Both arms now raise a typed `EmbeddingUnavailable`; `_hash_embedding` is DELETED
-rather than left reachable (the only remaining mention is a comment recording the removal).
-
-**The docs and examples were teaching the defect** — the sharpest part.
-`memory-patterns-guide.md` documented `VectorMemory(embedding_fn=None)` under the heading
-*"Default: Mock hash-based embedder (testing only)"*, and `memory-showcase/demo.py` printed
-*"Key Feature: Semantic search"* while ranking MD5 noise. **The defect WAS the documented API.**
-
-Discrimination verified independently: reverting ONLY `vector.py` to main → **10 failed**;
-restored → 24 pass, worktree clean.
-
-## RELEASE STATE — read before running /release
-
-**All dispositions are CLEARED (co-owner approved 2026-08-17).** Nine CodeQL alerts dismissed
-with proof: 11557–11561 (#2178, the http.py fix lines), 11484/11485/**11556** (#2181), 11555
-(#2140). #2170's decision is recorded on the issue.
-
-**The 11556 substitution is the thing to carry forward.** #2181's ceremony was written against
-**11474**, which went `fixed` when #2150 shifted the flagged line 731→732 — CodeQL matches on
-LOCATION, so it opened a NEW alert, 11556, for the same code in the same function. The ceremony
-was pointing at a dead alert while the live one sat open. **A ceremony can be silently orphaned
-by a one-line shift**, and "the alert we dispositioned is now fixed" is not evidence the
-disposition still applies. Third instance today (10867, 11474→11556).
-
-Related: `fingerprint_value` (`url_credentials.py:798`) holds the IDENTICAL unkeyed blake2b and
-carries **no alert at all** — the scanner flagged one of the two duplicate bodies, so a future
-edit to the other has zero scanner coverage. The byte-identity test is the only guard.
-
-### Drift + the publish-ORDER constraint (verified, not inherited)
-
-Six packages drifted (NOT the nine an earlier note claimed):
-
-| package | PyPI | repo |
-| --- | --- | --- |
-| kailash | 2.62.0 | **2.63.0** |
-| kailash-dataflow | 2.19.1 | 2.20.0 |
-| kailash-kaizen | 2.45.0 | **2.46.0** |
-| kailash-ml | 2.2.2 | 2.2.3 |
-| kailash-nexus | 2.15.0 | **2.16.0** |
-| kaizen-agents | 0.12.0 | 0.13.0 |
-
-In sync: align 0.7.4, mcp 0.5.1, pact 0.18.0.
-
-**core 2.63.0 MUST publish before kaizen 2.46.0 AND nexus 2.16.0.** Verified against the
-published artifact rather than assumed: the `kailash-2.62.0` wheel contains **789 files and zero
-`network_guard` hits**, with `url_credentials.py` present as a positive control. Both dependents
-already declare `kailash>=2.63.0`, so the FLOORS are correct — the constraint is publish ORDER,
-which protects the window between publishes.
-
-### Pre-release gates run
-
-- version consistency: **9/9 packages** `pyproject` == `__init__` (align + ml resolve through
-  `_version.py`; a naive grep reports those as mismatches — they are not)
-- working tree clean
-- CHANGELOGs written for today's work: core #2167 + #2108/#2114; kaizen #2174 (BREAKING, with
-  migration) + #2137 + #2170
-- **clean-venv gate on the real artifact**: built `kailash-2.63.0-py3-none-any.whl`, installed it
-  into a fresh venv, and confirmed `network_guard.check_url` imports AND `redact_mapping` works
-  (`{'api_key': '[REDACTED]'}`) from site-packages, not the repo
-
-**RELEASE COMPLETE — 2026-08-17. All six published and verified installable from production
-PyPI; zero drift across all nine packages.**
-
-| package | version | PyPI | GH Release |
-| --- | --- | --- | --- |
-| kailash | 2.63.0 | ✅ | ✅ |
-| kailash-dataflow | 2.20.0 | ✅ | ⚠ missing (503) |
-| kailash-ml | 2.2.3 | ✅ | ✅ (created after the fact) |
-| kaizen-agents | 0.13.0 | ✅ | ✅ |
-| kailash-kaizen | 2.46.0 | ✅ | ✅ |
-| kailash-nexus | 2.16.0 | ✅ | ✅ |
-
-**The publish-order constraint held end to end, verified rather than assumed:** a clean-venv
-`pip install kailash-kaizen==2.46.0` from production PyPI resolved `kailash 2.63.0`, imported
-`network_guard`, and the BREAKING change failed closed —
-`ConfigurationError: VectorMemory: 'embedding_fn' is required`.
-
-**TestPyPI earned its keep, and its own hazard is worth recording.** All five minors were
-validated there first. `kailash-nexus` appeared to FAIL — `FileNotFoundError: 'DESCRIPTION.txt'`
-— which looked like a broken sdist in our package. It was not: with `--index-url` pointing at
-TestPyPI, **every transitive dep resolves from TestPyPI first**, and TestPyPI hosts a stale
-`fastapi` whose version number outranks PyPI's, so pip picked it and tried to build it.
-Reversing the index order does NOT fix it (pip merges both indexes and takes the highest
-version). **The working form is: deps from real PyPI, then your own artifacts with `--no-deps`
-from TestPyPI.**
-
-**GitHub was in a MAJOR PARTIAL OUTAGE throughout** (Issues + Pull Requests `major_outage`,
-Actions + API `degraded_performance`). Every publish failure was infrastructure, none was code:
-`429/503` downloading `actions/download-artifact` from codeload (dataflow, nexus), and `503` on
-Create-GitHub-Release (dataflow, ml). **Read the job-level outcome, not the run-level
-conclusion** — `ml-v2.2.3` shows run=failure but `Publish to PyPI: success`, and the package IS
-live. Backing off ~75s beat hammering retries on the 429.
-
-**Residual:** the `dataflow-v2.20.0` GitHub Release could not be created (persistent 503). The
-package is on PyPI and installable; only the Release page is missing. Create it with
-`gh release create dataflow-v2.20.0 --verify-tag` once GitHub recovers.
-
-**NOT done (superseded):** the `/release` authorization prompt (`build-repo-release-discipline.md` Rule 4)
-— the co-owner approved "release" but has not seen the enumerated version list above, and PyPI
-is immutable.
-
-**GitHub was degraded during this work** — repeated 503s on the merge API and step-1 "Set up job"
-/ step-4 "Install uv" runner failures across several PRs. All were infrastructure, none was code;
-each cleared on re-run. Do not read those as test failures.
-
-## Traps (measured this session — do not rediscover)
-
-**Nine instrument failures this session, all the same shape: a check that returns the same
-result whether or not the thing is true, read as the negative answer.**
-
-**There are THREE flavours, and they get harder to catch in this order** (taxonomy from the
-`A-rebase2140` lane, adopted here because it predicts the next one rather than describing the
-last):
-
-| flavour | why it is hard | example from today |
+| flavour | why it is hard | example |
 | --- | --- | --- |
 | **empty** | at least looks odd | `grep` defeated by ANSI codes |
-| **truncated** | looks like DATA | `per_page=100` → "13 alerts" when there were 36; `tail -15` in a comparison |
-| **errored** | looks like an ANSWER TO A DIFFERENT QUESTION | `file or directory not found` reading as "no such tests exist" |
+| **truncated** | looks like DATA | `per_page=100` → "13 alerts" when there were 36 |
+| **errored** | looks like an ANSWER TO A DIFFERENT QUESTION | `file or directory not found` read as "no such tests" |
 
-**One control covers all three: run something whose answer you already know, in the same
-breath.**
+**One control covers all three: run something whose answer you already know, in the same breath.**
 
-**The costliest instance was #9: `ListAgents` returned "No reachable agents" and I read it as
-"the lanes are dead."** Both lanes were alive and working. On that inference I entered another
-session's worktree, committed its 13 uncommitted files under a message I wrote, and pushed —
-which the lane then correctly reported as an unexplained commit it did not author. **A lane's
-liveness is not observable from an empty agent listing.** Ask the lane, or check its artifact
-trail (pushed branches, filed issues, PR comments); read-only and in-progress work is invisible
-to both git AND the listing.
+Specific instances, each of which produced a confident wrong answer this block:
 
-Three others are new:
-
-- **Running a worktree's test FILE from another checkout silently tests the WORKTREE.** Mirror
-  of the known pythonpath trap. Ran `pytest <worktree>/tests/.../t.py` from main with main's
-  `src` on PYTHONPATH to establish a red; all 11 PASSED, reading as "the regression test is
-  vacuous." It was not: pytest set `rootdir` to the WORKTREE (its `pytest.ini` won) and put the
-  worktree's FIXED `src` ahead of PYTHONPATH. My `__file__` check ran in a SEPARATE process, so
-  it measured nothing about the pytest run. **Copy the test INTO the target checkout**; confirm
-  with `--collect-only 2>&1 | grep -i rootdir` in the SAME invocation. Correct control: 10
-  failed / 1 passed (the 1 is the test's own no-false-positive control).
-- **`tail -N` inside a comparison pipeline fabricates agreement.** I captured branch failures
-  through `| tail -15` and main's in full, then diffed: "0 new failures, 101 fixed." Both halves
-  were truncation artifact. Untruncated: 115 vs 114, 0 new, 1 fixed. **Never truncate either
-  side of a comparison.**
-- **`assert SECRET not in captured_text` passes when captured_text is EMPTY.** Any log-capture
-  assertion needs a paired positive control (`assert MARKER in text`), or a wrong logger name
-  makes it green forever.
-
-- **A test guarded by `if x is not None:` cannot fail.** `TestEncoderCaching` asserted nothing
-  on any runner without the tiktoken encoding data — zero caching coverage, presenting as
-  green. Same shape as every product defect this session found, inside our own suite. Grep
-  tests for `if .* is not None:` wrapping the assertion.
-- **A stub whose output AGREES with the fallback is a test that cannot fail.** The tiktoken
-  Tier-1 stub counts WORDS, not characters, precisely so a regression to the character-estimate
-  fallback is visible rather than merely plausible. Choose stub outputs that differ from the
-  degraded path.
-
-Carried forward, still true:
-
-- **A stale installed wheel shadows repo source** — hit it 4× this session, including through
-  *pyright diagnostics*, which resolved `redact_mapping`/`mask_error_text` against
-  site-packages and reported phantom undefined-name errors. Always pin repo `src` FIRST on
-  PYTHONPATH and print `__file__` **in the same process** you are measuring.
-- **`--color=no` when grepping pytest output** — ANSI codes defeat `grep "^FAILED"` silently.
+- **`ListAgents` returning empty ≠ lanes dead.** Both lanes were alive and working. On that
+  inference I entered another session's worktree, committed its 13 uncommitted files under a
+  message I wrote, and pushed. Ask the lane, or check its artifact trail.
+- **pytest `rootdir` beats `PYTHONPATH`.** Running a worktree's test FILE from another checkout
+  silently tests the WORKTREE. Made a discriminating regression test look vacuous. Copy the test
+  INTO the target checkout; confirm with `--collect-only | grep -i rootdir` in the SAME invocation.
+- **`tail -N` inside a comparison fabricates agreement.** Truncating one side produced
+  "0 new failures, 101 fixed"; untruncated it was 115 vs 114. Never truncate either side.
+- **Comparing a FIXED LINE RANGE across refs whose file length changed.** `sed -n '667,733p'` on
+  both sides covered different text after a 67-line insertion. Extract by NAME, never by line.
+- **A hash of empty input is a hash.** Two failed extractions both hashed to `e3b0c44298fc1c14`
+  and printed as "IDENTICAL — verified". Guard extract-then-hash with a line-count assertion.
+- **`gh api` code-scanning WITHOUT `--paginate` silently truncates** — 2301 open alerts here, so
+  an absent alert reads exactly like "no such alert". Always `--paginate` + a positive control.
+- **A claim inherited from session notes is a SPECIFICATION, not a measurement.** I repeated
+  `url_safety.py:130` across several messages and into these notes without re-deriving it; no
+  alert existed at that line. Re-derive before acting or repeating.
+- **`assert SECRET not in captured_text` passes when the capture is EMPTY.** Pair every
+  log-capture assertion with a positive control (`assert MARKER in text`).
+- **A test guarded by `if x is not None:` cannot fail.** Found in our own suite.
+- **A stub whose output AGREES with the fallback cannot detect a regression to it.**
+- **In zsh, assigning to `path` destroys `PATH`.** Produced "command not found: git", which reads
+  as an environment problem rather than your bug.
+- **`git worktree remove` refuses on a dirty tree** — use it instead of `rm -rf`.
+- **Stale installed wheel shadows repo source** — hit 4× this block, including through *pyright*
+  diagnostics resolving against site-packages. Pin repo `src` FIRST on PYTHONPATH and print
+  `__file__` **in the same process** you are measuring.
 - **`--continue-on-collection-errors --maxfail=100000`** or you measure a truncated suite.
-- **`gh api` code-scanning WITHOUT `--paginate` silently truncates.** This repo has **2301 open
-  alerts**; `?per_page=100` returns the first page and an absent alert reads exactly like "no
-  such alert." Cost a false "no CodeQL alert on that file" that was one message from being
-  reported as fact. **Always `gh api --paginate`, and positive-control the query against a ref
-  you know has hits.**
-- **Comparing a FIXED LINE RANGE across two refs is invalid when the file's length changed.**
-  I hashed `sed -n '667,733p'` on both sides to check whether a function was byte-identical; the
-  branch had added 67 lines, so the ranges covered different text and the hashes differed. Read
-  as "the function changed" — it had not. **Extract the function BY NAME (`awk` from its `def`
-  to its close), never by line number.**
-- **A hash of empty input is a hash.** My by-name extraction then failed on shell quoting and
-  returned nothing on BOTH sides; two empty strings hash identically to
-  `e3b0c44298fc1c14`, which printed as "IDENTICAL — verified". **Guard every extract-then-hash
-  with a non-empty/line-count assertion before comparing.**
-- **`gh run view --log-failed` can return 0 bytes** on a genuinely failed job. That is zero
-  evidence, not "no failures". Fall back to the run-level zip
-  (`gh api .../runs/<id>/logs > x.zip; unzip -p x.zip "<job>.txt"`).
-- **`gh pr create` can open the PR against an UNPUSHED commit.** #2176 was created pointing at
-  the pre-rebase SHA while the push had failed non-fast-forward. Always verify
-  `gh pr view <N> --json headRefOid` equals local HEAD after creating.
-- **A pre-commit "Skipped — no files to check" is NOT a pass.** A multi-file
-  `pre-commit run --files $files` silently matched nothing; per-file invocation ran 14 hooks
-  each. Count the hooks that actually ran.
-- **Read-only agents (`security-reviewer`) have NO Bash** — dispatching them with `git diff`
-  instructions returns EMPTY, indistinguishable from a clean review.
+- **`--color=no`** when grepping pytest output.
 
-## Local full-sweep baseline (for the next session)
+### Release-specific
 
-`tests/unit tests/security tests/regression` on main, untruncated:
-`115 failed, 7141 passed, 50 errors`. These are local-environment failures (optional deps,
-no infra); the per-package CI matrix installs extras and is green. **Do not read a local
-failure count as a regression without diffing against this baseline.**
+- **TestPyPI's own hazard:** with `--index-url` on TestPyPI, EVERY transitive dep resolves from
+  TestPyPI first, and it hosts a stale `fastapi` whose version outranks PyPI's — which made
+  `kailash-nexus` look like a broken sdist. Reversing index order does NOT help (pip merges both
+  and takes the highest). **Working form: deps from real PyPI, then your own artifacts with
+  `--no-deps` from TestPyPI.**
+- **Read JOB-level outcomes, not run-level.** `ml-v2.2.3` reported `run=failure` while
+  `Publish to PyPI: success` — the package was live, and a run-level read would have prompted a
+  republish of an immutable artifact.
+- **PyPI propagation:** the JSON API updates before the simple index pip uses. If the workflow
+  succeeded and `/pypi/<pkg>/<ver>/json` returns metadata, the publish happened — retry the
+  install, do not re-publish.
+- **On a 429, back off rather than retry immediately.** nexus failed twice; a ~75s pause then
+  succeeded.
 
-## Decisions status
+---
 
-- **D1 CodeQL** ✅ alert 11547 dismissed, re-verified this session (`state=dismissed`,
-  `reason="false positive"`)
-- **D2 GPU CI** ✅ #2164 merged; jobs retired, restoration trail in `docs/ci/self-hosted-runner.md`
-- **D3 isort** ✅ #2165 merged. Verified before merge with the discriminating check, not a single
-  green run: `--all-files` and `--from-ref` now AGREE and the tree is clean after both. (The
-  defect was the two modes contradicting each other, so one passing run proves nothing.)
-- **D4 branch protection** ✅ applied as the verified always-running intersection
-  `['CodeQL','Analyze Python','test-with-infrastructure']`. **Limitation:** this is a floor —
-  the Python/PACT/DataFlow matrix is path-conditional and cannot be required directly; that
-  needs an always-running gate job depending on them.
-- **D5 release** — **NOT run, deliberately.** Publishing is irreversible and remains the
-  co-owner's explicit call. core 2.63.0 MUST publish before nexus AND kaizen (both import
-  `kailash.utils.network_guard`, new in core). Nine packages carry drift; every security fix
-  from the last three sessions is unreleased.
+## Local full-suite baseline (for regression comparison)
 
-## Still-open findings worth routing
+`tests/unit tests/security tests/regression` on main, untruncated: **115 failed, 7141 passed,
+50 errors**. These are local-environment failures (optional deps, no infra); the per-package CI
+matrix installs extras and is green. **Do not read a local failure count as a regression without
+diffing against this baseline, untruncated on both sides.**
 
-- **#2166** `MiddlewareAccessControlManager.check_session_access` cannot work — passes 3 kwargs
-  `PermissionCheckNode` does not declare, omits required `operation`, misreads the return shape.
-  Was unreachable until #2140 made the manager constructible. Needs an authorization-schema
-  decision; fixing it blind would ship a WRONG authz check in place of a loud failure.
-- **#2168** the unreachable `resolve_dns=False` affordance (above)
-- **#2180 — `packages/kailash-kaizen/tests/integration/` (131 files) runs in NO workflow.**
-  Fourth instance of the #2038/#2074 bug class. The only reference is a `paths:` TRIGGER filter
-  in `trust-tests.yml:19`, and all three kaizen invocations carry `-m 'not (integration or ...)'`.
-  **This is why the tiktoken tests were NOT simply moved to Tier 2** — "one tier later" would
-  have been "never", so the split keeps a stubbed-encoder delegation test in Tier 1. Wiring it
-  costs CI time and is the co-owner's spend decision; the issue records the gap without
-  changing any workflow.
-- **#2170–#2175** filed by the CodeQL lane: a "non-reversible" tag claim that is not
-  (`url_safety.py`), an unkeyed hash fingerprinting client IPs in rate-limit middleware, an
-  unsanitized caller id, a bad-tag-filter question, **a mock embedder as the production
-  default**, and an unpinned TLS minimum version.
-- **CORRECTED — "#2150's own CodeQL HIGH at `url_safety.py:130`" was FALSE.** Measured with
-  `--paginate` (the repo has **2301 open alerts**, so an unpaginated query silently truncates):
-  there is **no alert at `url_safety.py:130`**. The real one is **10867**,
-  `py/clear-text-logging-sensitive-data` at `url_safety.py:71`, **on `main`, open since
-  2026-04-24** — pre-existing, NOT carried by #2150.
-  I repeated `:130` from the cont-18 notes across several messages and wrote it back into these
-  notes without ever re-deriving it. **A claim inherited from session notes is a specification,
-  not a measurement** — re-derive before acting on it or repeating it.
-  Alert 10867 looks like a FALSE POSITIVE on its face: line 71 logs
-  `_url_fingerprint(url)` — a truncated BLAKE2b digest — not the URL. But the disposition should
-  be written against the real defect underneath it (next bullet), not against ":130".
-- **`fingerprint_secret`'s docstring contradicts itself, and the false half is load-bearing.**
-  `url_credentials.py:689` says *"BLAKE2b is a fast **keyed-hash** that CodeQL does not flag for
-  this rule"*; `:714` in the SAME docstring says *"no secret keying material"*. The
-  implementation passes no `key=`. The `:689` claim is the stated JUSTIFICATION for the rule not
-  applying, so a reader stops there and never reaches `:714`. Added to **#2170**; the #2181
-  ceremony's SCOPE CAVEAT already points at it.
-- **Two wall-clock perf flakes** in kaizen (`test_async_execution_overhead` ~4.5s against a 5.0s
-  bound). Left alone deliberately: bumping an absolute bound is how a complexity regression
-  hides. The correct fix is a self-normalizing ratio (measure 1/N scale in the same run), not a
-  bigger constant.
+---
 
-## Wave tracker
+## Open decisions
 
-**Both lanes were ALIVE and completed their work** — `ListAgents` reporting "No reachable
-agents" was wrong (see instance #9 above). Corrected record:
-
-- **E-dns** — delivered #2169 (merged) + #2168. Pushed back on a bad recommendation of mine and
-  was right to.
-- **A-rebase2140 (`f-codeql`)** — delivered the two real CodeQL fixes, found two MORE leaks
-  nobody had reported (`Node.execute` logging every node's inputs; the driver exception text
-  re-leaking the masked URL), filed #2170–#2175, and drafted three Rule-1b ceremonies
-  (**approved**, verified independently, to be filed as ONE issue with the 11474 caveat
-  verbatim). Its work is #2176. **I committed its files from under it on a bad
-  liveness inference — the commit message on `4184b409c` is mine, not the lane's.**
-
-**`git worktree list` shows ~18 worktrees; several hold merged branches and can be pruned.**
-
-## The pattern worth carrying forward
-
-**Every product defect this session shares one shape with every one of my own instrument
-failures: a check that reports success without discriminating.** `verify_api_key` that cannot
-succeed · rotation that never fires · `--auth` that unlocks a `0.0.0.0` bind while installing
-nothing · CI gates matching zero tests · a marker hook keyed on memory addresses · an LOC guard
-raised to pass · two conformance MUSTs that cannot return False · a sanitizer that renders but
-never withholds — and, on my side, a truncated diff, an empty capture, a clean worktree, a
-rootdir that silently swapped the code under test.
-
-**None are tested-path defects. All would ship green.** Ask of every check, before citing it:
-*what result would this produce if the thing it checks were false?* If the answer is "the same
-one", it is not evidence.
+See `sweep-cont20-report.md` § 5. In brief: **D1** wire `tests/integration/` (131 files, real CI
+cost) · **D2** specify the authorization schema for #2166 · **D3** the 165 historical branches
+(recommend: leave, audit separately).
