@@ -190,8 +190,26 @@ class MultiDimensionEvaluator:
             dimension = self._registry.get(dimension_name)
 
             if dimension is None:
+                # An unregistered dimension is a constraint the caller asked to
+                # enforce that NOTHING enforced. Dropping it from the result set
+                # made an unevaluated constraint indistinguishable from a
+                # satisfied one on the only field callers gate on: with every
+                # dimension unknown, `dimension_results` and `failed_dimensions`
+                # were both empty and `satisfied` came back True -- byte-identical
+                # to a genuinely-passing evaluation. Worse, that verdict is
+                # produced exactly when the registry is misconfigured, which is
+                # when the caller most needs the truth. Fail closed (#2189).
                 warnings.append(f"Unknown dimension: {dimension_name}")
                 logger.warning(f"Unknown constraint dimension: {dimension_name}")
+                dimension_results[dimension_name] = ConstraintCheckResult(
+                    satisfied=False,
+                    reason=(
+                        f"Unknown constraint dimension '{dimension_name}': not "
+                        f"registered, so it could not be evaluated. Treated as "
+                        f"unsatisfied (fail-closed)."
+                    ),
+                )
+                failed_dimensions.append(dimension_name)
                 continue
 
             try:
@@ -263,8 +281,15 @@ class MultiDimensionEvaluator:
             True if overall constraint evaluation is satisfied
         """
         if not results:
-            # No valid dimensions evaluated
-            return True
+            # Nothing was measured. A verdict computed over zero dimensions
+            # carries no information, so returning True here would report
+            # "measured nothing" in the same value as "checked and passed".
+            # evaluate() early-returns for a genuinely empty constraint set and
+            # now records unknown dimensions as failures, so reaching this with
+            # no results means the measurement did not happen. Fail closed
+            # (#2189). It also guards HIERARCHICAL below, which indexes
+            # results[first_key] and would otherwise raise on an empty map.
+            return False
 
         total = len(results)
         passed = total - len(failed)

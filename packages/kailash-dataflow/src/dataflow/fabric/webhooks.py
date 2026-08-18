@@ -343,13 +343,20 @@ class _StripeVerifier(_SignatureVerifier):
 
         # Tolerance window — guard NaN/Inf to match the receiver's
         # generic timestamp validator.
+        # ``fromtimestamp`` is INSIDE the guard, not after it. ``isfinite``
+        # admits finite-but-out-of-range values (``t=1e300``), and those raise
+        # OverflowError/OSError inside ``fromtimestamp`` -- an exception that
+        # escapes ``handle_webhook``'s documented ``{"accepted": ..., "reason":
+        # ...}`` contract, skips ``metrics.record_webhook``, and surfaces as a
+        # 500 on an attacker-controlled header. Guarding the parse but not the
+        # conversion stops one step short of the hazard the guard names (#2189).
         try:
             ts_float = float(timestamp)
             if not math.isfinite(ts_float):
                 raise ValueError("non-finite timestamp")
-        except ValueError:
+            ts_dt = datetime.fromtimestamp(ts_float, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
             return _VerifyResult(False, "Stripe-Signature timestamp not numeric")
-        ts_dt = datetime.fromtimestamp(ts_float, tz=timezone.utc)
         age = (now - ts_dt).total_seconds()
         if age > self._TOLERANCE_SECONDS:
             return _VerifyResult(False, f"Stripe timestamp too old ({int(age)}s)")
@@ -399,13 +406,16 @@ class _SlackVerifier(_SignatureVerifier):
         if not signature.startswith("v0="):
             return _VerifyResult(False, "X-Slack-Signature must start with v0=")
 
+        # See the note in _StripeVerifier.verify: the conversion belongs
+        # inside the guard, and OverflowError/OSError are part of its
+        # failure set (#2189).
         try:
             ts_float = float(timestamp)
             if not math.isfinite(ts_float):
                 raise ValueError("non-finite timestamp")
-        except ValueError:
+            ts_dt = datetime.fromtimestamp(ts_float, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
             return _VerifyResult(False, "Slack timestamp not numeric")
-        ts_dt = datetime.fromtimestamp(ts_float, tz=timezone.utc)
         age = (now - ts_dt).total_seconds()
         if age > self._TOLERANCE_SECONDS:
             return _VerifyResult(False, f"Slack timestamp too old ({int(age)}s)")
@@ -553,7 +563,25 @@ class WebhookReceiver:
         # 3. Provider-specific signature verification
         verifier = _get_verifier(webhook_config.provider)
         now = datetime.now(timezone.utc)
-        verify_result = verifier.verify(headers=hdrs, body=body, secret=secret, now=now)
+        # Defense in depth: a verifier operates entirely on attacker-controlled
+        # headers and body. Every rejection it can reason about is returned as
+        # a _VerifyResult, so an EXCEPTION escaping here is by definition an
+        # input the verifier did not anticipate -- and letting it propagate
+        # breaks this method's documented return contract, skips the metric,
+        # and turns a rejection into a 500. Fail closed instead (#2189).
+        try:
+            verify_result = verifier.verify(
+                headers=hdrs, body=body, secret=secret, now=now
+            )
+        except Exception:
+            logger.exception(
+                "Webhook verifier raised for source '%s' (provider=%s); "
+                "rejecting the delivery",
+                source_name,
+                verifier.name,
+            )
+            metrics.record_webhook(source=source_name, accepted=False)
+            return {"accepted": False, "reason": "Signature verification failed"}
         if not verify_result.accepted:
             logger.warning(
                 "Webhook signature rejected for source '%s' (provider=%s): %s",
