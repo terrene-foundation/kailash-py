@@ -612,6 +612,7 @@ class WorkflowAPIGateway:
             **mounted_subapp_auth_kwargs(
                 parent_label=f"{type(self).__name__}(title={self.app.title!r})",
                 parent_is_authenticated=self._auth_config is not None,
+                parent_external_auth_reason=self._external_auth_reason,
             ),
         )
         # Track it so its runtime is released on shutdown/close() (issue #1285).
