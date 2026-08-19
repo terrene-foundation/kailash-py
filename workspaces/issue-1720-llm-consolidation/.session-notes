@@ -129,5 +129,6 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 | `hist-branches` | 169 unexamined local branches | deferred by judgment | sweep report D5 |
 
 Closed this session: `pr-queue` (both cont-20 PRs merged), `absence-sweep` (#2189 fixes
-merged in #2195), `ci-cost-reach` (WITHDRAWN — my filing was a duplicate of loom's shipped
-T4; closed with evidence at loom `9cff8704e293…` / local `d0a756ef9…`).
+merged in #2195), `ci-cost-reach` (row MOVED here from the open ledger above, not retained
+there — WITHDRAWN; my filing duplicated loom's shipped T4, closed with evidence at loom
+`9cff8704e293…` / local `d0a756ef9…`. The lesson is retained as a Traps entry).
