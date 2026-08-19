@@ -23,6 +23,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Artifact Flow Rules | `.claude/**`, `sync-manifest.yaml`, `**/VERSION` | `.claude/rules/artifact-flow.md` |
 | BUILD Repo Release Discipline | `pyproject.toml`, `packages/**/pyproject.toml`, `CHANGELOG.md`, `packages/**/CHANGELOG.md`, `packages/**/__init__.py`, `src/kailash/__init__.py`, `.github/workflows/publish-pypi.yml`, `.github/workflows/publish-*.yml`, `.github/workflows/release*.yml`, `deploy/deployment-config.md` | `.claude/rules/build-repo-release-discipline.md` |
 | Burn-Down Reporting — A Number Against A Number, Every Session And Every Wave | `**/workspaces/**`, `**/.session-notes*`, `**/.session-notes.d/**`, `**/.wave-tracker*`, `**/.wave-tracker.d/**`, `**/todos/**`, `journal/**` | `.claude/rules/burn-down-reporting.md` |
+| Burndown Integrity — The Block Is Generated, And It Is The Only Quote | `**/workspaces/**`, `**/.session-notes*`, `**/.session-notes.d/**`, `journal/**`, `**/*REGISTER*`, `**/*BURNDOWN*`, `**/burndown/**` | `.claude/rules/burndown-integrity.md` |
 | CI Cost Discipline — A Gate Run Is A Purchased Resource, And The Dominant Waste Is Re-Pushing | `**/todos/**`, `**/.wave-tracker*`, `**/.wave-tracker.d/**`, `**/.github/workflows/**` | `.claude/rules/ci-cost-discipline.md` |
 | CI Runner Rules | `.github/workflows/**`, `**/ci/**`, `**/.github/**` | `.claude/rules/ci-runners.md` |
 | COC Artifact Eval Coverage — Every Artifact Ships Structural Fixtures AND A Probe Set | `.claude/**` | `.claude/rules/coc-artifact-eval-coverage.md` |
@@ -37,6 +38,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | DataFlow Classification Redaction Rules | `**/dataflow/**`, `**/kailash-dataflow/**`, `**/*classification*`, `**/*redact*` | `.claude/rules/dataflow-classification.md` |
 | DataFlow Identifier Safety Rules | `**/dataflow/**`, `**/sql*`, `**/dialect*`, `**/migrations/**` | `.claude/rules/dataflow-identifier-safety.md` |
 | DataFlow Pool Configuration Rules | `**/dataflow/**` | `.claude/rules/dataflow-pool.md` |
+| Deferral-Registry Locality — Every Repo Owns Its Own Backlog | `.claude/rules/project/**`, `.claude/agents/project/**`, `.claude/commands/project/**`, `.claude/skills/project/**`, `**/deferrals.json`, `**/phase2-deferrals.json` | `.claude/rules/deferral-registry-locality.md` |
 | Dependency Rules | `pyproject.toml`, `Cargo.toml`, `package.json`, `**/*.py`, `**/*.rs`, `**/*.ts`, `**/*.tsx`, `**/*.js`, `**/*.jsx` | `.claude/rules/dependencies.md` |
 | Deploy Hygiene — Committed ≠ Deployed | `**/Dockerfile`, `**/*.dockerfile`, `deploy/**`, `**/k8s/**`, `**/kubernetes/**`, `**/helm/**`, `**/.github/workflows/**`, `**/fly.toml`, `**/vercel.json`, `**/app.yaml`, `**/serverless.yml`, `**/wrangler.toml`, `**/Procfile`, `**/next.config.*`, `**/vite.config.*`, `**/package.json`, `deploy/deployment-config.md` | `.claude/rules/deploy-hygiene.md` |
 | SDK Release Rules | `deploy/**`, `.github/**`, `pyproject.toml`, `CHANGELOG.md` | `.claude/rules/deployment.md` |
@@ -52,6 +54,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Hook Event Selection — The Event Is A Deliberated Choice | `**/.claude/hooks/**`, `**/.claude/variants/**/hooks/**`, `**/.claude/settings.json` | `.claude/rules/hook-event-selection.md` |
 | Hook Output Discipline — No Raw exit(2) | `**/.claude/hooks/**`, `**/.claude/variants/**/hooks/**`, `**/.claude/test-harness/**` | `.claude/rules/hook-output-discipline.md` |
 | Infrastructure SQL Rules | `**/db/**`, `**/infrastructure/**` | `.claude/rules/infrastructure-sql.md` |
+| Instrument Bipolarity — Discrimination Is Recorded At AUTHORSHIP | `**/.claude/bin/**`, `**/.claude/hooks/**`, `**/.claude/audit-fixtures/**`, `**/.claude/test-harness/**`, `**/.github/workflows/**`, `**/tests/**`, `**/*.test.*`, `**/*_test.*`, `**/test_*.py` | `.claude/rules/instrument-bipolarity.md` |
 | Journal Author Discipline — Verifiable, Not Trusted | `journal/**`, `**/journal/**` | `.claude/rules/journal-author-discipline.md` |
 | Journal Rules | `journal/**`, `**/journal/**` | `.claude/rules/journal.md` |
 | Knowledge-Cascade Routing — Cascade-Valuable Knowledge Lands In A Manifest-Registered COC Artifact, Never Agent Memory | `**/MEMORY.md`, `**/memory/**/*.md`, `journal/**`, `**/.session-notes*`, `.claude/rules/**`, `.claude/.proposals/**` | `.claude/rules/knowledge-cascade-routing.md` |
@@ -61,6 +64,7 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Nexus Webhook HMAC Rules | `**/nexus/**`, `**/webhook*`, `**/*hmac*`, `**/signature*` | `.claude/rules/nexus-webhook-hmac.md` |
 | Observability Rules | `**/*.py`, `**/*.rs`, `**/*.ts`, `**/*.tsx`, `**/*.js`, `**/*.jsx` | `.claude/rules/observability.md` |
 | Orchestration Launch-Ledger — Track Spawned Agents In A Durable Artifact That Survives Context Boundaries | `**/workspaces/**`, `**/.session-notes*`, `journal/**` | `.claude/rules/orchestration-launch-ledger.md` |
+| Orchestrator Context Economy — Main-Agent Context Is A Coordination Resource | `.claude/agents/**`, `**/.claude/agents/**`, `**/.claude/hooks/**`, `**/.claude/settings.json` | `.claude/rules/orchestrator-context-economy.md` |
 | Orphan Detection Rules | `packages/**`, `src/**`, `**/tests/**` | `.claude/rules/orphan-detection.md` |
 | PACT Governance Rules | `**/pact/**`, `**/governance/**` | `.claude/rules/pact-governance.md` |
 | Kailash Pattern Rules | `**/*.py`, `**/*.ts`, `**/*.js`, `**/*.rs` | `.claude/rules/patterns.md` |
@@ -98,4 +102,4 @@ A path-scoped rule you have not read is a rule you are not honoring.
 | Wave-Loop — Verify-And-Feed-Forward Between Milestone-Groups | `**/workspaces/**`, `**/todos/**`, `**/.claude/commands/**`, `**/02-plans/**` | `.claude/rules/wave-loop.md` |
 | Worktree Isolation Rules | `.claude/agents/**`, `.claude/commands/**`, `.claude/skills/**`, `**/*worktree*`, `**/workspaces/**` | `.claude/rules/worktree-isolation.md` |
 
-79 path-scoped rules indexed.
+83 path-scoped rules indexed.
