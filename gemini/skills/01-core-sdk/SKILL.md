@@ -1,0 +1,186 @@
+---
+name: core-sdk
+description: "Kailash Core SDK — workflows, 110+ nodes, runtime, async, cycles, MCP, OpenTelemetry. Use for WorkflowBuilder + connections + runtime patterns."
+---
+
+# Kailash Core SDK - Foundational Skills
+
+Comprehensive guide to Kailash Core SDK fundamentals for workflow automation and integration.
+
+## Features
+
+The Core SDK provides the foundational building blocks for creating custom workflows with fine-grained control:
+
+- **110+ Workflow Nodes**: Pre-built nodes for AI, API, database, file operations, logic, and more
+- **WorkflowBuilder API**: String-based workflow construction with type safety
+- **Dual Runtime Support**: AsyncLocalRuntime (Docker/Nexus) and LocalRuntime (CLI/scripts)
+- **Advanced Patterns**: Cyclic workflows, conditional execution, error handling
+- **MCP Integration**: Built-in Model Context Protocol support
+- **Parameter Passing**: Flexible data flow between nodes
+- **Zero Configuration**: Auto-detection of runtime context
+- **Production Ready**: Enterprise features including monitoring, validation, and debugging
+
+## Quick Start
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("NodeName", "id", {"param": "value"})
+
+# Use context manager for proper resource cleanup (recommended)
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
+```
+
+## Reference Documentation
+
+### Getting Started
+
+- **[workflow-quickstart](workflow-quickstart.md)** - Create basic workflows with WorkflowBuilder
+- **[kailash-installation](kailash-installation.md)** - Installation and setup guide
+- **[kailash-imports](kailash-imports.md)** - Import patterns and module organization
+
+### Core Patterns
+
+- **[node-patterns-common](node-patterns-common.md)** - Common node usage patterns
+- **[connection-patterns](connection-patterns.md)** - Linking nodes and data flow
+- **[param-passing-quick](param-passing-quick.md)** - Parameter passing strategies
+- **[runtime-execution](runtime-execution.md)** - Executing workflows (sync/async)
+- **[runtime-lifecycle](runtime-lifecycle.md)** - Runtime lifecycle, ref counting, acquire/release, context managers
+
+### Advanced Topics
+
+- **[async-workflow-patterns](async-workflow-patterns.md)** - Asynchronous workflow execution
+- **[async-resource-safety](async-resource-safety.md)** - `__del__` hardening, double-check locking, pool lifecycle, static analysis guardrails
+- **[cycle-workflows-basics](cycle-workflows-basics.md)** - Cyclic workflow patterns
+- **[error-handling-patterns](error-handling-patterns.md)** - Error management strategies
+- **[switchnode-patterns](switchnode-patterns.md)** - Conditional routing with SwitchNode
+- **[pythoncode-best-practices](pythoncode-best-practices.md)** - PythonCode node best practices
+- **[mcp-integration-guide](mcp-integration-guide.md)** - Model Context Protocol integration
+
+### Runtime Diagnostics
+
+- **[runtime-progress](runtime-progress.md)** - ProgressRegistry for node progress tracking (contextvars, thread-safe callbacks, bounded deque)
+- **[runtime-watchdog](runtime-watchdog.md)** - EventLoopWatchdog for asyncio stall detection (heartbeat + thread, StallReport, task stack capture)
+
+### Recurring + Durable Execution
+
+- **`WorkflowScheduler`** (`kailash.runtime.scheduler`) — cron + interval + one-shot scheduling for recurring workflow execution; APScheduler-backed SQLite jobstore. See **[15-enterprise-infrastructure/scheduler-patterns](../15-enterprise-infrastructure/scheduler-patterns.md)**.
+- **`ExecutionTracker`** (`kailash.runtime.execution_tracker`) — per-node checkpoint primitive consumed by `DurableRequest` for resume-on-restart workflows. See **[15-enterprise-infrastructure/durability-patterns](../15-enterprise-infrastructure/durability-patterns.md)**.
+
+## Key Concepts
+
+### Canonical Node Pattern (4-Parameter)
+
+**This is the single source of truth for node configuration.** All other skills reference this section.
+
+```python
+workflow.add_node(
+    "NodeClassName",  # 1. Node type (PascalCase, string)
+    "unique_node_id", # 2. Unique ID (snake_case, string)
+    {                 # 3. Configuration dict
+        "param1": "value",
+        "param2": 123
+    },
+    connections=[]    # 4. Optional: input connections
+)
+```
+
+| Parameter   | Type | Description                          | Example                         |
+| ----------- | ---- | ------------------------------------ | ------------------------------- |
+| Node type   | str  | The node class name (PascalCase)     | `"LLMNode"`, `"HTTPRequest"`    |
+| Node ID     | str  | Unique identifier (snake_case)       | `"fetch_data"`, `"process_1"`   |
+| Config      | dict | Node-specific configuration          | `{"url": "..."}`                |
+| Connections | list | Optional input connections (4-tuple) | `[("src", "out", "dst", "in")]` |
+
+**Connection Methods**:
+
+```python
+# Method 1: add_connection (4-positional params - explicit)
+workflow.add_connection("read_file", "content", "transform", "input")
+
+# Method 2: connect (flexible API with keyword args)
+workflow.connect("read_file", "transform", from_output="content", to_input="input")
+
+# Method 3: connect with mapping (multiple outputs)
+workflow.connect("node1", "node2", mapping={"content": "input", "meta": "metadata"})
+```
+
+### WorkflowBuilder Pattern
+
+- String-based node API: `workflow.add_node("NodeName", "id", {})`
+- Always call `.build()` before execution
+- Never `workflow.execute(runtime)` - always `runtime.execute(workflow.build())`
+
+### Runtime Selection
+
+- **AsyncLocalRuntime**: For Docker/Nexus (async contexts) - async-first, no threading, 10-100x faster
+- **LocalRuntime**: For CLI/scripts (sync contexts) - synchronous execution with thread support
+- **get_runtime()**: Auto-detection helper that selects appropriate runtime based on context
+
+Both runtimes return identical structure: `(results, run_id)` tuple.
+
+### Runtime Architecture
+
+Both LocalRuntime and AsyncLocalRuntime inherit from BaseRuntime with shared capabilities:
+
+**BaseRuntime Foundation**:
+
+- 29 configuration parameters (debug, enable_cycles, conditional_execution, connection_validation, etc.)
+- Execution metadata management
+- Common initialization and validation modes (strict, warn, off)
+
+**Shared Mixins**:
+
+- **CycleExecutionMixin**: Cyclic workflow execution with validation
+- **ValidationMixin**: Workflow structure validation (5 methods)
+- **ConditionalExecutionMixin**: Conditional execution and branching with SwitchNode support
+
+**AsyncLocalRuntime-Specific**:
+
+- WorkflowAnalyzer for optimal execution strategy
+- Level-based parallelism for concurrent execution
+- Thread pool for sync nodes without blocking
+- Semaphore control to prevent resource exhaustion
+
+## Critical Rules
+
+- ALWAYS: `runtime.execute(workflow.build())`
+- String-based nodes: `workflow.add_node("NodeName", "id", {})`
+- 4-parameter connections: `(source_id, source_param, target_id, target_param)`
+- Docker/Nexus: Use AsyncLocalRuntime (mandatory)
+- CLI/Scripts: Use LocalRuntime
+- NEVER: `workflow.execute(runtime)`
+- NEVER: Instance-based nodes
+- NEVER: Use LocalRuntime in Docker (causes hangs)
+
+## When to Use This Skill
+
+Use this skill when you need to:
+
+- Create custom workflows from scratch
+- Understand workflow fundamentals
+- Learn node patterns and connections
+- Set up runtime execution
+- Handle errors in workflows
+- Implement cyclic or async patterns
+- Integrate with MCP
+- Get started with Kailash SDK
+
+## Related Skills
+
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database operations framework built on Core SDK
+- **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel platform framework built on Core SDK
+- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent framework built on Core SDK
+- **[06-cheatsheets](../06-cheatsheets/SKILL.md)** - Quick reference patterns
+- **[08-nodes-reference](../08-nodes-reference/SKILL.md)** - Complete node reference
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
+
+## Support
+
+For complex workflows or debugging, invoke:
+
+- `pattern-expert` - Workflow patterns and cyclic debugging
+- `testing-specialist` - Test workflow implementations

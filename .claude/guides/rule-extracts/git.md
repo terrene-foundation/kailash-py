@@ -149,6 +149,55 @@ git reset --hard origin/main         # unstaged work has NO reflog; gone forever
 
 Origin: kailash-py session 2026-04-28 (PR #691 sync-PR rebase) — `.session-notes` modifications wiped by `git reset --hard 7ce2d2eb` during a "move commit off main" recovery. Content was only recovered because the file had been read into the agent's conversation context earlier in the session; without that, the prior session's hand-off would have been permanently lost. The agent had earlier seen `M .session-notes` in `git status` output but did not re-check working-tree state before the reset. Cross-language principle — applies to every SDK and every language; `git reset --hard` semantics are universal. Sibling destructive ops (`git checkout --force`, `git checkout -- <path>`, `git clean -fd`) are out of scope for this rule per `rule-authoring.md` Rule 6 focus discipline; the system prompt's "destructive operations" guardrail covers them at session level.
 
+### Why `git stash -u` is NOT the safe capture (extracted 2026-08-16)
+
+The rule body names the prohibition; the mechanism is here. `git stash` writes to a stack held in the
+`.git` directory, and in a multi-worktree checkout that directory is SHARED across every linked
+worktree. So a stash pushed from worktree A is visible — and poppable — from worktree B, which is
+exactly the cross-worktree contamination `worktree-isolation.md` Rule 9 exists to prevent. A parallel
+agent popping "its" stash can silently acquire another lane's uncommitted work, and the loss is
+indistinguishable from the destructive op the stash was meant to guard against.
+
+The safe capture is a patch file, which is worktree-local and inert:
+
+```bash
+# DO — capture to a patch (worktree-local, nothing shared through .git)
+git diff > /tmp/wip-$(git rev-parse --abbrev-ref HEAD).patch
+git status --porcelain            # confirm empty BEFORE the destructive op
+# DO NOT — stash (stack is .git-scoped; any linked worktree can pop it)
+git stash -u
+```
+
+Enforcement: `.claude/hooks/validate-bash-command.js` carries the tripwire at the Bash boundary — it
+fires on the destructive ops before they run, so the check is structural rather than advisory.
+
+## Pre-Commit Comment-Syntax Matchers — the `types.UnionType` false positive (extracted 2026-08-16)
+
+**This section materializes a pointer that was previously dangling.** The `git.md` § Discipline bullet
+cited "the `types.UnionType` false-positive walkthrough" in this extract, but no such section existed
+here — the content lived only in the rule body. It is written out here at extraction time rather than
+dropped (`zero-tolerance.md` Rule 1: found it, own it).
+
+`pygrep`-class pre-commit hooks match on comment FRAGMENTS, without requiring trailing punctuation.
+The canonical trap is `python-use-type-annotations`, whose pattern matches the literal substring
+`# type` — NOT `# type:`. Any comment beginning with those characters trips it, including comments
+that have nothing to do with type comments:
+
+```python
+# DO — reworded so the literal substring never appears
+# a union of the two runtime classes (see types.UnionType)
+x: int | str = 0
+
+# DO NOT — trips python-use-type-annotations even though this is prose, not a type comment
+# type unions are written with | in 3.10+
+x: int | str = 0
+```
+
+The failure is confusing because the hook reports a type-annotation violation on a line whose
+annotation is already correct. The fix is never `--no-verify` (BLOCKED by the § Discipline
+pre-commit-workaround bullet) and never restructuring the annotation — it is rewording the COMMENT so
+the literal fragment does not appear.
+
 ## Atomic Commits + Body Discipline — Extended Example
 
 ```

@@ -56,12 +56,26 @@
  * The ordering mirrors `instruct-and-wait.js`'s severity contract:
  *   block           tool call is DENIED (exit 2). Only meaningful at PreToolUse.
  *   halt-and-report tool RAN; agent must surface and wait.
+ *   pre-action      PreToolUse only: NOT blocked and NOT yet run; agent decides.
  *   advisory        tool RAN; agent acknowledges and may proceed.
  *   post-mortem     forensic only (Stop-class events).
+ *
+ * `pre-action` (loom#1715 H-1) is REGISTERED here rather than left unknown, and
+ * the reason is `normalizeSeverity` below: an unregistered severity is coerced to
+ * `halt-and-report` on DELIVERY, which would restore the exact false head
+ * ("the action ALREADY RAN") the register was added to end — a silent rewrite,
+ * one layer down, of the only head that is true at PreToolUse.
+ *
+ * It ties with `advisory` at rank 1, deliberately, and the tie is defined rather
+ * than accidental: `mostRestrictive` keeps SOURCE ORDER on a tie, so no existing
+ * numeric value moves and no existing selection changes. The two share a rank
+ * because they share a disposition — neither halts the session, and a co-firing
+ * `halt-and-report` or `block` must outrank both, which it does.
  */
 const SEVERITY_RANK = Object.freeze({
   "post-mortem": 0,
   advisory: 1,
+  "pre-action": 1,
   "halt-and-report": 2,
   block: 3,
 });

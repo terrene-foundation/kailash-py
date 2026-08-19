@@ -15,8 +15,12 @@ node .claude/audit-fixtures/phase2-deferral-expiry/run.mjs
 ```
 
 Registered in `.claude/test-harness/ci-audit-fixtures.json` (`mode: run`,
-`min_cases: 40`). That registry is closed in both directions, so this runner
-cannot become unwired and the entry cannot outlive the runner.
+`min_cases: 51`). That registry is closed in both directions, so this runner
+cannot become unwired and the entry cannot outlive the runner. The floor
+restated here is COUPLED to the registry by
+`.claude/test-harness/tests/audit-fixture-prose-count-coupling.test.mjs`, so it
+cannot drift again — this line read `40` against a registry declaring `51`
+until loom#1793 added that gate.
 
 ## Why these fixtures exist
 
@@ -56,6 +60,36 @@ Both were caught by reading the hits rather than the tally
 ## Scope limit — stated plainly
 
 These fixtures pin predicates. They do **not** establish that the gate blocks
-anything: this repo has no required status checks and `enforce_admins:false`
-(measured 2026-08-06), so a red run is evidence, not a merge block. See the
-registry's `_README` § CI REALITY.
+anything — that is branch-protection state, which no fixture here observes.
+
+**Re-measure it; do not cite this paragraph.** Branch protection is mutable repo
+state, so any sentence here is a dated snapshot. Read the shape with `has()` —
+the object-construction form yields `null` for a missing key and cannot tell
+ABSENT from PRESENT-AND-NULL:
+
+```
+gh api repos/:owner/:repo/branches/main/protection --jq \
+  '{has_required_status_checks: has("required_status_checks"),
+    contexts: .required_status_checks.contexts,
+    enforce_admins: .enforce_admins.enabled}'
+
+  2026-08-06 -> no required_status_checks, enforce_admins false
+  2026-08-14 -> {"contexts":["Required checks"],"enforce_admins":true,
+                 "has_enforce_admins":true,"has_required_status_checks":true}
+```
+
+**As of the 2026-08-14 measurement a red run of this gate DOES block the merge**
+at canon loom — the gate's step runs in job `coc-artifact-eval-structural`, the
+job named `Required checks` lists that job in its `needs:`, and that name is the
+pinned protection context under `enforce_admins: true`. Which PRs, and NOT via a
+`paths:` filter: the eval workflow instantiates on EVERY PR (its `pull_request`
+arm has no filter; the four-path filter is on the `push:` arm alone). A PR
+touching no artifact path SKIPS the structural job through a job-level `if:`, and
+`Required checks` still reports and passes. The text here until 2026-08-14 said the opposite
+("a red run is evidence, not a merge block"); that became false on 2026-08-08
+and sat stale, which is the argument for re-measuring over citing.
+
+**Consumers: this paragraph describes CANON LOOM, not your repo.** Protection is
+per-repository. Run the query above against your own remote before concluding
+anything about whether this gate gates you. See the registry's `_README` §
+CI REALITY.

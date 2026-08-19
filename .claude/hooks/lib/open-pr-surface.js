@@ -246,4 +246,11 @@ module.exports = {
   getOpenPullRequests,
   formatOpenPrBlock,
   computeOpenPrState,
+  // Exported so every SessionStart surface that interpolates untrusted text into
+  // additionalContext routes through THIS sanitizer instead of copying it.
+  // `deferral-surface.js` is the first external caller (registry ids + dates).
+  // One helper, every caller routes through it — `security.md` § Multi-Site
+  // Kwarg Plumbing; a second copy is how the two would drift on the next
+  // hardening. Adding an export changes no behaviour for existing callers.
+  sanitizeTitle,
 };
