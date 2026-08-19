@@ -67,7 +67,10 @@ the same discovery twice.
    the source does not have — the `orphan-detection.md` § 1 class.
 2. **#2141 / #2142 un-gated HTTP surfaces.** #2141 is blocked on the `--auth` semantics
    decision (§ 5 D1), not on implementation.
-3. **loom#1826 / loom#1827** — filed upstream, awaiting loom. Nothing for this repo to do.
+3. **loom#1826** — filed upstream, awaiting loom. Nothing for this repo to do.
+   (A second filing, loom#1827, was withdrawn the same session: it duplicated loom's already
+   shipped T4 fix and repeated an over-claim loom had already narrowed. Recorded in the notes
+   as a trap rather than quietly deleted.)
 4. **#2199** — local tracker for the Gate-2 defect; closes when a clean re-emit verifies.
 
 ---

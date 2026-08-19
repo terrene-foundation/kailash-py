@@ -38,7 +38,8 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
    re-validate: `python tools/sweep-redteam.py specs/ml-feature-store.md --json` →
    `orphans=0` ⇒ that spec is done.
 
-4. **Check loom#1826 / loom#1827 before re-filing anything upstream.**
+4. **Check loom#1826 before re-filing anything upstream.** (loom#1827 was mine and is
+   WITHDRAWN — see Traps.)
    re-validate: `gh issue view 1826 --repo <loom-private-org>/loom --json state -q .state`
    → `CLOSED` ⇒ fix landed; re-verify locally per directive 1.
 
@@ -70,7 +71,8 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 - Merged #2192, #2123, #2195, #2196, #2197, #2198.
 - Filed #2199 (local tracker) and #2194 (governance actor provenance).
 - Filed TWO issues upstream into private loom: **#1826** (Gate-2 delivers the emitter's
-  staging layout) and **#1827** (`ci-cost-discipline.md` push-time MUSTs unreachable).
+  staging layout) — still open and believed correct — and **#1827**, which I then
+  WITHDREW and closed the same session as a duplicate of loom's own T4.
   Both cross-repo writes carried a `/cross-repo-authorize` write-tier receipt written
   BEFORE the write; receipts are in `.claude/cross-repo-authz/`, uncommitted per the
   `coc-build` branch of the ceremony.
@@ -88,8 +90,15 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 - **`ci-cost-discipline.md` cannot fire.** Its push-time MUSTs are path-scoped to
   `**/todos/**`, `**/.wave-tracker*`, `**/.github/workflows/**` — globs a push never
   touches. Measured: 1150 files changed across this session's merges, 0 matching, with a
-  control proving the matcher works. Filed loom#1827. Until it lands, push discipline comes
-  from `git.md` (baseline) alone.
+  control proving the matcher works. **My inference from that was WRONG and I filed it
+  upstream before catching it (loom#1827, now withdrawn).** A glob cannot be TRIGGERED BY a
+  push, but injection is sticky-once per session, so a glob matching a file touched EARLIER
+  leaves the rule loaded AT push time — reaching some pushes by coincidence, not never.
+  loom had already shipped the real fix in the sync I was reviewing:
+  `.claude/hooks/lib/ci-cost-reach.js`, composed by `validate-bash-command.js` on the
+  PreToolUse Bash matcher, delivering the contract at the moment CI spend is decided. It
+  fired on my next push, which is how I found the error. loom had also already narrowed this
+  exact over-claim once (their #1715 M-4) — I reproduced a corrected mistake.
 - **The burndown hooks + new wrapup skill landed mid-session and were inert for it.**
   `settings.json` gained 66 lines in the sync; a running session keeps the config it
   started with. Fixtures pass (64 + 39, exit 0) and both hooks execute — nothing is broken,
@@ -113,7 +122,6 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
-| `ci-cost-reach` | ci-cost-discipline unreachable | filed upstream, awaiting loom | loom#1827 |
 | `sweep5-orphans` | 52 spec orphans / 18 coverage gaps | open, newly measured | sweep-cont21-report.md § 4 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
 | `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2, D3) | #2194 |
@@ -121,4 +129,5 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 | `hist-branches` | 169 unexamined local branches | deferred by judgment | sweep report D5 |
 
 Closed this session: `pr-queue` (both cont-20 PRs merged), `absence-sweep` (#2189 fixes
-merged in #2195).
+merged in #2195), `ci-cost-reach` (WITHDRAWN — my filing was a duplicate of loom's shipped
+T4; closed with evidence at loom `9cff8704e293…` / local `d0a756ef9…`).
