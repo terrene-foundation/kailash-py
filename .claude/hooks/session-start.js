@@ -149,10 +149,39 @@ process.stdin.on("end", () => {
       unlandedBlock = null; // never block session start
     }
 
+    // Phase-2 deferral surface: the third sibling. The open-PR block answers
+    // "what is ON the board?", unlanded-work answers "what never GOT to the
+    // board?", this answers "what did we PROMISE to build and then not build?"
+    // — the dated backlog in .claude/test-harness/phase2-deferrals.json, which
+    // its own header notes is checked only on a PR/push touching `.claude/**`
+    // and is surfaced to an operator nowhere. Zero subprocesses, zero network:
+    // one stat + one file read.
+    //
+    // LAZY require, and that is load-bearing. `lib/deferral-surface.js` is
+    // loom_only (the registry it reads ships NOWHERE, while `.claude/hooks/**`
+    // is ALWAYS_INCLUDE — both measured with the distributor's own
+    // classifyFile), so THIS file ships to consumers where that lib does not
+    // exist. A module-scope require would throw MODULE_NOT_FOUND before this
+    // handler ever ran and take the whole SessionStart hook down at every
+    // consumer — the #840 broken-on-import pattern. Requiring it here means the
+    // absent lib is just the "skip silently" state.
+    let deferralBlock = null;
+    try {
+      const { renderDeferralBlock } = require("./lib/deferral-surface");
+      // The lib CASCADES since E6 (2026-08-14), so this runs at consumers too.
+      // ONE call that resolves, counts and renders together — the two-call shape
+      // this used to spell out is what let the resolved path go missing, so it
+      // is no longer spelled out anywhere.
+      deferralBlock = renderDeferralBlock(data.cwd);
+    } catch {
+      deferralBlock = null; // lib absent (partial sync) or failed — never block
+    }
+
     const output = { continue: true };
     const ctxParts = [];
     if (openPrBlock) ctxParts.push(openPrBlock);
     if (unlandedBlock) ctxParts.push(unlandedBlock);
+    if (deferralBlock) ctxParts.push(deferralBlock);
     if (result.sessionNotesContext) ctxParts.push(result.sessionNotesContext);
     if (trustGate) ctxParts.push(trustGate);
     if (ctxParts.length) {

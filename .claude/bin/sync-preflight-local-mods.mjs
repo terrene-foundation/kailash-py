@@ -40,6 +40,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -63,6 +64,25 @@ const SHARED_GLOB_DIRS = [
  * Mirrors the preserved set in `commands/sync-from-template.md` § Downstream Sync.
  */
 const PRESERVED_SUBDIRS = ["project"];
+
+/**
+ * CONSUMER-OWNED files at the `.claude/` ROOT (loom#1729).
+ *
+ * These are shipped ONCE as a scaffold and thereafter WRITTEN BY THE CONSUMER.
+ * They are consumer-owned in exactly the sense `commands/sync-from-template.md`
+ * § Downstream Sync step 3 already names for `rules/project/` and `team-memory/**`
+ * — "MUST NEVER be overwritten" — but they live at the `.claude/` ROOT, which the
+ * six SHARED_GLOB_DIRS above do not reach. That is the whole gap: the category
+ * existed, the enforcement did not extend to this location.
+ *
+ * WHY A POST-CONDITION AND NOT ONLY A PRE-SCAN. The failure mode is silent LOSS,
+ * not a visible conflict: the registry returns to `{"deferrals": {}}` and the
+ * SessionStart surface then reports "✓ Verified Empty", which is INDISTINGUISHABLE
+ * from a consumer who never deferred anything. A pre-scan can only say what is at
+ * risk; nothing in the outcome discriminates survival from loss. `--snapshot` /
+ * `--verify` is that discriminator: it can only pass if the bytes actually survived.
+ */
+const CONSUMER_OWNED_ROOT_FILES = [".claude/deferrals.json"];
 
 /**
  * Default matcher for a commit authored BY the sync rather than by the consumer.
@@ -99,11 +119,20 @@ function parseArgs(argv) {
     } else if (a === "--sync-subject-re") {
       if (!argv[i + 1]) throw new DidNotRun("--sync-subject-re requires a regex");
       opts.syncSubjectRe = argv[++i];
+    } else if (a === "--snapshot") {
+      if (!argv[i + 1]) throw new DidNotRun("--snapshot requires a receipt path");
+      opts.snapshot = argv[++i];
+    } else if (a === "--verify") {
+      if (!argv[i + 1]) throw new DidNotRun("--verify requires a receipt path");
+      opts.verify = argv[++i];
     } else if (a === "--help" || a === "-h") {
       opts.help = true;
     } else {
       throw new DidNotRun(`unrecognized flag: ${a}`);
     }
+  }
+  if (opts.snapshot && opts.verify) {
+    throw new DidNotRun("--snapshot and --verify are mutually exclusive");
   }
   return opts;
 }
@@ -178,14 +207,115 @@ function classify(root, rel, syncRe, dirtySet) {
   };
 }
 
+/** Consumer-owned root files that EXIST under `root`, as repo-relative paths. */
+function enumerateConsumerOwnedRootFiles(root) {
+  return CONSUMER_OWNED_ROOT_FILES.filter((rel) => {
+    const abs = path.join(root, rel);
+    return fs.existsSync(abs) && fs.statSync(abs).isFile();
+  }).sort();
+}
+
+/** sha256 of a file's bytes. Throws DidNotRun if unreadable — never a fake digest. */
+function hashFile(abs) {
+  try {
+    return createHash("sha256").update(fs.readFileSync(abs)).digest("hex");
+  } catch (e) {
+    throw new DidNotRun(`cannot read ${abs}: ${e.message}`);
+  }
+}
+
+/**
+ * Record the pre-sync bytes of every EXISTING consumer-owned root file.
+ * A path that is absent is recorded as absent — so the "absent registry still
+ * receives the scaffold" case verifies clean rather than reading as a loss.
+ */
+function snapshotConsumerOwned(root) {
+  const entries = {};
+  for (const rel of CONSUMER_OWNED_ROOT_FILES) {
+    const abs = path.join(root, rel);
+    entries[rel] =
+      fs.existsSync(abs) && fs.statSync(abs).isFile()
+        ? { present: true, sha256: hashFile(abs) }
+        : { present: false, sha256: null };
+  }
+  return { version: 1, root, taken_at_sha: headSha(root), entries };
+}
+
+function headSha(root) {
+  try {
+    return git(root, ["rev-parse", "HEAD"]).trim();
+  } catch {
+    return null; // a snapshot is still valid without one; never fabricate
+  }
+}
+
+/**
+ * Compare the CURRENT bytes against a snapshot. A violation is exactly:
+ *   - present-before → absent-after   (destroyed)
+ *   - present-before → different-after (overwritten)
+ * An absent-before path is unconstrained: receiving the scaffold is the
+ * create-if-absent case the mechanism exists to allow.
+ */
+function verifyConsumerOwned(root, snap) {
+  if (!snap || snap.version !== 1 || !snap.entries) {
+    throw new DidNotRun("snapshot receipt is malformed or not version 1");
+  }
+  const violations = [];
+  for (const [rel, before] of Object.entries(snap.entries)) {
+    if (!before.present) continue;
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs)) {
+      violations.push({ path: rel, reason: "DESTROYED — present before the sync, absent after" });
+      continue;
+    }
+    const after = hashFile(abs);
+    if (after !== before.sha256) {
+      violations.push({
+        path: rel,
+        reason: `OVERWRITTEN — bytes changed (${before.sha256.slice(0, 12)} → ${after.slice(0, 12)})`,
+      });
+    }
+  }
+  return violations;
+}
+
 function run(argv) {
   const opts = parseArgs(argv);
   if (opts.help) {
     process.stdout.write(
       "usage: sync-preflight-local-mods.mjs [--root <dir>] [--json] [--sync-subject-re <regex>]\n" +
+        "       sync-preflight-local-mods.mjs --snapshot <receipt>   (BEFORE the sync writes)\n" +
+        "       sync-preflight-local-mods.mjs --verify <receipt>     (AFTER the merge)\n" +
         "exit 0 = nothing at risk · 2 = human decides · 1 = DID NOT RUN (never read as safe)\n",
     );
     return { exit: 0, report: null };
+  }
+
+  if (opts.snapshot) {
+    const root = path.resolve(opts.root);
+    if (!fs.existsSync(root)) throw new DidNotRun(`--root does not exist: ${root}`);
+    const snap = snapshotConsumerOwned(root);
+    fs.writeFileSync(opts.snapshot, JSON.stringify(snap, null, 2) + "\n");
+    return { exit: 0, report: { mode: "snapshot", receipt: opts.snapshot, entries: snap.entries }, json: opts.json };
+  }
+
+  if (opts.verify) {
+    const root = path.resolve(opts.root);
+    if (!fs.existsSync(opts.verify)) {
+      throw new DidNotRun(`--verify receipt does not exist: ${opts.verify} (was --snapshot run?)`);
+    }
+    let snap;
+    try {
+      snap = JSON.parse(fs.readFileSync(opts.verify, "utf8"));
+    } catch (e) {
+      throw new DidNotRun(`--verify receipt is not readable JSON: ${e.message}`);
+    }
+    const violations = verifyConsumerOwned(root, snap);
+    return {
+      exit: violations.length > 0 ? 2 : 0,
+      report: { mode: "verify", receipt: opts.verify, checked: Object.keys(snap.entries).length, violations },
+      json: opts.json,
+    };
   }
 
   const root = path.resolve(opts.root);
@@ -218,8 +348,14 @@ function run(argv) {
     report: {
       root,
       scanned_dirs: SHARED_GLOB_DIRS,
+      // loom#1729 — the consumer-owned ROOT files are no longer in the unscanned
+      // residual: they are enumerated below and enforced by --snapshot/--verify.
+      // The rest of the residual stands and is stated rather than assumed away.
       unscanned_note:
-        ".claude/bin, .claude/hooks, .claude/audit-fixtures and the .claude/ root are NOT scanned",
+        ".claude/bin, .claude/hooks and .claude/audit-fixtures are NOT scanned; " +
+        ".claude/ root files other than the consumer-owned set below are NOT scanned",
+      consumer_owned_root_files: CONSUMER_OWNED_ROOT_FILES,
+      consumer_owned_present: enumerateConsumerOwnedRootFiles(root),
       sync_subject_re: opts.syncSubjectRe,
       scanned: results.length,
       at_risk: atRisk.map((r) => ({ path: r.rel, reason: r.reason })),
@@ -248,11 +384,53 @@ function main() {
 
   if (json) {
     process.stdout.write(JSON.stringify(report, null, 2) + "\n");
-  } else {
+    process.exit(exit);
+  }
+
+  if (report.mode === "snapshot") {
+    const present = Object.entries(report.entries).filter(([, v]) => v.present);
+    process.stdout.write(
+      `Consumer-owned snapshot written: ${report.receipt}\n` +
+        `  recorded present: ${present.length} of ${Object.keys(report.entries).length}\n`,
+    );
+    for (const [rel, v] of Object.entries(report.entries)) {
+      process.stdout.write(
+        `  ${rel}  ${v.present ? v.sha256.slice(0, 12) : "(absent — scaffold may land)"}\n`,
+      );
+    }
+    process.exit(exit);
+  }
+
+  if (report.mode === "verify") {
+    if (report.violations.length === 0) {
+      process.stdout.write(
+        `Consumer-owned verify: ${report.checked} checked, 0 violations — every ` +
+          `pre-sync file survived byte-identical.\n`,
+      );
+    } else {
+      process.stdout.write(
+        `Consumer-owned verify: ${report.violations.length} VIOLATION(S) — the sync ` +
+          `destroyed or overwrote consumer-owned state. HALT; do not report success:\n`,
+      );
+      for (const v of report.violations) {
+        process.stdout.write(`  ${v.path}\n      ${v.reason}\n`);
+      }
+    }
+    process.exit(exit);
+  }
+
+  {
     process.stdout.write(
       `Scanned: ${report.scanned} files across ${report.scanned_dirs.length} shared dirs (${report.scanned_dirs.join(", ")})\n`,
     );
     process.stdout.write(`Not scanned: ${report.unscanned_note}\n`);
+    process.stdout.write(
+      `Consumer-owned (MUST survive the sync; enforce with --snapshot/--verify): ` +
+        `${report.consumer_owned_present.length} present of ${report.consumer_owned_root_files.length} declared` +
+        (report.consumer_owned_present.length
+          ? ` — ${report.consumer_owned_present.join(", ")}\n`
+          : `\n`),
+    );
     if (report.at_risk.length === 0) {
       process.stdout.write("At risk: 0 — nothing a sync would silently replace.\n");
     } else {
@@ -272,7 +450,11 @@ if (import.meta.url === `file://${process.argv[1]}`) main();
 export {
   SHARED_GLOB_DIRS,
   PRESERVED_SUBDIRS,
+  CONSUMER_OWNED_ROOT_FILES,
   DEFAULT_SYNC_SUBJECT_RE,
+  enumerateConsumerOwnedRootFiles,
+  snapshotConsumerOwned,
+  verifyConsumerOwned,
   parseArgs,
   enumerateSharedFiles,
   classify,

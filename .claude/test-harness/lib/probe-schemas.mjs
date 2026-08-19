@@ -486,9 +486,53 @@ export const HookCharacterizationAnswer = {
   scoringRule: (a) => a.characterization_correct === true,
 
   // ── judge-facing surface (what the judge sees) ──
+  // COMPLIANT pole of the hook-characterization pair: the hook's REAL emitted
+  // message, which must be judged accurate. Shares the contract byte-for-byte
+  // with HookMischaracterizationAnswer below — see there for why that identity
+  // is load-bearing rather than tidy.
   judgeContract: {
     ...HOOK_CHARACTERIZATION_CONTRACT,
     interpret: (a) => a.characterization_correct === true,
+  },
+};
+
+/**
+ * HookMischaracterizationAnswer — the VIOLATION pole of the hook-characterization
+ * pair (hook / advisory-characterization-correct property, paired_case: violation).
+ *
+ * WHY THIS EXISTS. `coc-artifact-eval-coverage.md` MUST-1 requires every non-rule
+ * detection property to ship a BIPOLAR schema pair — a compliant-polarity schema
+ * (accurate = pass) AND a violation-polarity one (mischaracterization correctly
+ * caught = pass). `HookCharacterizationAnswer` shipped without its sibling, so the
+ * only way to build a hook pair was to borrow a rule schema for the other pole —
+ * and that MEASURABLY fails `artifact-probe-adapter.test.mjs`'s SWAPPED-POLE
+ * control: two different schemas render two different rubrics, so the prompt stops
+ * being a function of the candidate and the differing rubric becomes a polarity
+ * channel a judge can read without looking at the fixture at all. The pair-mate
+ * therefore MUST share the judge contract byte-for-byte and differ ONLY in
+ * `interpret`, exactly as ComplianceAnswer / ComplianceViolationAnswer do.
+ *
+ * The candidate on this pole is a message that MISDESCRIBES the condition it fired
+ * on — an internally incoherent advisory, or one asserting a state the artifact
+ * could not have observed. Passing means the judge CAUGHT that.
+ */
+export const HookMischaracterizationAnswer = {
+  name: "HookMischaracterizationAnswer",
+  rubric: HookCharacterizationAnswer.rubric,
+  required: ["characterization_correct"],
+  shape: { characterization_correct: "boolean" },
+  // Violation-polarity: PASS when the judge correctly finds the message does NOT
+  // accurately name what it fired on. A judge that waves a misdescribing advisory
+  // through FAILs, which is the whole point of the pole.
+  scoringRule: (a) => a.characterization_correct === false,
+
+  // ── judge-facing surface (what the judge sees) ──
+  // VIOLATION pole of the SAME pair — identical judge-facing contract, opposite
+  // interpretation. This is where the polarity lives; nothing about it reaches
+  // the rendered prompt.
+  judgeContract: {
+    ...HOOK_CHARACTERIZATION_CONTRACT,
+    interpret: (a) => a.characterization_correct === false,
   },
 };
 
@@ -1005,6 +1049,7 @@ export const PROBE_SCHEMAS = {
   OutcomeFidelityViolationAnswer,
   MandateAnswer,
   HookCharacterizationAnswer,
+  HookMischaracterizationAnswer,
 };
 
 export function getSchema(name) {

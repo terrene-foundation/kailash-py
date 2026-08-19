@@ -7,14 +7,20 @@ You are now operating as the **coc-onboarding** specialist for the remainder of 
 
 ## Invocation patterns
 
-**(a) Inline persona — most reliable; works in both headless and interactive Codex.**
-After invoking `/prompts:specialist-coc-onboarding`, your context now contains the operating specification below. Read the user's task and respond as the coc-onboarding specialist.
+**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**
+Inject this file's body into the turn, then state the task:
+
+```bash
+bin/coc <phase> "$(cat .codex/prompts/specialist-coc-onboarding.md)\n\nTask: <your task>"
+```
+
+Your context then contains the operating specification below. Read the task and respond as the coc-onboarding specialist.
 
 **(b) Worker subagent delegation — interactive Codex only.**
-Delegate to a worker subagent using natural-language spawn (per Codex subagent docs). Pass the operating specification below as the worker's prompt body.
+Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.
 
 **(c) Headless `codex exec` fallback.**
-Native subagent spawning is unreliable in headless mode. Use pattern (a): invoke `/prompts:specialist-coc-onboarding`, then provide your task in the same session.
+Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat `.codex/prompts/specialist-coc-onboarding.md` into the turn, then provide your task in the same session.
 
 ---
 

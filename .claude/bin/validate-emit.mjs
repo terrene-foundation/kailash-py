@@ -1515,8 +1515,53 @@ const LOOM_ONLY_TIER_CARVEOUTS = new Set([
   // carve-out, same class as the weft-* / o1-citation / distillation-claim siblings above.
   "hooks/emit-artifact-activation.js",
   "hooks/emit-artifact-activation-session.js",
+  // loom#1410 — the de-scoping gate's fixture runner. It `import`s the loom-only
+  // `bin/check-descoping.mjs` directly, so shipping it would orphan it: every
+  // community consumer would take an ERR_MODULE_NOT_FOUND on load. That is not a
+  // prediction — `community-import-closure.test.mjs` R2-HIGH-7 measured exactly
+  // this edge and went RED until the loom_only fence landed. It sits under the
+  // synced `audit-fixtures/**` tier, so the collision is real and the carve-out is
+  // LOAD-BEARING, the same class as the weft-* / o1-citation siblings above. Listed
+  // as the concrete FILE because this check only honours wildcard-free entries.
   "hooks/lib/artifact-activation-event.js",
   "hooks/lib/artifact-activation-ledger.js",
+  "audit-fixtures/descoping-gate/run.mjs",
+  // wave-loop.md MUST-8 — the wave corpus-ledger detector's bipolar fixture
+  // runner. It `import`s the loom-only `bin/check-wave-corpus-ledger.mjs`
+  // directly, so shipping it would orphan it exactly as the descoping-gate
+  // sibling above would have: an ERR_MODULE_NOT_FOUND on load for every
+  // community consumer, the edge `community-import-closure.test.mjs` R2-HIGH-7
+  // already measured. It sits under the synced `audit-fixtures/**` tier, so the
+  // collision is real and the carve-out is LOAD-BEARING. Listed as the concrete
+  // FILE because this check only honours wildcard-free entries.
+  "audit-fixtures/wave-corpus-ledger/run.mjs",
+  // loom#E6 (2026-08-14) — `hooks/lib/deferral-surface.js` was HERE and is now
+  // REMOVED alongside its `sync-manifest.yaml::loom_only` line: the surface
+  // CASCADES. Its fence was load-bearing only while the sole file it could read
+  // shipped nowhere; `.claude/deferrals.json` now ships to every target via the
+  // CONCRETE `sync-tier-aware.mjs::ALWAYS_INCLUDE` entry, so reader and readable
+  // file arrive together. Do NOT restore the entry without also removing that
+  // ALWAYS_INCLUDE path — `consumer-deferral-cascade.test.mjs` REDs on either
+  // half alone, which is the point: the two are one decision.
+  //
+  // The deferral surface's probe-candidate fixtures + answer-key sidecars STAY
+  // loom_only, and the reason is now different from the lib's. They are not
+  // orphan-data-for-an-absent-lib any more; they are candidates for an LLM-judge
+  // probe suite under `test-harness/**`, which is universally `exclude`d and
+  // reaches no consumer on either lane. Shipping fixtures for a suite that
+  // cannot run there is the orphan, so the fence holds on its own footing.
+  // Concrete files, not a glob: check-8 accepts a collision only wildcard-free
+  // (`!lo.includes("*")`) — the same constraint the descoping-gate/run.mjs
+  // sibling records. A ninth fixture MUST be added here too;
+  // `deferral-surface.test.mjs` enumerates the directory and REDs otherwise.
+  "audit-fixtures/deferral-surface/clean-past-expiry-characterized.expected",
+  "audit-fixtures/deferral-surface/clean-past-expiry-characterized.txt",
+  "audit-fixtures/deferral-surface/clean-unverified-characterized.expected",
+  "audit-fixtures/deferral-surface/clean-unverified-characterized.txt",
+  "audit-fixtures/deferral-surface/flag-past-expiry-mischaracterized.expected",
+  "audit-fixtures/deferral-surface/flag-past-expiry-mischaracterized.txt",
+  "audit-fixtures/deferral-surface/flag-unverified-rendered-as-zero.expected",
+  "audit-fixtures/deferral-surface/flag-unverified-rendered-as-zero.txt",
 ]);
 
 // Positive allowlist (cc-artifacts.md Rule 10) of concrete loom_only files that
@@ -3362,7 +3407,13 @@ function checkCocArtifactIds(root) {
     // target-invariant: a language variant overlay (--target <lang>) can REPLACE
     // an artifact's frontmatter, so a typed-field throw introduced by an overlay's
     // frontmatter is exercised only when that target emits (at its /sync-to-use).
-    const r = emitCoc({ outDir: tmp });
+    //
+    // `lane: "all"` (loom#1699) keeps this gate FULL-CORPUS. emitCoc now defaults
+    // to the fail-closed USE lane, which withholds the `use_exclude`/`obsoleted`
+    // artifacts — but those artifacts DO emit on the BUILD lane, so their ids
+    // must still be gated here. This is a CORPUS question, not a distribution
+    // one; narrowing it to one lane would silently un-gate the other lane's ids.
+    const r = emitCoc({ outDir: tmp, lane: "all" });
     const results = [
       {
         artifact: ".coc/",
@@ -4206,6 +4257,14 @@ const LOOM_ONLY_LEARNING_EXCLUSIONS = new Set([
   // observability), so it never materializes at a consumer; loom-only, not a
   // gitignore_additions disclosure-parity requirement.
   "artifact-activation",
+  // T2 (runtime-enforcement-2026-08-14) — the deferral surface's last-seen
+  // pointer, written ONLY by the loom_only `hooks/lib/deferral-surface.js`, so
+  // it never materializes at a consumer; loom-only, not a gitignore_additions
+  // disclosure-parity requirement. Same reasoning as `artifact-activation`
+  // above. It carries a COUNT and an ISO timestamp only — nothing
+  // operator-correlatable — but is still fenced so `git add -A` cannot sweep
+  // per-clone runtime state into a commit.
+  ".deferral-surface-last-seen",
 ]);
 
 const LEARNING_PREFIX = ".claude/learning/";
@@ -4223,29 +4282,54 @@ function normalizeLearningEntry(value) {
 
 // Parse loom's OWN root .gitignore in ONE read. Returns:
 //   null  → file unreadable/absent (the detector cannot run).
-//   { learning, sawLearningLine } otherwise:
+//   { learning, sawLearningLine, negations } otherwise:
 //     learning        — Set of normalized `.claude/learning/**` basenames.
 //     sawLearningLine — true iff ANY non-comment line referenced
 //                       `.claude/learning/` at all, regardless of whether it
 //                       normalized to a basename. This is the discriminator
 //                       between parser SHAPE-DRIFT (lines present, zero entries
 //                       → FAIL) and GENUINELY-EMPTY (no learning lines → SKIP).
+//     negations       — VERBATIM learning-scoped `!` lines. A re-include is the
+//                       INVERSE of a fence, so it is collected and FAILED by the
+//                       caller, never normalized into `learning` as though it
+//                       were one.
+//
+// READ THIS BEFORE "SIMPLIFYING" THE NEGATION HANDLING BACK TO A STRIP.
+// This function used to do `t.startsWith("!") ? t.slice(1) : t` and then treat
+// the result as an ordinary entry. That was safe ONLY while the fence was the
+// trailing-slash DIRECTORY pattern `.claude/learning/`: git does not descend
+// into an excluded directory, so a `!` line below it was DEAD TEXT and could
+// not re-include anything. The fence is now `.claude/learning/**`, a FILE
+// pattern — git keeps descending, so a `!` line below it is LIVE and DOES
+// re-include. Measured at both poles, `git add -A` with the same negation line:
+//     .claude/learning/    → stages .gitignore ONLY        (negation inert)
+//     .claude/learning/**  → stages coordination-log.jsonl (negation LIVE)
+// Under the strip, `!.claude/learning/coordination-log.jsonl` normalized to
+// `coordination-log.jsonl`, which IS in gitignore_additions, so this gate
+// reported the fence INTACT for a line that REMOVES it. A disclosure gate must
+// not normalize a fence and its inverse together.
 function parseLoomGitignore(root) {
   const text = safeRead(join(root, ".gitignore"));
   if (text === null) return null;
   const learning = new Set();
+  const negations = [];
   let sawLearningLine = false;
   for (const raw of text.split(/\r?\n/)) {
     const t = raw.trim();
     if (!t || t.startsWith("#")) continue;
-    // .gitignore negations (`!path`) re-include — strip the `!` for shape
-    // comparison (same handling as the entry derivation below).
-    const v = t.startsWith("!") ? t.slice(1) : t;
-    if (v.startsWith(LEARNING_PREFIX)) sawLearningLine = true;
+    const isNegation = t.startsWith("!");
+    const v = isNegation ? t.slice(1) : t;
+    if (!v.startsWith(LEARNING_PREFIX)) continue;
+    sawLearningLine = true;
+    if (isNegation) {
+      // Collected, NOT normalized into `learning` — see the block comment above.
+      negations.push(t);
+      continue;
+    }
     const base = normalizeLearningEntry(v);
     if (base) learning.add(base);
   }
-  return { learning, sawLearningLine };
+  return { learning, sawLearningLine, negations };
 }
 
 // Parse the `gitignore_additions:` block of sync-manifest.yaml, returning the
@@ -4310,6 +4394,24 @@ function checkGitignoreLearningParity(root) {
           detail: `disclosure-parity gate cannot run — ${missing.join(" and ")} unreadable or absent. Fail-closed: a missing input cannot prove gitignore_additions ⊇ loom .gitignore learning/**, so this BLOCKS rather than silently passing (fail-open SKIP would defeat the fence).`,
         },
       ],
+    };
+  }
+  // A learning-scoped `!` re-include is the INVERSE of a fence and BLOCKS before
+  // any superset arithmetic runs — the required-set comparison below cannot see
+  // it (a negation names a path that IS in gitignore_additions, so parity would
+  // PASS while the file is actually un-fenced). This arm exists because the
+  // `.claude/learning/**` shape makes negations LIVE where the previous
+  // directory-shape fence made them inert; see parseLoomGitignore's block
+  // comment for the both-pole measurement.
+  if (loom.negations.length > 0) {
+    return {
+      id,
+      source_rule,
+      results: loom.negations.map((line) => ({
+        artifact: ".gitignore",
+        status: STATUS.FAIL,
+        detail: `learning-scoped negation \`${line}\` RE-INCLUDES a path the \`.claude/learning/**\` fence excludes. Under the current file-pattern fence git keeps descending, so this line is LIVE and un-fences operator telemetry (signed coordination records, posture, violations, leases) into a repo whose history is the sync source for every consumer. A re-include is the inverse of a fence: remove the line. If a path genuinely must be tracked, move it OUT of \`.claude/learning/\` rather than negating the fence.`,
+      })),
     };
   }
   const loomSet = loom.learning;

@@ -29,4 +29,16 @@ After CI green or path-filter auto-skip, run `gh pr merge <N> --admin --merge --
 
 **Why:** `--admin` is the owner-class bypass for chore PRs; without it the PR drifts open across sessions and the failure mode resumes.
 
+### 4. Multi-Surface Delivery Pins Its Corpus SHA
+
+A delivery fanned out to ≥2 surfaces MUST carry the `corpus-sha: <40-hex>` PR trailer and a
+per-surface ledger, and MUST NOT be held together by an unrecorded branch freeze — contract,
+ledger schema and freeze-lease fields in `rules/wave-loop.md` MUST-8 (not restated here) —
+a reachability pointer at the sync surface, whose severity, detection and Trust-Posture
+Wiring are MUST-8's clause-scoped block, never a second copy of them.
+
+**Why:** Surfaces that cannot land together are normal; a shared-branch freeze to fake
+atomicity restores nothing, blocks every unrelated lane, and lifts only when someone
+remembers.
+
 Origin: 2026-05-02 — `/autonomize` unknown at session start despite prior `/sync-to-build` delivery. See guide.

@@ -30,8 +30,13 @@
  * and honors those globs at source-tree scan time.
  *
  * Deferred (NOT emitted here):
- *   - .codex/prompts/ frontmatter is kept from the source .md; Codex CLI
- *     reads it as-is via /prompts:<name>.
+ *   - .codex/prompts/ frontmatter is kept from the source .md. It is NOT loaded
+ *     by a `/prompts:<name>` slash command — OpenAI deprecated repo-local
+ *     custom prompts 2026-05-28 (loom#385, openai/codex#9848) and Codex CLI
+ *     0.128+ no longer loads `.codex/prompts/`. The directory ships as ON-DISK
+ *     operating-spec content, injected inline via
+ *     `bin/coc <phase> "$(cat .codex/prompts/<name>.md)\n\nTask: …"`
+ *     (`rules/cross-cli-artifact-hygiene.md` MUST-1).
  *   - .codex-mcp-guard/server.js POLICIES_POPULATED flip is NOT done here.
  *     Flipping the flag without wiring real predicate FUNCTIONS into POLICIES
  *     would convert the fail-closed guard (zero-tolerance Rule 2) into a
@@ -69,6 +74,8 @@ import path from "node:path";
 import {
   REPO,
   safeWriteFileSync,
+  ensureTrailingNewline,
+  writeTextArtifactSync,
   safeReadFileSync,
   matchesAnyGlob,
   loadExclusions,
@@ -188,7 +195,8 @@ function emitCommands({ outDir, exclusions, tierFilter, loomOnly, surfaceRoles, 
       continue;
     }
 
-    // Codex — same .md, Codex reads frontmatter natively via /prompts:<name>.
+    // Codex — same .md, frontmatter preserved. Consumed by inline-cat injection,
+    // NOT by a `/prompts:<name>` slash command (deprecated upstream; see header).
     // Apply variant overlays per (lang, codex) 3-axis stack so codex/prompts
     // matches the same composed content CC sees in .claude/commands/.
     if (!matchesAnyGlob(manifestRel, exclusions.codex)) {
@@ -200,7 +208,7 @@ function emitCommands({ outDir, exclusions, tierFilter, loomOnly, surfaceRoles, 
       const cTrimmed = cBody.replace(/^\n+/, "").replace(/\n+$/, "\n");
       const codexPath = path.join(outDir, "codex", "prompts", `${codexName}.md`);
       const codexContent = `---\nname: ${codexName}\ndescription: "${cDesc}"\n---\n\n${cTrimmed}`;
-      safeWriteFileSync(codexPath, codexContent);
+      writeTextArtifactSync(codexPath, codexContent);
       stats.codex++;
       if (verbose) console.log(`  codex   prompts/${codexName}.md`);
     } else {
@@ -229,7 +237,7 @@ function emitCommands({ outDir, exclusions, tierFilter, loomOnly, surfaceRoles, 
         `tools = [${toolsLine}]`,
         "",
       ].join("\n");
-      safeWriteFileSync(geminiPath, tomlContent);
+      writeTextArtifactSync(geminiPath, tomlContent);
       stats.gemini++;
       if (verbose) console.log(`  gemini  commands/${geminiName}.toml`);
     }
@@ -374,11 +382,25 @@ function emitSkillTreeWithOverlays({ skillName, skillSrc, skillOut, cli, lang })
         // native names / codex strip) so CC-isms (Read/Glob/Grep) do not
         // leak verbatim into the skills lane. Body untouched.
         const outBody = translateSkillFrontmatterTools(result.body, cli);
-        safeWriteFileSync(outFile, outBody);
+        writeTextArtifactSync(outFile, outBody);
         continue;
       }
     }
-    // Fallback: byte copy (destination keeps original relPath).
+    // Fallback: byte copy (destination keeps original relPath). Deliberately on
+    // the RAW writer, not the terminator-applying one: this is a verbatim
+    // passthrough and MUST stay byte-exact.
+    //
+    // loom#1684 F4 — SCOPE, stated precisely because the obvious reading is
+    // wrong. `data` is a Buffer, but NOT only binary. Two classes reach here:
+    //   (1) non-`.md` files (images, fixtures) — never composable; and
+    //   (2) any `.md` whose `composeArtifactBody` returned null, i.e. no global
+    //       source at `.claude/skills/<rel>` (a variant-only file). That is a
+    //       TEXT artifact copied verbatim, and it therefore BYPASSES the
+    //       exactly-one-LF contract by design.
+    // Class (2) is safe only because the copy is byte-identical to a source the
+    // corrected `git ls-files` sweep in emitter-trailing-newline.test.mjs holds
+    // to the same one-LF invariant — the source sweep is what covers this path,
+    // not the writer.
     const outFile = path.join(skillOut, relPath);
     const data = safeReadFileSync(absPath);
     safeWriteFileSync(outFile, data);
@@ -695,7 +717,7 @@ function emitRulesReferenceSkill({ outDir, exclusions, tierFilter, loomOnly, sur
   stats.rules = rules.length;
   for (const cli of ["codex", "gemini"]) {
     const outFile = path.join(outDir, cli, "skills", RULES_REFERENCE_SKILL, "SKILL.md");
-    safeWriteFileSync(outFile, skillMd);
+    writeTextArtifactSync(outFile, skillMd);
     stats[cli] = 1;
     if (verbose) console.log(`  ${cli.padEnd(7)} skills/${RULES_REFERENCE_SKILL}/ (${rules.length} rules)`);
   }
@@ -960,14 +982,29 @@ function emitCodexAgentPrompts({ outDir, exclusions, tierFilter, loomOnly, surfa
       "",
       "## Invocation patterns",
       "",
-      "**(a) Inline persona — most reliable; works in both headless and interactive Codex.**",
-      `After invoking \`/prompts:${promptName}\`, your context now contains the operating specification below. Read the user's task and respond as the ${displayName} specialist.`,
+      "**(a) Inline-cat injection — most reliable; works in both headless and interactive Codex.**",
+      "Inject this file's body into the turn, then state the task:",
+      "",
+      // The fence is built from ARRAY ELEMENTS, not from escaped newlines inside
+      // one template literal. An escaped newline immediately before a path glues
+      // its trailing letter onto the following token, so a scanner reading this
+      // SOURCE file sees a longer word where the directory name should be. That
+      // synthetic word is absent from the disclosure scanner's internal-directory
+      // exclusion list, so the token pair matched its `<org>/<repo-family>`
+      // org-slug shape and failed the client-template completeness gate on a leak
+      // that does not exist. The join below supplies the same newlines without
+      // ever placing one adjacent to a path.
+      "```bash",
+      `bin/coc <phase> "$(cat .codex/prompts/${promptName}.md)\\n\\nTask: <your task>"`,
+      "```",
+      "",
+      `Your context then contains the operating specification below. Read the task and respond as the ${displayName} specialist.`,
       "",
       "**(b) Worker subagent delegation — interactive Codex only.**",
-      "Delegate to a worker subagent using natural-language spawn (per Codex subagent docs). Pass the operating specification below as the worker's prompt body.",
+      "Delegate to a worker subagent using natural-language spawn (per Codex subagent docs), referencing this file by path. Pass the operating specification below as the worker's prompt body.",
       "",
       "**(c) Headless `codex exec` fallback.**",
-      `Native subagent spawning is unreliable in headless mode. Use pattern (a): invoke \`/prompts:${promptName}\`, then provide your task in the same session.`,
+      `Native subagent spawning is unreliable in headless mode. Use pattern (a): inline-cat \`.codex/prompts/${promptName}.md\` into the turn, then provide your task in the same session.`,
       "",
       "---",
       "",
@@ -987,7 +1024,7 @@ function emitCodexAgentPrompts({ outDir, exclusions, tierFilter, loomOnly, surfa
     const content = `${fm}${preamble}${trimmedBody}`;
 
     const outPath = path.join(outDir, "codex", "prompts", `${promptName}.md`);
-    safeWriteFileSync(outPath, content);
+    writeTextArtifactSync(outPath, content);
     stats.codex++;
     if (verbose) console.log(`  codex   prompts/${promptName}.md`);
   }
@@ -1050,7 +1087,7 @@ function emitGeminiAgents({ outDir, exclusions, tierFilter, loomOnly, surfaceRol
     const out = `---\n${fmLines.join("\n")}\n---\n\n${trimmedBody}`;
 
     const outPath = path.join(outDir, "gemini", "agents", `${name}.md`);
-    safeWriteFileSync(outPath, out);
+    writeTextArtifactSync(outPath, out);
     stats.gemini++;
     if (verbose) console.log(`  gemini  agents/${name}.md`);
   }
@@ -1180,6 +1217,8 @@ if (invokedAsScript) {
 export {
   REPO,
   safeWriteFileSync,
+  ensureTrailingNewline,
+  writeTextArtifactSync,
   loadExclusions,
   loadLoomOnly,
   loadTiers,

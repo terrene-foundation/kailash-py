@@ -256,7 +256,15 @@ export const MANIFEST_DIR_FIELDS = Object.freeze(["fixturesDir"]);
 // loom declares IN CODE. A class ABSENT from this table is NOT bucketed into
 // "empty" — it routes to the manifest-declared branch, which WARNS loudly when
 // un-adopted and fails closed on every malformed or violated declaration.
-const IN_CODE_PIN_SETS = Object.freeze({
+//
+// EXPORTED so the test-harness helpers that build synthetic `coc-source` trees
+// DERIVE the entries this check will demand instead of re-typing them. A
+// hand-mirrored copy is a snapshot that silently goes stale the moment a second
+// pin is added: the pin then fires against every synthetic manifest in the
+// suite, and the resulting reds name check (i) rather than the change that
+// caused them. Deriving makes the coupling structural — a new pin is satisfied
+// by every helper by construction, with no second list to remember.
+export const IN_CODE_PIN_SETS = Object.freeze({
   // loom adopts the eval ENGINE and EXCLUDES the canon-sync scanner
   // (`canon-sync-readiness-check.mjs` belongs to the SEPARATE F3
   // canon-incorporation decision).
@@ -289,6 +297,34 @@ const IN_CODE_PIN_SETS = Object.freeze({
         type: "tool",
         scanner: ".claude/bin/detection-binding-check.mjs",
         fixturesDir: ".claude/audit-fixtures/detection-binding-check",
+      }),
+      // loom's SECOND local structural scanner (loom#1722): Sweep 5's REPO-LEVEL
+      // branch for a repo whose specs govern the ARTIFACT CORPUS rather than
+      // application source. Pinned on the SAME reasoning as the entry above —
+      // checks (d)-(h) all PRESUPPOSE the entry exists, and this scanner is not
+      // named `*-readiness-check.mjs` either, so check (f)'s orphan sweep would
+      // not catch its deletion. Without the pin, a one-line manifest edit
+      // silently removes Sweep 5's only mechanical instrument while
+      // `coc-eval-all` keeps reporting GREEN.
+      Object.freeze({
+        key: "spec-corpus-conformance",
+        type: "tool",
+        scanner: ".claude/bin/spec-corpus-conformance.mjs",
+        fixturesDir: ".claude/audit-fixtures/spec-corpus-conformance",
+      }),
+      // loom#1751 part (b) — the AUTHORED-vs-OFFERED upflow-invisibility probe.
+      // It is loom's ONLY instrument for the class "a producing repo authored a
+      // COC artifact and never offered it": Gate-1 ingest reviews what a
+      // proposal manifest CONTAINS, and nothing else asks what is MISSING from
+      // it. Deleting the entry (or repointing its fixturesDir at a fresh tree)
+      // would restore that blind spot with the gate still green, exactly as for
+      // the sibling above — and this detector is MORE prone to it, because its
+      // findings are advisory triage rows a reader may be tempted to silence.
+      Object.freeze({
+        key: "upflow-gap",
+        type: "tool",
+        scanner: ".claude/bin/lib/fleet-upflow-gap.mjs",
+        fixturesDir: ".claude/audit-fixtures/upflow-gap",
       }),
     ]),
   }),

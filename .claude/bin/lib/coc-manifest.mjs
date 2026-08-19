@@ -12,10 +12,19 @@
  * (same behavior, byte-identical emit) — only the file location + the
  * sibling import paths (`./lib/X` → `./X`) and REPO's depth changed.
  *
- * Symbols (14): REPO, safeWriteFileSync, safeReadFileSync, globToRegex,
- *   matchesAnyGlob, loadExclusions, loadLoomOnly, loadTiers,
+ * Symbols (21): REPO, safeWriteFileSync, ensureTrailingNewline,
+ *   writeTextArtifactSync, safeReadFileSync, globToRegex,
+ *   matchesAnyGlob, loadExclusions, loadLoomOnly, loadFlatList,
+ *   loadLaneExclusions, loadTiers,
  *   loadTargetTierSubscriptions, loadTargetVariant, buildTierFilter,
- *   composeArtifactBody, rewriteClaudePathsForCli, walkFiles.
+ *   composeArtifactBody, rewriteClaudePathsForCli, walkFiles,
+ *   loadSurfaceRoles, loadTargetRole, surfaceRolesAllow.
+ *
+ * The count is produced STRUCTURALLY — `Object.keys(await import(...)).length`,
+ * imported in place so the `./slot-parser.mjs` sibling resolves. A grep or a
+ * hand-count is not the instrument: this header read 14 against an actual 17
+ * before loom#1684 touched it, and 16 against 19 after, because the three
+ * surface-role symbols were never listed. Re-measure; do not increment.
  *
  * Node ESM, zero external deps (mirrors emit.mjs / emit-cli-artifacts.mjs).
  */
@@ -67,6 +76,70 @@ function safeWriteFileSync(filePath, data) {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+// ────────────────────────────────────────────────────────────────
+// Text-artifact terminator contract (loom#1684)
+// ────────────────────────────────────────────────────────────────
+// EVERY text artifact an emitter writes ends with EXACTLY ONE LF.
+//
+// The BUILD-py target runs pre-commit's `end-of-file-fixer`, and the Gate-2
+// driver commits INTO that target — so the hook rewrites loom's emitted bytes
+// and ABORTS the commit, blocking the whole BUILD-py distribution lane. The
+// contract is two-sided because that hook is two-sided: it APPENDS a missing
+// terminator AND STRIPS extra ones. A one-sided "append if absent" fix leaves
+// the too-many case (the actual #1684 offender) unrepaired, and a `tail -c1`
+// sweep cannot even see it.
+//
+// Three cases, matching `end_of_file_fixer.fix_file` **for CR-free input** —
+// which is the whole of what these emitters produce (see the scope note below):
+//   ""            → ""      zero-byte stays zero-byte (the `.gitkeep` sentinel
+//                           emit-coc pins to EMPTY_SHA256; the hook's seek(-1)
+//                           raises on an empty file and it returns unchanged)
+//   "\n\n"        → ""      an all-newline file is truncated to empty
+//   "a" / "a\n\n" → "a\n"   everything else gets exactly one
+//
+// SCOPE — the equivalence is NOT unconditional, and the earlier revision of this
+// comment said "exactly" without qualification. That was an over-claim; it is
+// withdrawn. Corrected by EXECUTING the real hook (`fix_file` from the
+// pre-commit-hooks checkout under `~/.cache/pre-commit`), not by inference:
+//
+//   input        eof-fixer    this helper    agree?
+//   "a"          "a\n"        "a\n"          yes
+//   "a\n"        "a\n"        "a\n"          yes
+//   "a\n\n"      "a\n"        "a\n"          yes
+//   ""           ""           ""             yes
+//   "\n\n"       ""           ""             yes
+//   "a\r\n"      "a\r\n"      "a\r\n"        yes
+//   "a\r\n\r\n"  "a\r\n"      "a\r\n\r\n"    NO — hook truncates, we no-op
+//   "a\r\r"      "a\r"        "a\r\r\n"      NO — hook truncates, we append
+//   "a\r\r\n"    "a\r"        "a\r\r\n"      NO — hook truncates, we no-op
+//
+// The hook treats `\r` as a line break (`last_character not in {b'\n', b'\r'}`);
+// this regex is `/\n+$/`, LF-only. Every divergence therefore requires a CR in
+// the input, and each one would recreate the #1684 abort.
+//
+// Why the residual is nonetheless CLOSED rather than merely accepted: CR is
+// structurally excluded from emitted output, and that exclusion is now ENFORCED,
+// not assumed. `emitter-trailing-newline.test.mjs` asserts every emitted text
+// artifact across all three emitters is CR-free (measured at that suite's
+// landing: 1160 files, 0 CR-bearing, with a planted-CR control confirming the
+// scanner fires). So no input reaching this helper can hit a divergent row.
+// Deliberately NOT "fixed" by stripping CR here: that would mutate content on a
+// path no emitter exercises, trading a structurally-unreachable divergence for a
+// live behavioural change.
+function ensureTrailingNewline(text) {
+  const body = text.replace(/\n+$/, "");
+  return body === "" ? "" : `${body}\n`;
+}
+
+// The ONE write path for emitted TEXT artifacts. `safeWriteFileSync` stays a
+// pure security primitive (O_NOFOLLOW, no content transform); this wrapper owns
+// the terminator contract so it cannot drift across the ~13 emitter write sites.
+// Binary/Buffer payloads (the byte-copy fallback) keep using safeWriteFileSync
+// directly — a byte copy must stay byte-exact.
+function writeTextArtifactSync(filePath, text) {
+  safeWriteFileSync(filePath, ensureTrailingNewline(text));
 }
 
 // Symlink-safe read (mirrors safeWriteFileSync to keep the source side
@@ -199,15 +272,24 @@ function loadLoomOnly() {
   // never-sync list — artifacts loom keeps for itself. A consumer holds no such
   // list because it fans nothing out; the empty set is exact, and it is what the
   // stanza-absent path below already returns.
+  return loadFlatList("loom_only");
+}
+
+// Read a top-level FLAT list stanza (`<key>:` followed by `  - <entry>` lines).
+// The shape `loom_only:` / `exclude:` / `use_exclude:` / `obsoleted:` and their
+// lane siblings all share. Returns [] when the manifest is EXPECTED-absent
+// (D1 DISTRIBUTION-DECLARATION, loom#1386) or the stanza is missing.
+function loadFlatList(key) {
   const src = readManifestSource(REPO);
   if (src === null) return [];
   const lines = src.split("\n");
 
   const result = [];
   let inStanza = false;
+  const head = new RegExp(`^${key}:\\s*$`);
 
   for (const line of lines) {
-    if (/^loom_only:\s*$/.test(line)) {
+    if (head.test(line)) {
       inStanza = true;
       continue;
     }
@@ -228,6 +310,61 @@ function loadLoomOnly() {
   }
 
   return result;
+}
+
+// ────────────────────────────────────────────────────────────────
+// sync-manifest.yaml → per-LANE distribution-fate exclusions
+// ────────────────────────────────────────────────────────────────
+// `loom_only` is lane-AGNOSTIC (never leaves loom). The manifest ALSO carries
+// two LANE-SCOPED axes that an emitter writing into a distributed tree MUST
+// honour, exactly as `sync-tier-aware.mjs` does for the `.claude/` tree:
+//
+//   USE lane   → `use_exclude`   (class exclude; classifyFile step 4)
+//              ∪ `obsoleted` ∪ `use_obsoleted`     (buildPlan purgeList)
+//   BUILD lane → `build_exclude` (class exclude; classifyFile step 4)
+//              ∪ `obsoleted` ∪ `build_obsoleted`   (buildPlan purgeList)
+//
+// The class-exclude half answers "never SHIP this here"; the purge half answers
+// "actively DELETE this here". Both are composed, because an artifact the
+// distributor deletes from a target must not be handed straight back by a
+// derived-tree emitter writing into that same target.
+//
+// The two halves use DIFFERENT path conventions (documented at the manifest's
+// `build_obsoleted:` header): class-exclude entries are `.claude/`-RELATIVE
+// globs; purge entries are repo-ROOT-relative and carry the `.claude/` prefix,
+// and a directory entry ends in `/`. `normalizeFateEntry` reconciles both onto
+// the manifest-relative glob space the emitters match against — the SAME
+// `.claude/`-prefix normalization `emit.mjs::_collectDeclaredArtifactPatterns`
+// applies, plus a trailing-`/` → `/**` expansion so a dir entry matches its
+// descendants under `globToRegex` (which anchors with `$`, so a bare
+// `test-harness/` would match nothing at all).
+//
+// `lane: "all"` returns [] — the NO-LANE-FILTER form, for full-corpus callers
+// (grammar/parity gates) whose question is about the corpus, not distribution.
+const LANE_FATE_BLOCKS = {
+  use: { classExclude: "use_exclude", laneObsoleted: "use_obsoleted" },
+  build: { classExclude: "build_exclude", laneObsoleted: "build_obsoleted" },
+};
+
+function normalizeFateEntry(entry) {
+  const stripped = entry.replace(/^\.claude\//, "");
+  return stripped.endsWith("/") ? `${stripped}**` : stripped;
+}
+
+function loadLaneExclusions(lane) {
+  if (lane === "all") return [];
+  const blocks = LANE_FATE_BLOCKS[lane];
+  if (!blocks) {
+    throw new Error(
+      `coc-manifest: unknown lane "${lane}" — expected "use", "build", or "all".`,
+    );
+  }
+  const raw = [
+    ...loadFlatList(blocks.classExclude),
+    ...loadFlatList("obsoleted"),
+    ...loadFlatList(blocks.laneObsoleted),
+  ];
+  return [...new Set(raw.map(normalizeFateEntry))];
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -737,11 +874,15 @@ function* walkFiles(root, rel = "") {
 export {
   REPO,
   safeWriteFileSync,
+  ensureTrailingNewline,
+  writeTextArtifactSync,
   safeReadFileSync,
   globToRegex,
   matchesAnyGlob,
   loadExclusions,
   loadLoomOnly,
+  loadFlatList,
+  loadLaneExclusions,
   loadTiers,
   loadTargetTierSubscriptions,
   loadTargetVariant,

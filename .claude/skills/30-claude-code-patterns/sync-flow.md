@@ -350,6 +350,8 @@ node .claude/bin/sync-gate2-worktree.mjs --lane use --target <slug> --finalize -
 # CC-only BUILD single-shot (no enrichment): omit --stage-only — the helper applies + commits + PRs in one call.
 node .claude/bin/sync-gate2-worktree.mjs --lane build --target <slug>
 # build_multi_cli BUILD (py|rs, #181): TWO-PHASE like USE — --stage-only, emit derived trees, --assert-derived-trees, --finalize.
+# loom#1690: the driver ENFORCES this. A bare single-shot on py|rs is REFUSED (exit 2, before any
+# fetch/worktree), and --finalize refuses (exit 4, worktree kept) if the derived trees are absent.
 ```
 
 The engine call is `sync-tier-aware.mjs --<build|template> <slug> --out <scratch>` retargeted at the worktree; a non-zero `--verify` inside `--stage-only` ABORTS before any commit. FINALIZE stages EXPLICIT paths (`coc-sync-landing.md` MUST-2 — never `git add -A`) and emits the exact-tracking receipt (`sync-completeness.md` MUST-7 — every enumerated target's per-file `buildReceipt` manifest, scrubbed per `user-flow-validation.md` MUST-6 before the journal embed). Merge is gated: a bare `--finalize` (or single-shot) STOPS at the PR and prints the human-gated merge command; `--merge` runs the `git.md` § "CI-check and merge are SEPARATE steps" sequence. The throwaway worktree's `.venv`/`target` never touches the dev's.
