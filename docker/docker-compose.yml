@@ -92,16 +92,17 @@ services:
     image: ollama/ollama:latest
     container_name: kailash-ollama
     volumes:
-      - ollama_models:/root/.ollama
+      - kailash_ollama_models:/root/.ollama
     ports:
-      - "11434:11434"
+      - "11436:11434"
     environment:
       OLLAMA_KEEP_ALIVE: 24h
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "ollama list 2>/dev/null | grep -q 'nomic-embed-text' || exit 1"]
+      interval: 15s
+      timeout: 10s
       retries: 5
+      start_period: 600s
     restart: unless-stopped
     # Pull models needed for testing and examples
     entrypoint: ["/bin/sh", "-c"]
@@ -263,7 +264,7 @@ volumes:
     name: kailash_mongo_data
   qdrant_data:
     name: kailash_qdrant_data
-  ollama_models:
+  kailash_ollama_models:
     name: kailash_ollama_models
   admin_postgres_data:
     name: kailash_admin_postgres_data
