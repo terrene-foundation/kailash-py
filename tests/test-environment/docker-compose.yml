@@ -76,15 +76,27 @@ services:
     ports:
       - "11435:11434"
     volumes:
-      - ollama_models:/root/.ollama
+      - kailash_ollama_models:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_MODELS=/root/.ollama/models
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/version || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "ollama list 2>/dev/null | grep -q 'llama3.2:3b' || exit 1"]
+      interval: 15s
       timeout: 10s
       retries: 5
+      start_period: 600s
+    # Pull the model the tests reference before reporting healthy. Without this the
+    # test stacks start an EMPTY ollama: /api/tags and /api/version both answer 200
+    # with zero models, so the old healthcheck reported healthy in exactly the state
+    # that makes every LLM-dependent test vacuous (#2201).
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "ollama serve &
+       sleep 5 &&
+       ollama pull llama3.2:1b &&
+       ollama pull llama3.2:3b &&
+       wait"
     networks:
       - kailash-test-network
 
@@ -266,7 +278,8 @@ volumes:
   postgres_test_data:
   mysql_test_data:
   mongodb_test_data:
-  ollama_models:
+  kailash_ollama_models:
+    name: kailash_ollama_models
   qdrant_test_data:
   minio_test_data:
   elasticsearch_data:

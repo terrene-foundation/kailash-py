@@ -19,7 +19,7 @@ TEST_DB_CONFIG = {
 
 # Ollama configuration
 OLLAMA_CONFIG = {
-    "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+    "host": os.getenv("OLLAMA_HOST", "http://localhost:11435"),
     "model": os.getenv("OLLAMA_MODEL", "llama3.2:1b"),
 }
 
