@@ -1,60 +1,106 @@
-# Session Notes — 2026-08-21 (cont-22: ollama converged, MCP/A2A drift is now the top item)
+# Session Notes — 2026-08-21 (cont-23: the Sweep-5 corpus was 69% noise; #2203 still gated)
 
 ## Where we are
 
-main — green, PR queue empty, working tree clean. #2201 (four ollama stacks) is fixed and
-closed. **#2203 is the new top priority per the co-owner: MCP and A2A are both pinned to
-superseded protocol revisions, and the MCP gap is architectural rather than a version bump.**
+main — green, PR queue empty, working tree clean. The sweep-5 orphan corpus, carried on
+the ledger since cont-20 as "52 orphans / 18 coverage gaps", is now **22 orphans / 0
+coverage gaps** — not because anything was suppressed, but because the scanner had two
+mechanical defects. Fixed and merged (PR #2205).
 
-Verify state with `gh pr list` and `git status --porcelain` rather than trusting this line;
-no SHA is pinned here because one goes stale the moment these notes are themselves merged.
+**#2203 remains the top item and is STILL BLOCKED on D-A and D-B.** Re-verified this
+session, not assumed: `gh issue view 2203 --json comments` → `ncomments: 0`.
+
+Verify state with `gh pr list` and `git status --porcelain` rather than trusting this
+line; no SHA is pinned here because one goes stale the moment these notes are merged.
 
 ## Read first
 
-1. `sweep-cont22-report.md` — completion status, ETA, and the three NEW decision points
-   (D-A MCP revision, D-B A2A line, D-C the TCK's non-black-box requirement)
-2. § Next-session directives below — the only imperative surface in this file
+1. § Next-session directives below — the only imperative surface in this file
+2. `sweep-cont22-report.md` — still current for #2203 scope (D-A/D-B/D-C unchanged).
+   Its § 4 orphan figures are now SUPERSEDED; see § Sweep-5 below.
 3. § Traps — measured, do not rediscover
 
 ---
 
 ## Next-session directives
 
-1. **Do not start #2203 implementation until D-A and D-B are answered.** MCP-Modern vs
-   MCP-Legacy-latest, and A2A 1.0 vs 0.3, change what gets built, not just how much.
-   re-validate: `gh issue view 2203 --comments` → a co-owner comment naming a target
-   revision per protocol ⇒ unblocked. Absent ⇒ still blocked.
+1. **Do not start #2203 implementation until D-A and D-B are answered.** Unchanged.
+   re-validate: `gh issue view 2203 --json comments -q '.comments|length'` → non-zero
+   AND a co-owner comment naming a target revision per protocol ⇒ unblocked.
+   `gh issue view 2203 --comments` renders EMPTY text on this repo even at exit 0 —
+   that is a renderer quirk, not an absence of comments. Use the `--json` form; it
+   discriminates and the text form does not.
 
-2. **When #2203 MCP starts, treat it as an architecture change, not a version bump.**
-   re-validate: `grep -rc "server/discover\|resultType" src/kailash/trust/mcp/` → `0`
-   ⇒ the Modern surface is still entirely absent and the estimate stands.
+2. **The remaining 22 sweep-5 orphans are candidate-REAL. Triage them, do not re-count
+   them.** Three are already confirmed by hand and are the honest starting set:
+   - `TrackerMCPServer` — `ml-tracking.md` §11.1 MUST; no `kailash_ml/tracker/`
+     package exists at all. Genuinely unimplemented. **Adjacent to #2203** — it is an
+     MCP surface, so building it before D-A picks a revision would build on an
+     unratified protocol target. Hold with #2203, do not start independently.
+   - `SQLiteStorageDriver` — §2.3 mandates `kailash_ml._storage.sqlite_driver`; the
+     implementation shipped as `tracking.storage.sqlite.SqliteTrackerStore`. The spec
+     is stale, the code is fine. Spec edit, not code.
+   - `diff_runs` — §5.3 requires it module-level at `engines.experiment_tracker`;
+     it ships as an async METHOD on the tracker and `km.diff_runs` is not exported.
+     The spec's own Origin note already conceded "grep currently empty".
+   re-validate the corpus figure: run per-spec over `specs/*.md` and count; do NOT use
+   `--all` (see Traps).
 
-3. **When #2203 A2A starts, the well-known path lives in FOUR files, not one.**
-   re-validate: `grep -rln "well-known/agent" src/kailash/trust/a2a/` → expect
-   `service.py`, `models.py`, `agent_card.py` (service.py twice). Renaming only the
-   endpoint at `service.py:175` leaves three stale references.
+3. **#2206 is a durability defect, not a flaky test — do not quarantine it.**
+   `#1548`'s fix is still in the tree and its failure still reproduces, so a residual
+   window survives. re-validate: `grep -rn "MigrationNotAppliedError" packages/kailash-dataflow/src/dataflow --include="*.py"`
+   → non-empty ⇒ the fix IS present and #2206 is a hole in it, not a regression.
 
 4. **Check the next loom Gate-2 sync for the path regression BEFORE merging it.**
-   re-validate: `git ls-tree -r --name-only <sync-branch> -- codex gemini` → empty ⇒
-   fixed. Non-empty ⇒ loom#1826 has not landed; repair as in PR #2198, do not merge.
+   Unchanged. re-validate: `git ls-tree -r --name-only <sync-branch> -- codex gemini`
+   → empty ⇒ fixed. Non-empty ⇒ loom#1826 has not landed; repair as in PR #2198.
    Checking `.codex/` is populated does NOT discriminate — it was populated throughout.
 
 5. **Do not implement #2141, #2166, or #2194 without the co-owner's schema decision.**
-   re-validate: `gh issue view 2141 --comments` (and 2166 / 2194) → a comment naming
-   the schema ⇒ unblocked.
+   Unchanged. re-validate with the `--json` comment-count form from directive 1.
+   Measured this session: 2141 has ONE comment and it is our own recommendation, not
+   a decision; 2166 and 2194 have zero.
+
+---
+
+## Sweep-5 — what actually changed (supersedes cont-22 § 4)
+
+Corpus measured before and after over all 85 specs, per-spec:
+
+```
+before  70 findings  (52 orphan, 18 coverage_gap)
+after   22 findings  (22 orphan,  0 coverage_gap)
+removed 48           newly-reported 0
+```
+
+Two scanner defects, both fixed in PR #2205:
+
+- **The Tier-2 coverage scan read ONE test root** (`<root>/tests/integration`). This
+  repo has NINE; the other eight are `packages/*/tests/integration`. kailash-ml keeps
+  all 82 of its Tier-2 tests there. **Every one of the 18 coverage gaps was this.**
+- **`ClassName.member` citations resolved to zero candidate FILES**, because the
+  resolver looked for a MODULE named e.g. `FeatureField`. Now resolved against an AST
+  class index that walks methods, nested classes, plain assignments AND `AnnAssign` —
+  the last being how every dataclass field is spelled, and the largest single source.
+
+Resolution is member-by-member and cannot pass by blanket suppression: an absent member
+on a real class, and an absent class, both still orphan. Three regression tests, each
+paired with a control; the two fix-dependent ones were verified to FAIL against the
+pre-fix tool.
 
 ---
 
 ## In-play branches and worktrees
 
-- **At risk** — none known. Every branch opened this block was merged and deleted.
+- **At risk** — none known. `fix/sweep-redteam-resolution-blindspots` was merged and
+  deleted this session.
   re-check, because this is written from memory and not measured:
   `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/main $b | grep -q '^+' && echo "AT RISK $b"; done`
-  → any output ⇒ that branch holds content nothing upstream has. An ahead-count does NOT
-  discriminate; a rebased branch reads ahead long after its content landed.
+  → any output ⇒ that branch holds content nothing upstream has. An ahead-count does
+  NOT discriminate; a rebased branch reads ahead long after its content landed.
 - **Remote non-main refs** — `docs/notes-cont18-execution`,
   `fix/2070-logging-hook-redaction-defeat`. Both believed superseded (the latter by
-  PR #2101); neither re-verified this session.
+  PR #2101); neither re-verified this session or the last two.
 - **Worktrees** — 1 (the main checkout). Removing a worktree deletes a DIRECTORY, never
   a branch (`worktree-isolation.md` Rule 8). re-check: `node .claude/bin/worktree-reap.mjs`
 - **169 local branches** — carried, unexamined, since cont-20. Sweep report D5: leave.
@@ -63,41 +109,42 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 
 ## Executed this session (external — not recoverable from git log)
 
-- Merged PR #2202 (#2201 ollama convergence); issue #2201 auto-closed by `Fixes`.
-- Merged PR #2200 (cont-21 sweep + notes).
-- Earlier in this session chain: merged #2192, #2123, #2195, #2196, #2197, #2198;
-  filed #2199 and #2194; filed loom#1826 (open, correct) and loom#1827 (WITHDRAWN).
+- Merged PR #2205 (sweep-redteam scanner fix); branch deleted.
+- Filed #2206 (dataflow #1548 residual durability window).
+- Re-verified #2203 / #2166 / #2194 comment counts = 0; #2141 = 1 (our own).
 
 ---
 
 ## Traps (measured — do not rediscover)
 
+- **`gh issue view <N> --comments` prints NOTHING on this repo, at exit 0, for issues
+  that exist and are OPEN.** Measured: #2203/#2166/#2194 → 0 bytes; #2141 → 5138 bytes.
+  An empty render is NOT an absent issue and NOT zero comments. Use
+  `--json comments -q '.comments|length'`, which discriminates.
 - **`tools/sweep-redteam.py --all` returns `specs=0 … OK` on this repo.** It scans
-  `workspaces/*/specs/**/*.md`, which is empty — spec authority is at repo-root `specs/`.
-  That OK sentinel is a vacuous green. Pointing it at each `specs/*.md` explicitly works
-  and finds 52 orphans / 18 coverage gaps.
-- **`curl` is NOT in `ollama/ollama:latest`** (nor `wget`). Every shipped ollama
-  healthcheck was `curl -f …` and exited **127** — reporting unhealthy forever, not
-  healthy-while-empty as #2201 assumed. Health now gates on `ollama list | grep -q <model>`,
-  using the CLI that IS in the image. Inert before only because every `depends_on` uses
-  the short list form and waits for *started*, not *healthy*.
-- **A compose file's `volumes:` names are ALIASES, not real volumes.** `name:` keys and
-  project prefixing rename them. Resolve with `docker compose config`, never by reading
-  the YAML — that is how #2201's table missed that two stacks already shared a volume.
-- **loom#1827 was my own bad filing.** The measurement was sound (1150 files, 0 glob
-  matches, control passing); the inference was not. A glob cannot be TRIGGERED BY a push,
-  but injection is sticky-once, so a glob matching a file touched EARLIER leaves the rule
-  loaded AT push time. loom had already shipped the fix (`ci-cost-reach.js`) in the sync I
-  was reviewing and had already narrowed the same over-claim once.
+  `workspaces/*/specs/**/*.md`, which is empty — spec authority is at repo-root
+  `specs/`. That OK sentinel is a vacuous green. Run it per-spec instead.
+- **The sweep tool refuses spec paths outside the repo root** (`spec path escapes repo
+  root`). Put throwaway control fixtures INSIDE the tree, not in a scratch dir.
+- **A CI failure on this repo may be a duplicate-run artifact.** Two runs fire per push;
+  the SAME job on the SAME SHA can be failure in one and success in the other (measured:
+  runs 32402148738 vs 32402192881 on `d915b42d6`). Compare both before calling it broken.
+- **Only THREE contexts are required here**: `CodeQL`, `Analyze Python`,
+  `test-with-infrastructure` (`enforce_admins: false`). A red non-required job does not
+  block merge — but it still gets fixed or filed (#2206), never ignored.
+- **`grep --include=*.py` is glob-expanded by zsh and errors out.** Quote it:
+  `--include="*.py"`. A "no matches found" from this is an ERRORED command and zero
+  evidence, not an absence.
+- **`curl` is NOT in `ollama/ollama:latest`** (nor `wget`). Health now gates on
+  `ollama list | grep -q <model>`.
+- **A compose file's `volumes:` names are ALIASES.** Resolve with `docker compose config`.
 - **In zsh, `"$var:src/..."` applies a `:s///` history modifier**; brace it as
-  `"${var}:path"`. And **backticks inside a double-quoted `git commit -m` are command
-  substitution** — use `-F` with a quoted heredoc. Both silently rewrote text I was
-  citing as evidence.
+  `"${var}:path"`. Backticks inside a double-quoted `git commit -m` are command
+  substitution — use `-F` with a quoted heredoc.
 - **`pre-commit run --from-ref X --to-ref Y --files ...` checks NOTHING** — every hook
-  prints `(no files to check) Skipped` and the run "passes". Use `--files <paths>` alone.
-- **A validator failing identically on both sides is not a regression.** `validate-emit`
-  reports 4 blocking failures here and on main alike, all rooted in `sync-manifest.yaml`
-  being loom-only. Diff the FAIL SETS, not the counts.
+  prints `(no files to check) Skipped`. Use `--files <paths>` alone.
+- **A validator failing identically on both sides is not a regression.** Diff the FAIL
+  SETS, not the counts.
 
 ---
 
@@ -105,12 +152,14 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
-| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, blocked on D-A/D-B | #2203, report § 3 |
-| `sweep5-orphans` | 52 spec orphans / 18 coverage gaps | open, measured twice | report § 4 |
+| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, blocked on D-A/D-B | #2203, cont-22 report § 3 |
+| `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
+| `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
 | `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2) | #2194 |
-| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner (D3) | report D3 |
-| `hist-branches` | 169 unexamined local branches | deferred by judgment | report D5 |
+| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner (D3) | cont-22 report D3 |
+| `hist-branches` | 169 unexamined local branches | deferred by judgment | cont-22 report D5 |
 
-Closed this session: `ollama-compose` (#2201 fixed, merged PR #2202).
+Closed this session: none fully — `sweep5-orphans` shrank 70 → 22 and its scanner is
+fixed, but the 22 survivors are unresolved and it stays open.
