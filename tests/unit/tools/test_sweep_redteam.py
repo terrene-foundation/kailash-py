@@ -335,3 +335,107 @@ def test_sentinel_field_shape_matches_spec(tmp_path, monkeypatch):
         "orphans=0 coverage_gaps=0 stubs=0 -->"
     )
     assert sentinel == expected
+
+
+# --- Resolution-blindspot regressions ---------------------------------------
+# Both cases below reported a finding before the multi-root / class-index fix
+# and MUST NOT report one after it. Each is paired with a negative control in
+# the same class so the fix cannot pass by suppressing findings wholesale.
+
+
+def test_tier2_coverage_found_in_package_test_root(tmp_path, monkeypatch):
+    """A package-local Tier-2 suite counts as coverage.
+
+    Before the fix `has_tier2_coverage` scanned only the repo-root
+    `tests/integration/` tree, so a symbol covered by
+    `packages/<pkg>/tests/integration/` was reported as a `coverage_gap`.
+    """
+    spec_body = "# Spec\nEvery request MUST route through `myapp.gateway.Router`.\n"
+    source = "class Router:\n    def dispatch(self, request):\n        return request\n"
+    _build_workspace_tree(
+        tmp_path,
+        spec_body=spec_body,
+        source_files={"packages/pkg-a/src/myapp/gateway.py": source},
+        integration_tests={},
+    )
+    pkg_tests = tmp_path / "packages" / "pkg-a" / "tests" / "integration"
+    pkg_tests.mkdir(parents=True, exist_ok=True)
+    (pkg_tests / "test_gateway.py").write_text(
+        "from myapp.gateway import Router\n\n\ndef test_router():\n    assert Router\n",
+        encoding="utf-8",
+    )
+
+    exit_code, findings, sentinel = _run_tool(monkeypatch, tmp_path)
+
+    assert findings == [], findings
+    assert exit_code == 0
+    parsed = _parse_sentinel(sentinel)
+    assert parsed["coverage_gaps"] == 0
+    assert parsed["orphans"] == 0
+
+
+def test_class_member_citation_resolves_via_class_index(tmp_path, monkeypatch):
+    """`ClassName.member` names no module but MUST still resolve.
+
+    Covers a plain method AND an annotated dataclass field — the latter is
+    how every dataclass attribute is spelled, and omitting `ast.AnnAssign`
+    was the single largest false-positive source in the live corpus.
+    """
+    spec_body = (
+        "# Spec\n"
+        "The dispatcher MUST expose `Router.dispatch`.\n"
+        "The schema MUST carry `FeatureField.dtype`.\n"
+    )
+    source = (
+        "import dataclasses\n\n\n"
+        "class Router:\n"
+        "    def dispatch(self, request):\n"
+        "        return request\n\n\n"
+        "@dataclasses.dataclass(frozen=True)\n"
+        "class FeatureField:\n"
+        "    name: str\n"
+        "    dtype: str\n"
+    )
+    _build_workspace_tree(
+        tmp_path,
+        spec_body=spec_body,
+        source_files={"src/myapp/gateway.py": source},
+        integration_tests={
+            "test_gateway.py": "from myapp.gateway import Router, FeatureField\n"
+        },
+    )
+
+    exit_code, findings, sentinel = _run_tool(monkeypatch, tmp_path)
+
+    assert findings == [], findings
+    assert exit_code == 0
+    assert _parse_sentinel(sentinel)["orphans"] == 0
+
+
+def test_class_member_citation_absent_member_still_orphans(tmp_path, monkeypatch):
+    """Negative control for the class-index resolver.
+
+    The resolver MUST discriminate member-by-member: a real class missing the
+    cited member, and an entirely absent class, both stay orphans. Without
+    this, the fix above could pass by suppressing every `ClassName.member`.
+    """
+    spec_body = (
+        "# Spec\n"
+        "The dispatcher MUST expose `Router.never_implemented`.\n"
+        "The registry MUST expose `NoSuchClass.member`.\n"
+    )
+    source = "class Router:\n    def dispatch(self, request):\n        return request\n"
+    _build_workspace_tree(
+        tmp_path,
+        spec_body=spec_body,
+        source_files={"src/myapp/gateway.py": source},
+        integration_tests={"test_gateway.py": "from myapp.gateway import Router\n"},
+    )
+
+    exit_code, findings, sentinel = _run_tool(monkeypatch, tmp_path)
+
+    assert exit_code == 1
+    symbols = sorted(f["symbol"] for f in findings)
+    assert symbols == ["NoSuchClass.member", "Router.never_implemented"], findings
+    assert all(f["category"] == "orphan" for f in findings), findings
+    assert _parse_sentinel(sentinel)["orphans"] == 2

@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import json
 import re
 import sys
@@ -346,6 +347,104 @@ def _source_roots() -> list[Path]:
     return roots
 
 
+def _iter_source_files() -> Iterator[Path]:
+    """Every `.py` under every import root, `__pycache__` excluded."""
+    for root in _source_roots():
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            yield path
+
+
+@functools.lru_cache(maxsize=1)
+def _class_index() -> dict[str, tuple[tuple[Path, int], ...]]:
+    """Map every top-level-or-nested ClassDef name → the sites defining it.
+
+    Built once per process by AST-parsing every source file. This exists so a
+    spec citation of the shape `ClassName.member` — which names no module and
+    therefore resolves to zero candidate FILES — can still be verified
+    structurally instead of being reported as an orphan by default.
+    """
+    index: dict[str, list[tuple[Path, int]]] = {}
+    for path in _iter_source_files():
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError, ValueError):
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                index.setdefault(node.name, []).append((path, node.lineno))
+    return {k: tuple(v) for k, v in index.items()}
+
+
+def _class_defines_member(path: Path, class_name: str, member: str) -> int | None:
+    """Return the line number where `class_name` defines `member`, else None.
+
+    Walks the class body for methods, nested classes, plain assignments AND
+    annotated assignments — the last of these is how every dataclass field
+    (`dtype: str`, `fields: tuple[...]`) is spelled, so omitting it would
+    mis-report every dataclass attribute a spec cites.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.ClassDef) and node.name == class_name):
+            continue
+        for stmt in node.body:
+            if (
+                isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                and stmt.name == member
+            ):
+                return stmt.lineno
+            if isinstance(stmt, ast.AnnAssign):
+                tgt = stmt.target
+                if isinstance(tgt, ast.Name) and tgt.id == member:
+                    return stmt.lineno
+            if isinstance(stmt, ast.Assign):
+                for tgt in stmt.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id == member:
+                        return stmt.lineno
+    return None
+
+
+def _module_for_path(path: Path) -> str:
+    """Dotted module name for a source file, relative to its import root."""
+    for root in _source_roots():
+        try:
+            rel = path.relative_to(root)
+        except ValueError:
+            continue
+        parts = list(rel.parts)
+        if parts and parts[-1] == "__init__.py":
+            parts = parts[:-1]
+        elif parts:
+            parts[-1] = parts[-1][:-3] if parts[-1].endswith(".py") else parts[-1]
+        return ".".join(parts)
+    return ""
+
+
+def resolve_class_member(symbol: str) -> tuple[Path, int] | None:
+    """Resolve a `ClassName.member[.rest]` citation against the class index.
+
+    Returns the (path, lineno) of the member definition, or None when either
+    the class or the member is genuinely absent — the latter is a REAL orphan
+    and MUST keep reporting as one.
+    """
+    parts = symbol.split(".")
+    if len(parts) < 2:
+        return None
+    class_name, member = parts[0], parts[1]
+    if not class_name[:1].isupper():
+        return None
+    for path, _cls_line in _class_index().get(class_name, ()):
+        line = _class_defines_member(path, class_name, member)
+        if line is not None:
+            return (path, line)
+    return None
+
+
 def _dotted_path_is_module(symbol: str) -> bool:
     """True if the FULL dotted path names an importable module or package on disk.
 
@@ -598,6 +697,30 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
         # `.register`, `.changed`), so the CapWords-tail carve-out preserves the
         # false-positive suppression while restoring genuine missing-symbol drift.
         root = symbol.name.split(".")[0]
+        # A `ClassName.member` citation names no MODULE, so it resolves to zero
+        # candidate files. Resolve it against the class index before concluding
+        # drift — otherwise every dataclass field a spec cites reads as an
+        # orphan while being present in source.
+        member_hit = resolve_class_member(symbol.name)
+        if member_hit is not None:
+            hit_path, hit_line = member_hit
+            hit_rel = str(hit_path.relative_to(ROOT))
+            hit_module = _module_for_path(hit_path)
+            if hit_module and not has_tier2_coverage(f"{hit_module}.{tail}"):
+                return [
+                    Finding(
+                        category="coverage_gap",
+                        symbol=symbol.name,
+                        spec=str(symbol.spec_path.relative_to(ROOT)),
+                        spec_line=symbol.spec_line,
+                        source=f"{hit_rel}:{hit_line}",
+                        evidence=(
+                            f"no Tier-2 integration test imports module "
+                            f"{hit_module} (resolved via class index)"
+                        ),
+                    )
+                ]
+            return []
         if (
             root[:1].islower()
             and not root.startswith(_KAILASH_FAMILY_PREFIXES)
@@ -679,34 +802,58 @@ def verify_symbol(symbol: SpecSymbol) -> list[Finding]:
     return findings
 
 
+def _test_roots() -> list[Path]:
+    """Every Tier-2 test root: `tests/integration/` plus each
+    `packages/*/tests/integration/`.
+
+    Mirrors `_source_roots()`. The single-root form this replaced scanned
+    only the repo-root tree, so every package that keeps its own Tier-2
+    suite (kailash-ml alone has 82 files there) was invisible and every
+    symbol it covered was reported as a `coverage_gap`.
+    """
+    roots: list[Path] = []
+    root_tests = ROOT / "tests" / "integration"
+    if root_tests.is_dir():
+        roots.append(root_tests)
+    pkg_dir = ROOT / "packages"
+    if pkg_dir.is_dir():
+        for pkg in sorted(pkg_dir.iterdir()):
+            cand = pkg / "tests" / "integration"
+            if cand.is_dir():
+                roots.append(cand)
+    return roots
+
+
 def has_tier2_coverage(symbol_name: str) -> bool:
-    """Return True if any tests/integration/**/*.py imports the module."""
+    """Return True if any Tier-2 integration test imports the module.
+
+    Scans EVERY root from `_test_roots()`, not just the repo-root tree.
+    """
     module_path = ".".join(symbol_name.split(".")[:-1])
     if not module_path:
         return False
-    tests_root = ROOT / "tests" / "integration"
-    if not tests_root.is_dir():
+    roots = _test_roots()
+    if not roots:
         return False
     # Build the structural import-line patterns:
     #   "from <module>" / "import <module>"
     # Use plain substring search per-file — fast, deterministic, scans bytes.
     import_needle_from = f"from {module_path}".encode()
     import_needle_imp = f"import {module_path}".encode()
-    for path in tests_root.rglob("*.py"):
-        try:
-            data = path.read_bytes()
-        except OSError:
-            continue
-        if import_needle_from in data or import_needle_imp in data:
-            return True
-        # Also accept the parent module (sub-pkg convention shifts the path)
-        parent = ".".join(module_path.split(".")[:-1])
-        if parent:
-            if (
-                f"from {parent}".encode() in data
-                and module_path.split(".")[-1].encode() in data
-            ):
+    parent = ".".join(module_path.split(".")[:-1])
+    tail_needle = module_path.split(".")[-1].encode()
+    for tests_root in roots:
+        for path in tests_root.rglob("*.py"):
+            try:
+                data = path.read_bytes()
+            except OSError:
+                continue
+            if import_needle_from in data or import_needle_imp in data:
                 return True
+            # Also accept the parent module (sub-pkg convention shifts the path)
+            if parent:
+                if f"from {parent}".encode() in data and tail_needle in data:
+                    return True
     return False
 
 
