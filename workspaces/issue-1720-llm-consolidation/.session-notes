@@ -1,119 +1,103 @@
-# Session Notes — 2026-08-19 (cont-21: loom sync repaired, two gaps filed upstream)
+# Session Notes — 2026-08-21 (cont-22: ollama converged, MCP/A2A drift is now the top item)
 
 ## Where we are
 
-main — green, PR queue empty, working tree clean. The 2026-08-19 loom COC artifact update
-landed with its path-mapping defect repaired rather than merged as delivered. Two loom-side
-defects filed upstream. Sweep 5 was run correctly for the first time on this repo shape and
-surfaced a 70-finding corpus that the tool's own default invocation reports as clean.
+main — green, PR queue empty, working tree clean. #2201 (four ollama stacks) is fixed and
+closed. **#2203 is the new top priority per the co-owner: MCP and A2A are both pinned to
+superseded protocol revisions, and the MCP gap is architectural rather than a version bump.**
 
 Verify state with `gh pr list` and `git status --porcelain` rather than trusting this line;
 no SHA is pinned here because one goes stale the moment these notes are themselves merged.
 
 ## Read first
 
-1. `sweep-cont21-report.md` — completion status, ETA in cycles, the 5 decision points
+1. `sweep-cont22-report.md` — completion status, ETA, and the three NEW decision points
+   (D-A MCP revision, D-B A2A line, D-C the TCK's non-black-box requirement)
 2. § Next-session directives below — the only imperative surface in this file
-3. § Traps — measured this block, do not rediscover
+3. § Traps — measured, do not rediscover
 
 ---
 
 ## Next-session directives
 
-1. **Check the next loom Gate-2 sync for the path regression BEFORE merging it.**
-   re-validate: `git ls-tree -r --name-only <sync-branch> -- codex gemini` → empty ⇒ fixed.
-   Non-empty ⇒ loom#1826 has not landed; do NOT merge, repair or close as before.
-   Checking that `.codex/` is populated does NOT discriminate — it was populated throughout
-   the incident.
+1. **Do not start #2203 implementation until D-A and D-B are answered.** MCP-Modern vs
+   MCP-Legacy-latest, and A2A 1.0 vs 0.3, change what gets built, not just how much.
+   re-validate: `gh issue view 2203 --comments` → a co-owner comment naming a target
+   revision per protocol ⇒ unblocked. Absent ⇒ still blocked.
 
-2. **Do not implement #2141, #2166, or #2194 without the co-owner's schema decision.**
-   Each needs a security semantics call that no spec contains; guessing ships a wrong
-   authz/auth control in place of an honest gap.
-   re-validate: `gh issue view 2141 --comments` (and 2166 / 2194) → a co-owner comment
-   naming the schema ⇒ unblocked. Absent ⇒ still blocked.
+2. **When #2203 MCP starts, treat it as an architecture change, not a version bump.**
+   re-validate: `grep -rc "server/discover\|resultType" src/kailash/trust/mcp/` → `0`
+   ⇒ the Modern surface is still entirely absent and the estimate stands.
 
-3. **Take the Sweep-5 scoped first pass on `ml-feature-store` + `ml-tracking`** (15 orphans,
-   4 coverage gaps) to measure the spec-over-promised vs source-missing ratio before sizing
-   the remaining ~55.
-   re-validate: `python tools/sweep-redteam.py specs/ml-feature-store.md --json` →
-   `orphans=0` ⇒ that spec is done.
+3. **When #2203 A2A starts, the well-known path lives in FOUR files, not one.**
+   re-validate: `grep -rln "well-known/agent" src/kailash/trust/a2a/` → expect
+   `service.py`, `models.py`, `agent_card.py` (service.py twice). Renaming only the
+   endpoint at `service.py:175` leaves three stale references.
 
-4. **Check loom#1826 before re-filing anything upstream.** (loom#1827 was mine and is
-   WITHDRAWN — see Traps.)
-   re-validate: `gh issue view 1826 --repo <loom-private-org>/loom --json state -q .state`
-   → `CLOSED` ⇒ fix landed; re-verify locally per directive 1.
+4. **Check the next loom Gate-2 sync for the path regression BEFORE merging it.**
+   re-validate: `git ls-tree -r --name-only <sync-branch> -- codex gemini` → empty ⇒
+   fixed. Non-empty ⇒ loom#1826 has not landed; repair as in PR #2198, do not merge.
+   Checking `.codex/` is populated does NOT discriminate — it was populated throughout.
 
-5. **Close #2199 only after a clean Gate-2 re-emit is verified here**, not when loom#1826
-   closes — the local tracker is for the delivered state, not the upstream fix.
-   re-validate: directive 1's command on the post-fix sync branch → empty ⇒ closable.
+5. **Do not implement #2141, #2166, or #2194 without the co-owner's schema decision.**
+   re-validate: `gh issue view 2141 --comments` (and 2166 / 2194) → a comment naming
+   the schema ⇒ unblocked.
 
 ---
 
 ## In-play branches and worktrees
 
-- **At risk** — none known. Every branch this session opened was merged and deleted
-  (#2192, #2195, #2196, #2197, #2198 + the two docs branches).
-  re-check, because this was written from memory and not measured:
+- **At risk** — none known. Every branch opened this block was merged and deleted.
+  re-check, because this is written from memory and not measured:
   `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/main $b | grep -q '^+' && echo "AT RISK $b"; done`
   → any output ⇒ that branch holds content nothing upstream has. An ahead-count does NOT
-  discriminate (a rebased branch reads ahead long after its content landed).
-- **Remote non-main refs** — `docs/notes-cont18-execution`, `fix/2070-logging-hook-redaction-defeat`.
-  Both believed superseded (the latter by PR #2101); neither re-verified this session.
-- **Worktrees** — 1 (the main checkout). No reap verdicts run this block.
-  Removing a worktree deletes a DIRECTORY, never a branch (`worktree-isolation.md` Rule 8).
-  re-check: `node .claude/bin/worktree-reap.mjs`
-- **169 local branches** — carried, unexamined, since cont-20. Sweep-report D5: leave.
+  discriminate; a rebased branch reads ahead long after its content landed.
+- **Remote non-main refs** — `docs/notes-cont18-execution`,
+  `fix/2070-logging-hook-redaction-defeat`. Both believed superseded (the latter by
+  PR #2101); neither re-verified this session.
+- **Worktrees** — 1 (the main checkout). Removing a worktree deletes a DIRECTORY, never
+  a branch (`worktree-isolation.md` Rule 8). re-check: `node .claude/bin/worktree-reap.mjs`
+- **169 local branches** — carried, unexamined, since cont-20. Sweep report D5: leave.
 
 ---
 
 ## Executed this session (external — not recoverable from git log)
 
-- Merged #2192, #2123, #2195, #2196, #2197, #2198.
-- Filed #2199 (local tracker) and #2194 (governance actor provenance).
-- Filed TWO issues upstream into private loom: **#1826** (Gate-2 delivers the emitter's
-  staging layout) — still open and believed correct — and **#1827**, which I then
-  WITHDREW and closed the same session as a duplicate of loom's own T4.
-  Both cross-repo writes carried a `/cross-repo-authorize` write-tier receipt written
-  BEFORE the write; receipts are in `.claude/cross-repo-authz/`, uncommitted per the
-  `coc-build` branch of the ceremony.
-- Posted reconciliation + recommendation comments to #2141 and #2189.
+- Merged PR #2202 (#2201 ollama convergence); issue #2201 auto-closed by `Fixes`.
+- Merged PR #2200 (cont-21 sweep + notes).
+- Earlier in this session chain: merged #2192, #2123, #2195, #2196, #2197, #2198;
+  filed #2199 and #2194; filed loom#1826 (open, correct) and loom#1827 (WITHDRAWN).
 
 ---
 
-## Traps (measured this block)
+## Traps (measured — do not rediscover)
 
 - **`tools/sweep-redteam.py --all` returns `specs=0 … OK` on this repo.** It scans
-  `workspaces/*/specs/**/*.md`, which is empty here — spec authority is at repo-root
-  `specs/`. The OK sentinel is a vacuous green: same output whether the corpus is clean or
-  unexamined. Pointing the tool at each `specs/*.md` explicitly DOES work and found
-  52 orphans / 18 coverage gaps. Never cite the `--all` sentinel on this repo.
-- **`ci-cost-discipline.md` cannot fire.** Its push-time MUSTs are path-scoped to
-  `**/todos/**`, `**/.wave-tracker*`, `**/.github/workflows/**` — globs a push never
-  touches. Measured: 1150 files changed across this session's merges, 0 matching, with a
-  control proving the matcher works. **My inference from that was WRONG and I filed it
-  upstream before catching it (loom#1827, now withdrawn).** A glob cannot be TRIGGERED BY a
-  push, but injection is sticky-once per session, so a glob matching a file touched EARLIER
-  leaves the rule loaded AT push time — reaching some pushes by coincidence, not never.
-  loom had already shipped the real fix in the sync I was reviewing:
-  `.claude/hooks/lib/ci-cost-reach.js`, composed by `validate-bash-command.js` on the
-  PreToolUse Bash matcher, delivering the contract at the moment CI spend is decided. It
-  fired on my next push, which is how I found the error. loom had also already narrowed this
-  exact over-claim once (their #1715 M-4) — I reproduced a corrected mistake.
-- **The burndown hooks + new wrapup skill landed mid-session and were inert for it.**
-  `settings.json` gained 66 lines in the sync; a running session keeps the config it
-  started with. Fixtures pass (64 + 39, exit 0) and both hooks execute — nothing is broken,
-  it just needs a session boundary. This session's notes were written under the NEW wrapup
-  contract manually.
-- **In zsh, `"$var:src/..."` applies a `:s///` history modifier.** `git cat-file -e
-  "$tag:src/kailash/utils/server_auth.py"` silently asked for `v2.63.0_auth.py` and reported
-  ABSENT for every tag. Brace it: `"${tag}:path"`. A control that hardcodes the string
-  cannot catch this — the bug lives in the expansion the control does not use.
-- **`pre-commit run --from-ref X --to-ref Y --files ...` checks NOTHING.** Every hook prints
-  `(no files to check) Skipped` and the run "passes"; black then reformatted a file that run
-  never opened. Use `--files <paths>` alone and read the hook lines, not the exit code.
+  `workspaces/*/specs/**/*.md`, which is empty — spec authority is at repo-root `specs/`.
+  That OK sentinel is a vacuous green. Pointing it at each `specs/*.md` explicitly works
+  and finds 52 orphans / 18 coverage gaps.
+- **`curl` is NOT in `ollama/ollama:latest`** (nor `wget`). Every shipped ollama
+  healthcheck was `curl -f …` and exited **127** — reporting unhealthy forever, not
+  healthy-while-empty as #2201 assumed. Health now gates on `ollama list | grep -q <model>`,
+  using the CLI that IS in the image. Inert before only because every `depends_on` uses
+  the short list form and waits for *started*, not *healthy*.
+- **A compose file's `volumes:` names are ALIASES, not real volumes.** `name:` keys and
+  project prefixing rename them. Resolve with `docker compose config`, never by reading
+  the YAML — that is how #2201's table missed that two stacks already shared a volume.
+- **loom#1827 was my own bad filing.** The measurement was sound (1150 files, 0 glob
+  matches, control passing); the inference was not. A glob cannot be TRIGGERED BY a push,
+  but injection is sticky-once, so a glob matching a file touched EARLIER leaves the rule
+  loaded AT push time. loom had already shipped the fix (`ci-cost-reach.js`) in the sync I
+  was reviewing and had already narrowed the same over-claim once.
+- **In zsh, `"$var:src/..."` applies a `:s///` history modifier**; brace it as
+  `"${var}:path"`. And **backticks inside a double-quoted `git commit -m` are command
+  substitution** — use `-F` with a quoted heredoc. Both silently rewrote text I was
+  citing as evidence.
+- **`pre-commit run --from-ref X --to-ref Y --files ...` checks NOTHING** — every hook
+  prints `(no files to check) Skipped` and the run "passes". Use `--files <paths>` alone.
 - **A validator failing identically on both sides is not a regression.** `validate-emit`
-  reports 4 blocking failures here and on main alike — all rooted in `sync-manifest.yaml`
-  being loom-only, which a `coc-build` repo does not have. Diff the FAIL SETS, not counts.
+  reports 4 blocking failures here and on main alike, all rooted in `sync-manifest.yaml`
+  being loom-only. Diff the FAIL SETS, not the counts.
 
 ---
 
@@ -121,14 +105,12 @@ no SHA is pinned here because one goes stale the moment these notes are themselv
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
+| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, blocked on D-A/D-B | #2203, report § 3 |
+| `sweep5-orphans` | 52 spec orphans / 18 coverage gaps | open, measured twice | report § 4 |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
-| `sweep5-orphans` | 52 spec orphans / 18 coverage gaps | open, newly measured | sweep-cont21-report.md § 4 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
-| `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2, D3) | #2194 |
-| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner | sweep report D3 |
-| `hist-branches` | 169 unexamined local branches | deferred by judgment | sweep report D5 |
+| `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2) | #2194 |
+| `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner (D3) | report D3 |
+| `hist-branches` | 169 unexamined local branches | deferred by judgment | report D5 |
 
-Closed this session: `pr-queue` (both cont-20 PRs merged), `absence-sweep` (#2189 fixes
-merged in #2195), `ci-cost-reach` (row MOVED here from the open ledger above, not retained
-there — WITHDRAWN; my filing duplicated loom's shipped T4, closed with evidence at loom
-`9cff8704e293…` / local `d0a756ef9…`. The lesson is retained as a Traps entry).
+Closed this session: `ollama-compose` (#2201 fixed, merged PR #2202).
