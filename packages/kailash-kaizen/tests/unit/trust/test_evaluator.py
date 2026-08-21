@@ -270,8 +270,17 @@ class TestIndependentMode:
 class TestUnknownDimension:
     """Tests for handling unknown dimensions."""
 
-    def test_unknown_dimension_warning(self, evaluator: MultiDimensionEvaluator):
-        """Unknown dimensions generate warnings but don't fail."""
+    def test_unknown_dimension_fails_closed(self, evaluator: MultiDimensionEvaluator):
+        """An unregistered dimension is unsatisfied, not silently dropped.
+
+        This asserted the opposite until #2189: an unknown dimension warned and
+        was dropped from ``dimension_results``, so a constraint the caller asked
+        to enforce that NOTHING enforced came back ``satisfied=True`` -- and with
+        every dimension unknown the verdict was byte-identical to a genuinely
+        passing evaluation, produced exactly when the registry is misconfigured
+        and the caller most needs the truth. The evaluator now fails closed; this
+        test was left asserting the pre-#2189 behaviour and is corrected here.
+        """
         result = evaluator.evaluate(
             constraints={
                 "cost_limit": 1000,
@@ -281,9 +290,18 @@ class TestUnknownDimension:
             mode=InteractionMode.CONJUNCTIVE,
         )
 
-        assert result.satisfied is True
+        # Fail-closed: the unevaluated dimension makes the whole result unsatisfied.
+        assert result.satisfied is False
         assert "Unknown dimension: unknown_dimension" in result.warnings
-        assert "unknown_dimension" not in result.dimension_results
+
+        # It is RECORDED rather than dropped -- being absent from the result set
+        # is what made it indistinguishable from a satisfied dimension.
+        assert "unknown_dimension" in result.dimension_results
+        assert result.dimension_results["unknown_dimension"].satisfied is False
+        assert "unknown_dimension" in result.failed_dimensions
+
+        # The known dimension is still evaluated on its own merits.
+        assert result.dimension_results["cost_limit"].satisfied is True
 
 
 class TestAntiGaming:
