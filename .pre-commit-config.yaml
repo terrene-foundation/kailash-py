@@ -127,6 +127,22 @@ repos:
   # package or the lint script itself changes. Pure-stdlib script; no
   # external dependencies; resolves the venv via find-venv-python.sh
   # for worktree compatibility (same pattern as spec-drift-gate above).
+  # CI job-budget census (loom#1877). Fires only on workflow edits, so a new
+  # CI job becomes a DECLARED act instead of an unremarked one. Deliberately a
+  # pre-commit hook rather than a CI job: this repo has an active CI-spend
+  # concern, and a gate about runner fan-out that itself consumes a runner on
+  # every PR would be self-defeating.
+  - repo: local
+    hooks:
+      - id: ci-job-budget
+        name: CI job-budget census (loom#1877)
+        description: "Block push/PR duplicate-run defects and unremarked CI job fan-out."
+        entry: scripts/development/find-venv-python.sh scripts/ci/job_budget_audit.py
+        language: system
+        files: ^(\.github/workflows/|scripts/ci/job_budget_audit\.py|scripts/ci/job-budget\.d/)
+        pass_filenames: false
+        stages: [pre-commit, manual]
+
   - repo: local
     hooks:
       - id: kailash-delegate-fences

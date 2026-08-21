@@ -63,7 +63,7 @@ permissions:
 
 concurrency:
   # Improved concurrency: Group by PR number for PR events, unique run_id for push events
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

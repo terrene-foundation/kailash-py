@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: spec-drift-gate-${{ github.head_ref || github.run_id }}
+  group: spec-drift-gate-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
