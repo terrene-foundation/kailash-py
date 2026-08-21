@@ -94,20 +94,28 @@ pre-fix tool.
 
 ## In-play branches and worktrees
 
-- **At risk** — none known. `fix/sweep-redteam-resolution-blindspots` was merged and
-  deleted this session.
-  re-check, because this is written from memory and not measured:
-  `for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do git cherry origin/main $b | grep -q '^+' && echo "AT RISK $b"; done`
-  → any output ⇒ that branch holds content nothing upstream has. An ahead-count does
-  NOT discriminate; a rebased branch reads ahead long after its content landed.
-- **Remote non-main refs** — `docs/notes-cont18-execution`,
-  `fix/2070-logging-hook-redaction-defeat`. Both believed superseded (the latter by
-  PR #2101); neither re-verified this session or the last two.
-- **Worktrees** — 1 (the main checkout). Removing a worktree deletes a DIRECTORY, never
-  a branch (`worktree-isolation.md` Rule 8). re-check: `node .claude/bin/worktree-reap.mjs`
-- **169 local branches** — carried, unexamined, since cont-20. Sweep report D5: leave.
+**The forest is empty. 1 local branch (main), 1 remote branch (main), 1 worktree,
+0 open PRs.** Verified after the 2026-08-21 sweep, not asserted:
+`git for-each-ref refs/heads | wc -l` -> 1.
 
----
+- **169 local branches were audited and removed.** 51 carried commits not upstream
+  by `git cherry`; every one sampled proved LANDED (content in main under a moved
+  path) or obsolete against a codebase now at 2.63.0. All 51 are preserved as
+  `archive/2026-08-21/<branch>` tags before deletion — **zero loss, and the tags
+  are LOCAL ONLY** (49 of the 51 were never pushed, so a local tag preserves
+  exactly what existed; they are deliberately NOT pushed, because this repo uses
+  the tag namespace for releases).
+  re-check a specific one: `git log --oneline -1 archive/2026-08-21/<branch>`
+- **The two remote branches were deleted** after verification: `docs/notes-cont18-execution`
+  (touched only `.session-notes`, since rewritten five times) and
+  `fix/2070-logging-hook-redaction-defeat` (superseded by merged PR #2101 — all
+  three of its commits have counterparts in main's #2084 lineage, which went
+  further with audit-trail hardening and #2111 checkpointing).
+- **Do not re-audit from the branch count alone.** `git cherry` matches by
+  patch-id, so a squashed or conflict-resolved rebase reads as unlanded long
+  after its content shipped. The W5 audit cluster proved it: 7 branches read
+  "unlanded", all 7 were byte-identical to files already in main under
+  `workspaces/_archive/` (one differed by a single trailing newline).
 
 ## Executed this session (external — not recoverable from git log)
 
@@ -116,6 +124,9 @@ pre-fix tool.
 - Re-verified #2203 / #2166 / #2194 comment counts = 0; #2141 = 1 (our own).
 - Co-owner ratified D-A/D-B/D-C; recorded at #2203 (comment count 0 → 1).
 - Wrote `02-plans/03-2203-protocol-drift-waves.md` (3 waves, 8 shards, awaiting approval).
+- Merged PR #2207: loom#1877 ci-job-budget incorporation + the duplicate-run fix
+  + one stale kaizen trust test corrected.
+- Swept 169 local / 3 remote branches to 1 each; 51 archive tags written.
 
 ---
 
@@ -136,6 +147,15 @@ pre-fix tool.
 - **Only THREE contexts are required here**: `CodeQL`, `Analyze Python`,
   `test-with-infrastructure` (`enforce_admins: false`). A red non-required job does not
   block merge — but it still gets fixed or filed (#2206), never ignored.
+- **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** After the
+  #2207 dedup fix, the push run is cancelled by the PR run, and every job in it
+  reports `fail`. Measured on PR #2207 head `8e4edc026`: 8 "fail" checks, **0**
+  genuine `failure` runs. Classify with
+  `gh run list --commit <sha> --json conclusion` before believing a red board.
+- **A zsh glob that matches nothing aborts the WHOLE command**, so
+  `ls a/*.yml b/*.yaml | wc -l` printed `0` when only the second pattern missed —
+  a fabricated zero, not an empty set. Guard with `setopt NULL_GLOB` or avoid
+  multi-pattern globs.
 - **`grep --include=*.py` is glob-expanded by zsh and errors out.** Quote it:
   `--include="*.py"`. A "no matches found" from this is an ERRORED command and zero
   evidence, not an absence.
@@ -163,7 +183,9 @@ pre-fix tool.
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
 | `authz-schema` | #2166 + #2194 actor/authz schema | blocked on co-owner (D2) | #2194 |
 | `mcp-health` | `mcp_channel.py:961` non-discriminating check | blocked on co-owner (D3) | cont-22 report D3 |
-| `hist-branches` | 169 unexamined local branches | deferred by judgment | cont-22 report D5 |
+| `ci-job-budget` | loom#1877 incorporation + duplicate-run fix | **CLOSED** — merged | PR #2207, `rules/ci-job-budget.md` |
+| `hist-branches` | 169 unexamined local branches | **CLOSED** — swept to 1; 51 archive tags | this file § In-play branches |
 
-Closed this session: none fully — `sweep5-orphans` shrank 70 → 22 and its scanner is
-fixed, but the 22 survivors are unresolved and it stays open.
+Closed this session: `ci-job-budget` (PR #2207) and `hist-branches` (forest swept to
+empty). `sweep5-orphans` shrank and its scanner is fixed, but its survivors are
+unresolved and it stays open.
