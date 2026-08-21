@@ -81,6 +81,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
 | Infrastructure SQL safety             | `rules/infrastructure-sql.md`   | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
 | PACT governance security              | `rules/pact-governance.md`      | `packages/kailash-pact/**`                                            |
+| CI job budget & duplicate runs        | `rules/ci-job-budget.md`        | `.github/workflows/**`, `scripts/ci/job-budget.d/**`                  |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 

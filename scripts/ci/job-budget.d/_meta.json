@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "Declaration for scripts/ci/job_budget_audit.py.",
+    "",
+    "PUBLIC-REPO SAFE BY CONSTRUCTION. This repo runs GitHub-hosted runners, so",
+    "there is no self-hosted fleet topology here — no runner labels, no host ids,",
+    "no per-pool capacities, no internal hostnames. Do not add any. loom#1877's",
+    "Gate-1 refused the originating repo's declaration for exactly that reason:",
+    "it encoded self-hosted topology and the cascade reaches public surfaces.",
+    "",
+    "Capacity here is expressed as a per-PR job ceiling, which is the metric that",
+    "actually bites on GitHub-hosted runners (queue depth and spend), and which",
+    "carries no infrastructure detail."
+  ],
+
+  "required_contexts": [
+    "CodeQL",
+    "Analyze Python",
+    "test-with-infrastructure"
+  ],
+
+  "required_contexts_source": {
+    "$comment": "Re-measure rather than trusting this line; branch protection is mutable.",
+    "command": "gh api repos/:owner/:repo/branches/main/protection --jq '.required_status_checks.contexts'",
+    "measured_on": "2026-08-21",
+    "measured_value": ["CodeQL", "Analyze Python", "test-with-infrastructure"]
+  },
+
+  "per_pr_job_ceiling": 30,
+  "per_pr_job_ceiling_rationale": [
+    "Measured 2026-08-21 on PR #2205: 25 runner-consuming jobs across 5 runs.",
+    "The ceiling is set just above the measured baseline so it is a RATCHET —",
+    "it fires when fan-out grows, not retroactively on today's state.",
+    "Lowering it is the goal; raising it requires a dated entry below."
+  ],
+
+  "budgeted_exemptions": [
+    {
+      "workflow": "project-automation.yml",
+      "jobs": 5,
+      "reason": "Issue/project board bookkeeping. Every job is `if:`-gated on event type and skips on ordinary PRs — measured on PR #2205: all 5 reported `skipping`.",
+      "declared_on": "2026-08-21",
+      "revisit_on": "2027-02-21"
+    },
+    {
+      "workflow": "claude.yml",
+      "jobs": 3,
+      "reason": "Interactive assistant workflow, gated on an explicit mention trigger; does not fire on ordinary PR synchronize events.",
+      "declared_on": "2026-08-21",
+      "revisit_on": "2027-02-21"
+    }
+  ],
+
+  "dedup_exempt_workflows": [
+    {
+      "workflow": "docs-deploy.yml",
+      "reason": "Uses the fixed group `pages` deliberately — GitHub Pages deployments must serialize globally, not per-branch, and must NOT cancel in progress.",
+      "declared_on": "2026-08-21"
+    }
+  ]
+}
