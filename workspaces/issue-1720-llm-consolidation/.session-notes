@@ -24,9 +24,13 @@ line; no SHA is pinned here because one goes stale the moment these notes are me
 
 ## Next-session directives
 
-1. **Do not start #2203 implementation until D-A and D-B are answered.** Unchanged.
-   re-validate: `gh issue view 2203 --json comments -q '.comments|length'` → non-zero
-   AND a co-owner comment naming a target revision per protocol ⇒ unblocked.
+1. **#2203 is UNBLOCKED — D-A/D-B/D-C were ratified 2026-08-21 and recorded durably**
+   at `#2203#issuecomment-5363864384`. Targets: **MCP Modern (`2026-07-28`)**,
+   **A2A 1.0**, **TCK hook env-gated fail-closed + security-reviewed**.
+   The wave plan is `02-plans/03-2203-protocol-drift-waves.md` and is **AWAITING
+   APPROVAL** — `/todos` plan approval is a structural human gate, so no shard starts
+   without it. Get the plan approved, then run Wave 1.
+   re-validate: `gh issue view 2203 --json comments -q '.comments|length'` → `1`.
    `gh issue view 2203 --comments` renders EMPTY text on this repo even at exit 0 —
    that is a renderer quirk, not an absence of comments. Use the `--json` form; it
    discriminates and the text form does not.
@@ -112,6 +116,8 @@ pre-fix tool.
 - Merged PR #2205 (sweep-redteam scanner fix); branch deleted.
 - Filed #2206 (dataflow #1548 residual durability window).
 - Re-verified #2203 / #2166 / #2194 comment counts = 0; #2141 = 1 (our own).
+- Co-owner ratified D-A/D-B/D-C; recorded at #2203 (comment count 0 → 1).
+- Wrote `02-plans/03-2203-protocol-drift-waves.md` (3 waves, 8 shards, awaiting approval).
 
 ---
 
@@ -152,7 +158,7 @@ pre-fix tool.
 
 | id | workstream | state | receipt |
 | --- | --- | --- | --- |
-| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, blocked on D-A/D-B | #2203, cont-22 report § 3 |
+| `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
 | `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
 | `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
