@@ -69,13 +69,11 @@ line; no SHA is pinned here because one goes stale the moment these notes are me
 
 ## Sweep-5 — what actually changed (supersedes cont-22 § 4)
 
-Corpus measured before and after over all 85 specs, per-spec:
-
-```
-before  70 findings  (52 orphan, 18 coverage_gap)
-after   22 findings  (22 orphan,  0 coverage_gap)
-removed 48           newly-reported 0
-```
+The corpus was measured before and after over all 85 specs, per-spec. The counts and
+the delta live in the durable receipt — PR #2205's body and commit `d915b42d6` — not
+here: `.session-notes` is memory-only and carries no verified figures
+(`burn-down-reporting.md` MUST-3). Re-derive by running the tool per-spec over
+`specs/*.md`; do NOT use `--all` (see Traps).
 
 Two scanner defects, both fixed in PR #2205:
 
