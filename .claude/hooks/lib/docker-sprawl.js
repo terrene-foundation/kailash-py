@@ -150,28 +150,64 @@ function inspectCompose(path, text) {
   return findings;
 }
 
+/** Strip heredoc BODIES from a command string.
+ *
+ *  Measured the day this shipped: the detector fired on a `git commit -F - <<'MSG'`
+ *  whose MESSAGE text contained the words "a bare `docker run`". The command
+ *  invoked no docker at all. A guard that flags prose ABOUT docker is the
+ *  false-positive class that gets a guard switched off, so heredoc bodies are
+ *  removed before any matching.
+ */
+function stripHeredocs(cmd) {
+  return String(cmd || "").replace(
+    /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?^\s*\2\s*$/gm,
+    "<<HEREDOC",
+  );
+}
+
+/** Split a command line into invocation segments on shell separators. */
+function commandSegments(cmd) {
+  return stripHeredocs(cmd)
+    .split(/(?:\|\||&&|[;|\n])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** True when the segment INVOKES docker, rather than merely mentioning it.
+ *  Allows a leading `sudo` and any number of `VAR=value` env prefixes. */
+function isDockerInvocation(seg) {
+  return /^(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*docker\b/.test(seg);
+}
+
 /** Findings for a pending shell command. Lexical by nature, so this can only
  *  ever be advisory/halt-and-report -- never `block`. */
 function inspectDockerRun(command) {
-  const cmd = String(command || "");
-  // `docker run` / `docker container run`, not `docker compose run`.
-  if (!/\bdocker\s+(container\s+)?run\b/.test(cmd)) return [];
-  if (/\bdocker\s+compose\b/.test(cmd)) return [];
-  const img = /\b(?:docker\s+(?:container\s+)?run\b[^|;&]*?)\s((?!-)[A-Za-z0-9][\w./-]*(?::[\w.-]+)?)\s*(?:$|[|;&])/.exec(cmd);
-  const imageRef = img ? img[1] : (cmd.match(/\s([a-z0-9]+\/[\w.-]+:[\w.-]+)/) || [])[1];
-  if (!isStatefulImage(imageRef) && !STATEFUL_IMAGES.some((s) => cmd.toLowerCase().includes(s))) return [];
   const findings = [];
-  const hasNamedVol = /-v\s+[A-Za-z][\w.-]*:/.test(cmd) || /--mount[^|;&]*source=[A-Za-z]/.test(cmd);
-  const hasRm = /\s--rm\b/.test(cmd);
-  if (!hasNamedVol && !hasRm) {
-    findings.push({
-      check: "ungrouped-run",
-      detail:
-        "a stateful `docker run` with neither a NAMED volume nor `--rm`: it joins " +
-        "no compose group and strands an anonymous volume when removed. Prefer a " +
-        `compose service in the \`${CANONICAL_GROUP}\` group; if it must be a bare ` +
-        "run, add `--rm` (throwaway) or `-v <name>:/path` (persistent).",
-    });
+  for (const seg of commandSegments(command)) {
+    if (!isDockerInvocation(seg)) continue;            // prose ABOUT docker: ignored
+    if (/^\s*(?:sudo\s+)?docker\s+compose\b/.test(seg)) continue; // compose is the good path
+    if (!/\bdocker\s+(?:container\s+)?run\b/.test(seg)) continue;
+    const imgMatch =
+      /\s((?!-)[A-Za-z0-9][\w./-]*(?::[\w.-]+)?)\s*$/.exec(seg) ||
+      /\s([a-z0-9]+\/[\w.-]+(?::[\w.-]+)?)\b/.exec(seg);
+    const imageRef = imgMatch ? imgMatch[1] : null;
+    const statefulHere =
+      isStatefulImage(imageRef) ||
+      STATEFUL_IMAGES.some((s) => new RegExp(`\\b${s}[\\w.-]*(?::|\\s|$)`).test(seg.toLowerCase()));
+    if (!statefulHere) continue;
+    const hasNamedVol =
+      /-v\s+[A-Za-z][\w.-]*:/.test(seg) || /--mount[^\s]*source=[A-Za-z]/.test(seg);
+    const hasRm = /\s--rm\b/.test(seg);
+    if (!hasNamedVol && !hasRm) {
+      findings.push({
+        check: "ungrouped-run",
+        detail:
+          "a stateful `docker run` with neither a NAMED volume nor `--rm`: it joins " +
+          "no compose group and strands an anonymous volume when removed. Prefer a " +
+          `compose service in the \`${CANONICAL_GROUP}\` group; if it must be a bare ` +
+          "run, add `--rm` (throwaway) or `-v <name>:/path` (persistent).",
+      });
+    }
   }
   return findings;
 }
@@ -186,4 +222,7 @@ module.exports = {
   anonymousStatefulServices,
   inspectCompose,
   inspectDockerRun,
+  stripHeredocs,
+  commandSegments,
+  isDockerInvocation,
 };

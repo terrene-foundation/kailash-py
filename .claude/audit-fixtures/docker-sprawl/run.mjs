@@ -90,6 +90,21 @@ check("9c docker compose run quiet", r("docker compose run --rm db psql"), 0);
 check("9d unrelated command quiet", r("ls -la && git status"), 0);
 check("9e non-stateful run quiet", r("docker run -d my/app:1.0"), 0);
 
+// 9f-9j — COMMAND POSITION. The detector must fire on an INVOCATION and stay
+// silent on PROSE that merely contains the words. Measured live: the first
+// revision fired on `git commit -F - <<MSG` whose message text read "a bare
+// `docker run` against ..." -- no docker was invoked. A guard that flags prose
+// about docker is the false-positive class that gets a guard switched off.
+check(
+  "9f heredoc PROSE quiet (the measured false positive)",
+  r("git commit -F - <<'MSG'\nA bare `docker run` against postgres:16 strands a volume\nMSG"),
+  0,
+);
+check("9g -m string prose quiet", r('git commit -m "explain docker run postgres:16 sprawl"'), 0);
+check("9h chained invocation still fires", r("cd /x && docker run -d postgres:16") > 0, true);
+check("9i sudo + env prefix still fires", r("sudo FOO=1 docker run -d postgres:16") > 0, true);
+check("9j echo-of-a-command quiet", r("echo 'docker run -d postgres:16' > note.txt"), 0);
+
 // 10 — hook boundary: fires, stays quiet, and FAILS OPEN
 function drive(payload) {
   const res = spawnSync(process.execPath, [HOOK], { input: payload, encoding: "utf8" });
