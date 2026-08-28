@@ -10,6 +10,8 @@
 # DEVELOPMENT:
 #   docker-compose up -d
 
+name: kailash_sdk
+
 version: '3.8'
 
 services:

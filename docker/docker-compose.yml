@@ -3,6 +3,8 @@
 # Start with: docker-compose up -d
 # Stop with: docker-compose down
 
+name: kailash_sdk
+
 services:
   # PostgreSQL with pgvector extension - Main database
   postgres:

@@ -1,6 +1,8 @@
 # Kailash SDK Performance Testing Infrastructure
 # Enhanced Docker composition for comprehensive load testing with monitoring
 
+name: kailash_sdk
+
 version: '3.8'
 
 services:

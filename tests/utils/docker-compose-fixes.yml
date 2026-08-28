@@ -1,6 +1,8 @@
 # Example Docker Compose configuration with best practices
 # This serves as a template for fixing deployment configurations
 
+name: kailash_sdk
+
 version: '3.8'
 
 services:
