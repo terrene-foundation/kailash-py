@@ -1,6 +1,18 @@
-# Session Notes — 2026-08-21 (cont-23: the Sweep-5 corpus was 69% noise; #2203 still gated)
+# Session Notes — 2026-08-28 (cont-24: docker sprawl closed; #2203 plan still awaiting approval)
 
 ## Where we are
+
+main — green, PR queue empty, working tree clean, ONE local branch.
+
+**cont-24 (2026-08-28) landed two enforcement waves and a docker cleanup:**
+PR #2207 (loom#1877 CI job-budget + the duplicate-run fix) and PR #2208
+(docker no-sprawl group discipline). Both ship a structural guard with bipolar
+fixtures. Docker went 491 volumes → 35 (25.8GB reclaimed), with every NAMED
+volume preserved.
+
+**#2203 is UNBLOCKED but its wave plan is STILL AWAITING APPROVAL** — that is
+the top item and nothing has moved on it since cont-23.
+
 
 main — green, PR queue empty, working tree clean. The sweep-5 orphan corpus, carried on
 the ledger since cont-20 as "52 orphans / 18 coverage gaps", is now **22 orphans / 0
@@ -147,6 +159,20 @@ pre-fix tool.
 - **Only THREE contexts are required here**: `CodeQL`, `Analyze Python`,
   `test-with-infrastructure` (`enforce_admins: false`). A red non-required job does not
   block merge — but it still gets fixed or filed (#2206), never ignored.
+- **`kailash_sdk` is a compose project name SHARED with kailash-rs.** A
+  `kailash_sdk_*` volume may belong to either repo. NEVER delete one assuming it
+  is this repo's, and treat concurrent py+rs stack runs as sharing state.
+  Unresolved: renaming one side orphans ~31.9GB.
+- **NEVER `docker volume prune` / `docker system prune -a` on this machine.**
+  Both delete by *dangling*, not by *ownership*. This daemon hosts at least five
+  other projects' named volumes (`arbor_*`, `impact_verse_*`, `marineinsure_*`,
+  `astra_test_*`). The safe form is removing only ANONYMOUS 64-hex 0-link
+  volumes, which is what cont-24 did.
+- **A loop that removes volumes miscounts its own failures.** The list is
+  captured once; as removals cascade, later `docker volume rm` calls hit
+  already-gone volumes and return non-zero. cont-24 read 315 such as
+  "refused (in-use)" — they were "already removed". Re-measure with
+  `docker volume ls -q | wc -l`, never trust the loop's error tally.
 - **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** After the
   #2207 dedup fix, the push run is cancelled by the PR run, and every job in it
   reports `fail`. Measured on PR #2207 head `8e4edc026`: 8 "fail" checks, **0**
@@ -178,6 +204,7 @@ pre-fix tool.
 | --- | --- | --- | --- |
 | `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
 | `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
+| `docker-sprawl` | one compose group + guard; 491→35 volumes | **CLOSED** — merged | PR #2208, `rules/docker-no-sprawl.md` |
 | `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
 | `auth-semantics` | #2141 `--auth` + kailash-ml release | blocked on co-owner (D1) | #2141 comment |
