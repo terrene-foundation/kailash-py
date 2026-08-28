@@ -2,6 +2,8 @@
 # LOCKED-IN CONFIGURATION - DO NOT CHANGE PORTS
 # PostgreSQL: 5434, Redis: 6380, Ollama: 11435, MySQL: 3307
 
+name: kailash_sdk
+
 services:
   # PostgreSQL with pgvector - Port 5434 (LOCKED-IN)
   postgres:

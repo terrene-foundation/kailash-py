@@ -82,6 +82,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | Infrastructure SQL safety             | `rules/infrastructure-sql.md`   | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
 | PACT governance security              | `rules/pact-governance.md`      | `packages/kailash-pact/**`                                            |
 | CI job budget & duplicate runs        | `rules/ci-job-budget.md`        | `.github/workflows/**`, `scripts/ci/job-budget.d/**`                  |
+| Local docker: one group, no strays    | `rules/docker-no-sprawl.md`     | `**/docker-compose*.yml`, `**/compose.y*ml`, `**/Dockerfile*`         |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 
