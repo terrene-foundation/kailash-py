@@ -143,7 +143,18 @@ export default defineConfig({
 
 ## Test Execution
 
+**PARSIMONY IS THE DEFAULT** (`rules/test-parsimony.md` MUST-1): run the narrowest
+suite that could fail because of the diff. The whole-tree forms below are the
+CRITICAL-JUNCTURE lane (nightly, `workflow_dispatch`, merge-queue, push to `main`,
+release) — not the per-iteration lane.
+
 ```bash
+# ITERATION — default. Scope to what the change could break.
+pytest tests/unit/<area>/ -q                 # the area the diff touched
+pytest tests/unit -k "<selector>" -q         # a selection across areas
+pytest packages/<pkg>/tests/unit -q          # that package's own suite
+
+# CRITICAL JUNCTURE ONLY — whole-tree forms.
 # Unit
 pytest tests/unit/ --timeout=1 --tb=short
 
@@ -158,7 +169,9 @@ npx playwright test
 npx playwright test --ui      # with UI
 npx playwright test --debug   # debug mode
 
-# Coverage
+# Coverage — CRITICAL JUNCTURE ONLY. `--cov` forces full collection AND
+# instrumentation, so it is BLOCKED on a routine or agent-initiated run
+# (`rules/test-parsimony.md` MUST NOT).
 pytest --cov=src/kailash --cov-report=term-missing
 ```
 

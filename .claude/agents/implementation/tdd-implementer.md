@@ -86,7 +86,9 @@ After each component, verify:
 ### Component: [Name]
 - [ ] Core implementation complete
 - [ ] Follows existing SDK patterns
-- [ ] Unit tests pass: `pytest tests/unit/test_component.py -v`
+- [ ] Unit tests pass, SCOPED to the component (`rules/test-parsimony.md` MUST-1 —
+      the narrowest suite that could fail; not the whole tree):
+      `pytest tests/unit/test_component.py -v`
 - [ ] Integration tests pass: `pytest tests/integration/test_component.py -v`
 - [ ] E2E tests pass: `pytest tests/e2e/test_component.py -v`
 - [ ] NO CHANGES MADE TO TESTS TO FIT CODE
