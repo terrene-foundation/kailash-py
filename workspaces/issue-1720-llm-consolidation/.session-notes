@@ -1,6 +1,18 @@
-# Session Notes — 2026-08-28 (cont-24: docker sprawl closed; #2203 plan still awaiting approval)
+# Session Notes — 2026-09-01 (cont-25: CI/local-gate parsimony; #2203 plan STILL unapproved)
 
 ## Where we are
+
+main — green, PR queue empty, working tree clean, one local branch.
+
+**cont-25 (2026-09-01) landed the iteration/juncture split (PR #2213).** Two lanes
+now: ITERATION (PR, feature push, local commit) runs floor-Python/ubuntu/scoped;
+CRITICAL JUNCTURE (schedule, workflow_dispatch, merge_group, push to main,
+release) runs the full matrix. Measured: PR-time jobs 53 -> 35, docs-only
+pre-commit 82s -> 3s, CI settle ~9min -> 3min.
+
+**#2203 is UNBLOCKED but its wave plan is STILL AWAITING APPROVAL** — unchanged
+since cont-23. It is the top item and nothing has moved on it for three sessions.
+
 
 main — green, PR queue empty, working tree clean, ONE local branch.
 
@@ -173,6 +185,19 @@ pre-fix tool.
   already-gone volumes and return non-zero. cont-24 read 315 such as
   "refused (in-use)" — they were "already removed". Re-measure with
   `docker volume ls -q | wc -l`, never trust the loop's error tally.
+- **The local gate is 29s, not "tens of minutes".** Measured: `tests/unit` with the
+  pre-commit marker filter is 4891 passed / 27.20s. If a session reports the gate
+  as slow, the cause is TRIGGERING, not size — re-measure before optimising.
+- **`--cov` and whole-tree pytest are CRITICAL-JUNCTURE-ONLY** (`rules/test-parsimony.md`
+  MUST-1). Agent artifacts prescribed them as defaults; that is where the broad
+  `tests/unit tests/regression tests/deployment tests/security --cov` invocation
+  came from, NOT the pre-commit config.
+- **Matrix breadth is keyed on the EVENT, never on `event_name == 'pull_request'`.**
+  The negated form INVERTS: a push to a feature branch is not a pull_request, so it
+  would earn the FULL matrix. Caught during implementation; pinned by MUST-3.
+- **Before narrowing any CI lane, verify the juncture arm EXISTS**
+  (`schedule:` / `branches: [main]` / `merge_group:`). ml and align had neither, so
+  narrowing alone would have DELETED four Python versions. Both got a nightly.
 - **Cancelled duplicate CI runs surface as `fail` in `gh pr checks`.** After the
   #2207 dedup fix, the push run is cancelled by the PR run, and every job in it
   reports `fail`. Measured on PR #2207 head `8e4edc026`: 8 "fail" checks, **0**
@@ -204,6 +229,7 @@ pre-fix tool.
 | --- | --- | --- | --- |
 | `proto-drift` | #2203 MCP + A2A superseded revisions | **TOP PRIORITY**, UNBLOCKED; plan awaiting approval | #2203 comment, `02-plans/03-2203-*` |
 | `sweep5-orphans` | was 52/18 → now **22 orphans, 0 gaps**; 3 triaged by hand | open, scanner fixed | PR #2205, § Sweep-5 above |
+| `ci-local-parsimony` | iteration/juncture split; 53->35 jobs, 82s->3s gate | **CLOSED** — merged | PR #2213, `rules/test-parsimony.md` |
 | `docker-sprawl` | one compose group + guard; 491→35 volumes | **CLOSED** — merged | PR #2208, `rules/docker-no-sprawl.md` |
 | `dataflow-durability` | #1548 residual uncommitted-DDL window | **NEW**, filed with evidence | #2206 |
 | `gate2-regression` | loom Gate-2 path mapping | filed upstream, awaiting loom | loom#1826, local #2199 |
