@@ -172,6 +172,56 @@ def group_dedups_push_and_pr(group: str | None) -> tuple[bool, str]:
     )
 
 
+_JUNCTURE_TOKENS = ("github.event_name ==", "github.ref ==")
+
+
+def matrix_breadth_findings(name, text):
+    """Flag a literal multi-entry matrix on a PR-reachable workflow.
+
+    Such a matrix runs EVERY entry on EVERY PR. The juncture-keyed form collapses
+    to one entry for iteration and expands only at a critical juncture (schedule /
+    workflow_dispatch / merge_group / push to main). Measured 2026-09-01: literal
+    matrices accounted for 18 of 53 PR-time jobs, 8 of them Windows at 2x cost.
+    """
+    out = []
+    for key in ("python-version", "os"):
+        expr = re.search(key + r": >-\s*\n\s*\$\{\{ fromJSON\((.*?)\) \}\}", text, re.S)
+        if expr:
+            if not any(tok in expr.group(1) for tok in _JUNCTURE_TOKENS):
+                out.append(
+                    Finding(
+                        "error",
+                        "matrix-breadth",
+                        name,
+                        "`"
+                        + key
+                        + "` uses a fromJSON expression not keyed on a critical "
+                        "juncture, so it cannot collapse for the PR lane",
+                    )
+                )
+            continue
+        lit = re.search(key + r": *\[([^\]]*)\]", text)
+        if not lit:
+            continue
+        entries = [e for e in lit.group(1).split(",") if e.strip()]
+        if len(entries) > 1:
+            out.append(
+                Finding(
+                    "error",
+                    "matrix-breadth",
+                    name,
+                    "`"
+                    + key
+                    + "` is a literal "
+                    + str(len(entries))
+                    + "-entry matrix on a PR-reachable workflow, so all of them run on "
+                    "every PR. Key it on a critical juncture so the PR lane collapses "
+                    "to the floor version.",
+                )
+            )
+    return out
+
+
 def audit(
     decl: dict[str, Any], workflows_dir: Path = WORKFLOWS, today: _dt.date | None = None
 ) -> list[Finding]:
@@ -208,6 +258,8 @@ def audit(
             ok, why = group_dedups_push_and_pr(_concurrency_group(text))
             if not ok:
                 findings.append(Finding("error", "dedup", f.name, why))
+
+        findings.extend(matrix_breadth_findings(f.name, text))
 
         # Advisory — freeloaders: neither required nor paths-gated.
         if (
@@ -356,9 +408,40 @@ def selftest() -> int:
         if not any(f.check == "exemption" for f in stale):
             failures.append("NEGATIVE control 'stale exemption' did NOT trip")
 
+    # Matrix breadth: a literal multi-entry matrix must trip; a juncture-keyed
+    # expression and a single-entry literal must not.
+    cases += 1
+    if not matrix_breadth_findings(
+        "w.yml", '        python-version: ["3.11", "3.12"]\n'
+    ):
+        failures.append("NEGATIVE control 'matrix-breadth literal' did NOT trip")
+    cases += 1
+    if not matrix_breadth_findings(
+        "w.yml", "        os: [ubuntu-latest, windows-latest]\n"
+    ):
+        failures.append("NEGATIVE control 'matrix-breadth os' did NOT trip")
+    cases += 1
+    keyed = (
+        "        python-version: >-\n"
+        "          ${{ fromJSON((github.event_name == 'schedule') && '[\"3.11\",\"3.12\"]'"
+        " || '[\"3.11\"]') }}\n"
+    )
+    if matrix_breadth_findings("w.yml", keyed):
+        failures.append("POSITIVE control 'juncture-keyed matrix' was flagged")
+    cases += 1
+    if matrix_breadth_findings("w.yml", '        python-version: ["3.11"]\n'):
+        failures.append("POSITIVE control 'single-entry literal' was flagged")
+    cases += 1
+    unkeyed = (
+        "        python-version: >-\n"
+        '          ${{ fromJSON(true && \'["3.11","3.12"]\' || \'["3.11"]\') }}\n'
+    )
+    if not matrix_breadth_findings("w.yml", unkeyed):
+        failures.append("NEGATIVE control 'fromJSON not juncture-keyed' did NOT trip")
+
     # Anti-vacuity floor: every check this tool can emit must own a negative control.
-    checks_with_negative = {"dedup", "ceiling", "exemption"}
-    emitted_checks = {"dedup", "ceiling", "exemption", "freeloader"}
+    checks_with_negative = {"dedup", "ceiling", "exemption", "matrix-breadth"}
+    emitted_checks = {"dedup", "ceiling", "exemption", "freeloader", "matrix-breadth"}
     advisory_only = {"freeloader"}
     uncovered = emitted_checks - checks_with_negative - advisory_only
     if uncovered:

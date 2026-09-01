@@ -34,8 +34,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # PARSIMONY (#CI-budget): a PR runs ubuntu x FLOOR only. Windows costs
+        # 2x GitHub minutes per job, and 4 py x 2 OS = 8 jobs fired on every PR
+        # while gating nothing. The full cross-OS matrix MOVED to the nightly
+        # `schedule:` added below - relocated, not dropped.
+        os: >-
+          ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.ref == 'refs/heads/main') && '["ubuntu-latest","windows-latest"]' || '["ubuntu-latest"]') }}
+        python-version: >-
+          ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.ref == 'refs/heads/main') && '["3.11","3.12","3.13","3.14"]' || '["3.11"]') }}
 
     steps:
       - name: Checkout repository

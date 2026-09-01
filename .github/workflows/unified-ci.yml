@@ -116,7 +116,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        # PARSIMONY (#CI-budget): a PR runs the FLOOR version only. The full
+        # matrix still runs nightly against main via the `schedule:` trigger
+        # above, which this file already documents as running "the identical
+        # matrix" — so the PR-time matrix was duplicating an existing nightly.
+        python-version: >-
+          ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.ref == 'refs/heads/main') && '["3.11","3.12","3.13","3.14"]' || '["3.11"]') }}
     steps:
       - uses: actions/checkout@v7
 

@@ -215,7 +215,13 @@ repos:
             -q, # Quiet output
           ]
         pass_filenames: false
-        always_run: true
+        # PARSIMONY: was `always_run: true`, which fired all 4891 unit tests on
+        # EVERY commit — measured 82s on a DOCS-ONLY change, where not one of
+        # those tests could observe the diff. Scoped to the files whose change
+        # can actually alter a unit-test outcome: Python source/tests, the
+        # dependency manifests, and the pytest config itself. A docs, workflow,
+        # or .claude/** commit now skips it entirely.
+        files: '\.(py)$|^(pyproject\.toml|uv\.lock|conftest\.py|pytest\.ini|setup\.cfg|tox\.ini)$'
         stages: [pre-commit]
 
   # Security scanning with Trivy (temporarily disabled due to config issues)
