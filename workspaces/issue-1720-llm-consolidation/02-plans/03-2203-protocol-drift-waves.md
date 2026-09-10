@@ -1,7 +1,23 @@
 # #2203 — MCP + A2A protocol drift: wave plan
 
-**Status: APPROVED 2026-09-10. Wave 1 Shard A LANDED (`b6bf4a1ca`, in `dev`).
-Wave 1 Shard B LANDED, against a CORRECTED method set — see below.**
+**Status: APPROVED 2026-09-10. Wave 1 Shard A LANDED (`b6bf4a1ca`).
+Shard 1B was landed and then REVERTED (`6e4e652da` → `93323218e`) — it
+introduced a cross-agent task read/write. Shard 1-AUTH landed in its place
+(`35fc66f01`) and now gates the 1B re-land. Sequence is 1A → 1-AUTH → 1B' → 1C.**
+
+> **Why 1B was reverted, and why an auth shard appeared.** An adversarial review
+> executed two attacks against 1B on a live app: `GetTask` had no ownership
+> predicate (any caller read any task, including its full message history), and a
+> client-supplied `message.taskId` let a caller append to a victim's task and get
+> the victim's history back — a confused-deputy against the agent executor, since
+> the injected text arrives labelled `ROLE_USER`. Both were introduced by 1B.
+>
+> A correct ownership check needs a caller identity, and there was none to bind
+> to: `A2AAuthenticator.verify_token` had NO call site in the request path, so any
+> non-empty bearer string authenticated every protected method — including
+> `trust.delegate` and `audit.query`. That hole was PRE-EXISTING and sat under the
+> whole A2A surface, not just 1B. Fixing it is 1-AUTH, and it necessarily
+> precedes any ownership work.
 
 > **Scope correction, measured at implementation:** 1A's well-known path is **16
 > sites across 6 files**, not the 4-across-3 stated below. The original count
@@ -80,7 +96,8 @@ because the original "4" understated it, and 1C inherits all three.
 | shard            | scope                                                                                                                                                                                                                                | budget notes                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | **1A** ✅ LANDED | Well-known path `/.well-known/agent.json` → `/.well-known/agent-card.json` across all FOUR sites (`service.py:175` endpoint, `service.py:11` docstring, `models.py:84`, `agent_card.py:209`), plus card derivation to the 1.0 shape. | Small LOC, but 4 sites in 3 files — the trap directive 3 names. Renaming only the endpoint leaves three stale references. |
-| **1B** ✅ LANDED | ~~The 1.0 method set: `message/send`, `tasks/get`, `SendMessage`, `GetTask`.~~ **Corrected at implementation to `SendMessage` + `GetTask` only** (see the method-set correction above). Shipped with the v1.0 core data model they require — `Role`, `TaskState`, `Part` (a `oneof` in 1.0), `Message`, `Artifact`, `TaskStatus`, `Task` — camelCase wire fields, ProtoJSON enum values, `TaskNotFoundError` → `-32001`, and a bounded task store. | Net-new surface; load-bearing logic, under 500 LOC. The data model was NOT anticipated by this row — `SendMessage`/`GetTask` are unimplementable without it. |
+| **1-AUTH** ✅ LANDED | Verify bearer tokens in the request path; hand handlers a verified `CallerIdentity` instead of a raw string; fail closed when no verifier is configured; pin token audience to this agent. | PRE-EXISTING hole, not 1B's, but it GATES 1B — ownership is unenforceable without an identity. BREAKING: `MethodHandler`'s second arg changed type. |
+| **1B'** (re-land) | `SendMessage` + `GetTask`, PascalCase per the correction above, PLUS: `owner_id` on `Task` enforced in BOTH `GetTask` and the existing-task branch of `SendMessage`; server-derived `role`; the 12 correctness findings from the reverted attempt (chief among them `historyLength > len(history)` returning `hl − n` messages via a negative slice, and an unknown client-supplied `taskId` creating a task instead of raising `TaskNotFoundError` — three spec MUSTs in § 3.4.2). | Blocked on 1-AUTH. The reverted code is recoverable from `6e4e652da`; do NOT re-apply it wholesale — it carries the IDOR. |
 | **1C** | The remaining **9** v1.0 JSON-RPC methods: `SendStreamingMessage`, `ListTasks`, `CancelTask`, `SubscribeToTask`, `GetExtendedAgentCard`, and the four `*TaskPushNotificationConfig` methods. | NOT in the original plan — surfaced by the 1B method-set correction. Two are **streaming** (SSE), a different transport concern from 1B's request/response pair, so this is very likely ≥2 shards. Size it at `/todos` before starting; do not treat it as a tail of 1B. |
 
 **Open question for 1A, to settle at implementation:** whether the 0.2.x path keeps serving
